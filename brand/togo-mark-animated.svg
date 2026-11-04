@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <style>
+    .chev{stroke-dasharray:30;stroke-dashoffset:30;animation:draw 6s cubic-bezier(.65,0,.35,1) infinite}
+    .p{opacity:0;animation:step 6s ease-out infinite}
+    .p1{animation-delay:.55s}.p2{animation-delay:.8s}.p3{animation-delay:1.05s}.p4{animation-delay:1.3s}
+    .home{transform-box:fill-box;transform-origin:center;opacity:0;animation:lamp 6s cubic-bezier(.34,1.56,.64,1) infinite;animation-delay:1.55s}
+    @keyframes draw{0%{stroke-dashoffset:30}10%{stroke-dashoffset:0}88%{stroke-dashoffset:0}96%,100%{stroke-dashoffset:30}}
+    @keyframes step{0%{opacity:0}4%{opacity:1}78%{opacity:1}86%,100%{opacity:0}}
+    @keyframes lamp{0%{opacity:0;transform:scale(.3)}6%{opacity:1;transform:scale(1)}74%{opacity:1;transform:scale(1)}82%,100%{opacity:0;transform:scale(.3)}}
+    @media (prefers-reduced-motion:reduce){*{animation:none!important;opacity:1!important;stroke-dashoffset:0!important}}
+  </style>
+  <defs><g id="pw"><ellipse cx="0" cy="0" rx="1.7" ry="1.95"/><circle cx="2.55" cy="-1.7" r=".85"/><circle cx="3.1" cy="0" r=".85"/><circle cx="2.55" cy="1.7" r=".85"/></g></defs>
+  <g transform="translate(-.2 .4)">
+    <path class="chev" d="M9 23 L19.5 31 L9 39" stroke="#eceae6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <g fill="#eceae6">
+      <use class="p p1" href="#pw" transform="translate(26.16 42.57) rotate(-26.6) scale(.9)"/>
+      <use class="p p2" href="#pw" transform="translate(31.28 37.54) rotate(-36.6) scale(.9)"/>
+      <use class="p p3" href="#pw" transform="translate(38.08 35.23) rotate(-26.6) scale(.9)"/>
+      <use class="p p4" href="#pw" transform="translate(43.21 30.2) rotate(-36.6) scale(.9)"/>
+    </g>
+    <circle class="home" cx="54" cy="24.5" r="4.6" fill="#9fd0f5"/>
+  </g>
+</svg>

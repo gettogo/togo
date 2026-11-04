@@ -1,0 +1,9 @@
+.DS_Store
+*.xcuserstate
+xcuserdata/
+DerivedData/
+.build/
+*.p8
+.env*
+.worktrees/
+helper/bin/

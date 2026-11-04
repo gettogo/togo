@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tmux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+
+      - name: Install tmux
+        if: runner.os == 'macOS'
+        run: brew install tmux
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: helper/go.mod
+
+      - name: Lint and test
+        run: make lint test
