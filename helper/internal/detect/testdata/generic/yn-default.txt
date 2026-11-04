@@ -1,0 +1,4 @@
+The following packages will be upgraded:
+  libssl3 openssl
+2 upgraded, 0 newly installed, 0 to remove.
+Do you want to continue? (Y/n)

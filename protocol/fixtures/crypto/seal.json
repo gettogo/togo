@@ -1,0 +1,162 @@
+{
+  "description": "Sealed envelope vectors. All keys are test-only values: recipient keys are the push.pair fixture host key (bytes 0x20..0x3f) and device key (bytes 0x40..0x5f); ephPriv and nonce are SHA-256(\"togo test vector: \" + name + \" ephemeral\") and the first 12 bytes of SHA-256(\"togo test vector: \" + name + \" nonce\"). Encoding: keys, nonce, sharedSecret, salt, key and ciphertext are lowercase hex; label, info, aad and plaintext are UTF-8 strings; envelope is base64url without padding. Steps: sharedSecret = X25519(ephPriv, recipientPub), rejected when all zero; salt = ephPub || recipientPub; key = HKDF-SHA256(ikm=sharedSecret, salt, info=\"togo/v1/\" + label, L=32); ciphertext = ChaCha20-Poly1305(key, nonce, plaintext, aad), ciphertext then 16-byte tag; envelope = 0x01 || ephPub || nonce || ciphertext. vectors: sealing with ephPriv and nonce must reproduce envelope byte for byte, and opening with recipientPriv must return plaintext. negative: opening envelope with recipientPriv, label and aad must fail without revealing which check failed (bad base64url, version not 0x01, shorter than 61 bytes, low-order ephemeral key, wrong label, aad or key, tampered bytes).",
+  "vectors": [
+    {
+      "name": "push needs_you to device",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "recipientPub": "79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a",
+      "ephPriv": "46aec286b0866322e1d94ec73be40b165f78bb04a26ca0ba2756aa5360061b35",
+      "ephPub": "528c59e4fffe8be121b20bbbe7076c36b603db02ed142f97a0f03e287129ca66",
+      "nonce": "2539e47cbe49e4904760bc0b",
+      "label": "push",
+      "info": "togo/v1/push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "plaintext": "{\"v\":1,\"kind\":\"needs_you\",\"sessionId\":\"s_abcdefghij\",\"bib\":\"01\",\"agent\":\"claude\",\"title\":\"Run npm test?\",\"body\":\"Bash: npm test\",\"requestId\":\"r_abcdefghij\",\"options\":[{\"n\":1,\"label\":\"Yes\",\"role\":\"approve\"},{\"n\":2,\"label\":\"Yes, and don't ask again\",\"role\":\"approve_always\"},{\"n\":3,\"label\":\"No\",\"role\":\"deny\"}],\"ts\":1793707200000}",
+      "sharedSecret": "ca59e2c5c26fa938c5631405554deed36bd2f9897799b23a127cb2114ca36337",
+      "salt": "528c59e4fffe8be121b20bbbe7076c36b603db02ed142f97a0f03e287129ca6679a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a",
+      "key": "b03b3901444b99e411c885e1ed1b98fac9e1e86ebedc47c6800e041a9e257a16",
+      "ciphertext": "63ad9625425823a3a0402b2375cdfc1126fdfc5d20f8a72846b4bfc0602c9c84e547f548ef3a016f4cb8be8c328594e13a25a12a0f815e423f8c5468047ac22fc726b4a4d24c3ffe3f95a5b1c5d71678f93f0f636872ac5ecb865957da8a54b87a449a5e72948d6565e49d591f24a3d51906b2c525c5b3109df4152407e1c55dcf49c9d7633a1a1e6fe3bc059f097fbdaf5404b9c16ccf4f17c56834794b15c08c9f0159bd20d020d746e135761d940c1d72ca21eac83edeba94a0889e25bc39d5840bb639b419f452a1a1c078ca9844cb348e31b7aef5618508597ae869e9965973ba001ac3baaf660c1f2635d253cdae4107b9dd87631df12d8cc5f62861465354dffa62bccbb0ddc49e77f6989f6edc10eaad1d39aa49a6ca5273adbd0a9119683d3612ec1503cf537fec780c8c1efa38abe66b197276a76639d3c593b8535ae7cf8f50672ac8b5f1e12a347c95558d1e08d4dd98e79b",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s"
+    },
+    {
+      "name": "answer to host",
+      "recipientPriv": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "recipientPub": "358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254",
+      "ephPriv": "445afb0f13ccd656519bf5c7e80acb268a619587724f21a01a3e2ce8736cbd4f",
+      "ephPub": "55e822da336d6a09509fffe67005256825a27bda8077b1b19d935c159747ea75",
+      "nonce": "2e872c2a0c2987db4862e5a6",
+      "label": "answer",
+      "info": "togo/v1/answer",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7",
+      "plaintext": "{\"requestId\":\"r_abcdefghij\",\"decision\":\"option:2\",\"ts\":1793707200000,\"deviceId\":\"dev_test-1\",\"sig\":\"lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ\"}",
+      "sharedSecret": "74ab9ed502e0f3ed747e2809c063bb3ad01d915b9ac1b18638178ec3279c873a",
+      "salt": "55e822da336d6a09509fffe67005256825a27bda8077b1b19d935c159747ea75358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254",
+      "key": "a2323c7e8039772eebdef21203a5a9f0c2c92e193629405b9ec69821adaa22ff",
+      "ciphertext": "63b786e971745f570e2254e6d4175dde48d7254c3c9d6487d75612ebe5aeb06a5f8a8b7e4dd1e6f2621bd9758e39f0fe93a2d00fbdcfa5326e1e0c632c13a9609a6437fdd256f231a202b53187a162e80f1faf023365603030549d72bbbb2fe952421e7a299c2721c2d0fa5ae9d23f516f2f49462807d2d04c07b63422181edf240e2c2dd8cd5c2bac424e0d4ae6b87d29fa7ef847776d2d6c45cd603c776449cfebf8857e9d450c617fc4c57fc3a695df1fe40addf151e6aa4b078adb50b923b0d72826d586a2989e34cb34",
+      "envelope": "AVXoItozbWoJUJ__5nAFJWglonvagHexsZ2TXBWXR-p1LocsKgwph9tIYuWmY7eG6XF0X1cOIlTm1Bdd3kjXJUw8nWSH11YS6-WusGpfiot-TdHm8mIb2XWOOfD-k6LQD73PpTJuHgxjLBOpYJpkN_3SVvIxogK1MYehYugPH68CM2VgMDBUnXK7uy_pUkIeeimcJyHC0Ppa6dI_UW8vSUYoB9LQTAe2NCIYHt8kDiwt2M1cK6xCTg1K5rh9Kfp--Ed3bS1sRc1gPHdkSc_r-IV-nUUMYX_ExX_DppXfH-QK3fFR5qpLB4rbULkjsNcoJtWGopieNMs0"
+    },
+    {
+      "name": "empty plaintext and aad",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "recipientPub": "79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a",
+      "ephPriv": "5c3c260582e5227eb1c19f5b7c24688393eba2a3064c72b71c741493d875d481",
+      "ephPub": "0a2c8ba05130f71b3cccff23e0f0f355fa99d0db391bd13d3551f493e504861a",
+      "nonce": "3045ff257bb17d460f44d7dd",
+      "label": "push",
+      "info": "togo/v1/push",
+      "aad": "",
+      "plaintext": "",
+      "sharedSecret": "c089c30f5d49cf1ced02e13b9378005cad2f2f33ade89542c79ffa4a070d4071",
+      "salt": "0a2c8ba05130f71b3cccff23e0f0f355fa99d0db391bd13d3551f493e504861a79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a",
+      "key": "941f2b598bdae354ea62b57c6b8badb0ed3077719559e595839b737a5ebebe2b",
+      "ciphertext": "52fa53fd8a550869a1b55faaf172db5b",
+      "envelope": "AQosi6BRMPcbPMz_I-Dw81X6mdDbORvRPTVR9JPlBIYaMEX_JXuxfUYPRNfdUvpT_YpVCGmhtV-q8XLbWw"
+    }
+  ],
+  "negative": [
+    {
+      "name": "flipped ciphertext byte",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLYq2WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "flipped tag byte",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y5xs",
+      "expect": "fail"
+    },
+    {
+      "name": "flipped nonce byte",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJDnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "wrong aad",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1x",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "wrong label",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "answer",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "wrong recipient",
+      "recipientPriv": "26f1150dfcaf3ead66316a7d99f57a7f835f10778800082db6c9d9b53bb26f6a",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "version byte 0x02",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AlKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "short envelope",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38",
+      "expect": "fail"
+    },
+    {
+      "name": "empty envelope",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "",
+      "expect": "fail"
+    },
+    {
+      "name": "low-order ephemeral key zero",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "low-order ephemeral key order 8",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AeDrenw7QbiuFlbj-vGfxGraCY3rnDKx_YZiBRZfSbgAJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    },
+    {
+      "name": "padded base64",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT__ovhIbILu-cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9_F0g-KcoRrS_wGAsnITlR_VI7zoBb0y4vowyhZThOiWhKg-BXkI_jFRoBHrCL8cmtKTSTD_-P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm_jvAWfCX-9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg-3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3_pivMuw3cSed_aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3_seAyMHvo4q-ZrGXJ2p2Y508WTuFNa58-PUGcqyLXx4So0fJVVjR4I1N2Y55s=",
+      "expect": "fail"
+    },
+    {
+      "name": "standard base64 alphabet",
+      "recipientPriv": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "label": "push",
+      "aad": "h_mmg42klgyqzwneiskrelxms3j7|dev_test-1",
+      "envelope": "AVKMWeT//ovhIbILu+cHbDa2A9sC7RQvl6DwPihxKcpmJTnkfL5J5JBHYLwLY62WJUJYI6OgQCsjdc38ESb9/F0g+KcoRrS/wGAsnITlR/VI7zoBb0y4vowyhZThOiWhKg+BXkI/jFRoBHrCL8cmtKTSTD/+P5WlscXXFnj5Pw9jaHKsXsuGWVfailS4ekSaXnKUjWVl5J1ZHySj1RkGssUlxbMQnfQVJAfhxV3PScnXYzoaHm/jvAWfCX+9r1QEucFsz08XxWg0eUsVwIyfAVm9INAg10bhNXYdlAwdcsoh6sg+3rqUoIieJbw51YQLtjm0GfRSoaHAeMqYRMs0jjG3rvVhhQhZeuhp6ZZZc7oAGsO6r2YMHyY10lPNrkEHud2HYx3xLYzF9ihhRlNU3/pivMuw3cSed/aYn27cEOqtHTmqSabKUnOtvQqRGWg9NhLsFQPPU3/seAyMHvo4q+ZrGXJ2p2Y508WTuFNa58+PUGcqyLXx4So0fJVVjR4I1N2Y55s",
+      "expect": "fail"
+    }
+  ]
+}

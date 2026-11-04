@@ -1,0 +1,13 @@
+╭─────────────────────────────────────────────╮
+│ Ready to code?                              │
+│                                             │
+│ Here is the plan:                           │
+│  1. Add a retry wrapper around fetchConfig  │
+│  2. Cover the wrapper with unit tests       │
+│                                             │
+│ Would you like to proceed?                  │
+│                                             │
+│ ❯ 1. Yes, and auto-accept edits             │
+│   2. Yes, and manually approve edits        │
+│   3. No, keep planning                      │
+╰─────────────────────────────────────────────╯

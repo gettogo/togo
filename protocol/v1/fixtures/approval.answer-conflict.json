@@ -1,0 +1,48 @@
+{
+  "description": "Answering an approval the desk already answered is refused and sends no keys. Deviation: the approval store is seeded with r_abcdefghij for s_abcdefghij, then the desk answer is recorded before the request.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "approval.answer",
+    "params": {
+      "requestId": "r_abcdefghij",
+      "decision": "approve"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "error": {
+      "code": -32006,
+      "message": "conflict",
+      "data": {
+        "reason": "answered",
+        "by": "desk"
+      }
+    }
+  }
+}

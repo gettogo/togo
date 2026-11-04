@@ -29,6 +29,7 @@ const (
 	optionAgent   = "@togo_agent"
 	optionName    = "@togo_name"
 	optionCreated = "@togo_created"
+	optionMuted   = "@togo_muted"
 )
 
 // CreateOpts are the inputs to Create. Zero values select the defaults: the

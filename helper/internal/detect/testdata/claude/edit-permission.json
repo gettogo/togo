@@ -1,0 +1,35 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "permission",
+  "title": "Do you want to make this edit to config.ts?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, allow all edits during this session (shift+tab)",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "No, and tell the agent what to do differently",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "Escape"
+    ]
+  }
+}

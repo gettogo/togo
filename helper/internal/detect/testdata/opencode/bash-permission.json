@@ -1,0 +1,38 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "permission",
+  "title": "Allow this command to run?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Allow once",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Allow always",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Reject",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  }
+}

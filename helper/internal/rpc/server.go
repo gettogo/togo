@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 )
 
 // protocolVersion is the only protocol version this helper speaks.
@@ -23,6 +24,9 @@ type HelperInfo struct {
 	Arch         string
 	Hostname     string
 	Capabilities []string
+	// Concurrent lists methods whose handlers may block (local.ask), so each
+	// call runs on its own goroutine instead of holding up later requests.
+	Concurrent []string
 }
 
 type request struct {
@@ -58,17 +62,36 @@ type helloHelper struct {
 
 // Serve reads framed JSON-RPC requests from r and writes responses to w until
 // r reaches a clean EOF, in which case it returns nil. Requests are handled
-// one at a time in arrival order. Calls other than hello get -32002 until a
-// hello with a supported protocol version succeeds.
+// one at a time in arrival order, except methods listed in info.Concurrent,
+// which run on their own goroutine so a blocking handler does not stall the
+// stream. Calls other than hello get -32002 until a hello with a supported
+// protocol version succeeds. Handlers reach the stream through ConnFrom.
 //
 // An oversized or truncated frame leaves the stream unframed, so Serve stops
 // without replying and returns ErrFrameTooLarge or io.ErrUnexpectedEOF.
+//
+// When the stream ends, Serve cancels the context given to handlers, closes
+// the Conn and waits for concurrent handlers to return.
 func Serve(ctx context.Context, r io.Reader, w io.Writer, h Handler, info HelperInfo) error {
+	ctx, cancel := context.WithCancel(ctx)
+	conn := newConn(w)
+	ctx = withConn(ctx, conn)
+	var inflight sync.WaitGroup
+	defer func() {
+		cancel()
+		conn.close()
+		inflight.Wait()
+	}()
+
+	concurrent := make(map[string]bool, len(info.Concurrent))
+	for _, m := range info.Concurrent {
+		concurrent[m] = true
+	}
 	ready := false
 	for {
 		payload, err := ReadFrame(r)
 		if errors.Is(err, io.EOF) {
-			return nil
+			return conn.writeErr()
 		}
 		if err != nil {
 			return err
@@ -76,53 +99,73 @@ func Serve(ctx context.Context, r io.Reader, w io.Writer, h Handler, info Helper
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		resp, ok := respond(ctx, payload, h, info, &ready)
-		if !ok {
+		req, resp, done := parse(payload, info, &ready)
+		if !done && concurrent[req.Method] {
+			inflight.Go(func() {
+				// A write failure is recorded on conn and surfaces from the read loop.
+				_ = conn.send(call(ctx, h, req))
+			})
 			continue
 		}
-		if err := send(w, resp); err != nil {
+		if !done {
+			resp = call(ctx, h, req)
+		}
+		if resp.JSONRPC == "" {
+			continue
+		}
+		if err := conn.send(resp); err != nil {
 			return err
+		}
+		// Notifications open only once the hello response is on the wire.
+		if ready {
+			conn.setReady()
 		}
 	}
 }
 
-// respond builds the reply to one frame. ok is false for notifications.
-func respond(ctx context.Context, payload []byte, h Handler, info HelperInfo, ready *bool) (resp response, ok bool) {
+// parse validates one frame and answers everything that does not need the
+// handler: malformed frames, hello, and calls before hello. done is false
+// when req must go to the handler. A zero resp means no reply (a
+// notification from the client).
+func parse(payload []byte, info HelperInfo, ready *bool) (req request, resp response, done bool) {
 	null := json.RawMessage("null")
 	if !json.Valid(payload) {
-		return failure(null, NewError(CodeParse, nil)), true
+		return req, failure(null, NewError(CodeParse, nil)), true
 	}
-	var req request
 	if err := json.Unmarshal(payload, &req); err != nil || req.JSONRPC != "2.0" || req.Method == "" {
-		return failure(null, NewError(CodeInvalidRequest, nil)), true
+		return req, failure(null, NewError(CodeInvalidRequest, nil)), true
 	}
 	if len(req.ID) == 0 {
-		return response{}, false
+		return req, response{}, true
 	}
 	if !validID(req.ID) {
-		return failure(null, NewError(CodeInvalidRequest, nil)), true
+		return req, failure(null, NewError(CodeInvalidRequest, nil)), true
 	}
 
 	if req.Method == "hello" {
 		result, rpcErr := hello(req.Params, info)
 		if rpcErr != nil {
-			return failure(req.ID, rpcErr), true
+			return req, failure(req.ID, rpcErr), true
 		}
 		*ready = true
-		return response{JSONRPC: "2.0", ID: req.ID, Result: result}, true
+		return req, response{JSONRPC: "2.0", ID: req.ID, Result: result}, true
 	}
 	if !*ready {
-		return failure(req.ID, NewError(CodeNotReady, nil)), true
+		return req, failure(req.ID, NewError(CodeNotReady, nil)), true
 	}
+	return req, response{}, false
+}
+
+func call(ctx context.Context, h Handler, req request) response {
 	result, rpcErr := h.Handle(ctx, req.Method, req.Params)
 	if rpcErr != nil {
-		return failure(req.ID, rpcErr), true
+		return failure(req.ID, rpcErr)
 	}
 	if result == nil {
 		// A nil Result would be dropped by omitempty, leaving neither result nor error.
 		result = json.RawMessage("null")
 	}
-	return response{JSONRPC: "2.0", ID: req.ID, Result: result}, true
+	return response{JSONRPC: "2.0", ID: req.ID, Result: result}
 }
 
 func hello(params json.RawMessage, info HelperInfo) (*helloResult, *Error) {

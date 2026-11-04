@@ -1,0 +1,35 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "permission",
+  "title": "Would you like to proceed?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes, and auto-accept edits",
+      "role": "approve_always"
+    },
+    {
+      "n": 2,
+      "label": "Yes, and manually approve edits",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "No, keep planning",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  }
+}

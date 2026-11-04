@@ -1,0 +1,125 @@
+{
+  "description": "Approval signature vectors. Ed25519 over the UTF-8 bytes of message = \"togo-approval/v1\\n\" + hostId + \"\\n\" + requestId + \"\\n\" + decision + \"\\n\" + ts, ts in decimal Unix milliseconds. seed is the 32-byte Ed25519 private seed in hex (test-only: 0x11 repeated for the answer fixture, otherwise SHA-256(\"togo test vector: signer ...\")); publicKey and signature are base64url without padding. expect ok: the signature verifies under publicKey; signers with deterministic Ed25519 reproduce it exactly, hedged signers (CryptoKit) need only verify it. expect fail: verification must return false. Fields other than the edited one are copied from the first vector; message is rebuilt from the edited fields. non-canonical s adds the group order L to the scalar half and must be rejected.",
+  "vectors": [
+    {
+      "name": "answer fixture option:2",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_abcdefghij",
+      "decision": "option:2",
+      "ts": 1793707200000,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_abcdefghij\noption:2\n1793707200000",
+      "signature": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ",
+      "expect": "ok"
+    },
+    {
+      "name": "approve",
+      "seed": "ca26f6338548e28f57e2100422439d2fde9fcfc90f514a7464d8df2c4babceb2",
+      "publicKey": "FEZyQehA4pbkWQC7T1a28vMIhwopegyWMnnBWuzMZ-M",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_234567abcd",
+      "decision": "approve",
+      "ts": 1793707260123,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_234567abcd\napprove\n1793707260123",
+      "signature": "0Slfg3frQnuVtDk_MCZNfd8At6Bm-zzHWt0EjsamY-GHOFfLva2RfLR78hLRWWJsEY_iIET4xmL-npYc_SfPCQ",
+      "expect": "ok"
+    },
+    {
+      "name": "deny",
+      "seed": "4486407aa8f1f287f5975c5b842cd69412504799aefd2a294b39339e78ab6a74",
+      "publicKey": "HemF-67ue5f40FIJGCL2mK4ZVclWTDhXVB4j94OAGig",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_zzzzzzzzzz",
+      "decision": "deny",
+      "ts": 1,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_zzzzzzzzzz\ndeny\n1",
+      "signature": "KmE61mlwOFyGgXrneDIIK1BOtamzAs0onlJB9TYFD8xjMJGwucWeLRgbeENCDSVDCHGfEIBg7YClBZ4RJSD6CQ",
+      "expect": "ok"
+    },
+    {
+      "name": "other decision",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_abcdefghij",
+      "decision": "option:3",
+      "ts": 1793707200000,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_abcdefghij\noption:3\n1793707200000",
+      "signature": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ",
+      "expect": "fail"
+    },
+    {
+      "name": "other ts",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_abcdefghij",
+      "decision": "option:2",
+      "ts": 1793707200001,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_abcdefghij\noption:2\n1793707200001",
+      "signature": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ",
+      "expect": "fail"
+    },
+    {
+      "name": "other host",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "hostId": "h_aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "requestId": "r_abcdefghij",
+      "decision": "option:2",
+      "ts": 1793707200000,
+      "message": "togo-approval/v1\nh_aaaaaaaaaaaaaaaaaaaaaaaaaa\nr_abcdefghij\noption:2\n1793707200000",
+      "signature": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ",
+      "expect": "fail"
+    },
+    {
+      "name": "other key",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "FEZyQehA4pbkWQC7T1a28vMIhwopegyWMnnBWuzMZ-M",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_abcdefghij",
+      "decision": "option:2",
+      "ts": 1793707200000,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_abcdefghij\noption:2\n1793707200000",
+      "signature": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ",
+      "expect": "fail"
+    },
+    {
+      "name": "flipped signature bit",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_abcdefghij",
+      "decision": "option:2",
+      "ts": 1793707200000,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_abcdefghij\noption:2\n1793707200000",
+      "signature": "l7Fs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ",
+      "expect": "fail"
+    },
+    {
+      "name": "short signature",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_abcdefghij",
+      "decision": "option:2",
+      "ts": 1793707200000,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_abcdefghij\noption:2\n1793707200000",
+      "signature": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SI",
+      "expect": "fail"
+    },
+    {
+      "name": "non-canonical s",
+      "seed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "publicKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "requestId": "r_abcdefghij",
+      "decision": "option:2",
+      "ts": 1793707200000,
+      "message": "togo-approval/v1\nh_mmg42klgyqzwneiskrelxms3j7\nr_abcdefghij\noption:2\n1793707200000",
+      "signature": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoRzg74HSvpeh7ahX-V970ik9qLsXYO5eAljTts-s5SIEQ",
+      "expect": "fail"
+    }
+  ]
+}

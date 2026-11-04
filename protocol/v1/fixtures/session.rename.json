@@ -46,7 +46,13 @@
       "status": "idle",
       "activity": null,
       "attachedClients": 0,
-      "managed": true
+      "managed": true,
+      "muted": false,
+      "meta": {
+        "model": null,
+        "contextPercent": null,
+        "costUsd": null
+      }
     }
   }
 }

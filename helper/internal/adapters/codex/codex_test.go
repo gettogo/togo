@@ -1,0 +1,123 @@
+package codex
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func fixture(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func lister(c ...Candidate) func(context.Context) ([]Candidate, error) {
+	return func(context.Context) ([]Candidate, error) { return c, nil }
+}
+
+func TestMapFixtures(t *testing.T) {
+	cases := []struct {
+		file, event, want, tool, command, message string
+	}{
+		{"user_prompt_submit.json", "UserPromptSubmit", "prompt", "", "", ""},
+		{"permission_request.json", "PermissionRequest", "permission", "Bash", "rm -rf build", ""},
+		{"stop.json", "Stop", "stop", "", "", "Done. Tests pass."},
+		{"notify_turn_complete.json", "notify", "stop", "", "", "Done."},
+	}
+	for _, c := range cases {
+		t.Run(c.file, func(t *testing.T) {
+			a := &Adapter{}
+			ev, err := a.Map(c.event, strings.NewReader(fixture(t, c.file)), map[string]string{"TOGO_SESSION": "s_abc"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ev.Agent != "codex" || ev.Event != c.want || ev.Cwd != "/work/app" {
+				t.Fatalf("event = %+v", ev)
+			}
+			if ev.SessionID == nil || *ev.SessionID != "s_abc" {
+				t.Fatalf("session = %v", ev.SessionID)
+			}
+			d := ev.Data
+			if d.Tool != c.tool || d.Command != c.command || d.Message != c.message || d.AgentSessionID != "0199-aaaa" {
+				t.Fatalf("data = %+v", d)
+			}
+		})
+	}
+}
+
+func TestSharedDaemonResolvesByUniqueCwd(t *testing.T) {
+	a := &Adapter{Sessions: lister(
+		Candidate{"s_one", "codex", "/work/app"},
+		Candidate{"s_two", "codex", "/work/other"},
+		Candidate{"s_three", "claude", "/work/app"},
+	)}
+	ev, err := a.Map("Stop", strings.NewReader(fixture(t, "stop.json")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.SessionID == nil || *ev.SessionID != "s_one" {
+		t.Fatalf("session = %v", ev.SessionID)
+	}
+}
+
+func TestAmbiguousCwdDropped(t *testing.T) {
+	var logged string
+	a := &Adapter{
+		Sessions: lister(Candidate{"s_one", "codex", "/work/app"}, Candidate{"s_two", "codex", "/work/app"}),
+		Logf:     func(f string, args ...any) { logged = f },
+	}
+	_, err := a.Map("Stop", strings.NewReader(fixture(t, "stop.json")), nil)
+	if !errors.Is(err, ErrDropped) || logged == "" {
+		t.Fatalf("err = %v, logged = %q", err, logged)
+	}
+}
+
+func TestAgentSessionIdRemembered(t *testing.T) {
+	cands := []Candidate{{"s_one", "codex", "/work/app"}}
+	a := &Adapter{Sessions: func(context.Context) ([]Candidate, error) { return cands, nil }}
+	if _, err := a.Map("UserPromptSubmit", strings.NewReader(fixture(t, "user_prompt_submit.json")), nil); err != nil {
+		t.Fatal(err)
+	}
+	cands = append(cands, Candidate{"s_two", "codex", "/work/app"})
+	ev, err := a.Map("Stop", strings.NewReader(fixture(t, "stop.json")), nil)
+	if err != nil || *ev.SessionID != "s_one" {
+		t.Fatalf("ev = %+v, err = %v", ev, err)
+	}
+}
+
+func TestMalformedAndUnsupportedInputRejected(t *testing.T) {
+	a := &Adapter{}
+	env := map[string]string{"TOGO_SESSION": "s_abc"}
+	for name, c := range map[string]struct{ event, in string }{
+		"not json":      {"Stop", "{{{"},
+		"array":         {"Stop", "[]"},
+		"empty":         {"Stop", ""},
+		"unknown event": {"PreToolUse", "{}"},
+		"notify type":   {"notify", `{"type":"other"}`},
+		"oversize":      {"Stop", `{"cwd":"` + strings.Repeat("a", 2<<20) + `"}`},
+	} {
+		if _, err := a.Map(c.event, strings.NewReader(c.in), env); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestLongFieldsTruncatedAndErrorsOmitPayload(t *testing.T) {
+	a := &Adapter{}
+	in := `{"session_id":"x","cwd":"/w","last_assistant_message":"` + strings.Repeat("é", 1000) + `\u0007"}`
+	ev, err := a.Map("Stop", strings.NewReader(in), map[string]string{"TOGO_SESSION": "s_a"})
+	if err != nil || len([]rune(ev.Data.Message)) != maxMessageRune {
+		t.Fatalf("err = %v, len = %d", err, len([]rune(ev.Data.Message)))
+	}
+	_, err = a.Map("Stop", strings.NewReader("secret-token-123"), nil)
+	if err == nil || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("err = %v", err)
+	}
+}

@@ -1,0 +1,4 @@
+$ ./deploy.sh staging
+Building release bundle... done
+Uploading 14 files to staging
+Overwrite existing release v2.3.1? [y/n] 

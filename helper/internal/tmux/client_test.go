@@ -486,3 +486,40 @@ func TestAttachArgvSurvivesSchemaQuoting(t *testing.T) {
 		t.Fatalf("argv after the shell = %q, want %q", got, argv)
 	}
 }
+
+func TestPipedSessionsSeesTapExit(t *testing.T) {
+	c := tmuxtest.New(t)
+	ctx := context.Background()
+	const name = "s_pipedpiped"
+	if err := c.NewSession(ctx, tmux.NewSessionOpts{Name: name, Dir: t.TempDir(), Cols: 80, Rows: 24}); err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	piped, err := c.PipedSessions(ctx)
+	if err != nil || piped[name] {
+		t.Fatalf("before pipe-pane: %v %v", piped, err)
+	}
+	if err := c.PipePane(ctx, "="+name+":", "cat >/dev/null"); err != nil {
+		t.Fatal(err)
+	}
+	if piped, err = c.PipedSessions(ctx); err != nil || !piped[name] {
+		t.Fatalf("while piping: %v %v", piped, err)
+	}
+	if err := c.PipePane(ctx, "="+name+":", "exit 0"); err != nil {
+		t.Fatal(err)
+	}
+	// tmux notices a dead pipe when it next writes pane output to it.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if err := c.SendKeys(ctx, "="+name+":", false, "echo", "Space", "x", "Enter"); err != nil {
+			t.Fatal(err)
+		}
+		piped, err = c.PipedSessions(ctx)
+		if err == nil && !piped[name] {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pipe still reported after its command exited: %v %v", piped, err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}

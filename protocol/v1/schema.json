@@ -33,11 +33,29 @@
         { "if": { "properties": { "method": { "const": "session.attachCommand" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionAttachCommandParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "agents.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
         { "if": { "properties": { "method": { "const": "fs.recentDirs" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
-        { "if": { "properties": { "method": { "const": "fs.listDir" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsListDirParams" } }, "required": ["params"] } }
+        { "if": { "properties": { "method": { "const": "fs.listDir" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsListDirParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "events.subscribe" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EventsSubscribeParams" } } } },
+        { "if": { "properties": { "method": { "const": "events.keepalive" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EventsKeepaliveParams" } } } },
+        { "if": { "properties": { "method": { "const": "approval.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/ApprovalListParams" } } } },
+        { "if": { "properties": { "method": { "const": "approval.answer" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/ApprovalAnswerParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.setMute" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionSetMuteParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "push.pair" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/PushPairParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "push.unpair" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/PushUnpairParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.status" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.diff" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitDiffParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.log" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitLogParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.branches" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "fs.read" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsReadParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "ports.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.signal" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalSignalParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.hook" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalHookParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.ask" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalAskParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.notify" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalNotifyParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.job" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalJobParams" } }, "required": ["params"] } }
       ]
     },
     "Notification": {
-      "description": "A JSON-RPC 2.0 notification (no id). The helper ignores notifications in phase 1; phase 4 adds the `event` notification.",
+      "description": "A JSON-RPC 2.0 notification (no id). The helper ignores notifications it receives. It sends one kind, `event`, and only to a connection that called events.subscribe.",
       "type": "object",
       "properties": {
         "jsonrpc": { "const": "2.0" },
@@ -45,7 +63,10 @@
         "params": { "type": "object" }
       },
       "required": ["jsonrpc", "method"],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "method": { "const": "event" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/Event" } }, "required": ["params"] } }
+      ]
     },
     "Response": {
       "description": "A JSON-RPC 2.0 response: exactly one of `result` or `error`. `id` echoes the request id, or is null when it could not be read (parse error).",
@@ -73,7 +94,7 @@
       ]
     },
     "Error": {
-      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (path not absolute after ~ expansion, contains NUL, missing, not a directory, or, for fs.listDir, not readable), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval already answered, phase 4), -32007 \"not_managed\" (write call on an unmanaged session). `data` is omitted when a code defines none.",
+      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval no longer answerable; data {reason: \"answered\" | \"prompt_gone\" | \"expired\", by?: \"desk\" | \"phone\"}, by present when reason is answered), -32007 \"not_managed\" (write call on an unmanaged session). `data` is omitted when a code defines none.",
       "type": "object",
       "properties": {
         "code": { "type": "integer" },
@@ -130,7 +151,21 @@
             "required": ["data"]
           }
         },
-        { "if": { "properties": { "code": { "const": -32006 } } }, "then": { "properties": { "message": { "const": "conflict" } } } },
+        {
+          "if": { "properties": { "code": { "const": -32006 } } },
+          "then": {
+            "properties": {
+              "message": { "const": "conflict" },
+              "data": {
+                "type": "object",
+                "properties": { "reason": { "enum": ["answered", "prompt_gone", "expired"] }, "by": { "enum": ["desk", "phone"] } },
+                "required": ["reason"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["data"]
+          }
+        },
         { "if": { "properties": { "code": { "const": -32007 } } }, "then": { "properties": { "message": { "const": "not_managed" } } } }
       ]
     },
@@ -166,12 +201,14 @@
         "agent": { "description": "Agent id from agents.list. Unmanaged sessions report `shell`.", "type": "string" },
         "cwd": { "description": "Absolute working directory of the session's active pane.", "type": "string" },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
-        "status": { "description": "Phase 1 reports only `idle` and `exited` (pane dead); phase 4 adds the rest.", "enum": ["working", "needs_you", "done", "idle", "exited"] },
-        "activity": { "description": "Short description of what the agent is doing. Null in phase 1.", "type": ["string", "null"] },
+        "status": { "description": "`needs_you` while an approval for the session is pending, else the status the helper derived from hooks and output, else `exited` when the pane is dead and `idle` otherwise. Helpers without events.v1 report only `idle` and `exited`.", "enum": ["working", "needs_you", "done", "idle", "exited"] },
+        "activity": { "description": "Short description of what the agent is doing, or null when unknown.", "type": ["string", "null"] },
         "attachedClients": { "type": "integer", "minimum": 0 },
-        "managed": { "type": "boolean" }
+        "managed": { "type": "boolean" },
+        "muted": { "description": "Pushes for this session are suppressed (session.setMute). False by default; always false for unmanaged sessions.", "type": "boolean" },
+        "meta": { "description": "Agent-reported model and usage, all null until an agent hook reports them.", "$ref": "#/$defs/SessionMeta" }
       },
-      "required": ["id", "bib", "name", "agent", "cwd", "createdAt", "status", "activity", "attachedClients", "managed"],
+      "required": ["id", "bib", "name", "agent", "cwd", "createdAt", "status", "activity", "attachedClients", "managed", "muted", "meta"],
       "additionalProperties": false,
       "oneOf": [
         {
@@ -215,7 +252,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Phase 1 helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\"].",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\"]. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.*, fs.read, fs.listDir with ref), \"ports.v1\" (ports.list). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -318,13 +355,16 @@
       "additionalProperties": false
     },
     "FsListDirParams": {
-      "description": "fs.listDir. path must be absolute or start with ~ (expanded to the home directory); relative paths, NUL bytes, missing paths, non-directories and directories the user cannot read are -32003. showHidden (default false) includes names starting with a dot.",
+      "description": "fs.listDir. path must be absolute or start with ~ (expanded to the home directory); relative paths, NUL bytes, missing paths, non-directories and directories the user cannot read are -32003. showHidden (default false) includes names starting with a dot. With ref (git.v1), id is required and path is relative to the session cwd: the listing is the tree at that commit, with the same -32003 rules as fs.read.",
       "type": "object",
       "properties": {
         "path": { "type": "string" },
-        "showHidden": { "type": "boolean" }
+        "showHidden": { "type": "boolean" },
+        "id": { "$ref": "#/$defs/SessionIdParam" },
+        "ref": { "type": "string" }
       },
       "required": ["path"],
+      "dependentRequired": { "ref": ["id"] },
       "additionalProperties": false
     },
     "FsListDirResult": {
@@ -346,6 +386,1432 @@
       "required": ["path", "entries"],
       "additionalProperties": false
     },
+    "RequestId": {
+      "description": "Approval id: `r_` + 10 chars of lowercase unpadded base32.",
+      "type": "string",
+      "pattern": "^r_[a-z2-7]{10}$"
+    },
+    "HostId": {
+      "description": "Host id: `h_` + the first 26 chars of lowercase unpadded base32 of SHA-256(mailbox secret).",
+      "type": "string",
+      "pattern": "^h_[a-z2-7]{26}$"
+    },
+    "JobId": {
+      "description": "Job id: `j_` + 10 chars of lowercase unpadded base32.",
+      "type": "string",
+      "pattern": "^j_[a-z2-7]{10}$"
+    },
+    "DeviceId": {
+      "description": "Phone-chosen device id.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "Base64Url": {
+      "description": "base64url without padding.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]*$"
+    },
+    "Key32": {
+      "description": "A 32-byte key in base64url without padding (43 chars).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"
+    },
+    "SessionMeta": {
+      "description": "What agent hooks and status-line payloads report about a session. Each field is null until reported.",
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contextPercent": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "costUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "model",
+        "contextPercent",
+        "costUsd"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalOption": {
+      "description": "One answer offered by the prompt. n is the number the agent's menu shows; option:<n> picks it.",
+      "type": "object",
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "role": {
+          "enum": [
+            "approve",
+            "approve_always",
+            "deny",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "n",
+        "label",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "Approval": {
+      "description": "A question waiting for the user. Only pending approvals are listed or sent; the end of one is the approval.closed event.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bib": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "agent": {
+          "type": "string"
+        },
+        "source": {
+          "description": "hook: an agent permission hook; screen: the prompt-shape detector; ask: `togo ask`.",
+          "enum": [
+            "hook",
+            "screen",
+            "ask"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "snippet": {
+          "description": "Last lines of the pane around the prompt, at most 40 lines and 4096 bytes.",
+          "type": "string",
+          "maxLength": 4096
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApprovalOption"
+          }
+        },
+        "allowText": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "const": "pending"
+        }
+      },
+      "required": [
+        "requestId",
+        "sessionId",
+        "bib",
+        "agent",
+        "source",
+        "title",
+        "detail",
+        "snippet",
+        "options",
+        "allowText",
+        "createdAt",
+        "expiresAt",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "Decision": {
+      "description": "approve | deny | option:<n> (1-99, no leading zero) | text:<1-2000 Unicode scalar values (not UTF-16 units), no control characters (Unicode Cc)>. approve picks the first option with role approve (never approve_always); deny picks the first with role deny, else sends Escape. option:<n> naming no offered option and text: when allowText is false are -32602. Answers arriving through the relay mailbox may only be approve, deny or option:<n>.",
+      "type": "string",
+      "pattern": "^(approve|deny|option:[1-9][0-9]?|text:[^\\u0000-\\u001f\\u007f-\\u009f]{1,2000})$"
+    },
+    "Job": {
+      "type": "object",
+      "properties": {
+        "jobId": {
+          "$ref": "#/$defs/JobId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "progress": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "running",
+            "ok",
+            "failed"
+          ]
+        },
+        "startedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "endedAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "jobId",
+        "name",
+        "progress",
+        "message",
+        "status",
+        "startedAt",
+        "endedAt"
+      ],
+      "additionalProperties": false
+    },
+    "Event": {
+      "description": "params of the `event` notification. The kind-specific fields sit beside the header fields. seq is strictly increasing per daemon and starts at 1. Every subscriber receives every event (no per-connection filtering), so a seq gap always means lost events and the client must call events.subscribe again. The helper writes the events.subscribe response before any event for that subscription; a client drops every event with seq <= the response seq. sessionId equals session.id for kind session, is non-null for session.removed and approval.open/closed of a session, and is null for events that belong to no session (notify and job without a session).",
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "kind": {
+          "enum": [
+            "session",
+            "session.removed",
+            "approval.open",
+            "approval.closed",
+            "notify",
+            "job"
+          ]
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "kind",
+        "sessionId"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "session"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "session": {
+                "$ref": "#/$defs/Session"
+              }
+            },
+            "required": [
+              "session"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "session.removed"
+              }
+            }
+          },
+          "then": {
+            "properties": {}
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "approval.open"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "approval": {
+                "$ref": "#/$defs/Approval"
+              }
+            },
+            "required": [
+              "approval"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "approval.closed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requestId": {
+                "$ref": "#/$defs/RequestId"
+              },
+              "resolution": {
+                "enum": [
+                  "phone",
+                  "desk",
+                  "expired",
+                  "gone"
+                ]
+              }
+            },
+            "required": [
+              "requestId",
+              "resolution"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "notify"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "body": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "level": {
+                "enum": [
+                  "info",
+                  "done",
+                  "needs_you"
+                ]
+              }
+            },
+            "required": [
+              "title",
+              "body",
+              "level"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "job"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "job": {
+                "$ref": "#/$defs/Job"
+              }
+            },
+            "required": [
+              "job"
+            ]
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "SessionRefParams": {
+      "description": "Params naming one session: git.status, git.branches, ports.list. Bad id: -32602; unknown: -32001.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SessionIdParam"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "EventsSubscribeParams": {
+      "description": "events.subscribe. Starts event notifications on this connection and returns a snapshot. foreground (default true) says the app is on screen, which suppresses pushes for sessions the app shows; call again to change it. Foreground is a lease: it lapses 45 s after the last request the connection sent, and any request renews it. An idle app on screen calls events.keepalive about every 20 s.",
+      "type": "object",
+      "properties": {
+        "foreground": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EventsKeepaliveParams": {
+      "description": "events.keepalive. Does nothing but, like every request, renews the connection's foreground lease (see EventsSubscribeParams). Result is {}.",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "EventsSubscribeResult": {
+      "description": "events.subscribe result. seq is the seq of the last event already reflected in sessions and approvals (0 when none). This response is written before any event for the subscription; events with seq <= this seq are already in the snapshot and the client drops them. Calling events.subscribe again on the same connection returns a fresh snapshot under the same rule and does not duplicate the stream.",
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Session"
+          }
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Approval"
+          }
+        }
+      },
+      "required": [
+        "seq",
+        "sessions",
+        "approvals"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalListParams": {
+      "description": "approval.list. Pending approvals, oldest first, optionally for one session.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionIdParam"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ApprovalListResult": {
+      "type": "object",
+      "properties": {
+        "approvals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Approval"
+          }
+        }
+      },
+      "required": [
+        "approvals"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalAnswerParams": {
+      "description": "approval.answer. Unknown requestId: -32001. Malformed decision (see Decision) or option n not offered: -32602. Already answered, prompt gone or expired: -32006, and no keys reach the pane.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "requestId",
+        "decision"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalAnswerResult": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "const": "answered"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "SessionSetMuteParams": {
+      "description": "session.setMute -> Session. Bad id or muted missing: -32602; unknown: -32001; u_ id: -32007.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SessionIdParam"
+        },
+        "muted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "muted"
+      ],
+      "additionalProperties": false
+    },
+    "PushPairParams": {
+      "description": "push.pair. x25519: the device's push-sealing public key; approvalKey: its Ed25519 answer-signing public key. Pairing an existing deviceId replaces it. Any field out of shape: -32602.",
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "$ref": "#/$defs/DeviceId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "x25519": {
+          "$ref": "#/$defs/Key32"
+        },
+        "approvalKey": {
+          "$ref": "#/$defs/Key32"
+        },
+        "apnsToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64,200}$"
+        },
+        "env": {
+          "enum": [
+            "sandbox",
+            "production"
+          ]
+        },
+        "relayUrl": {
+          "type": "string",
+          "pattern": "^https://[^\\s/?#]+(/[^\\s]*)?$"
+        },
+        "liveActivityToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64,200}$"
+        }
+      },
+      "required": [
+        "deviceId",
+        "name",
+        "x25519",
+        "approvalKey",
+        "apnsToken",
+        "env",
+        "relayUrl"
+      ],
+      "additionalProperties": false
+    },
+    "PushPairResult": {
+      "description": "hostKey is the helper's X25519 public key, which seals answers sent through the relay mailbox.",
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "$ref": "#/$defs/HostId"
+        },
+        "hostKey": {
+          "$ref": "#/$defs/Key32"
+        }
+      },
+      "required": [
+        "hostId",
+        "hostKey"
+      ],
+      "additionalProperties": false
+    },
+    "PushUnpairParams": {
+      "description": "push.unpair -> {}. Unknown deviceId: -32001.",
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deviceId"
+      ],
+      "additionalProperties": false
+    },
+    "GitStatusResult": {
+      "description": "git.status. A cwd outside any repository is repo false, root and branch null, zero counts and no files. branch is null on a detached HEAD. The helper runs git with repository config that executes programs disabled.",
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "boolean"
+        },
+        "root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ahead": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "behind": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "description": "index and worktree are the porcelain v2 status letters, `.` when unchanged.",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "origPath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "index": {
+                "type": "string"
+              },
+              "worktree": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "origPath",
+              "index",
+              "worktree"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "repo",
+        "root",
+        "branch",
+        "ahead",
+        "behind",
+        "files"
+      ],
+      "additionalProperties": false
+    },
+    "GitDiffParams": {
+      "description": "git.diff. path is relative to the session cwd. ref diffs the working tree (or the index with staged) against that commit. Path or ref rules as fs.read: -32003.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SessionIdParam"
+        },
+        "path": {
+          "type": "string"
+        },
+        "staged": {
+          "type": "boolean"
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "GitDiffResult": {
+      "description": "diff is unified text capped at 512 KiB; binary lists paths whose content differs but is not shown.",
+      "type": "object",
+      "properties": {
+        "diff": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "binary": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "diff",
+        "truncated",
+        "binary"
+      ],
+      "additionalProperties": false
+    },
+    "GitLogParams": {
+      "description": "git.log. ref defaults to HEAD, limit to 50. A ref starting with - or not resolving: -32003.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SessionIdParam"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "GitLogResult": {
+      "type": "object",
+      "properties": {
+        "commits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40,64}$"
+              },
+              "short": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "date": {
+                "$ref": "#/$defs/Timestamp"
+              },
+              "subject": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "hash",
+              "short",
+              "author",
+              "date",
+              "subject"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "commits"
+      ],
+      "additionalProperties": false
+    },
+    "GitBranchesResult": {
+      "description": "git.branches. Local branches by name. Outside a repository: current null, no branches.",
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "upstream": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "current": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "upstream",
+              "current"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "current",
+        "branches"
+      ],
+      "additionalProperties": false
+    },
+    "FsReadParams": {
+      "description": "fs.read. path is relative to the session cwd; absolute paths, .. escapes, symlinks resolving outside the cwd, missing files and non-files are -32003. ref reads the file at that commit (a ref starting with - is -32003).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SessionIdParam"
+        },
+        "path": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "FsReadResult": {
+      "description": "path echoes the cleaned relative path. size is the full file size in bytes; content holds at most 512 KiB, base64url without padding (the protocol-wide rule) when the bytes are not valid UTF-8.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "encoding": {
+          "enum": [
+            "utf8",
+            "base64"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "encoding",
+        "content",
+        "truncated"
+      ],
+      "additionalProperties": false
+    },
+    "PortsListResult": {
+      "description": "ports.list. TCP ports in the LISTEN state held by processes in the session's process tree, ordered by port.",
+      "type": "object",
+      "properties": {
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "address": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "command": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "port",
+              "address",
+              "pid",
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "ports"
+      ],
+      "additionalProperties": false
+    },
+    "LocalSignalParams": {
+      "description": "local.signal -> {}. Sent by `togo tap` for a bell, an OSC 9 or OSC 777 notification, or the first output after quiet. local.* methods are served only by the daemon, on connections it accepts on its unix socket from the same user; `serve --stdio` proxies to that socket, so its connections get them too. The in-process server that `serve --stdio` falls back to without a daemon does not serve them.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/ManagedSessionId"
+        },
+        "kind": {
+          "enum": [
+            "bell",
+            "osc9",
+            "osc777",
+            "output"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "LocalHookParams": {
+      "description": "local.hook -> {}. One agent hook invocation, reduced by the adapter; the raw payload is never forwarded.",
+      "type": "object",
+      "properties": {
+        "agent": {
+          "enum": [
+            "claude",
+            "codex"
+          ]
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ManagedSessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "contextPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "costUsd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "agentSessionId": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "agent",
+        "event",
+        "sessionId",
+        "cwd",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "LocalAskParams": {
+      "description": "local.ask. Opens an approval with source ask and blocks until it is answered or timeoutSec passes.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ManagedSessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "maxItems": 9
+        },
+        "allowText": {
+          "type": "boolean"
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "sessionId",
+        "title",
+        "options",
+        "allowText",
+        "timeoutSec"
+      ],
+      "additionalProperties": false
+    },
+    "LocalAskResult": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Decision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "enum": [
+            "answered",
+            "timeout"
+          ]
+        }
+      },
+      "required": [
+        "decision",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "LocalNotifyParams": {
+      "description": "local.notify. strict makes `togo notify` exit non-zero when nothing was delivered.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ManagedSessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "strict": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sessionId",
+        "title",
+        "body",
+        "strict"
+      ],
+      "additionalProperties": false
+    },
+    "LocalNotifyResult": {
+      "description": "delivered is true when a subscriber or a paired device received it.",
+      "type": "object",
+      "properties": {
+        "delivered": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "delivered"
+      ],
+      "additionalProperties": false
+    },
+    "LocalJobParams": {
+      "description": "local.job. start needs name and returns a new jobId; update and end need jobId; end takes status (default ok).",
+      "type": "object",
+      "properties": {
+        "op": {
+          "enum": [
+            "start",
+            "update",
+            "end"
+          ]
+        },
+        "jobId": {
+          "$ref": "#/$defs/JobId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "progress": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "message": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "additionalProperties": false
+    },
+    "LocalJobResult": {
+      "type": "object",
+      "properties": {
+        "jobId": {
+          "$ref": "#/$defs/JobId"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "additionalProperties": false
+    },
+    "PushPlaintext": {
+      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds.",
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "kind": {
+          "enum": [
+            "needs_you",
+            "done",
+            "job",
+            "notify",
+            "clear"
+          ]
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bib": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApprovalOption"
+          }
+        },
+        "ts": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "v",
+        "kind",
+        "sessionId",
+        "bib",
+        "agent",
+        "title",
+        "body",
+        "ts"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "needs_you"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requestId": true,
+              "options": true
+            },
+            "required": [
+              "requestId",
+              "options"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "clear"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "requestId"
+            ],
+            "properties": {
+              "requestId": true,
+              "title": {
+                "const": ""
+              },
+              "body": {
+                "const": ""
+              },
+              "options": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "done",
+                  "job",
+                  "notify"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requestId": false,
+              "options": false
+            }
+          }
+        }
+      ]
+    },
+    "AnswerPlaintext": {
+      "description": "Plaintext sealed (label answer, aad hostId) by the phone and posted to the relay mailbox, encoded as compact UTF-8 JSON. decision is limited to approve, deny and option:<n>; text answers travel only over SSH. ts is Unix time in milliseconds on the phone. sig is the Ed25519 signature, base64url without padding (86 chars), by the device's approvalKey over the UTF-8 bytes of \"togo-approval/v1\\n\" + hostId + \"\\n\" + requestId + \"\\n\" + decision + \"\\n\" + ts, where ts is written in decimal ASCII without leading zeros, each field is exactly the value in this object (hostId from push.pair), and there is no trailing newline.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "decision": {
+          "type": "string",
+          "pattern": "^(approve|deny|option:[1-9][0-9]?)$"
+        },
+        "ts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deviceId": {
+          "$ref": "#/$defs/DeviceId"
+        },
+        "sig": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        }
+      },
+      "required": [
+        "requestId",
+        "decision",
+        "ts",
+        "deviceId",
+        "sig"
+      ],
+      "additionalProperties": false
+    },
+    "PlaintextFixture": {
+      "description": "A sealed-payload example in protocol/v1/fixtures/plaintext. Shape only: protocol/fixtures/crypto holds the seal and signature vectors.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "push",
+            "answer"
+          ]
+        },
+        "plaintext": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "description",
+        "kind",
+        "plaintext"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "push"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "plaintext": {
+                "$ref": "#/$defs/PushPlaintext"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "answer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "plaintext": {
+                "$ref": "#/$defs/AnswerPlaintext"
+              }
+            }
+          }
+        }
+      ]
+    },
     "Fixture": {
       "description": "Golden exchange in protocol/v1/fixtures. A harness starts a fresh connection, sends each `setup` request in order (each reply must be a success response; its result is not compared), then sends `request` and compares the reply to `response` semantically: same keys and values, with two placeholder rules for strings in `response`. (1) The string \"<any>\" matches any value (the key must still be present); it is used only for genuinely host-dependent values (tmux path and socket label in argv, os, arch, the -32602 reason text). (2) A string starting with \"<home>\" is replaced by the harness HOME path followed by the rest of the string (\"<home>/proj\" means HOME + \"/proj\"; \"<home>\" alone means HOME) and then compared exactly. Harness environment shared by all fixtures: a fresh, empty tmux server on a test label; no unmanaged sessions (user socket disabled); session ids come from a seam returning \"s_abcdefghij\"; the clock reads 2026-11-03T12:00:00Z; helper version \"0.0.0-test\", hostname \"testhost\"; HOME (and the API's home) is a fresh temp dir, given as an absolute path with symlinks resolved (so tmux's pane path equals it), holding directories `alpha`, `Beta`, `proj`, `.cache` and a regular file `notes.txt` (byte order Beta, alpha, proj differs from the case-insensitive order alpha, Beta, proj); TOGO_HOME is a separate fresh temp dir; the login-shell PATH contains none of claude, omp, codex, opencode. Per-fixture deviations are stated in `description`.",
       "type": "object",
@@ -366,7 +1832,20 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "session.attachCommand" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/SessionAttachCommandResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "agents.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AgentsListResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.recentDirs" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsRecentDirsResult" } } } } } },
-        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.listDir" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsListDirResult" } } } } } }
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.listDir" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsListDirResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "events.subscribe" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EventsSubscribeResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "events.keepalive" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "approval.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/ApprovalListResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "approval.answer" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/ApprovalAnswerResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.setMute" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/Session" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "push.pair" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/PushPairResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "push.unpair" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.status" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitStatusResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.diff" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitDiffResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.log" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitLogResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.branches" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitBranchesResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.read" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsReadResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "ports.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/PortsListResult" } } } } } }
       ]
     }
   }

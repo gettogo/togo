@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:togo:protocol:v1:plaintext",
+  "description": "One sealed-payload example. See $defs/PlaintextFixture in schema.json.",
+  "$ref": "urn:togo:protocol:v1:schema#/$defs/PlaintextFixture"
+}

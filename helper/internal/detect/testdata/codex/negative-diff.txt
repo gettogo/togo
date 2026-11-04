@@ -1,0 +1,8 @@
+• Edited docs/prompts.md (+3 -1)
+    10  ## Approval prompt
+    11 -❯ 1. Yes
+    11 +❯ 1. Yes, proceed
+    12 +  2. No, cancel
+    13    Do you want to proceed?
+
+› Summarise the change

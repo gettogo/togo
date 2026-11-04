@@ -1,0 +1,17 @@
+{
+  "description": "hostId = \"h_\" + first 26 chars of lowercase unpadded base32 of SHA-256(mailbox secret). The first vector matches the push.pair fixture's host keys.",
+  "vectors": [
+    {
+      "secretHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7"
+    },
+    {
+      "secretHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "hostId": "h_mzuhvlpymk6xo3epygfy5h4oea"
+    },
+    {
+      "secretHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "hostId": "h_v6lbg5qpojrv7pnujjnauy6dt4"
+    }
+  ]
+}

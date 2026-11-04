@@ -1,5 +1,7 @@
 // Package api maps the protocol v1 session, agent and filesystem methods
-// onto the helper's domain packages.
+// onto the helper's domain packages. Other methods (events, approvals,
+// push, git, ports) plug in through API.Ext so their packages never edit
+// this file.
 package api
 
 import (
@@ -16,6 +18,23 @@ import (
 	"github.com/gettogo/togo/helper/internal/state"
 )
 
+// Method serves one extension method. An error that is a *CodeError reaches
+// the client with its code and data; a *session.InvalidParamsError becomes
+// -32602; anything else is logged and reported as -32603.
+type Method func(ctx context.Context, params json.RawMessage) (any, error)
+
+// CodeError is a protocol error chosen by an extension method. The rpc
+// package supplies the fixed message for Code, so Data is all a method
+// controls.
+type CodeError struct {
+	Code int
+	Data any
+}
+
+func (e *CodeError) Error() string {
+	return fmt.Sprintf("protocol error %d", e.Code)
+}
+
 // API is the rpc.Handler for every method except hello.
 type API struct {
 	Sessions *session.Service
@@ -25,6 +44,11 @@ type API struct {
 	// Logf receives the details of internal errors, which never reach the
 	// client. Nil discards them.
 	Logf func(format string, args ...any)
+	// Ext holds the methods served by packages outside api. It is consulted
+	// before the built-in methods, so another package can extend a built-in
+	// method (fs.listDir with a ref) without editing this file. It must not
+	// be modified while the API is serving.
+	Ext map[string]Method
 }
 
 // Handle dispatches one protocol method.
@@ -33,6 +57,13 @@ func (a *API) Handle(ctx context.Context, method string, params json.RawMessage)
 		result any
 		err    error
 	)
+	if fn, ok := a.Ext[method]; ok {
+		result, err = fn(ctx, params)
+		if err != nil {
+			return nil, a.mapError(method, err)
+		}
+		return result, nil
+	}
 	switch method {
 	case "session.list":
 		result, err = a.sessionList(ctx)
@@ -177,8 +208,13 @@ func (a *API) listDir(raw json.RawMessage) (any, error) {
 	return map[string]any{"path": dir, "entries": entries}, nil
 }
 
-// decode reads a params object into v. Absent or null params count as {}
-// and unknown fields are ignored. Failures are *session.InvalidParamsError.
+// Decode reads a params object into v. Absent or null params count as {}
+// and unknown fields are ignored. Failures are *session.InvalidParamsError,
+// which Handle reports as -32602, so extension methods return them as is.
+func Decode(raw json.RawMessage, v any) error {
+	return decode(raw, v)
+}
+
 func decode(raw json.RawMessage, v any) error {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
@@ -197,8 +233,11 @@ func (a *API) mapError(method string, err error) *rpc.Error {
 	var (
 		invalid *session.InvalidParamsError
 		tmuxErr *session.TmuxUnavailableError
+		codeErr *CodeError
 	)
 	switch {
+	case errors.As(err, &codeErr):
+		return rpc.NewError(codeErr.Code, codeErr.Data)
 	case errors.Is(err, session.ErrNotFound):
 		return rpc.NewError(rpc.CodeNotFound, nil)
 	case errors.Is(err, session.ErrNotManaged):

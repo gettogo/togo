@@ -56,6 +56,8 @@ type SessionInfo struct {
 	// @togo_agent, @togo_name and @togo_created. They are the empty string
 	// when the option is unset.
 	Bib, Agent, Title, CreatedTag string
+	// Muted is true when the user option @togo_muted is "1".
+	Muted bool
 }
 
 // NewSessionOpts configures NewSession.
@@ -116,12 +118,13 @@ const listFormat = `#{session_name}` + "\x1f" +
 	`#{@togo_bib}` + "\x1f" +
 	`#{@togo_agent}` + "\x1f" +
 	`#{@togo_name}` + "\x1f" +
-	`#{@togo_created}` + "\x1e"
+	`#{@togo_created}` + "\x1f" +
+	`#{@togo_muted}` + "\x1e"
 
 // ListSessions returns every session on the client's socket. When no server
 // is running it returns nil, nil. Output is split on the "\x1e\n" record
 // delimiter, so newlines inside a session name or option value stay inside
-// their field; records without exactly 9 fields are skipped, not an error.
+// their field; records without exactly 10 fields are skipped, not an error.
 func (c *Client) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 	out, err := c.run(ctx, "list-sessions", "-F", listFormat)
 	if err != nil {
@@ -136,7 +139,7 @@ func (c *Client) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 // parseListOutput parses the output of "list-sessions -F listFormat" into
 // session records. Output is split on the "\x1e\n" record delimiter, so
 // newlines inside a session name or option value stay inside their field.
-// Records without exactly 9 fields are skipped, not an error; a record with
+// Records without exactly 10 fields are skipped, not an error; a record with
 // a non-numeric created or attached field is an error.
 func parseListOutput(out string) ([]SessionInfo, error) {
 	sessions := []SessionInfo{}
@@ -146,7 +149,7 @@ func parseListOutput(out string) ([]SessionInfo, error) {
 			continue
 		}
 		fields := strings.Split(record, "\x1f")
-		if len(fields) != 9 {
+		if len(fields) != 10 {
 			continue
 		}
 		created, err := strconv.ParseInt(fields[1], 10, 64)
@@ -167,6 +170,7 @@ func parseListOutput(out string) ([]SessionInfo, error) {
 			Agent:      fields[6],
 			Title:      fields[7],
 			CreatedTag: fields[8],
+			Muted:      fields[9] == "1",
 		})
 	}
 	return sessions, nil
@@ -308,8 +312,9 @@ func (c *Client) mapError(err error, stderr string) error {
 }
 
 // classifyStderr maps the stderr text of a failed tmux invocation to a
-// driver error. Only "no server running" and a missing socket file ("No
-// such file or directory") classify as errNoServer; session-missing
+// driver error. "no server running", a missing socket file ("No
+// such file or directory") and a server that went away mid-command ("server
+// exited unexpectedly", "lost server") classify as errNoServer; session-missing
 // messages classify as ErrNoSession; every other cause, including empty
 // stderr and "Permission denied", is a generic error carrying the text
 // verbatim.
@@ -319,7 +324,9 @@ func classifyStderr(stderr string) error {
 	case text == "":
 		return errors.New("tmux: unknown error (empty stderr)")
 	case strings.Contains(strings.ToLower(text), "no server running") ||
-		strings.Contains(strings.ToLower(text), "no such file or directory"):
+		strings.Contains(strings.ToLower(text), "no such file or directory") ||
+		strings.Contains(strings.ToLower(text), "server exited unexpectedly") ||
+		strings.Contains(strings.ToLower(text), "lost server"):
 		return fmt.Errorf("%w: %s", errNoServer, text)
 	case strings.Contains(text, "can't find session") || strings.Contains(text, "no such session"):
 		return fmt.Errorf("%w: %s", ErrNoSession, text)

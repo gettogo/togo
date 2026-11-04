@@ -1,4 +1,4 @@
-.PHONY: lint test build check-trailers
+.PHONY: lint test build check-trailers relay-test
 
 lint:
 	@test -z "$$(gofmt -l helper)"
@@ -13,3 +13,6 @@ build:
 check-trailers:
 	@test -n "$(RANGE)" || { echo "check-trailers: RANGE is required, e.g. RANGE=HEAD~1..HEAD" >&2; exit 1; }
 	./scripts/check-trailers.sh "$(RANGE)"
+
+relay-test:
+	cd relay && npm ci && npm test && npx tsc --noEmit

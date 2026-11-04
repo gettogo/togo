@@ -1,0 +1,11 @@
+{
+  "description": "Answer option:2 from device dev_test-1 to host h_mmg42klgyqzwneiskrelxms3j7 at 2026-11-03T12:00:00Z. sig is a real signature by the Ed25519 key with seed 32 bytes of 0x11 (public key 0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc) over \"togo-approval/v1\\nh_mmg42klgyqzwneiskrelxms3j7\\nr_abcdefghij\\noption:2\\n1793707200000\".",
+  "kind": "answer",
+  "plaintext": {
+    "requestId": "r_abcdefghij",
+    "decision": "option:2",
+    "ts": 1793707200000,
+    "deviceId": "dev_test-1",
+    "sig": "lrFs0GYx8BssHKOJx69wiOsWATauhVSt4mml0s-xyoSGr8iqL5dML-AEaEKf9WmP9qLsXYO5eAljTts-s5SIAQ"
+  }
+}

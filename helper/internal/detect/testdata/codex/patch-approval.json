@@ -1,0 +1,35 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "permission",
+  "title": "Would you like to make the following edits?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes, proceed",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, and don't ask again for these files",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "No, and tell the agent what to do differently",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "y"
+    ],
+    "2": [
+      "a"
+    ],
+    "3": [
+      "Escape"
+    ]
+  }
+}

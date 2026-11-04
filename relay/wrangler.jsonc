@@ -1,0 +1,22 @@
+{
+  "name": "togo-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "vars": {
+    // Bundle id of the iOS app; APNs rejects pushes whose topic differs.
+    "APNS_TOPIC": "app.togo.Togo"
+  },
+  // Secrets, set with `wrangler secret put`, never in this file:
+  //   APNS_KEY      APNs auth key (.p8 contents)
+  //   APNS_KEY_ID   10-character key id
+  //   APNS_TEAM_ID  10-character team id
+  "durable_objects": {
+    "bindings": [
+      { "name": "RATE_LIMITER", "class_name": "RateLimiter" },
+      { "name": "MAILBOX", "class_name": "Mailbox" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RateLimiter", "Mailbox"] }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "confirm",
+  "title": "Overwrite existing release v2.3.1?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ]
+  }
+}

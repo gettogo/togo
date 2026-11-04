@@ -1,0 +1,8 @@
+  The repository has two test runners configured.
+
+  Which one should I use for the new tests?
+  → 1) vitest
+    2) jest
+    3) Something else
+ ─────────────────────────────────────────────
+  ctrl+c interrupt

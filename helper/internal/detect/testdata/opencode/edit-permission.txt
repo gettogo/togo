@@ -1,0 +1,10 @@
+  ┃ Permission required
+  ┃ edit: src/routes/user.ts
+  ┃
+  ┃ Allow this edit?
+  ┃
+  ┃   Allow once
+  ┃ > Allow always
+  ┃   Reject
+  ┃
+  ┃ ↑/↓ select  enter confirm  esc reject

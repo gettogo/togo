@@ -1,0 +1,32 @@
+{
+  "description": "Push for a pending approval in session 01. Seal it with label push and aad hostId + \"|\" + deviceId.",
+  "kind": "push",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_abcdefghij",
+    "bib": "01",
+    "agent": "claude",
+    "title": "Run npm test?",
+    "body": "Bash: npm test",
+    "requestId": "r_abcdefghij",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, and don't ask again",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "No",
+        "role": "deny"
+      }
+    ],
+    "ts": 1793707200000
+  }
+}

@@ -10,18 +10,36 @@ import (
 	"runtime"
 
 	"github.com/gettogo/togo/helper/internal/api"
+	"github.com/gettogo/togo/helper/internal/daemon"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/version"
 )
 
+// capabilities are what the in-process server offers. It has no event hub,
+// so it never claims events, approvals or push.
 var capabilities = []string{"session.v1", "agents.v1", "fs.v1"}
 
+// daemonCapabilities are what `togo daemon` offers.
+var daemonCapabilities = daemon.Capabilities
+
+// startDaemon launches a detached daemon for home. Tests replace it so
+// they never start a real one by accident.
+var startDaemon = func(home string) error {
+	exe, err := executable()
+	if err != nil {
+		return err
+	}
+	_, err = daemon.Start(exe, home)
+	return err
+}
+
 // runServe answers protocol requests on stdin and stdout until stdin ends.
-// stdout carries frames only, so diagnostics go to the log file when --log
-// is given and are dropped otherwise; stderr is for failures that stop the
-// helper.
+// It proxies to the daemon, starting one when none answers, and serves in
+// process when that fails. stdout carries frames only, so diagnostics go to
+// the log file when --log is given and are dropped otherwise; stderr is for
+// failures that stop the helper.
 func runServe(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := newFlagSet("serve")
 	stdio := fs.Bool("stdio", false, "serve over stdin and stdout")
@@ -41,33 +59,37 @@ func runServe(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	if err != nil {
 		return fail(stderr, err)
 	}
-	svc, err := session.NewService(ctx, home)
-	if err != nil {
-		return fail(stderr, err)
-	}
-	userHome, err := os.UserHomeDir()
-	if err != nil {
-		return fail(stderr, err)
-	}
-	h := &api.API{Sessions: svc, Recent: svc.Recent, Home: userHome}
+	logf := func(string, ...any) {}
 	if *logToFile {
 		logger, closeLog, err := openServeLog(home)
 		if err != nil {
 			return fail(stderr, err)
 		}
 		defer closeLog()
-		h.Logf = logger.Printf
+		logf = logger.Printf
 	}
-	hostname, err := os.Hostname()
+
+	conn, err := daemon.Connect(ctx, daemon.SocketPath(home), func() error { return startDaemon(home) }, daemon.StartWait)
+	if err == nil {
+		if err := daemon.Pump(ctx, conn, stdin, stdout); err != nil {
+			logf("serve: %v", err)
+			return fail(stderr, err)
+		}
+		return exitOK
+	}
+	logf("serve: daemon unavailable, serving in process without events: %v", err)
+	return serveInProcess(ctx, home, logf, stdin, stdout, stderr)
+}
+
+func serveInProcess(ctx context.Context, home string, logf func(string, ...any), stdin io.Reader, stdout, stderr io.Writer) int {
+	h, err := newAPI(ctx, home)
 	if err != nil {
 		return fail(stderr, err)
 	}
-	info := rpc.HelperInfo{
-		Version:      version.Version,
-		OS:           runtime.GOOS,
-		Arch:         runtime.GOARCH,
-		Hostname:     hostname,
-		Capabilities: capabilities,
+	h.Logf = logf
+	info, err := helperInfo(capabilities)
+	if err != nil {
+		return fail(stderr, err)
 	}
 
 	// A blocking read on stdin cannot be interrupted by closing it, so Serve
@@ -80,13 +102,51 @@ func runServe(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return exitOK
 	case err := <-served:
 		if err != nil && ctx.Err() == nil {
-			if h.Logf != nil {
-				h.Logf("serve: %v", err)
-			}
+			logf("serve: %v", err)
 			return fail(stderr, err)
 		}
 		return exitOK
 	}
+}
+
+func newAPI(ctx context.Context, home string) (*api.API, error) {
+	svc, err := session.NewService(ctx, home)
+	if err != nil {
+		return nil, err
+	}
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return &api.API{Sessions: svc, Recent: svc.Recent, Home: userHome}, nil
+}
+
+func helperInfo(caps []string) (rpc.HelperInfo, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return rpc.HelperInfo{}, err
+	}
+	return rpc.HelperInfo{
+		Version:      version.Version,
+		OS:           runtime.GOOS,
+		Arch:         runtime.GOARCH,
+		Hostname:     hostname,
+		Capabilities: caps,
+	}, nil
+}
+
+// executable returns the resolved absolute path of the running binary, the
+// path a detached daemon or a service definition must run.
+func executable() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("locate togo binary: %w", err)
+	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return "", fmt.Errorf("locate togo binary: %w", err)
+	}
+	return exe, nil
 }
 
 // openServeLog opens $TOGO_HOME/log/serve.log for appending. Both the

@@ -1,0 +1,10 @@
+  ┃ Permission required
+  ┃ bash: npm install --save-dev vitest
+  ┃
+  ┃ Allow this command to run?
+  ┃
+  ┃ > Allow once
+  ┃   Allow always
+  ┃   Reject
+  ┃
+  ┃ ↑/↓ select  enter confirm  esc reject

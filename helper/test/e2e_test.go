@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/daemon/daemontest"
 	"github.com/gettogo/togo/helper/internal/rpc"
 )
 
@@ -103,8 +104,14 @@ func isolatedEnv(t *testing.T) (env, vars []string, label string) {
 		t.Fatal(err)
 	}
 	label = fmt.Sprintf("togo-test-%d-%d", os.Getpid(), labelSeq.Add(1))
+	// A short TOGO_HOME keeps the daemon socket under the path limit, so a
+	// daemon that serve starts really runs, whatever the test's name.
+	home, err := os.MkdirTemp("", "tg")
+	if err != nil {
+		t.Fatal(err)
+	}
 	vars = []string{
-		"TOGO_HOME=" + t.TempDir(),
+		"TOGO_HOME=" + home,
 		"TOGO_TMUX_LABEL=" + label,
 		"TMUX=",
 		"TMUX_TMPDIR=" + tmuxDir,
@@ -113,10 +120,13 @@ func isolatedEnv(t *testing.T) (env, vars []string, label string) {
 	// kill-server must see the same TMUX_TMPDIR as the helper, or it looks in
 	// the default socket directory and leaks the private server.
 	t.Cleanup(func() {
+		// serve detaches the daemon it starts, so nothing else stops it.
+		daemontest.Stop(t, home)
 		kill := exec.Command("tmux", "-L", label, "kill-server")
 		kill.Env = env
 		kill.Run()
 		os.RemoveAll(tmuxDir)
+		os.RemoveAll(home)
 	})
 	return env, vars, label
 }

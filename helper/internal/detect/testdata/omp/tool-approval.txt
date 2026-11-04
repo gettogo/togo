@@ -1,0 +1,9 @@
+ ─── Tool approval ───────────────────────────
+  write_file  docs/notes/todo.md  (1.2 KB)
+
+  Approve this tool call?
+  → 1) Approve
+    2) Approve for this session
+    3) Deny
+ ─────────────────────────────────────────────
+  ctrl+c interrupt

@@ -7,3 +7,7 @@ DerivedData/
 .env*
 .worktrees/
 helper/bin/
+
+# Local tooling, never committed
+.claude/
+relay/node_modules/

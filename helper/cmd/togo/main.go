@@ -16,7 +16,9 @@ import (
 	"github.com/gettogo/togo/helper/internal/version"
 )
 
-const usage = `Usage: togo <command> [arguments]
+// usage grows as command files call addUsage from init, so a new command
+// never edits this file.
+var usage = `Usage: togo <command> [arguments]
 
 Commands:
   new [agent] [--dir D] [--name N] [--detach]   start a session and attach to it
@@ -25,6 +27,46 @@ Commands:
   serve --stdio [--log]                         serve the phone over stdin and stdout
   version                                       print the version
 `
+
+// command runs one subcommand with the arguments after its name and returns
+// the exit code.
+type command func(ctx context.Context, args []string, env map[string]string, stdin io.Reader, stdout, stderr io.Writer) int
+
+var commands = map[string]command{}
+
+// register adds a subcommand. Command files call it from init; a duplicate
+// name is a programming error caught by every test run.
+func register(name string, fn command) {
+	if _, dup := commands[name]; dup {
+		panic("togo: command registered twice: " + name)
+	}
+	commands[name] = fn
+}
+
+// addUsage appends one line, formatted like the lines above, to the usage
+// text. Internal commands run by tmux or agent hooks leave themselves out.
+func addUsage(line string) {
+	usage += line + "\n"
+}
+
+func init() {
+	register("new", func(ctx context.Context, args []string, env map[string]string, _ io.Reader, stdout, stderr io.Writer) int {
+		return runNew(ctx, args, env, stdout, stderr)
+	})
+	register("ls", func(ctx context.Context, args []string, _ map[string]string, _ io.Reader, stdout, stderr io.Writer) int {
+		return runLs(ctx, args, stdout, stderr)
+	})
+	register("attach", func(ctx context.Context, args []string, env map[string]string, _ io.Reader, _, stderr io.Writer) int {
+		return runAttach(ctx, args, env, stderr)
+	})
+	register("serve", func(ctx context.Context, args []string, _ map[string]string, stdin io.Reader, stdout, stderr io.Writer) int {
+		return runServe(ctx, args, stdin, stdout, stderr)
+	})
+	register("version", func(_ context.Context, _ []string, _ map[string]string, _ io.Reader, stdout, _ io.Writer) int {
+		fmt.Fprintf(stdout, "togo %s\n", version.String())
+		return exitOK
+	})
+}
 
 const (
 	exitOK    = 0
@@ -48,23 +90,12 @@ func runContext(ctx context.Context, args []string, env map[string]string, stdin
 		fmt.Fprint(stderr, usage)
 		return exitUsage
 	}
-	rest := args[1:]
-	switch args[0] {
-	case "new":
-		return runNew(ctx, rest, env, stdout, stderr)
-	case "ls":
-		return runLs(ctx, rest, stdout, stderr)
-	case "attach":
-		return runAttach(ctx, rest, env, stderr)
-	case "serve":
-		return runServe(ctx, rest, stdin, stdout, stderr)
-	case "version":
-		fmt.Fprintf(stdout, "togo %s\n", version.String())
-		return exitOK
-	default:
+	fn, ok := commands[args[0]]
+	if !ok {
 		fmt.Fprintf(stderr, "togo: unknown command %q\n\n%s", args[0], usage)
 		return exitUsage
 	}
+	return fn(ctx, args[1:], env, stdin, stdout, stderr)
 }
 
 // newService builds the production session service. The socket label and

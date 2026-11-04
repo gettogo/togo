@@ -29,3 +29,17 @@ jobs:
 
       - name: Lint and test
         run: make lint test
+
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+
+      - name: Relay test
+        run: make relay-test

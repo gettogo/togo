@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +13,9 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
+	"github.com/gettogo/togo/helper/internal/fsread"
+	"github.com/gettogo/togo/helper/internal/gitx"
+	"github.com/gettogo/togo/helper/internal/push"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
@@ -23,7 +27,11 @@ const fixturesDir = "../../../protocol/v1/fixtures"
 
 // fixtureNeedsFake names fixtures that deviate from the shared harness and
 // run in their own test.
-var fixtureNeedsFake = map[string]bool{"tmux-unavailable.json": true}
+var fixtureNeedsFake = map[string]bool{
+	"tmux-unavailable.json": true, "ports.list.json": true,
+	"events.subscribe.json": true, "events.keepalive.json": true, "session.setMute.json": true,
+	"approval.list.json": true, "approval.answer-conflict.json": true,
+}
 
 type fixture struct {
 	Setup    []json.RawMessage `json:"setup"`
@@ -62,7 +70,19 @@ func harness(t *testing.T, tm *tmux.Client) (a *api.API, home string) {
 		NewID: func() string { return "s_abcdefghij" },
 		Now:   func() time.Time { return time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC) },
 	}
-	return &api.API{Sessions: svc, Recent: recent, Home: home}, home
+	g := &gitx.Service{Sessions: svc}
+	f := &fsread.Service{Sessions: svc}
+	ext := g.Methods()
+	maps.Copy(ext, f.Methods())
+	// The pairing fixtures fix the host secrets: mailbox secret bytes
+	// 0x00..0x1f, then X25519 private key bytes 0x20..0x3f.
+	seq := make([]byte, 64)
+	for i := range seq {
+		seq[i] = byte(i)
+	}
+	p := &push.Service{Home: togoHome, Rand: bytes.NewReader(seq)}
+	maps.Copy(ext, p.Methods())
+	return &api.API{Sessions: svc, Recent: recent, Home: home, Ext: ext}, home
 }
 
 // exchange sends the setup requests then the request over one connection and
@@ -233,7 +253,7 @@ func TestMalformedParamsAreInvalidParams(t *testing.T) {
 
 func TestUnknownMethod(t *testing.T) {
 	a, _ := harness(t, &tmux.Client{Bin: "tmux-not-installed"})
-	_, e := call(t, a, "git.status", `{}`)
+	_, e := call(t, a, "ports.list", `{}`)
 	if e == nil || e.Code != rpc.CodeMethodNotFound || e.Message != "method not found" {
 		t.Fatalf("got %+v", e)
 	}

@@ -1,0 +1,47 @@
+│ Do you want to proceed?                                      │
+│ ❯ 1. Yes                                                     │
+│   2. No, and tell the agent what to do differently (esc)     │
+╰──────────────────────────────────────────────────────────────╯
+  test case_01 ... ok
+  test case_02 ... ok
+  test case_03 ... ok
+  test case_04 ... ok
+  test case_05 ... ok
+  test case_06 ... ok
+  test case_07 ... ok
+  test case_08 ... ok
+  test case_09 ... ok
+  test case_10 ... ok
+  test case_11 ... ok
+  test case_12 ... ok
+  test case_13 ... ok
+  test case_14 ... ok
+  test case_15 ... ok
+  test case_16 ... ok
+  test case_17 ... ok
+  test case_18 ... ok
+  test case_19 ... ok
+  test case_20 ... ok
+  test case_21 ... ok
+  test case_22 ... ok
+  test case_23 ... ok
+  test case_24 ... ok
+  test case_25 ... ok
+  test case_26 ... ok
+  test case_27 ... ok
+  test case_28 ... ok
+  test case_29 ... ok
+  test case_30 ... ok
+  test case_31 ... ok
+  test case_32 ... ok
+  test case_33 ... ok
+  test case_34 ... ok
+  test case_35 ... ok
+  test case_36 ... ok
+  test case_37 ... ok
+  test case_38 ... ok
+  test case_39 ... ok
+  test case_40 ... ok
+  test case_41 ... ok
+
+test result: ok. 41 passed; 0 failed

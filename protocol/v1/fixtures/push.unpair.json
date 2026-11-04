@@ -1,0 +1,45 @@
+{
+  "description": "Unpairing a paired device succeeds. Pairing harness: the host key seam returns mailbox secret bytes 0x00..0x1f and X25519 private key bytes 0x20..0x3f; all keys and the APNs token are test values.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "push.pair",
+      "params": {
+        "deviceId": "dev_test-1",
+        "name": "Test iPhone",
+        "x25519": "eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo",
+        "approvalKey": "ERERERERERERERERERERERERERERERERERERERERERE",
+        "apnsToken": "abababababababababababababababababababababababababababababababab",
+        "env": "sandbox",
+        "relayUrl": "https://relay.example.test"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "push.unpair",
+    "params": {
+      "deviceId": "dev_test-1"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {}
+  }
+}

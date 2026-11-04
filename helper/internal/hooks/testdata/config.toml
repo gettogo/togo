@@ -1,0 +1,7 @@
+model = "gpt-5"
+
+[features]
+web_search = true
+
+[projects."/tmp/x"]
+trust_level = "trusted"

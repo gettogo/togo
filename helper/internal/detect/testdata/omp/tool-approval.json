@@ -1,0 +1,35 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "permission",
+  "title": "Approve this tool call?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Approve",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Approve for this session",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Deny",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  }
+}

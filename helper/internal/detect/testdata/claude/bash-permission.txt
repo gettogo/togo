@@ -1,0 +1,13 @@
+● I'll clean the build output before rebuilding.
+
+╭──────────────────────────────────────────────────────────────╮
+│ Bash command                                                 │
+│                                                              │
+│   rm -rf ./build && make                                     │
+│   Clean and rebuild the project                              │
+│                                                              │
+│ Do you want to proceed?                                      │
+│ ❯ 1. Yes                                                     │
+│   2. Yes, and don't ask again for make commands in ~/src/app │
+│   3. No, and tell the agent what to do differently (esc)     │
+╰──────────────────────────────────────────────────────────────╯

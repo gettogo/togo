@@ -19,6 +19,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/tmux"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // ErrNotFound is returned when no session has the given id or bib.
@@ -69,6 +70,10 @@ type Session struct {
 	Activity        *string   `json:"activity"`
 	AttachedClients int       `json:"attachedClients"`
 	Managed         bool      `json:"managed"`
+	// Muted is read from the session's @togo_muted option, so it outlives
+	// the process that set it.
+	Muted bool             `json:"muted"`
+	Meta  wire.SessionMeta `json:"meta"`
 }
 
 // Service runs session operations. Construct it with NewService, or set the
@@ -237,6 +242,25 @@ func (s *Service) Rename(ctx context.Context, id, name string) (Session, error) 
 	return s.find(ctx, id)
 }
 
+// SetMuted records whether pushes for a managed session are suppressed and
+// returns the session.
+func (s *Service) SetMuted(ctx context.Context, id string, muted bool) (Session, error) {
+	if err := requireManaged(id); err != nil {
+		return Session{}, err
+	}
+	if err := s.checkTmux(ctx); err != nil {
+		return Session{}, err
+	}
+	value := "0"
+	if muted {
+		value = "1"
+	}
+	if err := s.Tmux.SetOption(ctx, id, optionMuted, value); err != nil {
+		return Session{}, notFoundOr(err, id)
+	}
+	return s.find(ctx, id)
+}
+
 // AttachCommand returns the argv that attaches a terminal to the session.
 // It works for unmanaged sessions too, since attaching changes nothing.
 func (s *Service) AttachCommand(ctx context.Context, id string) ([]string, error) {
@@ -397,6 +421,7 @@ func managedSession(info tmux.SessionInfo) Session {
 		Status:          status(info),
 		AttachedClients: info.Attached,
 		Managed:         true,
+		Muted:           info.Muted,
 	}
 }
 

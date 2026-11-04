@@ -1,0 +1,35 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "question",
+  "title": "Which one should I use for the new tests?",
+  "options": [
+    {
+      "n": 1,
+      "label": "vitest",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "jest",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Something else",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  }
+}

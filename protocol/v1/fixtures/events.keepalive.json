@@ -1,0 +1,37 @@
+{
+  "description": "A keepalive from a subscribed app renews its foreground lease and returns an empty object.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "events.subscribe",
+      "params": {
+        "foreground": true
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "events.keepalive",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {}
+  }
+}

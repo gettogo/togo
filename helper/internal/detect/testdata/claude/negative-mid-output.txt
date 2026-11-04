@@ -1,0 +1,9 @@
+● Here is how the confirmation flow works:
+
+  1. Yes keeps the current behaviour and asks again next time.
+  2. No cancels the request.
+
+  Do you want me to add a yes/no toggle to the settings page? I can also
+  wire it into the onboarding screen.
+
+✻ Thinking… (12s · esc to interrupt)
