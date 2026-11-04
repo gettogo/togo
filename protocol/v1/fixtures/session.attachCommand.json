@@ -1,5 +1,5 @@
 {
-  "description": "argv to attach to a managed session without a shell. argv[0] is the tmux path and argv[2] the socket label (togo in production, a test label here).",
+  "description": "argv to attach to a managed session without a shell. argv[0] is the tmux path, argv[1] is -u (UTF-8 output whatever the attaching locale) and argv[3] the socket label (togo in production, a test label here).",
   "setup": [
     {
       "jsonrpc": "2.0",
@@ -38,6 +38,7 @@
     "result": {
       "argv": [
         "<any>",
+        "-u",
         "-L",
         "<any>",
         "attach-session",

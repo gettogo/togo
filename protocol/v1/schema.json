@@ -281,7 +281,7 @@
       "additionalProperties": false
     },
     "SessionAttachCommandResult": {
-      "description": "argv to run on the host (no shell): [tmux path, socket args..., \"attach-session\", \"-t\", \"=\" + tmux session name]. Managed: [tmux, \"-L\", label, \"attach-session\", \"-t\", \"=s_...\"]. Unmanaged: [tmux, \"attach-session\", \"-t\", \"=\" + name].",
+      "description": "argv to run on the host (no shell): [tmux path, \"-u\", socket args..., \"attach-session\", \"-t\", \"=\" + tmux session name]. Managed: [tmux, \"-u\", \"-L\", label, \"attach-session\", \"-t\", \"=s_...\"]. Unmanaged: [tmux, \"-u\", \"attach-session\", \"-t\", \"=\" + name]. A name ending in \";\" has a backslash inserted before that \";\", because tmux reads a trailing \";\" as a command separator.",
       "type": "object",
       "properties": {
         "argv": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
