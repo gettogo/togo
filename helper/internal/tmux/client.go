@@ -273,6 +273,23 @@ func checkOption(key, value string) error {
 	return nil
 }
 
+// CaptureHistory returns the plain text of the session's active pane: lines
+// rows of history above the visible screen, then the visible rows. join
+// rejoins lines the terminal wrapped, so a long command or URL comes back
+// as one line. Escape sequences are not included.
+func (c *Client) CaptureHistory(ctx context.Context, name string, lines int, join bool) (string, error) {
+	args := []string{"capture-pane", "-p"}
+	if join {
+		args = append(args, "-J")
+	}
+	args = append(args, "-S", "-"+strconv.Itoa(lines), "-t", "="+name+":")
+	out, err := c.run(ctx, args...)
+	if errors.Is(err, errNoServer) {
+		return "", ErrNoSession
+	}
+	return out, err
+}
+
 // AttachArgv returns the argv needed to attach to the session with the exact
 // given name. It performs no exec itself. -u makes tmux draw UTF-8 even
 // when the attaching environment has no UTF-8 locale.
@@ -312,9 +329,10 @@ func (c *Client) mapError(err error, stderr string) error {
 }
 
 // classifyStderr maps the stderr text of a failed tmux invocation to a
-// driver error. "no server running", a missing socket file ("No
-// such file or directory") and a server that went away mid-command ("server
-// exited unexpectedly", "lost server") classify as errNoServer; session-missing
+// driver error. "no server running", a missing socket file ("error
+// connecting to ... (No such file or directory)") and a server that went away
+// mid-command ("server exited unexpectedly", "lost server") classify as
+// errNoServer; session-missing
 // messages classify as ErrNoSession; every other cause, including empty
 // stderr and "Permission denied", is a generic error carrying the text
 // verbatim.
@@ -324,7 +342,10 @@ func classifyStderr(stderr string) error {
 	case text == "":
 		return errors.New("tmux: unknown error (empty stderr)")
 	case strings.Contains(strings.ToLower(text), "no server running") ||
-		strings.Contains(strings.ToLower(text), "no such file or directory") ||
+		// A bare "No such file or directory" can come from any path tmux
+		// opens, so it only means no server next to the connect failure.
+		(strings.Contains(strings.ToLower(text), "error connecting") &&
+			strings.Contains(strings.ToLower(text), "no such file or directory")) ||
 		strings.Contains(strings.ToLower(text), "server exited unexpectedly") ||
 		strings.Contains(strings.ToLower(text), "lost server"):
 		return fmt.Errorf("%w: %s", errNoServer, text)

@@ -19,7 +19,7 @@ import (
 
 // capabilities are what the in-process server offers. It has no event hub,
 // so it never claims events, approvals or push.
-var capabilities = []string{"session.v1", "agents.v1", "fs.v1"}
+var capabilities = []string{"session.v1", "agents.v1", "fs.v1", "capture.v1"}
 
 // daemonCapabilities are what `togo daemon` offers.
 var daemonCapabilities = daemon.Capabilities

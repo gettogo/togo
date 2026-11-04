@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/gettogo/togo/helper/internal/doctor"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/version"
@@ -25,6 +26,7 @@ Commands:
   ls                                            list sessions
   attach <number|id>                            attach to a session
   serve --stdio [--log]                         serve the phone over stdin and stdout
+  doctor [--json]                               check this host is ready for Togo
   version                                       print the version
 `
 
@@ -61,6 +63,9 @@ func init() {
 	})
 	register("serve", func(ctx context.Context, args []string, _ map[string]string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runServe(ctx, args, stdin, stdout, stderr)
+	})
+	register("doctor", func(ctx context.Context, args []string, _ map[string]string, _ io.Reader, stdout, _ io.Writer) int {
+		return runDoctor(args, doctor.DefaultEnv(state.LoginPath(ctx)), stdout)
 	})
 	register("version", func(_ context.Context, _ []string, _ map[string]string, _ io.Reader, stdout, _ io.Writer) int {
 		fmt.Fprintf(stdout, "togo %s\n", version.String())

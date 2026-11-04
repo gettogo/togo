@@ -1,5 +1,5 @@
 {
-  "description": "First call. The helper answers with its version, platform and base capabilities. os and arch are host-dependent.",
+  "description": "First call. The helper answers with its version, platform and capabilities. os and arch are host-dependent.",
   "request": {
     "jsonrpc": "2.0",
     "id": 1,
@@ -27,7 +27,8 @@
       "capabilities": [
         "session.v1",
         "agents.v1",
-        "fs.v1"
+        "fs.v1",
+        "capture.v1"
       ]
     }
   }

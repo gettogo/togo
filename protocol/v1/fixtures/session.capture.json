@@ -1,0 +1,44 @@
+{
+  "description": "Capture a managed session's scrollback and visible screen as plain text. lines counts history lines above the visible rows; join (default true) rejoins wrapped lines. text is host-dependent here because the shell prompt is. truncated is true only when the oldest lines were cut to fit the frame size.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.capture",
+    "params": {
+      "id": "s_abcdefghij",
+      "lines": 50
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "text": "<any>",
+      "truncated": false
+    }
+  }
+}

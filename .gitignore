@@ -7,6 +7,8 @@ DerivedData/
 .env*
 .worktrees/
 helper/bin/
+apps/ios/Togo.xcodeproj/
+apps/ios/Config/Signing.local.xcconfig
 
 # Local tooling, never committed
 .claude/

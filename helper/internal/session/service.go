@@ -106,11 +106,24 @@ set -g set-clipboard on
 set -s escape-time 0
 set -g history-limit 50000
 set -g default-terminal "tmux-256color"
+set -g status off
+set-environment -g COLORTERM truecolor
+set -as terminal-features 'xterm*:RGB'
 `
 
-// tmuxFallbacks are where package managers and systems install tmux, for
-// when the login PATH does not name it either.
-var tmuxFallbacks = []string{"/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux", "/bin/tmux"}
+// TmuxFallbacks are where package managers and systems install tmux, for
+// when the login PATH does not name it either. home is the user's home
+// directory; when empty, the per-user Nix profile is left out.
+func TmuxFallbacks(home string) []string {
+	list := []string{
+		"/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux", "/bin/tmux",
+		"/home/linuxbrew/.linuxbrew/bin/tmux", "/nix/var/nix/profiles/default/bin/tmux",
+	}
+	if home != "" {
+		list = append(list, filepath.Join(home, ".nix-profile", "bin", "tmux"))
+	}
+	return list
+}
 
 // NewService returns the production Service rooted at home (see
 // state.Home). It rewrites home/tmux.conf on every start so the file always
@@ -123,7 +136,8 @@ func NewService(ctx context.Context, home string) (*Service, error) {
 		return nil, fmt.Errorf("tmux config: %w", err)
 	}
 	label := cmp.Or(os.Getenv("TOGO_TMUX_LABEL"), "togo")
-	bin := resolveTmux(state.LoginPath(ctx), tmuxFallbacks)
+	userHome, _ := os.UserHomeDir()
+	bin := resolveTmux(state.LoginPath(ctx), TmuxFallbacks(userHome))
 	return &Service{
 		Tmux:     &tmux.Client{Bin: bin, Socket: []string{"-L", label}, Config: conf},
 		User:     &tmux.Client{Bin: bin},

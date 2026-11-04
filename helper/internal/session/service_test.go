@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/fsx"
+	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/tmux"
@@ -419,5 +421,134 @@ func TestCreateUsesServicePath(t *testing.T) {
 	var ipe *session.InvalidParamsError
 	if _, err := s.Create(context.Background(), session.CreateOpts{Agent: "codex", Cwd: t.TempDir()}); !errors.As(err, &ipe) {
 		t.Fatalf("Create codex with codex absent from Path: error = %v, want *InvalidParamsError", err)
+	}
+}
+
+// newPrinting creates a managed-looking session cols wide and 24 high on s.Tmux whose pane
+// runs script and then idles, so the output stays on screen.
+func newPrinting(t *testing.T, c *tmux.Client, id string, cols int, script string) {
+	t.Helper()
+	err := c.NewSession(context.Background(), tmux.NewSessionOpts{
+		Name: id, Dir: t.TempDir(), Cols: cols, Rows: 24,
+		Command: []string{"/bin/sh", "-c", script + "; sleep 300"},
+		Options: map[string]string{"@togo_bib": "01"},
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+}
+
+func waitCapture(t *testing.T, s *session.Service, id, want string, lines int) (string, bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		text, truncated, err := s.Capture(context.Background(), id, lines, true)
+		if err != nil {
+			t.Fatalf("Capture: %v", err)
+		}
+		if strings.Contains(text, want) || time.Now().After(deadline) {
+			return text, truncated
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestCaptureLinesRange(t *testing.T) {
+	s := newService(t)
+	ctx := context.Background()
+	for _, n := range []int{0, -1, 10001} {
+		var invalid *session.InvalidParamsError
+		if _, _, err := s.Capture(ctx, "s_abcdefghij", n, true); !errors.As(err, &invalid) {
+			t.Errorf("Capture lines=%d: error = %v, want *InvalidParamsError", n, err)
+		}
+	}
+	var invalid *session.InvalidParamsError
+	if _, _, err := s.Capture(ctx, "bogus", 10, true); !errors.As(err, &invalid) {
+		t.Errorf("Capture malformed id: error = %v, want *InvalidParamsError", err)
+	}
+	if _, _, err := s.Capture(ctx, "s_abcdefghij", 10, true); !errors.Is(err, session.ErrNotFound) {
+		t.Errorf("Capture unknown id: error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestCaptureReturnsHistoryAndScreen(t *testing.T) {
+	s := newService(t)
+	newPrinting(t, s.Tmux, "s_abcdefghij", 80, `seq 1 100`)
+	text, truncated := waitCapture(t, s, "s_abcdefghij", "\n100", 1000)
+	if truncated || !strings.HasPrefix(text, "1\n") || !strings.HasSuffix(text, "\n100") {
+		t.Fatalf("Capture = %.20q...%q truncated=%v, want 1..100 with no trailing blank rows", text, text[max(0, len(text)-10):], truncated)
+	}
+	if strings.Contains(text, "\x1b") {
+		t.Error("Capture contains escape sequences, want plain text")
+	}
+	few, _ := waitCapture(t, s, "s_abcdefghij", "\n100", 10)
+	if lines := strings.Split(few, "\n"); len(lines) > 10+24 || lines[len(lines)-1] != "100" {
+		t.Errorf("Capture lines=10 returned %d lines ending %q, want at most 34 ending at 100", len(lines), lines[len(lines)-1])
+	}
+}
+
+func TestCaptureTruncates(t *testing.T) {
+	s := newService(t)
+	dir := t.TempDir()
+	conf := filepath.Join(dir, "tmux.conf")
+	if err := os.WriteFile(conf, []byte("set -g history-limit 20000\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.Tmux.Config = conf
+	newPrinting(t, s.Tmux, "s_abcdefghij", 200,
+		`awk 'BEGIN{pad=sprintf("%94s",""); gsub(/ /,"x",pad); for(i=1;i<=12000;i++) printf "L%05d %s\n", i, pad}'`)
+	text, truncated := waitCapture(t, s, "s_abcdefghij", "L12000", 10000)
+	if !truncated {
+		t.Error("truncated = false, want true for 1.2 MB of output")
+	}
+	if len(text) > 900000 {
+		t.Errorf("len(text) = %d, want at most 900000", len(text))
+	}
+	if !strings.HasSuffix(text, "L12000 "+strings.Repeat("x", 94)) {
+		t.Errorf("text does not end with the newest line")
+	}
+	if !strings.HasPrefix(text, "L") || len(strings.SplitN(text, "\n", 2)[0]) != 101 {
+		t.Errorf("text starts mid-line: %.30q", text)
+	}
+}
+
+func TestCaptureUnmanaged(t *testing.T) {
+	s := newService(t)
+	s.User = tmuxtest.New(t)
+	newPrinting(t, s.User, "my work", 80, `echo from-user-session`)
+	text, _ := waitCapture(t, s, "u_6d7920776f726b", "from-user-session", 100)
+	if !strings.Contains(text, "from-user-session") {
+		t.Fatalf("Capture of unmanaged session = %q", text)
+	}
+	if _, _, err := s.Capture(context.Background(), "u_6e6f7065", 10, true); !errors.Is(err, session.ErrNotFound) {
+		t.Errorf("Capture unknown unmanaged: error = %v, want ErrNotFound", err)
+	}
+}
+
+// The frame limit applies to the encoded reply, and json.Marshal turns
+// "<", ">" and "&" into 6 bytes each, so dense markup must be cut earlier
+// than plain text.
+func TestCaptureFitsFrameWhenEscapeHeavy(t *testing.T) {
+	s := newService(t)
+	conf := filepath.Join(t.TempDir(), "tmux.conf")
+	if err := os.WriteFile(conf, []byte("set -g history-limit 20000\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.Tmux.Config = conf
+	newPrinting(t, s.Tmux, "s_abcdefghij", 200,
+		`awk 'BEGIN{for(i=1;i<=12000;i++) printf "%05d <a href=\"x\">&</a>\\\\ <b>&&<b>&&<b>&&<b>&&\n", i}'`)
+	text, truncated := waitCapture(t, s, "s_abcdefghij", "12000 <a", 10000)
+	reply, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "result": map[string]any{"text": text, "truncated": truncated}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reply) > rpc.MaxFrame {
+		t.Errorf("encoded reply is %d bytes, want at most %d", len(reply), rpc.MaxFrame)
+	}
+	if !truncated {
+		t.Error("truncated = false, want true")
+	}
+	if !strings.HasSuffix(text, `12000 <a href="x">&</a>\\ <b>&&<b>&&<b>&&<b>&&`) {
+		t.Errorf("text does not end with the newest line: %.60q", text[max(0, len(text)-60):])
 	}
 }

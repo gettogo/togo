@@ -487,6 +487,72 @@ func TestAttachArgvSurvivesSchemaQuoting(t *testing.T) {
 	}
 }
 
+// startPrinting creates an 80x24 session whose pane runs script, then
+// keeps the pane alive so capture-pane has something to read.
+func startPrinting(t *testing.T, c *tmux.Client, script string) {
+	t.Helper()
+	err := c.NewSession(context.Background(), tmux.NewSessionOpts{
+		Name: "cap", Dir: t.TempDir(), Cols: 80, Rows: 24,
+		Command: []string{"/bin/sh", "-c", script + "; sleep 300"},
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+}
+
+// waitCapture polls until the capture satisfies done, because the pane
+// prints asynchronously after NewSession returns.
+func waitCapture(t *testing.T, c *tmux.Client, lines int, join bool, done func(string) bool) string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, err := c.CaptureHistory(context.Background(), "cap", lines, join)
+		if err != nil {
+			t.Fatalf("CaptureHistory: %v", err)
+		}
+		if done(got) || time.Now().After(deadline) {
+			return got
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func longestRun(text string) (longest, nonEmpty int) {
+	for _, l := range strings.Split(text, "\n") {
+		if l != "" {
+			nonEmpty++
+		}
+		longest = max(longest, len(l))
+	}
+	return longest, nonEmpty
+}
+
+func TestCaptureHistoryJoin(t *testing.T) {
+	c := tmuxtest.New(t)
+	startPrinting(t, c, `printf '%0300d\n' 0`)
+	ready := func(s string) bool { return strings.Contains(s, "0") }
+
+	joined := waitCapture(t, c, 100, true, ready)
+	if longest, n := longestRun(joined); longest != 300 || n != 1 {
+		t.Errorf("join=true: longest line %d, %d non-empty lines, want one 300-char line", longest, n)
+	}
+	wrapped := waitCapture(t, c, 100, false, ready)
+	if longest, n := longestRun(wrapped); longest != 80 || n != 4 {
+		t.Errorf("join=false: longest line %d, %d non-empty lines, want 4 lines of at most 80", longest, n)
+	}
+}
+
+func TestCaptureHistoryUnknownSession(t *testing.T) {
+	c := tmuxtest.New(t)
+	if _, err := c.CaptureHistory(context.Background(), "nope", 10, true); !errors.Is(err, tmux.ErrNoSession) {
+		t.Fatalf("CaptureHistory with no server: error = %v, want ErrNoSession", err)
+	}
+	startPrinting(t, c, "true")
+	if _, err := c.CaptureHistory(context.Background(), "nope", 10, true); !errors.Is(err, tmux.ErrNoSession) {
+		t.Fatalf("CaptureHistory unknown name: error = %v, want ErrNoSession", err)
+	}
+}
+
 func TestPipedSessionsSeesTapExit(t *testing.T) {
 	c := tmuxtest.New(t)
 	ctx := context.Background()

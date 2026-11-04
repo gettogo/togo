@@ -16,6 +16,7 @@ func TestClassifyStderr(t *testing.T) {
 	}{
 		{name: "no server running", stderr: "no server running on /tmp/x", wantIs: errNoServer},
 		{name: "missing socket file", stderr: "error connecting to /tmp/x (No such file or directory)", wantIs: errNoServer},
+		{name: "no such file without connect error", stderr: "open /x: No such file or directory", wantGeneric: true},
 		{name: "server exited unexpectedly", stderr: "server exited unexpectedly", wantIs: errNoServer},
 		{name: "lost server", stderr: "lost server", wantIs: errNoServer},
 		{name: "permission denied", stderr: "error connecting to /tmp/x (Permission denied)", wantGeneric: true},

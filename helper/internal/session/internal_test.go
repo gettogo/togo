@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/agents"
+	"github.com/gettogo/togo/helper/internal/tmux"
 	"github.com/gettogo/togo/helper/internal/tmux/tmuxtest"
 )
 
@@ -239,5 +240,46 @@ func TestResolveTmuxFallsBackToKnownLocations(t *testing.T) {
 func TestResolveTmuxKeepsBareNameWhenMissing(t *testing.T) {
 	if got := resolveTmux("", []string{filepath.Join(t.TempDir(), "tmux")}); got != "tmux" {
 		t.Fatalf("resolveTmux with no tmux anywhere = %q, want %q so the not-installed path reports it", got, "tmux")
+	}
+}
+
+func TestTmuxConfPhoneLines(t *testing.T) {
+	for _, line := range []string{
+		"set -g status off",
+		"set-environment -g COLORTERM truecolor",
+		"set -as terminal-features 'xterm*:RGB'",
+	} {
+		if !strings.Contains(tmuxConf, line+"\n") {
+			t.Errorf("tmuxConf lacks %q", line)
+		}
+	}
+	if strings.Contains(tmuxConf, "extended-keys") {
+		t.Error("tmuxConf sets extended-keys, which waits for engine support")
+	}
+
+	conf := filepath.Join(t.TempDir(), "tmux.conf")
+	if err := os.WriteFile(conf, []byte(tmuxConf), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := tmuxtest.New(t)
+	c.Config = conf
+	if err := c.NewSession(context.Background(), tmux.NewSessionOpts{Name: "conf", Dir: t.TempDir()}); err != nil {
+		t.Fatalf("tmux rejected tmux.conf: %v", err)
+	}
+	for _, q := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"show", "-gv", "status"}, "off"},
+		{[]string{"show-environment", "-g", "COLORTERM"}, "COLORTERM=truecolor"},
+		{[]string{"show", "-sv", "terminal-features"}, "xterm*:RGB"},
+	} {
+		out, err := exec.Command(c.Bin, append(append([]string{}, c.Socket...), q.args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("tmux %v: %v: %s", q.args, err, out)
+		}
+		if !strings.Contains(string(out), q.want) {
+			t.Errorf("tmux %v = %q, want it to contain %q", q.args, out, q.want)
+		}
 	}
 }

@@ -30,6 +30,7 @@
         { "if": { "properties": { "method": { "const": "session.create" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionCreateParams" } } } },
         { "if": { "properties": { "method": { "const": "session.kill" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionKillParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "session.rename" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRenameParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.capture" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionCaptureParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "session.attachCommand" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionAttachCommandParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "agents.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
         { "if": { "properties": { "method": { "const": "fs.recentDirs" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
@@ -252,7 +253,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\"]. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.*, fs.read, fs.listDir with ref), \"ports.v1\" (ports.list). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.*, fs.read, fs.listDir with ref), \"ports.v1\" (ports.list). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -308,6 +309,27 @@
         "name": { "type": "string" }
       },
       "required": ["id", "name"],
+      "additionalProperties": false
+    },
+    "SessionCaptureParams": {
+      "description": "session.capture -> SessionCaptureResult. Read-only; works for managed and unmanaged sessions. lines: history lines above the visible screen, 1-10000, default 1000; the visible rows are always included after them. With join true a wrapped line counts as several rows, so the result can hold fewer lines than `lines`. join: rejoin lines the terminal wrapped, default true. lines outside 1-10000, or an id matching neither id pattern: -32602. Unknown id: -32001.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/SessionIdParam" },
+        "lines": { "type": "integer", "minimum": 1, "maximum": 10000, "default": 1000 },
+        "join": { "type": "boolean", "default": true }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "SessionCaptureResult": {
+      "description": "text: plain text with no escape sequences and no trailing blank rows. When the JSON-encoded reply would not fit in one frame (1 MiB; escaping makes characters such as <, >, &, quotes and newlines take 2 to 6 bytes), the oldest lines are dropped, the newest are kept whole, and truncated is true. Text over 900000 bytes is cut the same way.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "truncated": { "type": "boolean" }
+      },
+      "required": ["text", "truncated"],
       "additionalProperties": false
     },
     "SessionAttachCommandParams": {
@@ -1829,6 +1851,7 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "session.create" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/Session" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "session.kill" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "session.rename" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/Session" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.capture" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/SessionCaptureResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "session.attachCommand" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/SessionAttachCommandResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "agents.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AgentsListResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.recentDirs" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsRecentDirsResult" } } } } } },

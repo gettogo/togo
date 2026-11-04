@@ -75,6 +75,8 @@ func (a *API) Handle(ctx context.Context, method string, params json.RawMessage)
 		result, err = a.sessionRename(ctx, params)
 	case "session.attachCommand":
 		result, err = a.sessionAttachCommand(ctx, params)
+	case "session.capture":
+		result, err = a.sessionCapture(ctx, params)
 	case "agents.list":
 		result = a.agentsList(ctx)
 	case "fs.recentDirs":
@@ -154,6 +156,22 @@ func (a *API) sessionAttachCommand(ctx context.Context, raw json.RawMessage) (an
 		return nil, err
 	}
 	return map[string]any{"argv": argv}, nil
+}
+
+func (a *API) sessionCapture(ctx context.Context, raw json.RawMessage) (any, error) {
+	p := struct {
+		ID    string `json:"id"`
+		Lines int    `json:"lines"`
+		Join  bool   `json:"join"`
+	}{Lines: session.DefaultCaptureLines, Join: true}
+	if err := decode(raw, &p); err != nil {
+		return nil, err
+	}
+	text, truncated, err := a.Sessions.Capture(ctx, p.ID, p.Lines, p.Join)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"text": text, "truncated": truncated}, nil
 }
 
 func (a *API) agentsList(ctx context.Context) any {

@@ -1,0 +1,4 @@
+// The team id is personal, so it stays out of git. scripts/bootstrap-ios.sh
+// writes Signing.local.xcconfig from the Apple Development certificate's OU.
+DEVELOPMENT_TEAM =
+#include? "Signing.local.xcconfig"

@@ -52,7 +52,7 @@ func TestServeHello(t *testing.T) {
 	if err := json.Unmarshal(payload, &reply); err != nil {
 		t.Fatalf("reply %s: %v", payload, err)
 	}
-	if want := []string{"session.v1", "agents.v1", "fs.v1"}; !slices.Equal(reply.Result.Capabilities, want) {
+	if want := []string{"session.v1", "agents.v1", "fs.v1", "capture.v1"}; !slices.Equal(reply.Result.Capabilities, want) {
 		t.Errorf("capabilities = %q, want %q", reply.Result.Capabilities, want)
 	}
 	if reply.Result.Protocol != 1 || reply.Result.Helper.Version == "" {

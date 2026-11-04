@@ -97,7 +97,7 @@ func exchange(t *testing.T, a *api.API, fx fixture) []json.RawMessage {
 	}
 	info := rpc.HelperInfo{
 		Version: "0.0.0-test", OS: runtime.GOOS, Arch: runtime.GOARCH, Hostname: "testhost",
-		Capabilities: []string{"session.v1", "agents.v1", "fs.v1"},
+		Capabilities: []string{"session.v1", "agents.v1", "fs.v1", "capture.v1"},
 	}
 	var out bytes.Buffer
 	if err := rpc.Serve(context.Background(), &in, &out, a, info); err != nil {

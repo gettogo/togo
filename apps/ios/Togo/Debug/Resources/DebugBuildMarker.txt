@@ -1,0 +1,1 @@
+This file ships only in Debug builds. make ios-release-check fails if it reaches a Release build.
