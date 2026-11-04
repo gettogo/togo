@@ -45,11 +45,6 @@ func NewLabel(label string) *Client {
 	return &Client{Bin: "tmux", Socket: []string{"-L", label}}
 }
 
-// NewDefault returns a Client for the default tmux server.
-func NewDefault() *Client {
-	return &Client{Bin: "tmux"}
-}
-
 // SessionInfo describes one tmux session.
 type SessionInfo struct {
 	Name     string
@@ -191,7 +186,9 @@ func (c *Client) NewSession(ctx context.Context, o NewSessionOpts) error {
 	}
 	args := []string{"new-session", "-d", "-s", escapeArg(o.Name)}
 	if o.Dir != "" {
-		args = append(args, "-c", escapeArg(o.Dir))
+		// tmux expands -c as a format, unlike the other arguments here, so
+		// "#" must be doubled to reach the filesystem as written.
+		args = append(args, "-c", escapeArg(strings.ReplaceAll(o.Dir, "#", "##")))
 	}
 	if o.Cols > 0 {
 		args = append(args, "-x", strconv.Itoa(o.Cols))

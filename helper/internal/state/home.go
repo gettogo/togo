@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -70,13 +71,20 @@ var (
 )
 
 // loginPathMarker frames the PATH value in the shell's output, so text that
-// login profiles print (a motd, an echo in .zprofile) is not mistaken for it.
+// login and rc files print (a motd, an echo in .zshrc) is not mistaken for
+// it.
 const loginPathMarker = "\x1eTOGO_PATH="
 
-// LoginPath returns PATH as the user's login shell sets it. The helper may
-// run under launchd or a bare ssh command with a minimal PATH, so agent
-// lookups use this instead. The result is cached for the process, except a
-// fallback caused by ctx ending, which is retried on the next call.
+// loginPathTimeout bounds the shell lookup. A variable so tests can shorten
+// it.
+var loginPathTimeout = 2 * time.Second
+
+// LoginPath returns PATH as the user's interactive login shell sets it, the
+// same "$SHELL -lic" agents are launched with. The helper may run under
+// launchd or a bare ssh command with a minimal PATH, so agent and tmux
+// lookups use this instead. The result is cached for the process, including
+// the process PATH used when the shell fails or hangs past the timeout. Only
+// a fallback caused by the caller's ctx ending is retried on the next call.
 func LoginPath(ctx context.Context) string {
 	loginPathMu.Lock()
 	defer loginPathMu.Unlock()
@@ -90,13 +98,22 @@ func LoginPath(ctx context.Context) string {
 	return p
 }
 
-// loginPath asks shell for its login PATH, falling back to the process PATH.
-// cacheable is false when the fallback came from ctx being cancelled or
-// timing out rather than from the shell itself.
+// loginPath asks shell for its interactive login PATH, falling back to the
+// process PATH. cacheable is false when the fallback came from the caller's
+// ctx ending rather than from the shell itself.
 func loginPath(ctx context.Context, shell string) (path string, cacheable bool) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	tctx, cancel := context.WithTimeout(ctx, loginPathTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, shell, "-lc", `printf '\036TOGO_PATH=%s\036' "$PATH"`).Output()
+	cmd := exec.CommandContext(tctx, shell, "-lic", `printf '\036TOGO_PATH=%s\036' "$PATH"`)
+	// Stdin stays nil, which is /dev/null, so an rc file that reads input
+	// sees EOF instead of blocking. A new session detaches the shell from
+	// any controlling terminal the helper has, so interactive job control
+	// cannot stop it, and makes it a process group that the timeout kills
+	// whole: a child left holding stdout would otherwise keep Output waiting.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 100 * time.Millisecond
+	out, err := cmd.Output()
 	if err == nil {
 		if _, rest, ok := strings.Cut(string(out), loginPathMarker); ok {
 			if p, _, ok := strings.Cut(rest, "\x1e"); ok && p != "" {

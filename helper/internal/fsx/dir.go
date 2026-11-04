@@ -53,7 +53,8 @@ func ValidateDir(p string) (string, error) {
 // ListDir validates p as ValidateDir does and returns the cleaned path with
 // its subdirectories, symlinks to directories included, sorted
 // case-insensitively. Names starting with "." are left out unless
-// showHidden. At most 2000 entries are returned.
+// showHidden. At most 2000 entries are returned. A directory that cannot be
+// read, such as one without permission, also wraps ErrInvalidPath.
 func ListDir(p string, showHidden bool) (string, []Entry, error) {
 	dir, err := ValidateDir(p)
 	if err != nil {
@@ -61,7 +62,7 @@ func ListDir(p string, showHidden bool) (string, []Entry, error) {
 	}
 	des, err := os.ReadDir(dir)
 	if err != nil {
-		return "", nil, fmt.Errorf("list %s: %w", dir, err)
+		return "", nil, fmt.Errorf("%w: list %s: %w", ErrInvalidPath, dir, err)
 	}
 	entries := []Entry{}
 	for _, de := range des {

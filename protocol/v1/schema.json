@@ -73,7 +73,7 @@
       ]
     },
     "Error": {
-      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (path not absolute after ~ expansion, contains NUL, missing, or not a directory), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval already answered, phase 4), -32007 \"not_managed\" (write call on an unmanaged session). `data` is omitted when a code defines none.",
+      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (path not absolute after ~ expansion, contains NUL, missing, not a directory, or, for fs.listDir, not readable), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval already answered, phase 4), -32007 \"not_managed\" (write call on an unmanaged session). `data` is omitted when a code defines none.",
       "type": "object",
       "properties": {
         "code": { "type": "integer" },
@@ -281,7 +281,7 @@
       "additionalProperties": false
     },
     "SessionAttachCommandResult": {
-      "description": "argv to run on the host (no shell): [tmux path, \"-u\", socket args..., \"attach-session\", \"-t\", \"=\" + tmux session name]. Managed: [tmux, \"-u\", \"-L\", label, \"attach-session\", \"-t\", \"=s_...\"]. Unmanaged: [tmux, \"-u\", \"attach-session\", \"-t\", \"=\" + name]. A name ending in \";\" has a backslash inserted before that \";\", because tmux reads a trailing \";\" as a command separator.",
+      "description": "argv to run on the host: [tmux path, \"-u\", socket args..., \"attach-session\", \"-t\", \"=\" + tmux session name]. The tmux path is absolute whenever the helper found tmux, so it runs under the minimal PATH of an SSH exec channel. Managed: [tmux, \"-u\", \"-L\", label, \"attach-session\", \"-t\", \"=s_...\"]. Unmanaged: [tmux, \"-u\", \"attach-session\", \"-t\", \"=\" + name]. A name ending in \";\" has a backslash inserted before that \";\", because tmux reads a trailing \";\" as a command separator. An SSH exec request carries one command string that the host account's login shell parses, so clients executing argv over an SSH exec channel must POSIX single-quote every element, argv[0] included, and join the quoted elements with single spaces. The quoting rule: wrap the element in ' and replace each ' inside it with the four characters '\\'' (close the quote, a backslash-escaped quote, reopen). For example it's becomes 'it'\\''s'. The rule assumes a POSIX shell (sh, bash, zsh, dash, ksh).",
       "type": "object",
       "properties": {
         "argv": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
@@ -318,7 +318,7 @@
       "additionalProperties": false
     },
     "FsListDirParams": {
-      "description": "fs.listDir. path must be absolute or start with ~ (expanded to the home directory); relative paths, NUL bytes, missing paths and non-directories are -32003. showHidden (default false) includes names starting with a dot.",
+      "description": "fs.listDir. path must be absolute or start with ~ (expanded to the home directory); relative paths, NUL bytes, missing paths, non-directories and directories the user cannot read are -32003. showHidden (default false) includes names starting with a dot.",
       "type": "object",
       "properties": {
         "path": { "type": "string" },

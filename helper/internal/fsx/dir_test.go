@@ -115,3 +115,19 @@ func TestListDirRejectsRelative(t *testing.T) {
 		t.Fatalf("ListDir(relative) error = %v, want ErrInvalidPath", err)
 	}
 }
+
+// A folder the user cannot open (mode 0, or macOS privacy protection on
+// ~/Library/Mail) is a path the client picked, not a helper failure.
+func TestListDirUnreadableIsInvalidPath(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode 0 directory")
+	}
+	dir := filepath.Join(t.TempDir(), "locked")
+	if err := os.Mkdir(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	if _, _, err := ListDir(dir, false); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("ListDir(unreadable) error = %v, want ErrInvalidPath", err)
+	}
+}

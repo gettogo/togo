@@ -152,6 +152,9 @@ func TestNewServiceProduction(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not on PATH")
 	}
+	if !filepath.IsAbs(s.Tmux.Bin) || s.User.Bin != s.Tmux.Bin {
+		t.Errorf("tmux binaries = %q and %q, want one absolute path", s.Tmux.Bin, s.User.Bin)
+	}
 	// The real server must have loaded the file; User is left alone so the
 	// owner's default socket is never touched.
 	s.User = nil
@@ -196,5 +199,45 @@ func TestWithLockHonoursContext(t *testing.T) {
 	}
 	if err := withLock(context.Background(), path, func() error { ran = true; return nil }); err != nil || !ran {
 		t.Fatalf("withLock on a free lock = %v (ran %v), want fn run", err, ran)
+	}
+}
+
+func fakeExecutable(t *testing.T, dir string, mode os.FileMode) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "tmux")
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"), mode); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestResolveTmuxPrefersLoginPath(t *testing.T) {
+	root := t.TempDir()
+	login := fakeExecutable(t, filepath.Join(root, "login"), 0o755)
+	fallback := fakeExecutable(t, filepath.Join(root, "fallback"), 0o755)
+	path := strings.Join([]string{filepath.Join(root, "empty"), filepath.Join(root, "login")}, string(os.PathListSeparator))
+	if got := resolveTmux(path, []string{fallback}); got != login {
+		t.Fatalf("resolveTmux = %q, want the login PATH match %q", got, login)
+	}
+}
+
+func TestResolveTmuxFallsBackToKnownLocations(t *testing.T) {
+	root := t.TempDir()
+	notExec := fakeExecutable(t, filepath.Join(root, "noexec"), 0o644)
+	fallback := fakeExecutable(t, filepath.Join(root, "brew"), 0o755)
+	// A relative entry would depend on the helper's working directory.
+	t.Chdir(root)
+	path := strings.Join([]string{"/usr/bin/nonexistent-dir", "brew", filepath.Join(root, "noexec")}, string(os.PathListSeparator))
+	if got := resolveTmux(path, []string{filepath.Join(root, "missing", "tmux"), notExec, fallback}); got != fallback {
+		t.Fatalf("resolveTmux = %q, want the first executable fallback %q", got, fallback)
+	}
+}
+
+func TestResolveTmuxKeepsBareNameWhenMissing(t *testing.T) {
+	if got := resolveTmux("", []string{filepath.Join(t.TempDir(), "tmux")}); got != "tmux" {
+		t.Fatalf("resolveTmux with no tmux anywhere = %q, want %q so the not-installed path reports it", got, "tmux")
 	}
 }

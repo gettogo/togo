@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestHomeCreatesPrivateDir(t *testing.T) {
@@ -80,9 +81,7 @@ func TestLoginPathFallsBackToProcessPath(t *testing.T) {
 }
 
 func TestLoginPathNotCachedAfterCancel(t *testing.T) {
-	loginPathMu.Lock()
-	loginPathCached = ""
-	loginPathMu.Unlock()
+	resetLoginPath(t)
 	t.Setenv("SHELL", fakeShell(t))
 	t.Setenv("PATH", "/proc/bin")
 
@@ -93,6 +92,68 @@ func TestLoginPathNotCachedAfterCancel(t *testing.T) {
 	}
 	if got := LoginPath(context.Background()); got != "/login/bin:/usr/bin" {
 		t.Fatalf("LoginPath after a cancelled call = %q, want the login PATH", got)
+	}
+}
+
+func writeShell(t *testing.T, script string) string {
+	t.Helper()
+	shell := filepath.Join(t.TempDir(), "fakesh")
+	if err := os.WriteFile(shell, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return shell
+}
+
+func resetLoginPath(t *testing.T) {
+	loginPathMu.Lock()
+	loginPathCached = ""
+	loginPathMu.Unlock()
+	t.Cleanup(func() {
+		loginPathMu.Lock()
+		loginPathCached = ""
+		loginPathMu.Unlock()
+	})
+}
+
+// The agent launch command runs under "$SHELL -lic", and PATH additions
+// often live in files only interactive shells read (~/.zshrc), so the
+// lookup must ask an interactive shell too. The shell reads stdin first:
+// anything but /dev/null could block it until the timeout.
+func TestLoginPathUsesInteractiveShell(t *testing.T) {
+	shell := writeShell(t, `#!/bin/sh
+cat >/dev/null
+echo 'rc noise'
+case "$1" in *i*) PATH=/interactive/bin:/usr/bin ;; esac
+eval "$2"
+`)
+	got, ok := loginPath(context.Background(), shell)
+	if got != "/interactive/bin:/usr/bin" || !ok {
+		t.Fatalf("loginPath = %q, %v; want the interactive PATH %q, cacheable", got, ok, "/interactive/bin:/usr/bin")
+	}
+}
+
+// A shell that hangs (a prompt in .zshrc waiting for input, a slow network
+// mount) must cost the timeout once, not on every call.
+func TestLoginPathCachesTimeoutFallback(t *testing.T) {
+	resetLoginPath(t)
+	old := loginPathTimeout
+	loginPathTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { loginPathTimeout = old })
+	t.Setenv("PATH", "/proc/bin")
+	// sleep is a child of the shell and keeps stdout open after the shell
+	// is killed, which must not stretch the wait.
+	t.Setenv("SHELL", writeShell(t, "#!/bin/sh\n/bin/sleep 30\n"))
+
+	start := time.Now()
+	if got := LoginPath(context.Background()); got != "/proc/bin" {
+		t.Fatalf("LoginPath with a hung shell = %q, want the process PATH", got)
+	}
+	if waited := time.Since(start); waited > 2*time.Second {
+		t.Fatalf("LoginPath with a hung shell took %v, want about the timeout", waited)
+	}
+	t.Setenv("SHELL", fakeShell(t))
+	if got := LoginPath(context.Background()); got != "/proc/bin" {
+		t.Fatalf("LoginPath after a timeout = %q, want the cached fallback", got)
 	}
 }
 

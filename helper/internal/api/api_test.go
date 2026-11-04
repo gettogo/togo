@@ -250,3 +250,53 @@ func TestTmuxMissingReportsNullFound(t *testing.T) {
 		t.Errorf("error JSON: %s", b)
 	}
 }
+
+// agents.list may run the login shell, which can take seconds; a client
+// that gives up on the call must stop it, so the lookup takes the request
+// context.
+func TestAgentsListUsesRequestContext(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(t.TempDir(), "fakesh")
+	if err := os.WriteFile(shell, []byte("#!/bin/sh\nPATH="+bin+"\neval \"$2\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", shell)
+	t.Setenv("PATH", t.TempDir())
+	a := &api.API{Sessions: &session.Service{}}
+
+	claudeInstalled := func(ctx context.Context) bool {
+		t.Helper()
+		res, rerr := a.Handle(ctx, "agents.list", nil)
+		if rerr != nil {
+			t.Fatalf("agents.list: %+v", rerr)
+		}
+		var got struct {
+			Agents []struct {
+				ID        string `json:"id"`
+				Installed bool   `json:"installed"`
+			} `json:"agents"`
+		}
+		if err := json.Unmarshal([]byte(toJSON(res)), &got); err != nil {
+			t.Fatal(err)
+		}
+		for _, ag := range got.Agents {
+			if ag.ID == "claude" {
+				return ag.Installed
+			}
+		}
+		t.Fatal("agents.list has no claude entry")
+		return false
+	}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if claudeInstalled(cancelled) {
+		t.Fatal("agents.list with a cancelled request ran the login shell")
+	}
+	if !claudeInstalled(context.Background()) {
+		t.Fatal("agents.list did not find claude on the login PATH")
+	}
+}

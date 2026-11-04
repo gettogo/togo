@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -102,23 +103,50 @@ set -g history-limit 50000
 set -g default-terminal "tmux-256color"
 `
 
+// tmuxFallbacks are where package managers and systems install tmux, for
+// when the login PATH does not name it either.
+var tmuxFallbacks = []string{"/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux", "/bin/tmux"}
+
 // NewService returns the production Service rooted at home (see
 // state.Home). It rewrites home/tmux.conf on every start so the file always
 // matches this helper version. The togo socket label comes from
-// TOGO_TMUX_LABEL when set, which only tests do.
-func NewService(_ context.Context, home string) (*Service, error) {
+// TOGO_TMUX_LABEL when set, which only tests do. It does not run tmux, so a
+// missing tmux surfaces on the first session call, not here.
+func NewService(ctx context.Context, home string) (*Service, error) {
 	conf := filepath.Join(home, "tmux.conf")
 	if err := state.WriteFile(conf, []byte(tmuxConf)); err != nil {
 		return nil, fmt.Errorf("tmux config: %w", err)
 	}
 	label := cmp.Or(os.Getenv("TOGO_TMUX_LABEL"), "togo")
+	bin := resolveTmux(state.LoginPath(ctx), tmuxFallbacks)
 	return &Service{
-		Tmux:     &tmux.Client{Bin: "tmux", Socket: []string{"-L", label}, Config: conf},
-		User:     tmux.NewDefault(),
+		Tmux:     &tmux.Client{Bin: bin, Socket: []string{"-L", label}, Config: conf},
+		User:     &tmux.Client{Bin: bin},
 		Recent:   &state.Recent{File: filepath.Join(home, "recent.json")},
 		LockFile: filepath.Join(home, "run", "bib.lock"),
 		Shell:    cmp.Or(os.Getenv("SHELL"), "/bin/sh"),
 	}, nil
+}
+
+// resolveTmux returns an absolute path to tmux, searching the absolute
+// directories of path and then fallbacks. The helper usually runs under a
+// bare ssh exec whose PATH lacks Homebrew and /usr/local, and the app runs
+// attach argv under that same PATH, so a bare "tmux" would not be found
+// there. When tmux is nowhere it returns "tmux", which fails as not
+// installed when run.
+func resolveTmux(path string, fallbacks []string) string {
+	var candidates []string
+	for _, dir := range filepath.SplitList(path) {
+		if filepath.IsAbs(dir) {
+			candidates = append(candidates, filepath.Join(dir, "tmux"))
+		}
+	}
+	for _, c := range append(candidates, fallbacks...) {
+		if p, err := exec.LookPath(c); err == nil {
+			return p
+		}
+	}
+	return "tmux"
 }
 
 // List returns managed sessions ordered by bib, then unmanaged sessions

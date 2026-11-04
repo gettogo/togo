@@ -3,6 +3,7 @@ package tmux_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -425,5 +426,63 @@ func TestNewSessionRejectsSeparatorsInOptions(t *testing.T) {
 	}
 	if sessions, _ := c.ListSessions(context.Background()); len(sessions) != 0 {
 		t.Fatalf("ListSessions = %+v, want no session created", sessions)
+	}
+}
+
+// tmux format-expands the -c directory, where "##" means "#" and "#{...}"
+// is a format, so a folder with "#" in its name must still start the
+// session there.
+func TestNewSessionDirWithHashRoundTrips(t *testing.T) {
+	c := tmuxtest.New(t)
+	ctx := context.Background()
+	for i, base := range []string{"a##b", "x#{y}", "proj#1", "#{session_name}"} {
+		dir := filepath.Join(t.TempDir(), base)
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		name := fmt.Sprintf("hash%d", i)
+		if err := c.NewSession(ctx, tmux.NewSessionOpts{Name: name, Dir: dir}); err != nil {
+			t.Fatalf("NewSession(dir %q): %v", base, err)
+		}
+		sessions, err := c.ListSessions(ctx)
+		if err != nil {
+			t.Fatalf("ListSessions: %v", err)
+		}
+		want, _ := filepath.EvalSymlinks(dir)
+		var got string
+		for _, s := range sessions {
+			if s.Name == name {
+				got = s.Path
+			}
+		}
+		if got != want {
+			t.Errorf("session in dir %q has path %q, want %q", base, got, want)
+		}
+	}
+}
+
+// shellJoin is the quoting rule schema.json gives clients that run argv
+// over an SSH exec channel.
+func shellJoin(argv []string) string {
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		quoted[i] = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+	}
+	return strings.Join(quoted, " ")
+}
+
+// An SSH exec request is one string that the remote shell parses, so the
+// attach argv only survives if the client quotes it as the schema says.
+// The name is the hostile unmanaged-session vector shared with the app.
+func TestAttachArgvSurvivesSchemaQuoting(t *testing.T) {
+	const name = `it's "x"; $(y) \`
+	argv := (&tmux.Client{Bin: "/opt/homebrew/bin/tmux"}).AttachArgv(name)
+	out, err := exec.Command("/bin/sh", "-c", `printf '%s\0' `+shellJoin(argv)).Output()
+	if err != nil {
+		t.Fatalf("sh: %v", err)
+	}
+	got := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	if !reflect.DeepEqual(got, argv) {
+		t.Fatalf("argv after the shell = %q, want %q", got, argv)
 	}
 }

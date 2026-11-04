@@ -69,8 +69,9 @@ func runContext(ctx context.Context, args []string, env map[string]string, stdin
 
 // newService builds the production session service. The socket label and
 // the state directory come from the environment, which tests point at
-// private values.
-func newService(ctx context.Context) (*session.Service, error) {
+// private values. It is a variable so tests can model a host without tmux,
+// which the service would otherwise find in its fixed install locations.
+var newService = func(ctx context.Context) (*session.Service, error) {
 	home, err := state.Home()
 	if err != nil {
 		return nil, err

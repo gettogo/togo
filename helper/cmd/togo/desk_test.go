@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/tmux/tmuxtest"
 )
 
@@ -217,10 +218,16 @@ func TestVersionPrintsBuildAndPlatform(t *testing.T) {
 func TestMissingTmuxReportsOneLine(t *testing.T) {
 	t.Setenv("TOGO_HOME", t.TempDir())
 	t.Setenv("TOGO_TMUX_LABEL", "togo-test-notmux")
-	t.Setenv("PATH", t.TempDir())
-	if _, err := exec.LookPath("tmux"); err == nil {
-		t.Fatal("tmux still on PATH")
+	missing := filepath.Join(t.TempDir(), "tmux")
+	orig := newService
+	newService = func(ctx context.Context) (*session.Service, error) {
+		s, err := orig(ctx)
+		if err == nil {
+			s.Tmux.Bin, s.User.Bin = missing, missing
+		}
+		return s, err
 	}
+	t.Cleanup(func() { newService = orig })
 	code, _, stderr := runCLI(t, nil, "ls")
 	if code != 1 || strings.Count(stderr, "\n") != 1 || !strings.Contains(stderr, "tmux") {
 		t.Errorf("code=%d stderr=%q, want exit 1 and one line about tmux", code, stderr)

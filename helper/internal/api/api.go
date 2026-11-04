@@ -45,7 +45,7 @@ func (a *API) Handle(ctx context.Context, method string, params json.RawMessage)
 	case "session.attachCommand":
 		result, err = a.sessionAttachCommand(ctx, params)
 	case "agents.list":
-		result = a.agentsList()
+		result = a.agentsList(ctx)
 	case "fs.recentDirs":
 		result, err = a.recentDirs()
 	case "fs.listDir":
@@ -125,11 +125,13 @@ func (a *API) sessionAttachCommand(ctx context.Context, raw json.RawMessage) (an
 	return map[string]any{"argv": argv}, nil
 }
 
-func (a *API) agentsList() any {
-	// A fresh login-shell PATH lookup per call: the user may install an agent while the app is open.
+func (a *API) agentsList(ctx context.Context) any {
+	// The login PATH is cached for the process, but the agent binaries are
+	// looked up on every call, so an agent installed into a directory
+	// already on that PATH shows up while the app is open.
 	path := a.Sessions.Path
 	if path == "" {
-		path = state.LoginPath(context.Background())
+		path = state.LoginPath(ctx)
 	}
 	type entry struct {
 		ID        string `json:"id"`
