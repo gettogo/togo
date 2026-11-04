@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:togo:protocol:v1:fixture",
+  "description": "One golden fixture file in protocol/v1/fixtures. See $defs/Fixture in schema.json.",
+  "$ref": "urn:togo:protocol:v1:schema#/$defs/Fixture"
+}

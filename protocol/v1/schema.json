@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:togo:protocol:v1:schema",
+  "title": "Togo protocol v1",
+  "description": "Messages exchanged between the Togo app and the togo helper (`togo serve --stdio`). Transport: each message is a 4-byte big-endian unsigned length followed by that many bytes of UTF-8 JSON (one JSON-RPC 2.0 object, no batches). Max frame 1,048,576 bytes. `hello` must be the first call; every other call before a successful hello gets -32002 not_ready. Every response carries the id of the request it answers; clients must match responses to requests by id, not by order. Senders must follow the params schemas; the helper ignores unknown params fields.",
+  "oneOf": [
+    { "$ref": "#/$defs/Request" },
+    { "$ref": "#/$defs/Notification" },
+    { "$ref": "#/$defs/Response" }
+  ],
+  "$defs": {
+    "Id": {
+      "description": "JSON-RPC request id. The app uses positive integers.",
+      "type": ["integer", "string"]
+    },
+    "Request": {
+      "description": "A JSON-RPC 2.0 call. Methods with no required params may omit `params`.",
+      "type": "object",
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "$ref": "#/$defs/Id" },
+        "method": { "type": "string", "minLength": 1 },
+        "params": { "type": "object" }
+      },
+      "required": ["jsonrpc", "id", "method"],
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "method": { "const": "hello" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HelloParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "session.create" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionCreateParams" } } } },
+        { "if": { "properties": { "method": { "const": "session.kill" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionKillParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.rename" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRenameParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.attachCommand" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionAttachCommandParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "agents.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "fs.recentDirs" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "fs.listDir" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsListDirParams" } }, "required": ["params"] } }
+      ]
+    },
+    "Notification": {
+      "description": "A JSON-RPC 2.0 notification (no id). The helper ignores notifications in phase 1; phase 4 adds the `event` notification.",
+      "type": "object",
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "method": { "type": "string", "minLength": 1 },
+        "params": { "type": "object" }
+      },
+      "required": ["jsonrpc", "method"],
+      "additionalProperties": false
+    },
+    "Response": {
+      "description": "A JSON-RPC 2.0 response: exactly one of `result` or `error`. `id` echoes the request id, or is null when it could not be read (parse error).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "jsonrpc": { "const": "2.0" },
+            "id": { "$ref": "#/$defs/Id" },
+            "result": { "type": "object" }
+          },
+          "required": ["jsonrpc", "id", "result"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "jsonrpc": { "const": "2.0" },
+            "id": { "anyOf": [{ "$ref": "#/$defs/Id" }, { "type": "null" }] },
+            "error": { "$ref": "#/$defs/Error" }
+          },
+          "required": ["jsonrpc", "id", "error"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Error": {
+      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (path not absolute after ~ expansion, contains NUL, missing, or not a directory), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval already answered, phase 4), -32007 \"not_managed\" (write call on an unmanaged session). `data` is omitted when a code defines none.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "integer" },
+        "message": { "type": "string" },
+        "data": {}
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "code": { "const": -32700 } } }, "then": { "properties": { "message": { "const": "parse error" } } } },
+        { "if": { "properties": { "code": { "const": -32600 } } }, "then": { "properties": { "message": { "const": "invalid request" } } } },
+        { "if": { "properties": { "code": { "const": -32601 } } }, "then": { "properties": { "message": { "const": "method not found" } } } },
+        {
+          "if": { "properties": { "code": { "const": -32602 } } },
+          "then": {
+            "properties": {
+              "message": { "const": "invalid params" },
+              "data": { "type": "object", "properties": { "reason": { "type": "string" } }, "required": ["reason"], "additionalProperties": false }
+            },
+            "required": ["data"]
+          }
+        },
+        { "if": { "properties": { "code": { "const": -32603 } } }, "then": { "properties": { "message": { "const": "internal error" } } } },
+        { "if": { "properties": { "code": { "const": -32001 } } }, "then": { "properties": { "message": { "const": "not_found" } } } },
+        { "if": { "properties": { "code": { "const": -32002 } } }, "then": { "properties": { "message": { "const": "not_ready" } } } },
+        { "if": { "properties": { "code": { "const": -32003 } } }, "then": { "properties": { "message": { "const": "invalid_path" } } } },
+        {
+          "if": { "properties": { "code": { "const": -32004 } } },
+          "then": {
+            "properties": {
+              "message": { "const": "tmux_unavailable" },
+              "data": {
+                "type": "object",
+                "properties": { "found": { "type": ["string", "null"] }, "required": { "const": "3.2" } },
+                "required": ["found", "required"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["data"]
+          }
+        },
+        {
+          "if": { "properties": { "code": { "const": -32005 } } },
+          "then": {
+            "properties": {
+              "message": { "const": "unsupported_version" },
+              "data": {
+                "type": "object",
+                "properties": { "supported": { "type": "array", "items": { "type": "integer" }, "minItems": 1 } },
+                "required": ["supported"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["data"]
+          }
+        },
+        { "if": { "properties": { "code": { "const": -32006 } } }, "then": { "properties": { "message": { "const": "conflict" } } } },
+        { "if": { "properties": { "code": { "const": -32007 } } }, "then": { "properties": { "message": { "const": "not_managed" } } } }
+      ]
+    },
+    "ManagedSessionId": {
+      "description": "Managed session id: `s_` + 10 chars of lowercase unpadded base32. Also the tmux session name on socket `togo`.",
+      "type": "string",
+      "pattern": "^s_[a-z2-7]{10}$"
+    },
+    "UnmanagedSessionId": {
+      "description": "Unmanaged session id: `u_` + lowercase hex of the tmux session name on the user's default socket.",
+      "type": "string",
+      "pattern": "^u_([0-9a-f]{2})+$"
+    },
+    "SessionId": {
+      "anyOf": [{ "$ref": "#/$defs/ManagedSessionId" }, { "$ref": "#/$defs/UnmanagedSessionId" }]
+    },
+    "SessionIdParam": {
+      "description": "Session id as sent in params. Any string is accepted on the wire; one matching neither ManagedSessionId nor UnmanagedSessionId gets -32602 invalid params with data.reason.",
+      "type": "string"
+    },
+    "Timestamp": {
+      "description": "RFC 3339 timestamp. The helper emits UTC with a `Z` suffix and whole seconds.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "Session": {
+      "description": "A tmux session. Managed sessions live on socket `togo`; unmanaged ones are read-only views of the user's default socket.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/SessionId" },
+        "bib": { "description": "Two-digit number 01-99, lowest free at creation. Null for unmanaged sessions.", "type": ["string", "null"] },
+        "name": { "description": "Display name. Managed: Trimmed of leading and trailing Unicode whitespace, then 1-64 Unicode scalar values (Go runes, not bytes or grapheme clusters), with no control characters (Unicode Cc). Unmanaged: the tmux session name as is.", "type": "string" },
+        "agent": { "description": "Agent id from agents.list. Unmanaged sessions report `shell`.", "type": "string" },
+        "cwd": { "description": "Absolute working directory of the session's active pane.", "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "status": { "description": "Phase 1 reports only `idle` and `exited` (pane dead); phase 4 adds the rest.", "enum": ["working", "needs_you", "done", "idle", "exited"] },
+        "activity": { "description": "Short description of what the agent is doing. Null in phase 1.", "type": ["string", "null"] },
+        "attachedClients": { "type": "integer", "minimum": 0 },
+        "managed": { "type": "boolean" }
+      },
+      "required": ["id", "bib", "name", "agent", "cwd", "createdAt", "status", "activity", "attachedClients", "managed"],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "id": { "$ref": "#/$defs/ManagedSessionId" },
+            "bib": { "type": "string", "pattern": "^(0[1-9]|[1-9][0-9])$" },
+            "managed": { "const": true }
+          }
+        },
+        {
+          "properties": {
+            "id": { "$ref": "#/$defs/UnmanagedSessionId" },
+            "bib": { "type": "null" },
+            "managed": { "const": false }
+          }
+        }
+      ]
+    },
+    "EmptyParams": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "EmptyResult": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "HelloParams": {
+      "description": "hello. The helper answers -32005 unsupported_version unless protocol is 1.",
+      "type": "object",
+      "properties": {
+        "protocol": { "type": "integer", "minimum": 1 },
+        "client": {
+          "type": "object",
+          "properties": { "name": { "type": "string" }, "version": { "type": "string" } },
+          "required": ["name", "version"],
+          "additionalProperties": false
+        },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["protocol", "client", "capabilities"],
+      "additionalProperties": false
+    },
+    "HelloResult": {
+      "description": "Phase 1 helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\"].",
+      "type": "object",
+      "properties": {
+        "protocol": { "const": 1 },
+        "helper": {
+          "type": "object",
+          "properties": {
+            "version": { "type": "string" },
+            "os": { "description": "Go GOOS, e.g. darwin, linux.", "type": "string" },
+            "arch": { "description": "Go GOARCH, e.g. arm64, amd64.", "type": "string" },
+            "hostname": { "type": "string" }
+          },
+          "required": ["version", "os", "arch", "hostname"],
+          "additionalProperties": false
+        },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["protocol", "helper", "capabilities"],
+      "additionalProperties": false
+    },
+    "SessionListResult": {
+      "description": "session.list. Managed sessions first ordered by bib, then unmanaged ordered by name.",
+      "type": "object",
+      "properties": {
+        "sessions": { "type": "array", "items": { "$ref": "#/$defs/Session" } }
+      },
+      "required": ["sessions"],
+      "additionalProperties": false
+    },
+    "SessionCreateParams": {
+      "description": "session.create -> Session. agent defaults to \"shell\"; cwd defaults to the home directory and may start with ~; name defaults to the agent's display name; cols 0 or 20-500 (0 = 80); rows 0 or 5-300 (0 = 24). Unknown or not installed agent, bad name, or out-of-range size: -32602. Bad cwd: -32003. All 99 bibs in use: -32602. cols and rows of 0 mean the defaults 80 and 24.",
+      "type": "object",
+      "properties": {
+        "agent": { "type": "string" },
+        "cwd": { "type": "string" },
+        "name": { "description": "Trimmed of leading and trailing Unicode whitespace, then 1-64 Unicode scalar values (Go runes, not bytes or grapheme clusters), with no control characters (Unicode Cc), else -32602. Omitted, or empty after trimming, means the agent's display name.", "type": "string" },
+        "cols": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 20, "maximum": 500 }] },
+        "rows": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 5, "maximum": 300 }] }
+      },
+      "additionalProperties": false
+    },
+    "SessionKillParams": {
+      "description": "session.kill -> {}. An id matching neither the managed nor the unmanaged id pattern: -32602 with data.reason. Unknown managed id: -32001. Any `u_` id: -32007 not_managed, decided from the id alone; the user's tmux socket is never touched.",
+      "type": "object",
+      "properties": { "id": { "$ref": "#/$defs/SessionIdParam" } },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "SessionRenameParams": {
+      "description": "session.rename -> Session. name: Trimmed of leading and trailing Unicode whitespace, then 1-64 Unicode scalar values (Go runes, not bytes or grapheme clusters), with no control characters (Unicode Cc); empty after trimming is -32602. An id matching neither id pattern: -32602 with data.reason. Unknown managed id: -32001. Any `u_` id: -32007.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/SessionIdParam" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"],
+      "additionalProperties": false
+    },
+    "SessionAttachCommandParams": {
+      "description": "session.attachCommand. Works for managed and unmanaged sessions. An id matching neither id pattern: -32602 with data.reason. Unknown id: -32001.",
+      "type": "object",
+      "properties": { "id": { "$ref": "#/$defs/SessionIdParam" } },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "SessionAttachCommandResult": {
+      "description": "argv to run on the host (no shell): [tmux path, socket args..., \"attach-session\", \"-t\", \"=\" + tmux session name]. Managed: [tmux, \"-L\", label, \"attach-session\", \"-t\", \"=s_...\"]. Unmanaged: [tmux, \"attach-session\", \"-t\", \"=\" + name].",
+      "type": "object",
+      "properties": {
+        "argv": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      },
+      "required": ["argv"],
+      "additionalProperties": false
+    },
+    "Agent": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "description": "Display name, e.g. \"Claude Code\".", "type": "string" },
+        "installed": { "description": "Command found on the user's login-shell PATH. Always true for shell.", "type": "boolean" }
+      },
+      "required": ["id", "name", "installed"],
+      "additionalProperties": false
+    },
+    "AgentsListResult": {
+      "description": "agents.list. Order in v1: claude (Claude Code), omp (OMP), codex (Codex), opencode (OpenCode), shell (Shell).",
+      "type": "object",
+      "properties": {
+        "agents": { "type": "array", "items": { "$ref": "#/$defs/Agent" } }
+      },
+      "required": ["agents"],
+      "additionalProperties": false
+    },
+    "FsRecentDirsResult": {
+      "description": "fs.recentDirs. Absolute paths of folders used for session.create, newest first, deduplicated. When none are recorded: [home directory].",
+      "type": "object",
+      "properties": {
+        "dirs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20 }
+      },
+      "required": ["dirs"],
+      "additionalProperties": false
+    },
+    "FsListDirParams": {
+      "description": "fs.listDir. path must be absolute or start with ~ (expanded to the home directory); relative paths, NUL bytes, missing paths and non-directories are -32003. showHidden (default false) includes names starting with a dot.",
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "showHidden": { "type": "boolean" }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "FsListDirResult": {
+      "description": "path is the cleaned absolute path that was listed. entries are subdirectories only (symlinks to directories included), sorted case-insensitively by name, at most 2000.",
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "entries": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "type": "object",
+            "properties": { "name": { "type": "string", "minLength": 1 }, "dir": { "const": true } },
+            "required": ["name", "dir"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["path", "entries"],
+      "additionalProperties": false
+    },
+    "Fixture": {
+      "description": "Golden exchange in protocol/v1/fixtures. A harness starts a fresh connection, sends each `setup` request in order (each reply must be a success response; its result is not compared), then sends `request` and compares the reply to `response` semantically: same keys and values, with two placeholder rules for strings in `response`. (1) The string \"<any>\" matches any value (the key must still be present); it is used only for genuinely host-dependent values (tmux path and socket label in argv, os, arch, the -32602 reason text). (2) A string starting with \"<home>\" is replaced by the harness HOME path followed by the rest of the string (\"<home>/proj\" means HOME + \"/proj\"; \"<home>\" alone means HOME) and then compared exactly. Harness environment shared by all fixtures: a fresh, empty tmux server on a test label; no unmanaged sessions (user socket disabled); session ids come from a seam returning \"s_abcdefghij\"; the clock reads 2026-11-03T12:00:00Z; helper version \"0.0.0-test\", hostname \"testhost\"; HOME (and the API's home) is a fresh temp dir, given as an absolute path with symlinks resolved (so tmux's pane path equals it), holding directories `alpha`, `Beta`, `proj`, `.cache` and a regular file `notes.txt` (byte order Beta, alpha, proj differs from the case-insensitive order alpha, Beta, proj); TOGO_HOME is a separate fresh temp dir; the login-shell PATH contains none of claude, omp, codex, opencode. Per-fixture deviations are stated in `description`.",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "setup": { "type": "array", "items": { "$ref": "#/$defs/Request" } },
+        "request": { "$ref": "#/$defs/Request" },
+        "response": { "$ref": "#/$defs/Response" }
+      },
+      "required": ["description", "request", "response"],
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "hello" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HelloResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/SessionListResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.create" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/Session" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.kill" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.rename" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/Session" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.attachCommand" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/SessionAttachCommandResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "agents.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AgentsListResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.recentDirs" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsRecentDirsResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.listDir" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsListDirResult" } } } } } }
+      ]
+    }
+  }
+}

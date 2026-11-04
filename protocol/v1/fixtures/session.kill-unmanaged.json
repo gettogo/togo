@@ -1,0 +1,34 @@
+{
+  "description": "Write calls on an unmanaged session (u_ + hex of \"my work\") are refused from the id alone; the user's tmux socket is never touched.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.kill",
+    "params": {
+      "id": "u_6d7920776f726b"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": {
+      "code": -32007,
+      "message": "not_managed"
+    }
+  }
+}

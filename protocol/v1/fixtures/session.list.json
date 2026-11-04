@@ -1,0 +1,53 @@
+{
+  "description": "One managed shell session created in ~/proj with default name and size.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "sessions": [
+        {
+          "id": "s_abcdefghij",
+          "bib": "01",
+          "name": "Shell",
+          "agent": "shell",
+          "cwd": "<home>/proj",
+          "createdAt": "2026-11-03T12:00:00Z",
+          "status": "idle",
+          "activity": null,
+          "attachedClients": 0,
+          "managed": true
+        }
+      ]
+    }
+  }
+}

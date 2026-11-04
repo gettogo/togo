@@ -1,0 +1,37 @@
+{
+  "description": "An id matching neither the managed (s_ + 10 base32) nor the unmanaged (u_ + even-length lowercase hex) pattern is invalid params, not not_found.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.kill",
+    "params": {
+      "id": "foo"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": {
+      "code": -32602,
+      "message": "invalid params",
+      "data": {
+        "reason": "<any>"
+      }
+    }
+  }
+}

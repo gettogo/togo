@@ -1,0 +1,29 @@
+{
+  "description": "hello with a protocol version the helper does not speak. The connection stays open and not ready.",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "hello",
+    "params": {
+      "protocol": 2,
+      "client": {
+        "name": "togo-test",
+        "version": "0.0.0-test"
+      },
+      "capabilities": []
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+      "code": -32005,
+      "message": "unsupported_version",
+      "data": {
+        "supported": [
+          1
+        ]
+      }
+    }
+  }
+}

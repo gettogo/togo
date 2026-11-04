@@ -1,0 +1,45 @@
+{
+  "description": "Create a shell session in ~/proj (tilde expanded) at 100x30. name defaults to the agent display name, bib is the lowest free, status idle, nobody attached.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.create",
+    "params": {
+      "agent": "shell",
+      "cwd": "~/proj",
+      "cols": 100,
+      "rows": 30
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "id": "s_abcdefghij",
+      "bib": "01",
+      "name": "Shell",
+      "agent": "shell",
+      "cwd": "<home>/proj",
+      "createdAt": "2026-11-03T12:00:00Z",
+      "status": "idle",
+      "activity": null,
+      "attachedClients": 0,
+      "managed": true
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "description": "Known agents in fixed order. The harness login PATH holds none of the agent commands, so only shell is installed.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "agents.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "agents": [
+        {
+          "id": "claude",
+          "name": "Claude Code",
+          "installed": false
+        },
+        {
+          "id": "omp",
+          "name": "OMP",
+          "installed": false
+        },
+        {
+          "id": "codex",
+          "name": "Codex",
+          "installed": false
+        },
+        {
+          "id": "opencode",
+          "name": "OpenCode",
+          "installed": false
+        },
+        {
+          "id": "shell",
+          "name": "Shell",
+          "installed": true
+        }
+      ]
+    }
+  }
+}

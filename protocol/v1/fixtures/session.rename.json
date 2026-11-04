@@ -1,0 +1,52 @@
+{
+  "description": "Rename a managed session. Returns the updated session; id and bib are unchanged.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.rename",
+    "params": {
+      "id": "s_abcdefghij",
+      "name": "api server"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "id": "s_abcdefghij",
+      "bib": "01",
+      "name": "api server",
+      "agent": "shell",
+      "cwd": "<home>/proj",
+      "createdAt": "2026-11-03T12:00:00Z",
+      "status": "idle",
+      "activity": null,
+      "attachedClients": 0,
+      "managed": true
+    }
+  }
+}

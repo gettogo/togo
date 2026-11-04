@@ -1,0 +1,36 @@
+{
+  "description": "Deviation: the tmux binary reports \"tmux 2.9\". hello still succeeds; session calls fail with the found and required versions.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": {
+      "code": -32004,
+      "message": "tmux_unavailable",
+      "data": {
+        "found": "2.9",
+        "required": "3.2"
+      }
+    }
+  }
+}

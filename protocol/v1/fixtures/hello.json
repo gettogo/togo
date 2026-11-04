@@ -1,0 +1,34 @@
+{
+  "description": "First call. The helper answers with its version, platform and phase 1 capabilities. os and arch are host-dependent.",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "hello",
+    "params": {
+      "protocol": 1,
+      "client": {
+        "name": "togo-test",
+        "version": "0.0.0-test"
+      },
+      "capabilities": []
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocol": 1,
+      "helper": {
+        "version": "0.0.0-test",
+        "os": "<any>",
+        "arch": "<any>",
+        "hostname": "testhost"
+      },
+      "capabilities": [
+        "session.v1",
+        "agents.v1",
+        "fs.v1"
+      ]
+    }
+  }
+}

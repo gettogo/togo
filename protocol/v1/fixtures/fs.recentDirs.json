@@ -1,0 +1,60 @@
+{
+  "description": "session.create records its folder, expanded to an absolute path, newest first. Setup creates in ~/alpha, kills it (the id seam is constant, so the first session must go before the second create), then creates in ~/proj.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/alpha"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "session.kill",
+      "params": {
+        "id": "s_abcdefghij"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "fs.recentDirs",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "result": {
+      "dirs": [
+        "<home>/proj",
+        "<home>/alpha"
+      ]
+    }
+  }
+}

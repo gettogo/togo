@@ -1,0 +1,49 @@
+{
+  "description": "argv to attach to a managed session without a shell. argv[0] is the tmux path and argv[2] the socket label (togo in production, a test label here).",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.attachCommand",
+    "params": {
+      "id": "s_abcdefghij"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "argv": [
+        "<any>",
+        "-L",
+        "<any>",
+        "attach-session",
+        "-t",
+        "=s_abcdefghij"
+      ]
+    }
+  }
+}

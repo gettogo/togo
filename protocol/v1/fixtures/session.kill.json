@@ -1,0 +1,48 @@
+{
+  "description": "Kill takes effect: create a session, kill it in setup (its reply must be a success; the schema fixes the result to {}), then session.list is empty. The checked request is the follow-up list because only that proves the session is gone.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "session.kill",
+      "params": {
+        "id": "s_abcdefghij"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "session.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "sessions": []
+    }
+  }
+}

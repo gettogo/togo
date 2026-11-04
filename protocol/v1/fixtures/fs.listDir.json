@@ -1,0 +1,47 @@
+{
+  "description": "List ~ (the harness home: alpha, Beta, proj, .cache and file notes.txt). Directories only, hidden ones excluded, sorted case-insensitively (a byte sort would give Beta, alpha, proj). path is the expanded absolute home path.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "fs.listDir",
+    "params": {
+      "path": "~"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "path": "<home>",
+      "entries": [
+        {
+          "name": "alpha",
+          "dir": true
+        },
+        {
+          "name": "Beta",
+          "dir": true
+        },
+        {
+          "name": "proj",
+          "dir": true
+        }
+      ]
+    }
+  }
+}
