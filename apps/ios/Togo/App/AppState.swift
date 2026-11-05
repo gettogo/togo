@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import TogoKit
 
@@ -140,6 +141,12 @@ struct WorkspaceState: Equatable, Sendable {
     var selected: TabID?
     /// "04 ended", shown in the workspace when the session on screen went away underneath it.
     var ended: String?
+    /// The tab beside the selected one. It stays here while the window is too narrow to show it.
+    var secondary: TabID?
+    /// The pane that takes keyboard shortcuts, find, compose and dictation.
+    var focused: Pane = .primary
+    /// The primary pane's share of the width when the panes sit side by side.
+    var primaryFraction: CGFloat = 0.5
 }
 
 enum AppRoute: Hashable, Sendable {
@@ -158,7 +165,7 @@ enum AppSheet: Identifiable, Hashable, Sendable {
 }
 
 enum SettingsPage: Hashable, Sendable {
-    case terminal, keyboard, shortcuts, gestures, machines, notifications, sync, privacy, about
+    case terminal, keyboard, shortcuts, gestures, dictation, machines, notifications, sync, privacy, diagnostics, about
 }
 
 /// One machine's complete view at `at`. Applying it replaces everything the store knew about

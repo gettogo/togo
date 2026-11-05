@@ -77,6 +77,14 @@ targets:
         CADisableMinimumFrameDurationOnPhone: true
         NSFaceIDUsageDescription: Unlock your SSH keys.
         NSLocalNetworkUsageDescription: Find and connect to the machines on your network.
+        NSMicrophoneUsageDescription: "Togo listens only while you hold the microphone button, and turns speech into text on this device."
+        NSSpeechRecognitionUsageDescription: "Speech becomes text on this device. Nothing is sent anywhere."
+        # A tab dragged between windows or panes.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: app.togo.tab
+            UTTypeDescription: Togo tab
+            UTTypeConformsTo:
+              - public.data
         NSBonjourServices:
           - _ssh._tcp
         # Port previews load http://127.0.0.1 in a web view.

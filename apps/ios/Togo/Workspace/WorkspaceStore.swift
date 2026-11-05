@@ -15,7 +15,9 @@ extension AppStore {
     /// is what lets it shrink into its tab.
     var incomingRequests: [RequestCard] {
         controlCenter.requests.filter { card in
-            if let id = card.tabID, id == workspace.selected { return false }
+            if let id = card.tabID, id == workspace.selected || (panesVisible && id == workspace.secondary) {
+                return false
+            }
             if case .done = card.phase { return false }
             return true
         }
@@ -24,7 +26,12 @@ extension AppStore {
     /// ⌘1 to ⌘9 pick tabs in strip order. A number past the last tab does nothing.
     func selectTab(number: Int) {
         guard (1...9).contains(number), workspace.tabs.indices.contains(number - 1) else { return }
-        select(workspace.tabs[number - 1].id)
+        let id = workspace.tabs[number - 1].id
+        if panesVisible, workspace.secondary != nil {
+            place(id, in: workspace.focused)
+        } else {
+            select(id)
+        }
     }
 
     /// Moves along the strip and stops at either end, the way the pager does. Swipes on the
@@ -48,8 +55,8 @@ extension AppStore {
         case .controlCenter:
             workspaceOpen = false
         case .detach:
-            if let selected = workspace.selected {
-                close(selected)
+            if let focused = focusedTab?.id {
+                close(focused)
             }
         case .newSession:
             startNewSession()
@@ -149,5 +156,106 @@ extension RequestCard {
     /// The tab this card belongs to, if it comes from a session.
     var tabID: TabID? {
         sessionID.map { TabID(hostID: hostID, sessionID: $0) }
+    }
+}
+
+/// Two panes side by side. The same tab is never in both; the secondary stays in state while
+/// the window is too narrow to show it.
+extension AppStore {
+    /// The tab ⌘1-9, ⌘W, find, compose and dictation act on.
+    var focusedTab: WorkspaceTab? {
+        let id = workspace.focused == .secondary ? workspace.secondary : workspace.selected
+        return workspace.tabs.first { $0.id == id }
+    }
+
+    /// Opens the tab if needed and puts it in the secondary pane. Asked for the primary tab, the
+    /// most recently used other tab takes the primary pane instead, or nothing happens.
+    func openBeside(_ id: TabID) {
+        if id == workspace.selected {
+            guard let other = recentTabs.first(where: { $0 != id && hasTab($0) })
+                ?? workspace.tabs.last(where: { $0.id != id })?.id else { return }
+            workspace.selected = other
+            touch(other)
+        } else if !hasTab(id) {
+            let primary = workspace.selected
+            open(hostID: id.hostID, sessionID: id.sessionID)
+            guard let primary else { return }
+            workspace.selected = primary
+        }
+        workspace.secondary = id
+        workspace.focused = panesVisible ? .secondary : .primary
+        touch(id)
+    }
+
+    /// Called by the workspace when its arrangement changes. Collapsing to one pane hands focus
+    /// back to the primary, the pane still on screen.
+    func setPanesVisible(_ visible: Bool) {
+        panesVisible = visible
+        if !visible { workspace.focused = .primary }
+    }
+
+    func closeSecondary() {
+        workspace.secondary = nil
+        workspace.focused = .primary
+    }
+
+    func swapPanes() {
+        guard let secondary = workspace.secondary, let primary = workspace.selected else { return }
+        workspace.selected = secondary
+        workspace.secondary = primary
+        workspace.focused = workspace.focused == .primary ? .secondary : .primary
+    }
+
+    func focus(_ pane: Pane) {
+        guard pane == .primary || (panesVisible && workspace.secondary != nil) else { return }
+        workspace.focused = pane
+    }
+
+    /// Puts an open tab in a pane: a drop, or a pick from the sidebar. A tab already in the other
+    /// pane trades places with the one there.
+    func place(_ id: TabID, in pane: Pane) {
+        guard hasTab(id) else { return }
+        switch pane {
+        case .primary:
+            if id == workspace.secondary {
+                workspace.secondary = workspace.selected
+            }
+            workspace.selected = id
+        case .secondary:
+            if id == workspace.selected {
+                guard let secondary = workspace.secondary else {
+                    openBeside(id)
+                    return
+                }
+                workspace.selected = secondary
+            }
+            workspace.secondary = id
+        }
+        workspace.focused = panesVisible ? pane : .primary
+        touch(id)
+    }
+
+    /// Keeps the panes apart when a tab leaves: the secondary's tab just goes, and the
+    /// primary's is replaced by the secondary's.
+    func releasePanes(closing id: TabID) {
+        drafts[id] = nil
+        recentTabs.removeAll { $0 == id }
+        if id == workspace.secondary {
+            workspace.secondary = nil
+            workspace.focused = .primary
+        } else if id == workspace.selected, let secondary = workspace.secondary {
+            workspace.selected = secondary
+            workspace.secondary = nil
+            workspace.focused = .primary
+        }
+    }
+
+    func touch(_ id: TabID) {
+        recentTabs.removeAll { $0 == id }
+        recentTabs.insert(id, at: 0)
+    }
+
+    private func hasTab(_ id: TabID) -> Bool {
+        workspace.tabs.contains { $0.id == id }
     }
 }

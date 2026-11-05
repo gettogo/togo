@@ -57,6 +57,14 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// This device's choice: never encoded, so turning it on here cannot turn it on elsewhere.
     public var approveWithoutUnlock = false
     public var liveActivities = true
+    /// The screen stays on while the workspace is open. This device's choice: never encoded.
+    public var keepScreenOn = false
+    /// The language dictation listens for; nil follows the system. This device's choice.
+    public var dictationLocale: String?
+    /// Which engine turns speech into text. This device's choice.
+    public var dictationEngine: DictationEngineChoice = .apple
+    /// The downloaded Whisper model in use, if any. This device's choice.
+    public var whisperModel: String?
 
     public init() {}
 
@@ -86,6 +94,11 @@ public struct AppSettings: Codable, Sendable, Equatable {
     }
 }
 
+/// The engine dictation runs on: Apple's on-device speech, or a downloaded Whisper model.
+public enum DictationEngineChoice: String, Codable, Sendable, Equatable {
+    case apple, whisper
+}
+
 /// Whether this device syncs, kept on the device only. Settings from another device
 /// must never turn sync back on here, so the choice lives outside the synced record
 /// and is read before anything is merged.
@@ -112,6 +125,10 @@ public struct SyncSwitch: Sendable {
 public struct DeviceSettings: Sendable {
     private static let approveKey = "push.approveWithoutUnlock"
     private static let commandsKey = "push.liveActivityCommandMachines"
+    private static let keepScreenOnKey = "device.keepScreenOn"
+    private static let dictationLocaleKey = "device.dictationLocale"
+    private static let dictationEngineKey = "device.dictationEngine"
+    private static let whisperModelKey = "device.whisperModel"
     private let backend: any KeyValueBackend
 
     public init(backend: any KeyValueBackend) {
@@ -123,12 +140,24 @@ public struct DeviceSettings: Sendable {
         settings.approveWithoutUnlock = backend.data(forKey: Self.approveKey) == Data([1])
         settings.liveActivityCommandMachines = backend.data(forKey: Self.commandsKey)
             .flatMap { try? JSONDecoder().decode(Set<UUID>.self, from: $0) } ?? []
+        settings.keepScreenOn = backend.data(forKey: Self.keepScreenOnKey) == Data([1])
+        settings.dictationLocale = string(Self.dictationLocaleKey)
+        settings.dictationEngine = string(Self.dictationEngineKey).flatMap(DictationEngineChoice.init) ?? .apple
+        settings.whisperModel = string(Self.whisperModelKey)
     }
 
     public func save(_ settings: AppSettings) {
         backend.set(Data([settings.approveWithoutUnlock ? 1 : 0]), forKey: Self.approveKey)
         backend.set(try? JSONEncoder().encode(settings.liveActivityCommandMachines.sorted { $0.uuidString < $1.uuidString }),
                     forKey: Self.commandsKey)
+        backend.set(Data([settings.keepScreenOn ? 1 : 0]), forKey: Self.keepScreenOnKey)
+        backend.set(settings.dictationLocale.map { Data($0.utf8) }, forKey: Self.dictationLocaleKey)
+        backend.set(Data(settings.dictationEngine.rawValue.utf8), forKey: Self.dictationEngineKey)
+        backend.set(settings.whisperModel.map { Data($0.utf8) }, forKey: Self.whisperModelKey)
+    }
+
+    private func string(_ key: String) -> String? {
+        backend.data(forKey: key).map { String(decoding: $0, as: UTF8.self) }
     }
 }
 

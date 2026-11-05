@@ -46,6 +46,10 @@
 	<string>Unlock your SSH keys.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Find and connect to the machines on your network.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Togo listens only while you hold the microphone button, and turns speech into text on this device.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech becomes text on this device. Nothing is sent anywhere.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
@@ -78,6 +82,19 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Togo tab</string>
+			<key>UTTypeIdentifier</key>
+			<string>app.togo.tab</string>
+		</dict>
 	</array>
 </dict>
 </plist>

@@ -99,6 +99,7 @@ struct SettingsView: View {
                 row(.terminal)
                 row(.keyboard)
                 row(.gestures)
+                row(.dictation)
             }
             .groupedRows()
             Section {
@@ -110,6 +111,7 @@ struct SettingsView: View {
             .groupedRows()
             Section {
                 gettingStarted
+                row(.diagnostics)
                 row(.about)
             }
             .groupedRows()
@@ -152,6 +154,10 @@ struct SettingsView: View {
             SyncSettingsView(settings: settings, iCloudAvailable: values.iCloudAvailable, update: actions.update)
         case .privacy:
             PrivacySettingsView(settings: settings, biometry: values.biometry, update: actions.update)
+        case .dictation:
+            DictationSettingsView()
+        case .diagnostics:
+            DiagnosticsView()
         case .about:
             AboutView(appVersion: values.appVersion, machines: values.machines)
         }
@@ -206,6 +212,8 @@ struct SettingsView: View {
         case .notifications: settingsText("settings.notifications.title", "Notifications")
         case .sync: settingsText("settings.sync.title", "iCloud sync")
         case .privacy: settingsText("settings.privacy.title", "Privacy")
+        case .dictation: settingsText("settings.dictation.title", "Dictation")
+        case .diagnostics: settingsText("settings.diagnostics.title", "Diagnostics")
         case .about: settingsText("settings.about.title", "About")
         }
     }
@@ -220,6 +228,8 @@ struct SettingsView: View {
         case .notifications: "bell"
         case .sync: "icloud"
         case .privacy: "lock"
+        case .dictation: "mic"
+        case .diagnostics: "stethoscope"
         case .about: "info.circle"
         }
     }
@@ -240,7 +250,7 @@ struct SettingsView: View {
             return settings.resumeLock ? values.biometry.prefix(1).uppercased() + values.biometry.dropFirst() : settingsText("settings.off", "Off")
         case .about:
             return values.appVersion
-        case .keyboard, .shortcuts, .gestures:
+        case .keyboard, .shortcuts, .gestures, .dictation, .diagnostics:
             return nil
         }
     }

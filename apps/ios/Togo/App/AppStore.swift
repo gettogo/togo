@@ -31,6 +31,17 @@ import TogoKit
     var reviewEnded: String?
     /// The open review holds a commit message the user has typed.
     var reviewHasDraft = false
+    /// Compose text per tab. Cleared when it is sent and when the tab closes.
+    var drafts: [TabID: String] = [:]
+    /// The board of every session, shown over the workspace.
+    var boardShown = false
+    /// The workspace with its chrome hidden.
+    var zen = false
+    /// Both panes are on screen. The workspace sets it from its arrangement; while false the
+    /// secondary tab waits in state and everything acts on the primary pane.
+    var panesVisible = false
+    /// Open tabs, most recently put on screen first.
+    var recentTabs: [TabID] = []
     /// Why the last answer to a card did not arrive, by card id. It sits on the card the user
     /// will answer again rather than in `notice`, which belongs to the whole screen.
     private(set) var answerFailures: [String: String] = [:]
@@ -195,13 +206,18 @@ import TogoKit
                 title: row.map(\.name) ?? sessionID, link: .connecting, transport: transport
             ))
         }
+        if id == workspace.secondary {
+            workspace.secondary = workspace.selected
+        }
         workspace.selected = id
+        touch(id)
         workspaceOpen = true
     }
 
     func close(_ id: TabID) {
         guard let index = workspace.tabs.firstIndex(where: { $0.id == id }) else { return }
         workspace.tabs.remove(at: index)
+        releasePanes(closing: id)
         if workspace.selected == id {
             let neighbour = min(index, workspace.tabs.count - 1)
             workspace.selected = neighbour >= 0 ? workspace.tabs[neighbour].id : nil
@@ -211,9 +227,10 @@ import TogoKit
         }
     }
 
+    /// Shows a tab in the primary pane. A tab already beside it trades places with the primary.
     func select(_ id: TabID) {
         guard workspace.tabs.contains(where: { $0.id == id }) else { return }
-        workspace.selected = id
+        place(id, in: .primary)
     }
 
     private static func defaultReviewServices() -> any ReviewServices {

@@ -12,6 +12,9 @@ enum ComposeCopy {
     static let photo = String(localized: "compose.photo", defaultValue: "Attach image")
     static let dismiss = String(localized: "compose.dismiss", defaultValue: "Dismiss")
     static let tryAgain = String(localized: "compose.tryAgain", defaultValue: "Try again")
+    static func to(_ bib: String) -> String {
+        String(localized: "compose.to", defaultValue: "To \(bib)")
+    }
     static let sendingImage = String(localized: "compose.sendingImage", defaultValue: "Sending image")
     static let uploadFailed = String(localized: "compose.uploadFailed", defaultValue: "Couldn\u{2019}t send the image.")
     static let tooLarge = String(localized: "compose.tooLarge", defaultValue: "This image is too large to send.")
@@ -47,7 +50,20 @@ struct ComposeHistory {
 }
 
 @Observable @MainActor final class ComposeModel {
-    var text: String
+    /// Reads and writes the draft the model was given, so the text outlives the bar.
+    var text: String {
+        get {
+            access(keyPath: \.text)
+            return draft?.wrappedValue ?? localText
+        }
+        set {
+            withMutation(keyPath: \.text) {
+                if let draft { draft.wrappedValue = newValue } else { localText = newValue }
+            }
+        }
+    }
+    @ObservationIgnored private var localText: String
+    @ObservationIgnored private let draft: Binding<String>?
     private(set) var history: [String]
     let images: ImagePasteFlow
     private let store: ComposeHistory
@@ -55,10 +71,11 @@ struct ComposeHistory {
     private let pressEnter: @MainActor () -> Void
 
     init(
-        text: String = "", history: ComposeHistory, images: ImagePasteFlow,
+        text: String = "", draft: Binding<String>? = nil, history: ComposeHistory, images: ImagePasteFlow,
         paste: @escaping @MainActor (String) -> Void, pressEnter: @escaping @MainActor () -> Void
     ) {
-        self.text = text
+        self.localText = text
+        self.draft = draft
         self.store = history
         self.history = history.load()
         self.images = images
@@ -96,35 +113,39 @@ struct ComposeBar: View {
     @State private var model: ComposeModel
     @State private var photo: PhotosPickerItem?
     private let focusOnAppear: Bool
+    /// The bib of the session the text goes to, shown as "To 04"; nil hides the label.
+    private let target: String?
 
     init(
-        hostID: HostID, sessionID: String, imageSupport: ImageSupport,
+        hostID: HostID, sessionID: String, imageSupport: ImageSupport, draft: Binding<String>,
+        target: String? = nil,
         paste: @escaping @MainActor (String) -> Void, pressEnter: @escaping @MainActor () -> Void,
         upload: @escaping ImagePasteFlow.Upload
     ) {
         let images = ImagePasteFlow(support: imageSupport, upload: upload, paste: paste)
         let model = ComposeModel(
-            history: ComposeHistory(hostID: hostID, sessionID: sessionID), images: images,
+            draft: draft, history: ComposeHistory(hostID: hostID, sessionID: sessionID), images: images,
             paste: paste, pressEnter: pressEnter
         )
-        self.init(model: model, focusOnAppear: true)
+        self.init(model: model, focusOnAppear: true, target: target)
     }
 
     init(
         engine: any TerminalEngine, hostID: HostID, sessionID: String, imageSupport: ImageSupport,
-        upload: @escaping ImagePasteFlow.Upload
+        draft: Binding<String>, target: String? = nil, upload: @escaping ImagePasteFlow.Upload
     ) {
         self.init(
-            hostID: hostID, sessionID: sessionID, imageSupport: imageSupport,
+            hostID: hostID, sessionID: sessionID, imageSupport: imageSupport, draft: draft, target: target,
             paste: { [weak engine] in engine?.paste($0) },
             pressEnter: { [weak engine] in engine?.send(KeyStroke(.enter)) },
             upload: upload
         )
     }
 
-    init(model: ComposeModel, focusOnAppear: Bool) {
+    init(model: ComposeModel, focusOnAppear: Bool, target: String? = nil) {
         _model = State(initialValue: model)
         self.focusOnAppear = focusOnAppear
+        self.target = target
     }
 
     var body: some View {
@@ -132,6 +153,14 @@ struct ComposeBar: View {
             Rectangle()
                 .fill(Color.togoLine)
                 .frame(height: 0.5)
+            if let target {
+                Text(ComposeCopy.to(target))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.togoMute)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+            }
             ImageStatusRow(flow: model.images)
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 4) {

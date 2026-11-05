@@ -33,8 +33,8 @@ extension AppStore {
     }
 }
 
-/// The compose bar under the tab on screen while it is open. Each tab keeps its draft until
-/// the workspace closes.
+/// The compose bar under the tab on screen while it is open. Each tab's draft lives in the
+/// store until it is sent or the tab closes.
 struct WorkspaceComposeBar: View {
     let store: AppStore
     let terminals: TerminalPool
@@ -66,8 +66,10 @@ struct WorkspaceComposeBar: View {
             },
             paste: { handle.paste($0) }
         )
+        let id = tab.id
+        let draft = Binding(get: { store.drafts[id] ?? "" }, set: { store.drafts[id] = $0.isEmpty ? nil : $0 })
         let model = ComposeModel(
-            history: ComposeHistory(hostID: tab.hostID, sessionID: tab.sessionID), images: images,
+            draft: draft, history: ComposeHistory(hostID: tab.hostID, sessionID: tab.sessionID), images: images,
             paste: { handle.paste($0) }, pressEnter: { handle.pressEnter() }
         )
         models[tab.id] = model
