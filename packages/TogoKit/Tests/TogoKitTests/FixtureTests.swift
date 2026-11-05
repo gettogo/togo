@@ -11,12 +11,26 @@ struct FixtureTests {
     }()
 
     @Test func everyFixtureDecodes() throws {
-        let files = try FileManager.default
-            .contentsOfDirectory(at: Self.fixturesDirectory, includingPropertiesForKeys: nil)
+        let files = try Self.fixtures(in: Self.fixturesDirectory)
+        #expect(files.count >= 16)
+        try checkFixtures(files)
+    }
+
+    /// Exchanges for methods no helper serves yet still round-trip through the app's types.
+    @Test func pendingFixturesValidate() throws {
+        let pending = Self.fixturesDirectory.appending(path: "pending", directoryHint: .isDirectory)
+        guard FileManager.default.fileExists(atPath: pending.path) else { return }
+        try checkFixtures(Self.fixtures(in: pending))
+    }
+
+    private static func fixtures(in directory: URL) throws -> [URL] {
+        try FileManager.default
+            .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        #expect(files.count >= 16)
+    }
 
+    private func checkFixtures(_ files: [URL]) throws {
         for file in files {
             let name = file.lastPathComponent
             let fixture = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: file))
@@ -157,6 +171,8 @@ struct FixtureTests {
         case .gitBranches: (SessionIDParams.self, GitBranches.self)
         case .portsList: (SessionIDParams.self, PortList.self)
         case .gitDiff: (GitDiffParams.self, GitDiff.self)
+        case .gitStage, .gitUnstage, .gitDiscard: (GitPathsParams.self, GitStatus.self)
+        case .gitCommit: (GitCommitParams.self, GitCommitResult.self)
         case .gitLog: (GitLogParams.self, GitLog.self)
         case .pushPair: (PushPairParams.self, PushPairResult.self)
         case .pushUnpair: (PushUnpairParams.self, EmptyResult.self)

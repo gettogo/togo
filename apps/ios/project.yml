@@ -79,6 +79,9 @@ targets:
         NSLocalNetworkUsageDescription: Find and connect to the machines on your network.
         NSBonjourServices:
           - _ssh._tcp
+        # Port previews load http://127.0.0.1 in a web view.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         CFBundleURLTypes:
           - CFBundleURLName: app.togo
             CFBundleURLSchemes:

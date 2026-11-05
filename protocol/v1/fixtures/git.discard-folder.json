@@ -1,0 +1,54 @@
+{
+  "description": "A write never acts on a folder: a path ending in / is refused before anything is read or changed. Deviation: ~/proj is a git repository on branch main, with user.name and user.email in its config and one commit adding README.md (\"hello\\n\"); ~/proj/newpkg holds an untracked file a.txt.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "git.discard",
+    "params": {
+      "id": "s_abcdefghij",
+      "paths": [
+        "newpkg/"
+      ],
+      "seen": {
+        "newpkg/": {
+          "status": "??"
+        }
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "error": {
+      "code": -32602,
+      "message": "invalid params",
+      "data": {
+        "reason": "<any>"
+      }
+    }
+  }
+}

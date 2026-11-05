@@ -1,0 +1,45 @@
+{
+  "description": "commit diffs that commit against its first parent. Deviation: ~/proj is a git repository on branch main, with user.name and user.email in its config and one commit adding README.md (\"hello\\n\") and a second commit changing it to \"hello again\\n\".",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "git.diff",
+    "params": {
+      "id": "s_abcdefghij",
+      "commit": "HEAD"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "diff": "diff --git a/README.md b/README.md\nindex ce01362..13ab7f7 100644\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-hello\n+hello again\n",
+      "truncated": false,
+      "binary": []
+    }
+  }
+}

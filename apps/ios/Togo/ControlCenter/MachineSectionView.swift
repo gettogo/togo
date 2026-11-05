@@ -146,17 +146,37 @@ struct MachineSectionView: View {
             case .connectWith:
                 ConnectWithMenu(etAvailable: etAvailable) { perform(.open(row, $0)) }
             case .kill:
+                reviewItems(for: row, actions)
                 Divider()
                 menuButton(action, row, role: .destructive) { perform(.kill(row)) }
                     .disabled(actions.disabled.contains(action))
             case .open, .rename, .mute, .copyPath:
                 menuButton(action, row) { perform(command(action, row)) }
                     .disabled(actions.disabled.contains(action))
+            case .changes, .files, .ports:
+                EmptyView()
             }
+        }
+        if !actions.available.contains(.kill) {
+            reviewItems(for: row, actions)
         }
         if let note = actions.note {
             Divider()
             Text(note)
+        }
+    }
+
+    /// Changes, Files and Ports, after the row's own actions and before Kill when there is one.
+    @ViewBuilder private func reviewItems(for row: SessionRow, _ actions: SessionActionSet) -> some View {
+        if !actions.review.isEmpty {
+            Divider()
+            ForEach(actions.review, id: \.self) { action in
+                menuButton(action, row) { perform(command(action, row)) }
+                    .disabled(actions.disabled.contains(action))
+            }
+            if let note = actions.reviewNote {
+                Text(note)
+            }
         }
     }
 
@@ -173,6 +193,9 @@ struct MachineSectionView: View {
         case .mute: .toggleMute(row)
         case .copyPath: .copyPath(row)
         case .kill: .kill(row)
+        case .changes: .review(row, .changes)
+        case .files: .review(row, .files)
+        case .ports: .review(row, .ports)
         }
     }
 }

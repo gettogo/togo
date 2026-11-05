@@ -4,6 +4,20 @@ import TogoKit
 /// What the user can do to one session row, in menu order.
 enum SessionAction: Hashable, CaseIterable, Sendable {
     case open, connectWith, rename, mute, copyPath, kill
+    /// The review screens, opened on one of their tabs.
+    case changes, files, ports
+
+    /// The review actions, in menu order. They live in `SessionActionSet.review`.
+    static let reviewActions: [SessionAction] = [.changes, .files, .ports]
+
+    var reviewTab: ReviewTab? {
+        switch self {
+        case .changes: .changes
+        case .files: .files
+        case .ports: .ports
+        case .open, .connectWith, .rename, .mute, .copyPath, .kill: nil
+        }
+    }
 
     /// Killing ends the agent and its screen for good, so it is the one action that asks first.
     var needsConfirmation: Bool { self == .kill }
@@ -16,6 +30,9 @@ enum SessionAction: Hashable, CaseIterable, Sendable {
         case .mute: row.muted ? ControlCenterCopy.unmute : ControlCenterCopy.mute
         case .copyPath: ControlCenterCopy.copyPath
         case .kill: ControlCenterCopy.kill
+        case .changes: ReviewCopy.tabName(.changes)
+        case .files: ReviewCopy.tabName(.files)
+        case .ports: ReviewCopy.tabName(.ports)
         }
     }
 
@@ -27,6 +44,9 @@ enum SessionAction: Hashable, CaseIterable, Sendable {
         case .mute: row.muted ? "bell" : "bell.slash"
         case .copyPath: "doc.on.doc"
         case .kill: "xmark.circle"
+        case .changes: "plus.forwardslash.minus"
+        case .files: "folder"
+        case .ports: "safari"
         }
     }
 }
@@ -37,9 +57,13 @@ struct SessionActionSet: Equatable, Sendable {
     var available: [SessionAction]
     var disabled: Set<SessionAction>
     var note: String?
+    /// Changes, Files and Ports, as far as the machine's helper offers them.
+    var review: [SessionAction] = []
+    /// Why the review actions are disabled, when that is not `note` already.
+    var reviewNote: String?
 
     func allows(_ action: SessionAction) -> Bool {
-        available.contains(action) && !disabled.contains(action)
+        (available.contains(action) || review.contains(action)) && !disabled.contains(action)
     }
 }
 
@@ -50,6 +74,7 @@ enum SessionCommand {
     case toggleMute(SessionRow)
     case copyPath(SessionRow)
     case kill(SessionRow)
+    case review(SessionRow, ReviewTab)
     case newSession(HostID)
     case retry(HostID)
     case signIn(HostID)
@@ -73,16 +98,41 @@ enum SessionActions {
         } else {
             []
         }
-        let available = SessionAction.allCases.filter { !changesSession.contains($0) || changeable.contains($0) }
+        let available = SessionAction.allCases.filter { action in
+            !SessionAction.reviewActions.contains(action) && (!changesSession.contains(action) || changeable.contains(action))
+        }
 
-        if changeable.isEmpty {
+        var set = if changeable.isEmpty {
             // The helper refuses these with -32007 for sessions it did not start.
-            return SessionActionSet(available: available, disabled: [], note: ControlCenterCopy.startedOutside)
+            SessionActionSet(available: available, disabled: [], note: ControlCenterCopy.startedOutside)
+        } else if let machine, let reason = unreachableReason(machine) {
+            SessionActionSet(available: available, disabled: Set(changeable), note: reason)
+        } else {
+            SessionActionSet(available: available, disabled: [], note: nil)
         }
-        if let machine, let reason = unreachableReason(machine) {
-            return SessionActionSet(available: available, disabled: Set(changeable), note: reason)
+        if let machine {
+            addReview(to: &set, machine: machine)
         }
-        return SessionActionSet(available: available, disabled: [], note: nil)
+        return set
+    }
+
+    /// Changes and Files need the helper's git methods, Ports its port list. Without a helper they
+    /// stay in the menu, disabled, with the reason.
+    private static func addReview(to set: inout SessionActionSet, machine: MachineSection) {
+        if machine.helper == .missing {
+            set.review = SessionAction.reviewActions
+            set.disabled.formUnion(SessionAction.reviewActions)
+            set.reviewNote = ReviewEntryCopy.helperMissing(machine.name)
+            return
+        }
+        var review: [SessionAction] = []
+        if machine.capabilities.contains(Capability.git) { review += [.changes, .files] }
+        if machine.capabilities.contains(Capability.ports) { review.append(.ports) }
+        set.review = review
+        if !review.isEmpty, let reason = unreachableReason(machine) {
+            set.disabled.formUnion(review)
+            if reason != set.note { set.reviewNote = reason }
+        }
     }
 
     /// Opening still works while a machine is away, because the terminal retries on its own;

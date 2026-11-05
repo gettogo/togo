@@ -1,7 +1,8 @@
-// Package gitx serves the read-only git.* methods that back the phone's diff
-// viewer. Every call runs git with argv only, repository-controlled program
-// hooks switched off, and output capped, so a hostile repository cannot make
-// the helper execute anything or buffer unbounded data.
+// Package gitx serves the git.* methods behind the phone's review tools:
+// reads for any session, and stage, unstage, discard and commit for managed
+// ones. Every call runs git with argv only, repository-controlled programs
+// switched off, and output capped, so a hostile repository cannot make the
+// helper execute anything or buffer unbounded data.
 package gitx
 
 import (
@@ -44,12 +45,42 @@ const DefaultTimeout = 10 * time.Second
 // ErrTimeout is wrapped by a call that ran past its time limit.
 var ErrTimeout = errors.New("git timed out")
 
-// ExitError is a git invocation that ran and exited non-zero.
+// ExitError is a git invocation that ran and exited non-zero. Its stderr
+// is kept for classifying the failure and never reaches a client.
 type ExitError struct {
-	Code int
+	Code   int
+	stderr []byte
 }
 
 func (e *ExitError) Error() string { return fmt.Sprintf("git exited with status %d", e.Code) }
+
+// stderrMentions reports whether err is an *ExitError whose stderr contains
+// any of the given phrases.
+func stderrMentions(err error, phrases ...string) bool {
+	var ee *ExitError
+	if !errors.As(err, &ee) {
+		return false
+	}
+	for _, p := range phrases {
+		if bytes.Contains(ee.stderr, []byte(p)) {
+			return true
+		}
+	}
+	return false
+}
+
+// stderrLimit caps the stderr kept from one git process.
+const stderrLimit = 64 << 10
+
+// capped keeps the first stderrLimit bytes written to it and drops the rest.
+type capped struct{ buf bytes.Buffer }
+
+func (c *capped) Write(p []byte) (int, error) {
+	if room := stderrLimit - c.buf.Len(); room > 0 {
+		c.buf.Write(p[:min(room, len(p))])
+	}
+	return len(p), nil
+}
 
 // safeArgs run before every subcommand. Each one turns off a way a
 // repository's own config could make git execute a program or page output.
@@ -64,7 +95,23 @@ var safeArgs = []string{
 	"-c", "protocol.allow=never",
 	"-c", "credential.helper=",
 	"-c", "log.showSignature=false",
+	// A submodule is another repository with its own config, which the
+	// listing in neutralEnv never sees: git must not enter one. Status and
+	// diff also pass --ignore-submodules=dirty so only the recorded commit
+	// (the gitlink) is compared, which reads the submodule's refs and runs
+	// nothing in it.
+	"-c", "submodule.recurse=false",
+	"-c", "diff.ignoreSubmodules=all",
+	"-c", "status.submoduleSummary=false",
+	"-c", "diff.submodule=short",
+	// The phone's diff parser expects a/ and b/ prefixes on root-relative paths.
+	"-c", "diff.noprefix=false",
+	"-c", "diff.mnemonicPrefix=false",
+	"-c", "diff.relative=false",
 }
+
+// ignoreSubmodules compares a submodule only by its recorded commit.
+const ignoreSubmodules = "--ignore-submodules=dirty"
 
 // Env returns the process environment with every GIT_* variable dropped and
 // the variables git needs for deterministic, lock-free, prompt-free output.
@@ -100,22 +147,48 @@ func (g *Git) bin() string {
 
 // Run runs `git -C dir <safe flags> args...` and returns at most limit bytes
 // of stdout. When the output is longer the process is stopped and truncated
-// is true. A non-zero exit is an *ExitError unless the output was truncated.
+// is true. A non-zero exit is an *ExitError unless the output was truncated;
+// the stdout read before it is still returned. Before every call the
+// repository's hooks and filters defined in config are blanked (neutralEnv).
 func (g *Git) Run(ctx context.Context, dir string, limit int, args ...string) (out []byte, truncated bool, err error) {
+	return g.run(ctx, dir, nil, limit, args...)
+}
+
+// RunInput is Run with stdin fed to the process.
+func (g *Git) RunInput(ctx context.Context, dir string, stdin []byte, limit int, args ...string) ([]byte, bool, error) {
+	return g.run(ctx, dir, stdin, limit, args...)
+}
+
+func (g *Git) run(ctx context.Context, dir string, stdin []byte, limit int, args ...string) ([]byte, bool, error) {
+	env, err := g.neutralEnv(ctx, dir)
+	if err != nil {
+		return nil, false, err
+	}
+	return g.exec(ctx, dir, stdin, env, limit, args...)
+}
+
+// exec runs one git process with optional stdin and extra environment,
+// appended after Env.
+func (g *Git) exec(ctx context.Context, dir string, stdin []byte, env []string, limit int, args ...string) (out []byte, truncated bool, err error) {
+	name := subcommand(args)
 	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, g.timeout())
 	defer cancel()
 	argv := append([]string{"-C", dir}, safeArgs...)
 	argv = append(argv, args...)
 	cmd := exec.CommandContext(ctx, g.bin(), argv...)
-	cmd.Env = Env()
-	cmd.Stdin = nil
+	cmd.Env = append(Env(), env...)
+	if stdin != nil {
+		cmd.Stdin = bytes.NewReader(stdin)
+	}
+	var stderr capped
+	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, false, fmt.Errorf("git %s: %w", args[0], err)
+		return nil, false, fmt.Errorf("git %s: %w", name, err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, false, fmt.Errorf("git %s: %w", args[0], err)
+		return nil, false, fmt.Errorf("git %s: %w", name, err)
 	}
 	var buf bytes.Buffer
 	_, copyErr := io.Copy(&buf, io.LimitReader(stdout, int64(limit)+1))
@@ -127,25 +200,38 @@ func (g *Git) Run(ctx context.Context, dir string, limit int, args ...string) (o
 	_, _ = io.Copy(io.Discard, stdout)
 	waitErr := cmd.Wait()
 	if copyErr != nil {
-		return nil, false, fmt.Errorf("git %s: %w", args[0], copyErr)
+		return nil, false, fmt.Errorf("git %s: %w", name, copyErr)
 	}
 	if truncated {
 		return buf.Bytes(), true, nil
 	}
 	if parent.Err() != nil {
-		return nil, false, fmt.Errorf("git %s: %w", args[0], parent.Err())
+		return nil, false, fmt.Errorf("git %s: %w", name, parent.Err())
 	}
 	if ctx.Err() != nil {
-		return nil, false, fmt.Errorf("git %s: %w", args[0], ErrTimeout)
+		return nil, false, fmt.Errorf("git %s: %w", name, ErrTimeout)
 	}
 	var ee *exec.ExitError
 	if errors.As(waitErr, &ee) {
-		return nil, false, &ExitError{Code: ee.ExitCode()}
+		return buf.Bytes(), false, &ExitError{Code: ee.ExitCode(), stderr: stderr.buf.Bytes()}
 	}
 	if waitErr != nil {
-		return nil, false, fmt.Errorf("git %s: %w", args[0], waitErr)
+		return nil, false, fmt.Errorf("git %s: %w", name, waitErr)
 	}
 	return buf.Bytes(), false, nil
+}
+
+// subcommand names the git command in args for error messages, skipping
+// leading -c settings.
+func subcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		if args[i] == "-c" {
+			i++
+			continue
+		}
+		return args[i]
+	}
+	return ""
 }
 
 // notARepoExit is git's fatal-error status, which rev-parse uses for a

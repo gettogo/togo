@@ -40,6 +40,9 @@ struct RootSheet: View {
                 hostID: id, machine: store.machineName(for: id), services: store.services,
                 finish: { store.sheet = nil }
             ))
+        case .review:
+            // RootView presents the review itself, as a cover on a phone.
+            EmptyView()
         }
     }
 }

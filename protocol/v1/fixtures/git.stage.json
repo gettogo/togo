@@ -1,0 +1,65 @@
+{
+  "description": "Staging a modified file returns the fresh status with the change in the index. Deviation: ~/proj is a git repository on branch main, with user.name and user.email in its config and one commit adding README.md (\"hello\\n\"); README.md then reads \"hello again\\n\".",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "git.stage",
+    "params": {
+      "id": "s_abcdefghij",
+      "paths": [
+        "README.md"
+      ],
+      "seen": {
+        "README.md": {
+          "status": ".M",
+          "fingerprint": "blob:13ab7f7412573d479aa8b41ce1e29a9f9f2a62d5"
+        }
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "repo": true,
+      "root": "<home>/proj",
+      "branch": "main",
+      "ahead": 0,
+      "behind": 0,
+      "truncated": false,
+      "files": [
+        {
+          "path": "README.md",
+          "origPath": null,
+          "index": "M",
+          "worktree": ".",
+          "fingerprint": "blob:13ab7f7412573d479aa8b41ce1e29a9f9f2a62d5"
+        }
+      ]
+    }
+  }
+}

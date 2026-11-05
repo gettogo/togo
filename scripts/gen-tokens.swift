@@ -24,7 +24,12 @@ let paletteURL = repoRoot.appendingPathComponent("apps/ios/Togo/Design/Palette.s
 let checkOnly = CommandLine.arguments.dropFirst().contains("--check")
 
 // Order fixes the order of the generated Swift, so output is stable.
-let roleKeys = ["ink", "deepest", "raised", "line", "snow", "mute", "muteDim", "grouped"]
+let roleKeys = [
+    "ink", "deepest", "raised", "line", "snow", "mute", "muteDim", "grouped",
+    // Content colours for diffs and code; they never reuse the accent hue.
+    "diffAddedBg", "diffAddedWord", "diffRemovedBg", "diffRemovedWord", "diffHunkBg", "gutterText",
+    "syntaxKeyword", "syntaxType", "syntaxString", "syntaxNumber", "syntaxComment", "syntaxAttribute",
+]
 
 func loadRoles() -> [Role] {
     guard let data = try? Data(contentsOf: tokensURL),

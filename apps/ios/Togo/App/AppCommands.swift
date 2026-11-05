@@ -13,22 +13,36 @@ struct AppCommands: Commands {
                 .keyboardShortcut("k", modifiers: .command)
             Button(String(localized: "cmd.newSession", defaultValue: "New Session")) { store?.startNewSession() }
                 .keyboardShortcut("t", modifiers: .command)
-                .disabled(store?.services.hosts.isEmpty ?? true)
-            // Closing a tab detaches; the session keeps running on its machine.
+                .disabled((store?.services.hosts.isEmpty ?? true) || reviewOpen)
+            // Closing a tab detaches; the session keeps running on its machine. Over the review,
+            // it closes the review.
             Button(String(localized: "cmd.closeTab", defaultValue: "Close Tab")) { store?.perform(.detach) }
                 .keyboardShortcut("w", modifiers: .command)
                 .disabled(!(store?.workspaceOpen ?? false))
             Button(String(localized: "cmd.find", defaultValue: "Find")) { store?.requestFind() }
                 .keyboardShortcut("f", modifiers: .command)
-                .disabled(!(store?.workspaceOpen ?? false))
+                .disabled(!(store?.workspaceOpen ?? false) || reviewOpen)
+            Divider()
+            // The review screens for the session on screen.
+            Button(String(localized: "cmd.changes", defaultValue: "Changes")) { store?.openReview(.changes) }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(!(store?.canOpenReview(.changes) ?? false))
+            Button(String(localized: "cmd.files", defaultValue: "Files")) { store?.openReview(.files) }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(!(store?.canOpenReview(.files) ?? false))
+            Button(String(localized: "cmd.ports", defaultValue: "Ports")) { store?.openReview(.ports) }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(!(store?.canOpenReview(.ports) ?? false))
             Divider()
             ForEach(1...9, id: \.self) { number in
                 Button(String(localized: "cmd.tab", defaultValue: "Tab \(number)")) { store?.showTab(number: number) }
                     .keyboardShortcut(KeyEquivalent(Character(String(number))), modifiers: .command)
-                    .disabled((store?.workspace.tabs.count ?? 0) < number)
+                    .disabled((store?.workspace.tabs.count ?? 0) < number || reviewOpen)
             }
         }
     }
+
+    private var reviewOpen: Bool { store?.reviewing != nil }
 }
 
 extension FocusedValues {
@@ -45,19 +59,19 @@ extension AppStore {
 
     /// ⌘T: the new session sheet, aimed at the machine of the tab on screen.
     func startNewSession() {
-        guard !services.hosts.isEmpty else { return }
+        guard !services.hosts.isEmpty, reviewing == nil else { return }
         showSheet(.newSession(workspaceOpen ? selectedTab?.hostID : nil))
     }
 
     /// ⌘1 to ⌘9 work from the sessions list too, opening the workspace on that tab.
     func showTab(number: Int) {
-        guard workspace.tabs.indices.contains(number - 1) else { return }
+        guard reviewing == nil, workspace.tabs.indices.contains(number - 1) else { return }
         selectTab(number: number)
         workspaceOpen = true
     }
 
     func requestFind() {
-        guard workspaceOpen else { return }
+        guard workspaceOpen, reviewing == nil else { return }
         findRequests += 1
     }
 

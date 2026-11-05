@@ -1,0 +1,65 @@
+{
+  "description": "git.status lists untracked files one by one, so a file inside a new folder is staged by its own path. Deviation: ~/proj is a git repository on branch main, with user.name and user.email in its config and one commit adding README.md (\"hello\\n\"); ~/proj/newpkg/a.txt is a new untracked file reading \"hello\\n\".",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "git.stage",
+    "params": {
+      "id": "s_abcdefghij",
+      "paths": [
+        "newpkg/a.txt"
+      ],
+      "seen": {
+        "newpkg/a.txt": {
+          "status": "??",
+          "fingerprint": "blob:ce013625030ba8dba906f756967f9e9ca394464a"
+        }
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "repo": true,
+      "root": "<home>/proj",
+      "branch": "main",
+      "ahead": 0,
+      "behind": 0,
+      "truncated": false,
+      "files": [
+        {
+          "path": "newpkg/a.txt",
+          "origPath": null,
+          "index": "A",
+          "worktree": ".",
+          "fingerprint": "blob:ce013625030ba8dba906f756967f9e9ca394464a"
+        }
+      ]
+    }
+  }
+}

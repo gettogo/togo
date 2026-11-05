@@ -143,4 +143,40 @@ struct SSHLocalhostTests {
         )
         await #expect(throws: SSHError.hostKeyRejected) { try await connection.connect() }
     }
+
+    @Test(.enabled(if: enabled, "set TOGO_IT_SSH=1 to run against localhost"))
+    func forwardsToLocalHTTPServer() async throws {
+        let scratch = try KeygenScratch()
+        try Data("forwarded index\n".utf8).write(to: scratch.directory.appendingPathComponent("index.html"))
+        let port = LoopbackSocket.freePort()
+        let server = Process()
+        server.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        server.arguments = ["-m", "http.server", "\(port)", "--bind", "127.0.0.1", "--directory", scratch.directory.path]
+        server.standardOutput = FileHandle.nullDevice
+        server.standardError = FileHandle.nullDevice
+        try server.run()
+        defer { server.terminate() }
+        #expect(await eventually(.seconds(10)) { LoopbackSocket.connect(port: port) != nil })
+
+        let setup = try await setup()
+        try await setup.connection.connect()
+        let forward = LocalForward(
+            opener: setup.connection, target: ForwardTarget(ListeningPort(port: port, address: "127.0.0.1", pid: 0, command: "python3"))!,
+            preferredLocalPort: nil
+        )
+        let local = try await forward.start()
+        let (body, _) = try await URLSession(configuration: .ephemeral)
+            .data(from: try #require(URL(string: "http://127.0.0.1:\(local)/")))
+        #expect(String(decoding: body, as: UTF8.self) == "forwarded index\n")
+
+        // OpenSSH reports the refused connect in its own words.
+        server.terminate()
+        server.waitUntilExit()
+        let probe = try #require(LoopbackSocket.connect(port: local))
+        var events = forward.events.makeAsyncIterator()
+        #expect(await events.next() == .upstreamRefused)
+        #expect(probe.readsEOF())
+        await forward.stop()
+        await setup.connection.close()
+    }
 }

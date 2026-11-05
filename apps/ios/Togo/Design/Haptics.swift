@@ -3,6 +3,10 @@ import SwiftUI
 /// One haptic per action, and nothing else in the app vibrates.
 enum Haptic: CaseIterable, Sendable {
     case approve, deny, connect, error, tabSettle
+    /// A stage, unstage or commit went through.
+    case done
+    /// The user confirmed a discard.
+    case discard
 
     var feedback: SensoryFeedback {
         switch self {
@@ -11,6 +15,8 @@ enum Haptic: CaseIterable, Sendable {
         case .connect: .impact(flexibility: .soft, intensity: 0.5)
         case .error: .error
         case .tabSettle: .selection
+        case .done: .success
+        case .discard: .warning
         }
     }
 }

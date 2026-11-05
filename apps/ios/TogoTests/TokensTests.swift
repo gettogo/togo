@@ -7,6 +7,20 @@ struct TokensTests {
     private static let roles: [(key: String, color: UIColor)] = [
         ("ink", .togoInk), ("deepest", .togoDeepest), ("raised", .togoRaised), ("line", .togoLine),
         ("snow", .togoSnow), ("mute", .togoMute), ("muteDim", .togoMuteDim), ("grouped", .togoGrouped),
+        ("diffAddedBg", .togoDiffAddedBg), ("diffAddedWord", .togoDiffAddedWord),
+        ("diffRemovedBg", .togoDiffRemovedBg), ("diffRemovedWord", .togoDiffRemovedWord),
+        ("diffHunkBg", .togoDiffHunkBg), ("gutterText", .togoGutterText),
+        ("syntaxKeyword", .togoSyntaxKeyword), ("syntaxType", .togoSyntaxType),
+        ("syntaxString", .togoSyntaxString), ("syntaxNumber", .togoSyntaxNumber),
+        ("syntaxComment", .togoSyntaxComment), ("syntaxAttribute", .togoSyntaxAttribute),
+    ]
+
+    private static let diffBackgrounds: [UIColor] = [
+        .togoDiffAddedBg, .togoDiffAddedWord, .togoDiffRemovedBg, .togoDiffRemovedWord, .togoDiffHunkBg,
+    ]
+    private static let syntaxColours: [UIColor] = [
+        .togoSyntaxKeyword, .togoSyntaxType, .togoSyntaxString, .togoSyntaxNumber, .togoSyntaxComment,
+        .togoSyntaxAttribute,
     ]
 
     @Test func paletteMatchesTokensFile() throws {
@@ -43,6 +57,40 @@ struct TokensTests {
     /// into the background.
     @Test func groupedCardsStandOffThePageInDark() {
         #expect(Self.contrast(.togoGrouped, .togoInk, .dark) >= 1.1)
+    }
+
+    @Test(arguments: [UIUserInterfaceStyle.dark, .light])
+    func diffAndSyntaxColoursMeetContrast(style: UIUserInterfaceStyle) {
+        for background in Self.diffBackgrounds {
+            #expect(Self.contrast(background, .togoGutterText, style) >= 4.5, "gutter on \(Self.hex(background, style))")
+            #expect(Self.contrast(background, .togoSnow, style) >= 4.5, "snow on \(Self.hex(background, style))")
+        }
+        for colour in Self.syntaxColours + [.togoMute] {
+            let name = Self.hex(colour, style)
+            #expect(Self.contrast(colour, .togoInk, style) >= 4.5, "\(name) on ink")
+            for background in Self.diffBackgrounds {
+                #expect(Self.contrast(colour, background, style) >= 4.5, "\(name) on \(Self.hex(background, style))")
+            }
+        }
+    }
+
+    @Test(arguments: [UIUserInterfaceStyle.dark, .light])
+    func noSyntaxColourNearAccentHue(style: UIUserInterfaceStyle) {
+        let accents = [UIColor.togoAccent, .togoAccentText].map { Self.hue($0, style) }
+        for colour in Self.syntaxColours + Self.diffBackgrounds + [.togoGutterText] {
+            let hue = Self.hue(colour, style)
+            for accent in accents {
+                let gap = min(abs(hue - accent), 360 - abs(hue - accent))
+                #expect(gap > 20, "\(Self.hex(colour, style)) is \(Int(gap)) degrees from the accent")
+            }
+        }
+    }
+
+    private static func hue(_ color: UIColor, _ style: UIUserInterfaceStyle) -> CGFloat {
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        color.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+            .getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        return hue * 360
     }
 
     private static func tokenColors() throws -> [String: Any] {

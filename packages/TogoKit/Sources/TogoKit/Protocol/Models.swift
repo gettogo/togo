@@ -342,20 +342,59 @@ public struct RecentDirs: Codable, Hashable, Sendable {
 public struct ListDirParams: Codable, Hashable, Sendable {
     public var path: String
     public var showHidden: Bool?
+    /// Lists files and symlinks too, each entry with its `kind`. Without it, folders only.
+    public var includeFiles: Bool?
+    /// With `ref`, the session whose cwd `path` is relative to.
+    public var id: String?
+    /// Lists the tree at this commit instead of the folder on disk. Needs `id`.
+    public var ref: String?
+    /// `path` is relative to the root of the repository holding the session cwd. Needs `id`.
+    public var root: Bool?
 
-    public init(path: String, showHidden: Bool? = nil) {
+    public init(
+        path: String, showHidden: Bool? = nil, includeFiles: Bool? = nil, id: String? = nil, ref: String? = nil,
+        root: Bool? = nil
+    ) {
         self.path = path
         self.showHidden = showHidden
+        self.includeFiles = includeFiles
+        self.id = id
+        self.ref = ref
+        self.root = root
     }
 }
 
 public struct DirEntry: Codable, Hashable, Sendable {
+    public enum Kind: WireEnum {
+        case dir, file
+        /// Never followed: where it points is not listed.
+        case symlink
+        case unknown(String)
+
+        public static let known: [Kind] = [.dir, .file, .symlink]
+
+        public var rawValue: String {
+            switch self {
+            case .dir: "dir"
+            case .file: "file"
+            case .symlink: "symlink"
+            case .unknown(let value): value
+            }
+        }
+    }
+
     public var name: String
     public var dir: Bool
+    /// Present when the listing included files.
+    public var kind: Kind?
+    /// The file's length in bytes; files only.
+    public var size: Int?
 
-    public init(name: String, dir: Bool) {
+    public init(name: String, dir: Bool, kind: Kind? = nil, size: Int? = nil) {
         self.name = name
         self.dir = dir
+        self.kind = kind
+        self.size = size
     }
 }
 

@@ -39,9 +39,11 @@ struct RootView: View {
                 controlCenter
             }
         }
-        .sheet(item: $store.sheet) { sheet in
+        .sheet(item: formSheet) { sheet in
             RootSheet(sheet: sheet, store: store, onboarding: onboarding, zoom: zoom, tutorial: tutorial)
         }
+        // From the sessions list; over the workspace, the workspace presents it.
+        .reviewPresentation(store: store, terminals: terminals, active: !store.workspaceOpen)
         .fullScreenCover(isPresented: $store.workspaceOpen) {
             WorkspaceView(store: store, terminals: terminals)
                 .modifier(WorkspaceEntrance(sourceID: zoomSource, namespace: zoom))
@@ -59,6 +61,14 @@ struct RootView: View {
         .focusedSceneValue(\.appStore, store)
         .togoControls()
         .overlay { if launchShown { LaunchOverlay { launchShown = false } } }
+    }
+
+    /// Every sheet but the review, which has its own presentation.
+    private var formSheet: Binding<AppSheet?> {
+        Binding {
+            if case .review? = store.sheet { return nil }
+            return store.sheet
+        } set: { store.sheet = $0 }
     }
 
     private var hasNoMachines: Bool {

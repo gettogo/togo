@@ -1,0 +1,45 @@
+{
+  "description": "Committing the staged change returns the new HEAD. hash and short depend on the host clock, so they match anything. Deviation: ~/proj is a git repository on branch main, with user.name and user.email in its config and one commit adding README.md (\"hello\\n\"); README.md then reads \"hello again\\n\" and is staged.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "git.commit",
+    "params": {
+      "id": "s_abcdefghij",
+      "message": "Update readme\n\nSay hello again.",
+      "amend": false
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "hash": "<any>",
+      "short": "<any>"
+    }
+  }
+}

@@ -3,13 +3,14 @@ import Foundation
 @preconcurrency import LocalAuthentication
 import NIOCore
 @preconcurrency import NIOSSH
+import Synchronization
 
 /// One authenticated SSH connection to a host profile, through its jump hosts.
 ///
 /// Credentials are resolved before any socket opens: the biometric context is evaluated,
 /// the key is loaded with it, a password is read or asked for. The handshake then signs
 /// with an already-authorised key and never shows a prompt on the NIO event loop.
-public actor SSHConnection {
+public actor SSHConnection: TCPChannelOpener {
     private let profile: HostProfile
     private let keys: KeychainKeyStore
     private let secrets: any SecretStore
@@ -77,6 +78,31 @@ public actor SSHConnection {
             terminalPixelWidth: 0, terminalPixelHeight: 0, terminalModes: SSHTerminalModes([:])
         )
         return try await SessionChannel.open(on: try requireRoot(), pty: pty, command: command)
+    }
+
+    /// Opens a TCP connection from the target machine to `host:port` on that machine's side.
+    /// Only the machine's own loopback addresses are reachable this way.
+    public func openDirectTCPIP(host: String, port: Int) async throws -> any ExecChannel {
+        guard ForwardTarget.isAllowed(host: host, port: port) else {
+            throw DirectTCPIPError.failed("Only ports on the machine itself can be opened.")
+        }
+        guard isConnected, let client = clients.last else { throw SSHError.channelClosed(exitStatus: nil) }
+        return try await TCPIPChannel.open(on: client, host: host, port: port)
+    }
+
+    public func waitUntilClosed() async {
+        guard let root else { return }
+        let future = root.closeFuture
+        let waiter = Mutex<CheckedContinuation<Void, Never>?>(nil)
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                waiter.withLock { $0 = continuation }
+                future.whenComplete { _ in waiter.withLock { $0.take() }?.resume() }
+                if Task.isCancelled { waiter.withLock { $0.take() }?.resume() }
+            }
+        } onCancel: {
+            waiter.withLock { $0.take() }?.resume()
+        }
     }
 
     public func run(_ command: String, timeout: Duration) async throws -> (stdout: Data, stderr: Data, status: Int32) {
@@ -240,5 +266,107 @@ public actor SSHConnection {
         if let error = error as? SSHError { return error }
         if case ChannelError.connectTimeout = error { return .timeout }
         return .unreachable("The server could not be reached. Check the address and your network")
+    }
+}
+
+/// One direct-tcpip channel as a byte pipe. Reads are paced like `SSHExecChannel`: the
+/// next read is asked for only after `incoming` accepted the previous one, so a slow
+/// local reader stops the SSH window and the machine's side stops sending.
+private final class TCPIPChannel: ExecChannel {
+    static let bufferLimit = 256 << 10
+
+    let incoming = ByteStream(limit: bufferLimit)
+    private let channel: any Channel
+
+    private init(channel: any Channel, reads: AsyncStream<Data>) {
+        self.channel = channel
+        let incoming = self.incoming
+        Task {
+            for await data in reads {
+                guard await incoming.write(data) else { break }
+                channel.read()
+            }
+            incoming.finish()
+            try? await channel.close()
+        }
+    }
+
+    static func open(on client: SSHClient, host: String, port: Int) async throws -> TCPIPChannel {
+        let (reads, continuation) = AsyncStream<Data>.makeStream()
+        let settings = SSHChannelType.DirectTCPIP(
+            targetHost: host, targetPort: port, originatorAddress: try SocketAddress(ipAddress: "127.0.0.1", port: 0)
+        )
+        let channel: any Channel
+        do {
+            channel = try await client.createDirectTCPIPChannel(using: settings) { child in
+                child.setOption(ChannelOptions.autoRead, value: false).flatMap {
+                    child.pipeline.addHandler(TCPIPReader(continuation: continuation))
+                }
+            }
+        } catch let error as NIOSSHError where error.type == .channelSetupRejected {
+            continuation.finish()
+            throw DirectTCPIPError(rejection: error)
+        } catch {
+            continuation.finish()
+            throw error
+        }
+        channel.read()
+        return TCPIPChannel(channel: channel, reads: reads)
+    }
+
+    func write(_ data: Data) async throws {
+        do {
+            try await channel.writeAndFlush(ByteBuffer(bytes: data))
+        } catch {
+            throw SSHError.channelClosed(exitStatus: nil)
+        }
+    }
+
+    func close() async {
+        try? await channel.close()
+        incoming.finish()
+    }
+}
+
+private final class TCPIPReader: ChannelInboundHandler, Sendable {
+    typealias InboundIn = ByteBuffer
+
+    private let continuation: AsyncStream<Data>.Continuation
+
+    init(continuation: AsyncStream<Data>.Continuation) {
+        self.continuation = continuation
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        continuation.yield(Data(unwrapInboundIn(data).readableBytesView))
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        // The machine's side finished sending; what was read is still delivered.
+        if case ChannelEvent.inputClosed = event { continuation.finish() }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        continuation.finish()
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: any Error) {
+        context.close(promise: nil)
+    }
+}
+
+extension DirectTCPIPError {
+    /// SSH reports why a channel was not opened as a reason code and text. Code 2 is a
+    /// failed connect; OpenSSH says why in the text, NIO servers leave it empty.
+    init(rejection: NIOSSHError) {
+        let detail = String(describing: rejection).components(separatedBy: "Reason: ").last ?? ""
+        let code = detail.prefix { $0.isNumber }
+        let text = detail.dropFirst(code.count).trimmingCharacters(in: .whitespaces)
+        if code == "2", text.isEmpty || text.localizedCaseInsensitiveContains("refused") {
+            self = .refused
+        } else {
+            self = .failed(text.isEmpty ? "The machine would not open the connection." : text)
+        }
     }
 }

@@ -84,7 +84,19 @@ private let safeArea = UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0)
     )
     let format = UIGraphicsImageRendererFormat(for: window.traitCollection)
     format.scale = 3
-    return UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
-        window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+    let renderer = UIGraphicsImageRenderer(bounds: window.bounds, format: format)
+    func draw() -> UIImage {
+        renderer.image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
     }
+    // System controls fade in on their own clock, such as a search field's clear button, and a
+    // busy Mac stretches every fade. A fixed wait caught them part way and the references
+    // drifted, so the screen is drawn until two frames 0.1 s apart are identical.
+    var image = draw()
+    for _ in 0..<30 {
+        RunLoop.main.run(until: .now + 0.1)
+        let next = draw()
+        if next.pngData() == image.pngData() { return next }
+        image = next
+    }
+    return image
 }

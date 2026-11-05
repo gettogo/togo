@@ -46,6 +46,10 @@
         { "if": { "properties": { "method": { "const": "git.diff" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitDiffParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.log" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitLogParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.branches" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.stage" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitPathsParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.unstage" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitPathsParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.discard" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitPathsParams", "properties": { "seen": true }, "required": ["seen"] } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.commit" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitCommitParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "fs.read" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsReadParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "fs.upload" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsUploadParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "ports.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
@@ -96,7 +100,7 @@
       ]
     },
     "Error": {
-      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval no longer answerable; data {reason: \"answered\" | \"prompt_gone\" | \"expired\", by?: \"desk\" | \"phone\"}, by present when reason is answered), -32007 \"not_managed\" (write call on an unmanaged session). `data` is omitted when a code defines none.",
+      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval no longer answerable; data {reason: \"answered\" | \"prompt_gone\" | \"expired\", by?: \"desk\" | \"phone\"}, by present when reason is answered; or a git write refused, data GitConflictData: nothing changed except for reasons partial and raced), -32007 \"not_managed\" (write call on an unmanaged session, including git.stage, git.unstage, git.discard and git.commit). `data` is omitted when a code defines none.",
       "type": "object",
       "properties": {
         "code": { "type": "integer" },
@@ -159,10 +163,15 @@
             "properties": {
               "message": { "const": "conflict" },
               "data": {
-                "type": "object",
-                "properties": { "reason": { "enum": ["answered", "prompt_gone", "expired"] }, "by": { "enum": ["desk", "phone"] } },
-                "required": ["reason"],
-                "additionalProperties": false
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": { "reason": { "enum": ["answered", "prompt_gone", "expired"] }, "by": { "enum": ["desk", "phone"] } },
+                    "required": ["reason"],
+                    "additionalProperties": false
+                  },
+                  { "$ref": "#/$defs/GitConflictData" }
+                ]
               }
             },
             "required": ["data"]
@@ -254,7 +263,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.*, fs.read, fs.listDir with ref), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -378,20 +387,22 @@
       "additionalProperties": false
     },
     "FsListDirParams": {
-      "description": "fs.listDir. path must be absolute or start with ~ (expanded to the home directory); relative paths, NUL bytes, missing paths, non-directories and directories the user cannot read are -32003. showHidden (default false) includes names starting with a dot. With ref (git.v1), id is required and path is relative to the session cwd: the listing is the tree at that commit, with the same -32003 rules as fs.read.",
+      "description": "fs.listDir. path must be absolute or start with ~ (expanded to the home directory); relative paths, NUL bytes, missing paths, non-directories and directories the user cannot read are -32003. showHidden (default false) includes names starting with a dot. includeFiles (default false) lists files and symlinks as well as directories; symlinks are never followed. With ref (git.v1), id is required and path is relative to the session cwd: the listing is the tree at that commit, with the same -32003 rules as fs.read. root (gitwrite.v1) needs id and makes path relative to the root of the repository holding the session cwd, as in fs.read; without ref it lists that folder on disk.",
       "type": "object",
       "properties": {
         "path": { "type": "string" },
         "showHidden": { "type": "boolean" },
+        "includeFiles": { "type": "boolean" },
         "id": { "$ref": "#/$defs/SessionIdParam" },
-        "ref": { "type": "string" }
+        "ref": { "type": "string" },
+        "root": { "type": "boolean" }
       },
       "required": ["path"],
-      "dependentRequired": { "ref": ["id"] },
+      "dependentRequired": { "ref": ["id"], "root": ["id"] },
       "additionalProperties": false
     },
     "FsListDirResult": {
-      "description": "path is the cleaned absolute path that was listed. entries are subdirectories only (symlinks to directories included), sorted case-insensitively by name, at most 2000.",
+      "description": "path is the cleaned absolute path that was listed. Without includeFiles, entries are subdirectories only (symlinks to directories included, at a ref only trees), with dir true and no kind or size. With includeFiles, entries are directories, regular files and symlinks, each with kind; dir is true only for kind dir; size (bytes) is given for files only; symlinks are reported as kind symlink and not followed; submodules, sockets, devices and pipes are left out. Sorted case-insensitively by name, at most 2000.",
       "type": "object",
       "properties": {
         "path": { "type": "string" },
@@ -400,7 +411,12 @@
           "maxItems": 2000,
           "items": {
             "type": "object",
-            "properties": { "name": { "type": "string", "minLength": 1 }, "dir": { "const": true } },
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "dir": { "type": "boolean" },
+              "kind": { "enum": ["dir", "file", "symlink"] },
+              "size": { "type": "integer", "minimum": 0 }
+            },
             "required": ["name", "dir"],
             "additionalProperties": false
           }
@@ -1081,7 +1097,7 @@
       "additionalProperties": false
     },
     "GitStatusResult": {
-      "description": "git.status. A cwd outside any repository is repo false, root and branch null, zero counts and no files. branch is null on a detached HEAD. The helper runs git with repository config that executes programs disabled.",
+      "description": "git.status. A cwd outside any repository is repo false, root and branch null, zero counts and no files. branch is null on a detached HEAD. The helper runs git with repository config that executes programs disabled. A helper with gitwrite.v1 lists every untracked file on its own (never a folder entry, as git status --untracked-files=all), lists at most 2,000 files in git's order, and always sends truncated, true when it left files out. Absent truncated (an older helper) means false. A client must not offer an action on all changes (such as discarding everything) while truncated is true.",
       "type": "object",
       "properties": {
         "repo": {
@@ -1107,10 +1123,14 @@
           "type": "integer",
           "minimum": 0
         },
+        "truncated": {
+          "type": "boolean"
+        },
         "files": {
           "type": "array",
+          "maxItems": 2000,
           "items": {
-            "description": "index and worktree are the porcelain v2 status letters, `.` when unchanged.",
+            "description": "index and worktree are the porcelain v2 status letters, `.` when unchanged. fingerprint (gitwrite.v1) identifies the working-tree content; every untracked or changed file present in the working tree has one, and it is absent only when the path has no file there (deleted).",
             "type": "object",
             "properties": {
               "path": {
@@ -1127,6 +1147,9 @@
               },
               "worktree": {
                 "type": "string"
+              },
+              "fingerprint": {
+                "$ref": "#/$defs/GitFingerprint"
               }
             },
             "required": [
@@ -1150,7 +1173,7 @@
       "additionalProperties": false
     },
     "GitDiffParams": {
-      "description": "git.diff. path is relative to the session cwd. ref diffs the working tree (or the index with staged) against that commit. Path or ref rules as fs.read: -32003.",
+      "description": "git.diff. path is relative to the repository root, like git.status paths, and the diff runs at the root, so a session in a subfolder of the repository diffs any path git.status lists. ref diffs the working tree (or the index with staged) against that commit. commit (gitwrite.v1) diffs that commit against its first parent, a root commit against the empty tree; commit with staged true or with ref is -32602. Path, ref or commit rules as fs.read: -32003.",
       "type": "object",
       "properties": {
         "id": {
@@ -1164,11 +1187,20 @@
         },
         "ref": {
           "type": "string"
+        },
+        "commit": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
         "id"
       ],
+      "dependentSchemas": {
+        "commit": {
+          "properties": { "staged": { "const": false }, "ref": false }
+        }
+      },
       "additionalProperties": false
     },
     "GitDiffResult": {
@@ -1300,8 +1332,96 @@
       ],
       "additionalProperties": false
     },
+    "GitPathsParams": {
+      "description": "git.stage, git.unstage, git.discard (gitwrite.v1). Paths are relative to the repository root, like git.status paths. Each path names one file (GitWritePath) and follows the fs.read rules (-32003); a path of more than 4,096 bytes, with a NUL, ending in / or naming a directory is -32602, so a write never acts on a whole folder. The helper reads a fresh status first and refuses the whole call with -32006 stale when a path is not in it with a change the method acts on (stage: worktree change, untracked or unmerged; unstage: index change; discard: any change), or when seen has the path and either its status differs from the fresh letters or its fingerprint differs from a freshly computed one (one present and the other absent also differs). A file edited again keeps its letters but changes its fingerprint. Paths with a filter attribute (such as Git LFS) are -32006 filtered, a held index.lock is -32006 locked, and git.discard of an unmerged path is -32006 unmerged; in each case nothing is changed. git.discard acts on each path by itself: a path in HEAD has its index entry and working-tree file restored to HEAD (staged and unstaged changes both go); a path not in HEAD (untracked, or added in the index only) is removed from the index if there and its file is deleted. A path staged as a rename (index R) undoes the rename: its origPath is restored to HEAD in the index and working tree in the same write, and the new path is removed; the call is -32006 stale when anything is on disk at origPath under any letter case (a listed, ignored or untracked file, a link or a folder), or when seen has the new path but not origPath with the same status and no fingerprint, and -32006 case_rename when origPath differs from the path only in letter case. The partial changed list includes origPath when it changed. Nothing else changes: no other path, no ignored file and no folder. git.unstage of a path staged as a rename also puts its origPath back in the index. The result is the status after the write. Paths are passed to git literally, after --, and no hook, filter or other repository-configured program runs.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/SessionIdParam" },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/GitWritePath" }
+        },
+        "seen": {
+          "description": "Optional for git.stage and git.unstage; git.discard needs an entry for every path (-32602 otherwise). For each path, what git.status reported when the user chose it: status is the index and worktree letters, index first (\".M\" is a worktree change, \"??\" an untracked file), and fingerprint is the entry's fingerprint, absent when the entry had none. For a staged rename the client also sends its origPath with the rename's status and no fingerprint, so git.discard restores only the old path the user saw.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/GitWritePath" },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "status": { "type": "string", "pattern": "^[.MTADRCU?]{2}$" },
+              "fingerprint": { "$ref": "#/$defs/GitFingerprint" }
+            },
+            "required": ["status"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["id", "paths"],
+      "additionalProperties": false
+    },
+    "GitWritePath": {
+      "description": "One file path for a git write: 1 to 4,096 UTF-8 bytes (the schema can only bound characters) with no NUL. A path ending in / is also -32602; that rule is pinned by a fixture rather than this schema.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[^\\u0000]*$"
+    },
+    "GitFingerprint": {
+      "description": "Content id of a working-tree file, compared only for equality. blob:<hash> is git's blob hash of the file bytes as stored without filters (git hash-object --no-filters), used for regular files up to 8,388,608 bytes while the blob-hashed files so far in the status list (git's order) total at most 268,435,456 bytes. stat:<size>:<mtime_ns> is the lstat size in bytes and modification time in nanoseconds since the epoch, used for larger files, for symlinks, and for every regular file from the first one that would pass that total.",
+      "type": "string",
+      "pattern": "^(blob:([0-9a-f]{40}|[0-9a-f]{64})|stat:[0-9]+:[0-9]+)$"
+    },
+    "GitCommitParams": {
+      "description": "git.commit (gitwrite.v1). Commits the index with message, or replaces the HEAD commit with amend. message is 1 to 65,536 UTF-8 bytes, its first line is not empty after trimming, and it has no control characters other than \\n and \\t; otherwise -32602. amend without head is -32602. Nothing staged without amend is -32006 nothing_staged, amend with no commit yet is -32006 unborn_amend, a missing git user.name or user.email is -32006 identity, a held index.lock is -32006 locked, and head that is no longer HEAD is -32006 stale. Hooks and commit signing never run.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/SessionIdParam" },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "allOf": [
+            { "pattern": "^[^\\n]*\\S" },
+            { "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$" }
+          ]
+        },
+        "amend": { "type": "boolean" },
+        "head": {
+          "description": "The HEAD commit hash the user saw: required with amend (the commit it replaces), optional otherwise.",
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+        }
+      },
+      "required": ["id", "message", "amend"],
+      "if": { "properties": { "amend": { "const": true } }, "required": ["amend"] },
+      "then": { "properties": { "head": true }, "required": ["head"] },
+      "additionalProperties": false
+    },
+    "GitCommitResult": {
+      "description": "The new HEAD commit.",
+      "type": "object",
+      "properties": {
+        "hash": { "type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$" },
+        "short": { "type": "string", "minLength": 1 }
+      },
+      "required": ["hash", "short"],
+      "additionalProperties": false
+    },
+    "GitConflictData": {
+      "description": "-32006 data for a git write. stale: a path or HEAD no longer matches what the client saw. locked: another git process holds the index lock. filtered: a path has a filter attribute. unmerged: a conflicted path that the method does not act on. nothing_staged, identity, unborn_amend: see GitCommitParams. case_rename: git.discard of a rename that only changes letter case, which the helper does not undo. For all of these nothing changed. partial: the write failed after changing some paths; changed lists the paths whose status differs from before the call, and the client should refresh. raced: git.commit made commit hash, but another process moved HEAD between the helper's check and the commit, so its parent is not the HEAD the user saw; nothing is rewritten.",
+      "type": "object",
+      "properties": {
+        "reason": { "enum": ["stale", "locked", "filtered", "unmerged", "nothing_staged", "identity", "unborn_amend", "partial", "raced", "case_rename"] },
+        "changed": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/GitWritePath" } },
+        "hash": { "type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$" }
+      },
+      "required": ["reason"],
+      "additionalProperties": false
+    },
     "FsReadParams": {
-      "description": "fs.read. path is relative to the session cwd; absolute paths, .. escapes, symlinks resolving outside the cwd, missing files and non-files are -32003. ref reads the file at that commit (a ref starting with - is -32003).",
+      "description": "fs.read. path is relative to the session cwd; absolute paths, .. escapes, symlinks resolving outside the cwd, missing files and non-files are -32003. ref reads the file at that commit (a ref starting with - is -32003). root (gitwrite.v1) makes path relative to the root of the repository holding the session cwd instead, the form git.status paths take; the same -32003 rules apply against the root, and a session outside a repository is -32003.",
       "type": "object",
       "properties": {
         "id": {
@@ -1312,6 +1432,9 @@
         },
         "ref": {
           "type": "string"
+        },
+        "root": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -2084,7 +2207,7 @@
       ]
     },
     "Fixture": {
-      "description": "Golden exchange in protocol/v1/fixtures. A harness starts a fresh connection, sends each `setup` request in order (each reply must be a success response; its result is not compared), then sends `request` and compares the reply to `response` semantically: same keys and values, with two placeholder rules for strings in `response`. (1) The string \"<any>\" matches any value (the key must still be present); it is used only for genuinely host-dependent values (tmux path and socket label in argv, os, arch, the -32602 reason text). (2) A string starting with \"<home>\" is replaced by the harness HOME path followed by the rest of the string (\"<home>/proj\" means HOME + \"/proj\"; \"<home>\" alone means HOME) and then compared exactly. Harness environment shared by all fixtures: a fresh, empty tmux server on a test label; no unmanaged sessions (user socket disabled); session ids come from a seam returning \"s_abcdefghij\"; the clock reads 2026-11-03T12:00:00Z; helper version \"0.0.0-test\", hostname \"testhost\"; HOME (and the API's home) is a fresh temp dir, given as an absolute path with symlinks resolved (so tmux's pane path equals it), holding directories `alpha`, `Beta`, `proj`, `.cache` and a regular file `notes.txt` (byte order Beta, alpha, proj differs from the case-insensitive order alpha, Beta, proj); TOGO_HOME is a separate fresh temp dir; the login-shell PATH contains none of claude, omp, codex, opencode. Per-fixture deviations are stated in `description`.",
+      "description": "Golden exchange in protocol/v1/fixtures. A harness starts a fresh connection, sends each `setup` request in order (each reply must be a success response; its result is not compared), then sends `request` and compares the reply to `response` semantically: same keys and values, with two placeholder rules for strings in `response`. (1) The string \"<any>\" matches any value (the key must still be present); it is used only for genuinely host-dependent values (tmux path and socket label in argv, os, arch, the -32602 reason text, git.commit hashes, which depend on the host clock; so the git.commit result is checked for shape only, not against GitCommitResult). (2) A string starting with \"<home>\" is replaced by the harness HOME path followed by the rest of the string (\"<home>/proj\" means HOME + \"/proj\"; \"<home>\" alone means HOME) and then compared exactly. Harness environment shared by all fixtures: a fresh, empty tmux server on a test label; no unmanaged sessions (user socket disabled); session ids come from a seam returning \"s_abcdefghij\"; the clock reads 2026-11-03T12:00:00Z; helper version \"0.0.0-test\", hostname \"testhost\"; HOME (and the API's home) is a fresh temp dir, given as an absolute path with symlinks resolved (so tmux's pane path equals it), holding directories `alpha`, `Beta`, `proj`, `.cache` and a regular file `notes.txt` (byte order Beta, alpha, proj differs from the case-insensitive order alpha, Beta, proj); TOGO_HOME is a separate fresh temp dir; the login-shell PATH contains none of claude, omp, codex, opencode. Per-fixture deviations are stated in `description`.",
       "type": "object",
       "properties": {
         "description": { "type": "string", "minLength": 1 },
@@ -2116,6 +2239,10 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.diff" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitDiffResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.log" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitLogResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.branches" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitBranchesResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.stage" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitStatusResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.unstage" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitStatusResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.discard" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitStatusResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.commit" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "type": "object", "properties": { "hash": { "type": "string" }, "short": { "type": "string" } }, "required": ["hash", "short"], "additionalProperties": false } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.read" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsReadResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.upload" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsUploadResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "ports.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/PortsListResult" } } } } } }

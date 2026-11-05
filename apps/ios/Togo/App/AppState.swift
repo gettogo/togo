@@ -152,6 +152,7 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     case editMachine(HostID)
     case newSession(HostID?)
     case signIn(HostID)
+    case review(ReviewSubject, ReviewTab)
 
     var id: Self { self }
 }

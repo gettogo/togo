@@ -76,6 +76,9 @@ enum LiveServiceError: Error, LocalizedError {
     @ObservationIgnored var onMachineRemoved: (HostID) -> Void = { _ in }
     /// A machine's address or credentials changed. Its terminals reconnect with the new ones.
     @ObservationIgnored var onMachineChanged: (HostID) -> Void = { _ in }
+    /// Runs when the app goes to the background, before the helper connections close: port
+    /// previews over them stop first so they can reopen on return.
+    @ObservationIgnored var beforeDroppingHelpers: @MainActor () async -> Void = {}
     var settings = AppSettings() {
         didSet { settingsChanged(from: oldValue) }
     }
@@ -166,7 +169,11 @@ enum LiveServiceError: Error, LocalizedError {
         }
         if !on {
             let helpers = deps.helpers
-            Task { await helpers.dropAll() }
+            let before = beforeDroppingHelpers
+            Task {
+                await before()
+                await helpers.dropAll()
+            }
         }
     }
 
@@ -228,7 +235,7 @@ enum LiveServiceError: Error, LocalizedError {
 
     /// A prompter for a helper request the user just made. Like a terminal the user opens, it
     /// may ask only in the foreground and only during this one request.
-    private func userPrompter(_ record: HostRecord) -> AttachPrompter {
+    func userPrompter(_ record: HostRecord) -> AttachPrompter {
         AttachPrompter(
             prompts: attachPrompts, hostID: record.id, machine: record.profile.name,
             address: record.profile.endpoint.host, userStarted: foreground

@@ -36,6 +36,13 @@ actor HelperChannels {
         }
     }
 
+    /// The SSH connection behind the machine's helper channel, opened if there is none. Port
+    /// previews open their connections over it, so they never sign in a second time. It never
+    /// asks the user anything: the review call that came first already could.
+    func connection(for record: HostRecord) async throws -> SSHConnection {
+        try await channel(for: record, prompter: nil).connection
+    }
+
     func drop(_ id: UUID) async {
         guard let task = channels.removeValue(forKey: id) else { return }
         if let channel = try? await task.value {

@@ -23,6 +23,14 @@ import TogoKit
     var pendingLink: DeepLink?
     /// Bumped by ⌘F; the workspace opens its find bar when it changes.
     var findRequests = 0
+    /// Bumped when a stage, unstage, discard or commit in the review goes through, so the
+    /// workspace header counts the changes again.
+    var reviewWrites = 0
+    /// Why the open review can no longer change anything: its session or machine went while a
+    /// commit message was being written, so it stays open, read-only, to keep the message.
+    var reviewEnded: String?
+    /// The open review holds a commit message the user has typed.
+    var reviewHasDraft = false
     /// Why the last answer to a card did not arrive, by card id. It sits on the card the user
     /// will answer again rather than in `notice`, which belongs to the whole screen.
     private(set) var answerFailures: [String: String] = [:]
@@ -31,9 +39,16 @@ import TogoKit
     @ObservationIgnored var removedMachines: Set<HostID> = []
     @ObservationIgnored private var isRunning = false
     let services: any AppServices
+    /// What the review screens read and write. Previews and tests pass fixtures; the app passes
+    /// the live services once they exist.
+    let reviewServices: any ReviewServices
 
-    init(services: any AppServices, controlCenter: ControlCenterState = .init(), firstRun: Bool = false) {
+    init(
+        services: any AppServices, controlCenter: ControlCenterState = .init(), firstRun: Bool = false,
+        reviewServices: (any ReviewServices)? = nil
+    ) {
         self.services = services
+        self.reviewServices = reviewServices ?? Self.defaultReviewServices()
         self.controlCenter = controlCenter
         self.firstRun = firstRun
     }
@@ -86,8 +101,13 @@ import TogoKit
         }
         controlCenter.archived = (controlCenter.archived.filter { $0.hostID != snapshot.hostID } + archived)
             .sorted { $0.statusSince > $1.statusSince }
-        if snapshot.reachability == .online {
+        switch snapshot.reachability {
+        case .online:
             closeEndedTabs(on: snapshot.hostID, listed: Set(snapshot.sessions.map(\.id)))
+        case .failed, .keyMissing:
+            endReview(hostID: snapshot.hostID, sessionID: nil, why: ReviewEntryCopy.machineLost(machineName(for: snapshot.hostID)))
+        case .connecting, .waking, .offline, .authNeeded:
+            break
         }
         controlCenter.requests = mergedRequests(snapshot)
         let cardIDs = Set(controlCenter.requests.map(\.id))
@@ -194,6 +214,14 @@ import TogoKit
     func select(_ id: TabID) {
         guard workspace.tabs.contains(where: { $0.id == id }) else { return }
         workspace.selected = id
+    }
+
+    private static func defaultReviewServices() -> any ReviewServices {
+        #if DEBUG
+        FakeReviewServices()
+        #else
+        NoReviewServices()
+        #endif
     }
 
     // MARK: Private

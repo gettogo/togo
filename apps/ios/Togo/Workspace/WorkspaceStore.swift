@@ -35,8 +35,13 @@ extension AppStore {
         select(workspace.tabs[target].id)
     }
 
-    /// Shortcuts the focused terminal passes up. ⌘V is handled where it starts.
+    /// Shortcuts the focused terminal passes up. ⌘V is handled where it starts. While the review
+    /// is open over the workspace, ⌘W closes the review and the rest wait until it is gone.
     func perform(_ shortcut: ShortcutAction) {
+        if reviewing != nil {
+            if case .detach = shortcut { closeReview() }
+            return
+        }
         switch shortcut {
         case .session(let n):
             selectTab(number: n)
@@ -59,10 +64,15 @@ extension AppStore {
         for tab in workspace.tabs where tab.hostID == hostID && !listed.contains(tab.sessionID) {
             closeEndedTab(tab.id)
         }
+        // A review opened from the sessions list has no tab of its own.
+        if let subject = reviewing?.subject, subject.hostID == hostID, !listed.contains(subject.sessionID) {
+            endReview(hostID: hostID, sessionID: subject.sessionID, why: ReviewEntryCopy.sessionEnded)
+        }
     }
 
     /// Everything shown for a machine that is gone: its section, cards, archive rows and tabs.
     func forgetMachine(_ hostID: HostID) {
+        endReview(hostID: hostID, sessionID: nil, why: ReviewEntryCopy.machineRemoved(machineName(for: hostID)))
         removedMachines.insert(hostID)
         controlCenter.machines.removeAll { $0.id == hostID }
         controlCenter.requests.removeAll { $0.hostID == hostID }
@@ -80,6 +90,7 @@ extension AppStore {
         if workspace.selected == id && workspaceOpen {
             workspace.ended = WorkspaceCopy.ended(tab.bib ?? tab.title)
         }
+        endReview(hostID: tab.hostID, sessionID: tab.sessionID, why: ReviewEntryCopy.sessionEnded)
         close(id)
     }
 

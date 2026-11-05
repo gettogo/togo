@@ -33,6 +33,7 @@ import (
 var Capabilities = []string{
 	"session.v1", "agents.v1", "fs.v1", "capture.v1",
 	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1",
+	"gitwrite.v1",
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read

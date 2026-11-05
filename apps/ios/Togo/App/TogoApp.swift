@@ -49,6 +49,7 @@ struct TogoApp: App {
                     if let link = DeepLink(url: url) { composition.store.open(link) }
                 }
                 .task { composition.start() }
+                .defaultAppStorage(composition.appStorage)
         }
         .commands { AppCommands() }
         .onChange(of: scenePhase) { _, phase in
@@ -56,8 +57,12 @@ struct TogoApp: App {
             switch phase {
             case .active:
                 composition.live?.setForeground(true)
+                composition.review?.setForeground(true)
                 composition.push?.becameActive()
-            case .background: composition.live?.setForeground(false)
+            case .background:
+                // Forwards are marked paused first; the helper connections close once they stopped.
+                composition.review?.setForeground(false)
+                composition.live?.setForeground(false)
             default: break
             }
         }
@@ -68,12 +73,17 @@ struct TogoApp: App {
 @MainActor final class AppComposition {
     /// Nil when the app runs on fake services for UI tests.
     let live: LiveServices?
+    /// Nil when the app runs on fake services for UI tests.
+    let review: LiveReviewServices?
     let store: AppStore
     let onboarding: any OnboardingServices
     let terminals = TerminalPool()
     let tutorial: TutorialModel
     /// Nil under unit and UI tests and in a process without the app group.
     let push: AppPush?
+    /// Where views keep `@AppStorage` settings: the UI tests' own suite under `-ui-fakes`, so
+    /// a choice one test makes never reaches the next.
+    var appStorage: UserDefaults = .standard
     private var started = false
     #if DEBUG
     private var uiTestMachines: UITestMachines?
@@ -102,6 +112,7 @@ struct TogoApp: App {
         )
         let deviceID = Self.deviceID()
         let signedIn = SignedInConnections()
+        let helpers = HelperChannels(env: env)
         // Each store listens to its own backend: a backend's change stream has one consumer.
         func backend() -> any KeyValueBackend { isolated ? MemoryBackend() : DefaultsBackend() }
         func remote() -> (any KeyValueBackend)? { isolated ? nil : UbiquitousBackend() }
@@ -134,7 +145,7 @@ struct TogoApp: App {
                         path: SystemPathSource()
                     )
                 },
-                helpers: HelperChannels(env: env),
+                helpers: helpers,
                 connect: { record, sessionID, transport, prompter in
                     var profile = record.profile
                     profile.transport = transport
@@ -164,8 +175,16 @@ struct TogoApp: App {
             )
         )
         live = services
+        let review = LiveReviewServices(
+            channels: helpers,
+            records: { [weak services] in services?.hostRecord($0) },
+            opener: { try await helpers.connection(for: $0) },
+            prompter: { [weak services] in services?.userPrompter($0) }
+        )
+        self.review = review
+        services.beforeDroppingHelpers = { [weak review] in await review?.settle() }
         tutorial = TutorialModel()
-        store = AppStore(services: services)
+        store = AppStore(services: services, reviewServices: review)
         onboarding = LiveOnboardingServices(keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys)
         let store = self.store, terminals = self.terminals
         services.onMachineRemoved = { id in
@@ -186,9 +205,12 @@ struct TogoApp: App {
         let machines = UITestMachines(firstRun: launch.firstRun)
         uiTestMachines = machines
         live = nil
+        review = nil
         push = nil
-        tutorial = TutorialModel(defaults: launch.defaults())
-        store = AppStore(services: machines.services)
+        let defaults = launch.defaults()
+        appStorage = defaults
+        tutorial = TutorialModel(defaults: defaults)
+        store = AppStore(services: machines.services, reviewServices: ReviewFakes.uiTestServices())
         onboarding = FakeOnboardingServices(outcomes: Array(repeating: .ready(OnboardingSamples.ready), count: 4))
     }
     #endif

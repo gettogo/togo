@@ -39,6 +39,7 @@ struct WorkspaceView: View {
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
             .attachPrompts(store.services.attachPrompts, active: true)
+            .reviewPresentation(store: store, terminals: terminals, active: true)
             .onChange(of: store.workspace.selected) {
                 status = nil
                 store.composing = nil
@@ -188,7 +189,13 @@ struct WorkspaceView: View {
         let name = row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? tab.title
         return WorkspaceHeader(
             bib: row?.bib ?? tab.bib, title: name, link: tab.link, status: status ?? store.workspace.ended, noteShown: $noteShown,
-            onBack: { store.workspaceOpen = false }
+            onBack: { store.workspaceOpen = false },
+            accessories: {
+                if let row {
+                    ReviewHeaderButtons(store: store, row: row)
+                        .id(tab.id)
+                }
+            }
         ) {
             actions(for: tab, row: row)
         }
@@ -217,6 +224,12 @@ struct WorkspaceView: View {
         }
         if let row {
             let allowed = SessionActions.actions(for: row, on: store.machine(for: tab.hostID))
+            if store.reviewSubject(for: row).canRead {
+                Section {
+                    Button(ReviewCopy.tabName(.files), systemImage: "folder") { store.review(row, tab: .files) }
+                    Button(ReviewCopy.tabName(.history), systemImage: "clock") { store.review(row, tab: .history) }
+                }
+            }
             Section {
                 if allowed.available.contains(.rename) {
                     Button(ControlCenterCopy.rename, systemImage: SessionAction.rename.systemImage(for: row)) {

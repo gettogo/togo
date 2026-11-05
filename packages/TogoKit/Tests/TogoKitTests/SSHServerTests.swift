@@ -82,6 +82,15 @@ private final class Pump: ChannelInboundHandler, Sendable {
     }
 }
 
+private final class Echo: ChannelInboundHandler, Sendable {
+    typealias InboundIn = ByteBuffer
+    typealias OutboundOut = ByteBuffer
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        context.writeAndFlush(data, promise: nil)
+    }
+}
+
 struct SSHServerTests {
     /// A fixed host key: tests never accept arbitrary keys.
     static func scratchURL() -> URL {
@@ -154,5 +163,47 @@ struct SSHServerTests {
         await connection.close()
         try await jump.close()
         try await target.close()
+    }
+
+    @Test func forwardsThroughTestSSHServer() async throws {
+        let echo = try await ServerBootstrap(group: MultiThreadedEventLoopGroup.singleton)
+            .childChannelInitializer { $0.pipeline.addHandler(Echo()) }
+            .bind(host: "127.0.0.1", port: 0).get()
+        let echoPort = try #require(echo.localAddress?.port)
+        let (server, port) = try await Self.startServer(seed: 4, name: "forward", forwards: true)
+        let (connection, _) = Self.connection(HostEndpoint(host: "127.0.0.1", port: port, user: "u"))
+        try await connection.connect()
+
+        let forward = LocalForward(
+            opener: connection, target: ForwardTarget(ListeningPort(port: echoPort, address: "*", pid: 1, command: "echo"))!,
+            preferredLocalPort: nil
+        )
+        let local = try await forward.start()
+        let socket = try #require(LoopbackSocket.connect(port: local))
+        socket.send("ping")
+        #expect(socket.read(count: 4) == Data("ping".utf8))
+        let payload = String(repeating: "0123456789abcdef", count: 64 * 1024)
+        socket.send(payload)
+        #expect(socket.read(count: payload.utf8.count) == Data(payload.utf8))
+
+        let closedPort = LoopbackSocket.freePort()
+        let refused = LocalForward(
+            opener: connection,
+            target: ForwardTarget(ListeningPort(port: closedPort, address: "127.0.0.1", pid: 1, command: "gone"))!,
+            preferredLocalPort: nil
+        )
+        let probe = try #require(LoopbackSocket.connect(port: try await refused.start()))
+        var events = refused.events.makeAsyncIterator()
+        #expect(await events.next() == .upstreamRefused)
+        #expect(probe.readsEOF())
+        await refused.stop()
+
+        // Dropping the SSH connection closes every piped connection and the listener.
+        await connection.close()
+        #expect(socket.readsEOF())
+        #expect(await eventually { LoopbackSocket.connect(port: local) == nil })
+        await forward.stop()
+        try await echo.close()
+        try await server.close()
     }
 }

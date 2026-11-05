@@ -1,0 +1,57 @@
+{
+  "description": "List ~ with includeFiles (the harness home: alpha, Beta, proj, .cache and file notes.txt holding one byte). Directories and files, hidden ones excluded, sorted case-insensitively; size only on files.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "fs.listDir",
+    "params": {
+      "path": "~",
+      "includeFiles": true
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "path": "<home>",
+      "entries": [
+        {
+          "name": "alpha",
+          "dir": true,
+          "kind": "dir"
+        },
+        {
+          "name": "Beta",
+          "dir": true,
+          "kind": "dir"
+        },
+        {
+          "name": "notes.txt",
+          "dir": false,
+          "kind": "file",
+          "size": 1
+        },
+        {
+          "name": "proj",
+          "dir": true,
+          "kind": "dir"
+        }
+      ]
+    }
+  }
+}

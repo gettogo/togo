@@ -37,6 +37,9 @@ struct UITestLaunch {
     let services: FakeAppServices
     private var snapshots: [HostID: HostViewSnapshot] = [:]
 
+    /// A helper new enough for the review screens: git reads and writes, and the port list.
+    static let capabilities: Set<String> = [Capability.events, Capability.git, Capability.gitWrite, Capability.ports]
+
     init(firstRun: Bool) {
         services = FakeAppServices(hosts: firstRun ? [] : Samples.hosts)
         if !firstRun {
@@ -45,7 +48,7 @@ struct UITestLaunch {
                 snapshots[machine.id] = HostViewSnapshot(
                     hostID: machine.id, reachability: machine.reachability, helper: machine.helper,
                     sessions: machine.sessions, requests: state.requests.filter { $0.hostID == machine.id },
-                    at: Samples.now, capabilities: [Capability.events]
+                    at: Samples.now, capabilities: Self.capabilities
                 )
             }
         }

@@ -1,6 +1,7 @@
 import Foundation
 
-// git.*, fs.read and ports.list. Paths are relative to the session cwd. Keys the
+// git.*, fs.read and ports.list. Git paths are relative to the repository root; fs.read
+// paths to the session cwd unless `root` is set. Keys the
 // schema requires but allows to be null encode as null rather than going missing.
 
 public struct GitStatus: Codable, Hashable, Sendable {
@@ -10,16 +11,21 @@ public struct GitStatus: Codable, Hashable, Sendable {
         /// Porcelain v2 status letters, `.` when unchanged.
         public var index: String
         public var worktree: String
+        /// Identifies the working-tree content (`blob:<hash>` or `stat:<size>:<mtime_ns>`),
+        /// compared only for equality. Nil when there is no file in the working tree, or
+        /// from a helper without `gitwrite.v1`.
+        public var fingerprint: String?
 
-        public init(path: String, origPath: String?, index: String, worktree: String) {
+        public init(path: String, origPath: String?, index: String, worktree: String, fingerprint: String? = nil) {
             self.path = path
             self.origPath = origPath
             self.index = index
             self.worktree = worktree
+            self.fingerprint = fingerprint
         }
 
         private enum CodingKeys: String, CodingKey {
-            case path, origPath, index, worktree
+            case path, origPath, index, worktree, fingerprint
         }
 
         public func encode(to encoder: any Encoder) throws {
@@ -28,6 +34,7 @@ public struct GitStatus: Codable, Hashable, Sendable {
             try container.encode(origPath, forKey: .origPath)
             try container.encode(index, forKey: .index)
             try container.encode(worktree, forKey: .worktree)
+            try container.encodeIfPresent(fingerprint, forKey: .fingerprint)
         }
     }
 
@@ -37,19 +44,31 @@ public struct GitStatus: Codable, Hashable, Sendable {
     public var branch: String?
     public var ahead: Int
     public var behind: Int
+    /// True when the helper left files out (it lists at most 2,000); nil from a helper
+    /// without `gitwrite.v1`. Read `isTruncated`.
+    public var truncated: Bool?
+    /// Every changed path, untracked files one by one (never a folder entry) from a
+    /// helper with `gitwrite.v1`.
     public var files: [File]
 
-    public init(repo: Bool, root: String?, branch: String?, ahead: Int, behind: Int, files: [File]) {
+    /// Some changes are not in `files`, so nothing may act on "all changes" (such as
+    /// discarding everything): the user would destroy work they never saw.
+    public var isTruncated: Bool { truncated == true }
+
+    public init(
+        repo: Bool, root: String?, branch: String?, ahead: Int, behind: Int, truncated: Bool? = nil, files: [File]
+    ) {
         self.repo = repo
         self.root = root
         self.branch = branch
         self.ahead = ahead
         self.behind = behind
+        self.truncated = truncated
         self.files = files
     }
 
     private enum CodingKeys: String, CodingKey {
-        case repo, root, branch, ahead, behind, files
+        case repo, root, branch, ahead, behind, truncated, files
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -59,6 +78,7 @@ public struct GitStatus: Codable, Hashable, Sendable {
         try container.encode(branch, forKey: .branch)
         try container.encode(ahead, forKey: .ahead)
         try container.encode(behind, forKey: .behind)
+        try container.encodeIfPresent(truncated, forKey: .truncated)
         try container.encode(files, forKey: .files)
     }
 }
@@ -68,12 +88,15 @@ public struct GitDiffParams: Codable, Hashable, Sendable {
     public var path: String?
     public var staged: Bool?
     public var ref: String?
+    /// Diffs this commit against its first parent. Not combined with `staged` or `ref`.
+    public var commit: String?
 
-    public init(id: String, path: String? = nil, staged: Bool? = nil, ref: String? = nil) {
+    public init(id: String, path: String? = nil, staged: Bool? = nil, ref: String? = nil, commit: String? = nil) {
         self.id = id
         self.path = path
         self.staged = staged
         self.ref = ref
+        self.commit = commit
     }
 }
 
@@ -88,6 +111,126 @@ public struct GitDiff: Codable, Hashable, Sendable {
         self.truncated = truncated
         self.binary = binary
     }
+}
+
+extension GitStatus.File {
+    /// The index and worktree letters together, index first, as `GitSeen.status` sends them.
+    public var letters: String { index + worktree }
+}
+
+/// What the user saw for one path when they chose it. A file edited again keeps its
+/// letters but not its fingerprint, so the helper can still tell it changed.
+public struct GitSeen: Codable, Hashable, Sendable {
+    public var status: String
+    public var fingerprint: String?
+
+    public init(status: String, fingerprint: String? = nil) {
+        self.status = status
+        self.fingerprint = fingerprint
+    }
+
+    public init(_ file: GitStatus.File) {
+        self.init(status: file.letters, fingerprint: file.fingerprint)
+    }
+}
+
+/// `git.stage`, `git.unstage` and `git.discard`. Each path names one file relative to the
+/// session cwd; a folder (or a path ending in `/`) is refused as invalid params.
+///
+/// `git.discard` restores a path in HEAD to HEAD in both the index and the working tree,
+/// and deletes a path not in HEAD (untracked, or only added to the index). Nothing else.
+public struct GitPathsParams: Codable, Hashable, Sendable {
+    public var id: String
+    public var paths: [String]
+    /// What `git.status` showed for each path when the user chose it. The helper refuses
+    /// the call as stale when the file's state or content has changed since.
+    public var seen: [String: GitSeen]?
+
+    /// The longest path a git write accepts, in UTF-8 bytes.
+    public static let maxPathBytes = 4096
+
+    /// A single file path of 1 to `maxPathBytes` bytes with no NUL and no trailing `/`.
+    public static func isValidPath(_ path: String) -> Bool {
+        !path.isEmpty && path.utf8.count <= maxPathBytes && !path.utf8.contains(0) && !path.hasSuffix("/")
+    }
+
+    public init(id: String, paths: [String], seen: [String: GitSeen]? = nil) {
+        self.id = id
+        self.paths = paths
+        self.seen = seen
+    }
+
+    /// Acts on these status entries and tells the helper what they looked like.
+    public init(id: String, files: [GitStatus.File]) {
+        self.init(
+            id: id, paths: files.map(\.path),
+            seen: Dictionary(files.map { ($0.path, GitSeen($0)) }, uniquingKeysWith: { _, last in last })
+        )
+    }
+}
+
+/// `git.commit`. Hooks and signing never run.
+public struct GitCommitParams: Codable, Hashable, Sendable {
+    public var id: String
+    public var message: String
+    public var amend: Bool
+    /// The HEAD hash the user saw: required with `amend` (the commit it replaces). The
+    /// helper refuses the commit as stale when HEAD has moved since.
+    public var head: String?
+
+    /// A full SHA-1 or SHA-256 commit id in lowercase hex.
+    public static func isValidHash(_ hash: String) -> Bool {
+        (hash.utf8.count == 40 || hash.utf8.count == 64)
+            && hash.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+    }
+
+    /// `amend` names the commit it replaces, and any `head` is a full hash.
+    public var isValid: Bool {
+        if let head { Self.isValidHash(head) } else { !amend }
+    }
+
+    public init(id: String, message: String, amend: Bool, head: String? = nil) {
+        self.id = id
+        self.message = message
+        self.amend = amend
+        self.head = head
+    }
+}
+
+public struct GitCommitResult: Codable, Hashable, Sendable {
+    public var hash: String
+    public var short: String
+
+    public init(hash: String, short: String) {
+        self.hash = hash
+        self.short = short
+    }
+}
+
+/// Why the helper refused a git write. Nothing in the repository changed, except for
+/// `partial` and `raced`.
+public enum GitConflict: String, Sendable {
+    /// A path or HEAD no longer looks the way the user saw it.
+    case stale
+    /// Another git process holds the index lock.
+    case locked
+    /// The path uses a clean or smudge filter, such as Git LFS.
+    case filtered
+    /// Discarding a path with an unresolved merge conflict.
+    case unmerged
+    case nothingStaged = "nothing_staged"
+    /// git has no user name or email on the host.
+    case identity
+    /// Amending before the first commit.
+    case unbornAmend = "unborn_amend"
+    /// The write failed after changing some of the paths. The status should be read again.
+    case partial
+    /// The commit was made, but another process moved HEAD while it ran, so its parent is not
+    /// the commit the user saw. Nothing was rewritten.
+    case raced
+    /// Undoing a rename that only changes letter case; both names are one file on a
+    /// case-insensitive disk. Nothing changed.
+    case caseRename = "case_rename"
 }
 
 public struct GitLogParams: Codable, Hashable, Sendable {
@@ -196,11 +339,15 @@ public struct FsReadParams: Codable, Hashable, Sendable {
     public var path: String
     /// Reads the file as of this commit instead of the working tree.
     public var ref: String?
+    /// `path` is relative to the root of the repository holding the session cwd, the form
+    /// `GitStatus` paths take. Needs `gitwrite.v1`. Nil, not false, when unset.
+    public var root: Bool?
 
-    public init(id: String, path: String, ref: String? = nil) {
+    public init(id: String, path: String, ref: String? = nil, root: Bool = false) {
         self.id = id
         self.path = path
         self.ref = ref
+        self.root = root ? true : nil
     }
 }
 

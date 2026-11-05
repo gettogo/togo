@@ -9,6 +9,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -23,6 +24,7 @@ const (
 	CapPush      = "push.v1"
 	CapGit       = "git.v1"
 	CapPorts     = "ports.v1"
+	CapGitWrite  = "gitwrite.v1"
 )
 
 // App-facing methods.
@@ -38,6 +40,10 @@ const (
 	MethodGitDiff         = "git.diff"
 	MethodGitLog          = "git.log"
 	MethodGitBranches     = "git.branches"
+	MethodGitStage        = "git.stage"
+	MethodGitUnstage      = "git.unstage"
+	MethodGitDiscard      = "git.discard"
+	MethodGitCommit       = "git.commit"
 	MethodFsRead          = "fs.read"
 	MethodFsUpload        = "fs.upload"
 	MethodPortsList       = "ports.list"
@@ -93,6 +99,50 @@ const (
 	ByPhone = "phone"
 )
 
+// Conflict reasons for refused git writes, carried in -32006 data. Nothing
+// in the repository changed when one is returned, except for partial (a
+// write failed after changing the paths listed in changed) and raced (the
+// commit hash was made, but on a HEAD another process moved meanwhile).
+const (
+	ConflictStale         = "stale"
+	ConflictLocked        = "locked"
+	ConflictFiltered      = "filtered"
+	ConflictUnmerged      = "unmerged"
+	ConflictNothingStaged = "nothing_staged"
+	ConflictIdentity      = "identity"
+	ConflictUnbornAmend   = "unborn_amend"
+	ConflictPartial       = "partial"
+	ConflictRaced         = "raced"
+	// ConflictCaseRename refuses undoing a rename that only changes letter
+	// case: on a case-insensitive disk both names are one file.
+	ConflictCaseRename = "case_rename"
+)
+
+// MaxBlobFingerprintBytes is the largest working-tree file fingerprinted by
+// its blob hash; larger files and symlinks use size and mtime instead.
+const MaxBlobFingerprintBytes = 8 << 20
+
+// GitSeen is what the client saw for one path of a git write: the index and
+// worktree status letters, and the entry's fingerprint when it had one.
+type GitSeen struct {
+	Status      string `json:"status"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+// HashesForFingerprint reports whether a regular file of size bytes is
+// fingerprinted by its blob hash.
+func HashesForFingerprint(size int64) bool { return size <= MaxBlobFingerprintBytes }
+
+// BlobFingerprint is the fingerprint of a file with this git blob hash
+// (git hash-object --no-filters).
+func BlobFingerprint(hash string) string { return "blob:" + hash }
+
+// StatFingerprint is the fingerprint of a large file or symlink from its
+// lstat size and modification time in nanoseconds since the epoch.
+func StatFingerprint(size, mtimeNs int64) string {
+	return "stat:" + strconv.FormatInt(size, 10) + ":" + strconv.FormatInt(mtimeNs, 10)
+}
+
 // Limits from the schema, enforced by the packages that build these shapes.
 const (
 	MaxTitle        = 200
@@ -103,9 +153,42 @@ const (
 	MaxOptionLabel  = 80
 	MaxAskOptions   = 9
 	MaxDeviceName   = 64
-	MaxSubjectText  = 1024
-	MaxHostName     = 64
+	MaxGitPaths     = 1000
+	MaxCommitBytes  = 65536
+	// MaxStatusFiles caps git.status files; beyond it the result is truncated.
+	MaxStatusFiles = 2000
+	MaxSubjectText = 1024
+	MaxHostName    = 64
 )
+
+// IsFileEntry reports whether a git write path can name a single file. A
+// folder entry (trailing /) is invalid params; whether the path is a
+// directory on disk is checked where the path is resolved.
+func IsFileEntry(p string) bool { return p != "" && !strings.HasSuffix(p, "/") }
+
+// MaxWritePathBytes is the longest path a git write accepts, in bytes.
+const MaxWritePathBytes = 4096
+
+// ValidWritePath reports whether p may be sent to a git write: a file
+// entry of at most MaxWritePathBytes bytes with no NUL. Anything else is
+// invalid params. Escapes and symlinks are checked where p is resolved.
+func ValidWritePath(p string) bool {
+	return IsFileEntry(p) && len(p) <= MaxWritePathBytes && !strings.ContainsRune(p, 0)
+}
+
+// ValidCommitHash reports whether h is a full SHA-1 or SHA-256 commit id
+// in lowercase hex.
+func ValidCommitHash(h string) bool {
+	if len(h) != 40 && len(h) != 64 {
+		return false
+	}
+	for _, c := range h {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
 
 // Publisher fans an event out to subscribers. sessionID is nil for events
 // that belong to no session. payload is one of the *Event payload structs

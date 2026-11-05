@@ -69,7 +69,7 @@ func TestListDirHiddenAndSort(t *testing.T) {
 	if path != dir {
 		t.Errorf("path = %q, want cleaned %q", path, dir)
 	}
-	want := []Entry{{"a", true}, {"B", true}, {"c-link", true}}
+	want := []Entry{{Name: "a", Dir: true}, {Name: "B", Dir: true}, {Name: "c-link", Dir: true}}
 	if !reflect.DeepEqual(entries, want) {
 		t.Errorf("entries = %v, want %v", entries, want)
 	}
@@ -78,7 +78,7 @@ func TestListDirHiddenAndSort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListDir showHidden: %v", err)
 	}
-	want = []Entry{{".h", true}, {"a", true}, {"B", true}, {"c-link", true}}
+	want = []Entry{{Name: ".h", Dir: true}, {Name: "a", Dir: true}, {Name: "B", Dir: true}, {Name: "c-link", Dir: true}}
 	if !reflect.DeepEqual(entries, want) {
 		t.Errorf("entries with hidden = %v, want %v", entries, want)
 	}
@@ -129,5 +129,69 @@ func TestListDirUnreadableIsInvalidPath(t *testing.T) {
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
 	if _, _, err := ListDir(dir, false); !errors.Is(err, ErrInvalidPath) {
 		t.Fatalf("ListDir(unreadable) error = %v, want ErrInvalidPath", err)
+	}
+}
+
+func TestListFilesKindsAndSizes(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	for _, d := range []string{"B", ".h"} {
+		if err := os.Mkdir(filepath.Join(dir, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "secret"), []byte("s"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Links are reported as links and never followed, wherever they point.
+	if err := os.Symlink(outside, filepath.Join(dir, "out-dir")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret"), filepath.Join(dir, "out-file")); err != nil {
+		t.Fatal(err)
+	}
+
+	path, entries, err := ListFiles(dir+"/.", false)
+	if err != nil {
+		t.Fatalf("ListFiles: %v", err)
+	}
+	if path != dir {
+		t.Errorf("path = %q, want %q", path, dir)
+	}
+	five := int64(5)
+	want := []Entry{
+		{Name: "a.txt", Kind: KindFile, Size: &five},
+		{Name: "B", Dir: true, Kind: KindDir},
+		{Name: "out-dir", Kind: KindSymlink},
+		{Name: "out-file", Kind: KindSymlink},
+	}
+	if !reflect.DeepEqual(entries, want) {
+		t.Errorf("entries = %+v, want %+v", entries, want)
+	}
+
+	_, entries, err = ListFiles(dir, true)
+	if err != nil || len(entries) != 5 || entries[0].Name != ".h" {
+		t.Errorf("showHidden: %+v %v", entries, err)
+	}
+	for _, bad := range []string{"rel", dir + "/a.txt", dir + "/missing", dir + "/a\x00b"} {
+		if _, _, err := ListFiles(bad, false); !errors.Is(err, ErrInvalidPath) {
+			t.Errorf("ListFiles(%q) error = %v, want ErrInvalidPath", bad, err)
+		}
+	}
+}
+
+func TestListFilesCapsEntries(t *testing.T) {
+	dir := t.TempDir()
+	for i := range maxEntries + 5 {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%04d", i)), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, entries, err := ListFiles(dir, false)
+	if err != nil || len(entries) != maxEntries {
+		t.Fatalf("len = %d, %v; want %d", len(entries), err, maxEntries)
 	}
 }

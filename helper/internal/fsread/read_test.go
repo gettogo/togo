@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -223,5 +224,47 @@ func TestListDirWithoutRefListsAbsolutePath(t *testing.T) {
 	var r struct{ Entries []fsx.Entry }
 	if err := call(t, dir, "fs.listDir", `{"path":`+quote(dir)+`}`, &r); err != nil || len(r.Entries) != 1 {
 		t.Errorf("%+v %v", r, err)
+	}
+}
+
+func TestListDirIncludeFiles(t *testing.T) {
+	dir := tempDir(t)
+	git(t, dir, "init", "-q", "-b", "main")
+	write(t, dir, "src/x", []byte("1"))
+	if err := os.Symlink("top.txt", filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "link")
+	commitFile(t, dir, "top.txt", []byte("hello"))
+
+	type res struct {
+		Path    string
+		Entries []fsx.Entry
+	}
+	five := int64(5)
+	want := []fsx.Entry{
+		{Name: "link", Kind: fsx.KindSymlink},
+		{Name: "src", Dir: true, Kind: fsx.KindDir},
+		{Name: "top.txt", Kind: fsx.KindFile, Size: &five},
+	}
+	var r res
+	if err := call(t, dir, "fs.listDir", `{"id":"s_abcdefghij","path":".","ref":"HEAD","includeFiles":true}`, &r); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(r.Entries, want) {
+		t.Errorf("at ref: %+v, want %+v", r.Entries, want)
+	}
+	r = res{}
+	if err := call(t, dir, "fs.listDir", `{"path":`+quote(dir)+`,"includeFiles":true}`, &r); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(r.Entries, want) {
+		t.Errorf("working tree: %+v, want %+v", r.Entries, want)
+	}
+	// Without includeFiles both forms keep listing folders only.
+	r = res{}
+	if err := call(t, dir, "fs.listDir", `{"id":"s_abcdefghij","path":".","ref":"HEAD"}`, &r); err != nil ||
+		!reflect.DeepEqual(r.Entries, []fsx.Entry{{Name: "src", Dir: true}}) {
+		t.Errorf("folders only: %+v %v", r.Entries, err)
 	}
 }

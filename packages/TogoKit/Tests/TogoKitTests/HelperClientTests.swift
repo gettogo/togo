@@ -243,3 +243,253 @@ private struct AnsweredRequest: Decodable {
     let id: Int
     let method: String
 }
+
+extension HelperClientTests {
+    static let gitCapabilities = ["session.v1", "agents.v1", "fs.v1", "git.v1", "gitwrite.v1"]
+
+    @Test func stageSendsPathsAndReturnsFreshStatus() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let stage = Task { try await client.gitStage(id: "s_abcdefghij", paths: ["a b.txt"]) }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.method == "git.stage")
+        #expect(request.params["paths"] == .array([.string("a b.txt")]))
+        #expect(request.params["seen"] == nil)
+        await channel.reply(to: request.id, result: #"""
+            {"repo":true,"root":"/p","branch":"main","ahead":0,"behind":0,\#
+            "files":[{"path":"a b.txt","origPath":null,"index":"M","worktree":"."}]}
+            """#)
+        #expect(try await stage.value.files.first?.index == "M")
+    }
+
+    @Test func discardFromFilesSendsWhatWasSeen() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let file = GitStatus.File(path: "App.swift", origPath: nil, index: ".", worktree: "M", fingerprint: "blob:ab12")
+        let discard = Task { try await client.gitDiscard(id: "s_abcdefghij", files: [file]) }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.method == "git.discard")
+        #expect(request.params["seen"] == .object([
+            "App.swift": .object(["status": .string(".M"), "fingerprint": .string("blob:ab12")]),
+        ]))
+        await channel.reply(to: request.id, result: #"{"repo":true,"root":"/p","branch":"main","ahead":0,"behind":0,"files":[]}"#)
+        #expect(try await discard.value.files.isEmpty)
+    }
+
+    @Test func conflictReasonMapsFromData() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let stage = Task { try await client.gitStage(id: "s_abcdefghij", paths: ["a.txt"]) }
+        let request = try #require(await channel.nextRequest())
+        await channel.sendJSON(#"""
+            {"jsonrpc":"2.0","id":\#(request.id),"error":{"code":-32006,"message":"conflict","data":{"reason":"stale"}}}
+            """#)
+        do {
+            _ = try await stage.value
+            Issue.record("stale stage succeeded")
+        } catch let error as HelperError {
+            #expect(error == .conflict("stale"))
+            #expect(error.gitConflict == .stale)
+        }
+    }
+
+    /// The agent edits the file again after the phone read status: still M, new content.
+    @Test func repeatEditDiscardIsStale() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let seen = GitStatus.File(path: "App.swift", origPath: nil, index: ".", worktree: "M", fingerprint: "blob:1111")
+        let discard = Task { try await client.gitDiscard(id: "s_abcdefghij", files: [seen]) }
+        let request = try #require(await channel.nextRequest())
+        await channel.sendJSON(#"""
+            {"jsonrpc":"2.0","id":\#(request.id),"error":{"code":-32006,"message":"conflict","data":{"reason":"stale"}}}
+            """#)
+        await #expect(throws: HelperError.conflict("stale")) { try await discard.value }
+    }
+
+    @Test func commitReturnsNewHead() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let commit = Task { try await client.gitCommit(GitCommitParams(id: "s_abcdefghij", message: "Fix", amend: false)) }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.method == "git.commit")
+        #expect(request.params["message"] == .string("Fix"))
+        let hash = String(repeating: "c", count: 40)
+        await channel.reply(to: request.id, result: #"{"hash":"\#(hash)","short":"ccccccc"}"#)
+        #expect(try await commit.value == GitCommitResult(hash: hash, short: "ccccccc"))
+    }
+
+    @Test func gitWritesNeedTheirCapability() async throws {
+        let (_, client) = try await readyClient(capabilities: ["session.v1", "agents.v1", "fs.v1", "git.v1"])
+        let missing = HelperError.unsupported(capability: "gitwrite.v1")
+        await #expect(throws: missing) { try await client.gitStage(id: "s_abcdefghij", paths: ["a"]) }
+        await #expect(throws: missing) { try await client.gitUnstage(id: "s_abcdefghij", paths: ["a"]) }
+        await #expect(throws: missing) { try await client.gitDiscard(id: "s_abcdefghij", paths: ["a"]) }
+        await #expect(throws: missing) {
+            try await client.gitCommit(GitCommitParams(id: "s_abcdefghij", message: "m", amend: false))
+        }
+        // An older helper would ignore commit and diff the working tree instead.
+        await #expect(throws: missing) { try await client.gitDiff(GitDiffParams(id: "s_abcdefghij", commit: "HEAD")) }
+    }
+
+    @Test func listDirAtRefSendsIdAndRef() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let list = Task { try await client.listDir(path: "Sources", showHidden: false, sessionID: "s_abcdefghij", ref: "HEAD") }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.method == "fs.listDir")
+        #expect(request.params == [
+            "path": .string("Sources"), "showHidden": .bool(false), "id": .string("s_abcdefghij"), "ref": .string("HEAD"),
+        ])
+        await channel.reply(to: request.id, result: #"{"path":"Sources","entries":[{"name":"App","dir":true}]}"#)
+        #expect(try await list.value.entries == [DirEntry(name: "App", dir: true)])
+    }
+
+    @Test func repoFolderSendsRootAndNeedsWrites() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let list = Task {
+            try await client.listRepoDir(path: "apps/tools", showHidden: true, includeFiles: true, sessionID: "s_abcdefghij", ref: nil)
+        }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.method == "fs.listDir")
+        #expect(request.params == [
+            "path": .string("apps/tools"), "showHidden": .bool(true), "includeFiles": .bool(true),
+            "id": .string("s_abcdefghij"), "root": .bool(true),
+        ])
+        await channel.reply(to: request.id, result: #"{"path":"/r/apps/tools","entries":[]}"#)
+        #expect(try await list.value.entries.isEmpty)
+
+        let (_, readOnly) = try await readyClient(capabilities: ["session.v1", "agents.v1", "fs.v1", "git.v1"])
+        let missing = HelperError.unsupported(capability: "gitwrite.v1")
+        await #expect(throws: missing) {
+            try await readOnly.listRepoDir(path: "a", showHidden: false, sessionID: "s_abcdefghij", ref: "HEAD")
+        }
+        await #expect(throws: missing) {
+            try await readOnly.readFile(FsReadParams(id: "s_abcdefghij", path: "a", root: true))
+        }
+    }
+}
+
+extension HelperClientTests {
+    @Test func badWritePathsNeverSent() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        for path in ["a\u{0}b", String(repeating: "a", count: 4097), String(repeating: "é", count: 2048) + "a", "newpkg/", ""] {
+            do {
+                _ = try await client.gitDiscard(id: "s_abcdefghij", paths: [path])
+                Issue.record("\(path.utf8.count)-byte path was accepted")
+            } catch HelperError.rpc(let error) {
+                #expect(error.code == RPCErrorCode.invalidParams)
+            }
+        }
+        try await expectNextRequestIsSessionList(channel, client)
+    }
+
+    @Test func longestWritePathIsSent() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let path = String(repeating: "a", count: 4096)
+        let stage = Task { try await client.gitStage(id: "s_abcdefghij", paths: [path]) }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.params["paths"] == .array([.string(path)]))
+        await channel.reply(to: request.id, result: #"{"repo":true,"root":"/p","branch":"main","ahead":0,"behind":0,"files":[]}"#)
+        _ = try await stage.value
+    }
+
+    @Test func amendWithoutHeadOrWithBadHashNeverSent() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        for params in [
+            GitCommitParams(id: "s_abcdefghij", message: "Fix", amend: true),
+            GitCommitParams(id: "s_abcdefghij", message: "Fix", amend: true, head: String(repeating: "a", count: 41)),
+            GitCommitParams(id: "s_abcdefghij", message: "Fix", amend: false, head: String(repeating: "A", count: 40)),
+        ] {
+            do {
+                _ = try await client.gitCommit(params)
+                Issue.record("commit \(params) was accepted")
+            } catch HelperError.rpc(let error) {
+                #expect(error.code == RPCErrorCode.invalidParams)
+            }
+        }
+        try await expectNextRequestIsSessionList(channel, client)
+    }
+
+    @Test func amendWithFullHashIsSent() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let head = String(repeating: "0", count: 64)
+        let commit = Task { try await client.gitCommit(GitCommitParams(id: "s_abcdefghij", message: "Fix", amend: true, head: head)) }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.params["head"] == .string(head))
+        await channel.reply(to: request.id, result: #"{"hash":"\#(head)","short":"0000000"}"#)
+        _ = try await commit.value
+    }
+
+    private func expectNextRequestIsSessionList(_ channel: PipeChannel, _ client: HelperClient) async throws {
+        let list = Task { try await client.listSessions() }
+        let next = try #require(await channel.nextRequest())
+        #expect(next.method == "session.list")
+        await channel.reply(to: next.id, result: #"{"sessions":[]}"#)
+        _ = try await list.value
+    }
+}
+
+extension HelperClientTests {
+    @Test func stageWithSeenSendsIt() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let seen = ["a.txt": GitSeen(status: ".M", fingerprint: "blob:ab12")]
+        let stage = Task { try await client.gitStage(id: "s_abcdefghij", paths: ["a.txt"], seen: seen) }
+        let request = try #require(await channel.nextRequest())
+        #expect(request.params["seen"] == .object([
+            "a.txt": .object(["status": .string(".M"), "fingerprint": .string("blob:ab12")]),
+        ]))
+        await channel.reply(to: request.id, result: #"{"repo":true,"root":"/p","branch":"main","ahead":0,"behind":0,"files":[]}"#)
+        _ = try await stage.value
+    }
+
+    @Test func partialWriteCarriesChangedPaths() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let discard = Task { try await client.gitDiscard(id: "s_abcdefghij", paths: ["a.txt", "b.txt"]) }
+        let request = try #require(await channel.nextRequest())
+        await channel.sendJSON(#"""
+            {"jsonrpc":"2.0","id":\#(request.id),"error":{"code":-32006,"message":"conflict",\#
+            "data":{"reason":"partial","changed":["a.txt"]}}}
+            """#)
+        do {
+            _ = try await discard.value
+            Issue.record("partial discard succeeded")
+        } catch let error as HelperError {
+            #expect(error == .partialWrite(changed: ["a.txt"]))
+            #expect(error.gitConflict == .partial)
+            #expect(error.localizedDescription.contains("a.txt"))
+        }
+    }
+
+    @Test func racedCommitCarriesHash() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let commit = Task { try await client.gitCommit(GitCommitParams(id: "s_abcdefghij", message: "Fix", amend: false)) }
+        let request = try #require(await channel.nextRequest())
+        let hash = "1234567" + String(repeating: "f", count: 33)
+        await channel.sendJSON(#"""
+            {"jsonrpc":"2.0","id":\#(request.id),"error":{"code":-32006,"message":"conflict",\#
+            "data":{"reason":"raced","hash":"\#(hash)"}}}
+            """#)
+        do {
+            _ = try await commit.value
+            Issue.record("raced commit succeeded")
+        } catch let error as HelperError {
+            #expect(error == .racedCommit(hash: hash))
+            #expect(error.gitConflict == .raced)
+            #expect(error.localizedDescription.contains("1234567"))
+            #expect(!error.localizedDescription.contains("12345678"))
+        }
+    }
+}
+
+extension HelperClientTests {
+    @Test func listDirCanAskForFiles() async throws {
+        let (channel, client) = try await readyClient(capabilities: Self.gitCapabilities)
+        let disk = Task { try await client.listDir(path: "/p", showHidden: true, includeFiles: true) }
+        let first = try #require(await channel.nextRequest())
+        #expect(first.params == ["path": .string("/p"), "showHidden": .bool(true), "includeFiles": .bool(true)])
+        await channel.reply(to: first.id, result: #"{"path":"/p","entries":[]}"#)
+        _ = try await disk.value
+        let tree = Task {
+            try await client.listDir(path: "src", showHidden: false, includeFiles: true, sessionID: "s_abcdefghij", ref: "HEAD")
+        }
+        let second = try #require(await channel.nextRequest())
+        #expect(second.params["includeFiles"] == .bool(true))
+        #expect(second.params["ref"] == .string("HEAD"))
+        await channel.reply(to: second.id, result: #"{"path":"/p/src","entries":[]}"#)
+        _ = try await tree.value
+    }
+}

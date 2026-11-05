@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// The bar above the tab strip: back to the sessions list, which session this is and how it
-/// is connected, and the session's actions. At accessibility sizes the title takes its own
-/// line under the buttons, so neither is cut short.
-struct WorkspaceHeader<Actions: View>: View {
+/// is connected, and the session's actions, with buttons such as "3 changes" before them. At
+/// accessibility sizes the title takes its own line under the buttons, so neither is cut short.
+struct WorkspaceHeader<Accessories: View, Actions: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -14,6 +14,7 @@ struct WorkspaceHeader<Actions: View>: View {
     let status: String?
     @Binding var noteShown: Bool
     let onBack: () -> Void
+    @ViewBuilder let accessories: () -> Accessories
     @ViewBuilder let actions: () -> Actions
 
     private var fallback: String? {
@@ -32,7 +33,7 @@ struct WorkspaceHeader<Actions: View>: View {
                 HStack {
                     backButton
                     Spacer(minLength: 8)
-                    actionsMenu
+                    trailing
                 }
                 titleBlock(alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,7 +43,7 @@ struct WorkspaceHeader<Actions: View>: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     titleBlock(alignment: .center)
                         .layoutPriority(1)
-                    actionsMenu
+                    trailing
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
@@ -60,17 +61,34 @@ struct WorkspaceHeader<Actions: View>: View {
         .animation(Motion.stateText(reduce: reduceMotion), value: line)
     }
 
+    /// "Sessions" while there is room for it beside the title and the buttons, otherwise the
+    /// chevron alone, which VoiceOver still reads as "Sessions".
     private var backButton: some View {
+        ViewThatFits(in: .horizontal) {
+            backButton(iconOnly: false)
+            backButton(iconOnly: true)
+        }
+    }
+
+    private func backButton(iconOnly: Bool) -> some View {
         Button(action: onBack) {
             Label(WorkspaceCopy.sessions, systemImage: "chevron.backward")
+                .labelStyle(BackLabelStyle(iconOnly: iconOnly))
                 .font(.body.weight(.medium))
                 .lineLimit(1)
                 .fixedSize()
-                .frame(minHeight: 44)
+                .frame(minWidth: iconOnly ? 44 : nil, minHeight: 44)
         }
         .buttonStyle(.glass)
-        .buttonBorderShape(.capsule)
+        .buttonBorderShape(iconOnly ? .circle : .capsule)
         .foregroundStyle(Color.togoSnow)
+    }
+
+    private var trailing: some View {
+        HStack(spacing: 8) {
+            accessories()
+            actionsMenu
+        }
     }
 
     private var actionsMenu: some View {
@@ -135,6 +153,18 @@ struct WorkspaceHeader<Actions: View>: View {
             .accessibilityHint(WorkspaceCopy.showFallback)
         } else {
             word
+        }
+    }
+}
+
+private struct BackLabelStyle: LabelStyle {
+    let iconOnly: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly {
+            Label(configuration).labelStyle(.iconOnly)
+        } else {
+            Label(configuration).labelStyle(.titleAndIcon)
         }
     }
 }

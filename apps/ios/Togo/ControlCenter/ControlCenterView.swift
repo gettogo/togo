@@ -268,6 +268,8 @@ struct ControlCenterView: View {
             UIPasteboard.general.string = row.cwd
         case .kill(let row):
             killTarget = row
+        case .review(let row, let tab):
+            store.review(row, tab: tab)
         case .newSession(let hostID):
             store.sheet = .newSession(hostID)
         case .retry:

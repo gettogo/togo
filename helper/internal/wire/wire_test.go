@@ -171,6 +171,112 @@ func TestApprovalSignedBytesMatchParkedFixture(t *testing.T) {
 	}
 }
 
+func TestGitWriteNamesMatchSchema(t *testing.T) {
+	raw, err := os.ReadFile("../../../protocol/v1/schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs map[string]json.RawMessage `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []string{MethodGitStage, MethodGitUnstage, MethodGitDiscard, MethodGitCommit} {
+		if !bytes.Contains(schema.Defs["Request"], []byte(`{ "const": "`+m+`" }`)) {
+			t.Errorf("Request has no dispatch row for %s", m)
+		}
+	}
+	if !bytes.Contains(schema.Defs["HelloResult"], []byte(`\"`+CapGitWrite+`\"`)) {
+		t.Errorf("HelloResult does not describe %s", CapGitWrite)
+	}
+	var data struct {
+		Properties struct {
+			Reason struct {
+				Enum []string `json:"enum"`
+			} `json:"reason"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(schema.Defs["GitConflictData"], &data); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{ConflictStale, ConflictLocked, ConflictFiltered, ConflictUnmerged, ConflictNothingStaged, ConflictIdentity, ConflictUnbornAmend, ConflictPartial, ConflictRaced, ConflictCaseRename}
+	if strings.Join(data.Properties.Reason.Enum, ",") != strings.Join(want, ",") {
+		t.Errorf("GitConflictData reasons = %v, want %v", data.Properties.Reason.Enum, want)
+	}
+}
+
+func TestFingerprintFormsMatchSchema(t *testing.T) {
+	raw, err := os.ReadFile("../../../protocol/v1/schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			GitFingerprint struct {
+				Pattern string `json:"pattern"`
+			} `json:"GitFingerprint"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	pattern := regexp.MustCompile(schema.Defs.GitFingerprint.Pattern)
+	for _, fp := range []string{
+		BlobFingerprint("13ab7f7412573d479aa8b41ce1e29a9f9f2a62d5"),
+		StatFingerprint(9_000_000, 1_793_707_200_123_456_789),
+	} {
+		if !pattern.MatchString(fp) {
+			t.Errorf("%q does not match %s", fp, pattern)
+		}
+	}
+	if got := StatFingerprint(9_000_000, 5); got != "stat:9000000:5" {
+		t.Errorf("StatFingerprint = %q", got)
+	}
+	if !HashesForFingerprint(MaxBlobFingerprintBytes) || HashesForFingerprint(MaxBlobFingerprintBytes+1) {
+		t.Errorf("blob fingerprints stop at %d bytes", MaxBlobFingerprintBytes)
+	}
+}
+
+func TestGitSeenEncodesStatusAndOptionalFingerprint(t *testing.T) {
+	b, _ := json.Marshal(map[string]GitSeen{"a": {Status: ".M", Fingerprint: "blob:ab"}, "b/": {Status: "??"}})
+	if want := `{"a":{"status":".M","fingerprint":"blob:ab"},"b/":{"status":"??"}}`; string(b) != want {
+		t.Errorf("got %s", b)
+	}
+}
+
+func TestStatusFileCapMatchesSchema(t *testing.T) {
+	raw, err := os.ReadFile("../../../protocol/v1/schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			GitStatusResult struct {
+				Properties struct {
+					Files struct {
+						MaxItems int `json:"maxItems"`
+					} `json:"files"`
+				} `json:"properties"`
+			} `json:"GitStatusResult"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if got := schema.Defs.GitStatusResult.Properties.Files.MaxItems; got != MaxStatusFiles {
+		t.Errorf("schema caps git.status files at %d, MaxStatusFiles = %d", got, MaxStatusFiles)
+	}
+}
+
+func TestWritePathsNeverNameAFolderEntry(t *testing.T) {
+	for p, want := range map[string]bool{"a.txt": true, "dir/a.txt": true, "newpkg/": false, "/": false, "": false} {
+		if got := IsFileEntry(p); got != want {
+			t.Errorf("IsFileEntry(%q) = %v, want %v", p, got, want)
+		}
+	}
+}
+
 func TestPairParamsPlatformDefaultsIOS(t *testing.T) {
 	old := `{"deviceId":"dev_test-1","name":"Test iPhone","apnsToken":"ab","env":"sandbox","relayUrl":"https://relay.example.test"}`
 	var p PairParams
@@ -287,6 +393,35 @@ func TestAnswerPlaintextAcceptsTypeAnswer(t *testing.T) {
 	}
 }
 
+func TestValidWritePath(t *testing.T) {
+	for p, want := range map[string]bool{
+		"a.txt":                                        true,
+		"dir/naïve file.txt":                           true,
+		strings.Repeat("a", MaxWritePathBytes):         true,
+		strings.Repeat("a", MaxWritePathBytes+1):       false,
+		strings.Repeat("é", MaxWritePathBytes/2) + "a": false, // 2,049 characters but 4,097 bytes
+		"a\x00b":  false,
+		"newpkg/": false,
+		"":        false,
+	} {
+		if got := ValidWritePath(p); got != want {
+			t.Errorf("ValidWritePath(%.20q, %d bytes) = %v, want %v", p, len(p), got, want)
+		}
+	}
+}
+
+func TestValidCommitHash(t *testing.T) {
+	for h, want := range map[string]bool{
+		strings.Repeat("a", 40): true, strings.Repeat("0", 64): true,
+		strings.Repeat("a", 41): false, strings.Repeat("a", 63): false, strings.Repeat("A", 40): false,
+		strings.Repeat("g", 40): false, "": false,
+	} {
+		if got := ValidCommitHash(h); got != want {
+			t.Errorf("ValidCommitHash(%q) = %v, want %v", h, got, want)
+		}
+	}
+}
+
 func TestSubjectValidate(t *testing.T) {
 	for _, s := range []Subject{
 		{Kind: SubjectCommand, Text: "npm test"},
@@ -316,6 +451,26 @@ func TestSubjectValidate(t *testing.T) {
 		if err := s.Validate(); err == nil {
 			t.Errorf("%+.20q validated", s.Text)
 		}
+	}
+}
+
+func TestWritePathLimitMatchesSchema(t *testing.T) {
+	raw, err := os.ReadFile("../../../protocol/v1/schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			GitWritePath struct {
+				MaxLength int `json:"maxLength"`
+			} `json:"GitWritePath"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if schema.Defs.GitWritePath.MaxLength != MaxWritePathBytes {
+		t.Errorf("schema maxLength %d, MaxWritePathBytes %d", schema.Defs.GitWritePath.MaxLength, MaxWritePathBytes)
 	}
 }
 

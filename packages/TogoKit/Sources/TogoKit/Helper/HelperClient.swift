@@ -102,8 +102,34 @@ public actor HelperClient {
         return result.dirs
     }
 
-    public func listDir(path: String, showHidden: Bool) async throws -> ListDirResult {
-        try await readyCall(.fsListDir, ListDirParams(path: path, showHidden: showHidden))
+    /// Folders only, unless `includeFiles`; an older helper ignores it and lists folders only.
+    public func listDir(path: String, showHidden: Bool, includeFiles: Bool = false) async throws -> ListDirResult {
+        try await readyCall(.fsListDir, ListDirParams(path: path, showHidden: showHidden, includeFiles: includeFiles ? true : nil))
+    }
+
+    /// Lists the tree at `ref`; `path` is relative to the session cwd.
+    public func listDir(
+        path: String, showHidden: Bool, includeFiles: Bool = false, sessionID: String, ref: String
+    ) async throws -> ListDirResult {
+        try await readyCall(
+            .fsListDir,
+            ListDirParams(path: path, showHidden: showHidden, includeFiles: includeFiles ? true : nil, id: sessionID, ref: ref),
+            needs: Capability.git
+        )
+    }
+
+    /// Lists a folder of the repository holding the session cwd, `path` relative to its root as
+    /// in `GitStatus`: on disk, or the tree at `ref`.
+    public func listRepoDir(
+        path: String, showHidden: Bool, includeFiles: Bool = false, sessionID: String, ref: String?
+    ) async throws -> ListDirResult {
+        try await readyCall(
+            .fsListDir,
+            ListDirParams(
+                path: path, showHidden: showHidden, includeFiles: includeFiles ? true : nil, id: sessionID, ref: ref, root: true
+            ),
+            needs: Capability.gitWrite
+        )
     }
 
     /// Writes a file for the session, at most `UploadParams.maxBytes`. A larger
@@ -146,11 +172,24 @@ public actor HelperClient {
                 needs: Capability.approvals
             )
         } catch HelperError.rpc(let error) where error.code == RPCErrorCode.conflict {
-            if case .object(let data)? = error.data, case .string(let reason)? = data["reason"] {
-                throw HelperError.conflict(reason)
-            }
-            throw HelperError.conflict(error.message)
+            throw Self.conflict(error)
         }
+    }
+
+    private static func conflict(_ error: RPCErrorObject) -> HelperError {
+        if case .object(let data)? = error.data, case .string(let reason)? = data["reason"] {
+            switch GitConflict(rawValue: reason) {
+            case .partial?:
+                guard case .array(let list)? = data["changed"] else { return .partialWrite(changed: []) }
+                return .partialWrite(changed: list.compactMap { if case .string(let path) = $0 { path } else { nil } })
+            case .raced?:
+                guard case .string(let hash)? = data["hash"] else { return .racedCommit(hash: "") }
+                return .racedCommit(hash: hash)
+            default:
+                return .conflict(reason)
+            }
+        }
+        return .conflict(error.message)
     }
 
     // MARK: - Git, files and ports
@@ -159,8 +198,10 @@ public actor HelperClient {
         try await readyCall(.gitStatus, SessionIDParams(id: id), needs: Capability.git)
     }
 
+    /// A diff of one commit needs `gitwrite.v1`: an older helper would ignore `commit`
+    /// and answer with the working tree instead.
     public func gitDiff(_ params: GitDiffParams) async throws -> GitDiff {
-        try await readyCall(.gitDiff, params, needs: Capability.git)
+        try await readyCall(.gitDiff, params, needs: params.commit == nil ? Capability.git : Capability.gitWrite)
     }
 
     public func gitLog(_ params: GitLogParams) async throws -> [GitCommit] {
@@ -172,8 +213,68 @@ public actor HelperClient {
         try await readyCall(.gitBranches, SessionIDParams(id: id), needs: Capability.git)
     }
 
+    // Writes throw `.conflict` with the helper's reason (see `HelperError.gitConflict`)
+    // when they were refused and nothing changed. Each returns the status after the write.
+
+    // A path that is empty, longer than `GitPathsParams.maxPathBytes`, holds a NUL or ends
+    // in `/`, and a commit that amends without a full `head` hash, throw the invalid
+    // params error the helper would send, without sending anything.
+
+    public func gitStage(id: String, paths: [String], seen: [String: GitSeen]? = nil) async throws -> GitStatus {
+        try await gitPaths(.gitStage, GitPathsParams(id: id, paths: paths, seen: seen))
+    }
+
+    public func gitUnstage(id: String, paths: [String], seen: [String: GitSeen]? = nil) async throws -> GitStatus {
+        try await gitPaths(.gitUnstage, GitPathsParams(id: id, paths: paths, seen: seen))
+    }
+
+    public func gitDiscard(id: String, paths: [String], seen: [String: GitSeen]? = nil) async throws -> GitStatus {
+        try await gitPaths(.gitDiscard, GitPathsParams(id: id, paths: paths, seen: seen))
+    }
+
+    /// Stages these status entries, refused as stale if any changed state since they were read.
+    public func gitStage(id: String, files: [GitStatus.File]) async throws -> GitStatus {
+        try await gitPaths(.gitStage, GitPathsParams(id: id, files: files))
+    }
+
+    public func gitUnstage(id: String, files: [GitStatus.File]) async throws -> GitStatus {
+        try await gitPaths(.gitUnstage, GitPathsParams(id: id, files: files))
+    }
+
+    public func gitDiscard(id: String, files: [GitStatus.File]) async throws -> GitStatus {
+        try await gitPaths(.gitDiscard, GitPathsParams(id: id, files: files))
+    }
+
+    public func gitCommit(_ params: GitCommitParams) async throws -> GitCommitResult {
+        guard params.isValid else { throw Self.invalidParams("amend needs the full hash of the commit it replaces") }
+        return try await gitWrite(.gitCommit, params)
+    }
+
+    private func gitPaths(_ method: Method, _ params: GitPathsParams) async throws -> GitStatus {
+        let keys = params.seen.map { Array($0.keys) } ?? []
+        guard !params.paths.isEmpty, (params.paths + keys).allSatisfy(GitPathsParams.isValidPath) else {
+            throw Self.invalidParams("each path names one file of at most 4096 bytes with no NUL")
+        }
+        return try await gitWrite(method, params)
+    }
+
+    private static func invalidParams(_ reason: String) -> HelperError {
+        .rpc(RPCErrorObject(
+            code: RPCErrorCode.invalidParams, message: "invalid params", data: .object(["reason": .string(reason)])
+        ))
+    }
+
+    private func gitWrite<P: Encodable & Sendable, R: Decodable>(_ method: Method, _ params: P) async throws -> R {
+        do {
+            return try await readyCall(method, params, needs: Capability.gitWrite)
+        } catch HelperError.rpc(let error) where error.code == RPCErrorCode.conflict {
+            throw Self.conflict(error)
+        }
+    }
+
+    /// The root form needs `gitwrite.v1`: an older helper would read the path from the session cwd.
     public func readFile(_ params: FsReadParams) async throws -> FsReadResult {
-        try await readyCall(.fsRead, params, needs: Capability.git)
+        try await readyCall(.fsRead, params, needs: params.root == true ? Capability.gitWrite : Capability.git)
     }
 
     public func ports(id: String) async throws -> [ListeningPort] {

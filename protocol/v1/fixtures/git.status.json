@@ -41,6 +41,7 @@
       "branch": null,
       "ahead": 0,
       "behind": 0,
+      "truncated": false,
       "files": []
     }
   }

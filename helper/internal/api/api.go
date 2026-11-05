@@ -207,8 +207,9 @@ func (a *API) recentDirs() (any, error) {
 
 func (a *API) listDir(raw json.RawMessage) (any, error) {
 	var p struct {
-		Path       *string `json:"path"`
-		ShowHidden bool    `json:"showHidden"`
+		Path         *string `json:"path"`
+		ShowHidden   bool    `json:"showHidden"`
+		IncludeFiles bool    `json:"includeFiles"`
 	}
 	if err := decode(raw, &p); err != nil {
 		return nil, err
@@ -216,7 +217,11 @@ func (a *API) listDir(raw json.RawMessage) (any, error) {
 	if p.Path == nil {
 		return nil, &session.InvalidParamsError{Msg: "path is required"}
 	}
-	dir, entries, err := fsx.ListDir(*p.Path, p.ShowHidden)
+	list := fsx.ListDir
+	if p.IncludeFiles {
+		list = fsx.ListFiles
+	}
+	dir, entries, err := list(*p.Path, p.ShowHidden)
 	if err != nil {
 		return nil, err
 	}

@@ -15,10 +15,21 @@ var ErrInvalidPath = errors.New("invalid path")
 
 const maxEntries = 2000
 
-// Entry is one listed subdirectory.
+// Entry kinds, set only when files are listed too.
+const (
+	KindDir     = "dir"
+	KindFile    = "file"
+	KindSymlink = "symlink"
+)
+
+// Entry is one listed name. ListDir lists subdirectories only and leaves
+// Kind and Size empty; ListFiles sets Kind on every entry and Size on files.
 type Entry struct {
 	Name string `json:"name"`
 	Dir  bool   `json:"dir"`
+	Kind string `json:"kind,omitempty"`
+	// Size is the file's length in bytes.
+	Size *int64 `json:"size,omitempty"`
 }
 
 // ValidateDir expands a leading "~" or "~/" to the home directory and
@@ -74,6 +85,48 @@ func ListDir(p string, showHidden bool) (string, []Entry, error) {
 			entries = append(entries, Entry{Name: name, Dir: true})
 		}
 	}
+	return dir, Sorted(entries), nil
+}
+
+// ListFiles is ListDir with files and symlinks as well as directories.
+// Symlinks are reported as KindSymlink and never followed, so a link can
+// not reveal anything about where it points. Other file types (sockets,
+// devices, pipes) are left out.
+func ListFiles(p string, showHidden bool) (string, []Entry, error) {
+	dir, err := ValidateDir(p)
+	if err != nil {
+		return "", nil, err
+	}
+	des, err := os.ReadDir(dir)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: list %s: %w", ErrInvalidPath, dir, err)
+	}
+	entries := []Entry{}
+	for _, de := range des {
+		name := de.Name()
+		if !showHidden && strings.HasPrefix(name, ".") {
+			continue
+		}
+		switch t := de.Type(); {
+		case t.IsDir():
+			entries = append(entries, Entry{Name: name, Dir: true, Kind: KindDir})
+		case t&os.ModeSymlink != 0:
+			entries = append(entries, Entry{Name: name, Kind: KindSymlink})
+		case t.IsRegular():
+			info, err := de.Info()
+			if err != nil {
+				continue // removed since the directory was read
+			}
+			size := info.Size()
+			entries = append(entries, Entry{Name: name, Kind: KindFile, Size: &size})
+		}
+	}
+	return dir, Sorted(entries), nil
+}
+
+// Sorted sorts entries case-insensitively by name, ties by bytes, and keeps
+// at most the first 2000.
+func Sorted(entries []Entry) []Entry {
 	slices.SortFunc(entries, func(a, b Entry) int {
 		if c := strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); c != 0 {
 			return c
@@ -83,7 +136,7 @@ func ListDir(p string, showHidden bool) (string, []Entry, error) {
 	if len(entries) > maxEntries {
 		entries = entries[:maxEntries]
 	}
-	return dir, entries, nil
+	return entries
 }
 
 func isDir(parent string, de os.DirEntry) bool {

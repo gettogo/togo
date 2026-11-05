@@ -1,0 +1,55 @@
+{
+  "description": "The phone saw README.md modified as \"hello there\\n\"; it was edited again before the call, so its status letters still match but its fingerprint does not, and nothing is touched. Deviation: ~/proj is a git repository on branch main, with user.name and user.email in its config and one commit adding README.md (\"hello\\n\"); README.md then reads \"hello again\\n\".",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "git.discard",
+    "params": {
+      "id": "s_abcdefghij",
+      "paths": [
+        "README.md"
+      ],
+      "seen": {
+        "README.md": {
+          "status": ".M",
+          "fingerprint": "blob:c7c7da3c64e86c3270f2639a1379e67e14891b6a"
+        }
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "error": {
+      "code": -32006,
+      "message": "conflict",
+      "data": {
+        "reason": "stale"
+      }
+    }
+  }
+}
