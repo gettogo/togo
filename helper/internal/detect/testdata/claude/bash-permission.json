@@ -4,6 +4,10 @@
   "match": true,
   "kind": "permission",
   "title": "Do you want to proceed?",
+  "subject": {
+    "kind": "command",
+    "text": "rm -rf ./build && make"
+  },
   "options": [
     {
       "n": 1,

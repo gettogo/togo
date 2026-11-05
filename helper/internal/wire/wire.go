@@ -8,8 +8,11 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Hello capabilities. A process lists only the ones it serves.
@@ -100,6 +103,8 @@ const (
 	MaxOptionLabel  = 80
 	MaxAskOptions   = 9
 	MaxDeviceName   = 64
+	MaxSubjectText  = 1024
+	MaxHostName     = 64
 )
 
 // Publisher fans an event out to subscribers. sessionID is nil for events
@@ -124,9 +129,78 @@ type Option struct {
 	Role  string `json:"role"`
 }
 
+// Subject kinds: what an approval is about.
+const (
+	SubjectCommand = "command"
+	SubjectFile    = "file"
+	SubjectURL     = "url"
+	SubjectText    = "text"
+)
+
+// Subject is the one thing an approval asks about, structured so that
+// notifications, the Live Activity and the Watch can show it without any
+// screen text.
+type Subject struct {
+	Kind string `json:"kind"`
+	Text string `json:"text"`
+}
+
+// Validate checks s against the schema: a known kind and 1-1024 runes
+// (Unicode scalar values, not bytes) of UTF-8 with no control characters
+// (Unicode Cc: U+0000-001F, U+007F-009F) other than newline and no
+// invisible characters (see IsInvisible). Errors never quote the text.
+func (s Subject) Validate() error {
+	switch s.Kind {
+	case SubjectCommand, SubjectFile, SubjectURL, SubjectText:
+	default:
+		return errors.New("subject kind must be command, file, url or text")
+	}
+	if s.Text == "" || !utf8.ValidString(s.Text) || utf8.RuneCountInString(s.Text) > MaxSubjectText {
+		return errors.New("subject text must be 1-1024 characters of UTF-8")
+	}
+	if strings.ContainsFunc(s.Text, func(r rune) bool { return r != '\n' && unicode.IsControl(r) }) {
+		return errors.New("subject text contains a control character")
+	}
+	if strings.ContainsFunc(s.Text, IsInvisible) {
+		return errors.New("subject text contains an invisible character")
+	}
+	return nil
+}
+
+// IsInvisible reports bidirectional overrides, embeddings, isolates and
+// marks (U+202A-202E, U+2066-2069, U+200E, U+200F, U+061C) and zero-width
+// characters (U+200B-200D, U+2060, U+FEFF). They can make a command read
+// differently from the bytes that run, so a subject may not contain them
+// and displayed text drops them.
+func IsInvisible(r rune) bool {
+	switch {
+	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r >= 0x200B && r <= 0x200F:
+		return true
+	case r == 0x061C, r == 0x2060, r == 0xFEFF:
+		return true
+	}
+	return false
+}
+
+// UnmarshalJSON rejects a subject that fails Validate, so a decoded Subject
+// is always one the schema allows.
+func (s *Subject) UnmarshalJSON(b []byte) error {
+	type plain Subject
+	var v plain
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	if err := Subject(v).Validate(); err != nil {
+		return err
+	}
+	*s = Subject(v)
+	return nil
+}
+
 // Approval is a pending question for the user. State is always "pending"
 // on the wire: answered approvals are announced by approval.closed and
-// never listed.
+// never listed. When Subject is set, Detail is Subject.Text truncated to
+// MaxDetail runes, for apps that predate Subject.
 type Approval struct {
 	RequestID string     `json:"requestId"`
 	SessionID *string    `json:"sessionId"`
@@ -135,6 +209,7 @@ type Approval struct {
 	Source    string     `json:"source"`
 	Title     string     `json:"title"`
 	Detail    *string    `json:"detail"`
+	Subject   *Subject   `json:"subject"`
 	Snippet   string     `json:"snippet"`
 	Options   []Option   `json:"options"`
 	AllowText bool       `json:"allowText"`
@@ -260,6 +335,9 @@ type HookData struct {
 	ContextPercent *float64 `json:"contextPercent,omitempty"`
 	CostUSD        *float64 `json:"costUsd,omitempty"`
 	AgentSessionID string   `json:"agentSessionId,omitempty"`
+	// Subject is what a permission hook asks about, built by the adapter
+	// from the tool and its input.
+	Subject *Subject `json:"subject,omitempty"`
 }
 
 // AskParams is the local.ask params. The call blocks until an answer or the
@@ -270,6 +348,10 @@ type AskParams struct {
 	Options    []string `json:"options"`
 	AllowText  bool     `json:"allowText"`
 	TimeoutSec int      `json:"timeoutSec"`
+	// Approve and Deny name the option that answers approve or deny from
+	// a notification. Empty means the role is inferred from the labels.
+	Approve string `json:"approve,omitempty"`
+	Deny    string `json:"deny,omitempty"`
 }
 
 // AskResult answers local.ask. Decision is nil on timeout.
@@ -326,7 +408,15 @@ const (
 	EnvProduction = "production"
 )
 
+// Device platforms in PairParams.Platform.
+const (
+	PlatformIOS   = "ios"
+	PlatformWatch = "watchos"
+)
+
 // PairParams is the push.pair params. Keys are base64url without padding.
+// An empty Platform means PlatformIOS (see EffectivePlatform). LiveActivityCommand
+// is the user's opt-in to command text in Live Activity pushes.
 type PairParams struct {
 	DeviceID          string `json:"deviceId"`
 	Name              string `json:"name"`
@@ -336,6 +426,21 @@ type PairParams struct {
 	Env               string `json:"env"`
 	RelayURL          string `json:"relayUrl"`
 	LiveActivityToken string `json:"liveActivityToken,omitempty"`
+
+	Platform               string `json:"platform,omitempty"`
+	LiveActivityStartToken string `json:"liveActivityStartToken,omitempty"`
+	LiveActivityCommand    bool   `json:"liveActivityCommand,omitempty"`
+}
+
+// EffectivePlatform returns Platform, or PlatformIOS for devices that paired
+// before the field existed. Readers use it instead of Platform. There is no
+// UnmarshalJSON default because types embedding PairParams would inherit it
+// and lose their own fields.
+func (p PairParams) EffectivePlatform() string {
+	if p.Platform == "" {
+		return PlatformIOS
+	}
+	return p.Platform
 }
 
 // PairResult answers push.pair. HostKey is the helper's X25519 public key.

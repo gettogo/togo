@@ -5,6 +5,28 @@ import TogoTerminal
 @testable import Togo
 
 @MainActor struct SettingsTests {
+    /// Turning command text off or on reaches a machine through its relay; until the machine
+    /// confirms over SSH, the page says the change is on its way.
+    @Test func commandChoicePendingUntilTheMachineConfirms() {
+        let sections = [
+            MachineSection(
+                id: Samples.studio, name: "Studio", symbol: .mini,
+                reachability: .offline(since: Samples.now, reason: "asleep"), helper: .present(version: "1", live: true), sessions: []
+            ),
+            MachineSection(
+                id: Samples.build, name: "Build box", symbol: .mini, reachability: .online,
+                helper: .present(version: "1", live: true), sessions: []
+            ),
+        ]
+        var machines = NotificationValues.machines(sections, paired: [Samples.studio], commandsOn: [Samples.studio])
+        #expect(machines.map(\NotificationMachine.helperCommand) == [true, nil])
+        #expect(NotificationMachinesSection.commandNote(machines[0], showing: false) == "Turns off when Studio receives it")
+        #expect(NotificationMachinesSection.commandNote(machines[0], showing: true) == nil)
+        #expect(NotificationMachinesSection.commandNote(machines[1], showing: true) == nil, "pairs with the choice")
+        machines[0].helperCommand = false
+        #expect(NotificationMachinesSection.commandNote(machines[0], showing: true) == "Turns on when Studio receives it")
+    }
+
     @Test func settingsWithoutNewerFieldsDecodeWithDefaults() throws {
         let saved = Data("""
         {"themeID":"plain","fontName":"Menlo","fontSize":15,"cursor":"bar",

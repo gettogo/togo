@@ -35,9 +35,12 @@ type Config struct {
 	Devices func() []Device // read on every rescan and every message
 	Options OptionsFunc
 	Answer  AnswerFunc
-	Dial    DialFunc         // default websocket.Dial
-	Now     func() time.Time // default time.Now
-	Logf    func(format string, args ...any)
+	// Register stores tokens from a verified registration. Nil drops
+	// registrations.
+	Register RegisterFunc
+	Dial     DialFunc         // default websocket.Dial
+	Now      func() time.Time // default time.Now
+	Logf     func(format string, args ...any)
 
 	MinBackoff     time.Duration // default 1 s
 	MaxBackoff     time.Duration // default 30 s
@@ -266,23 +269,35 @@ func (r *runner) pinger(ctx context.Context, conn *websocket.Conn, lastRead *ato
 }
 
 // handle verifies and applies one message and reports whether to ack it.
-// Every answer is acked once it is applied or definitively refused; only a
+// Every message is acked once it is applied or definitively refused; only a
 // shutdown mid-handling leaves it for redelivery.
 func (r *runner) handle(ctx context.Context, f frame) bool {
 	tag := idHash(f.ID)
-	a, err := r.v.verify(f.Ciphertext)
+	m, err := r.v.Open(f.Ciphertext)
 	if err != nil {
 		r.cfg.Logf("mailbox: dropped %s: %v", tag, err)
 		return true
 	}
-	if err := r.cfg.Answer(ctx, a.RequestID, a.Decision, ByPhone); err != nil {
+	what := "answer"
+	if m.Register != nil {
+		what = "registration"
+		if r.cfg.Register == nil {
+			r.cfg.Logf("mailbox: registration %s ignored", tag)
+			return true
+		}
+		g := m.Register
+		err = r.cfg.Register(g.DeviceID, g.APNsToken, g.LiveActivityToken, g.LiveActivityStartToken, *g.LiveActivityCommand, g.TS)
+	} else {
+		err = r.cfg.Answer(ctx, m.Answer.RequestID, m.Answer.Decision, ByPhone)
+	}
+	if err != nil {
 		if ctx.Err() != nil {
-			r.v.release(a.RequestID)
+			r.v.release(m.replayKey())
 			return false
 		}
-		r.cfg.Logf("mailbox: answer %s not applied", tag)
+		r.cfg.Logf("mailbox: %s %s not applied", what, tag)
 		return true
 	}
-	r.cfg.Logf("mailbox: answer %s applied", tag)
+	r.cfg.Logf("mailbox: %s %s applied", what, tag)
 	return true
 }

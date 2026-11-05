@@ -62,6 +62,45 @@ func TestDevicesLsHidesToken(t *testing.T) {
 	}
 }
 
+func TestDevicesLsShowsPlatformAndLiveActivity(t *testing.T) {
+	env := map[string]string{"TOGO_HOME": t.TempDir()}
+	svc, err := pushService(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, pub, _ := seal.GenerateX25519()
+	start := strings.Repeat("ef", 32)
+	for _, p := range []wire.PairParams{
+		{DeviceID: "d_phone", Name: "Desk iPhone", LiveActivityStartToken: start, LiveActivityCommand: true},
+		{DeviceID: "w_watch", Name: "Wrist", Platform: wire.PlatformWatch},
+	} {
+		p.X25519, p.ApprovalKey = b64(pub[:]), "ERERERERERERERERERERERERERERERERERERERERERE"
+		p.APNsToken, p.Env, p.RelayURL = testToken, wire.EnvSandbox, "https://relay.example.test"
+		raw, _ := json.Marshal(p)
+		if _, err := svc.Methods()[wire.MethodPushPair](context.Background(), raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out, errOut bytes.Buffer
+	if code := run([]string{"devices", "ls"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 3 || !strings.Contains(lines[0], "PLATFORM") || !strings.Contains(lines[0], "LIVE") || !strings.Contains(lines[0], "COMMAND") {
+		t.Fatalf("devices ls:\n%s", out.String())
+	}
+	if f := strings.Fields(lines[1]); !strings.Contains(lines[1], "d_phone") || !strings.Contains(lines[1], " ios ") ||
+		f[len(f)-4] != "on" || f[len(f)-3] != "on" {
+		t.Fatalf("phone row %q", lines[1])
+	}
+	if f := strings.Fields(lines[2]); !strings.Contains(lines[2], "watchos") || f[len(f)-4] != "-" || f[len(f)-3] != "-" {
+		t.Fatalf("watch row %q", lines[2])
+	}
+	if strings.Contains(out.String(), start[:16]) {
+		t.Fatalf("devices ls prints a Live Activity token:\n%s", out.String())
+	}
+}
+
 func TestDevicesRevokeUnpairs(t *testing.T) {
 	env := map[string]string{"TOGO_HOME": t.TempDir()}
 	pairTestDevice(t, env, "dev_test-1", "https://relay.example.test")

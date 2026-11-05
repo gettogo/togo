@@ -379,4 +379,64 @@ private func eventually(_ condition: @Sendable () async -> Bool) async -> Bool {
         let stored = try #require(local.data(forKey: "settings.app"))
         #expect(!String(decoding: stored, as: UTF8.self).contains("syncEnabled"))
     }
+
+    @Test func unlockAndCommandChoicesStayOnThisDevice() async throws {
+        let clock = StoreClock()
+        let remote = MemoryBackend()
+        let local = MemoryBackend()
+        let deviceBackend = MemoryBackend()
+        let machine = UUID()
+        let records = SyncedRecordStore<AppSettings>(
+            prefix: "settings.", local: local, remote: remote, deviceID: "a",
+            clock: { clock.read() }, debounce: .seconds(60)
+        )
+        let settings = SettingsStore(
+            records: records,
+            syncSwitch: SyncSwitch(backend: MemoryBackend()), device: DeviceSettings(backend: deviceBackend)
+        )
+        var value = AppSettings()
+        value.approveWithoutUnlock = true
+        value.liveActivityCommandMachines = [machine]
+        value.relayURL = URL(string: "https://relay.example.com")
+        await settings.save(value)
+        await records.flush()
+        #expect(!remote.allKeys().isEmpty)
+
+        let stored = String(decoding: try #require(local.data(forKey: "settings.app")), as: UTF8.self)
+        #expect(!stored.contains("approveWithoutUnlock"))
+        #expect(!stored.contains("liveActivityCommandMachines"))
+        #expect(!stored.contains(machine.uuidString))
+        #expect(stored.contains("relay.example.com"), "the relay is a shared choice")
+        for key in remote.allKeys() {
+            let text = String(decoding: remote.data(forKey: key) ?? Data(), as: UTF8.self)
+            #expect(!text.contains("approveWithoutUnlock") && !text.contains(machine.uuidString))
+        }
+        #expect(await settings.load() == value, "read back from this device's store")
+
+        var other = AppSettings()
+        DeviceSettings(backend: MemoryBackend()).apply(to: &other)
+        #expect(!other.approveWithoutUnlock)
+        #expect(other.liveActivityCommandMachines.isEmpty)
+    }
+
+    @Test func settingsFromAnotherDeviceKeepThisDevicesUnlockChoice() async throws {
+        let clock = StoreClock()
+        let remote = MemoryBackend()
+        // An older build, or a tampered record, that still carries the field.
+        let updated = clock.read().addingTimeInterval(60).timeIntervalSinceReferenceDate
+        remote.set(
+            Data(#"{"value":{"themeID":"paper","approveWithoutUnlock":true},"updatedAt":\#(updated),"deviceID":"b"}"#.utf8),
+            forKey: "settings.app"
+        )
+        let settings = SettingsStore(
+            records: SyncedRecordStore(
+                prefix: "settings.", local: MemoryBackend(), remote: remote, deviceID: "a",
+                clock: { clock.read() }, debounce: .seconds(60)
+            ),
+            syncSwitch: SyncSwitch(backend: MemoryBackend()), device: DeviceSettings(backend: MemoryBackend())
+        )
+        let loaded = await settings.load()
+        #expect(loaded.themeID == "paper")
+        #expect(!loaded.approveWithoutUnlock)
+    }
 }

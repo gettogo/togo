@@ -12,18 +12,33 @@ import (
 	"time"
 )
 
+// relayPush is the body of POST /v1/push. Target is empty for the phone
+// app and targetWatch for a Watch.
 type relayPush struct {
 	Token        string        `json:"token"`
 	Env          string        `json:"env"`
 	Ciphertext   string        `json:"ciphertext,omitempty"`
 	CollapseID   string        `json:"collapseId,omitempty"`
 	Kind         string        `json:"kind"`
+	Target       string        `json:"target,omitempty"`
 	LiveActivity *liveActivity `json:"liveActivity,omitempty"`
 }
 
+// liveActivity is a Live Activity start, update or end. Attributes are
+// set on start only, DismissalDate on end only; both dates are Unix
+// seconds. Nothing here is sealed, so the content state carries only
+// metadata, plus command text for devices that opted in.
 type liveActivity struct {
-	Event        string    `json:"event"`
-	ContentState LiveState `json:"contentState"`
+	Event         string          `json:"event"`
+	ContentState  LiveState       `json:"contentState"`
+	Attributes    *liveAttributes `json:"attributes,omitempty"`
+	DismissalDate *int64          `json:"dismissalDate,omitempty"`
+	StaleDate     *int64          `json:"staleDate,omitempty"`
+}
+
+// liveAttributes identify the activity a push-to-start creates.
+type liveAttributes struct {
+	HostID string `json:"hostId"`
 }
 
 // errStatus is a relay answer that is not 202. Retryable marks server errors.
@@ -53,6 +68,7 @@ func (s *Sender) post(ctx context.Context, d Device, body relayPush) error {
 	backoff := firstBackoff
 	for attempt := 1; ; attempt++ {
 		err = s.postOnce(ctx, d.RelayURL+"/v1/push", data, d, body.Token)
+		s.tap("/v1/push", body.Kind, data, err)
 		var st *errStatus
 		retry := err != nil && ctx.Err() == nil && (!errors.As(err, &st) || st.retryable)
 		if !retry || attempt == maxAttempts {
@@ -105,6 +121,8 @@ func (s *Sender) postOnce(ctx context.Context, url string, data []byte, d Device
 		return &errStatus{code: code, reason: printable(answer.Reason), retryable: code >= 500}
 	}
 }
+
+func asStatus(err error, st **errStatus) bool { return errors.As(err, st) }
 
 func (s *Sender) paused(token string) (time.Time, bool) {
 	s.mu.Lock()

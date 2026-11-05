@@ -1,9 +1,10 @@
-// Package mailbox reads approval answers that phones and watches post to the
-// relay mailbox. It keeps one outbound WebSocket per relay, opens each sealed
-// answer, checks the device signature, freshness and single use, and hands
-// only answers that pass every check to the approvals path. Text answers and
-// "always allow" options are refused here because the relay path is meant
-// for one-tap answers; they stay available over SSH.
+// Package mailbox reads approval answers and token registrations that phones
+// and watches post to the relay mailbox. It keeps one outbound WebSocket per
+// relay, opens each sealed message, checks the device signature, freshness
+// and single use, and hands only messages that pass every check on: answers
+// to the approvals path, registrations to the pairing store. Text answers
+// and "always allow" options are refused here because the relay path is
+// meant for one-tap answers; they stay available over SSH.
 package mailbox
 
 import (
@@ -34,7 +35,7 @@ var (
 	ErrUnknownDevice = errors.New("unknown or revoked device")
 	ErrSignature     = errors.New("bad signature")
 	ErrStale         = errors.New("timestamp outside freshness window")
-	ErrReplay        = errors.New("request already answered through the mailbox")
+	ErrReplay        = errors.New("already received through the mailbox")
 	ErrDecision      = errors.New("decision not allowed through the relay")
 )
 
@@ -51,12 +52,14 @@ type Keys struct {
 }
 
 // Device is a paired device as the reader sees it. Dead covers both revoked
-// devices and devices the relay reported as unregistered.
+// devices and devices the relay reported as unregistered. RegisterTS is the
+// ts of the last registration applied for it.
 type Device struct {
 	DeviceID    string
 	ApprovalKey ed25519.PublicKey
 	RelayURL    string
 	Dead        bool
+	RegisterTS  int64
 }
 
 // OptionsFunc returns the options of a pending approval, false when the
@@ -70,8 +73,24 @@ type Verifier struct {
 	options OptionsFunc
 	now     func() time.Time
 
-	mu   sync.Mutex
-	seen map[string]time.Time // requestId -> when its entry can be pruned
+	mu sync.Mutex
+	// seen maps a replay key (a requestId, or deviceId|ts for a
+	// registration) to when its entry can be pruned.
+	seen map[string]time.Time
+}
+
+// Message is one verified mailbox message. Exactly one field is set.
+type Message struct {
+	Answer   *wire.AnswerPlaintext
+	Register *wire.RegisterPlaintext
+}
+
+// replayKey is the key the message was reserved under.
+func (m Message) replayKey() string {
+	if m.Register != nil {
+		return registerKey(*m.Register)
+	}
+	return m.Answer.RequestID
 }
 
 // NewVerifier returns a Verifier. now defaults to time.Now.
@@ -82,22 +101,53 @@ func NewVerifier(keys Keys, devices func() []Device, options OptionsFunc, now fu
 	return &Verifier{keys: keys, devices: devices, options: options, now: now, seen: map[string]time.Time{}}
 }
 
-// Verify opens and checks one mailbox ciphertext. On success the requestId
-// is recorded as used, so the same answer is refused if it arrives again.
+// Verify opens and checks one mailbox answer. On success the requestId is
+// recorded as used, so the same answer is refused if it arrives again. A
+// registration is ErrMalformed here; Open accepts both.
 func (v *Verifier) Verify(ciphertext string) (requestID, decision string, err error) {
-	a, err := v.verify(ciphertext)
+	m, err := v.Open(ciphertext)
 	if err != nil {
 		return "", "", err
 	}
-	return a.RequestID, a.Decision, nil
+	if m.Answer == nil {
+		v.release(m.replayKey())
+		return "", "", ErrMalformed
+	}
+	return m.Answer.RequestID, m.Answer.Decision, nil
 }
 
-func (v *Verifier) verify(ciphertext string) (wire.AnswerPlaintext, error) {
-	var a wire.AnswerPlaintext
+// Open opens one mailbox ciphertext, dispatches on its type and checks it.
+// On success its replay key is recorded as used.
+func (v *Verifier) Open(ciphertext string) (Message, error) {
 	pt, err := seal.Open(v.keys.Private, ciphertext, seal.LabelAnswer, []byte(v.keys.HostID))
 	if err != nil {
-		return a, ErrOpen
+		return Message{}, ErrOpen
 	}
+	var head struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(pt, &head) != nil {
+		return Message{}, ErrMalformed
+	}
+	switch head.Type {
+	case "", wire.PlaintextAnswer:
+		a, err := v.verifyAnswer(pt)
+		if err != nil {
+			return Message{}, err
+		}
+		return Message{Answer: &a}, nil
+	case wire.PlaintextRegister:
+		r, err := v.verifyRegister(pt)
+		if err != nil {
+			return Message{}, err
+		}
+		return Message{Register: &r}, nil
+	}
+	return Message{}, ErrMalformed
+}
+
+func (v *Verifier) verifyAnswer(pt []byte) (wire.AnswerPlaintext, error) {
+	var a wire.AnswerPlaintext
 	dec := json.NewDecoder(bytes.NewReader(pt))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&a); err != nil || dec.More() {
@@ -119,7 +169,7 @@ func (v *Verifier) verify(ciphertext string) (wire.AnswerPlaintext, error) {
 	}
 	now := v.now()
 	ts := time.UnixMilli(a.TS)
-	if d := now.Sub(ts); d > FreshnessWindow || d < -FreshnessWindow {
+	if !fresh(ts, now) {
 		return a, ErrStale
 	}
 	if err := v.checkDecision(a.RequestID, a.Decision); err != nil {
@@ -129,6 +179,11 @@ func (v *Verifier) verify(ciphertext string) (wire.AnswerPlaintext, error) {
 		return a, ErrReplay
 	}
 	return a, nil
+}
+
+func fresh(ts, now time.Time) bool {
+	d := now.Sub(ts)
+	return d <= FreshnessWindow && d >= -FreshnessWindow
 }
 
 func (v *Verifier) device(id string) (Device, bool) {
@@ -175,10 +230,10 @@ func (v *Verifier) checkDecision(requestID, raw string) error {
 	return ErrDecision
 }
 
-// reserve marks requestID used. The entry lives until ts leaves the
+// reserve marks a replay key used. The entry lives until ts leaves the
 // freshness window, after which a replay would fail the freshness check
 // anyway.
-func (v *Verifier) reserve(requestID string, ts, now time.Time) bool {
+func (v *Verifier) reserve(key string, ts, now time.Time) bool {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	for k, until := range v.seen {
@@ -186,19 +241,19 @@ func (v *Verifier) reserve(requestID string, ts, now time.Time) bool {
 			delete(v.seen, k)
 		}
 	}
-	if _, dup := v.seen[requestID]; dup {
+	if _, dup := v.seen[key]; dup {
 		return false
 	}
-	v.seen[requestID] = ts.Add(FreshnessWindow)
+	v.seen[key] = ts.Add(FreshnessWindow)
 	return true
 }
 
-// release forgets requestID so a redelivery can be handled. Used only when
-// handing the answer on failed for a reason that says nothing about the
-// answer itself, such as shutdown.
-func (v *Verifier) release(requestID string) {
+// release forgets a replay key so a redelivery can be handled. Used only
+// when handing the message on failed for a reason that says nothing about
+// the message itself, such as shutdown.
+func (v *Verifier) release(key string) {
 	v.mu.Lock()
-	delete(v.seen, requestID)
+	delete(v.seen, key)
 	v.mu.Unlock()
 }
 

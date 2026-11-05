@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -16,11 +17,18 @@ import (
 // ErrUnknownDevice reports a deviceId that is not paired.
 var ErrUnknownDevice = errors.New("push: unknown device")
 
+// ErrStaleRegistration reports a registration no newer than the last one
+// applied for the device.
+var ErrStaleRegistration = errors.New("push: registration older than the last one applied")
+
 // Device is a paired phone. Dead is set when the relay reports its APNs token
 // unregistered; a dead device gets no pushes until it pairs again.
+// RegisterTS is the ts of the last registration applied, so a replayed or
+// reordered one is refused even after a restart.
 type Device struct {
 	wire.Device
-	Dead bool `json:"dead,omitempty"`
+	Dead       bool  `json:"dead,omitempty"`
+	RegisterTS int64 `json:"registerTs,omitempty"`
 }
 
 type devicesJSON struct {
@@ -34,8 +42,13 @@ type devicesJSON struct {
 type Devices struct {
 	Home string
 
-	mu sync.Mutex
+	mu  sync.Mutex
+	gen atomic.Uint64 // bumped on every write in this process
 }
+
+// Gen changes whenever this store writes, so a reader can tell whether a
+// cached view is current without reading the file.
+func (d *Devices) Gen() uint64 { return d.gen.Load() }
 
 // List returns the paired devices in pairing order.
 func (d *Devices) List() ([]Device, error) {
@@ -53,8 +66,14 @@ func (d *Devices) Put(dev wire.Device) error {
 	if err != nil {
 		return err
 	}
+	// The registration clock survives pairing again, so a registration
+	// captured before the re-pair cannot be replayed after it.
+	var regTS int64
+	if i := slices.IndexFunc(list, func(x Device) bool { return x.DeviceID == dev.DeviceID }); i >= 0 {
+		regTS = list[i].RegisterTS
+	}
 	list = slices.DeleteFunc(list, func(x Device) bool { return x.DeviceID == dev.DeviceID })
-	return d.write(append(list, Device{Device: dev}))
+	return d.write(append(list, Device{Device: dev, RegisterTS: regTS}))
 }
 
 // Remove unpairs id. It returns ErrUnknownDevice when id is not paired.
@@ -73,9 +92,11 @@ func (d *Devices) Remove(id string) error {
 	return d.write(list)
 }
 
-// MarkDead flags id after the relay answers 410 for its token. The token in
-// the request is compared so a device that re-paired with a new token while
-// the push was in flight stays live.
+// MarkDead handles a 410 from the relay for one of id's tokens. For the
+// APNs token the device is flagged dead; for a Live Activity token only that
+// token is forgotten, since the activity is gone but the device is not. The
+// token in the request is compared so a device that re-paired or registered
+// a new token while the push was in flight stays as it is.
 func (d *Devices) MarkDead(id, token string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -83,11 +104,97 @@ func (d *Devices) MarkDead(id, token string) error {
 	if err != nil {
 		return err
 	}
-	i := slices.IndexFunc(list, func(x Device) bool { return x.DeviceID == id && x.APNsToken == token })
-	if i < 0 || list[i].Dead {
+	i := slices.IndexFunc(list, func(x Device) bool { return x.DeviceID == id })
+	if i < 0 || token == "" {
 		return nil
 	}
-	list[i].Dead = true
+	dev := &list[i]
+	switch token {
+	case dev.APNsToken:
+		if dev.Dead {
+			return nil
+		}
+		dev.Dead = true
+	case dev.LiveActivityToken:
+		dev.LiveActivityToken = ""
+	case dev.LiveActivityStartToken:
+		dev.LiveActivityStartToken = ""
+	default:
+		return nil
+	}
+	return d.write(list)
+}
+
+// UpdateTokens stores tokens and the command text choice a device
+// registered through the mailbox at ts (Unix ms). An empty token leaves the
+// stored one unchanged. A new Live Activity update token means an activity
+// is live on the device. It returns ErrUnknownDevice when id is not paired
+// and ErrStaleRegistration when ts is not newer than the last registration
+// applied.
+func (d *Devices) UpdateTokens(id, apnsToken, laToken, laStartToken string, command bool, ts int64) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	list, err := d.read()
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(list, func(x Device) bool { return x.DeviceID == id })
+	if i < 0 {
+		return ErrUnknownDevice
+	}
+	dev := &list[i]
+	if ts <= dev.RegisterTS {
+		return ErrStaleRegistration
+	}
+	dev.RegisterTS = ts
+	dev.LiveActivityCommand = command
+	for _, f := range []struct {
+		dst *string
+		v   string
+	}{{&dev.APNsToken, apnsToken}, {&dev.LiveActivityToken, laToken}, {&dev.LiveActivityStartToken, laStartToken}} {
+		if f.v != "" {
+			*f.dst = f.v
+		}
+	}
+	return d.write(list)
+}
+
+// ForgetLiveActivities drops every stored Live Activity update token. The
+// Sender calls it on start: what was live before a restart is unknown, so
+// a device counts as having an activity again only once it registers one.
+func (d *Devices) ForgetLiveActivities() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	list, err := d.read()
+	if err != nil {
+		return err
+	}
+	changed := false
+	for i := range list {
+		if list[i].LiveActivityToken != "" {
+			list[i].LiveActivityToken, changed = "", true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return d.write(list)
+}
+
+// EndLiveActivity forgets id's Live Activity update token after the
+// activity was ended, if it is still token.
+func (d *Devices) EndLiveActivity(id, token string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	list, err := d.read()
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(list, func(x Device) bool { return x.DeviceID == id && x.LiveActivityToken == token })
+	if i < 0 || token == "" {
+		return nil
+	}
+	list[i].LiveActivityToken = ""
 	return d.write(list)
 }
 
@@ -123,5 +230,9 @@ func (d *Devices) write(list []Device) error {
 	if err != nil {
 		return err
 	}
-	return state.WriteFile(filepath.Join(dir, devicesFile), append(data, '\n'))
+	if err := state.WriteFile(filepath.Join(dir, devicesFile), append(data, '\n')); err != nil {
+		return err
+	}
+	d.gen.Add(1)
+	return nil
 }

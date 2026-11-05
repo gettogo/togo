@@ -239,3 +239,16 @@ func TestAskUnreachableTimesOutAtOnce(t *testing.T) {
 		t.Fatalf("result %+v, want an immediate timeout", r)
 	}
 }
+
+func TestAskRoleLabelsMustNameAnOption(t *testing.T) {
+	h, _, _, _ := setup()
+	for _, p := range []wire.AskParams{
+		{Title: "Ship?", Options: []string{"Yes", "No"}, TimeoutSec: 1, Approve: "Maybe"},
+		{Title: "Ship?", Options: []string{"Yes", "No"}, TimeoutSec: 1, Deny: "Never"},
+		{Title: "Ship?", Options: []string{"Yes", "No"}, TimeoutSec: 1, Approve: "Yes", Deny: "yes"},
+	} {
+		if _, err := call(t, h, wire.MethodLocalAsk, p); err == nil {
+			t.Fatalf("%+v accepted", p)
+		}
+	}
+}

@@ -4,6 +4,7 @@
   "match": true,
   "kind": "confirm",
   "title": "Overwrite existing release v2.3.1?",
+  "subject": null,
   "options": [
     {
       "n": 1,

@@ -98,6 +98,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	c.Sender = &push.Sender{
 		Hub: c.Hub, Keys: c.Push.HostKeys, Devices: c.Push.Devices(),
 		Session: c.sessionInfo, Client: o.RelayClient, Logf: logf,
+		Tap: push.FileTap(getenv(push.TapEnv)),
 	}
 	c.Upload = &upload.Service{Home: o.Home, Sessions: svc, Logf: logf}
 	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach}
@@ -240,7 +241,10 @@ func (c *Components) runMailbox(ctx context.Context) {
 		Devices: c.mailboxDevices,
 		Options: c.pendingOptions,
 		Answer:  c.Approvals.Answer,
-		Logf:    c.logf,
+		// A device registers new tokens through the mailbox; the next push
+		// reads them from the store.
+		Register: c.Push.Devices().UpdateTokens,
+		Logf:     c.logf,
 	})
 	if err != nil {
 		c.logf("mailbox: %v", err)
@@ -264,7 +268,7 @@ func (c *Components) mailboxDevices() []mailbox.Device {
 		}
 		out = append(out, mailbox.Device{
 			DeviceID: d.DeviceID, ApprovalKey: ed25519.PublicKey(key),
-			RelayURL: d.RelayURL, Dead: d.Dead,
+			RelayURL: d.RelayURL, Dead: d.Dead, RegisterTS: d.RegisterTS,
 		})
 	}
 	return out

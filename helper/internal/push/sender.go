@@ -8,9 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	"github.com/gettogo/togo/helper/internal/detect"
 	"github.com/gettogo/togo/helper/internal/seal"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -25,12 +29,12 @@ const (
 	queueSize       = 64
 )
 
-// Relay push kinds and Live Activity events, as the relay names them.
+// Relay push kinds and targets, as the relay names them.
 const (
 	relayAlert        = "alert"
 	relayBackground   = "background"
 	relayLiveActivity = "liveactivity"
-	liveUpdate        = "update"
+	targetWatch       = "watch"
 )
 
 // Hub is the part of the event hub the Sender needs.
@@ -52,23 +56,13 @@ type Message struct {
 	// Kind is the relay kind: alert, or background for clear.
 	Kind       string
 	CollapseID string
-	// Live, when set, is also sent as a Live Activity update to devices that
-	// registered a Live Activity token. It carries no ciphertext.
-	Live *LiveState
-}
-
-// LiveState is the Live Activity content state. Since is Unix seconds.
-type LiveState struct {
-	Bib     *string `json:"bib"`
-	Agent   string  `json:"agent"`
-	Status  string  `json:"status"`
-	Waiting int     `json:"waiting"`
-	Since   int64   `json:"since"`
 }
 
 // Sender turns hub events into sealed relay pushes for every live paired
 // device. Pushes other than clear are skipped while any app is in the
-// foreground (it gets the events directly) and for muted sessions.
+// foreground (it gets the events directly) and for muted sessions. It also
+// drives one Live Activity per machine on iOS devices (see LiveTracker);
+// Watch devices get background pushes only.
 type Sender struct {
 	Hub     Hub
 	Keys    func() (HostKeys, error)
@@ -84,14 +78,26 @@ type Sender struct {
 	Sleep func(ctx context.Context, d time.Duration) error
 	// Logf receives one line per failed push, with ids hashed. Nil discards.
 	Logf func(format string, args ...any)
+	// Host is the machine name sealed into every push; empty means the
+	// short form of os.Hostname.
+	Host string
+	// Live tracks this machine's Live Activity; nil means a new tracker.
+	Live *LiveTracker
+	// Tap sees every relay request, as hashes; nil for everything but
+	// end-to-end tests (see TapEnv).
+	Tap func(TapRecord)
 
 	initOnce sync.Once
 	queue    chan wire.Event
+	host     *string
 
 	mu          sync.Mutex
-	lastPush    map[string]time.Time            // session id -> last rate-limited push
-	pausedUntil map[string]time.Time            // device token -> relay 429 deadline
-	pending     map[string]map[string]time.Time // session id -> request id -> created
+	lastPush    map[string]time.Time // session id -> last rate-limited push
+	pausedUntil map[string]time.Time // device token -> relay 429 deadline
+
+	liveMu  sync.Mutex
+	liveDev map[string]*deviceLive // device id -> its activity
+	liveGen uint64                 // Devices.Gen when the list was last read
 }
 
 func (s *Sender) init() {
@@ -99,7 +105,17 @@ func (s *Sender) init() {
 		s.queue = make(chan wire.Event, queueSize)
 		s.lastPush = map[string]time.Time{}
 		s.pausedUntil = map[string]time.Time{}
-		s.pending = map[string]map[string]time.Time{}
+		s.liveDev = map[string]*deviceLive{}
+		if s.Live == nil {
+			s.Live = &LiveTracker{}
+		}
+		h := s.Host
+		if h == "" {
+			h, _ = os.Hostname()
+		}
+		if h = shortHost(h); h != "" {
+			s.host = &h
+		}
 		if s.Client == nil {
 			s.Client = &http.Client{
 				Timeout: requestTimeout,
@@ -123,16 +139,49 @@ func (s *Sender) Run(ctx context.Context) {
 			s.logf("push: queue full, dropped %s event", ev.Kind)
 		}
 	})
+	// Activities from before this process are unknown; a device counts as
+	// having one again once it registers an update token.
+	if err := s.Devices.ForgetLiveActivities(); err != nil {
+		s.logf("push: %v", err)
+	}
+	t := time.NewTicker(liveTick)
+	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case ev := <-s.queue:
-			if m, ok := s.message(ev); ok {
-				s.Deliver(ctx, m)
-			}
+			s.process(ctx, ev)
+		case <-t.C:
+			s.pumpLive(ctx)
 		}
 	}
+}
+
+// process handles one hub event: the tracker sees it, the push it maps to
+// goes out, then any Live Activity change.
+func (s *Sender) process(ctx context.Context, ev wire.Event) {
+	s.init()
+	sid := ""
+	if ev.SessionID != nil {
+		sid = *ev.SessionID
+	}
+	var info SessionInfo
+	if sid != "" && s.Session != nil {
+		info, _ = s.Session(sid)
+	}
+	s.observe(ev, sid, info, s.now())
+	if m, ok := s.message(ev, sid, info); ok {
+		s.Deliver(ctx, m)
+	}
+	s.pumpLive(ctx)
+}
+
+// shortHost is the machine name as `hostname -s` prints it, cut to the
+// schema's limit.
+func shortHost(h string) string {
+	h, _, _ = strings.Cut(h, ".")
+	return truncate(h, wire.MaxHostName)
 }
 
 func (s *Sender) now() time.Time {
@@ -150,19 +199,11 @@ func (s *Sender) logf(format string, args ...any) {
 
 // message maps an event to a push, applying the foreground, mute and rate
 // rules. ok is false when nothing should be sent.
-func (s *Sender) message(ev wire.Event) (Message, bool) {
-	sid := ""
-	if ev.SessionID != nil {
-		sid = *ev.SessionID
-	}
-	var info SessionInfo
-	if sid != "" && s.Session != nil {
-		info, _ = s.Session(sid)
-	}
+func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, bool) {
 	now := s.now()
 	m := Message{Kind: relayAlert}
 	p := &m.Plaintext
-	*p = wire.PushPlaintext{V: 1, SessionID: ev.SessionID, Bib: info.Bib, Agent: info.Agent, TS: now.UnixMilli()}
+	*p = wire.PushPlaintext{V: 1, SessionID: ev.SessionID, Bib: info.Bib, Agent: info.Agent, TS: now.UnixMilli(), Host: s.host}
 
 	switch pl := deref(ev.Payload).(type) {
 	case wire.ApprovalOpenEvent:
@@ -175,19 +216,20 @@ func (s *Sender) message(ev wire.Event) (Message, bool) {
 			p.Agent = &a.Agent
 		}
 		p.Title = a.Title
+		// With no subject the app shows the body, which may be screen
+		// text: clean it here too, before the length cap below.
 		if a.Detail != nil {
-			p.Body = *a.Detail
+			p.Body = detect.CleanLine(*a.Detail)
 		}
 		p.RequestID = a.RequestID
 		p.Options = a.Options
+		p.Subject = a.Subject
 		m.CollapseID = a.RequestID
-		m.Live = s.track(sid, a.RequestID, a.CreatedAt, true, p.Bib, p.Agent)
 	case wire.ApprovalClosedEvent:
 		p.Kind = wire.PushClear
 		p.RequestID = pl.RequestID
 		m.Kind = relayBackground
 		m.CollapseID = pl.RequestID
-		m.Live = s.track(sid, pl.RequestID, time.Time{}, false, p.Bib, p.Agent)
 	case wire.NotifyEvent:
 		switch pl.Level {
 		case wire.LevelDone:
@@ -237,6 +279,10 @@ func deref(v any) any {
 		return *p
 	case *wire.JobEvent:
 		return *p
+	case *wire.SessionEvent:
+		return *p
+	case *wire.SessionRemovedEvent:
+		return *p
 	}
 	return v
 }
@@ -253,47 +299,14 @@ func (s *Sender) admit(sid string, now time.Time) bool {
 	return true
 }
 
-// track records approvals opening and closing per session and returns the
-// Live Activity state that results, or nil when there is no agent to show.
-func (s *Sender) track(sid, rid string, created time.Time, open bool, bib, agent *string) *LiveState {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	reqs := s.pending[sid]
-	if open {
-		if reqs == nil {
-			reqs = map[string]time.Time{}
-			s.pending[sid] = reqs
-		}
-		reqs[rid] = created
-	} else {
-		delete(reqs, rid)
-		if len(reqs) == 0 {
-			delete(s.pending, sid)
-		}
-	}
-	if sid == "" || agent == nil || *agent == "" {
-		return nil
-	}
-	st := &LiveState{Bib: bib, Agent: *agent, Status: "running", Waiting: len(reqs), Since: s.now().Unix()}
-	if len(reqs) > 0 {
-		st.Status = wire.LevelNeedsYou
-		for _, t := range reqs {
-			if t.Unix() < st.Since && !t.IsZero() {
-				st.Since = t.Unix()
-			}
-		}
-	}
-	return st
-}
-
 // Result is the outcome of one push to one device.
 type Result struct {
 	DeviceID string
 	Err      error
 }
 
-// Deliver seals m for every live device and posts it to the device's relay.
-// Devices that registered a Live Activity token also get m.Live, unsealed.
+// Deliver seals m for every live device and posts it to the device's relay,
+// addressed to the Watch app, as a background push, for watchOS devices.
 func (s *Sender) Deliver(ctx context.Context, m Message) []Result {
 	s.init()
 	devices, err := s.Devices.List()
@@ -303,9 +316,10 @@ func (s *Sender) Deliver(ctx context.Context, m Message) []Result {
 	}
 	var live []Device
 	for _, d := range devices {
-		if !d.Dead {
-			live = append(live, d)
+		if d.Dead || !watchWants(d, m.Plaintext.Kind) {
+			continue
 		}
+		live = append(live, d)
 	}
 	if len(live) == 0 {
 		return nil
@@ -322,13 +336,6 @@ func (s *Sender) Deliver(ctx context.Context, m Message) []Result {
 			s.logf("push: device %s: %v", idHash(d.DeviceID), err)
 		}
 		out = append(out, Result{DeviceID: d.DeviceID, Err: err})
-		if m.Live != nil && d.LiveActivityToken != "" {
-			body := relayPush{Token: d.LiveActivityToken, Env: d.Env, Kind: relayLiveActivity,
-				LiveActivity: &liveActivity{Event: liveUpdate, ContentState: *m.Live}}
-			if err := s.post(ctx, d, body); err != nil {
-				s.logf("push: device %s live activity: %v", idHash(d.DeviceID), err)
-			}
-		}
 	}
 	return out
 }
@@ -342,13 +349,24 @@ func (s *Sender) deliverOne(ctx context.Context, hostID string, d Device, m Mess
 	if err != nil {
 		return err
 	}
-	return s.post(ctx, d, relayPush{Token: d.APNsToken, Env: d.Env, Ciphertext: ct, CollapseID: m.CollapseID, Kind: m.Kind})
+	body := relayPush{Token: d.APNsToken, Env: d.Env, Ciphertext: ct, CollapseID: m.CollapseID, Kind: m.Kind}
+	if d.EffectivePlatform() == wire.PlatformWatch {
+		// The phone's alert is mirrored to the Watch with its actions, so the Watch app gets
+		// silent pushes that only update its list and complication.
+		body.Target = targetWatch
+		body.Kind = relayBackground
+	}
+	return s.post(ctx, d, body)
 }
 
-// sealFitting seals p, dropping options and then the body until the
-// envelope fits the relay's ciphertext limit. The phone can still fetch the
-// full approval over SSH.
+// sealFitting seals p, shrinking it until the envelope fits the relay's
+// ciphertext limit: options go first, then the body, then the subject is
+// shortened, then the title goes. The question stays longest because it is
+// what the user answers. If nothing else fits, it sends the generic push
+// (kind, request id and time only), so the user still hears about it. The
+// phone can fetch the full approval over SSH.
 func sealFitting(pub [32]byte, p wire.PushPlaintext, aad []byte) (string, error) {
+	generic := false
 	for {
 		raw, err := json.Marshal(p)
 		if err != nil {
@@ -365,12 +383,42 @@ func sealFitting(pub [32]byte, p wire.PushPlaintext, aad []byte) (string, error)
 			p.Options = p.Options[:len(p.Options)-1]
 		case p.Body != "":
 			p.Body = ""
+		case p.Subject != nil && utf8.RuneCountInString(p.Subject.Text) > minSubject:
+			p.Subject = shorten(*p.Subject)
 		case p.Title != "":
 			p.Title = ""
+		case !generic:
+			generic = true
+			p = wire.PushPlaintext{V: p.V, Kind: p.Kind, RequestID: p.RequestID, TS: p.TS}
 		default:
 			return "", errors.New("push too large")
 		}
 	}
+}
+
+// minSubject is the shortest a subject is cut to before the title goes.
+const minSubject = 16
+
+// shorten halves the subject text on a scalar boundary and ends it with an
+// ellipsis. The result still passes Subject.Validate.
+func shorten(s wire.Subject) *wire.Subject {
+	keep := utf8.RuneCountInString(s.Text) / 2
+	text := strings.TrimRight(truncate(s.Text, keep), " \n")
+	if text == "" {
+		text = truncate(s.Text, keep)
+	}
+	s.Text = text + "…"
+	return &s
+}
+
+// watchWants reports whether d should get a push of kind. The Watch list and
+// complication use only needs_you and clear, and watchOS rations background
+// pushes, so the rest would spend that budget for nothing.
+func watchWants(d Device, kind string) bool {
+	if d.EffectivePlatform() != wire.PlatformWatch {
+		return true
+	}
+	return kind == wire.PushNeedsYou || kind == wire.PushClear
 }
 
 // idHash is the 6-character sha256 prefix logged in place of an id.

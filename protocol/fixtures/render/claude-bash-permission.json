@@ -1,0 +1,42 @@
+{
+  "name": "claude/bash-permission",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "claude",
+    "title": "Do you want to proceed?",
+    "body": "rm -rf ./build \u0026\u0026 make",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "rm -rf ./build \u0026\u0026 make"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, and don't ask again for make commands in ~/src/app",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "No, and tell the agent what to do differently",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Claude Code",
+    "subtitle": "Do you want to proceed?",
+    "body": "rm -rf ./build && make",
+    "category": "togo.request"
+  }
+}

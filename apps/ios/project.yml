@@ -24,6 +24,8 @@ packages:
     path: ../../packages/TogoTerminal
   TogoMosh:
     path: ../../packages/TogoMosh
+  TogoPush:
+    path: ../../packages/TogoPush
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     exactVersion: 1.19.7
@@ -34,10 +36,16 @@ targets:
     platform: iOS
     sources:
       - path: Togo
+      # The Live Activity and widget views, so the snapshot tests can render them.
+      - path: TogoWidgets/LiveCopy.swift
+      - path: TogoWidgets/LiveLockScreenView.swift
+      - path: TogoWidgets/IslandViews.swift
+      - path: TogoWidgets/WaitingWidget.swift
     dependencies:
       - package: TogoKit
       - package: TogoTerminal
       - package: TogoMosh
+      - package: TogoPush
       - target: TogoWatch
       - target: TogoWidgets
       - target: TogoNotificationService
@@ -75,6 +83,11 @@ targets:
           - CFBundleURLName: app.togo
             CFBundleURLSchemes:
               - togo
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        TogoRelayHost: $(TOGO_RELAY_HOST)
+        UIBackgroundModes:
+          - remote-notification
         UISupportedInterfaceOrientations~iphone:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -91,12 +104,22 @@ targets:
           - group.app.togo
         # Machines sync through key-value storage; keys and passwords never do.
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
+        # Development here; automatic signing writes production into Release builds.
+        aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
+        # Push keys, shared with the notification service and the widgets.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)app.togo.shared
 
   TogoWatch:
     type: application
     platform: watchOS
     sources:
       - path: TogoWatch
+    dependencies:
+      - package: TogoPush
+      - target: TogoWatchWidgets
+      - target: TogoWatchNotificationService
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.watchkitapp
@@ -106,16 +129,112 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Togo
         INFOPLIST_KEY_WKApplication: YES
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: app.togo.Togo
+    info:
+      path: TogoWatch/Info.plist
+      properties:
+        UIBackgroundModes:
+          - remote-notification
+        WKRunsIndependentlyOfCompanionApp: true
+    entitlements:
+      path: TogoWatch/TogoWatch.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.security.application-groups:
+          - group.app.togo.watch
+        # The Watch keeps its own push keys.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)app.togo.watch
+    scheme:
+      testTargets:
+        - TogoWatchTests
+
+  TogoWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: TogoWatchWidgets
+    dependencies:
+      - package: TogoPush
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.watchkitapp.Widgets
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+    info:
+      path: TogoWatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Togo
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: TogoWatchWidgets/TogoWatchWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.app.togo.watch
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)app.togo.watch
+
+  TogoWatchNotificationService:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: TogoWatchNotificationService
+    dependencies:
+      - package: TogoPush
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.watchkitapp.NotificationService
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+    info:
+      path: TogoWatchNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Togo
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: TogoWatchNotificationService/TogoWatchNotificationService.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.app.togo.watch
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)app.togo.watch
+
+  TogoWatchTests:
+    type: bundle.unit-test
+    platform: watchOS
+    sources:
+      - path: TogoWatchTests
+    dependencies:
+      - target: TogoWatch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.togo.TogoWatchTests
+        GENERATE_INFOPLIST_FILE: YES
 
   TogoWidgets:
     type: app-extension
     platform: iOS
     sources:
       - path: TogoWidgets
+      # The app's palette and bib, so the widgets draw with the same colors.
+      - path: Togo/Design/Palette.swift
+      - path: Togo/Design/Components/BibText.swift
+      - path: Togo/Resources/Colors.xcassets
+    dependencies:
+      - package: TogoPush
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.Widgets
         TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOLS: YES
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
     info:
@@ -131,12 +250,16 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.app.togo
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)app.togo.shared
 
   TogoNotificationService:
     type: app-extension
     platform: iOS
     sources:
       - path: TogoNotificationService
+    dependencies:
+      - package: TogoPush
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.NotificationService
@@ -157,6 +280,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.app.togo
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)app.togo.shared
 
   TogoTests:
     type: bundle.unit-test

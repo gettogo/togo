@@ -1,11 +1,12 @@
 .PHONY: lint test build check-trailers relay-test \
 	ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-snapshots ios-snapshots-record \
-	ios-release-check tokens tokens-check
+	ios-release-check tokens tokens-check togopush-test watch-test
 
 IOS_DIR := apps/ios
 IOS_PROJECT := $(IOS_DIR)/Togo.xcodeproj
 IOS_DERIVED := $(IOS_DIR)/DerivedData
 IOS_TEST_DEST := platform=iOS Simulator,name=iPhone 17
+WATCH_TEST_DEST := platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)
 # SwiftTerm (via TogoTerminal) ships a build plugin; unattended builds cannot
 # click through the trust prompt, so validation is skipped for packages and macros.
 XCODEBUILD := xcodebuild -project $(IOS_PROJECT) -scheme Togo -derivedDataPath $(IOS_DERIVED) \
@@ -56,6 +57,14 @@ ios-snapshots-record: ios-gen
 	TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all \
 	$(XCODEBUILD) -configuration Debug -destination '$(IOS_TEST_DEST)' -only-testing:TogoSnapshotTests test || true
 	$(MAKE) ios-snapshots
+
+togopush-test:
+	swift test --package-path packages/TogoPush
+
+watch-test: ios-gen
+	xcodebuild -project $(IOS_PROJECT) -scheme TogoWatch -derivedDataPath $(IOS_DERIVED) \
+		-skipPackagePluginValidation -skipMacroValidation -quiet \
+		-configuration Debug -destination '$(WATCH_TEST_DEST)' test
 
 # Signing is off because this checks what the Release binary contains, not
 # whether it can be provisioned; that happens in Xcode against the team.

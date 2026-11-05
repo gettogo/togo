@@ -1,0 +1,42 @@
+{
+  "name": "opencode/bash-permission",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "opencode",
+    "title": "Allow this command to run?",
+    "body": "npm install --save-dev vitest",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "npm install --save-dev vitest"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Allow once",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Allow always",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Reject",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 OpenCode",
+    "subtitle": "Allow this command to run?",
+    "body": "npm install --save-dev vitest",
+    "category": "togo.request"
+  }
+}

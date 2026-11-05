@@ -35,6 +35,57 @@ public struct ApprovalOption: Codable, Hashable, Sendable {
     }
 }
 
+/// The one thing an approval asks about, structured so it can be shown without screen text.
+public struct Subject: Codable, Hashable, Sendable {
+    public enum Kind: String, Codable, Sendable {
+        case command, file, url, text
+    }
+
+    /// The most Unicode scalars `text` may hold. The helper counts the same unit (Go runes),
+    /// not grapheme clusters or UTF-16 units.
+    public static let maxTextScalars = 1024
+
+    public var kind: Kind
+    /// 1-1024 Unicode scalars; newline is the only control character (Unicode Cc) allowed, and
+    /// bidirectional and zero-width characters are refused (see `isInvisible`).
+    public var text: String
+
+    public init(kind: Kind, text: String) {
+        self.kind = kind
+        self.text = text
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, text
+    }
+
+    /// Rejects text the schema does not allow, since subjects are shown on the lock screen,
+    /// the Live Activity and the Watch. The error never quotes the text.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(Kind.self, forKey: .kind)
+        text = try container.decode(String.self, forKey: .text)
+        let scalars = text.unicodeScalars
+        let control = scalars.contains {
+            ($0 != "\n" && $0.properties.generalCategory == .control) || Self.isInvisible($0)
+        }
+        if scalars.isEmpty || scalars.count > Self.maxTextScalars || control {
+            throw DecodingError.dataCorruptedError(
+                forKey: .text, in: container,
+                debugDescription: "subject text must be 1-1024 scalars with no control or invisible characters")
+        }
+    }
+
+    /// Bidirectional overrides, embeddings, isolates and marks, and zero-width characters,
+    /// which can make a command read differently from the bytes that run.
+    public static func isInvisible(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x202A...0x202E, 0x2066...0x2069, 0x200B...0x200F, 0x061C, 0x2060, 0xFEFF: true
+        default: false
+        }
+    }
+}
+
 public struct Approval: Codable, Hashable, Sendable, Identifiable {
     public enum Source: WireEnum {
         case hook, screen, ask
@@ -60,6 +111,9 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
     public var source: Source
     public var title: String
     public var detail: String?
+    /// Nil from helpers that predate it, when none was found, or when its kind is one this
+    /// version does not know; `detail` still describes the request then.
+    public var subject: Subject?
     public var snippet: String
     public var options: [ApprovalOption]
     public var allowText: Bool
@@ -69,7 +123,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
     public init(
         requestId: String, sessionId: String?, bib: String?, agent: String, source: Source,
         title: String, detail: String?, snippet: String, options: [ApprovalOption],
-        allowText: Bool, createdAt: Date, expiresAt: Date?
+        allowText: Bool, createdAt: Date, expiresAt: Date?, subject: Subject? = nil
     ) {
         self.requestId = requestId
         self.sessionId = sessionId
@@ -78,6 +132,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         self.source = source
         self.title = title
         self.detail = detail
+        self.subject = subject
         self.snippet = snippet
         self.options = options
         self.allowText = allowText
@@ -86,7 +141,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case requestId, sessionId, bib, agent, source, title, detail, snippet, options, allowText
+        case requestId, sessionId, bib, agent, source, title, detail, subject, snippet, options, allowText
         case createdAt, expiresAt, state
     }
 
@@ -99,6 +154,8 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         source = try container.decode(Source.self, forKey: .source)
         title = try container.decode(String.self, forKey: .title)
         detail = try container.decodeIfPresent(String.self, forKey: .detail)
+        // A subject this version cannot read must not drop the whole approval.
+        subject = (try? container.decodeIfPresent(Subject.self, forKey: .subject)) ?? nil
         snippet = try container.decode(String.self, forKey: .snippet)
         options = try container.decode([ApprovalOption].self, forKey: .options)
         allowText = try container.decode(Bool.self, forKey: .allowText)
@@ -116,6 +173,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         try container.encode(source, forKey: .source)
         try container.encode(title, forKey: .title)
         try container.encode(detail, forKey: .detail)
+        try container.encodeIfPresent(subject, forKey: .subject)
         try container.encode(snippet, forKey: .snippet)
         try container.encode(options, forKey: .options)
         try container.encode(allowText, forKey: .allowText)

@@ -37,6 +37,26 @@ import UIKit
     /// True once the stored machines have been read.
     var hostsLoaded: Bool { get }
     var settings: AppSettings { get set }
+    /// Whether iOS lets Togo show notifications.
+    var pushAuthorization: PushRegistrar.Authorization { get }
+    /// Machines this iPhone receives pushes from.
+    var pairedMachines: Set<HostID> { get }
+    /// Paired machines whose helper last confirmed it sends command text.
+    var confirmedCommands: Set<HostID> { get }
+    /// Paired machines sent a command text choice they have not confirmed yet.
+    var pendingCommands: Set<HostID> { get }
+    /// Asks iOS for notification permission, from Settings.
+    func turnOnNotifications() async
+    /// Removed machines still to be told to stop pushing to this iPhone.
+    var pendingRemovals: [PendingRemoval] { get }
+    /// Gives up on telling a removed machine, and forgets what was kept to reach it.
+    func forgetRemoval(_ id: String)
+}
+
+/// A removed machine waiting to unpair, by the helper's host id.
+struct PendingRemoval: Identifiable, Equatable, Sendable {
+    var id: String
+    var name: String
 }
 
 extension AppServices {
@@ -48,6 +68,20 @@ extension AppServices {
     var attachPrompts: AttachPrompts? { nil }
 
     var hostsLoaded: Bool { true }
+
+    var pushAuthorization: PushRegistrar.Authorization { .notDetermined }
+
+    var pairedMachines: Set<HostID> { [] }
+
+    var confirmedCommands: Set<HostID> { [] }
+
+    var pendingCommands: Set<HostID> { [] }
+
+    func turnOnNotifications() async {}
+
+    var pendingRemovals: [PendingRemoval] { [] }
+
+    func forgetRemoval(_ id: String) {}
 }
 
 /// A running terminal for one tab: the engine's view and the link phases that drive its chrome.

@@ -4,6 +4,7 @@
   "match": true,
   "kind": "confirm",
   "title": "Do you want to continue?",
+  "subject": null,
   "options": [
     {
       "n": 1,

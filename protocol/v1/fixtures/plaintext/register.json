@@ -1,0 +1,13 @@
+{
+  "description": "Device dev_test-1 registers a new APNs token and Live Activity token with host h_mmg42klgyqzwneiskrelxms3j7 at 2026-11-03T12:00:00Z; it has no push-to-start token and has not opted in to command text. Seal it with label answer and aad hostId. sig is a real signature by the Ed25519 key with seed 32 bytes of 0x11 (public key 0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc) over \"togo-register/v2\\nh_mmg42klgyqzwneiskrelxms3j7\\ndev_test-1\\n\" + apnsToken + \"\\n\" + liveActivityToken + \"\\n\\nfalse\\n1793707200000\". The tokens are test values.",
+  "kind": "register",
+  "plaintext": {
+    "type": "register",
+    "deviceId": "dev_test-1",
+    "apnsToken": "abababababababababababababababababababababababababababababababab",
+    "liveActivityToken": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "liveActivityCommand": false,
+    "ts": 1793707200000,
+    "sig": "0SeYtcaCqTrOWUvLQT2Dw1kMGszmej_FAVWlt_Qcf7QcScH8RoxXQjuYsOjAeYlEjAFvI4Zpd2j1x9pOKGL6CA"
+  }
+}

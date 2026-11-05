@@ -501,6 +501,31 @@
       ],
       "additionalProperties": false
     },
+    "Subject": {
+      "description": "The one thing an approval asks about, so notifications, the Live Activity and the Watch can show it without screen text. text counts Unicode scalar values and allows no control characters (Unicode Cc) other than newline and no bidirectional or zero-width characters (U+202A-202E, U+2066-2069, U+200B-200F, U+061C, U+2060, U+FEFF).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "command",
+            "file",
+            "url",
+            "text"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f]*$"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false
+    },
     "Approval": {
       "description": "A question waiting for the user. Only pending approvals are listed or sent; the end of one is the approval.closed event.",
       "type": "object",
@@ -545,6 +570,17 @@
             "null"
           ],
           "maxLength": 256
+        },
+        "subject": {
+          "description": "Absent or null when the helper found no subject; detail then still describes the request. When set, detail is subject.text truncated to 256 characters, for apps that do not read subject.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Subject"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "snippet": {
           "description": "Last lines of the pane around the prompt, at most 40 lines and 4096 bytes.",
@@ -954,7 +990,7 @@
       "additionalProperties": false
     },
     "PushPairParams": {
-      "description": "push.pair. x25519: the device's push-sealing public key; approvalKey: its Ed25519 answer-signing public key. Pairing an existing deviceId replaces it. Any field out of shape: -32602.",
+      "description": "push.pair. x25519: the device's push-sealing public key; approvalKey: its Ed25519 answer-signing public key. Pairing an existing deviceId replaces it. Any field out of shape: -32602. platform is ios when absent. liveActivityStartToken is the push-to-start token for the Live Activity; liveActivityCommand (default false) lets Live Activity pushes carry command text.",
       "type": "object",
       "properties": {
         "deviceId": {
@@ -988,6 +1024,19 @@
         "liveActivityToken": {
           "type": "string",
           "pattern": "^[0-9a-f]{64,200}$"
+        },
+        "platform": {
+          "enum": [
+            "ios",
+            "watchos"
+          ]
+        },
+        "liveActivityStartToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64,200}$"
+        },
+        "liveActivityCommand": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1459,6 +1508,9 @@
             },
             "agentSessionId": {
               "type": "string"
+            },
+            "subject": {
+              "$ref": "#/$defs/Subject"
             }
           },
           "additionalProperties": false
@@ -1508,6 +1560,18 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 3600
+        },
+        "approve": {
+          "description": "The option a notification's Approve picks, matched case-insensitively. Absent: inferred from the labels (Approve, Yes, Allow, Accept, Continue).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "deny": {
+          "description": "The option a notification's Deny picks, matched case-insensitively. Absent: inferred from the labels (Deny, No, Reject, Cancel, Stop).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
         }
       },
       "required": [
@@ -1643,7 +1707,7 @@
       "additionalProperties": false
     },
     "PushPlaintext": {
-      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds.",
+      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid.",
       "type": "object",
       "properties": {
         "v": {
@@ -1700,6 +1764,23 @@
         "ts": {
           "type": "integer",
           "minimum": 0
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Subject"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
         }
       },
       "required": [
@@ -1779,9 +1860,12 @@
       ]
     },
     "AnswerPlaintext": {
-      "description": "Plaintext sealed (label answer, aad hostId) by the phone and posted to the relay mailbox, encoded as compact UTF-8 JSON. decision is limited to approve, deny and option:<n>; text answers travel only over SSH. ts is Unix time in milliseconds on the phone. sig is the Ed25519 signature, base64url without padding (86 chars), by the device's approvalKey over the UTF-8 bytes of \"togo-approval/v1\\n\" + hostId + \"\\n\" + requestId + \"\\n\" + decision + \"\\n\" + ts, where ts is written in decimal ASCII without leading zeros, each field is exactly the value in this object (hostId from push.pair), and there is no trailing newline.",
+      "description": "Plaintext sealed (label answer, aad hostId) by the phone and posted to the relay mailbox, encoded as compact UTF-8 JSON. decision is limited to approve, deny and option:<n>; text answers travel only over SSH. ts is Unix time in milliseconds on the phone. sig is the Ed25519 signature, base64url without padding (86 chars), by the device's approvalKey over the UTF-8 bytes of \"togo-approval/v1\\n\" + hostId + \"\\n\" + requestId + \"\\n\" + decision + \"\\n\" + ts, where ts is written in decimal ASCII without leading zeros, each field is exactly the value in this object (hostId from push.pair), and there is no trailing newline. Senders omit type on answers, because helpers that predate it reject unknown fields; receivers accept it absent or \"answer\". Only RegisterPlaintext, which shares the mailbox, carries a type.",
       "type": "object",
       "properties": {
+        "type": {
+          "const": "answer"
+        },
         "requestId": {
           "$ref": "#/$defs/RequestId"
         },
@@ -1810,6 +1894,119 @@
       ],
       "additionalProperties": false
     },
+    "RegisterPlaintext": {
+      "description": "Plaintext sealed (label answer, aad hostId) by a paired device and posted to the relay mailbox when its tokens or its command text choice change, encoded as compact UTF-8 JSON. A token left out keeps the stored one. liveActivityCommand replaces the stored choice (see PairParams). ts is Unix time in milliseconds on the device. sig is the Ed25519 signature, base64url without padding (86 chars), by the device's approvalKey over the UTF-8 bytes of \"togo-register/v2\\n\" + hostId + \"\\n\" + deviceId + \"\\n\" + apnsToken + \"\\n\" + liveActivityToken + \"\\n\" + liveActivityStartToken + \"\\n\" + liveActivityCommand + \"\\n\" + ts, where an absent token is the empty string, liveActivityCommand is \"true\" or \"false\", ts is decimal ASCII without leading zeros, and there is no trailing newline.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "register"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/DeviceId"
+        },
+        "apnsToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64,200}$"
+        },
+        "liveActivityToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64,200}$"
+        },
+        "liveActivityStartToken": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64,200}$"
+        },
+        "liveActivityCommand": {
+          "type": "boolean"
+        },
+        "ts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sig": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        }
+      },
+      "required": [
+        "type",
+        "deviceId",
+        "liveActivityCommand",
+        "ts",
+        "sig"
+      ],
+      "additionalProperties": false
+    },
+    "LiveContentState": {
+      "description": "Live Activity content state, sent by the helper to the relay in the clear and shown by the app. since is Unix time in seconds when the status began. requestId is the approval the Approve button answers, null unless status is needs_you. command is null unless the device opted in with liveActivityCommand.",
+      "type": "object",
+      "properties": {
+        "bib": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "agent": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "needs_you",
+            "working",
+            "done"
+          ]
+        },
+        "waiting": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "since": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requestId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "command": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "bib",
+        "agent",
+        "status",
+        "waiting",
+        "since",
+        "requestId",
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "LiveAttributes": {
+      "description": "Live Activity attributes sent with a push-to-start.",
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "$ref": "#/$defs/HostId"
+        }
+      },
+      "required": [
+        "hostId"
+      ],
+      "additionalProperties": false
+    },
     "PlaintextFixture": {
       "description": "A sealed-payload example in protocol/v1/fixtures/plaintext. Shape only: protocol/fixtures/crypto holds the seal and signature vectors.",
       "type": "object",
@@ -1821,7 +2018,8 @@
         "kind": {
           "enum": [
             "push",
-            "answer"
+            "answer",
+            "register"
           ]
         },
         "plaintext": {
@@ -1863,6 +2061,22 @@
             "properties": {
               "plaintext": {
                 "$ref": "#/$defs/AnswerPlaintext"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "register"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "plaintext": {
+                "$ref": "#/$defs/RegisterPlaintext"
               }
             }
           }

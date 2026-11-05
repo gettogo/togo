@@ -1,0 +1,33 @@
+{
+  "name": "generic/yn-default",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "shell",
+    "title": "Do you want to continue?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "No",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Shell",
+    "subtitle": "Do you want to continue?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

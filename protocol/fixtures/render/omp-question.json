@@ -1,0 +1,38 @@
+{
+  "name": "omp/question",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "omp",
+    "title": "Which one should I use for the new tests?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "vitest",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "jest",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "Something else",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 OMP",
+    "subtitle": "Which one should I use for the new tests?",
+    "body": "",
+    "category": "togo.info"
+  }
+}

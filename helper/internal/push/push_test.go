@@ -145,12 +145,20 @@ func newEnv(t *testing.T, devices int) *env {
 
 func (e *env) pair(t *testing.T, id, liveToken string) {
 	t.Helper()
+	e.pairWith(t, id, func(p *wire.PairParams) { p.LiveActivityToken = liveToken })
+}
+
+// pairWith pairs a device whose params mut adjusts.
+func (e *env) pairWith(t *testing.T, id string, mut func(*wire.PairParams)) {
+	t.Helper()
 	priv, pub, err := seal.GenerateX25519()
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := pairParams(id, b64.EncodeToString(pub[:]), e.relay.URL)
-	p.LiveActivityToken = liveToken
+	if mut != nil {
+		mut(&p)
+	}
 	if _, err := e.call(wire.MethodPushPair, p); err != nil {
 		t.Fatalf("pair %s: %v", id, err)
 	}
@@ -175,10 +183,13 @@ func (e *env) call(method string, params any) (any, error) {
 
 // handle runs one event through the sender synchronously.
 func (e *env) handle(ev wire.Event) {
+	e.sender.process(context.Background(), ev)
+}
+
+// tick runs the periodic Live Activity pass at the current clock.
+func (e *env) tick() {
 	e.sender.init()
-	if m, ok := e.sender.message(ev); ok {
-		e.sender.Deliver(context.Background(), m)
-	}
+	e.sender.pumpLive(context.Background())
 }
 
 func (e *env) open(t *testing.T, ct string, deviceID string) wire.PushPlaintext {
@@ -310,6 +321,12 @@ func TestPairValidatesFieldsWithoutEchoingSecrets(t *testing.T) {
 		func(p *wire.PairParams) { p.APNsToken = "abcd" },
 		func(p *wire.PairParams) { p.LiveActivityToken = "zz" },
 		func(p *wire.PairParams) { p.Env = "prod" },
+		func(p *wire.PairParams) { p.Platform = "android" },
+		func(p *wire.PairParams) { p.Platform = "iOS" },
+		func(p *wire.PairParams) { p.LiveActivityStartToken = "zz" },
+		func(p *wire.PairParams) { p.LiveActivityStartToken = strings.Repeat("AB", 32) },
+		func(p *wire.PairParams) { p.LiveActivityStartToken = strings.Repeat("ab", 31) },
+		func(p *wire.PairParams) { p.LiveActivityStartToken = strings.Repeat("ab", 101) },
 	}
 	for i, mut := range bad {
 		p := good
@@ -321,6 +338,25 @@ func TestPairValidatesFieldsWithoutEchoingSecrets(t *testing.T) {
 		}
 		if strings.Contains(inv.Msg, p.APNsToken) || strings.Contains(inv.Msg, p.X25519) {
 			t.Fatalf("case %d: message echoes a secret: %q", i, inv.Msg)
+		}
+	}
+}
+
+func TestPairAcceptsWatchAndStartToken(t *testing.T) {
+	e := newEnv(t, 0)
+	_, pub, _ := seal.GenerateX25519()
+	for i, mut := range []func(p *wire.PairParams){
+		func(p *wire.PairParams) { p.Platform = wire.PlatformWatch },
+		func(p *wire.PairParams) { p.Platform = wire.PlatformIOS },
+		func(p *wire.PairParams) {
+			p.LiveActivityStartToken = strings.Repeat("cd", 32)
+			p.LiveActivityCommand = true
+		},
+	} {
+		p := pairParams("dev_a", b64.EncodeToString(pub[:]), "https://relay.example.test")
+		mut(&p)
+		if _, err := e.call(wire.MethodPushPair, p); err != nil {
+			t.Fatalf("case %d: %v", i, err)
 		}
 	}
 }

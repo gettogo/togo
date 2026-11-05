@@ -7,6 +7,7 @@ import {
 } from "./apns";
 import { json } from "./http";
 import { ConfigError } from "./jwt";
+import { FieldError, liveActivityPayload, parseLiveActivity, type LiveActivity } from "./liveactivity";
 import type { Admission } from "./ratelimit";
 
 // The relay forwards sealed bytes it cannot read. It never logs the token,
@@ -18,11 +19,6 @@ const TOKEN_RE = /^[0-9a-f]{64,200}$/;
 const CIPHERTEXT_RE = /^[A-Za-z0-9_-]+$/;
 // Sent as a header; printable ASCII only so CR/LF can never split it.
 const COLLAPSE_RE = /^[\x21-\x7e]{1,64}$/;
-// Push-to-start is not supported yet: it needs the attributes-type and
-// attributes fields, which the relay does not send, so APNs would refuse a
-// start. The relay rejects one up front.
-const LIVE_EVENTS = ["update", "end"] as const;
-const MAX_STATE_STRING = 64;
 
 export const TOKEN_LIMIT = 30;
 export const IP_LIMIT = 300;
@@ -36,27 +32,14 @@ declare global {
   }
 }
 
-interface ContentState {
-  bib: string | null;
-  agent: string;
-  status: string;
-  waiting: number;
-  since: number;
-}
-
 interface PushBody {
   token: string;
   env: ApnsEnvironment;
   ciphertext?: string;
   collapseId?: string;
   kind: ApnsPushType;
-  liveActivity?: { event: (typeof LIVE_EVENTS)[number]; contentState: ContentState };
-}
-
-class FieldError extends Error {
-  constructor(readonly field: string) {
-    super(field);
-  }
+  target: "app" | "watch";
+  liveActivity?: LiveActivity;
 }
 
 export async function handlePush(request: Request, env: Env): Promise<Response> {
@@ -81,14 +64,13 @@ export async function handlePush(request: Request, env: Env): Promise<Response> 
   if (tokGate.status === "unregistered") return json(410, { error: "unregistered" });
   if (tokGate.status === "limited") return limited(tokGate.retryAfter);
 
-  const live = body.kind === "liveactivity";
   let result: ApnsResult;
   try {
     result = await apnsSend(env, {
       token: body.token,
       environment: body.env,
       pushType: body.kind,
-      topic: live ? `${env.APNS_TOPIC}.push-type.liveactivity` : env.APNS_TOPIC,
+      topic: topicFor(env, body),
       collapseId: body.collapseId,
       payload: apnsPayload(body),
     });
@@ -119,19 +101,14 @@ function apnsPayload(body: PushBody): unknown {
       };
     case "background":
       return { aps: { "content-available": 1 }, c: body.ciphertext };
-    case "liveactivity": {
-      // Live Activity updates render in the system UI without app code, so
-      // they carry metadata only; the ciphertext stays off this path.
-      const la = body.liveActivity!;
-      return {
-        aps: {
-          timestamp: Math.floor(Date.now() / 1000),
-          event: la.event,
-          "content-state": la.contentState,
-        },
-      };
-    }
+    case "liveactivity":
+      return liveActivityPayload(body.liveActivity!, Math.floor(Date.now() / 1000));
   }
+}
+
+function topicFor(env: Env, body: PushBody): string {
+  if (body.kind === "liveactivity") return `${env.APNS_TOPIC}.push-type.liveactivity`;
+  return body.target === "watch" ? `${env.APNS_TOPIC}.watchkitapp` : env.APNS_TOPIC;
 }
 
 async function readCapped(request: Request): Promise<unknown> {
@@ -148,7 +125,7 @@ async function readCapped(request: Request): Promise<unknown> {
 
 function parsePush(raw: unknown): PushBody {
   if (!isObject(raw)) throw new FieldError("body");
-  const { token, env, ciphertext, collapseId, kind, liveActivity } = raw;
+  const { token, env, ciphertext, collapseId, kind, liveActivity, target } = raw;
   if (typeof token !== "string" || !TOKEN_RE.test(token.toLowerCase())) {
     throw new FieldError("token");
   }
@@ -162,7 +139,9 @@ function parsePush(raw: unknown): PushBody {
   if (kind !== "alert" && kind !== "background" && kind !== "liveactivity") {
     throw new FieldError("kind");
   }
-  const body: PushBody = { token: token.toLowerCase(), env, kind };
+  if (target !== undefined && target !== "app" && target !== "watch") throw new FieldError("target");
+  if (kind === "liveactivity" && target === "watch") throw new FieldError("target");
+  const body: PushBody = { token: token.toLowerCase(), env, kind, target: target ?? "app" };
   if (kind !== "liveactivity") body.ciphertext = ciphertext as string;
   if (collapseId !== undefined) body.collapseId = collapseId as string;
   if (kind === "liveactivity") {
@@ -171,39 +150,6 @@ function parsePush(raw: unknown): PushBody {
     throw new FieldError("liveActivity");
   }
   return body;
-}
-
-function parseLiveActivity(raw: unknown): PushBody["liveActivity"] {
-  if (!isObject(raw)) throw new FieldError("liveActivity");
-  const event = raw.event;
-  if (typeof event !== "string" || !(LIVE_EVENTS as readonly string[]).includes(event)) {
-    throw new FieldError("liveActivity.event");
-  }
-  const cs = raw.contentState;
-  if (!isObject(cs)) throw new FieldError("liveActivity.contentState");
-  const bib = cs.bib === null ? null : boundedString(cs.bib, "bib");
-  const state: ContentState = {
-    bib,
-    agent: boundedString(cs.agent, "agent"),
-    status: boundedString(cs.status, "status"),
-    waiting: nonNegativeInt(cs.waiting, "waiting"),
-    since: nonNegativeInt(cs.since, "since"),
-  };
-  return { event: event as (typeof LIVE_EVENTS)[number], contentState: state };
-}
-
-function boundedString(v: unknown, name: string): string {
-  if (typeof v !== "string" || v.length === 0 || v.length > MAX_STATE_STRING) {
-    throw new FieldError(`liveActivity.contentState.${name}`);
-  }
-  return v;
-}
-
-function nonNegativeInt(v: unknown, name: string): number {
-  if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) {
-    throw new FieldError(`liveActivity.contentState.${name}`);
-  }
-  return v;
 }
 
 function validCiphertext(v: unknown): v is string {

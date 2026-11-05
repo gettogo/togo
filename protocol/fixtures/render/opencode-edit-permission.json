@@ -1,0 +1,42 @@
+{
+  "name": "opencode/edit-permission",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "opencode",
+    "title": "Allow this edit?",
+    "body": "src/routes/user.ts",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "file",
+      "text": "src/routes/user.ts"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Allow once",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Allow always",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Reject",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 OpenCode",
+    "subtitle": "Allow this edit?",
+    "body": "src/routes/user.ts",
+    "category": "togo.request"
+  }
+}

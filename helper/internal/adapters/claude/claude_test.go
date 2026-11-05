@@ -33,7 +33,7 @@ func TestMapFixtures(t *testing.T) {
 		{"user_prompt_submit.json", "UserPromptSubmit", wire.HookData{}, local.EventPrompt, ""},
 		{"pre_tool_use.json", "PreToolUse", wire.HookData{Tool: "Bash"}, local.EventTool, ""},
 		{"post_tool_use.json", "PostToolUse", wire.HookData{Tool: "Write"}, local.EventToolDone, ""},
-		{"permission_request.json", "PermissionRequest", wire.HookData{Tool: "Bash", Command: "rm -rf node_modules"}, local.EventPermission, ""},
+		{"permission_request.json", "PermissionRequest", wire.HookData{Tool: "Bash", Command: "rm -rf node_modules", Subject: &wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf node_modules"}}, local.EventPermission, ""},
 		{"notification_permission.json", "Notification", wire.HookData{Message: "Claude needs your permission to use Bash"}, local.EventPermission, ""},
 		{"notification_idle.json", "Notification", wire.HookData{Message: "Claude is waiting for your input"}, local.EventAttention, ""},
 		{"stop.json", "Stop", wire.HookData{Message: "Done. All tests pass."}, local.EventStop, ""},
@@ -116,5 +116,44 @@ func TestAskForTitle(t *testing.T) {
 	a := AskFor(ev, 540)
 	if a.Title != "Allow Bash: rm -rf node_modules" || len(a.Options) != 2 || a.TimeoutSec != 540 {
 		t.Fatalf("ask %+v", a)
+	}
+}
+
+func TestPermissionSubjectKindFromTool(t *testing.T) {
+	cases := []struct {
+		tool, input string
+		want        *wire.Subject
+	}{
+		{"Bash", `{"command":"git push --force\n  origin main"}`, &wire.Subject{Kind: wire.SubjectCommand, Text: "git push --force\norigin main"}},
+		{"Edit", `{"file_path":"/Users/u/Проекты/app/main.go","old_string":"a","new_string":"b"}`, &wire.Subject{Kind: wire.SubjectFile, Text: "/Users/u/Проекты/app/main.go"}},
+		{"Write", `{"file_path":"notes.md","content":"SECRET"}`, &wire.Subject{Kind: wire.SubjectFile, Text: "notes.md"}},
+		{"WebFetch", `{"url":"https://example.com/a?b=c","prompt":"read it"}`, &wire.Subject{Kind: wire.SubjectURL, Text: "https://example.com/a?b=c"}},
+		{"mcp__db__query", `{"url":"postgres://x"}`, &wire.Subject{Kind: wire.SubjectText, Text: "postgres://x"}},
+		{"Bash", `{"command":"rm -rf ~/x‮gnp.txt"}`, &wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf ~/xgnp.txt"}},
+		{"Task", `{"description":"look around"}`, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.tool, func(t *testing.T) {
+			in := `{"session_id":"abc123","cwd":"/w","tool_name":"` + c.tool + `","tool_input":` + c.input + `}`
+			ev, _, err := Map("PermissionRequest", []byte(in), env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := ev.Data.Subject
+			switch {
+			case c.want == nil && got != nil:
+				t.Fatalf("subject = %+v, want none", *got)
+			case c.want != nil && (got == nil || *got != *c.want):
+				t.Fatalf("subject = %+v, want %+v", got, *c.want)
+			}
+			if got != nil {
+				if err := got.Validate(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if b, _ := json.Marshal(ev); strings.Contains(string(b), "SECRET") {
+				t.Fatalf("tool input leaked: %s", b)
+			}
+		})
 	}
 }

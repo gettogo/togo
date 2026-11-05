@@ -6,5 +6,9 @@
 	<array>
 		<string>group.app.togo</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)app.togo.shared</string>
+	</array>
 </dict>
 </plist>

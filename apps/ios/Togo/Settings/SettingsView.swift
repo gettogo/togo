@@ -7,6 +7,9 @@ import TogoTerminal
 struct SettingsValues: Equatable {
     var settings: AppSettings
     var machines: [SettingsMachine]
+    /// Removed machines still to be told to stop pushing.
+    var pendingRemovals: [PendingRemoval]
+    var notifications: NotificationValues
     /// False when no iCloud account is signed in, so sync cannot run.
     var iCloudAvailable: Bool
     /// "Face ID", "Touch ID", "Optic ID" or "passcode", from `BiometryName`.
@@ -17,6 +20,8 @@ struct SettingsValues: Equatable {
     init(
         settings: AppSettings = AppSettings(),
         machines: [SettingsMachine] = [],
+        pendingRemovals: [PendingRemoval] = [],
+        notifications: NotificationValues = NotificationValues(),
         iCloudAvailable: Bool = true,
         biometry: String = BiometryName.current,
         appVersion: String = Self.bundleVersion,
@@ -24,6 +29,8 @@ struct SettingsValues: Equatable {
     ) {
         self.settings = settings
         self.machines = machines
+        self.pendingRemovals = pendingRemovals
+        self.notifications = notifications
         self.iCloudAvailable = iCloudAvailable
         self.biometry = biometry
         self.appVersion = appVersion
@@ -55,19 +62,27 @@ struct SettingsActions {
     var removeMachine: (HostID) -> Void
     /// "Getting started": the presenter reopens the guide with `TutorialModel.reopen()`.
     var openGuide: () -> Void
+    /// Asks iOS for notification permission.
+    var turnOnNotifications: () -> Void
+    /// Stops trying to unpair a removed machine.
+    var forgetRemoval: (String) -> Void
 
     init(
         update: @escaping (AppSettings) -> Void,
         addMachine: @escaping () -> Void = {},
         editMachine: @escaping (HostID) -> Void = { _ in },
         removeMachine: @escaping (HostID) -> Void = { _ in },
-        openGuide: @escaping () -> Void = {}
+        openGuide: @escaping () -> Void = {},
+        turnOnNotifications: @escaping () -> Void = {},
+        forgetRemoval: @escaping (String) -> Void = { _ in }
     ) {
         self.update = update
         self.addMachine = addMachine
         self.editMachine = editMachine
         self.removeMachine = removeMachine
         self.openGuide = openGuide
+        self.turnOnNotifications = turnOnNotifications
+        self.forgetRemoval = forgetRemoval
     }
 }
 
@@ -88,6 +103,7 @@ struct SettingsView: View {
             .groupedRows()
             Section {
                 row(.machines)
+                row(.notifications)
                 row(.sync)
                 row(.privacy)
             }
@@ -124,7 +140,13 @@ struct SettingsView: View {
         case .machines:
             MachinesSettingsView(
                 machines: values.machines, add: actions.addMachine,
-                edit: actions.editMachine, remove: actions.removeMachine
+                edit: actions.editMachine, remove: actions.removeMachine,
+                removing: values.pendingRemovals, forgetRemoval: actions.forgetRemoval
+            )
+        case .notifications:
+            NotificationSettingsView(
+                settings: settings, notifications: values.notifications, update: actions.update,
+                turnOn: actions.turnOnNotifications
             )
         case .sync:
             SyncSettingsView(settings: settings, iCloudAvailable: values.iCloudAvailable, update: actions.update)
@@ -181,6 +203,7 @@ struct SettingsView: View {
         case .shortcuts: settingsText("settings.builder.title", "New shortcut")
         case .gestures: settingsText("settings.gestures.title", "Gestures")
         case .machines: settingsText("settings.machines.title", "Machines")
+        case .notifications: settingsText("settings.notifications.title", "Notifications")
         case .sync: settingsText("settings.sync.title", "iCloud sync")
         case .privacy: settingsText("settings.privacy.title", "Privacy")
         case .about: settingsText("settings.about.title", "About")
@@ -194,6 +217,7 @@ struct SettingsView: View {
         case .shortcuts: "command"
         case .gestures: "hand.tap"
         case .machines: "desktopcomputer"
+        case .notifications: "bell"
         case .sync: "icloud"
         case .privacy: "lock"
         case .about: "info.circle"
@@ -207,6 +231,8 @@ struct SettingsView: View {
             return ThemeChoice.all(imported: settings.customThemes).first { $0.id == settings.themeID }?.name
         case .machines:
             return values.machines.isEmpty ? settingsText("settings.machines.none", "None") : String(values.machines.count)
+        case .notifications:
+            return values.notifications.authorization.allowsPush ? settingsText("settings.on", "On") : settingsText("settings.off", "Off")
         case .sync:
             guard values.iCloudAvailable else { return settingsText("settings.sync.unavailable.short", "Signed out") }
             return settings.syncEnabled ? settingsText("settings.on", "On") : settingsText("settings.off", "Off")
@@ -278,7 +304,7 @@ extension SettingsValues {
                     helper: .outdated(found: "0.2.1")
                 ),
             ],
-            biometry: "Face ID", appVersion: "0.1.0 (1)"
+            notifications: .sample, biometry: "Face ID", appVersion: "0.1.0 (1)"
         )
     }
 }

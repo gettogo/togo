@@ -1,0 +1,38 @@
+{
+  "name": "claude/plan-approval",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "claude",
+    "title": "Would you like to proceed?",
+    "body": "Here is the plan:\n1. Add a retry wrapper around fetchConfig\n2. Cover the wrapper with unit tests",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes, and auto-accept edits",
+        "role": "approve_always"
+      },
+      {
+        "n": 2,
+        "label": "Yes, and manually approve edits",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "No, keep planning",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Claude Code",
+    "subtitle": "Would you like to proceed?",
+    "body": "Here is the plan:\n1. Add a retry wrapper around fetchConfig\n2. Cover the wrapper with unit tests",
+    "category": "togo.request.deny"
+  }
+}

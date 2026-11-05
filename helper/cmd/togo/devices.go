@@ -58,13 +58,20 @@ func runDevices(args []string, env map[string]string, stdout, stderr io.Writer) 
 		// Tokens and keys stay in the store; only what identifies a phone
 		// to its owner is printed.
 		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tDEVICE\tENV\tPAIRED\tSTATUS")
+		fmt.Fprintln(tw, "NAME\tDEVICE\tPLATFORM\tENV\tLIVE\tCOMMAND\tPAIRED\tSTATUS")
 		for _, d := range list {
 			status := "active"
 			if d.Dead {
 				status = "unregistered"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", d.Name, d.DeviceID, d.Env, d.PairedAt.Local().Format(time.DateOnly), status)
+			// Live Activities run on iOS only, and the command opt-in
+			// means nothing without them.
+			live, command := "-", "-"
+			if d.EffectivePlatform() == wire.PlatformIOS {
+				live, command = onOff(d.LiveActivityToken != "" || d.LiveActivityStartToken != ""), onOff(d.LiveActivityCommand)
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", d.Name, d.DeviceID, d.EffectivePlatform(), d.Env,
+				live, command, d.PairedAt.Local().Format(time.DateOnly), status)
 		}
 		if err := tw.Flush(); err != nil {
 			return fail(stderr, err)
@@ -81,6 +88,13 @@ func runDevices(args []string, env map[string]string, stdout, stderr io.Writer) 
 		return exitOK
 	}
 	return usageError(stderr, errors.New("devices takes ls or revoke <deviceId>"))
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
 
 func runPush(ctx context.Context, args []string, env map[string]string, stdout, stderr io.Writer) int {

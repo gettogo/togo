@@ -108,3 +108,13 @@ struct SnapshotMapper {
         }
     }
 }
+
+extension LiveServices {
+    /// What the app shows for a stored machine.
+    static func view(of record: HostRecord) -> HostRecordView {
+        HostRecordView(
+            id: record.id, name: record.profile.name, symbol: HostSymbol(rawValue: record.symbol) ?? .laptop,
+            address: record.profile.endpoint.host, etAvailable: record.profile.etAvailable
+        )
+    }
+}

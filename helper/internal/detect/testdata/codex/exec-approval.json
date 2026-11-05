@@ -4,6 +4,10 @@
   "match": true,
   "kind": "permission",
   "title": "Would you like to run the following command?",
+  "subject": {
+    "kind": "command",
+    "text": "cargo test --workspace"
+  },
   "options": [
     {
       "n": 1,

@@ -174,7 +174,7 @@ func newHarness(t *testing.T, mutate func(*harness)) *harness {
 	h := &harness{f: f, answers: make(chan answered, 16), logs: &logBuf{}}
 	h.relay = newFakeRelay(t, f.keys)
 	f.devices[0].RelayURL = h.relay.srv.URL + "/"
-	h.devs = f.devices
+	h.devs = append([]Device(nil), f.devices...)
 	if mutate != nil {
 		mutate(h)
 	}
@@ -212,9 +212,17 @@ func (h *harness) devices() []Device {
 	return append([]Device(nil), h.devs...)
 }
 
+// setDevices stores a copy, so the caller may keep changing d.
 func (h *harness) setDevices(d []Device) {
 	h.devMu.Lock()
-	h.devs = d
+	h.devs = append([]Device(nil), d...)
+	h.devMu.Unlock()
+}
+
+// setDead marks the first device dead or alive under the lock.
+func (h *harness) setDead(dead bool) {
+	h.devMu.Lock()
+	h.devs[0].Dead = dead
 	h.devMu.Unlock()
 }
 
@@ -378,17 +386,14 @@ func TestNoConnectionWithoutDevices(t *testing.T) {
 	if n := h.relay.dialCount(); n != 0 {
 		t.Fatalf("%d dials with no live device", n)
 	}
-	d := h.devices()
-	d[0].Dead = false
-	h.setDevices(d)
+	h.setDead(false)
 	select {
 	case <-h.relay.conned:
 	case <-time.After(5 * time.Second):
 		t.Fatal("no connection after a live device appeared")
 	}
 	// Revoking the last device closes the connection and stops redialing.
-	d[0].Dead = true
-	h.setDevices(d)
+	h.setDead(true)
 	time.Sleep(100 * time.Millisecond)
 	n := h.relay.dialCount()
 	time.Sleep(150 * time.Millisecond)

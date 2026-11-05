@@ -12,11 +12,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/gettogo/togo/helper/internal/detect"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
@@ -64,26 +66,67 @@ type payload struct {
 	NotifyLastMessage    *string `json:"last-assistant-message"`
 }
 
-// toolIn tolerates tool_input being any JSON value.
-type toolIn struct{ Command string }
+// toolIn tolerates tool_input being any JSON value. It keeps the command,
+// a file path, and the text of an apply_patch call, whose file names are
+// all that is shown of it.
+type toolIn struct{ Command, FilePath, Patch string }
 
 func (t *toolIn) UnmarshalJSON(b []byte) error {
 	var o struct {
-		Command json.RawMessage `json:"command"`
+		Command  json.RawMessage `json:"command"`
+		FilePath string          `json:"file_path"`
+		Path     string          `json:"path"`
+		Input    string          `json:"input"`
+		Patch    string          `json:"patch"`
 	}
-	if json.Unmarshal(b, &o) != nil || len(o.Command) == 0 {
+	if json.Unmarshal(b, &o) != nil {
+		return nil
+	}
+	t.FilePath = firstNonEmpty(o.FilePath, o.Path)
+	t.Patch = firstNonEmpty(o.Patch, o.Input)
+	if len(o.Command) == 0 {
 		return nil
 	}
 	var s string
 	if json.Unmarshal(o.Command, &s) == nil {
-		t.Command = s
+		if strings.HasPrefix(strings.TrimSpace(s), "*** Begin Patch") {
+			t.Patch = s
+		} else {
+			t.Command = s
+		}
 		return nil
 	}
 	var argv []string
 	if json.Unmarshal(o.Command, &argv) == nil {
+		if len(argv) == 2 && argv[0] == "apply_patch" {
+			t.Patch = argv[1]
+			return nil
+		}
 		t.Command = strings.Join(argv, " ")
 	}
 	return nil
+}
+
+var patchFile = regexp.MustCompile(`(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$`)
+
+// subject is what the call asks about: the files a patch touches, else the
+// command or path, of the kind the tool implies.
+func (t toolIn) subject(tool string) *wire.Subject {
+	if t.Patch != "" {
+		var files []string
+		for _, g := range patchFile.FindAllStringSubmatch(t.Patch, -1) {
+			files = append(files, g[1])
+		}
+		return detect.NewSubject(wire.SubjectFile, strings.Join(files, "\n"))
+	}
+	return detect.NewSubject(detect.SubjectKindForTool(tool), firstNonEmpty(t.Command, t.FilePath))
+}
+
+func firstNonEmpty(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	return b
 }
 
 // Map converts one payload. event is the Codex hook name (UserPromptSubmit,
@@ -122,6 +165,7 @@ func (a *Adapter) Map(event string, stdin io.Reader, env map[string]string) (wir
 	case "permission":
 		ev.Data.Tool = truncate(p.ToolName, 64)
 		ev.Data.Command = truncate(p.ToolInput.Command, maxCommandRune)
+		ev.Data.Subject = p.ToolInput.subject(p.ToolName)
 	case "stop":
 		msg := p.LastAssistantMessage
 		if msg == nil {

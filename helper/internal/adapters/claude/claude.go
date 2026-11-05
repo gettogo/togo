@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gettogo/togo/helper/internal/detect"
 	"github.com/gettogo/togo/helper/internal/local"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -87,7 +88,9 @@ func Map(event string, stdin []byte, env map[string]string) (wire.HookEvent, Out
 		ev.Event, ev.Data.Tool = local.EventToolDone, clean(p.ToolName, maxTool)
 	case "PermissionRequest":
 		ev.Event, ev.Data.Tool = local.EventPermission, clean(p.ToolName, maxTool)
-		ev.Data.Command = summary(p.ToolInput)
+		what := target(p.ToolInput)
+		ev.Data.Command = clean(what, maxCommand)
+		ev.Data.Subject = detect.NewSubject(detect.SubjectKindForTool(p.ToolName), what)
 	case "Notification":
 		ev.Data.Message = clean(p.Message, maxMessage)
 		switch p.NotificationType {
@@ -162,9 +165,9 @@ func Decision(answer string) []byte {
 	return b
 }
 
-// summary names what a tool call touches without forwarding its input: the
-// shell command, or the file path for file tools.
-func summary(raw json.RawMessage) string {
+// target names what a tool call touches without forwarding the rest of its
+// input: the shell command, the file path for file tools, or the URL.
+func target(raw json.RawMessage) string {
 	var in struct {
 		Command  string `json:"command"`
 		FilePath string `json:"file_path"`
@@ -173,7 +176,7 @@ func summary(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &in) != nil {
 		return ""
 	}
-	return clean(firstNonEmpty(in.Command, firstNonEmpty(in.FilePath, in.URL)), maxCommand)
+	return firstNonEmpty(in.Command, firstNonEmpty(in.FilePath, in.URL))
 }
 
 // model reads either the SessionStart string or the status line object.

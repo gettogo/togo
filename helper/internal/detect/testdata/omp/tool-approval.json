@@ -4,6 +4,10 @@
   "match": true,
   "kind": "permission",
   "title": "Approve this tool call?",
+  "subject": {
+    "kind": "file",
+    "text": "docs/notes/todo.md"
+  },
   "options": [
     {
       "n": 1,

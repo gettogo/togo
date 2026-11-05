@@ -109,6 +109,14 @@ struct RootView: View {
                     helper: sections[host.id]?.helper ?? .checking
                 )
             },
+            pendingRemovals: store.services.pendingRemovals,
+            notifications: NotificationValues(
+                authorization: store.services.pushAuthorization,
+                machines: NotificationValues.machines(
+                    store.controlCenter.machines, paired: store.services.pairedMachines,
+                    commandsOn: store.services.confirmedCommands, pending: store.services.pendingCommands
+                )
+            ),
             iCloudAvailable: FileManager.default.ubiquityIdentityToken != nil
         )
     }
@@ -135,7 +143,9 @@ struct RootView: View {
                     }
                 }
             },
-            openGuide: openGuide
+            openGuide: openGuide,
+            turnOnNotifications: { Task { await store.services.turnOnNotifications() } },
+            forgetRemoval: { store.services.forgetRemoval($0) }
         )
     }
 }

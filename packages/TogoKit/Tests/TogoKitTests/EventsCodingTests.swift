@@ -141,6 +141,94 @@ struct EventsCodingTests {
         }
     }
 
+    static func pendingFixture(_ name: String) throws -> [String: JSONValue] {
+        let url = FixtureTests.fixturesDirectory.appending(path: "pending/\(name).json")
+        guard case .object(let fields) = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: url)) else {
+            throw CocoaError(.coderReadCorrupt)
+        }
+        return fields
+    }
+
+    @Test func approvalWithSubjectDecodes() throws {
+        guard case .object(let response)? = try Self.pendingFixture("approval.list-subject")["response"],
+              let result = response["result"]
+        else {
+            Issue.record("approval.list-subject has no result")
+            return
+        }
+        let list = try JSONDecoder().decode(ApprovalList.self, from: JSONEncoder().encode(result))
+        let approval = try #require(list.approvals.first)
+        #expect(approval.subject == Subject(kind: .command, text: "npm test"))
+        #expect(approval.detail == approval.subject?.text)
+        let reencoded = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(list))
+        #expect(reencoded == result)
+    }
+
+    @Test func approvalWithoutSubjectDecodes() throws {
+        let approval = try JSONDecoder().decode(Approval.self, from: Data(Self.approval.utf8))
+        #expect(approval.subject == nil)
+        #expect(approval.title == "Run make test?")
+
+        let unknownKind = Self.approval.replacingOccurrences(
+            of: #""detail":null"#, with: #""detail":"x","subject":{"kind":"diff","text":"x"}"#)
+        #expect(try JSONDecoder().decode(Approval.self, from: Data(unknownKind.utf8)).subject == nil)
+    }
+
+    static func subjectJSON(_ text: String, kind: String = "command") throws -> Data {
+        try JSONEncoder().encode(JSONValue.object(["kind": .string(kind), "text": .string(text)]))
+    }
+
+    @Test func subjectAcceptsNewlinesAndScalarLimit() throws {
+        let lines = try JSONDecoder().decode(Subject.self, from: Self.subjectJSON("npm test\nnpm run lint"))
+        #expect(lines.text == "npm test\nnpm run lint")
+        // 1024 two-byte scalars: the limit counts Unicode scalars, as the helper does.
+        let long = String(repeating: "é", count: 1024)
+        #expect(try JSONDecoder().decode(Subject.self, from: Self.subjectJSON(long, kind: "text")).text == long)
+    }
+
+    @Test(arguments: [
+        "", String(repeating: "a", count: 1025), String(repeating: "é", count: 1025),
+        "a\u{1B}[2Jb", "a\rb", "a\tb", "a\u{7F}b", "a\u{85}b", "a\u{7}b", "\u{0}",
+        "rm -rf ~/x\u{202E}gnp.txt", "npm\u{200B}test", "\u{2066}ls\u{2069}", "\u{FEFF}ls", "a\u{61C}b",
+    ])
+    func subjectRejectsBadText(_ text: String) throws {
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(Subject.self, from: Self.subjectJSON(text))
+        }
+    }
+
+    @Test func subjectRejectsUnknownKindAndApprovalKeepsGoing() throws {
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(Subject.self, from: Self.subjectJSON("x", kind: "diff"))
+        }
+        let escaped = Self.approval.replacingOccurrences(
+            of: #""detail":null"#, with: #""detail":"x","subject":{"kind":"command","text":"rm\u001b[2J"}"#)
+        let approval = try JSONDecoder().decode(Approval.self, from: Data(escaped.utf8))
+        #expect(approval.subject == nil)
+        #expect(approval.detail == "x")
+    }
+
+    @Test func pairParamsEncodeWatchPlatform() throws {
+        guard case .object(let request)? = try Self.pendingFixture("push.pair-watch")["request"],
+              let params = request["params"]
+        else {
+            Issue.record("push.pair-watch has no params")
+            return
+        }
+        let typed = try JSONDecoder().decode(PushPairParams.self, from: JSONEncoder().encode(params))
+        #expect(typed.platform == .watchos)
+        #expect(try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(typed)) == params)
+
+        let old = #"""
+            {"deviceId":"d","name":"n","x25519":"k","approvalKey":"k","apnsToken":"ab","env":"sandbox",\#
+            "relayUrl":"https://relay.example.test"}
+            """#
+        let decoded = try JSONDecoder().decode(PushPairParams.self, from: Data(old.utf8))
+        #expect(decoded.platform == .ios)
+        #expect(decoded.liveActivityCommand == false)
+        #expect(decoded.liveActivityStartToken == nil)
+    }
+
     private static func kind(of event: HelperEvent) -> String {
         switch event {
         case .session: "session"

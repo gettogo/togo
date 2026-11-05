@@ -14,10 +14,15 @@ const (
 	PushClear    = "clear"
 )
 
+// LiveWorking is the Live Activity status while an agent works with nothing
+// waiting; the other statuses are PushNeedsYou and PushDone.
+const LiveWorking = "working"
+
 // PushPlaintext is sealed for one device and sent through the relay.
 // RequestID and Options are set for needs_you; clear sets RequestID only and
-// leaves Title and Body empty; the other kinds set neither. TS is Unix
-// milliseconds.
+// leaves Title and Body empty; the other kinds set neither. Subject is set
+// for needs_you when the approval has one. Host is the machine's short
+// display name. TS is Unix milliseconds.
 type PushPlaintext struct {
 	V         int      `json:"v"`
 	Kind      string   `json:"kind"`
@@ -29,6 +34,8 @@ type PushPlaintext struct {
 	RequestID string   `json:"requestId,omitempty"`
 	Options   []Option `json:"options,omitempty"`
 	TS        int64    `json:"ts"`
+	Subject   *Subject `json:"subject,omitempty"`
+	Host      *string  `json:"host,omitempty"`
 }
 
 // MarshalJSON writes options as [] for needs_you even when there are none,
@@ -50,8 +57,12 @@ func (p PushPlaintext) MarshalJSON() ([]byte, error) {
 
 // AnswerPlaintext is what the phone seals for the host and posts to the
 // relay mailbox. Decision is approve, deny or option:<n> only. TS is Unix
-// milliseconds; Sig is base64url without padding.
+// milliseconds; Sig is base64url without padding. Senders omit type on
+// answers, because helpers that predate it reject unknown fields; receivers
+// accept it absent or PlaintextAnswer, and only RegisterPlaintext carries a
+// type. MarshalJSON never writes it.
 type AnswerPlaintext struct {
+	Type      string `json:"type,omitempty"`
 	RequestID string `json:"requestId"`
 	Decision  string `json:"decision"`
 	TS        int64  `json:"ts"`
@@ -64,4 +75,11 @@ type AnswerPlaintext struct {
 // protocol change.
 func ApprovalSignedBytes(hostID, requestID, decision string, ts int64) []byte {
 	return []byte("togo-approval/v1\n" + hostID + "\n" + requestID + "\n" + decision + "\n" + strconv.FormatInt(ts, 10))
+}
+
+// MarshalJSON drops Type, so an answer reads the same to every helper.
+func (a AnswerPlaintext) MarshalJSON() ([]byte, error) {
+	type plain AnswerPlaintext
+	a.Type = ""
+	return json.Marshal(plain(a))
 }

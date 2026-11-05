@@ -58,6 +58,13 @@ struct SettingsSnapshotTests {
         assertScreen(page(.machines, checking), named: "settings-machines-checking")
     }
 
+    @Test func machinesRemoving() {
+        var removing = values
+        removing.machines = [values.machines[0]]
+        removing.pendingRemovals = [PendingRemoval(id: "h_build", name: "Build box")]
+        assertScreen(named: "settings-machines-removing") { page(.machines, removing) }
+    }
+
     @Test func noMachines() {
         var empty = values
         empty.machines = []

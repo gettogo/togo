@@ -9,6 +9,7 @@ DerivedData/
 helper/bin/
 apps/ios/Togo.xcodeproj/
 apps/ios/Config/Signing.local.xcconfig
+apps/ios/Config/Relay.xcconfig
 
 # Local tooling, never committed
 .claude/

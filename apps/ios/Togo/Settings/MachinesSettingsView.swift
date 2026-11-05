@@ -25,11 +25,14 @@ struct MachinesSettingsView: View {
     let add: () -> Void
     let edit: (HostID) -> Void
     let remove: (HostID) -> Void
+    /// Removed machines still to be told to stop pushing to this iPhone.
+    var removing: [PendingRemoval] = []
+    var forgetRemoval: (String) -> Void = { _ in }
     @State private var removal = MachineRemoval()
 
     var body: some View {
         Group {
-            if machines.isEmpty {
+            if machines.isEmpty && removing.isEmpty {
                 StateView(
                     kind: .empty,
                     title: settingsText("settings.machines.empty.title", "No machines yet"),
@@ -92,8 +95,49 @@ struct MachinesSettingsView: View {
                 Text(settingsText("settings.machines.footer", "Tap a machine to edit it. Swipe left to remove it."))
             }
             .groupedRows()
+            if !removing.isEmpty {
+                PendingRemovalsSection(removals: removing, forget: forgetRemoval)
+            }
         }
         .groupedList()
+    }
+}
+
+/// Removed machines that have not yet been told to stop sending notifications to this iPhone.
+private struct PendingRemovalsSection: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let removals: [PendingRemoval]
+    let forget: (String) -> Void
+
+    var body: some View {
+        Section {
+            ForEach(removals) { removal in
+                // At accessibility sizes the button goes under the text so neither breaks mid-word.
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+                layout {
+                    Text(settingsText(
+                        "settings.machines.removing", "Removing \(removal.name). Finishes next time it's reachable."
+                    ))
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Button(settingsText("settings.machines.forgetNow", "Forget now")) { forget(removal.id) }
+                        .font(.subheadline)
+                        .buttonStyle(.borderless)
+                }
+                .padding(.vertical, 4)
+                .frame(minHeight: 44)
+            }
+        } footer: {
+            Text(settingsText(
+                "settings.machines.forgetNow.footer",
+                "After Forget now, notifications may continue until you run togo devices revoke on that machine."
+            ))
+        }
+        .groupedRows()
     }
 }
 

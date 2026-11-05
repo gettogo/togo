@@ -1,0 +1,195 @@
+{
+  "description": "Text cleaning table shared by the helper (detect.CleanLine) and the app (PromptText.clean with the default of three lines). in is the raw text, want the cleaned text.",
+  "cases": [
+    {
+      "name": "box border around a command",
+      "in": "│ rm -rf ./build │",
+      "want": "rm -rf ./build"
+    },
+    {
+      "name": "boxed prompt",
+      "in": "╭──────────────────╮\n│ Bash command     │\n│   npm test       │\n╰──────────────────╯",
+      "want": "Bash command\nnpm test"
+    },
+    {
+      "name": "block element banner",
+      "in": "▐▛███▜▌ Claude Code ▝▜█████▛▘",
+      "want": "Claude Code"
+    },
+    {
+      "name": "heavy cursor",
+      "in": "❯ 1. Yes",
+      "want": "1. Yes"
+    },
+    {
+      "name": "single angle cursor",
+      "in": "› 2. No",
+      "want": "2. No"
+    },
+    {
+      "name": "triangle cursor",
+      "in": "▸ Allow once",
+      "want": "Allow once"
+    },
+    {
+      "name": "greater-than cursor",
+      "in": "> Deny",
+      "want": "Deny"
+    },
+    {
+      "name": "cursor inside a border",
+      "in": "│ ❯ 1. Yes │",
+      "want": "1. Yes"
+    },
+    {
+      "name": "only a leading cursor",
+      "in": "a > b",
+      "want": "a > b"
+    },
+    {
+      "name": "column alignment",
+      "in": "Allow    Bash\t\tnpm   test   ",
+      "want": "Allow Bash npm test"
+    },
+    {
+      "name": "blank lines dropped",
+      "in": "  one\n\n\n   two  ",
+      "want": "one\ntwo"
+    },
+    {
+      "name": "carriage return",
+      "in": "a\r\nb",
+      "want": "a\nb"
+    },
+    {
+      "name": "at most three lines",
+      "in": "> one\n› two\n▸ three\nfour",
+      "want": "one\ntwo\nthree"
+    },
+    {
+      "name": "border only",
+      "in": "╭──╮\n│  │\n╰──╯",
+      "want": ""
+    },
+    {
+      "name": "non-ASCII path",
+      "in": "~/Проекты/app",
+      "want": "~/Проекты/app"
+    },
+    {
+      "name": "accents and CJK",
+      "in": "café/日本語 ✓",
+      "want": "café/日本語 ✓"
+    },
+    {
+      "name": "control characters become spaces",
+      "in": "a\u0007b\u0085c",
+      "want": "a b c"
+    },
+    {
+      "name": "ANSI colour",
+      "in": "\u001b[31mrm -rf x\u001b[0m",
+      "want": "rm -rf x"
+    },
+    {
+      "name": "OSC title",
+      "in": "\u001b]0;title\u0007ls",
+      "want": "ls"
+    },
+    {
+      "name": "RLO reverses a command",
+      "in": "rm -rf ~/x\u202egnp.txt",
+      "want": "rm -rf ~/xgnp.txt"
+    },
+    {
+      "name": "isolates and marks",
+      "in": "\u2066ls\u2069 \u200e-la\u200f \u061cx",
+      "want": "ls -la x"
+    },
+    {
+      "name": "zero-width characters",
+      "in": "npm\u200b \u200ctest\u200d\u2060\ufeff",
+      "want": "npm test"
+    },
+    {
+      "name": "embeddings",
+      "in": "\u202aa\u202bb\u202cc\u202dd",
+      "want": "abcd"
+    },
+    {
+      "name": "heavy vertical edges",
+      "in": "┃ npm install ┃",
+      "want": "npm install"
+    },
+    {
+      "name": "double-line edges",
+      "in": "║ make test ║",
+      "want": "make test"
+    },
+    {
+      "name": "nested boxes",
+      "in": "│ │ src/config.ts      │ │",
+      "want": "src/config.ts"
+    },
+    {
+      "name": "box rule between lines",
+      "in": "one\n──────\ntwo",
+      "want": "one\ntwo"
+    },
+    {
+      "name": "shading blocks",
+      "in": "░▒▓ build ▓▒░",
+      "want": "build"
+    },
+    {
+      "name": "five lines keep three without ellipsis",
+      "in": "a\nb\nc\nd\ne",
+      "want": "a\nb\nc"
+    },
+    {
+      "name": "tab alignment in a diff gutter",
+      "in": "12\texport const x = 1;",
+      "want": "12 export const x = 1;"
+    },
+    {
+      "name": "non-breaking spaces",
+      "in": "git\u00a0\u00a0status",
+      "want": "git status"
+    },
+    {
+      "name": "cursor before an aligned label",
+      "in": "❯   1.  Yes,   proceed",
+      "want": "1. Yes, proceed"
+    },
+    {
+      "name": "cursor without a space",
+      "in": "❯1. Yes",
+      "want": "1. Yes"
+    },
+    {
+      "name": "cursor alone",
+      "in": "❯",
+      "want": ""
+    },
+    {
+      "name": "vertical tab and form feed",
+      "in": "a\u000bb\fc",
+      "want": "a b c"
+    },
+    {
+      "name": "lone escape",
+      "in": "a\u001bb",
+      "want": "a b"
+    },
+    {
+      "name": "CSI cut before its final byte",
+      "in": "ls\u001b[31",
+      "want": "ls"
+    },
+    {
+      "name": "blank carriage-return line",
+      "in": "x\r\n\r\ny",
+      "want": "x\ny"
+    }
+  ]
+}

@@ -138,6 +138,10 @@ func (s *Service) validatePair(p wire.PairParams) error {
 		return invalid("apnsToken must be 64-200 lowercase hex characters")
 	case p.LiveActivityToken != "" && !tokenRe.MatchString(p.LiveActivityToken):
 		return invalid("liveActivityToken must be 64-200 lowercase hex characters")
+	case p.LiveActivityStartToken != "" && !tokenRe.MatchString(p.LiveActivityStartToken):
+		return invalid("liveActivityStartToken must be 64-200 lowercase hex characters")
+	case p.Platform != "" && p.Platform != wire.PlatformIOS && p.Platform != wire.PlatformWatch:
+		return invalid("platform must be ios or watchos")
 	case p.Env != wire.EnvSandbox && p.Env != wire.EnvProduction:
 		return invalid("env must be sandbox or production")
 	case !s.validRelay(p.RelayURL):

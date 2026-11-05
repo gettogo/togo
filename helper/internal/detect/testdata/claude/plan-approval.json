@@ -4,6 +4,7 @@
   "match": true,
   "kind": "permission",
   "title": "Would you like to proceed?",
+  "subject": null,
   "options": [
     {
       "n": 1,

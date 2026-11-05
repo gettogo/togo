@@ -1,0 +1,41 @@
+{
+  "description": "A Watch pairs itself. Same harness and host keys as push.pair; the Watch sends platform watchos and no Live Activity fields. Pending: runs once the helper stores the platform.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "push.pair",
+    "params": {
+      "deviceId": "dev_test-1",
+      "name": "Test Watch",
+      "x25519": "eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo",
+      "approvalKey": "ERERERERERERERERERERERERERERERERERERERERERE",
+      "apnsToken": "abababababababababababababababababababababababababababababababab",
+      "env": "sandbox",
+      "relayUrl": "https://relay.example.test",
+      "platform": "watchos"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "hostId": "h_mmg42klgyqzwneiskrelxms3j7",
+      "hostKey": "NYBy1jZYgNGu6jKa35EhODhR7SGijjt16WXQ0s0WYlQ"
+    }
+  }
+}

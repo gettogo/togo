@@ -3018,6 +3018,28 @@
         }
       }
     },
+    "settings.machines.forgetNow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forget now"
+          }
+        }
+      }
+    },
+    "settings.machines.forgetNow.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After Forget now, notifications may continue until you run togo devices revoke on that machine."
+          }
+        }
+      }
+    },
     "settings.machines.none" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3073,6 +3095,17 @@
         }
       }
     },
+    "settings.machines.removing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removing %@. Finishes next time it's reachable."
+          }
+        }
+      }
+    },
     "settings.machines.row.hint" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3091,6 +3124,314 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Machines"
+          }
+        }
+      }
+    },
+    "settings.notifications.approveUnlocked" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approve without unlocking"
+          }
+        }
+      }
+    },
+    "settings.notifications.approveUnlocked.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anyone holding your locked iPhone could approve commands."
+          }
+        }
+      }
+    },
+    "settings.notifications.commands" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show command text"
+          }
+        }
+      }
+    },
+    "settings.notifications.commands.alert" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show commands in Live Activities?"
+          }
+        }
+      }
+    },
+    "settings.notifications.commands.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "settings.notifications.commands.confirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show commands"
+          }
+        }
+      }
+    },
+    "settings.notifications.commands.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Activities can't be encrypted. With this on, the command text passes the relay unencrypted. Use it with a relay you run yourself."
+          }
+        }
+      }
+    },
+    "settings.notifications.commands.pendingOff" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turns off when %@ receives it"
+          }
+        }
+      }
+    },
+    "settings.notifications.commands.pendingOn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turns on when %@ receives it"
+          }
+        }
+      }
+    },
+    "settings.notifications.denied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off in iOS Settings"
+          }
+        }
+      }
+    },
+    "settings.notifications.live" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Activities"
+          }
+        }
+      }
+    },
+    "settings.notifications.live.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows what each machine is doing on the Lock Screen and in the Dynamic Island."
+          }
+        }
+      }
+    },
+    "settings.notifications.machines" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Machines"
+          }
+        }
+      }
+    },
+    "settings.notifications.needsHelper" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs the Togo helper"
+          }
+        }
+      }
+    },
+    "settings.notifications.notAsked" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not asked yet"
+          }
+        }
+      }
+    },
+    "settings.notifications.notPaired" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not paired yet"
+          }
+        }
+      }
+    },
+    "settings.notifications.offline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline"
+          }
+        }
+      }
+    },
+    "settings.notifications.openSettings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
+    "settings.notifications.paired" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paired"
+          }
+        }
+      }
+    },
+    "settings.notifications.relay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relay"
+          }
+        }
+      }
+    },
+    "settings.notifications.relay.field" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relay address"
+          }
+        }
+      }
+    },
+    "settings.notifications.relay.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications are sealed on your machine and opened on this iPhone, so the relay can't read them. It does see when they're sent, this iPhone's push address, and command text where you turn it on."
+          }
+        }
+      }
+    },
+    "settings.notifications.relay.hosted" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Togo relay"
+          }
+        }
+      }
+    },
+    "settings.notifications.relay.invalid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use an https address, like https://relay.example.com."
+          }
+        }
+      }
+    },
+    "settings.notifications.relay.own" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your own relay"
+          }
+        }
+      }
+    },
+    "settings.notifications.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        }
+      }
+    },
+    "settings.notifications.tooOld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Helper too old for notifications"
+          }
+        }
+      }
+    },
+    "settings.notifications.turnOn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on"
           }
         }
       }

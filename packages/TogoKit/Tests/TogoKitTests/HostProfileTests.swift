@@ -8,13 +8,13 @@ struct HostProfileTests {
         {
           "id": "6F1C2D4E-8A9B-4C3D-9E0F-112233445566",
           "name": "studio",
-          "endpoint": {"host": "studio.local", "user": "jamie"},
+          "endpoint": {"host": "studio.local", "user": "sam"},
           "auth": {"password": {}}
         }
         """
         let profile = try JSONDecoder().decode(HostProfile.self, from: Data(json.utf8))
         #expect(profile.id == UUID(uuidString: "6F1C2D4E-8A9B-4C3D-9E0F-112233445566"))
-        #expect(profile.endpoint == HostEndpoint(host: "studio.local", port: 22, user: "jamie"))
+        #expect(profile.endpoint == HostEndpoint(host: "studio.local", port: 22, user: "sam"))
         #expect(profile.jumps.isEmpty)
         #expect(profile.auth == .password)
         #expect(profile.transport == .auto)

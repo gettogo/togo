@@ -2,6 +2,9 @@
   "name": "togo-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  // Logs never hold tokens or ciphertext.
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
   "vars": {
     // Bundle id of the iOS app; APNs rejects pushes whose topic differs.
     "APNS_TOPIC": "app.togo.Togo"

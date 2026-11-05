@@ -1,0 +1,42 @@
+{
+  "name": "omp/tool-approval",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "omp",
+    "title": "Approve this tool call?",
+    "body": "docs/notes/todo.md",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "file",
+      "text": "docs/notes/todo.md"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Approve",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Approve for this session",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Deny",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 OMP",
+    "subtitle": "Approve this tool call?",
+    "body": "docs/notes/todo.md",
+    "category": "togo.request"
+  }
+}

@@ -4,6 +4,10 @@
   "match": true,
   "kind": "permission",
   "title": "Allow this edit?",
+  "subject": {
+    "kind": "file",
+    "text": "src/routes/user.ts"
+  },
   "options": [
     {
       "n": 1,

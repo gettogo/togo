@@ -86,6 +86,7 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 	}
 	p := Prompt{Title: strings.TrimSpace(lines[h]), Keys: map[int][]string{}}
 	p.Detail = detail(lines, boxed, h, m.start)
+	p.Subject = subjectOf(lines, boxed, h, m.start)
 	hasRole := false
 	for i, l := range m.labels {
 		n := i + 1

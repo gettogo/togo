@@ -157,7 +157,7 @@ enum AppSheet: Identifiable, Hashable, Sendable {
 }
 
 enum SettingsPage: Hashable, Sendable {
-    case terminal, keyboard, shortcuts, gestures, machines, sync, privacy, about
+    case terminal, keyboard, shortcuts, gestures, machines, notifications, sync, privacy, about
 }
 
 /// One machine's complete view at `at`. Applying it replaces everything the store knew about

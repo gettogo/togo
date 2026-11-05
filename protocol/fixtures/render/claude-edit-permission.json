@@ -1,0 +1,42 @@
+{
+  "name": "claude/edit-permission",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "claude",
+    "title": "Do you want to make this edit to config.ts?",
+    "body": "src/config.ts",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "file",
+      "text": "src/config.ts"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, allow all edits during this session (shift+tab)",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "No, and tell the agent what to do differently",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Claude Code",
+    "subtitle": "Do you want to make this edit to config.ts?",
+    "body": "src/config.ts",
+    "category": "togo.request"
+  }
+}

@@ -4,6 +4,10 @@
   "match": true,
   "kind": "permission",
   "title": "Would you like to make the following edits?",
+  "subject": {
+    "kind": "file",
+    "text": "src/lib.rs"
+  },
   "options": [
     {
       "n": 1,

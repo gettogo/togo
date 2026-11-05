@@ -4,6 +4,10 @@
   "match": true,
   "kind": "permission",
   "title": "Allow this command to run?",
+  "subject": {
+    "kind": "command",
+    "text": "npm install --save-dev vitest"
+  },
   "options": [
     {
       "n": 1,

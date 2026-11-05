@@ -1,0 +1,67 @@
+{
+  "description": "One screen approval is pending: an agent asks to run npm test in session 01. Pending: the harness has no way yet to raise a screen approval before the request, so this runs once it does. detail repeats subject.text for apps that do not read subject.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "approval.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "approvals": [
+        {
+          "requestId": "r_abcdefghij",
+          "sessionId": "s_abcdefghij",
+          "bib": "01",
+          "agent": "claude",
+          "source": "screen",
+          "title": "Run npm test?",
+          "detail": "npm test",
+          "subject": {
+            "kind": "command",
+            "text": "npm test"
+          },
+          "snippet": "Bash command\n  npm test\nDo you want to proceed?\n❯ 1. Yes\n  2. Yes, and don't ask again\n  3. No",
+          "options": [
+            {
+              "n": 1,
+              "label": "Yes",
+              "role": "approve"
+            },
+            {
+              "n": 2,
+              "label": "Yes, and don't ask again",
+              "role": "approve_always"
+            },
+            {
+              "n": 3,
+              "label": "No",
+              "role": "deny"
+            }
+          ],
+          "allowText": false,
+          "createdAt": "2026-11-03T12:00:00Z",
+          "expiresAt": null,
+          "state": "pending"
+        }
+      ]
+    }
+  }
+}

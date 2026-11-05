@@ -82,7 +82,7 @@ describe("POST /v1/push", () => {
       [
         alert(token, {
           kind: "liveactivity",
-          liveActivity: { event: "start", contentState: { bib: "a", agent: "c", status: "s", waiting: 0, since: 0 } },
+          liveActivity: { event: "pause", contentState: { bib: "a", agent: "c", status: "working", waiting: 0, since: 0 } },
         }),
         "liveActivity.event",
       ],

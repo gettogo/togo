@@ -170,3 +170,181 @@ func TestApprovalSignedBytesMatchParkedFixture(t *testing.T) {
 		t.Error("answer fixture signature does not verify")
 	}
 }
+
+func TestPairParamsPlatformDefaultsIOS(t *testing.T) {
+	old := `{"deviceId":"dev_test-1","name":"Test iPhone","apnsToken":"ab","env":"sandbox","relayUrl":"https://relay.example.test"}`
+	var p PairParams
+	if err := json.Unmarshal([]byte(old), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.EffectivePlatform() != PlatformIOS || p.LiveActivityCommand || p.LiveActivityStartToken != "" {
+		t.Errorf("old params = %+v", p)
+	}
+
+	var w PairParams
+	if err := json.Unmarshal([]byte(`{"deviceId":"w","platform":"watchos"}`), &w); err != nil || w.EffectivePlatform() != PlatformWatch {
+		t.Errorf("watch params = %+v, %v", w, err)
+	}
+
+	stored := `{"deviceId":"dev_test-1","env":"sandbox","pairedAt":"2026-11-03T12:00:00Z"}`
+	var d Device
+	if err := json.Unmarshal([]byte(stored), &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.EffectivePlatform() != PlatformIOS || d.DeviceID != "dev_test-1" || !d.PairedAt.Equal(time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)) {
+		t.Errorf("stored device = %+v", d)
+	}
+}
+
+func TestPairParamsOmitUnsetAdditions(t *testing.T) {
+	b, _ := json.Marshal(PairParams{DeviceID: "d"})
+	for _, k := range []string{"platform", "liveActivityStartToken", "liveActivityCommand"} {
+		if strings.Contains(string(b), k) {
+			t.Errorf("zero params carry %s: %s", k, b)
+		}
+	}
+}
+
+func TestRegisterSignedBytesExact(t *testing.T) {
+	const host, dev, ts = "h_mmg42klgyqzwneiskrelxms3j7", "dev_test-1", int64(1793707200000)
+	apns, la, start := strings.Repeat("ab", 32), strings.Repeat("cd", 32), strings.Repeat("ef", 32)
+	got := string(RegisterSignedBytes(host, dev, apns, la, start, true, ts))
+	want := "togo-register/v2\nh_mmg42klgyqzwneiskrelxms3j7\ndev_test-1\n" + apns + "\n" + la + "\n" + start + "\ntrue\n1793707200000"
+	if got != want {
+		t.Errorf("all tokens:\ngot  %q\nwant %q", got, want)
+	}
+	got = string(RegisterSignedBytes(host, dev, "", la, "", false, ts))
+	want = "togo-register/v2\nh_mmg42klgyqzwneiskrelxms3j7\ndev_test-1\n\n" + la + "\n\nfalse\n1793707200000"
+	if got != want {
+		t.Errorf("one token:\ngot  %q\nwant %q", got, want)
+	}
+}
+
+func TestRegisterFixtureSignatureVerifies(t *testing.T) {
+	raw, err := os.ReadFile("../../../protocol/v1/fixtures/plaintext/register.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f struct{ Plaintext RegisterPlaintext }
+	if err := json.Unmarshal(raw, &f); err != nil {
+		t.Fatal(err)
+	}
+	p := f.Plaintext
+	if p.Type != PlaintextRegister {
+		t.Errorf("type = %q", p.Type)
+	}
+	sig, err := base64.RawURLEncoding.DecodeString(p.Sig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x11}, 32)).Public().(ed25519.PublicKey)
+	if p.LiveActivityCommand == nil {
+		t.Fatal("register fixture has no liveActivityCommand")
+	}
+	msg := RegisterSignedBytes("h_mmg42klgyqzwneiskrelxms3j7", p.DeviceID, p.APNsToken, p.LiveActivityToken, p.LiveActivityStartToken, *p.LiveActivityCommand, p.TS)
+	if !ed25519.Verify(pub, msg, sig) {
+		t.Error("register fixture signature does not verify")
+	}
+}
+
+func TestPushPlaintextSubjectOmittedWhenNil(t *testing.T) {
+	b, _ := json.Marshal(PushPlaintext{V: 1, Kind: PushNeedsYou, RequestID: "r_abcdefghij", TS: 5})
+	if strings.Contains(string(b), "subject") || strings.Contains(string(b), "host") {
+		t.Errorf("without subject = %s", b)
+	}
+	host := "studio"
+	b, _ = json.Marshal(PushPlaintext{V: 1, Kind: PushNeedsYou, RequestID: "r_abcdefghij", TS: 5,
+		Subject: &Subject{Kind: SubjectCommand, Text: "npm test"}, Host: &host})
+	if !strings.Contains(string(b), `"subject":{"kind":"command","text":"npm test"}`) || !strings.Contains(string(b), `"host":"studio"`) {
+		t.Errorf("with subject = %s", b)
+	}
+}
+
+func TestApprovalSubjectEncodesNull(t *testing.T) {
+	b, _ := json.Marshal(Approval{})
+	if !strings.Contains(string(b), `"subject":null`) {
+		t.Errorf("Approval = %s", b)
+	}
+}
+
+func TestAnswerPlaintextAcceptsTypeAnswer(t *testing.T) {
+	for _, in := range []string{
+		`{"requestId":"r_abcdefghij","decision":"approve","ts":1,"deviceId":"d","sig":"x"}`,
+		`{"type":"answer","requestId":"r_abcdefghij","decision":"approve","ts":1,"deviceId":"d","sig":"x"}`,
+	} {
+		dec := json.NewDecoder(strings.NewReader(in))
+		dec.DisallowUnknownFields()
+		var a AnswerPlaintext
+		if err := dec.Decode(&a); err != nil || a.RequestID != "r_abcdefghij" {
+			t.Errorf("%s: %+v, %v", in, a, err)
+		}
+	}
+	for _, typ := range []string{"", PlaintextAnswer} {
+		b, _ := json.Marshal(AnswerPlaintext{Type: typ, RequestID: "r_abcdefghij"})
+		if strings.Contains(string(b), "type") {
+			t.Errorf("encoded answer carries type: %s", b)
+		}
+	}
+}
+
+func TestSubjectValidate(t *testing.T) {
+	for _, s := range []Subject{
+		{Kind: SubjectCommand, Text: "npm test"},
+		{Kind: SubjectFile, Text: "/home/u/naïve.go"},
+		{Kind: SubjectURL, Text: "https://example.test/a"},
+		{Kind: SubjectText, Text: "line one\nline two"},
+		{Kind: SubjectText, Text: strings.Repeat("é", MaxSubjectText)},
+	} {
+		if err := s.Validate(); err != nil {
+			t.Errorf("%+.20v: %v", s, err)
+		}
+	}
+	for _, s := range []Subject{
+		{Kind: "path", Text: "x"},
+		{Kind: SubjectCommand, Text: ""},
+		{Kind: SubjectCommand, Text: "a\tb"},
+		{Kind: SubjectCommand, Text: "a\x1b[2Jb"},
+		{Kind: SubjectCommand, Text: "a\rb"},
+		{Kind: SubjectCommand, Text: "\u0085"},
+		{Kind: SubjectCommand, Text: "rm -rf ~/x\u202Egnp.txt"},
+		{Kind: SubjectCommand, Text: "npm\u200Btest"},
+		{Kind: SubjectCommand, Text: "\u2066ls\u2069"},
+		{Kind: SubjectCommand, Text: "\ufeffls"},
+		{Kind: SubjectCommand, Text: "\xff"},
+		{Kind: SubjectText, Text: strings.Repeat("a", MaxSubjectText+1)},
+	} {
+		if err := s.Validate(); err == nil {
+			t.Errorf("%+.20q validated", s.Text)
+		}
+	}
+}
+
+func TestSubjectDecodeValidates(t *testing.T) {
+	var s Subject
+	if err := json.Unmarshal([]byte(`{"kind":"command","text":"npm test\nnpm run lint"}`), &s); err != nil || s.Text != "npm test\nnpm run lint" {
+		t.Errorf("good subject: %+v, %v", s, err)
+	}
+	// 1024 scalars of a 2-byte character pass; the limit counts scalars, not bytes.
+	if err := json.Unmarshal([]byte(`{"kind":"text","text":"`+strings.Repeat("é", MaxSubjectText)+`"}`), &s); err != nil {
+		t.Errorf("1024 scalars: %v", err)
+	}
+	for name, raw := range map[string]string{
+		"empty":     `{"kind":"text","text":""}`,
+		"too long":  `{"kind":"text","text":"` + strings.Repeat("a", MaxSubjectText+1) + `"}`,
+		"esc":       `{"kind":"command","text":"a\u001b[2Jb"}`,
+		"cr":        `{"kind":"command","text":"a\rb"}`,
+		"tab":       `{"kind":"command","text":"a\tb"}`,
+		"del":       `{"kind":"command","text":"a\u007fb"}`,
+		"c1":        `{"kind":"command","text":"a\u0085b"}`,
+		"kind":      `{"kind":"diff","text":"x"}`,
+		"in a push": `{"v":1,"kind":"needs_you","subject":{"kind":"command","text":"\u0007"}}`,
+	} {
+		var v any = &Subject{}
+		if name == "in a push" {
+			v = &PushPlaintext{}
+		}
+		if err := json.Unmarshal([]byte(raw), v); err == nil {
+			t.Errorf("%s: decoded without error", name)
+		}
+	}
+}

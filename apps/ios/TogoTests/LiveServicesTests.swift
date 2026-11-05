@@ -2,6 +2,7 @@ import Foundation
 import Synchronization
 import Testing
 import TogoKit
+import struct TogoPush.Pairing
 @testable import Togo
 
 @MainActor struct LiveServicesTests {
@@ -17,7 +18,7 @@ import TogoKit
 
     private func services(
         watches: Watches, helpers: NoHelper = NoHelper(), remote: MemoryBackend? = nil, syncOn: Bool = true,
-        forgotPasswords: ForgottenPasswords? = nil
+        forgotPasswords: ForgottenPasswords? = nil, reported: @escaping (HostID, Set<String>) -> Void = { _, _ in }
     ) -> LiveServices {
         let now = self.now
         let syncSwitch = SyncSwitch(backend: MemoryBackend())
@@ -43,7 +44,8 @@ import TogoKit
                     _ = await prompter.answer(.password(user: record.profile.endpoint.user, host: record.profile.endpoint.host))
                 },
                 forgetPassword: { id in forgotPasswords?.ids.withLock { $0.append(id) } },
-                now: { now }
+                now: { now },
+                reported: reported
             )
         )
     }
@@ -271,5 +273,61 @@ import TogoKit
         #expect(prompter.asked.withLock { $0 } == 1)
         #expect(watches[Samples.studio]?.refreshes.withLock { $0 } == 1)
         #expect(watches[Samples.build]?.refreshes.withLock { $0 } == 0)
+    }
+}
+
+@MainActor extension LiveServicesTests {
+    // MARK: Lock-screen answers
+
+    private func approval(_ id: String) -> Approval {
+        Approval(
+            requestId: id, sessionId: "s7", bib: nil, agent: "claude", source: .hook, title: "Run npm test?",
+            detail: "npm test", snippet: "", options: [ApprovalOption(n: 1, label: "Yes", role: .approve)],
+            allowText: false, createdAt: now, expiresAt: nil
+        )
+    }
+
+    private func pairing(_ machine: UUID?) -> Pairing {
+        Pairing(
+            hostId: "h_studio", hostKey: "", relayURL: URL(string: "https://relay.example.test")!, machineName: "Studio",
+            appHostID: machine, pairedAt: now, tokenHash: "000000", liveActivityCommand: false
+        )
+    }
+
+    @Test func answersFromTheLockScreenOverTheLiveChannel() async throws {
+        let watches = Watches()
+        let services = services(watches: watches)
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let watch = try #require(watches[Samples.studio])
+        #expect(!services.hasLiveChannel(pairing(Samples.studio)))
+
+        watch.sink.yield(HostSnapshot(hostID: Samples.studio, reach: .online, sessions: []))
+        await eventually { services.hasLiveChannel(pairing(Samples.studio)) }
+        #expect(services.hasLiveChannel(pairing(Samples.studio)))
+        #expect(!services.hasLiveChannel(pairing(nil)))
+
+        try await services.answer(pairing(Samples.studio), requestId: "r1", decision: .approve)
+        #expect(watch.ops.withLock { $0 } == ["answer r1"])
+    }
+
+    @Test func reportsOpenRequestsOnceAfterComingForward() async throws {
+        let watches = Watches()
+        var reports: [Set<String>] = []
+        let services = services(watches: watches) { _, open in reports.append(open) }
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let watch = try #require(watches[Samples.studio])
+
+        watch.sink.yield(HostSnapshot(hostID: Samples.studio, reach: .online, sessions: [], approvals: [approval("r1")]))
+        await eventually { reports.count == 1 }
+        services.setForeground(false)
+        services.setForeground(true)
+        watch.sink.yield(HostSnapshot(hostID: Samples.studio, reach: .online, sessions: [], approvals: []))
+        await eventually { reports.count == 2 }
+        watch.sink.yield(HostSnapshot(hostID: Samples.studio, reach: .online, sessions: [], approvals: [approval("r2")]))
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(reports == [["r1"], []])
     }
 }

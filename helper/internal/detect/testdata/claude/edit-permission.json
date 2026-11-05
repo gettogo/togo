@@ -4,6 +4,10 @@
   "match": true,
   "kind": "permission",
   "title": "Do you want to make this edit to config.ts?",
+  "subject": {
+    "kind": "file",
+    "text": "src/config.ts"
+  },
   "options": [
     {
       "n": 1,

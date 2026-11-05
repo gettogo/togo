@@ -36,9 +36,12 @@ const maxScreenBytes = 256 << 10
 
 // Prompt is a recognised question on screen.
 type Prompt struct {
-	Kind    string
-	Title   string
-	Detail  *string
+	Kind   string
+	Title  string
+	Detail *string
+	// Subject is the command, file or URL the prompt asks about, already
+	// cleaned for display; nil when the prompt names none.
+	Subject *wire.Subject
 	Options []wire.Option
 	// Keys maps an option number to the tmux key names that select it, as
 	// of this capture. Arrow-menu keys are relative to the cursor row, so

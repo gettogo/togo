@@ -39,7 +39,7 @@ func TestApprovalOpenPushedToEveryDevice(t *testing.T) {
 // TestNeedsYouPlaintextMatchesFixture pins the sealed JSON to the shared
 // example the phone decodes.
 func TestNeedsYouPlaintextMatchesFixture(t *testing.T) {
-	raw, err := os.ReadFile("../../../protocol/v1/fixtures/plaintext/push.needs_you.json")
+	raw, err := os.ReadFile("../../../protocol/v1/fixtures/plaintext/push-needs-you-subject.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,8 @@ func TestNeedsYouPlaintextMatchesFixture(t *testing.T) {
 	}
 	e := newEnv(t, 1)
 	e.clock = time.UnixMilli(1793707200000)
-	e.handle(approvalOpen("r_abcdefghij"))
+	e.sender.Host = "studio"
+	e.handle(withSubject(approvalOpen("r_abcdefghij"), wire.SubjectCommand, "npm test"))
 	got := e.relay.received()
 	if len(got) != 1 {
 		t.Fatalf("relay got %d pushes", len(got))
@@ -330,5 +331,22 @@ func TestTruncateCountsCodePoints(t *testing.T) {
 	}
 	if got := truncate("short", 10); got != "short" {
 		t.Fatalf("truncate changed a short string: %q", got)
+	}
+}
+
+func TestFallbackBodyIsCleaned(t *testing.T) {
+	detail := "╭──────────────╮\n│ \x1b[31mHere is the plan:\x1b[0m │\n│ ❯ 1. Add   a‮ retry wrapper │\n╰──────────────╯\nthird\nfourth"
+	s := &Sender{Hub: &fakeHub{}, Host: "studio", Now: time.Now}
+	s.init()
+	sid := "s_aaaaaaaaaa"
+	ev := wire.Event{Kind: wire.EventApprovalOpen, SessionID: &sid, Payload: wire.ApprovalOpenEvent{Approval: wire.Approval{
+		RequestID: "r_aaaaaaaaaa", Agent: "claude", Title: "Would you like to proceed?", Detail: &detail,
+	}}}
+	m, ok := s.message(ev, sid, SessionInfo{})
+	if !ok {
+		t.Fatal("no push")
+	}
+	if want := "Here is the plan:\n1. Add a retry wrapper\nthird"; m.Plaintext.Body != want {
+		t.Fatalf("body = %q, want %q", m.Plaintext.Body, want)
 	}
 }

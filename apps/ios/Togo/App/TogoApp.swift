@@ -5,6 +5,7 @@ import UIKit
 
 @main
 struct TogoApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @State private var composition: AppComposition
     @State private var resumeLock: ResumeLockController
@@ -53,7 +54,9 @@ struct TogoApp: App {
         .onChange(of: scenePhase) { _, phase in
             resumeLock.scenePhaseChanged(to: phase)
             switch phase {
-            case .active: composition.live?.setForeground(true)
+            case .active:
+                composition.live?.setForeground(true)
+                composition.push?.becameActive()
             case .background: composition.live?.setForeground(false)
             default: break
             }
@@ -69,6 +72,8 @@ struct TogoApp: App {
     let onboarding: any OnboardingServices
     let terminals = TerminalPool()
     let tutorial: TutorialModel
+    /// Nil under unit and UI tests and in a process without the app group.
+    let push: AppPush?
     private var started = false
     #if DEBUG
     private var uiTestMachines: UITestMachines?
@@ -109,8 +114,11 @@ struct TogoApp: App {
             prefix: "settings.", local: backend(), remote: remote(), deviceID: deviceID, clock: { Date() },
             syncEnabled: syncSwitch.isOn
         )
+        let push = isolated ? nil : AppPush.make()
+        self.push = push
         let services = LiveServices(
             hostRecords: hostRecords, settingsRecords: settingsRecords, syncSwitch: syncSwitch,
+            device: DeviceSettings(backend: isolated ? MemoryBackend() : AppPush.deviceBackend()),
             dependencies: LiveServices.Dependencies(
                 watch: { record in
                     HostMonitor(
@@ -148,7 +156,11 @@ struct TogoApp: App {
                     }
                     await signedIn.put(connection, for: record.id)
                 },
-                forgetPassword: { id in try? secrets.delete(SSHConnection.passwordAccount(id)) }
+                forgetPassword: { id in try? secrets.delete(SSHConnection.passwordAccount(id)) },
+                registrar: push?.registrar,
+                pairing: push?.pairing,
+                shareSettings: { push?.share($0) },
+                reported: { id, open in push?.reported(id, open: open) }
             )
         )
         live = services
@@ -166,6 +178,7 @@ struct TogoApp: App {
             Task { await signedIn.discard(id) }
             terminals.restartTabs(on: id, store: store)
         }
+        push?.connect(services: services, store: store)
     }
 
     #if DEBUG
@@ -173,6 +186,7 @@ struct TogoApp: App {
         let machines = UITestMachines(firstRun: launch.firstRun)
         uiTestMachines = machines
         live = nil
+        push = nil
         tutorial = TutorialModel(defaults: launch.defaults())
         store = AppStore(services: machines.services)
         onboarding = FakeOnboardingServices(outcomes: Array(repeating: .ready(OnboardingSamples.ready), count: 4))
@@ -189,6 +203,13 @@ struct TogoApp: App {
         uiTestMachines?.start()
         #endif
         Task { await store.run() }
+        // Never asks: permission comes up when a machine first can send pushes, or from Settings.
+        if let registrar = push?.registrar {
+            Task { await registrar.refresh() }
+        }
+        #if DEBUG
+        if let push { PushE2E.start(push) }
+        #endif
     }
 
     static var isRunningTests: Bool {

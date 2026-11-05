@@ -6,6 +6,7 @@ package local
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -252,6 +253,17 @@ func (h *Handlers) ask(ctx context.Context, raw json.RawMessage) (any, error) {
 		if strings.TrimSpace(o) == "" {
 			return nil, invalid("options must not be empty")
 		}
+	}
+	names := func(label string) bool {
+		return slices.ContainsFunc(p.Options, func(o string) bool { return strings.EqualFold(strings.TrimSpace(o), strings.TrimSpace(label)) })
+	}
+	switch {
+	case p.Approve != "" && !names(p.Approve):
+		return nil, invalid("approve must name one of the options")
+	case p.Deny != "" && !names(p.Deny):
+		return nil, invalid("deny must name one of the options")
+	case p.Approve != "" && strings.EqualFold(strings.TrimSpace(p.Approve), strings.TrimSpace(p.Deny)):
+		return nil, invalid("approve and deny must name different options")
 	}
 	// Only the app answers an ask. With no app in the foreground and no
 	// paired device nobody will see it, so waiting would only hold up the

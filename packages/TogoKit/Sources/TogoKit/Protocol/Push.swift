@@ -7,6 +7,10 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         case sandbox, production
     }
 
+    public enum Platform: String, Codable, Sendable {
+        case ios, watchos
+    }
+
     public var deviceId: String
     public var name: String
     /// The device's X25519 key that seals pushes to it.
@@ -18,10 +22,16 @@ public struct PushPairParams: Codable, Hashable, Sendable {
     public var env: Environment
     public var relayUrl: String
     public var liveActivityToken: String?
+    public var platform: Platform
+    /// Lowercase hex push-to-start token for the Live Activity.
+    public var liveActivityStartToken: String?
+    /// The user's opt-in to command text in Live Activity pushes.
+    public var liveActivityCommand: Bool
 
     public init(
         deviceId: String, name: String, x25519: String, approvalKey: String, apnsToken: String,
-        env: Environment, relayUrl: String, liveActivityToken: String? = nil
+        env: Environment, relayUrl: String, liveActivityToken: String? = nil,
+        platform: Platform = .ios, liveActivityStartToken: String? = nil, liveActivityCommand: Bool = false
     ) {
         self.deviceId = deviceId
         self.name = name
@@ -31,6 +41,46 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         self.env = env
         self.relayUrl = relayUrl
         self.liveActivityToken = liveActivityToken
+        self.platform = platform
+        self.liveActivityStartToken = liveActivityStartToken
+        self.liveActivityCommand = liveActivityCommand
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case deviceId, name, x25519, approvalKey, apnsToken, env, relayUrl, liveActivityToken
+        case platform, liveActivityStartToken, liveActivityCommand
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        deviceId = try container.decode(String.self, forKey: .deviceId)
+        name = try container.decode(String.self, forKey: .name)
+        x25519 = try container.decode(String.self, forKey: .x25519)
+        approvalKey = try container.decode(String.self, forKey: .approvalKey)
+        apnsToken = try container.decode(String.self, forKey: .apnsToken)
+        env = try container.decode(Environment.self, forKey: .env)
+        relayUrl = try container.decode(String.self, forKey: .relayUrl)
+        liveActivityToken = try container.decodeIfPresent(String.self, forKey: .liveActivityToken)
+        platform = try container.decodeIfPresent(Platform.self, forKey: .platform) ?? .ios
+        liveActivityStartToken = try container.decodeIfPresent(String.self, forKey: .liveActivityStartToken)
+        liveActivityCommand = try container.decodeIfPresent(Bool.self, forKey: .liveActivityCommand) ?? false
+    }
+
+    // platform and liveActivityCommand are written only when they differ from the defaults,
+    // so an iPhone pairing reads exactly as it did before they existed.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(deviceId, forKey: .deviceId)
+        try container.encode(name, forKey: .name)
+        try container.encode(x25519, forKey: .x25519)
+        try container.encode(approvalKey, forKey: .approvalKey)
+        try container.encode(apnsToken, forKey: .apnsToken)
+        try container.encode(env, forKey: .env)
+        try container.encode(relayUrl, forKey: .relayUrl)
+        try container.encodeIfPresent(liveActivityToken, forKey: .liveActivityToken)
+        if platform != .ios { try container.encode(platform, forKey: .platform) }
+        try container.encodeIfPresent(liveActivityStartToken, forKey: .liveActivityStartToken)
+        if liveActivityCommand { try container.encode(true, forKey: .liveActivityCommand) }
     }
 }
 

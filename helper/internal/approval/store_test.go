@@ -303,3 +303,57 @@ func TestSessionGoneClosesItsApprovalsButNotAsks(t *testing.T) {
 		t.Fatalf("pending %v, want the ask and the other session's approval; hook %s", open, hook.RequestID)
 	}
 }
+
+const bashPrompt = "│ Bash command               │\n│   rm -rf ./build && make   │\n│ Do you want to proceed?    │\n│ ❯ 1. Yes                   │\n│   2. No                    │\n"
+
+func TestHookSubjectWinsOverScreen(t *testing.T) {
+	hook := wire.HookEvent{Agent: "claude", Data: wire.HookData{
+		Tool: "Bash", Command: "rm -rf ./build && make clean",
+		Subject: &wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf ./build && make clean"},
+	}}
+	screenSubject := wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf ./build && make"}
+	pr, ok := detect.Detect(bashPrompt)
+	if !ok || pr.Subject == nil || *pr.Subject != screenSubject {
+		t.Fatalf("screen subject = %+v", pr.Subject)
+	}
+	check := func(t *testing.T, a wire.Approval) {
+		t.Helper()
+		if a.Subject == nil || *a.Subject != *hook.Data.Subject {
+			t.Fatalf("subject = %+v, want the hook's", a.Subject)
+		}
+		if a.Detail == nil || *a.Detail != hook.Data.Subject.Text {
+			t.Fatalf("detail = %v, want the subject text", a.Detail)
+		}
+	}
+
+	t.Run("screen first", func(t *testing.T) {
+		st := New(Config{Tmux: &fakeTmux{screen: bashPrompt}, Pub: &fakePub{}})
+		st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+		if got := st.Pending(""); len(got) != 1 || got[0].Subject == nil || *got[0].Subject != screenSubject {
+			t.Fatalf("screen approval = %+v", got)
+		}
+		check(t, st.OpenFromHook(context.Background(), "s_aaaaaaaaaa", hook))
+		check(t, st.Pending("")[0])
+	})
+	t.Run("hook first", func(t *testing.T) {
+		f := &fakeTmux{}
+		st := New(Config{Tmux: f, Pub: &fakePub{}})
+		check(t, st.OpenFromHook(context.Background(), "s_aaaaaaaaaa", hook))
+		f.mu.Lock()
+		f.screen = bashPrompt
+		f.mu.Unlock()
+		st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+		got := st.Pending("")
+		if len(got) != 1 || len(got[0].Options) != 2 {
+			t.Fatalf("pending = %+v", got)
+		}
+		check(t, got[0])
+	})
+	t.Run("hook without a subject takes the screen's", func(t *testing.T) {
+		st := New(Config{Tmux: &fakeTmux{screen: bashPrompt}, Pub: &fakePub{}})
+		a := st.OpenFromHook(context.Background(), "s_aaaaaaaaaa", wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
+		if a.Subject == nil || *a.Subject != screenSubject || a.Detail == nil || *a.Detail != screenSubject.Text {
+			t.Fatalf("approval = %+v", a)
+		}
+	})
+}

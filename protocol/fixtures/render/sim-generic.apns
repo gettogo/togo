@@ -1,0 +1,9 @@
+{
+  "Simulator Target Bundle": "app.togo.Togo",
+  "aps": {
+    "alert": { "title": "Togo", "body": "Needs you" },
+    "mutable-content": 1,
+    "sound": "default"
+  },
+  "c": "AQ"
+}

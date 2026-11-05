@@ -133,6 +133,9 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		cur.fingerprint = p.Fingerprint
 		cur.a.Options = p.Options
 		cur.a.Snippet = p.Snippet
+		if cur.a.Subject == nil {
+			withSubject(&cur.a, p.Subject)
+		}
 		s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
 		s.mu.Unlock()
 		return
@@ -142,6 +145,7 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 	s.mu.Unlock()
 	a := s.base(ctx, sessionID, wire.SourceScreen)
 	a.Title, a.Detail, a.Snippet, a.Options = p.Title, p.Detail, p.Snippet, p.Options
+	withSubject(&a, p.Subject)
 	s.open(a, p.Fingerprint, nil)
 }
 
@@ -176,7 +180,8 @@ func (s *Store) SessionGone(_ context.Context, sessionID string) {
 // OpenFromHook opens an approval for an agent permission hook. The title
 // and detail come from the hook; the options come from the screen when a
 // prompt is already visible, otherwise from the prompt the watcher reports
-// next.
+// next. The hook's subject wins over one read off the screen: it comes from
+// the tool call itself rather than from what the TUI drew.
 func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.HookEvent) wire.Approval {
 	mu := s.lockFor(sessionID)
 	mu.Lock()
@@ -189,19 +194,25 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 		a.Detail = &d
 	}
 	var fp string
+	subject := ev.Data.Subject
 	if sessionID != "" {
 		if screen, err := s.cfg.Tmux.CapturePane(ctx, target(sessionID)); err == nil {
 			if p, ok := detect.Detect(screen); ok {
 				fp, a.Options, a.Snippet = p.Fingerprint, p.Options, p.Snippet
+				if subject == nil {
+					subject = p.Subject
+				}
 			}
 		}
 	}
+	withSubject(&a, subject)
 	s.mu.Lock()
 	if cur := s.pendingForSession(sessionID); cur != nil {
 		if fp != "" && cur.fingerprint == fp {
 			// The watcher already opened this prompt; the hook only adds
 			// what it knows about the request.
 			cur.a.Source, cur.a.Agent, cur.a.Title, cur.a.Detail = a.Source, a.Agent, a.Title, a.Detail
+			cur.a.Subject = a.Subject
 			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
 			s.mu.Unlock()
 			return cur.a
@@ -224,8 +235,9 @@ func (s *Store) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <
 	}
 	a.Title = truncate(p.Title, wire.MaxTitle)
 	a.AllowText = p.AllowText
+	roles := AskRoles(p.Options, p.Approve, p.Deny)
 	for i, label := range p.Options {
-		a.Options = append(a.Options, wire.Option{N: i + 1, Label: truncate(label, wire.MaxOptionLabel), Role: wire.RoleOther})
+		a.Options = append(a.Options, wire.Option{N: i + 1, Label: truncate(label, wire.MaxOptionLabel), Role: roles[i]})
 	}
 	ch := make(chan string, 1)
 	return s.open(a, "", ch), ch
@@ -341,6 +353,17 @@ func (s *Store) closeLocked(e *entry, resolution string) {
 	s.cfg.Pub.Publish(wire.EventApprovalClosed, e.a.SessionID, wire.ApprovalClosedEvent{
 		RequestID: e.a.RequestID, Resolution: resolution,
 	})
+}
+
+// withSubject sets a's subject and, for apps that predate subjects, its
+// detail to the subject text. A nil or invalid subject changes nothing.
+func withSubject(a *wire.Approval, s *wire.Subject) {
+	if s == nil || s.Validate() != nil {
+		return
+	}
+	v := *s
+	d := truncate(v.Text, wire.MaxDetail)
+	a.Subject, a.Detail = &v, &d
 }
 
 func target(sessionID string) string { return "=" + sessionID + ":" }

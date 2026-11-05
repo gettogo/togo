@@ -314,3 +314,31 @@ func TestOversizedScreenKeepsTail(t *testing.T) {
 	screen := strings.Repeat("x", 2*maxScreenBytes) + "\n" + fixture(t, "claude/bash-permission")
 	mustDetect(t, screen)
 }
+
+func TestRealFixturesForEachAgent(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "omp"} {
+		files, err := filepath.Glob(filepath.Join("testdata", agent, "real-*.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		real := 0
+		for _, f := range files {
+			raw, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var e expectation
+			if err := json.Unmarshal(raw, &e); err != nil {
+				t.Fatalf("%s: %v", f, err)
+			}
+			if e.Source != "real" || e.AgentVersion == nil || *e.AgentVersion == "" {
+				t.Errorf("%s: source %q, agentVersion %v; want real with a version", f, e.Source, e.AgentVersion)
+				continue
+			}
+			real++
+		}
+		if real == 0 {
+			t.Errorf("no real captures for %s", agent)
+		}
+	}
+}

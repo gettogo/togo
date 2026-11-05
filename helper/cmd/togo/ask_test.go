@@ -111,3 +111,76 @@ func TestJobCommands(t *testing.T) {
 		t.Fatalf("unreachable start: %d", code)
 	}
 }
+
+func TestAskApproveAndDenyFlags(t *testing.T) {
+	home, sock := tapHome(t)
+	d := startFakeDaemon(t, sock, func(string, json.RawMessage) (any, int) {
+		return map[string]any{"decision": "Ship it", "reason": "answered"}, 0
+	})
+	env := map[string]string{"TOGO_HOME": home}
+	code, out, _ := runWith(t, env, nil, "ask", "Deploy?", "--options", "Ship it,Hold", "--approve", "ship it", "--deny", "Hold")
+	if code != 0 || out != "Ship it\n" {
+		t.Fatalf("code %d out %q", code, out)
+	}
+	var p map[string]any
+	if err := json.Unmarshal(d.recorded()[0].Params, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p["approve"] != "ship it" || p["deny"] != "Hold" {
+		t.Fatalf("params %v", p)
+	}
+	// Without the flags nothing extra is sent; the helper infers the roles.
+	runWith(t, env, nil, "ask", "Deploy?", "--options", "Approve,Deny")
+	p = nil
+	if err := json.Unmarshal(d.recorded()[1].Params, &p); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p["approve"]; ok {
+		t.Fatalf("params %v", p)
+	}
+	for _, args := range [][]string{
+		{"ask", "q", "--options", "A,B", "--approve", "C"},
+		{"ask", "q", "--options", "A,B", "--approve", "A", "--deny", "a"},
+	} {
+		if code, _, _ := runWith(t, env, nil, args...); code != exitUsage {
+			t.Fatalf("%v: code %d", args, code)
+		}
+	}
+}
+
+func TestAskDenyRoleExitsOne(t *testing.T) {
+	cases := []struct {
+		name     string
+		decision string
+		args     []string
+		code     int
+		stdout   string
+	}{
+		{"inferred deny", "Deny", []string{"--options", "Approve,Deny"}, 1, "Deny\n"},
+		{"inferred approve", "Approve", []string{"--options", "Approve,Deny"}, 0, "Approve\n"},
+		{"explicit deny", "Hold", []string{"--options", "Ship it,Hold", "--deny", "hold"}, 1, "Hold\n"},
+		{"explicit deny replaces inference", "No", []string{"--options", "Yes,No,Later", "--deny", "Later"}, 0, "No\n"},
+		{"no role", "prod", []string{"--options", "staging,prod"}, 0, "prod\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home, sock := tapHome(t)
+			startFakeDaemon(t, sock, func(string, json.RawMessage) (any, int) {
+				return map[string]any{"decision": c.decision, "reason": "answered"}, 0
+			})
+			args := append([]string{"ask", "Deploy?", "--timeout", "5"}, c.args...)
+			code, out, _ := runWith(t, map[string]string{"TOGO_HOME": home}, nil, args...)
+			if code != c.code || out != c.stdout {
+				t.Fatalf("code %d out %q, want %d %q", code, out, c.code, c.stdout)
+			}
+		})
+	}
+}
+
+func TestAskHelpDocumentsDenyExit(t *testing.T) {
+	home, _ := tapHome(t)
+	code, _, stderr := runWith(t, map[string]string{"TOGO_HOME": home}, nil, "ask", "--help")
+	if code != exitOK || !strings.Contains(stderr, "--deny") || !strings.Contains(stderr, "exits 1") {
+		t.Fatalf("code %d help %q", code, stderr)
+	}
+}

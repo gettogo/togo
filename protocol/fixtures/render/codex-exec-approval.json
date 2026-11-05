@@ -1,0 +1,42 @@
+{
+  "name": "codex/exec-approval",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "codex",
+    "title": "Would you like to run the following command?",
+    "body": "cargo test --workspace",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "cargo test --workspace"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes, proceed",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, and don't ask again for this command",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "No, and tell the agent what to do differently",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Codex",
+    "subtitle": "Would you like to run the following command?",
+    "body": "cargo test --workspace",
+    "category": "togo.request"
+  }
+}

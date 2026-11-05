@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 func fixture(t *testing.T, name string) string {
@@ -119,5 +121,46 @@ func TestLongFieldsTruncatedAndErrorsOmitPayload(t *testing.T) {
 	_, err = a.Map("Stop", strings.NewReader("secret-token-123"), nil)
 	if err == nil || strings.Contains(err.Error(), "secret") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPermissionSubjectKindFromTool(t *testing.T) {
+	patch := `*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-a\n+b\n*** Add File: docs/Заметки.md\n+x\n*** End Patch\n`
+	cases := []struct {
+		name, tool, input string
+		want              *wire.Subject
+	}{
+		{"shell argv", "exec_command", `{"command":["git","status"]}`, &wire.Subject{Kind: wire.SubjectCommand, Text: "git status"}},
+		{"bash string", "Bash", `{"command":"cargo   test"}`, &wire.Subject{Kind: wire.SubjectCommand, Text: "cargo test"}},
+		{"patch argv", "apply_patch", `{"command":["apply_patch","` + patch + `"]}`, &wire.Subject{Kind: wire.SubjectFile, Text: "src/lib.rs\ndocs/Заметки.md"}},
+		{"patch string", "apply_patch", `{"command":"` + patch + `"}`, &wire.Subject{Kind: wire.SubjectFile, Text: "src/lib.rs\ndocs/Заметки.md"}},
+		{"patch input", "apply_patch", `{"input":"` + patch + `"}`, &wire.Subject{Kind: wire.SubjectFile, Text: "src/lib.rs\ndocs/Заметки.md"}},
+		{"file path", "Write", `{"file_path":"README.md"}`, &wire.Subject{Kind: wire.SubjectFile, Text: "README.md"}},
+		{"other tool", "web_search", `{"command":"weather"}`, &wire.Subject{Kind: wire.SubjectText, Text: "weather"}},
+		{"nothing to show", "Bash", `{}`, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := `{"session_id":"0199-aaaa","cwd":"/work/app","tool_name":"` + c.tool + `","tool_input":` + c.input + `}`
+			ev, err := (&Adapter{}).Map("PermissionRequest", strings.NewReader(in), map[string]string{"TOGO_SESSION": "s_abc"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(ev.Data.Command, "Begin Patch") {
+				t.Fatalf("patch text in command %q", ev.Data.Command)
+			}
+			got := ev.Data.Subject
+			switch {
+			case c.want == nil && got != nil:
+				t.Fatalf("subject = %+v, want none", *got)
+			case c.want != nil && (got == nil || *got != *c.want):
+				t.Fatalf("subject = %+v, want %+v", got, *c.want)
+			}
+			if got != nil {
+				if err := got.Validate(); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
 	}
 }

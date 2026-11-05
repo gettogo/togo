@@ -54,9 +54,22 @@ enum LiveServiceError: Error, LocalizedError {
         /// Removes a machine's saved password from this device.
         var forgetPassword: (HostID) -> Void = { _ in }
         var now: @Sendable () -> Date = { Date() }
+        /// Notification permission and pairing with each machine's helper; nil leaves push out.
+        var registrar: PushRegistrar?
+        var pairing: PairingCoordinator?
+        /// Copies the settings the notification service needs where it can read them.
+        var shareSettings: (AppSettings) -> Void = { _ in }
+        /// A machine reported after the app came to the foreground: the requests it still has
+        /// open, so notifications for the others can go.
+        var reported: (HostID, Set<String>) -> Void = { _, _ in }
     }
 
     private(set) var hosts: [HostRecordView] = []
+    var pairedMachines: Set<HostID> = []
+    var confirmedCommands: Set<HostID> = []
+    var pendingCommands: Set<HostID> = []
+    /// Removed machines whose helper has not yet been told to stop pushing.
+    var pendingRemovals: [PendingRemoval] = []
     /// Questions from terminals the user opens; monitors never ask.
     let attachPrompts = AttachPrompts()
     /// A machine was removed, here or on another device. Its screens and terminals go with it.
@@ -70,15 +83,17 @@ enum LiveServiceError: Error, LocalizedError {
     @ObservationIgnored private let hostStore: HostStore
     @ObservationIgnored private let hostRecords: SyncedRecordStore<HostRecord>
     @ObservationIgnored private let settingsStore: SettingsStore
-    @ObservationIgnored private let deps: Dependencies
-    @ObservationIgnored private var records: [HostID: HostRecord] = [:]
-    @ObservationIgnored private var watches: [HostID: any HostWatch] = [:]
+    @ObservationIgnored let deps: Dependencies
+    @ObservationIgnored private(set) var records: [HostID: HostRecord] = [:]
+    @ObservationIgnored private(set) var watches: [HostID: any HostWatch] = [:]
     @ObservationIgnored private var feeds: [HostID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var latest: [HostID: HostSnapshot] = [:]
+    @ObservationIgnored private(set) var latest: [HostID: HostSnapshot] = [:]
     @ObservationIgnored private var mapper = SnapshotMapper()
     @ObservationIgnored private var agentsRequested: Set<HostID> = []
     @ObservationIgnored private var terminals: [ObjectIdentifier: LiveTerminal] = [:]
-    @ObservationIgnored private var foreground = true
+    @ObservationIgnored private(set) var foreground = true
+    /// Machines that have not reported since the app last came to the foreground.
+    @ObservationIgnored private var unreported: Set<HostID> = []
     /// Set while a value from the store is applied, so it is not written straight back.
     @ObservationIgnored private var applyingStoredSettings = false
     @ObservationIgnored private var started = false
@@ -91,14 +106,15 @@ enum LiveServiceError: Error, LocalizedError {
     @ObservationIgnored private let sink: AsyncStream<HostViewSnapshot>.Continuation
 
     /// Both record stores must be made with `syncSwitch`'s value, so nothing merges from
-    /// iCloud before the device's own choice is known.
+    /// iCloud before the device's own choice is known. `device` keeps the settings that never sync.
     init(
         hostRecords: SyncedRecordStore<HostRecord>, settingsRecords: SyncedRecordStore<AppSettings>,
-        syncSwitch: SyncSwitch, dependencies: Dependencies
+        syncSwitch: SyncSwitch, device: DeviceSettings = DeviceSettings(backend: MemoryBackend()),
+        dependencies: Dependencies
     ) {
         self.hostRecords = hostRecords
         hostStore = HostStore(records: hostRecords)
-        settingsStore = SettingsStore(records: settingsRecords, syncSwitch: syncSwitch)
+        settingsStore = SettingsStore(records: settingsRecords, syncSwitch: syncSwitch, device: device)
         deps = dependencies
         (stream, sink) = AsyncStream.makeStream(of: HostViewSnapshot.self)
     }
@@ -108,9 +124,17 @@ enum LiveServiceError: Error, LocalizedError {
         guard !started else { return }
         started = true
         applyStored(await settingsStore.load())
+        deps.shareSettings(settings)
         await hostRecords.setSyncEnabled(settings.syncEnabled)
         reconcile(await hostStore.hosts())
         hostsLoaded = true
+        retryUnpairs()
+        if let pairing = deps.pairing {
+            pushChanged()
+            pairing.onChange = { [weak self] in self?.pushChanged() }
+            pairing.onUnpaired = { [weak self] entry in self?.unpaired(entry) }
+            pairing.onRepairNeeded = { [weak self] in self?.pairOnlineMachines() }
+        }
         let hostChanges = hostStore.changes
         let settingsChanges = settingsStore.changes
         listeners = [
@@ -129,6 +153,11 @@ enum LiveServiceError: Error, LocalizedError {
         guard on != foreground else { return }
         foreground = on
         attachPrompts.isForeground = on
+        deps.pairing?.isForeground = on
+        if on {
+            unreported = Set(records.keys)
+            retryUnpairs()
+        }
         for watch in watches.values {
             Task { await watch.setForeground(on) }
         }
@@ -321,8 +350,11 @@ enum LiveServiceError: Error, LocalizedError {
         let incoming = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         let removed = records.keys.filter { incoming[$0] == nil }
         let changed = records.keys.filter { incoming[$0] != nil && incoming[$0] != records[$0] }
+        // A removed machine's channel and saved password stay until its helper is told to stop pushing.
+        let paired = deps.pairing?.pairedOrPairing ?? []
+        let unpairing = Set(removed.filter { id in records[id].map { unpair($0, reachable: latest[id]?.reach == .online) } ?? false })
         for id in removed + changed {
-            stopWatching(id)
+            stopWatching(id, dropChannel: !unpairing.contains(id))
         }
         records = incoming
         hosts = all.map(Self.view(of:))
@@ -332,7 +364,7 @@ enum LiveServiceError: Error, LocalizedError {
         for id in removed {
             mapper.forget(id)
             attachPrompts.withdraw(hostID: id)
-            deps.forgetPassword(id)
+            if !paired.contains(id) { deps.forgetPassword(id) }
             onMachineRemoved(id)
         }
         changed.forEach(onMachineChanged)
@@ -342,6 +374,7 @@ enum LiveServiceError: Error, LocalizedError {
         let id = record.id
         let watch = deps.watch(record)
         watches[id] = watch
+        unreported.insert(id)
         let foreground = self.foreground
         let snapshots = watch.snapshots
         feeds[id] = Task { [weak self] in
@@ -353,7 +386,7 @@ enum LiveServiceError: Error, LocalizedError {
         }
     }
 
-    private func stopWatching(_ id: HostID) {
+    private func stopWatching(_ id: HostID, dropChannel: Bool = true) {
         feeds.removeValue(forKey: id)?.cancel()
         latest[id] = nil
         agentsRequested.remove(id)
@@ -361,6 +394,7 @@ enum LiveServiceError: Error, LocalizedError {
             Task { await watch.stop() }
         }
         // The cached channel was opened with the old address and credentials.
+        guard dropChannel else { return }
         let helpers = deps.helpers
         Task { await helpers.drop(id) }
     }
@@ -369,6 +403,12 @@ enum LiveServiceError: Error, LocalizedError {
         guard let record = records[snapshot.hostID] else { return }
         latest[snapshot.hostID] = snapshot
         publish(snapshot, record: record)
+        if snapshot.reach == .online, !record.noHelper {
+            pair(record, capabilities: snapshot.capabilities)
+            if foreground, unreported.remove(record.id) != nil {
+                deps.reported(record.id, Set(snapshot.approvals.map(\.requestId)))
+            }
+        }
         if snapshot.reach == .online, !record.noHelper, !agentsRequested.contains(record.id) {
             agentsRequested.insert(record.id)
             Task {
@@ -409,12 +449,6 @@ enum LiveServiceError: Error, LocalizedError {
         return record
     }
 
-    static func view(of record: HostRecord) -> HostRecordView {
-        HostRecordView(
-            id: record.id, name: record.profile.name, symbol: HostSymbol(rawValue: record.symbol) ?? .laptop,
-            address: record.profile.endpoint.host, etAvailable: record.profile.etAvailable
-        )
-    }
 
     // MARK: Settings
 
@@ -429,6 +463,12 @@ enum LiveServiceError: Error, LocalizedError {
     /// itself only. A switch flipped on another device reaches the host store here too.
     private func settingsChanged(from old: AppSettings) {
         guard settings != old else { return }
+        deps.shareSettings(settings)
+        if settings.relayURL != old.relayURL || settings.liveActivities != old.liveActivities
+            || settings.liveActivityCommandMachines != old.liveActivityCommandMachines {
+            pairOnlineMachines()
+        }
+        if settings.liveActivityCommandMachines != old.liveActivityCommandMachines { sendCommandChoice() }
         for terminal in terminals.values {
             terminal.apply(settings)
         }
