@@ -24,6 +24,9 @@ packages:
     path: ../../packages/TogoTerminal
   TogoMosh:
     path: ../../packages/TogoMosh
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    exactVersion: 1.19.7
 
 targets:
   Togo:
@@ -59,12 +62,19 @@ targets:
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: Ink
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         CADisableMinimumFrameDurationOnPhone: true
         NSFaceIDUsageDescription: Unlock your SSH keys.
-        NSLocalNetworkUsageDescription: Connect to machines on your network.
+        NSLocalNetworkUsageDescription: Find and connect to the machines on your network.
+        NSBonjourServices:
+          - _ssh._tcp
+        CFBundleURLTypes:
+          - CFBundleURLName: app.togo
+            CFBundleURLSchemes:
+              - togo
         UISupportedInterfaceOrientations~iphone:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -79,6 +89,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.app.togo
+        # Machines sync through key-value storage; keys and passwords never do.
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)$(CFBundleIdentifier)
 
   TogoWatch:
     type: application
@@ -159,13 +171,60 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
 
+  # Snapshot references are recorded on the iPhone 17 simulator; the library is never linked
+  # into the app.
+  TogoSnapshotTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TogoSnapshotTests
+        excludes:
+          - "**/__Snapshots__"
+    dependencies:
+      - target: Togo
+      - package: SnapshotTesting
+        product: SnapshotTesting
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.togo.TogoSnapshotTests
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+
+  # Runs from its own scheme so the unit and snapshot runs never wait on a UI test launch.
+  TogoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: TogoUITests
+    dependencies:
+      - target: Togo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.togo.TogoUITests
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Togo
+
 schemes:
   Togo:
     build:
       targets:
         Togo: all
         TogoTests: [test]
+        TogoSnapshotTests: [test]
+        TogoUITests: [test]
     test:
       config: Debug
       targets:
         - TogoTests
+        - TogoSnapshotTests
+
+  TogoUITests:
+    build:
+      targets:
+        Togo: all
+        TogoUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - TogoUITests

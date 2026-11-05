@@ -1,4 +1,5 @@
 import LocalAuthentication
+import UIKit
 
 /// Unlock wording from the hardware: iPhone Duo has Touch ID, so "Face ID" is never assumed.
 enum BiometryName {
@@ -16,4 +17,9 @@ enum BiometryName {
         _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
         return label(for: context.biometryType)
     }
+}
+
+/// "iPhone" or "iPad", for copy about what stays on this device.
+enum DeviceName {
+    @MainActor static var model: String { UIDevice.current.model }
 }

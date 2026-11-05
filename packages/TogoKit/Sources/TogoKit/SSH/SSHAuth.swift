@@ -24,10 +24,18 @@ final class PreparedAuthDelegate: NIOSSHClientUserAuthenticationDelegate, Sendab
     private let username: String
     private let state: Mutex<State>
     private let keyboardInteractive: KeyboardInteractiveResponder?
+    /// Keyboard-interactive only as a second step after the server accepted the key, such
+    /// as a one-time code. A refused key leaves public key in the server's list, so it still
+    /// ends as a refused key rather than a prompt.
+    private let keyboardInteractiveAfterKeyOnly: Bool
 
-    init(username: String, key: NIOSSHPrivateKey?, password: String?, keyboardInteractive: KeyboardInteractiveResponder? = nil) {
+    init(
+        username: String, key: NIOSSHPrivateKey?, password: String?, keyboardInteractive: KeyboardInteractiveResponder? = nil,
+        keyboardInteractiveAfterKeyOnly: Bool = false
+    ) {
         self.username = username
         self.keyboardInteractive = keyboardInteractive
+        self.keyboardInteractiveAfterKeyOnly = keyboardInteractiveAfterKeyOnly
         state = Mutex(State(key: key, password: password))
     }
 
@@ -42,6 +50,7 @@ final class PreparedAuthDelegate: NIOSSHClientUserAuthenticationDelegate, Sendab
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
         let username = self.username
+        let afterKeyOnly = keyboardInteractiveAfterKeyOnly
         let offer: NIOSSHUserAuthenticationOffer? = state.withLock { state in
             state.serverOffersPassword = availableMethods.contains(.password)
             if availableMethods.contains(.publicKey), let key = state.key {
@@ -54,7 +63,9 @@ final class PreparedAuthDelegate: NIOSSHClientUserAuthenticationDelegate, Sendab
                 state.tried.append("password")
                 return .init(username: username, serviceName: "", offer: .password(.init(password: password)))
             }
-            if availableMethods.contains(.keyboardInteractive), keyboardInteractive != nil, !state.keyboardInteractiveOffered {
+            let keyAccepted = state.tried.contains("publickey") && !availableMethods.contains(.publicKey)
+            if availableMethods.contains(.keyboardInteractive), keyboardInteractive != nil, !state.keyboardInteractiveOffered,
+               !afterKeyOnly || keyAccepted {
                 state.keyboardInteractiveOffered = true
                 state.tried.append("keyboard-interactive")
                 return .init(username: username, serviceName: "", offer: .keyboardInteractive(.init()))

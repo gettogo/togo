@@ -36,10 +36,10 @@ struct FixtureTests {
 
     @Test func sessionStatusUnknownKept() throws {
         let decoder = JSONDecoder()
-        #expect(try decoder.decode(SessionStatus.self, from: Data(#""paused""#.utf8)) == .other("paused"))
+        #expect(try decoder.decode(SessionStatus.self, from: Data(#""paused""#.utf8)) == .unknown("paused"))
         #expect(try decoder.decode(SessionStatus.self, from: Data(#""needs_you""#.utf8)) == .needsYou)
         #expect(String(decoding: try JSONEncoder().encode(SessionStatus.needsYou), as: UTF8.self) == #""needs_you""#)
-        #expect(String(decoding: try JSONEncoder().encode(SessionStatus.other("paused")), as: UTF8.self) == #""paused""#)
+        #expect(String(decoding: try JSONEncoder().encode(SessionStatus.unknown("paused")), as: UTF8.self) == #""paused""#)
     }
 
     @Test func createdAtAcceptsFractionalSecondsAndOffsets() throws {
@@ -143,9 +143,23 @@ struct FixtureTests {
         case .sessionRename: (RenameParams.self, Session.self)
         case .sessionAttachCommand: (SessionIDParams.self, AttachCommandResult.self)
         case .sessionCapture: (CaptureParams.self, CaptureResult.self)
+        case .sessionSetMute: (SetMuteParams.self, Session.self)
         case .agentsList: (EmptyParams.self, AgentList.self)
         case .fsRecentDirs: (EmptyParams.self, RecentDirs.self)
         case .fsListDir: (ListDirParams.self, ListDirResult.self)
+        case .fsRead: (FsReadParams.self, FsReadResult.self)
+        case .fsUpload: (UploadParams.self, UploadResult.self)
+        case .eventsSubscribe: (EventsSubscribeParams.self, EventSnapshot.self)
+        case .eventsKeepalive: (EmptyParams.self, EmptyResult.self)
+        case .approvalList: (ApprovalListParams.self, ApprovalList.self)
+        case .approvalAnswer: (ApprovalAnswerParams.self, ApprovalAnswerResult.self)
+        case .gitStatus: (SessionIDParams.self, GitStatus.self)
+        case .gitBranches: (SessionIDParams.self, GitBranches.self)
+        case .portsList: (SessionIDParams.self, PortList.self)
+        case .gitDiff: (GitDiffParams.self, GitDiff.self)
+        case .gitLog: (GitLogParams.self, GitLog.self)
+        case .pushPair: (PushPairParams.self, PushPairResult.self)
+        case .pushUnpair: (PushUnpairParams.self, EmptyResult.self)
         }
     }
 
@@ -158,3 +172,4 @@ struct FixtureTests {
         try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value))
     }
 }
+

@@ -21,9 +21,8 @@ struct PrivacyTests {
         #expect(!ResumeLock.needsUnlock(backgroundedAt: nil, now: now, enabled: true))
     }
 
-    @Test func resumeLockDefaultsOff() throws {
-        let defaults = try #require(UserDefaults(suiteName: "privacy-test-\(UUID().uuidString)"))
-        #expect(!defaults.bool(forKey: ResumeLock.defaultsKey))
+    @Test func resumeLockIsOnByDefault() {
+        #expect(AppSettings().resumeLock)
     }
 }
 
@@ -35,15 +34,17 @@ private final class CountingEvaluator: BiometricEvaluator {
     }
 }
 
+@MainActor private final class Setting {
+    var on = false
+}
+
 @MainActor
 struct ResumeLockControllerTests {
     @Test func engagingLockPromptsEvenWithCachedContext() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "privacy-test-\(UUID().uuidString)"))
-        defaults.set(true, forKey: ResumeLock.defaultsKey)
         let evaluator = CountingEvaluator()
         let biometrics = BiometricSession(evaluator: evaluator)
         _ = try await biometrics.context(reason: "earlier signing")
-        let controller = ResumeLockController(biometrics: biometrics, defaults: defaults)
+        let controller = ResumeLockController(biometrics: biometrics, isEnabled: { true })
         let now = Date()
         controller.scenePhaseChanged(to: .background, now: now)
         controller.scenePhaseChanged(to: .active, now: now.addingTimeInterval(5))
@@ -56,7 +57,7 @@ struct ResumeLockControllerTests {
     @Test func deviceLockClearsTheSigningContext() async throws {
         let evaluator = CountingEvaluator()
         let biometrics = BiometricSession(evaluator: evaluator)
-        let controller = ResumeLockController(biometrics: biometrics)
+        let controller = ResumeLockController(biometrics: biometrics, isEnabled: { true })
         _ = try await biometrics.context(reason: "sign")
         controller.protectedDataBecameUnavailable()
         _ = try await biometrics.context(reason: "sign")
@@ -69,11 +70,25 @@ struct ResumeLockControllerTests {
     }
     #endif
 
+    @Test func lockFollowsTheSettingAtEachReturn() async throws {
+        let setting = Setting()
+        let controller = ResumeLockController(
+            biometrics: BiometricSession(evaluator: CountingEvaluator()), isEnabled: { setting.on }
+        )
+        let now = Date()
+        controller.scenePhaseChanged(to: .background, now: now)
+        controller.scenePhaseChanged(to: .active, now: now.addingTimeInterval(5))
+        #expect(!controller.locked)
+        setting.on = true
+        controller.scenePhaseChanged(to: .background, now: now.addingTimeInterval(10))
+        controller.scenePhaseChanged(to: .active, now: now.addingTimeInterval(15))
+        #expect(controller.locked)
+        await controller.pending?.value
+    }
+
     @Test func shortBackgroundDoesNotLock() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "privacy-test-\(UUID().uuidString)"))
-        defaults.set(true, forKey: ResumeLock.defaultsKey)
         let evaluator = CountingEvaluator()
-        let controller = ResumeLockController(biometrics: BiometricSession(evaluator: evaluator), defaults: defaults)
+        let controller = ResumeLockController(biometrics: BiometricSession(evaluator: evaluator), isEnabled: { true })
         let now = Date()
         controller.scenePhaseChanged(to: .background, now: now)
         controller.scenePhaseChanged(to: .active, now: now.addingTimeInterval(0.5))

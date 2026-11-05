@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -314,6 +315,50 @@ func TestAttachCommandManaged(t *testing.T) {
 	}
 	if _, err := s.AttachCommand(ctx, "s_aaaaaaaaaa"); !errors.Is(err, session.ErrNotFound) {
 		t.Errorf("AttachCommand unknown: error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestPhoneAttachCommandMarksManagedSession(t *testing.T) {
+	s := newService(t)
+	ctx := context.Background()
+	got := mustCreate(t, s, session.CreateOpts{})
+	argv, err := s.PhoneAttachCommand(ctx, got.ID)
+	if err != nil {
+		t.Fatalf("PhoneAttachCommand: %v", err)
+	}
+	if want := s.Tmux.AttachArgv(got.ID); !reflect.DeepEqual(argv, want) {
+		t.Errorf("argv = %v, want %v", argv, want)
+	}
+	if out := tmuxOut(t, s.Tmux, "show-environment", "-t", "="+got.ID, "TOGO_CLIENT"); out != "TOGO_CLIENT=1" {
+		t.Errorf("session environment = %q, want TOGO_CLIENT=1", out)
+	}
+	if _, err := s.PhoneAttachCommand(ctx, "s_aaaaaaaaaa"); !errors.Is(err, session.ErrNotFound) {
+		t.Errorf("unknown session: error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestPhoneAttachCommandLeavesUnmanagedSessionAlone(t *testing.T) {
+	s := newService(t)
+	s.User = tmuxtest.New(t)
+	ctx := context.Background()
+	if err := s.User.NewSession(ctx, tmux.NewSessionOpts{Name: "my work", Dir: t.TempDir()}); err != nil {
+		t.Fatalf("NewSession on user socket: %v", err)
+	}
+	argv, err := s.PhoneAttachCommand(ctx, "u_6d7920776f726b")
+	if err != nil {
+		t.Fatalf("PhoneAttachCommand: %v", err)
+	}
+	if want := s.User.AttachArgv("my work"); !reflect.DeepEqual(argv, want) {
+		t.Errorf("argv = %v, want %v", argv, want)
+	}
+	for _, c := range []*tmux.Client{s.User, s.Tmux} {
+		out, _ := exec.Command(c.Bin, append(append([]string{}, c.Socket...), "show-environment", "-g")...).CombinedOutput()
+		if strings.Contains(string(out), "TOGO_CLIENT") {
+			t.Errorf("TOGO_CLIENT set on %v: %s", c.Socket, out)
+		}
+	}
+	if out, _ := exec.Command(s.User.Bin, append(append([]string{}, s.User.Socket...), "show-environment", "-t", "=my work", "TOGO_CLIENT")...).CombinedOutput(); strings.Contains(string(out), "TOGO_CLIENT=1") {
+		t.Errorf("unmanaged session environment was changed: %s", out)
 	}
 }
 

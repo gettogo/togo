@@ -21,6 +21,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/tmux"
 	"github.com/gettogo/togo/helper/internal/tmux/tmuxtest"
+	"github.com/gettogo/togo/helper/internal/upload"
 )
 
 const fixturesDir = "../../../protocol/v1/fixtures"
@@ -74,6 +75,7 @@ func harness(t *testing.T, tm *tmux.Client) (a *api.API, home string) {
 	f := &fsread.Service{Sessions: svc}
 	ext := g.Methods()
 	maps.Copy(ext, f.Methods())
+	maps.Copy(ext, (&upload.Service{Home: togoHome, Sessions: svc}).Methods())
 	// The pairing fixtures fix the host secrets: mailbox secret bytes
 	// 0x00..0x1f, then X25519 private key bytes 0x20..0x3f.
 	seq := make([]byte, 64)

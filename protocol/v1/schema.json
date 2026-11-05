@@ -47,6 +47,7 @@
         { "if": { "properties": { "method": { "const": "git.log" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitLogParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.branches" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "fs.read" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsReadParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "fs.upload" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsUploadParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "ports.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.signal" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalSignalParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.hook" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalHookParams" } }, "required": ["params"] } },
@@ -253,7 +254,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.*, fs.read, fs.listDir with ref), \"ports.v1\" (ports.list). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.*, fs.read, fs.listDir with ref), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -1303,6 +1304,40 @@
       ],
       "additionalProperties": false
     },
+    "FsUploadParams": {
+      "description": "fs.upload (upload.v1). Writes the bytes for the agent to read, such as a screenshot. sessionId must be a managed session id (an unmanaged one is -32007, an unknown one -32001; any other string is -32602). name is reduced to the characters A-Z a-z 0-9 . _ - and at most 64 bytes, keeping the extension; directory parts and leading dots are dropped. data is base64url without padding; more than 700000 decoded bytes is -32602.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionIdParam"
+        },
+        "name": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/$defs/Base64Url"
+        }
+      },
+      "required": [
+        "sessionId",
+        "name",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "FsUploadResult": {
+      "description": "path is the absolute path on the host of the file written, mode 0600 under $TOGO_HOME/uploads/<sessionId>/ as <unix-ms>-<name>. The helper deletes uploads older than 7 days.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
     "PortsListResult": {
       "description": "ports.list. TCP ports in the LISTEN state held by processes in the session's process tree, ordered by port.",
       "type": "object",
@@ -1868,6 +1903,7 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.log" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitLogResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.branches" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitBranchesResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.read" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsReadResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.upload" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsUploadResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "ports.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/PortsListResult" } } } } } }
       ]
     }

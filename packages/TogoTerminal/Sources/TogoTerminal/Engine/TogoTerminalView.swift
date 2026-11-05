@@ -20,6 +20,13 @@ final class TogoTerminalView: TerminalView {
     /// Bytes for typed text while a modifier is latched; nil passes the text to SwiftTerm.
     var latchedInput: ((String) -> [UInt8]?)?
     var onShortcut: ((ShortcutAction) -> Void)?
+    /// The selection text after a Copy, so it reaches the engine's clipboard hook.
+    var onCopy: ((String) -> Void)?
+    /// Edit menu Paste, so it takes the same sanitised, bracketed path as every other paste.
+    var onPaste: ((String) -> Void)?
+    var pasteboardText: () -> String? = { UIPasteboard.general.string }
+    /// Asked per hardware press; kitty mode never gets here, SwiftTerm reports those keys.
+    var extendedKeyMode: (() -> ExtendedKeyMode)?
     let chordRepeater: ChordRepeater
 
     private let wheelPan = UIPanGestureRecognizer()
@@ -54,12 +61,14 @@ final class TogoTerminalView: TerminalView {
         return super.gestureRecognizerShouldBegin(gestureRecognizer)
     }
 
+    /// More than one character at once is dictation or a text replacement, not a key, so it
+    /// gets the paste filter. A single typed character, a control included, passes unchanged.
     override func insertText(_ text: String) {
         if markedTextRange == nil, let bytes = latchedInput?(text) {
             if !bytes.isEmpty { send(data: bytes[...]) }
             return
         }
-        super.insertText(text)
+        super.insertText(text.count > 1 ? PasteText.sanitize(text) : text)
     }
 
     /// Ctrl and Option-as-Meta chords are encoded by `KeyEncoder.hardware`, so hardware and
@@ -90,12 +99,31 @@ final class TogoTerminalView: TerminalView {
         characters: String, charactersIgnoringModifiers: String, modifiers: UIKeyModifierFlags, keyCode: Int,
         isHeld: @escaping @MainActor () -> Bool
     ) -> Bool {
-        guard let bytes = KeyEncoder.hardware(
+        let extended = KeyEncoder.extendedHardware(
+            charactersIgnoringModifiers: charactersIgnoringModifiers, modifiers: modifiers, keyCode: keyCode,
+            optionAsMeta: optionAsMetaKey, mode: extendedKeyMode?() ?? .legacy)
+        guard let bytes = extended ?? KeyEncoder.hardware(
             characters: characters, charactersIgnoringModifiers: charactersIgnoringModifiers,
             modifiers: modifiers, optionAsMeta: optionAsMetaKey) else { return false }
         send(data: bytes[...])
         chordRepeater.start(key: keyCode, bytes: bytes, isHeld: isHeld)
         return true
+    }
+
+    /// SwiftTerm's copy writes the pasteboard itself and also ends the selection drag, so it
+    /// still runs; the text is read first because the copy clears the selection.
+    override func copy(_ sender: Any?) {
+        let text = getSelection()
+        super.copy(sender)
+        if let text { onCopy?(text) }
+    }
+
+    /// Ends the selection as SwiftTerm's paste does. SwiftTerm's kitty paste event (mode 5522)
+    /// is internal to SwiftTerm, so with the filter in front it cannot be sent from here.
+    override func paste(_ sender: Any?) {
+        guard let onPaste else { return super.paste(sender) }
+        clearSelection()
+        if let text = pasteboardText() { onPaste(text) }
     }
 
     /// A key released after focus moves never reaches this view, so the repeat ends here.

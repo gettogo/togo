@@ -46,7 +46,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         KeyBarItem(title: "Alt", action: .altLatch),
         .keys("Tab", "Tab"),
         .keys("Back Tab", "S-Tab"),
-    ] + arrows + [paste, hide])
+    ] + arrows + [compose, paste, hide])
 
     public static let claude = KeyBarConfig(items: [
         .keys("Esc", "Esc"),
@@ -54,7 +54,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         .keys("Mode", "S-Tab"),
         .keys("Interrupt", "C-c"),
         .keys("Ctrl O", "C-o"),
-    ] + arrows + [paste, hide])
+    ] + arrows + [compose, paste, hide])
 
     /// The bar for OMP sessions: the standard bar with Interrupt repeated at the end.
     public static let omp = KeyBarConfig(items: standard.items + [.keys("Interrupt", "C-c")])
@@ -68,6 +68,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         arrowItems.map { .keys($0.0, $0.2, symbol: $0.1) }
     }
 
+    private static let compose = KeyBarItem(title: "Compose", symbol: "square.and.pencil", action: .compose)
     private static let paste = KeyBarItem(title: "Paste", symbol: "doc.on.clipboard", action: .paste)
     private static let hide = KeyBarItem(title: "Hide keyboard", symbol: "keyboard.chevron.compact.down", action: .hideKeyboard)
 }

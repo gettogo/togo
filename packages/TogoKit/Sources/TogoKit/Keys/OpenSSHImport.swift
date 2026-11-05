@@ -7,12 +7,16 @@ public enum KeyError: Error, Equatable, LocalizedError {
     case badPassphrase
     case unsupportedKeyType(String)
     case malformed
+    /// The key a machine record names is not on this device, as when the record synced
+    /// from another device: private keys never leave the device that made or imported them.
+    case missing
 
     public var errorDescription: String? {
         switch self {
         case .badPassphrase: "The passphrase is wrong."
         case .unsupportedKeyType(let type): "Keys of type \(type) are not supported."
         case .malformed: "This is not an OpenSSH private key."
+        case .missing: "This key is not on this device."
         }
     }
 }

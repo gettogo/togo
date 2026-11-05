@@ -109,6 +109,9 @@ set -g default-terminal "tmux-256color"
 set -g status off
 set-environment -g COLORTERM truecolor
 set -as terminal-features 'xterm*:RGB'
+set -g allow-passthrough on
+set -s extended-keys on
+set -as terminal-features 'xterm*:extkeys'
 `
 
 // TmuxFallbacks are where package managers and systems install tmux, for
@@ -286,6 +289,32 @@ func (s *Service) AttachCommand(ctx context.Context, id string) ([]string, error
 		return s.Tmux.AttachArgv(sess.ID), nil
 	}
 	return s.User.AttachArgv(sess.Name), nil
+}
+
+// PhoneClientEnv is set in a managed session's environment when the phone
+// attaches, so shells and agents started in new panes can tell a phone is
+// connected. Panes that already exist keep the environment they started with.
+const PhoneClientEnv = "TOGO_CLIENT"
+
+// PhoneAttachCommand is AttachCommand for the phone. A tmux attach command
+// cannot carry an environment into the session's panes, so for a managed
+// session it first sets TOGO_CLIENT=1 in the session environment. The
+// user's own sessions are attached to unchanged.
+func (s *Service) PhoneAttachCommand(ctx context.Context, id string) ([]string, error) {
+	sess, err := s.find(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !sess.Managed {
+		return s.User.AttachArgv(sess.Name), nil
+	}
+	if err := s.Tmux.SetEnvironment(ctx, sess.ID, PhoneClientEnv, "1"); err != nil {
+		if errors.Is(err, tmux.ErrNoSession) {
+			return nil, fmt.Errorf("%w: %s", ErrNotFound, id)
+		}
+		return nil, fmt.Errorf("tmux set-environment: %w", err)
+	}
+	return s.Tmux.AttachArgv(sess.ID), nil
 }
 
 // Resolve finds a session by id or by bib, written with or without the

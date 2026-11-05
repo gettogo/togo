@@ -248,13 +248,13 @@ func TestTmuxConfPhoneLines(t *testing.T) {
 		"set -g status off",
 		"set-environment -g COLORTERM truecolor",
 		"set -as terminal-features 'xterm*:RGB'",
+		"set -g allow-passthrough on",
+		"set -s extended-keys on",
+		"set -as terminal-features 'xterm*:extkeys'",
 	} {
 		if !strings.Contains(tmuxConf, line+"\n") {
 			t.Errorf("tmuxConf lacks %q", line)
 		}
-	}
-	if strings.Contains(tmuxConf, "extended-keys") {
-		t.Error("tmuxConf sets extended-keys, which waits for engine support")
 	}
 
 	conf := filepath.Join(t.TempDir(), "tmux.conf")
@@ -273,6 +273,9 @@ func TestTmuxConfPhoneLines(t *testing.T) {
 		{[]string{"show", "-gv", "status"}, "off"},
 		{[]string{"show-environment", "-g", "COLORTERM"}, "COLORTERM=truecolor"},
 		{[]string{"show", "-sv", "terminal-features"}, "xterm*:RGB"},
+		{[]string{"show", "-sv", "terminal-features"}, "xterm*:extkeys"},
+		{[]string{"show", "-gv", "allow-passthrough"}, "on"},
+		{[]string{"show", "-sv", "extended-keys"}, "on"},
 	} {
 		out, err := exec.Command(c.Bin, append(append([]string{}, c.Socket...), q.args...)...).CombinedOutput()
 		if err != nil {

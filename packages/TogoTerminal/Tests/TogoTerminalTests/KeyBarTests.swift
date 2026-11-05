@@ -165,4 +165,15 @@ import UIKit
         #expect(bar.latch.alt == .off)
         #expect(bar.button(for: try item("Esc", in: .standard))?.accessibilityCustomActions?.isEmpty ?? true)
     }
+
+    @Test func composeItemRunsTheComposeClosureAndSendsNothing() throws {
+        let h = EngineHarness()
+        let bar = KeyBarView(config: .claude, engine: h.engine)
+        var toggles = 0
+        bar.onCompose = { toggles += 1 }
+        bar.perform(try item("Compose", in: .claude))
+        bar.perform(try item("Compose", in: .standard))
+        #expect(toggles == 2)
+        #expect(h.joinedInput.isEmpty)
+    }
 }

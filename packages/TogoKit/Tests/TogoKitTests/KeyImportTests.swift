@@ -69,6 +69,12 @@ struct KeyImportTests {
         #expect(try await store.list().isEmpty)
     }
 
+    @Test func keyFromAnotherDeviceIsMissingNotMalformed() {
+        #expect(throws: KeyError.missing) {
+            try makeStore().privateKey(id: "synced-from-another-device", context: .init())
+        }
+    }
+
     @Test func garbageIsMalformed() async {
         await #expect(throws: KeyError.malformed) {
             try await makeStore().importKey(openSSH: "not a key", passphrase: nil, label: "x")

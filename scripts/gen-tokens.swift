@@ -24,7 +24,7 @@ let paletteURL = repoRoot.appendingPathComponent("apps/ios/Togo/Design/Palette.s
 let checkOnly = CommandLine.arguments.dropFirst().contains("--check")
 
 // Order fixes the order of the generated Swift, so output is stable.
-let roleKeys = ["ink", "deepest", "raised", "line", "snow", "mute", "muteDim"]
+let roleKeys = ["ink", "deepest", "raised", "line", "snow", "mute", "muteDim", "grouped"]
 
 func loadRoles() -> [Role] {
     guard let data = try? Data(contentsOf: tokensURL),
@@ -44,6 +44,12 @@ func loadRoles() -> [Role] {
         fail("color.accent needs dark and light")
     }
     roles.append(Role(key: "accent", asset: "Accent", dark: accentDark, light: accentLight))
+    // The light accent is too pale for text on the light background, so "Needs you" gets its own
+    // darker value there.
+    guard let accentText = color["accentText"] as? [String: String],
+          let textDark = accentText["dark"], let textLight = accentText["light"]
+    else { fail("color.accentText needs dark and light") }
+    roles.append(Role(key: "accentText", asset: "AccentText", dark: textDark, light: textLight))
     return roles
 }
 

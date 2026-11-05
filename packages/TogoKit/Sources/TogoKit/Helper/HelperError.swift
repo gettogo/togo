@@ -13,6 +13,11 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
     case unsupported(capability: String)
     /// The response's `result` did not have the shape the method promises.
     case malformedResponse
+    /// `approval.answer` was refused because the approval was already answered, its
+    /// prompt is gone or it expired; no keys reached the pane. Carries the helper's reason.
+    case conflict(String)
+    /// The payload has this many bytes, more than the method accepts. Nothing was sent.
+    case tooLarge(Int)
 
     /// The helper asked for has no tmux session with this id: it was killed or ended.
     public var isSessionGone: Bool {
@@ -27,6 +32,8 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         case .notReady: "The Togo helper on the host is not ready yet."
         case .unsupported: "The Togo helper on the host is too old for this. Update it on the host."
         case .malformedResponse: "The Togo helper on the host sent a reply that could not be read."
+        case .conflict: "That request was already answered, or it is no longer waiting."
+        case .tooLarge: "That file is too large to send. The limit is about 700 KB."
         }
     }
 

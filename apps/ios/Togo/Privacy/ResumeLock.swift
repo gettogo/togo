@@ -5,7 +5,6 @@ import SwiftUI
 import TogoKit
 
 struct ResumeLock {
-    static let defaultsKey = "privacy.lockOnResume"
     /// A glance at Control Centre or a notification banner should not lock the app.
     static let grace: TimeInterval = 1
 
@@ -22,11 +21,12 @@ final class ResumeLockController {
     private(set) var locked = false
     private var backgroundedAt: Date?
     private let biometrics: BiometricSession
-    private let defaults: UserDefaults
+    /// Read at each return to the foreground, so a change in settings applies to the next one.
+    private let isEnabled: @MainActor () -> Bool
 
-    init(biometrics: BiometricSession, defaults: UserDefaults = .standard) {
+    init(biometrics: BiometricSession, isEnabled: @escaping @MainActor () -> Bool) {
         self.biometrics = biometrics
-        self.defaults = defaults
+        self.isEnabled = isEnabled
     }
 
     func scenePhaseChanged(to phase: ScenePhase, now: Date = Date()) {
@@ -40,7 +40,7 @@ final class ResumeLockController {
             // The session drops its context after a long background on its own; this only
             // tells it the background is over.
             biometrics.enteredForeground()
-            let lock = ResumeLock.needsUnlock(backgroundedAt: since, now: now, enabled: defaults.bool(forKey: ResumeLock.defaultsKey))
+            let lock = ResumeLock.needsUnlock(backgroundedAt: since, now: now, enabled: isEnabled())
             if lock {
                 locked = true
                 // A cached context would unlock without asking; the fresh one is then shared with signing.

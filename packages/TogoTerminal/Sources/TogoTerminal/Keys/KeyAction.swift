@@ -15,6 +15,8 @@ public enum KeyAction: Hashable, Codable, Sendable {
     case paste
     case hideKeyboard
     case dpad
+    /// Opens or closes the app's compose bar; the bar itself sends nothing.
+    case compose
 }
 
 @MainActor

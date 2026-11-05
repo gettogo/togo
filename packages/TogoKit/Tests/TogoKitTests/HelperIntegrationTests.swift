@@ -18,6 +18,7 @@ struct HelperIntegrationTests {
         environment["TMUX_TMPDIR"] = sandbox.appending(path: "tmux").path
         environment["TMUX"] = nil
         defer {
+            stopDaemon(home: sandbox.appending(path: "home"))
             stopTmux(label: label, environment: environment)
             try? FileManager.default.removeItem(at: sandbox)
         }
@@ -31,6 +32,18 @@ struct HelperIntegrationTests {
         let sessions = try await client.listSessions()
         #expect(sessions.map(\.id) == [created.id])
         #expect(sessions.first?.bib == "01")
+
+        let snapshot = try await client.subscribe(foreground: false)
+        #expect(snapshot.sessions.map(\.id) == [created.id])
+        #expect(snapshot.approvals.isEmpty)
+        #expect(try await client.approvals(sessionId: created.id).isEmpty)
+        let muted = try await client.setMute(id: created.id, muted: true)
+        #expect(muted.muted)
+        let mutedEvent = try await firstEvent(client.notifications, after: snapshot.seq) {
+            if case .session(let session) = $0.event { session.muted } else { false }
+        }
+        #expect(mutedEvent?.sessionId == created.id)
+        try await client.keepalive()
 
         let argv = try await client.attachCommand(id: created.id)
         #expect(argv.count > 1 && argv[1] == "-u")
@@ -55,6 +68,50 @@ struct HelperIntegrationTests {
             throw CancellationError()
         }
         return binary
+    }
+
+    /// The first event matching `predicate`, or nil if none arrives within five seconds.
+    private func firstEvent(
+        _ stream: AsyncStream<EventEnvelope>, after seq: Int,
+        where predicate: @escaping @Sendable (EventEnvelope) -> Bool
+    ) async throws -> EventEnvelope? {
+        try await withThrowingTaskGroup(of: EventEnvelope?.self) { group in
+            group.addTask {
+                for await event in stream {
+                    #expect(event.seq > seq)
+                    if predicate(event) { return event }
+                }
+                return nil
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(5))
+                return nil
+            }
+            let first = try await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+    }
+
+    /// `serve --stdio` starts a detached daemon for the TOGO_HOME, which outlives the
+    /// test unless stopped. The daemon is the process holding its lock file open.
+    private func stopDaemon(home: URL) {
+        let lsof = Process()
+        let output = Pipe()
+        lsof.executableURL = URL(filePath: "/usr/sbin/lsof")
+        lsof.arguments = ["-t", home.appending(path: "run/daemon.lock").path]
+        lsof.standardOutput = output
+        lsof.standardError = FileHandle.nullDevice
+        guard (try? lsof.run()) != nil else { return }
+        let pids = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            .split(whereSeparator: \.isNewline).compactMap { pid_t($0) }
+        lsof.waitUntilExit()
+        for pid in pids { kill(pid, SIGTERM) }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while pids.contains(where: { kill($0, 0) == 0 }), ContinuousClock.now < deadline {
+            usleep(50_000)
+        }
+        for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
     }
 
     private func stopTmux(label: String, environment: [String: String]) {

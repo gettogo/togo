@@ -3,7 +3,7 @@ import Testing
 import TogoKit
 
 struct ShellQuoteTests {
-    static let hostile = ["it's", "", "a b", "$(x)", "a\nb", "émoji 🐕", ";", "`id`", "\"q\"", "back\\slash", "*"]
+    static let hostile = ["it's", "", "a b", "$(x)", "a\nb", "émoji 🐕", ";", "`id`", "\"q\"", "back\\slash", "*", "\\'", "tab\there", "x\\", "\\\\'"]
 
     /// A `'` followed by a combining mark or joiner forms one grapheme cluster with it, so a
     /// Character-level replace misses the quote and the shell sees it unescaped.
@@ -18,6 +18,8 @@ struct ShellQuoteTests {
 
     @Test func shellQuoteHostile() throws {
         #expect(shellQuote(["it's"]) == #"'it'\''s'"#)
+        #expect(shellQuote(["\\"]) == #"\\"#)
+        #expect(shellQuote(["a\\'b"]) == #"'a'\\\''b'"#)
         #expect(shellQuote([""]) == "''")
         #expect(shellQuote(["a b", "$(x)", "a\nb", "émoji 🐕", ";"]) == "'a b' '$(x)' 'a\nb' 'émoji 🐕' ';'")
 
@@ -26,12 +28,25 @@ struct ShellQuoteTests {
         #expect(try run("/bin/sh", script: #"printf '%s\0' "# + quoted) == argv.map { Data($0.utf8) })
     }
 
-    @Test func shellQuoteEscapesEveryQuoteByte() {
-        for element in Self.graphemeHostile {
-            let quoted = shellQuote([element]).utf8
-            // Every 0x27 must open or close a quoted run, so the count is 2 + 3 per input quote.
-            let inputQuotes = element.utf8.filter { $0 == 0x27 }.count
-            #expect(quoted.filter { $0 == 0x27 }.count == 2 + 3 * inputQuotes, "\(element.debugDescription)")
+    @Test(arguments: ["/bin/sh", "/bin/bash", "/bin/zsh"])
+    func shellQuoteRoundTripsThroughShell(shell: String) throws {
+        try #require(FileManager.default.isExecutableFile(atPath: shell))
+        let argv = Self.hostile + Self.graphemeHostile
+        #expect(try run(shell, script: #"printf '%s\0' "# + shellQuote(argv)) == argv.map { Data($0.utf8) })
+    }
+
+    @Test func shellQuoteEscapesEveryQuoteAndBackslash() {
+        for element in Self.graphemeHostile + ["a\\b", "\\'"] {
+            let quoted = Array(shellQuote([element]).unicodeScalars)
+            // No single-quoted run holds a backslash or a quote.
+            var inRun = false
+            var escaped = false
+            for scalar in quoted {
+                if escaped { escaped = false; continue }
+                if !inRun, scalar == "\\" { escaped = true; continue }
+                if scalar == "'" { inRun.toggle(); continue }
+                if inRun { #expect(scalar != "\\", "\(element.debugDescription)") }
+            }
         }
     }
 
@@ -40,13 +55,12 @@ struct ShellQuoteTests {
             print("shellQuoteHostileThroughFish skipped: fish is not on PATH")
             return
         }
-        // fish reads \\ and \' inside single quotes as escapes, so the backslash case is POSIX-only.
-        let argv = (Self.hostile + Self.graphemeHostile).filter { !$0.contains("\\") }
+        let argv = Self.hostile + Self.graphemeHostile
         #expect(try run(fish, script: #"printf '%s\0' "# + shellQuote(argv)) == argv.map { Data($0.utf8) })
     }
 
     @Test func shellCommandWrapsScript() {
-        #expect(shellCommand("echo 'x'") == #"/bin/sh -c 'echo '\''x'\'''"#)
+        #expect(shellCommand("echo 'x'") == #"/bin/sh -c 'echo '\''x'\'"#)
     }
 
     @Test func shellCommandRunsScriptUnderSh() throws {

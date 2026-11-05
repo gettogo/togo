@@ -1,28 +1,44 @@
-/// Quotes argv for a POSIX shell, per `session.attachCommand` in protocol/v1/schema.json:
-/// each element wrapped in `'`, each `'` inside replaced by `'\''`, joined with single spaces.
+/// Quotes argv for a shell, per `session.attachCommand` in protocol/v1/schema.json.
 ///
-/// Inside single quotes a POSIX shell interprets nothing, so every byte arrives as sent.
+/// Safe in sh, bash, zsh and fish, which disagree about backslashes inside single quotes
+/// (POSIX keeps them literal, fish treats `\\` and `\'` as escapes). So single quotes only
+/// ever wrap runs with no `'` and no `\`; each of those two is written outside the quotes
+/// as `\'` or `\\`, which every one of these shells reads as the literal character.
+/// An empty element becomes `''`.
 ///
-/// The replace works on Unicode scalars, never Characters: a `'` followed by a combining
+/// The scan works on Unicode scalars, never Characters: a `'` followed by a combining
 /// mark or joiner is one grapheme cluster that does not compare equal to `"'"`, so a
-/// Character-level replace would leave that quote unescaped and let the rest of the
-/// element run as shell code. U+0027 is the only scalar that encodes to byte 0x27.
+/// Character-level scan would leave that quote unescaped and let the rest of the
+/// element run as shell code.
+///
+/// Known limit: csh and tcsh still expand `!` (even inside quotes) and reject a newline, so
+/// an element with either fails to run there; it fails closed rather than running other code.
 public func shellQuote(_ argv: [String]) -> String {
     argv.map(quoteElement).joined(separator: " ")
 }
 
 private func quoteElement(_ element: String) -> String {
-    var scalars = String.UnicodeScalarView()
-    scalars.append("'")
+    if element.isEmpty { return "''" }
+    var out = String.UnicodeScalarView()
+    var inRun = false
     for scalar in element.unicodeScalars {
-        if scalar == "'" {
-            scalars.append(contentsOf: #"'\''"#.unicodeScalars)
+        if scalar == "'" || scalar == "\\" {
+            if inRun {
+                out.append("'")
+                inRun = false
+            }
+            out.append("\\")
+            out.append(scalar)
         } else {
-            scalars.append(scalar)
+            if !inRun {
+                out.append("'")
+                inRun = true
+            }
+            out.append(scalar)
         }
     }
-    scalars.append("'")
-    return String(scalars)
+    if inRun { out.append("'") }
+    return String(out)
 }
 
 /// Runs `script` under `/bin/sh` whatever the account's login shell is, so a fish,

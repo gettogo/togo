@@ -36,6 +36,7 @@ const (
 	MethodGitLog          = "git.log"
 	MethodGitBranches     = "git.branches"
 	MethodFsRead          = "fs.read"
+	MethodFsUpload        = "fs.upload"
 	MethodPortsList       = "ports.list"
 )
 

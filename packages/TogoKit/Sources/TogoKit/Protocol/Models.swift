@@ -82,21 +82,11 @@ public struct HelloResult: Codable, Hashable, Sendable {
 
 // MARK: - Sessions
 
-/// Unknown strings are kept so a newer helper's status does not fail the whole list.
-public enum SessionStatus: Codable, Hashable, Sendable {
+public enum SessionStatus: WireEnum {
     case working, needsYou, done, idle, exited
-    case other(String)
+    case unknown(String)
 
-    public init(rawValue: String) {
-        switch rawValue {
-        case "working": self = .working
-        case "needs_you": self = .needsYou
-        case "done": self = .done
-        case "idle": self = .idle
-        case "exited": self = .exited
-        default: self = .other(rawValue)
-        }
-    }
+    public static let known: [SessionStatus] = [.working, .needsYou, .done, .idle, .exited]
 
     public var rawValue: String {
         switch self {
@@ -105,17 +95,8 @@ public enum SessionStatus: Codable, Hashable, Sendable {
         case .done: "done"
         case .idle: "idle"
         case .exited: "exited"
-        case .other(let value): value
+        case .unknown(let value): value
         }
-    }
-
-    public init(from decoder: any Decoder) throws {
-        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
     }
 }
 
@@ -130,10 +111,13 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
     public var activity: String?
     public var attachedClients: Int
     public var managed: Bool
+    public var muted: Bool = false
+    public var meta: SessionMeta = .init()
 
     public init(
         id: String, bib: String?, name: String, agent: String, cwd: String, createdAt: Date,
-        status: SessionStatus, activity: String?, attachedClients: Int, managed: Bool
+        status: SessionStatus, activity: String?, attachedClients: Int, managed: Bool,
+        muted: Bool = false, meta: SessionMeta = .init()
     ) {
         self.id = id
         self.bib = bib
@@ -145,14 +129,14 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         self.activity = activity
         self.attachedClients = attachedClients
         self.managed = managed
+        self.muted = muted
+        self.meta = meta
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, bib, name, agent, cwd, createdAt, status, activity, attachedClients, managed
+        case id, bib, name, agent, cwd, createdAt, status, activity, attachedClients, managed, muted, meta
     }
 
-    // createdAt is parsed here rather than through a JSONDecoder date strategy so the
-    // model decodes the same way whichever decoder the caller configured.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -160,17 +144,14 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         name = try container.decode(String.self, forKey: .name)
         agent = try container.decode(String.self, forKey: .agent)
         cwd = try container.decode(String.self, forKey: .cwd)
-        let stamp = try container.decode(String.self, forKey: .createdAt)
-        guard let date = RFC3339.parse(stamp) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .createdAt, in: container, debugDescription: "not an RFC 3339 timestamp: \(stamp)"
-            )
-        }
-        createdAt = date
+        createdAt = try container.decodeTimestamp(forKey: .createdAt)
         status = try container.decode(SessionStatus.self, forKey: .status)
         activity = try container.decodeIfPresent(String.self, forKey: .activity)
         attachedClients = try container.decode(Int.self, forKey: .attachedClients)
         managed = try container.decode(Bool.self, forKey: .managed)
+        // Helpers without mute.v1 and events.v1 omit both keys.
+        muted = try container.decodeIfPresent(Bool.self, forKey: .muted) ?? false
+        meta = try container.decodeIfPresent(SessionMeta.self, forKey: .meta) ?? .init()
     }
 
     // bib and activity are required keys in the schema, so nil encodes as null, not as a missing key.
@@ -181,11 +162,37 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         try container.encode(name, forKey: .name)
         try container.encode(agent, forKey: .agent)
         try container.encode(cwd, forKey: .cwd)
-        try container.encode(RFC3339.format(createdAt), forKey: .createdAt)
+        try container.encodeTimestamp(createdAt, forKey: .createdAt)
         try container.encode(status, forKey: .status)
         try container.encode(activity, forKey: .activity)
         try container.encode(attachedClients, forKey: .attachedClients)
         try container.encode(managed, forKey: .managed)
+        try container.encode(muted, forKey: .muted)
+        try container.encode(meta, forKey: .meta)
+    }
+}
+
+public struct SessionMeta: Codable, Hashable, Sendable {
+    public var model: String?
+    public var contextPercent: Double?
+    public var costUsd: Double?
+
+    public init(model: String? = nil, contextPercent: Double? = nil, costUsd: Double? = nil) {
+        self.model = model
+        self.contextPercent = contextPercent
+        self.costUsd = costUsd
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case model, contextPercent, costUsd
+    }
+
+    // Every key is required by the schema, so nil encodes as null.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(model, forKey: .model)
+        try container.encode(contextPercent, forKey: .contextPercent)
+        try container.encode(costUsd, forKey: .costUsd)
     }
 }
 
@@ -198,6 +205,35 @@ enum RFC3339 {
     /// Whole seconds in UTC with a `Z` suffix, matching what the helper emits.
     static func format(_ date: Date) -> String {
         Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down)).formatted(.iso8601)
+    }
+}
+
+// Timestamps are parsed here rather than through a JSONDecoder date strategy so the
+// models decode the same way whichever decoder the caller configured.
+extension KeyedDecodingContainer {
+    func decodeTimestamp(forKey key: Key) throws -> Date {
+        let stamp = try decode(String.self, forKey: key)
+        guard let date = RFC3339.parse(stamp) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key, in: self, debugDescription: "not an RFC 3339 timestamp: \(stamp)"
+            )
+        }
+        return date
+    }
+
+    func decodeTimestampIfPresent(forKey key: Key) throws -> Date? {
+        guard try contains(key) && !decodeNil(forKey: key) else { return nil }
+        return try decodeTimestamp(forKey: key)
+    }
+}
+
+extension KeyedEncodingContainer {
+    mutating func encodeTimestamp(_ date: Date?, forKey key: Key) throws {
+        if let date {
+            try encode(RFC3339.format(date), forKey: key)
+        } else {
+            try encodeNil(forKey: key)
+        }
     }
 }
 

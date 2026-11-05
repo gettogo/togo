@@ -82,6 +82,35 @@ let esc = "\u{1b}"
         #expect(h.joinedInput == Data("a".utf8))
     }
 
+    /// Dictation and text replacements arrive as one multi-character insert, which must not
+    /// carry controls the way a paste must not.
+    @Test func multiCharacterInsertDropsControls() async {
+        let h = EngineHarness()
+        h.engine.textInputView.insertText("ls\(esc)[31m -la\u{9b}\u{7f}\tx")
+        #expect(await waitUntil { !h.input.isEmpty })
+        await settle()
+        #expect(h.joinedInput == Data("ls[31m -la\tx".utf8))
+    }
+
+    @Test func singleTypedControlPassesThrough() async {
+        let h = EngineHarness()
+        h.engine.textInputView.insertText("\t")
+        #expect(await waitUntil { !h.input.isEmpty })
+        #expect(h.joinedInput == Data("\t".utf8))
+    }
+
+    @Test func imageOnThePasteboardGoesToTheImageHook() {
+        let h = EngineHarness()
+        let board = UIPasteboard.withUniqueName()
+        board.image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { _ in }
+        var pasted: Data?
+        h.engine.onPasteImage = { pasted = $0 }
+        h.engine.pasteFromClipboard(board)
+        #expect(pasted != nil)
+        #expect(h.input.isEmpty)
+        UIPasteboard.remove(withName: board.name)
+    }
+
     @Test func markedTextCommitsOnce() async {
         let h = EngineHarness()
         h.engine.textInputView.setMarkedText("に", selectedRange: NSRange(location: 1, length: 0))
@@ -124,7 +153,53 @@ let esc = "\u{1b}"
         h.feed("\(esc)[?2004h")
         h.engine.paste("x\(esc)[201~rm -rf ~\r")
         #expect(await waitUntil { !h.input.isEmpty })
-        #expect(h.joinedInput == Data("\(esc)[200~xrm -rf ~\r\(esc)[201~".utf8))
+        #expect(h.joinedInput == Data("\(esc)[200~x[201~rm -rf ~\r\(esc)[201~".utf8))
+    }
+
+    @Test func nestedEndMarkerCannotReassemble() async {
+        let h = EngineHarness()
+        h.feed("\(esc)[?2004h")
+        h.engine.paste("\(esc)[20\(esc)[201~1~echo owned\r")
+        #expect(await waitUntil { !h.input.isEmpty })
+        #expect(h.joinedInput == Data("\(esc)[200~[20[201~1~echo owned\r\(esc)[201~".utf8))
+    }
+
+    @Test func pasteDropsEscapeDeleteAndC1Controls() {
+        #expect(PasteText.sanitize("a\(esc)b") == "ab")
+        #expect(PasteText.sanitize("\u{9B}31mred") == "31mred")
+        #expect(PasteText.sanitize("x\u{7F}\u{00}\u{07}\u{85}y") == "xy")
+    }
+
+    @Test func pasteKeepsTabsNewlinesAndUnicode() {
+        let text = "col1\tcol2\nline two\r\nnaïve 日本語 \u{1F600} مرحبا"
+        #expect(PasteText.sanitize(text) == text)
+    }
+
+    @Test func editMenuPasteEndsTheSelection() async {
+        let h = EngineHarness()
+        h.feed("some output")
+        h.engine.selectAll()
+        #expect(h.engine.isSelecting)
+        // Nothing survives the filter, so no input goes out to end the selection on the way.
+        h.engine.terminalView.pasteboardText = { "\(esc)" }
+        h.engine.terminalView.paste(nil)
+        #expect(await waitUntil { !h.engine.isSelecting })
+    }
+
+    @Test func editMenuPasteTakesTheSanitisedPath() async {
+        let h = EngineHarness()
+        h.feed("\(esc)[?2004h")
+        h.engine.terminalView.pasteboardText = { "hi\(esc)[201~\r" }
+        h.engine.terminalView.paste(nil)
+        #expect(await waitUntil { !h.input.isEmpty })
+        #expect(h.joinedInput == Data("\(esc)[200~hi[201~\r\(esc)[201~".utf8))
+    }
+
+    @Test func plainPasteIsSanitisedToo() async {
+        let h = EngineHarness()
+        h.engine.paste("ls\(esc)[A\r")
+        #expect(await waitUntil { !h.input.isEmpty })
+        #expect(h.joinedInput == Data("ls[A\r".utf8))
     }
 
     @Test func longTitleIsTruncated() async {

@@ -7,6 +7,8 @@ import Foundation
 /// consumer of `channel.incoming`; one reader task decodes frames and resumes the
 /// waiting call. One writer task sends frames in id order, so `channel.write` is
 /// never called concurrently.
+///
+/// `event` notifications, sent once `subscribe` was called, go to `notifications`.
 public actor HelperClient {
     private let channel: any ExecChannel
     private let callTimeout: Duration
@@ -18,17 +20,31 @@ public actor HelperClient {
     private var writer: Task<Void, Never>?
     private let outbox: AsyncStream<OutgoingFrame>
     private let outboxSink: AsyncStream<OutgoingFrame>.Continuation
+    private let eventSink: AsyncStream<EventGate.Tagged>.Continuation
+    private let eventGate = EventGate()
+
+    /// Events after the latest `subscribe` snapshot, in seq order. Single consumer.
+    /// An event is checked against the newest snapshot when it is read, so after a
+    /// resubscribe nothing the new snapshot already contains comes out.
+    /// Holds the newest 256 when the consumer falls behind, so a seq gap means
+    /// events were lost and the consumer should subscribe again. Finishes when the
+    /// client closes.
+    public nonisolated let notifications: AsyncStream<EventEnvelope>
 
     public init(channel: any ExecChannel, callTimeout: Duration = .seconds(10)) {
         self.channel = channel
         self.callTimeout = callTimeout
         (outbox, outboxSink) = AsyncStream.makeStream()
+        let (events, eventSink) = AsyncStream<EventGate.Tagged>.makeStream(bufferingPolicy: .bufferingNewest(256))
+        self.eventSink = eventSink
+        notifications = eventGate.filtered(events)
     }
 
     deinit {
         reader?.cancel()
         writer?.cancel()
         outboxSink.finish()
+        eventSink.finish()
     }
 
     public func hello(client: ClientInfo) async throws -> HelloResult {
@@ -69,11 +85,11 @@ public actor HelperClient {
     }
 
     public func capture(id: String, lines: Int, join: Bool) async throws -> CaptureResult {
-        try requireReady()
-        guard capabilities?.contains("capture.v1") == true else {
-            throw HelperError.unsupported(capability: "capture.v1")
-        }
-        return try await call(.sessionCapture, CaptureParams(id: id, lines: lines, join: join))
+        try await readyCall(.sessionCapture, CaptureParams(id: id, lines: lines, join: join), needs: Capability.capture)
+    }
+
+    public func setMute(id: String, muted: Bool) async throws -> Session {
+        try await readyCall(.sessionSetMute, SetMuteParams(id: id, muted: muted), needs: Capability.mute)
     }
 
     public func agents() async throws -> [AgentInfo] {
@@ -90,6 +106,91 @@ public actor HelperClient {
         try await readyCall(.fsListDir, ListDirParams(path: path, showHidden: showHidden))
     }
 
+    /// Writes a file for the session, at most `UploadParams.maxBytes`. A larger
+    /// payload throws `.tooLarge` without sending anything.
+    public func upload(_ params: UploadParams) async throws -> UploadResult {
+        guard params.data.count <= UploadParams.maxBytes else { throw HelperError.tooLarge(params.data.count) }
+        return try await readyCall(.fsUpload, params, needs: Capability.upload)
+    }
+
+    // MARK: - Events and approvals
+
+    /// Starts or refreshes event delivery on this connection and returns the state the
+    /// events continue from. Calling it again does not start a second stream.
+    /// `foreground` suppresses pushes for sessions the app shows; the helper treats it
+    /// as a lease that lapses 45 s after the last request, so an idle app on screen
+    /// calls `keepalive()` about every 20 s.
+    public func subscribe(foreground: Bool) async throws -> EventSnapshot {
+        try await readyCall(.eventsSubscribe, EventsSubscribeParams(foreground: foreground), needs: Capability.events)
+    }
+
+    /// Renews the foreground lease; any other request renews it too.
+    public func keepalive() async throws {
+        let _: EmptyResult = try await readyCall(.eventsKeepalive, EmptyParams(), needs: Capability.events)
+    }
+
+    /// Pending approvals, oldest first, for one session or all of them.
+    public func approvals(sessionId: String?) async throws -> [Approval] {
+        let list: ApprovalList = try await readyCall(
+            .approvalList, ApprovalListParams(sessionId: sessionId), needs: Capability.approvals
+        )
+        return list.approvals
+    }
+
+    /// Throws `.conflict` when the approval was answered elsewhere, its prompt is gone
+    /// or it expired; the helper then sent no keys.
+    public func answer(requestId: String, decision: Decision) async throws {
+        do {
+            let _: ApprovalAnswerResult = try await readyCall(
+                .approvalAnswer, ApprovalAnswerParams(requestId: requestId, decision: decision),
+                needs: Capability.approvals
+            )
+        } catch HelperError.rpc(let error) where error.code == RPCErrorCode.conflict {
+            if case .object(let data)? = error.data, case .string(let reason)? = data["reason"] {
+                throw HelperError.conflict(reason)
+            }
+            throw HelperError.conflict(error.message)
+        }
+    }
+
+    // MARK: - Git, files and ports
+
+    public func gitStatus(id: String) async throws -> GitStatus {
+        try await readyCall(.gitStatus, SessionIDParams(id: id), needs: Capability.git)
+    }
+
+    public func gitDiff(_ params: GitDiffParams) async throws -> GitDiff {
+        try await readyCall(.gitDiff, params, needs: Capability.git)
+    }
+
+    public func gitLog(_ params: GitLogParams) async throws -> [GitCommit] {
+        let log: GitLog = try await readyCall(.gitLog, params, needs: Capability.git)
+        return log.commits
+    }
+
+    public func gitBranches(id: String) async throws -> GitBranches {
+        try await readyCall(.gitBranches, SessionIDParams(id: id), needs: Capability.git)
+    }
+
+    public func readFile(_ params: FsReadParams) async throws -> FsReadResult {
+        try await readyCall(.fsRead, params, needs: Capability.git)
+    }
+
+    public func ports(id: String) async throws -> [ListeningPort] {
+        let list: PortList = try await readyCall(.portsList, SessionIDParams(id: id), needs: Capability.ports)
+        return list.ports
+    }
+
+    // MARK: - Push pairing
+
+    public func pair(_ params: PushPairParams) async throws -> PushPairResult {
+        try await readyCall(.pushPair, params, needs: Capability.push)
+    }
+
+    public func unpair(deviceId: String) async throws {
+        let _: EmptyResult = try await readyCall(.pushUnpair, PushUnpairParams(deviceId: deviceId), needs: Capability.push)
+    }
+
     /// Fails pending calls with `.closed` and closes the channel. Later calls throw `.closed`.
     public func close() async {
         guard !isClosed else { return }
@@ -104,8 +205,13 @@ public actor HelperClient {
         if capabilities == nil { throw HelperError.notReady }
     }
 
-    private func readyCall<P: Encodable & Sendable, R: Decodable>(_ method: Method, _ params: P) async throws -> R {
+    private func readyCall<P: Encodable & Sendable, R: Decodable>(
+        _ method: Method, _ params: P, needs capability: String? = nil
+    ) async throws -> R {
         try requireReady()
+        if let capability, capabilities?.contains(capability) != true {
+            throw HelperError.unsupported(capability: capability)
+        }
         return try await call(method, params)
     }
 
@@ -201,15 +307,34 @@ public actor HelperClient {
             await channelFailed()
             return
         }
-        // Notifications have no id and the client does not act on any yet. A response to an
-        // expired call finds no entry and is dropped.
+        if envelope.id == nil {
+            if envelope.method == "event" { deliverEvent(frame) }
+            return
+        }
+        // A response to an expired call finds no entry and is dropped.
         guard case .int(let id)? = envelope.id, let call = pending.removeValue(forKey: id) else { return }
         call.timer.cancel()
         if let error = envelope.error {
             call.continuation.resume(throwing: HelperError.rpc(error))
-        } else {
-            call.continuation.resume(returning: frame)
+            return
         }
+        // The helper writes the snapshot before any event it does not contain. The seq
+        // is taken here, before the next frame is read, because the subscribing caller
+        // resumes later and the events behind the snapshot may already be routed by then.
+        if call.method == Method.eventsSubscribe.rawValue,
+           let snapshot = try? JSONDecoder().decode(ResultEnvelope<SnapshotSeq>.self, from: frame) {
+            eventGate.startGeneration(snapshotSeq: snapshot.result.seq)
+        }
+        call.continuation.resume(returning: frame)
+    }
+
+    /// An event that does not decode is dropped; the seq gap it leaves tells the
+    /// consumer to subscribe again.
+    private func deliverEvent(_ frame: Data) {
+        guard let notification = try? JSONDecoder().decode(EventNotification.self, from: frame),
+              let tagged = eventGate.tag(notification.params)
+        else { return }
+        eventSink.yield(tagged)
     }
 
     private func channelFailed() async {
@@ -223,6 +348,7 @@ public actor HelperClient {
         reader?.cancel()
         writer?.cancel()
         outboxSink.finish()
+        eventSink.finish()
         let calls = pending.values
         pending.removeAll()
         for call in calls {
@@ -247,7 +373,16 @@ private struct PendingCall {
 /// the waiting call expects, so a large capture is parsed once, not via `JSONValue`.
 private struct Envelope: Decodable {
     var id: RPCID?
+    var method: String?
     var error: RPCErrorObject?
+}
+
+private struct EventNotification: Decodable {
+    var params: EventEnvelope
+}
+
+private struct SnapshotSeq: Decodable {
+    var seq: Int
 }
 
 private struct ResultEnvelope<R: Decodable>: Decodable {

@@ -3,7 +3,7 @@ import Network
 import Synchronization
 
 public protocol NetworkPathSource: Sendable {
-    /// Single consumer: TerminalLink.
+    /// Each access returns a new stream with a single consumer (a TerminalLink or a HostMonitor).
     var changes: AsyncStream<Void> { get }
 }
 

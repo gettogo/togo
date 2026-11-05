@@ -24,6 +24,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/push"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/upload"
 	"github.com/gettogo/togo/helper/internal/watch"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -31,7 +32,7 @@ import (
 // Capabilities are what a daemon built by Compose serves.
 var Capabilities = []string{
 	"session.v1", "agents.v1", "fs.v1", "capture.v1",
-	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1",
+	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1",
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read
@@ -60,6 +61,7 @@ type Components struct {
 	Local     *local.Handlers
 	Push      *push.Service
 	Sender    *push.Sender
+	Upload    *upload.Service
 
 	logf      func(format string, args ...any)
 	followups chan string
@@ -97,6 +99,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		Hub: c.Hub, Keys: c.Push.HostKeys, Devices: c.Push.Devices(),
 		Session: c.sessionInfo, Client: o.RelayClient, Logf: logf,
 	}
+	c.Upload = &upload.Service{Home: o.Home, Sessions: svc, Logf: logf}
 	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach}
 	git := gitx.Git{}
 
@@ -110,6 +113,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		(&gitx.Service{Sessions: svc, Git: git}).Methods(),
 		(&fsread.Service{Sessions: svc, Git: git}).Methods(),
 		(&ports.Service{Sessions: svc, Panes: svc.Tmux}).Methods(),
+		c.Upload.Methods(),
 	} {
 		for name := range m {
 			if _, dup := ext[name]; dup {
@@ -148,6 +152,7 @@ func (c *Components) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Go(func() { c.Watch.Run(ctx) })
 	wg.Go(func() { c.Sender.Run(ctx) })
+	wg.Go(func() { c.Upload.Run(ctx) })
 	wg.Go(func() { c.runMailbox(ctx) })
 	wg.Go(func() { c.runFollowups(ctx) })
 	wg.Wait()

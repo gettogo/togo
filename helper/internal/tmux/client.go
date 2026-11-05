@@ -266,6 +266,20 @@ func (c *Client) SetOption(ctx context.Context, session, key, value string) erro
 	return err
 }
 
+// SetEnvironment sets a variable in the environment of the session with the
+// exact given name. Panes created afterwards inherit it; running panes do
+// not. When no server is running the error is ErrNoSession.
+func (c *Client) SetEnvironment(ctx context.Context, session, key, value string) error {
+	if err := checkOption(key, value); err != nil {
+		return err
+	}
+	_, err := c.run(ctx, "set-environment", "-t", "="+session, escapeArg(key), escapeArg(value))
+	if errors.Is(err, errNoServer) {
+		return ErrNoSession
+	}
+	return err
+}
+
 func checkOption(key, value string) error {
 	if strings.ContainsAny(key, "\x1f\x1e") || strings.ContainsAny(value, "\x1f\x1e") {
 		return fmt.Errorf("tmux: option %q: keys and values must not contain field or record separators", key)

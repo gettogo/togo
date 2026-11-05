@@ -11,6 +11,8 @@ import UIKit
     let latch = ModifierLatch()
     let presence = KeyboardPresence()
     private(set) var isShowingDPad = false
+    /// Called by a `.compose` item. The bar has no compose UI of its own; the host shows it.
+    public var onCompose: (() -> Void)?
 
     private weak var engine: SwiftTermEngine?
     private let stack = UIStackView()
@@ -60,12 +62,14 @@ import UIKit
             latch.tapAlt()
             haptics.selectionChanged()
         case .paste:
-            if let text = UIPasteboard.general.string { engine.paste(text) }
+            engine.pasteFromClipboard()
         case .hideKeyboard:
             engine.endEditing()
         case .dpad:
             isShowingDPad.toggle()
             refreshDPad()
+        case .compose:
+            onCompose?()
         }
     }
 

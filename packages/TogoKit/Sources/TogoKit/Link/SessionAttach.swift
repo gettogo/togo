@@ -33,7 +33,30 @@ public enum SessionAttach {
 
     /// Every call builds a new SSH connection, so a reconnect never reuses one that the
     /// network change or sleep left half dead. Nothing from a failed attempt stays open.
-    public static func connect(profile: HostProfile, sessionID: String, env: SessionEnvironment) -> LinkConnect {
+    /// `helperPath` is the helper binary the host record names, if any.
+    public static func connect(
+        profile: HostProfile, sessionID: String, env: SessionEnvironment, helperPath: String? = nil
+    ) -> LinkConnect {
+        let command = helperPath.map { shellQuote([$0, "serve", "--stdio"]) } ?? HelperCommand.serveStdio
+        return connect(profile: profile, env: env) { connection in
+            try await attachArgv(sessionID: sessionID, command: command, over: connection)
+        }
+    }
+
+    /// Attaches to a tmux session on a host without the helper, by the id `PlainTmuxSource` gave it.
+    public static func connectPlainTmux(profile: HostProfile, sessionID: String, env: SessionEnvironment) -> LinkConnect {
+        connect(profile: profile, env: env) { _ in
+            guard let name = PlainTmux.name(forID: sessionID) else {
+                throw HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "no such session"))
+            }
+            return PlainTmux.attachArgv(name: name)
+        }
+    }
+
+    private static func connect(
+        profile: HostProfile, env: SessionEnvironment,
+        argv: @escaping @Sendable (SSHConnection) async throws -> [String]
+    ) -> LinkConnect {
         { cols, rows, onWaking in
             let probe = profile.jumps.first ?? profile.endpoint
             try await WakeProbe.reach(
@@ -43,8 +66,9 @@ public enum SessionAttach {
             let connection = env.connection(for: profile)
             do {
                 try await connection.connect()
-                let argv = try await attachArgv(sessionID: sessionID, over: connection)
-                let request = AttachRequest(profile: profile, connection: connection, argv: argv, cols: cols, rows: rows)
+                let request = AttachRequest(
+                    profile: profile, connection: connection, argv: try await argv(connection), cols: cols, rows: rows
+                )
                 return try await env.connector.attach(request)
             } catch {
                 await connection.close()
@@ -53,8 +77,8 @@ public enum SessionAttach {
         }
     }
 
-    private static func attachArgv(sessionID: String, over connection: SSHConnection) async throws -> [String] {
-        let helper = HelperClient(channel: try await connection.openExec(HelperCommand.serveStdio))
+    private static func attachArgv(sessionID: String, command: String, over connection: SSHConnection) async throws -> [String] {
+        let helper = HelperClient(channel: try await connection.openExec(command))
         do {
             _ = try await helper.hello(client: client)
             let argv = try await helper.attachCommand(id: sessionID)

@@ -69,10 +69,8 @@ public final class KeychainKeyStore: KeyStore {
     /// Loads a key for signing with an already evaluated context, so the handshake that
     /// signs with it later never needs to show a prompt.
     func privateKey(id: String, context: LAContext) throws -> NIOSSHPrivateKey {
-        guard let data = try secrets.get(Self.account(id), context: context),
-              let material = try? JSONDecoder().decode(KeyMaterial.self, from: data) else {
-            throw KeyError.malformed
-        }
+        guard let data = try secrets.get(Self.account(id), context: context) else { throw KeyError.missing }
+        guard let material = try? JSONDecoder().decode(KeyMaterial.self, from: data) else { throw KeyError.malformed }
         switch material.kind {
         case .secureEnclaveP256:
             let key = try SecureEnclave.P256.Signing.PrivateKey(
@@ -86,7 +84,8 @@ public final class KeychainKeyStore: KeyStore {
         }
     }
 
-    func info(id: String) throws -> KeyInfo? {
+    /// Reads only the index, which needs no unlock.
+    public func info(id: String) throws -> KeyInfo? {
         try readIndex().first { $0.id == id }
     }
 

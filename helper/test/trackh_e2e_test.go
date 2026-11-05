@@ -109,7 +109,7 @@ func newRig(t *testing.T, relayURL string) *rig {
 	daemonCmd := startDaemon(t, bin, env)
 	c := dialDaemon(t, filepath.Join(home, "run", "togo.sock"))
 
-	for _, want := range []string{"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1"} {
+	for _, want := range []string{"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1"} {
 		if !slices.Contains(c.caps, want) {
 			t.Fatalf("hello capabilities %q lack %s", c.caps, want)
 		}

@@ -103,6 +103,54 @@ private final class WaitingPrompter: ConnectionPrompter {
     func trustNewHostKey(host: String, keyType: String, fingerprint: String) async -> Bool { true }
 }
 
+/// Offers every method a stock sshd does and refuses public keys, like a machine whose
+/// authorized_keys does not list the phone yet.
+private final class RefusesKeys: NIOSSHServerKeyboardInteractiveDelegate, Sendable {
+    var supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods { [.publicKey, .password, .keyboardInteractive] }
+
+    func requestReceived(
+        request: NIOSSHUserAuthenticationRequest, responsePromise: EventLoopPromise<NIOSSHUserAuthenticationOutcome>
+    ) {
+        responsePromise.succeed(.failure)
+    }
+
+    func keyboardInteractiveReceived(
+        username: String, responses: [String]?, nextStepPromise: EventLoopPromise<NIOSSHKeyboardInteractiveStep>
+    ) {
+        if responses == nil {
+            nextStepPromise.succeed(.challenge(.init(name: "", instruction: "", prompts: [KeyboardInteractiveTests.password])))
+        } else {
+            nextStepPromise.succeed(.outcome(.failure))
+        }
+    }
+}
+
+/// Accepts any key as a first step, then asks for a one-time code, like sshd with
+/// `AuthenticationMethods publickey,keyboard-interactive`.
+private final class KeyThenCode: NIOSSHServerKeyboardInteractiveDelegate, Sendable {
+    var supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods { [.publicKey, .keyboardInteractive] }
+
+    func requestReceived(
+        request: NIOSSHUserAuthenticationRequest, responsePromise: EventLoopPromise<NIOSSHUserAuthenticationOutcome>
+    ) {
+        if case .publicKey = request.request {
+            responsePromise.succeed(.partialSuccess(remainingMethods: .keyboardInteractive))
+        } else {
+            responsePromise.succeed(.failure)
+        }
+    }
+
+    func keyboardInteractiveReceived(
+        username: String, responses: [String]?, nextStepPromise: EventLoopPromise<NIOSSHKeyboardInteractiveStep>
+    ) {
+        switch responses {
+        case nil: nextStepPromise.succeed(.challenge(.init(name: "", instruction: "", prompts: [KeyboardInteractiveTests.code])))
+        case ["123456"]?: nextStepPromise.succeed(.outcome(.success))
+        default: nextStepPromise.succeed(.outcome(.failure))
+        }
+    }
+}
+
 struct KeyboardInteractiveTests {
     static let password = NIOSSHKeyboardInteractiveChallenge.Prompt(text: "Password:", echo: false)
     static let code = NIOSSHKeyboardInteractiveChallenge.Prompt(text: "Verification code:", echo: true)
@@ -243,5 +291,59 @@ struct KeyboardInteractiveTests {
         let answer = AuthAnswer.responses(["123456"])
         #expect(!String(describing: answer).contains("123456"))
         #expect(!String(reflecting: answer).contains("123456"))
+    }
+
+    /// With the fallback off, a refused key ends as a login failure the caller can explain,
+    /// not as a password or code prompt the user never asked for.
+    @Test func refusedKeyWithoutFallbackFailsAuth() async throws {
+        let (server, port) = try await Self.startServer(RefusesKeys())
+        let scratch = try KeygenScratch()
+        try scratch.keygen(["-q", "-t", "ed25519", "-N", "", "-f", scratch.path("id")])
+        let secrets = MemorySecretStore()
+        let biometrics = BiometricSession(evaluator: CountingEvaluator())
+        let keys = KeychainKeyStore(secrets: secrets, biometrics: biometrics)
+        let key = try await keys.importKey(openSSH: String(contentsOfFile: scratch.path("id"), encoding: .utf8), passphrase: nil, label: "k")
+        let prompter = TwoFactorPrompter(responses: nil)
+        let profile = HostProfile(
+            id: UUID(), name: "key", endpoint: HostEndpoint(host: "127.0.0.1", port: port, user: "u"), auth: .key(id: key.id)
+        )
+        let connection = SSHConnection(
+            profile: profile, keys: keys, secrets: secrets, biometrics: biometrics,
+            hostKeys: FileHostKeyStore(url: SSHServerTests.scratchURL()), prompter: prompter, credentialFallback: false
+        )
+
+        await #expect(throws: SSHError.authFailed(tried: ["publickey"])) { try await connection.connect() }
+        #expect(prompter.asked.withLock { $0 }.isEmpty)
+        try await server.close()
+    }
+
+    /// A key the server accepts with a second step still reaches the prompter with the fallback off.
+    @Test func acceptedKeyWithoutFallbackStillAsksForTheCode() async throws {
+        let (server, port) = try await Self.startServer(KeyThenCode())
+        let scratch = try KeygenScratch()
+        try scratch.keygen(["-q", "-t", "ed25519", "-N", "", "-f", scratch.path("id")])
+        let secrets = MemorySecretStore()
+        let biometrics = BiometricSession(evaluator: CountingEvaluator())
+        let keys = KeychainKeyStore(secrets: secrets, biometrics: biometrics)
+        let key = try await keys.importKey(openSSH: String(contentsOfFile: scratch.path("id"), encoding: .utf8), passphrase: nil, label: "k")
+        let prompter = TwoFactorPrompter(responses: ["123456"])
+        let profile = HostProfile(
+            id: UUID(), name: "key", endpoint: HostEndpoint(host: "127.0.0.1", port: port, user: "u"), auth: .key(id: key.id)
+        )
+        let connection = SSHConnection(
+            profile: profile, keys: keys, secrets: secrets, biometrics: biometrics,
+            hostKeys: FileHostKeyStore(url: SSHServerTests.scratchURL()), prompter: prompter, credentialFallback: false
+        )
+
+        try await connection.connect()
+        let asked = prompter.asked.withLock { $0 }
+        #expect(asked.count == 1)
+        if case .keyboardInteractive(_, _, let prompts)? = asked.first {
+            #expect(prompts.map(\.text) == ["Verification code:"])
+        } else {
+            Issue.record("expected a keyboard-interactive prompt, got \(asked)")
+        }
+        await connection.close()
+        try await server.close()
     }
 }

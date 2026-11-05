@@ -12,16 +12,24 @@ import UIKit
         didSet { updateDisplayLink() }
     }
     public private(set) var frameStats = FrameStats()
+    /// Attached to the root view, so the left-edge pan also starts in the safe-area margin.
+    public let gestures: GestureController
 
     private var displayLink: CADisplayLink?
+    private let root = UIView()
 
-    public init(engine: SwiftTermEngine) {
+    public init(engine: SwiftTermEngine, gestureConfig: GestureConfig = GestureConfig()) {
         self.engine = engine
+        gestures = GestureController(engine: engine, view: root, bindings: gestureConfig)
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
         nil
+    }
+
+    override public func loadView() {
+        view = root
     }
 
     override public func viewDidLoad() {
@@ -40,7 +48,7 @@ import UIKit
     /// The margins around the grid take the theme background, which can change at any time.
     override public func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
-        view.backgroundColor = engine.view.backgroundColor
+        view.backgroundColor = engine.backgroundColor
     }
 
     override public func viewDidAppear(_ animated: Bool) {

@@ -17,14 +17,20 @@ public actor SSHConnection {
     private let hostKeys: any HostKeyStore
     private let prompter: any ConnectionPrompter
     private let connectTimeout: Duration
+    private let credentialFallback: Bool
 
     private var clients: [SSHClient] = []
     private var root: (any Channel)?
     public private(set) var remoteAddress: String?
 
+    /// With `credentialFallback` off, only the profile's own credential is offered: a refused
+    /// key ends in `.authFailed` instead of a password or keyboard-interactive prompt. A key
+    /// the server accepts but wants a second step for, such as a one-time code, still prompts. Adding a
+    /// machine uses this so a key that is not authorised yet can be explained as such.
     public init(
         profile: HostProfile, keys: KeychainKeyStore, secrets: any SecretStore, biometrics: BiometricSession,
-        hostKeys: any HostKeyStore, prompter: any ConnectionPrompter, connectTimeout: Duration = .seconds(8)
+        hostKeys: any HostKeyStore, prompter: any ConnectionPrompter, connectTimeout: Duration = .seconds(8),
+        credentialFallback: Bool = true
     ) {
         self.profile = profile
         self.keys = keys
@@ -33,6 +39,7 @@ public actor SSHConnection {
         self.hostKeys = hostKeys
         self.prompter = prompter
         self.connectTimeout = connectTimeout
+        self.credentialFallback = credentialFallback
     }
 
     var isConnected: Bool { root?.isActive ?? false }
@@ -154,7 +161,8 @@ public actor SSHConnection {
         return password
     }
 
-    static func passwordAccount(_ id: UUID) -> String { "password:\(id.uuidString)" }
+    /// Where a machine's saved password lives in the secret store, by the profile id.
+    public static func passwordAccount(_ id: UUID) -> String { "password:\(id.uuidString)" }
 
     // MARK: Hops
 
@@ -173,7 +181,7 @@ public actor SSHConnection {
             let responder = KeyboardInteractiveResponder(prompter: prompter, autofill: autofill)
             let delegate = PreparedAuthDelegate(
                 username: endpoint.user, key: credentials.key, password: credentials.password,
-                keyboardInteractive: responder
+                keyboardInteractive: responder, keyboardInteractiveAfterKeyOnly: !credentialFallback
             )
             do {
                 defer { responder.cancelPending() }
@@ -192,7 +200,7 @@ public actor SSHConnection {
                     continue
                 }
                 // A key the server refused falls back to a password it offers, asked for once.
-                if mayAskPassword, credentials.password == nil, delegate.serverOffersPassword, passes <= 2 {
+                if credentialFallback, mayAskPassword, credentials.password == nil, delegate.serverOffersPassword, passes <= 2 {
                     credentials = Credentials(key: nil, password: try await askPassword())
                     continue
                 }

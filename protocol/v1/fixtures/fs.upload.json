@@ -1,0 +1,44 @@
+{
+  "description": "Uploading 4 bytes (fb ff 00 01) as ../shot.png: the name is sanitised to shot.png and the file lands under the session's directory in TOGO_HOME. The path embeds a millisecond timestamp.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "fs.upload",
+    "params": {
+      "sessionId": "s_abcdefghij",
+      "name": "../shot.png",
+      "data": "-_8AAQ"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "path": "<any>"
+    }
+  }
+}

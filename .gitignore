@@ -13,3 +13,4 @@ apps/ios/Config/Signing.local.xcconfig
 # Local tooling, never committed
 .claude/
 relay/node_modules/
+packages/TogoTerminal/.dd/

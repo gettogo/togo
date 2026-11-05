@@ -10,7 +10,9 @@ extension Color {
     static let togoSnow = Color(.snow)
     static let togoMute = Color(.mute)
     static let togoMuteDim = Color(.muteDim)
+    static let togoGrouped = Color(.grouped)
     static let togoAccent = Color(.accent)
+    static let togoAccentText = Color(.accentText)
 }
 
 extension UIColor {
@@ -21,5 +23,7 @@ extension UIColor {
     static let togoSnow = UIColor(resource: .snow)
     static let togoMute = UIColor(resource: .mute)
     static let togoMuteDim = UIColor(resource: .muteDim)
+    static let togoGrouped = UIColor(resource: .grouped)
     static let togoAccent = UIColor(resource: .accent)
+    static let togoAccentText = UIColor(resource: .accentText)
 }

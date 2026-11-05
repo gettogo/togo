@@ -151,7 +151,7 @@ func (a *API) sessionAttachCommand(ctx context.Context, raw json.RawMessage) (an
 	if _, err := session.ValidateID(p.ID); err != nil {
 		return nil, err
 	}
-	argv, err := a.Sessions.AttachCommand(ctx, p.ID)
+	argv, err := a.Sessions.PhoneAttachCommand(ctx, p.ID)
 	if err != nil {
 		return nil, err
 	}

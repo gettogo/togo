@@ -15,6 +15,9 @@ import UIKit
     public var onShortcut: (ShortcutAction) -> Void = { _ in }
     /// Consulted for an OSC 52 read only when `TerminalSettings.allowClipboardRead` is on.
     public var onClipboardRead: () -> String? = { UIPasteboard.general.string }
+    /// An image pasted with ⌘V or the key bar's Paste key, when the host can take one. Nil
+    /// leaves image-only pasteboards alone.
+    public var onPasteImage: ((Data) -> Void)?
 
     /// One OSC string larger than this is dropped by the parser. SwiftTerm's default is 65 MiB,
     /// which lets one hostile title or clipboard write pin that much memory.
@@ -22,12 +25,16 @@ import UIKit
     /// Titles feed window and tab labels; a remote can send megabytes of one.
     static let maximumTitleLength = 256
 
-    private let terminalView: TogoTerminalView
+    let terminalView: TogoTerminalView
     private let bridge = DelegateBridge()
     private var settings: TerminalSettings
     private var scrollRouter = ScrollRouter()
+    private var modifyKeys = ModifyKeysScanner()
 
     public var view: UIView { terminalView }
+    /// The theme background, for margins around the grid. SwiftTerm paints it on the view's
+    /// layer; setting the view's `backgroundColor` as well would fight it for that layer.
+    public private(set) var backgroundColor: UIColor = .black
 
     public init(settings: TerminalSettings, theme: TerminalTheme) {
         var options = TerminalOptions.default
@@ -47,11 +54,13 @@ import UIKit
         // SwiftTerm's iOS default only opens a link under a hovering pointer, so a finger tap
         // never could. `.always` makes OSC 8 links tappable; every one still passes LinkPolicy.
         terminalView.linkHighlightMode = .always
-        terminalView.isOpaque = true
         terminalView.onWheelPan = { [weak self] distance, point in self?.pan(by: distance, at: point) }
         terminalView.onWheelPanEnded = { [weak self] in self?.scrollRouter.reset() }
         terminalView.capturesWheelPan = { [weak self] in self?.mouseReporting ?? false }
         terminalView.onShortcut = { [weak self] action in self?.perform(action) }
+        terminalView.onPaste = { [weak self] text in self?.paste(text) }
+        terminalView.onCopy = { [weak self] text in self?.onClipboardWrite(text) }
+        terminalView.extendedKeyMode = { [weak self] in self?.modifyKeys.mode ?? .legacy }
         apply(settings)
         apply(theme)
     }
@@ -59,23 +68,30 @@ import UIKit
     // MARK: TerminalEngine
 
     public func feed(_ bytes: ArraySlice<UInt8>) {
+        modifyKeys.scan(bytes)
         terminalView.feed(byteArray: bytes)
     }
 
     public func send(_ key: KeyStroke) {
         let applicationCursor = terminalView.terminalInputStateSnapshot()?.applicationCursor ?? false
-        write(KeyEncoder.encode(key, applicationCursor: applicationCursor))
+        write(KeyEncoder.encode(key, applicationCursor: applicationCursor, mode: extendedKeyMode))
     }
 
-    /// Bracketed when the remote enabled mode 2004. The end marker is removed from the text
-    /// first, otherwise pasted content could close the bracket and run as typed input.
+    /// Kitty flags win over `modifyOtherKeys` when a remote has set both.
+    var extendedKeyMode: ExtendedKeyMode {
+        let kitty = !(terminalView.terminalInputStateSnapshot()?.keyboardEnhancementFlags.isEmpty ?? true)
+        return kitty ? .kitty : modifyKeys.mode
+    }
+
+    /// Bracketed when the remote enabled mode 2004. Either way the text passes `PasteText`
+    /// first, so it cannot close the bracket or carry its own control sequences.
     public func paste(_ text: String) {
+        let body = PasteText.sanitize(text)
         let bracketed = terminalView.terminalInputStateSnapshot()?.bracketedPasteMode ?? false
         guard bracketed else {
-            write(Array(text.utf8))
+            write(Array(body.utf8))
             return
         }
-        let body = text.replacingOccurrences(of: "\u{1b}[201~", with: "")
         write(Array("\u{1b}[200~\(body)\u{1b}[201~".utf8))
     }
 
@@ -102,7 +118,7 @@ import UIKit
         let background = Self.uiColor(theme.background)
         terminalView.nativeForegroundColor = Self.uiColor(theme.foreground)
         terminalView.nativeBackgroundColor = background
-        terminalView.backgroundColor = background
+        backgroundColor = background
         terminalView.caretColor = Self.uiColor(theme.cursor)
         terminalView.selectedTextBackgroundColor = Self.uiColor(theme.selection)
     }
@@ -133,6 +149,15 @@ import UIKit
     }
 
     public var selectedText: String? { terminalView.getSelection() }
+
+    public var isSelecting: Bool { terminalView.selectionActive }
+
+    /// Copies through `onClipboardWrite` and ends the selection. Rows the emulator wrapped
+    /// come out as one line; only real line breaks in the output stay.
+    public func copySelection() {
+        guard isSelecting else { return }
+        terminalView.copy(nil)
+    }
 
     public func selectAll() {
         terminalView.selectAll()
@@ -198,11 +223,9 @@ import UIKit
         case .none:
             break
         case .wheel(let up, let count):
-            let dimensions = terminalView.terminalDimensions
-            let col = min(max(Int(point.x / cell.width), 0), dimensions.cols - 1)
-            let row = min(max(Int((point.y - terminalView.bounds.minY) / cell.height), 0), dimensions.rows - 1)
+            let target = self.cell(at: point)
             for _ in 0..<count {
-                terminalView.sendMouseEvent(button: up ? 4 : 5, release: false, col: col, row: row)
+                terminalView.sendMouseEvent(button: up ? 4 : 5, release: false, col: target.col, row: target.row)
             }
         case .local(let lines):
             if lines > 0 { terminalView.scrollUp(lines: lines) } else { terminalView.scrollDown(lines: -lines) }
@@ -226,7 +249,21 @@ import UIKit
 
     func perform(_ action: ShortcutAction) {
         guard action == .paste else { return onShortcut(action) }
-        if let text = UIPasteboard.general.string { paste(text) }
+        pasteFromClipboard()
+    }
+
+    /// Text pastes as text. A pasteboard holding only an image hands its bytes to
+    /// `onPasteImage`, keeping the original encoding when the pasteboard has one.
+    public func pasteFromClipboard(_ board: UIPasteboard = .general) {
+        if let text = board.string {
+            paste(text)
+            return
+        }
+        guard let onPasteImage, board.hasImages else { return }
+        let encoded = ["public.png", "public.jpeg", "public.heic"].lazy.compactMap { board.data(forPasteboardType: $0) }.first
+        if let data = encoded ?? board.image?.pngData() {
+            onPasteImage(data)
+        }
     }
 
     func handleChord(
@@ -253,6 +290,39 @@ import UIKit
     private func write(_ bytes: [UInt8]) {
         guard !bytes.isEmpty else { return }
         terminalView.send(data: bytes[...])
+    }
+
+    // MARK: Gesture support
+
+    func cell(at point: CGPoint) -> GridCell {
+        let cell = cellSize
+        let dimensions = terminalView.terminalDimensions
+        guard cell.width > 0, cell.height > 0 else { return GridCell(col: 0, row: 0) }
+        let col = min(max(Int(point.x / cell.width), 0), dimensions.cols - 1)
+        let row = min(max(Int((point.y - terminalView.bounds.minY) / cell.height), 0), dimensions.rows - 1)
+        return GridCell(col: col, row: row)
+    }
+
+    /// Reads the logical line under the point, joining rows the emulator wrapped, so a URL
+    /// broken across rows is found whole.
+    func bareLink(at point: CGPoint) -> URL? {
+        let target = cell(at: point)
+        let rows = terminalView.terminalStateSnapshot().visibleRows
+        guard let index = rows.firstIndex(where: { $0.row == target.row }) else { return nil }
+        var first = index
+        while first > 0, rows[first].isWrapped { first -= 1 }
+        var last = index
+        while last + 1 < rows.count, rows[last + 1].isWrapped { last += 1 }
+        var line = ""
+        var offset = 0
+        for i in first...last {
+            if i == index {
+                // Wide glyphs fill two cells but are one character; their second cell is 0 wide.
+                offset = line.count + rows[i].cellWidths.prefix(target.col).count { $0 != 0 }
+            }
+            line += rows[i].text
+        }
+        return BareLink.url(in: line, at: offset)
     }
 
     // MARK: Conversions
@@ -329,4 +399,61 @@ import UIKit
     }
 
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+}
+
+extension SwiftTermEngine: GestureTarget {
+    var gestureView: UIView { terminalView }
+    var tracksMouse: Bool { mouseReporting }
+    var hasKeyboardFocus: Bool { terminalView.isFirstResponder }
+    var fontSize: CGFloat { terminalView.font.pointSize }
+
+    func setFontSize(_ size: CGFloat) {
+        var next = settings
+        next.fontSize = size
+        apply(next)
+    }
+
+    /// The advance of "W", the glyph SwiftTerm sizes its cells by.
+    func charWidth(forFontSize size: CGFloat) -> CGFloat {
+        var next = settings
+        next.fontSize = size
+        let font = Self.font(for: next) as CTFont
+        var character: UniChar = 0x57
+        var glyph: CGGlyph = 0
+        guard CTFontGetGlyphsForCharacters(font, &character, &glyph, 1) else { return size * 0.6 }
+        var advance = CGSize.zero
+        CTFontGetAdvancesForGlyphs(font, .horizontal, &glyph, &advance, 1)
+        return advance.width
+    }
+
+    func sendBytes(_ bytes: [UInt8]) {
+        write(bytes)
+    }
+
+    var scrollPan: UIGestureRecognizer { terminalView.panGestureRecognizer }
+
+    var mouseTracking: MouseTracking {
+        switch terminalView.terminalInputStateSnapshot()?.mouseMode ?? .off {
+        case .off: .off
+        case .x10: .presses
+        case .vt200: .clicks
+        case .buttonEventTracking: .drags
+        case .anyEvent: .anyMotion
+        }
+    }
+
+    /// SwiftTerm encodes whatever it is handed, whatever the mode, so the mode is checked here.
+    func sendMouse(button: Int, release: Bool, motion: Bool, at cell: GridCell) {
+        guard mouseTracking.reports(release: release, motion: motion) else { return }
+        terminalView.sendMouseEvent(button: button, release: release, motion: motion, col: cell.col, row: cell.row)
+    }
+
+    func open(_ url: URL) {
+        guard LinkPolicy.allows(url) else { return }
+        onOpenURL(url)
+    }
+
+    func copyToClipboard(_ text: String) {
+        onClipboardWrite(text)
+    }
 }

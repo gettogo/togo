@@ -25,6 +25,8 @@ struct ErrorTextTests {
         HelperError.notReady,
         HelperError.unsupported(capability: "capture.v1"),
         HelperError.malformedResponse,
+        HelperError.conflict("already_answered"),
+        HelperError.tooLarge(800_000),
         HostKeyStoreError.unreadable("/var/mobile/known_hosts.json"),
         KeyError.badPassphrase,
         KeyError.unsupportedKeyType("ssh-dss"),

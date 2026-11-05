@@ -6,7 +6,7 @@ import UIKit
 struct TokensTests {
     private static let roles: [(key: String, color: UIColor)] = [
         ("ink", .togoInk), ("deepest", .togoDeepest), ("raised", .togoRaised), ("line", .togoLine),
-        ("snow", .togoSnow), ("mute", .togoMute), ("muteDim", .togoMuteDim),
+        ("snow", .togoSnow), ("mute", .togoMute), ("muteDim", .togoMuteDim), ("grouped", .togoGrouped),
     ]
 
     @Test func paletteMatchesTokensFile() throws {
@@ -20,12 +20,29 @@ struct TokensTests {
         }
         #expect(Self.hex(.togoAccent, .dark) == "#9FD0F5")
         #expect(Self.hex(.togoAccent, .light) == "#3D8FD1")
+        let accentText = try #require(color["accentText"] as? [String: String])
+        #expect(Self.hex(.togoAccentText, .dark) == accentText["dark"]?.uppercased())
+        #expect(Self.hex(.togoAccentText, .light) == accentText["light"]?.uppercased())
     }
 
     @Test(arguments: [UIUserInterfaceStyle.dark, .light])
     func snowAndMuteMeetContrastOnInk(style: UIUserInterfaceStyle) {
         #expect(Self.contrast(.togoSnow, .togoInk, style) >= 4.5)
         #expect(Self.contrast(.togoMute, .togoInk, style) >= 4.5)
+        #expect(Self.contrast(.togoAccentText, .togoInk, style) >= 4.5)
+        #expect(Self.contrast(.togoAccentText, .togoRaised, style) >= 4.5)
+    }
+
+    @Test(arguments: [UIUserInterfaceStyle.dark, .light])
+    func textMeetsContrastOnGroupedCards(style: UIUserInterfaceStyle) {
+        #expect(Self.contrast(.togoSnow, .togoGrouped, style) >= 4.5)
+        #expect(Self.contrast(.togoMute, .togoGrouped, style) >= 4.5)
+    }
+
+    /// Grouped cards sit on the ink page; in dark they need a visible step or the groups blur
+    /// into the background.
+    @Test func groupedCardsStandOffThePageInDark() {
+        #expect(Self.contrast(.togoGrouped, .togoInk, .dark) >= 1.1)
     }
 
     private static func tokenColors() throws -> [String: Any] {
