@@ -7,6 +7,8 @@ enum Haptic: CaseIterable, Sendable {
     case done
     /// The user confirmed a discard.
     case discard
+    /// Dictation started listening.
+    case listen
 
     var feedback: SensoryFeedback {
         switch self {
@@ -15,8 +17,9 @@ enum Haptic: CaseIterable, Sendable {
         case .connect: .impact(flexibility: .soft, intensity: 0.5)
         case .error: .error
         case .tabSettle: .selection
-        case .done: .success
+        case .done: .impact(flexibility: .soft, intensity: 0.6)
         case .discard: .warning
+        case .listen: .impact(flexibility: .soft, intensity: 0.4)
         }
     }
 }
