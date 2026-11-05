@@ -57,7 +57,8 @@
         { "if": { "properties": { "method": { "const": "local.hook" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalHookParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.ask" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalAskParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.notify" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalNotifyParams" } }, "required": ["params"] } },
-        { "if": { "properties": { "method": { "const": "local.job" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalJobParams" } }, "required": ["params"] } }
+        { "if": { "properties": { "method": { "const": "local.job" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalJobParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.shutdown" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalShutdownParams" } }, "required": ["params"] } }
       ]
     },
     "Notification": {
@@ -1826,6 +1827,40 @@
       },
       "required": [
         "jobId"
+      ],
+      "additionalProperties": false
+    },
+    "LocalShutdownParams": {
+      "description": "local.shutdown -> LocalShutdownResult. Sent by `togo serve` when the daemon reports a different version than the installed binary, and by `togo daemon restart` and `togo update`. when idle: the daemon exits with status 75 once no approval is open and no local.ask call is waiting, which may be at once; its service manager or the next serve starts the installed binary. Repeated requests are answered with the current count and change nothing. reason is recorded in the daemon log.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "when": {
+          "const": "idle"
+        }
+      },
+      "required": [
+        "when"
+      ],
+      "additionalProperties": false
+    },
+    "LocalShutdownResult": {
+      "description": "deferred is true while pending approvals and asks hold the exit back.",
+      "type": "object",
+      "properties": {
+        "deferred": {
+          "type": "boolean"
+        },
+        "pending": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "deferred",
+        "pending"
       ],
       "additionalProperties": false
     },

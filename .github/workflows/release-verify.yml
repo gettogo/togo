@@ -1,0 +1,67 @@
+name: Release verify
+
+# Rebuilds a published release from its tag and compares the result with what
+# was released. It publishes nothing.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: helper/go.mod
+
+      - name: Rebuild the release
+        run: |
+          (cd helper && go build -o ../togo-release ./cmd/togo-release)
+          ./togo-release build --version "$TAG" --out rebuilt
+
+      - name: Download the published assets
+        run: |
+          mkdir released
+          version="${TAG#v}"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir released \
+            --pattern BUILDINFO.json \
+            --pattern "togo_${version}_linux_amd64.tar.gz" \
+            --pattern "togo_${version}_linux_arm64.tar.gz"
+
+      - name: Compare
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          status=0
+          for arch in amd64 arm64; do
+            name="togo_${version}_linux_${arch}.tar.gz"
+            if ! cmp "rebuilt/$name" "released/$name"; then
+              echo "::error::$name differs from the rebuild"
+              status=1
+            fi
+          done
+          # Pre-sign hashes of every binary, darwin included.
+          if ! diff <(jq -S .binaries rebuilt/BUILDINFO.json) <(jq -S .binaries released/BUILDINFO.json); then
+            echo "::error::BUILDINFO binary hashes differ from the rebuild"
+            status=1
+          fi
+          for key in version commit goVersion; do
+            a="$(jq -r ".$key" rebuilt/BUILDINFO.json)"
+            b="$(jq -r ".$key" released/BUILDINFO.json)"
+            if [ "$a" != "$b" ]; then
+              echo "::error::BUILDINFO $key differs: rebuilt $a, released $b"
+              status=1
+            fi
+          done
+          exit "$status"

@@ -14,7 +14,9 @@ import (
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
+	"github.com/gettogo/togo/helper/internal/update"
 	"github.com/gettogo/togo/helper/internal/version"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // capabilities are what the in-process server offers. It has no event hub,
@@ -69,8 +71,26 @@ func runServe(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		logf = logger.Printf
 	}
 
-	conn, err := daemon.Connect(ctx, daemon.SocketPath(home), func() error { return startDaemon(home) }, daemon.StartWait)
+	socket := daemon.SocketPath(home)
+	conn, daemonVersion, err := daemon.ConnectVersion(ctx, socket, func() error { return startDaemon(home) }, daemon.StartWait)
 	if err == nil {
+		installed := version.Current()
+		switch {
+		case stale(daemonVersion, installed):
+			// The daemon predates the installed binary. It exits once
+			// nothing is pending; this session stays with it until then,
+			// and the next serve reaches the new one.
+			res, err := daemon.RequestShutdown(ctx, socket, wire.ShutdownParams{Reason: wire.ShutdownUpgrade, When: wire.ShutdownIdle})
+			if err != nil {
+				logf("serve: daemon %s is older than this binary (%s); restart request failed: %v", daemonVersion, installed, err)
+			} else {
+				logf("serve: daemon %s is older than this binary (%s); it restarts when idle (%d pending)", daemonVersion, installed, res.Pending)
+			}
+		case stale(installed, daemonVersion):
+			// Another, newer install runs the daemon; restarting it would
+			// bring back the same version on every connection.
+			logf("serve: this binary (%s) is older than the daemon (%s); run togo update", installed, daemonVersion)
+		}
 		if err := daemon.Pump(ctx, conn, stdin, stdout); err != nil {
 			logf("serve: %v", err)
 			return fail(stderr, err)
@@ -79,6 +99,13 @@ func runServe(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	}
 	logf("serve: daemon unavailable, serving in process without events: %v", err)
 	return serveInProcess(ctx, home, logf, stdin, stdout, stderr)
+}
+
+// stale reports whether a daemon reporting running is older than the
+// binary reporting installed. Only release versions compare: development
+// builds never trigger a restart, and a newer daemon is left alone.
+func stale(running, installed string) bool {
+	return update.ValidVersion(running) && update.ValidVersion(installed) && update.Compare(running, installed) < 0
 }
 
 func serveInProcess(ctx context.Context, home string, logf func(string, ...any), stdin io.Reader, stdout, stderr io.Writer) int {
@@ -127,7 +154,7 @@ func helperInfo(caps []string) (rpc.HelperInfo, error) {
 		return rpc.HelperInfo{}, err
 	}
 	return rpc.HelperInfo{
-		Version:      version.Version,
+		Version:      version.Current(),
 		OS:           runtime.GOOS,
 		Arch:         runtime.GOARCH,
 		Hostname:     hostname,

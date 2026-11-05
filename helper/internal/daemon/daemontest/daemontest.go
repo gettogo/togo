@@ -1,8 +1,11 @@
 // Package daemontest stops helper daemons that tests started, directly or
-// through `togo serve --stdio`, which detaches the daemon it starts.
+// through `togo serve --stdio`, which detaches the daemon it starts, and
+// runs fake daemons in process.
 package daemontest
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strconv"
@@ -12,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/daemon"
+	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/sockd"
 )
 
@@ -74,4 +78,48 @@ func Running(home string) bool {
 func Alive(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+// Fake is an in-process daemon for serve and restart tests. It answers
+// "ping" with "pong" and serves local.shutdown through D.
+type Fake struct {
+	D *daemon.Daemon
+	// Done receives Run's result once the daemon stops.
+	Done <-chan error
+}
+
+type pong struct{}
+
+func (pong) Handle(context.Context, string, json.RawMessage) (any, *rpc.Error) { return "pong", nil }
+
+// StartFake runs a Fake on home reporting version, with pending as the
+// count of open approvals, until the test ends. It returns once the
+// socket answers.
+func StartFake(t testing.TB, home, version string, pending func() int) *Fake {
+	t.Helper()
+	d := daemon.New()
+	d.SetPending(pending)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- daemon.Run(ctx, daemon.Config{
+			Home:   home,
+			Daemon: d,
+			Info:   rpc.HelperInfo{Version: version, Capabilities: []string{"session.v1"}},
+			Build:  func(context.Context) (rpc.Handler, error) { return pong{}, nil },
+		})
+	}()
+	t.Cleanup(cancel)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		c, err := sockd.Dial(context.Background(), daemon.SocketPath(home))
+		if err == nil {
+			c.Close()
+			return &Fake{D: d, Done: done}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("fake daemon socket never came up: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

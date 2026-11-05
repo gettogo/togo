@@ -15,6 +15,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/sockd"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // StartWait is how long Connect waits for a daemon it started to bind.
@@ -36,11 +37,18 @@ const probeHello = `{"jsonrpc":"2.0","id":1,"method":"hello","params":{"protocol
 // rather than proxied to, since a bound socket queues connections even when
 // nothing reads them.
 func Connect(ctx context.Context, socket string, start func() error, wait time.Duration) (net.Conn, error) {
+	c, _, err := ConnectVersion(ctx, socket, start, wait)
+	return c, err
+}
+
+// ConnectVersion is Connect that also returns the version the daemon
+// reported in its hello.
+func ConnectVersion(ctx context.Context, socket string, start func() error, wait time.Duration) (net.Conn, string, error) {
 	if c, err := sockd.Dial(ctx, socket); err == nil {
 		return checked(ctx, socket, c)
 	}
 	if err := start(); err != nil {
-		return nil, fmt.Errorf("start daemon: %w", err)
+		return nil, "", fmt.Errorf("start daemon: %w", err)
 	}
 	deadline := time.Now().Add(wait)
 	for {
@@ -49,47 +57,101 @@ func Connect(ctx context.Context, socket string, start func() error, wait time.D
 			return checked(ctx, socket, c)
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("daemon did not come up within %v: %w", wait, err)
+			return nil, "", fmt.Errorf("daemon did not come up within %v: %w", wait, err)
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, "", ctx.Err()
 		case <-time.After(25 * time.Millisecond):
 		}
 	}
 }
 
-func checked(ctx context.Context, socket string, c net.Conn) (net.Conn, error) {
-	if err := probe(ctx, socket); err != nil {
+func checked(ctx context.Context, socket string, c net.Conn) (net.Conn, string, error) {
+	version, err := probe(ctx, socket)
+	if err != nil {
 		c.Close()
-		return nil, err
+		return nil, "", err
 	}
-	return c, nil
+	return c, version, nil
 }
 
-func probe(ctx context.Context, socket string) error {
+// probe greets the daemon on its own connection and returns the version
+// it reports.
+func probe(ctx context.Context, socket string) (string, error) {
 	c, err := sockd.Dial(ctx, socket)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer c.Close()
 	if err := c.SetDeadline(time.Now().Add(probeTimeout)); err != nil {
-		return err
+		return "", err
 	}
 	if err := rpc.WriteFrame(c, []byte(probeHello)); err != nil {
-		return fmt.Errorf("%w: %v", ErrUnresponsive, err)
+		return "", fmt.Errorf("%w: %v", ErrUnresponsive, err)
 	}
 	payload, err := rpc.ReadFrame(c)
 	if err != nil {
-		return fmt.Errorf("%w within %v: %v", ErrUnresponsive, probeTimeout, err)
+		return "", fmt.Errorf("%w within %v: %v", ErrUnresponsive, probeTimeout, err)
 	}
 	var reply struct {
-		Result json.RawMessage `json:"result"`
+		Result *struct {
+			Helper struct {
+				Version string `json:"version"`
+			} `json:"helper"`
+		} `json:"result"`
 	}
-	if err := json.Unmarshal(payload, &reply); err != nil || len(reply.Result) == 0 {
-		return fmt.Errorf("%w: unexpected reply", ErrUnresponsive)
+	if err := json.Unmarshal(payload, &reply); err != nil || reply.Result == nil {
+		return "", fmt.Errorf("%w: unexpected reply", ErrUnresponsive)
 	}
-	return nil
+	return reply.Result.Helper.Version, nil
+}
+
+// RequestShutdown sends local.shutdown to the daemon on socket over a
+// connection of its own and returns the daemon's answer.
+func RequestShutdown(ctx context.Context, socket string, p wire.ShutdownParams) (wire.ShutdownResult, error) {
+	c, err := sockd.Dial(ctx, socket)
+	if err != nil {
+		return wire.ShutdownResult{}, err
+	}
+	defer c.Close()
+	if err := c.SetDeadline(time.Now().Add(probeTimeout)); err != nil {
+		return wire.ShutdownResult{}, err
+	}
+	params, err := json.Marshal(p)
+	if err != nil {
+		return wire.ShutdownResult{}, err
+	}
+	call := `{"jsonrpc":"2.0","id":2,"method":"` + wire.MethodLocalShutdown + `","params":` + string(params) + `}`
+	for _, frame := range []string{probeHello, call} {
+		if err := rpc.WriteFrame(c, []byte(frame)); err != nil {
+			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %w", err)
+		}
+	}
+	for {
+		payload, err := rpc.ReadFrame(c)
+		if err != nil {
+			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %w", err)
+		}
+		var reply struct {
+			ID     int                  `json:"id"`
+			Result *wire.ShutdownResult `json:"result"`
+			Error  *rpc.Error           `json:"error"`
+		}
+		if err := json.Unmarshal(payload, &reply); err != nil {
+			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %w", err)
+		}
+		if reply.ID != 2 {
+			continue
+		}
+		if reply.Error != nil {
+			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %s", reply.Error.Message)
+		}
+		if reply.Result == nil {
+			return wire.ShutdownResult{}, errors.New("shutdown request: empty reply")
+		}
+		return *reply.Result, nil
+	}
 }
 
 // Start launches `exe daemon` detached from the caller, in its own session

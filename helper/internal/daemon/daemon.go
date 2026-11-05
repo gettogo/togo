@@ -28,6 +28,9 @@ type Config struct {
 	// there in time.
 	Build func(ctx context.Context) (rpc.Handler, error)
 	Info  rpc.HelperInfo
+	// Daemon serves local.shutdown and counts what a restart waits for.
+	// Nil means local.shutdown is not served.
+	Daemon *Daemon
 	// Logf receives diagnostics. Nil drops them.
 	Logf func(format string, args ...any)
 }
@@ -53,7 +56,9 @@ func PIDPath(home string) string {
 var ErrRunning = errors.New("daemon already running")
 
 // Run serves cfg.Handler on the TOGO_HOME socket until ctx is cancelled,
-// then stops accepting, closes open connections and removes the socket.
+// then stops accepting, closes open connections and removes the socket. It
+// also stops when cfg.Daemon is asked to shut down and nothing is pending,
+// and then returns ErrShutdown.
 // The lock is taken before the socket is bound so a second daemon fails on
 // the lock and never touches the first one's socket.
 func Run(ctx context.Context, cfg Config) error {
@@ -80,14 +85,20 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("daemon listen: %w", err)
 	}
 	logf("daemon: listening")
-	handler := newPendingHandler()
+	pending := newPendingHandler()
+	var handler rpc.Handler = pending
+	if d := cfg.Daemon; d != nil {
+		d.logf = logf
+		defer d.stop()
+		handler = d.wrap(pending)
+	}
 	built := make(chan error, 1)
 	go func() {
 		h, err := cfg.Build(ctx)
 		if err == nil {
-			handler.set(h)
+			pending.set(h)
 		} else {
-			handler.fail()
+			pending.fail()
 		}
 		built <- err
 	}()
@@ -98,10 +109,12 @@ func Run(ctx context.Context, cfg Config) error {
 		closed bool
 		wg     sync.WaitGroup
 	)
+	// closed is set before the listener closes, so the accept loop never
+	// mistakes a shutdown for an accept failure.
 	shutdown := func() {
-		ln.Close()
 		mu.Lock()
 		closed = true
+		ln.Close()
 		for c := range conns {
 			c.Close()
 		}
@@ -109,6 +122,20 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	stop := context.AfterFunc(ctx, shutdown)
 	defer stop()
+	var restarting bool
+	if d := cfg.Daemon; d != nil {
+		go func() {
+			select {
+			case <-d.Exit():
+				mu.Lock()
+				restarting = true
+				mu.Unlock()
+				logf("daemon: nothing pending, stopping for restart")
+				shutdown()
+			case <-d.stopped:
+			}
+		}()
+	}
 	var buildErr error
 	go func() {
 		if err := <-built; err != nil && ctx.Err() == nil {
@@ -158,6 +185,9 @@ func Run(ctx context.Context, cfg Config) error {
 	defer mu.Unlock()
 	if buildErr != nil {
 		return buildErr
+	}
+	if acceptErr == nil && restarting {
+		return ErrShutdown
 	}
 	return acceptErr
 }

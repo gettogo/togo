@@ -149,6 +149,19 @@ func (c *Components) Handler() rpc.Handler {
 	return c.Hub.Renewing(&publishingHandler{c: c})
 }
 
+// PendingApprovals counts the open approvals a restart must wait for. Asks
+// are left out: the Daemon counts their local.ask calls, which last until
+// the answer reaches the caller.
+func (c *Components) PendingApprovals() int {
+	n := 0
+	for _, a := range c.Approvals.Pending("") {
+		if a.Source != wire.SourceAsk {
+			n++
+		}
+	}
+	return n
+}
+
 // Run drives the background services until ctx ends.
 func (c *Components) Run(ctx context.Context) {
 	var wg sync.WaitGroup

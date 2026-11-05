@@ -39,7 +39,9 @@ type Service struct {
 	Home string
 	// TogoHome is passed to the daemon and holds its log.
 	TogoHome string
-	// Exe is the absolute path of the togo binary the service runs.
+	// Exe is the absolute path of the togo binary the service runs. The
+	// service file names StableExecutable(Exe), so a Homebrew upgrade that
+	// deletes the old version's directory leaves it pointing at the new one.
 	Exe string
 	UID int
 	Run Runner
@@ -162,11 +164,15 @@ func (s Service) loaded(ctx context.Context) bool {
 	return s.Run(ctx, []string{"launchctl", "print", s.domain() + "/" + Label}) == nil
 }
 
+// render writes the service definition. Both managers start the daemon
+// again after it exits with ExitUpgrade: launchd because the exit is not
+// successful, systemd because Restart=on-failure covers any non-zero status.
 func (s Service) render() ([]byte, error) {
+	exe := StableExecutable(s.Exe)
 	if s.Manager == Systemd {
-		return []byte(renderUnit(s.Exe, s.TogoHome)), nil
+		return []byte(renderUnit(exe, s.TogoHome)), nil
 	}
-	return renderPlist(s.Exe, s.TogoHome, s.logPath())
+	return renderPlist(exe, s.TogoHome, s.logPath())
 }
 
 func renderPlist(exe, togoHome, logPath string) ([]byte, error) {

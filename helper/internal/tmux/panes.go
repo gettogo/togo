@@ -48,3 +48,29 @@ func (c *Client) PipedSessions(ctx context.Context) (map[string]bool, error) {
 	}
 	return piped, nil
 }
+
+// TapOption is the session option that records the pipe-pane command the
+// helper armed, since tmux does not report a pipe's command.
+const TapOption = "@togo_tap"
+
+// TapCommands returns, for every session on the server, the command
+// recorded in TapOption, or "" when none is. No server means no sessions.
+func (c *Client) TapCommands(ctx context.Context) (map[string]string, error) {
+	out, err := c.run(ctx, "list-sessions", "-F", "#{session_name}\x1f#{"+TapOption+"}\x1e")
+	if errors.Is(err, errNoServer) {
+		return map[string]string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	cmds := map[string]string{}
+	for _, record := range strings.Split(out, "\x1e\n") {
+		record = strings.TrimSuffix(record, "\x1e")
+		name, cmd, ok := strings.Cut(record, "\x1f")
+		if !ok || name == "" {
+			continue
+		}
+		cmds[name] = cmd
+	}
+	return cmds, nil
+}

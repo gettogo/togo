@@ -81,6 +81,9 @@ type Watcher struct {
 	// piped reports which sessions still have a live tap; nil skips the
 	// check.
 	piped func(context.Context) (map[string]bool, error)
+	// armed reports the tap command recorded on each session; nil skips
+	// the check, so every unattached session is attached.
+	armed func(context.Context) (map[string]string, error)
 
 	mu       sync.Mutex
 	sessions map[string]*entry
@@ -114,6 +117,7 @@ func New(cfg Config) (*Watcher, error) {
 		return cfg.Tmux.CapturePane(ctx, "="+id+":")
 	}
 	w.piped = cfg.Tmux.PipedSessions
+	w.armed = cfg.Tmux.TapCommands
 	return w, nil
 }
 
@@ -175,6 +179,15 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 			piped = p
 		}
 	}
+	// A tap armed by an earlier daemon with this binary's command keeps
+	// running; one that names another binary path, such as a Homebrew
+	// version directory removed by an upgrade, is armed again.
+	var armed map[string]string
+	if w.armed != nil && piped != nil {
+		if a, err := w.armed(ctx); err == nil {
+			armed = a
+		}
+	}
 	live := map[string]bool{}
 	for _, s := range all {
 		if !s.Managed {
@@ -185,6 +198,10 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 		e.mu.Lock()
 		if e.attached && piped != nil && !piped[s.ID] {
 			e.attached = false
+		}
+		if !e.attached && piped[s.ID] && armed[s.ID] != "" && armed[s.ID] == w.tapCommand(s.ID) {
+			e.attached = true
+			e.screenCheck = true
 		}
 		if !e.attached && w.attach(ctx, s.ID) == nil {
 			e.attached = true
@@ -228,7 +245,23 @@ func (w *Watcher) attachTap(ctx context.Context, id string) error {
 	if !filepath.IsAbs(w.home) || strings.ContainsRune(w.home, 0) {
 		return fmt.Errorf("watch: home %q is not a usable absolute path", w.home)
 	}
-	return w.cfg.Tmux.PipePane(ctx, "="+id+":", pipeCommand(w.home, cmd))
+	full := pipeCommand(w.home, cmd)
+	if err := w.cfg.Tmux.PipePane(ctx, "="+id+":", full); err != nil {
+		return err
+	}
+	// Best effort: without the record the next daemon arms the tap again.
+	_ = w.cfg.Tmux.SetOption(ctx, id, tmux.TapOption, full)
+	return nil
+}
+
+// tapCommand is the pipe-pane command attachTap gives tmux for id, or ""
+// when it cannot be built.
+func (w *Watcher) tapCommand(id string) string {
+	cmd, err := tap.PipeCommand(w.cfg.TogoPath, id)
+	if err != nil || !filepath.IsAbs(w.home) {
+		return ""
+	}
+	return pipeCommand(w.home, cmd)
 }
 
 func pipeCommand(home, tapCmd string) string {

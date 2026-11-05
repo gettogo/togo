@@ -1,6 +1,6 @@
 .PHONY: lint test build check-trailers relay-test \
 	ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-snapshots ios-snapshots-record \
-	ios-release-check tokens tokens-check togopush-test watch-test
+	ios-release-check release-build release-test install-test tokens tokens-check togopush-test watch-test
 
 IOS_DIR := apps/ios
 IOS_PROJECT := $(IOS_DIR)/Togo.xcodeproj
@@ -22,6 +22,23 @@ test:
 
 build:
 	cd helper && go build -o bin/togo -ldflags "-X github.com/gettogo/togo/helper/internal/version.Version=$$(git describe --always --dirty)" ./cmd/togo
+
+# Reproducible helper release assets in dist/. VERSION is required, e.g.
+# VERSION=v1.0.0. ALLOW_DIRTY=1 makes a development build: it is marked dirty
+# and written to dist/dev/, never next to release assets.
+RELEASE_DIR := $(if $(ALLOW_DIRTY),../dist/dev,../dist)
+release-build:
+	@test -n "$(VERSION)" || { echo "release-build: VERSION is required, e.g. VERSION=v1.0.0" >&2; exit 1; }
+	@test -z "$(ALLOW_DIRTY)" || echo "release-build: development build, output goes to dist/dev and is not releasable" >&2
+	cd helper && go run ./cmd/togo-release build --version "$(VERSION)" --out ../dist --module-dir . $(if $(ALLOW_DIRTY),--allow-dirty)
+	cd helper && go run ./cmd/togo-release sums $(RELEASE_DIR)
+
+release-test:
+	cd helper && go test ./internal/release/... ./cmd/togo-release/... ./internal/version/...
+
+# Runs scripts/install.sh against signed test releases on 127.0.0.1.
+install-test:
+	./scripts/install-test.sh
 
 check-trailers:
 	@test -n "$(RANGE)" || { echo "check-trailers: RANGE is required, e.g. RANGE=HEAD~1..HEAD" >&2; exit 1; }
@@ -79,4 +96,5 @@ tokens-check:
 	swift scripts/gen-tokens.swift --check
 
 relay-test:
+	scripts/relay-deploy-test.sh
 	cd relay && npm ci && npm test && npx tsc --noEmit

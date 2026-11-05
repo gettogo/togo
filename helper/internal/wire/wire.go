@@ -57,6 +57,9 @@ const (
 	MethodLocalAsk    = "local.ask"
 	MethodLocalNotify = "local.notify"
 	MethodLocalJob    = "local.job"
+	// MethodLocalShutdown asks the daemon to exit with status 75 so its
+	// service manager, or the next serve, starts the installed binary.
+	MethodLocalShutdown = "local.shutdown"
 )
 
 // NotificationMethod is the JSON-RPC method of every event notification.
@@ -483,6 +486,28 @@ type JobParams struct {
 // JobResult answers local.job.
 type JobResult struct {
 	JobID string `json:"jobId"`
+}
+
+// ShutdownParams is the local.shutdown params. When is ShutdownIdle: exit
+// now when nothing is pending, else once the last pending approval or ask
+// resolves. Reason is recorded in the daemon log.
+type ShutdownParams struct {
+	Reason string `json:"reason"`
+	When   string `json:"when"`
+}
+
+// ShutdownParams values.
+const (
+	ShutdownIdle    = "idle"
+	ShutdownUpgrade = "upgrade"
+	ShutdownRestart = "restart"
+)
+
+// ShutdownResult answers local.shutdown. Deferred means the daemon waits
+// for Pending approvals and asks before it exits.
+type ShutdownResult struct {
+	Deferred bool `json:"deferred"`
+	Pending  int  `json:"pending"`
 }
 
 // Push environments.

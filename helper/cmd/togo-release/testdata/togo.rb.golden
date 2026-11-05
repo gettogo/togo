@@ -1,0 +1,42 @@
+class Togo < Formula
+  desc "Run coding agents on your Mac and watch over them from your iPhone"
+  homepage "https://github.com/gettogo/togo"
+  version "1.2.3"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://example.com/releases/download/v1.2.3/togo_1.2.3_darwin_arm64.tar.gz"
+      sha256 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    end
+    on_intel do
+      url "https://example.com/releases/download/v1.2.3/togo_1.2.3_darwin_amd64.tar.gz"
+      sha256 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://example.com/releases/download/v1.2.3/togo_1.2.3_linux_arm64.tar.gz"
+      sha256 "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    end
+    on_intel do
+      url "https://example.com/releases/download/v1.2.3/togo_1.2.3_linux_amd64.tar.gz"
+      sha256 "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    end
+  end
+
+  def install
+    bin.install "togo"
+  end
+
+  def caveats
+    <<~EOS
+      Run `togo service install` to start the daemon at login.
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/togo version")
+  end
+end
