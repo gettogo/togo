@@ -6,6 +6,8 @@ import "time"
 type sessionState struct {
 	// attached is true once the output tap is piped to the pane.
 	attached bool
+	// goneScans counts consecutive start scans that found the agent gone.
+	goneScans int
 	// working is true after output until the session settles.
 	working bool
 	// awaitingIdle is set by output and cleared when the silence check runs,

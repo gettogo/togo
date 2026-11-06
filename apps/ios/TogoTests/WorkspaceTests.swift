@@ -360,7 +360,7 @@ import UIKit
         terminals.sync(with: store)
         let tab = store.workspace.tabs[0]
         terminals.restart(tab, store: store)
-        terminals.restartTabs(on: Samples.studio, store: store)
+        terminals.restartTabs(on: Samples.studio)
         #expect(services.terminalsUserStarted == [true, true, false])
     }
 

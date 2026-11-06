@@ -9,6 +9,12 @@ struct MachineSectionView: View {
     /// Search or a filter is narrowing the list, so an empty machine says nothing.
     var narrowed = false
     var zoom: Namespace.ID?
+    /// Rows of the tabs on screen, marked in the sidebar.
+    var highlighted: Set<TabID> = []
+    /// The row the sidebar's keyboard cursor is on.
+    var cursor: TabID?
+    /// Rows can be dragged into a pane, which only the sidebar sits beside.
+    var draggable = false
     let perform: (SessionCommand) -> Void
 
     var body: some View {
@@ -20,11 +26,14 @@ struct MachineSectionView: View {
                 sessionRow(row)
             }
         } header: {
-            if case .offline = machine.reachability {
-                heading.tutorialTip(.offline)
-            } else {
-                heading
+            Group {
+                if case .offline = machine.reachability {
+                    heading.tutorialTip(.offline)
+                } else {
+                    heading
+                }
             }
+            .id(SessionRotors.Target.machine(machine.id))
         }
     }
 
@@ -111,14 +120,18 @@ struct MachineSectionView: View {
 
     private func sessionRow(_ row: SessionRow) -> some View {
         let actions = SessionActions.actions(for: row, on: machine)
+        let id = TabID(hostID: row.hostID, sessionID: row.id)
         return Button {
             perform(.open(row, nil))
         } label: {
-            SessionRowView(row: row, stale: stale)
+            SessionRowView(row: row, stale: stale, shown: highlighted.contains(id))
         }
         .buttonStyle(.plain)
-        .modifier(ZoomSource(id: TabID(hostID: row.hostID, sessionID: row.id), namespace: zoom))
-        .listRowBackground(Color.togoInk)
+        .hoverEffect(.highlight)
+        .modifier(ZoomSource(id: id, namespace: zoom))
+        .modifier(RowDrag(id: id, enabled: draggable))
+        .listRowBackground(rowBackground(id))
+        .id(SessionRotors.Target.row(id))
         .swipeActions(edge: .trailing) {
             if actions.allows(.kill) {
                 Button(SessionAction.kill.title(for: row), systemImage: SessionAction.kill.systemImage(for: row),
@@ -138,6 +151,20 @@ struct MachineSectionView: View {
             }
         }
         .contextMenu { menu(for: row, actions) }
+    }
+
+    /// The visible tabs' rows are filled; the keyboard cursor draws a ring.
+    @ViewBuilder private func rowBackground(_ id: TabID) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        ZStack {
+            Color.togoInk
+            if highlighted.contains(id) {
+                shape.fill(Color.togoLine).padding(.horizontal, 6)
+            }
+            if cursor == id {
+                shape.strokeBorder(Color.togoSnow, lineWidth: 2).padding(.horizontal, 6)
+            }
+        }
     }
 
     @ViewBuilder private func menu(for row: SessionRow, _ actions: SessionActionSet) -> some View {
@@ -244,6 +271,20 @@ private struct MachineMessage: View {
         }
         .padding(.top, 6)
         .listRowBackground(Color.togoInk)
+    }
+}
+
+/// Lets a row be dragged into a pane as its tab.
+private struct RowDrag: ViewModifier {
+    let id: TabID
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.draggable(id)
+        } else {
+            content
+        }
     }
 }
 

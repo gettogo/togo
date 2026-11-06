@@ -64,3 +64,17 @@ func TestRegistryOrderAndLookup(t *testing.T) {
 		t.Error("Lookup(nope) found an agent, want none")
 	}
 }
+
+func TestResume(t *testing.T) {
+	if a, _ := Lookup("claude"); len(a.Resume) != 1 || a.Resume[0] != "--continue" {
+		t.Errorf("claude Resume = %q, want [--continue]", a.Resume)
+	}
+	if a, _ := Lookup("codex"); len(a.Resume) != 2 || a.Resume[0] != "resume" || a.Resume[1] != "--last" {
+		t.Errorf("codex Resume = %q, want [resume --last]", a.Resume)
+	}
+	for _, id := range []string{"omp", "opencode", "shell"} {
+		if a, _ := Lookup(id); a.Resume != nil {
+			t.Errorf("%s Resume = %q, want nil", id, a.Resume)
+		}
+	}
+}

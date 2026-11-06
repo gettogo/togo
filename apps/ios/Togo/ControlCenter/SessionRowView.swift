@@ -7,6 +7,8 @@ struct SessionRowView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let row: SessionRow
     var stale = false
+    /// The row's tab is on screen beside the sidebar.
+    var shown = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -34,6 +36,7 @@ struct SessionRowView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenLabel)
         .accessibilityValue(row.activity ?? "")
+        .accessibilityAddTraits(shown ? .isSelected : [])
     }
 
     private var title: some View {

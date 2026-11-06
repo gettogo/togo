@@ -13,6 +13,8 @@ import UIKit
     private(set) var isShowingDPad = false
     /// Called by a `.compose` item. The bar has no compose UI of its own; the host shows it.
     public var onCompose: (() -> Void)?
+    /// Called by a `.dictate` item. The host opens its compose bar and listens there.
+    public var onDictate: (() -> Void)?
 
     private weak var engine: SwiftTermEngine?
     private let stack = UIStackView()
@@ -70,6 +72,8 @@ import UIKit
             refreshDPad()
         case .compose:
             onCompose?()
+        case .dictate:
+            onDictate?()
         }
     }
 

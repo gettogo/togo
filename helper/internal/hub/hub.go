@@ -35,6 +35,12 @@ type Hub struct {
 
 	// muteMu orders concurrent session.setMute calls.
 	muteMu sync.Mutex
+	// exitMu keeps each session's @togo_exit option in the order of the
+	// exit changes it records.
+	exitMu sync.Mutex
+	// relaunching holds a *sync.Mutex per session id, taken around a whole
+	// relaunch.
+	relaunching sync.Map
 
 	mu        sync.Mutex
 	seq       int64

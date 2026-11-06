@@ -9,7 +9,7 @@ const MAX_COMMAND = 160;
 // staleDate and dismissalDate must fall within [now - 60 s, now + 8 h].
 const DATE_PAST_SLACK = 60;
 const DATE_MAX_AHEAD = 8 * 3600;
-const STATUSES = ["needs_you", "working", "done"] as const;
+const STATUSES = ["needs_you", "working", "done", "ended", "failed", "offline"] as const;
 const REQUEST_ID_RE = /^r_[a-z2-7]{10}$/;
 const HOST_ID_RE = /^h_[a-z2-7]{26}$/;
 const ATTRIBUTES_TYPE = "TogoActivityAttributes";

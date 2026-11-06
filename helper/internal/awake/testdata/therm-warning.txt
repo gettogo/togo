@@ -1,0 +1,2 @@
+Thermal warning level set to 2.
+Note: No performance warning level has been recorded

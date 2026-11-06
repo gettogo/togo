@@ -1,0 +1,16 @@
+{
+  "description": "The machine went quiet while 2 sessions were working. Sealed ahead of time and sent by the relay only when the helper's connection goes quiet; it belongs to no session. Seal it with label push and aad hostId + \"|\" + deviceId.",
+  "kind": "push",
+  "plaintext": {
+    "v": 1,
+    "kind": "offline",
+    "sessionId": null,
+    "bib": null,
+    "agent": null,
+    "title": "studio is offline",
+    "body": "2 sessions were working",
+    "ts": 1793707200000,
+    "active": 2,
+    "host": "studio"
+  }
+}

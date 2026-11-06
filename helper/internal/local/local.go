@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/api"
+	"github.com/gettogo/togo/helper/internal/detect"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -30,6 +31,11 @@ const (
 	EventStop       = "stop"       // the turn ended: idle and done
 	EventStart      = "start"      // a session started; carries the model when known
 	EventMeta       = "meta"       // model, context and cost from the status line
+	EventEnd        = "end"        // the agent is quitting: ended
+	EventFailure    = "failure"    // the turn stopped on an error: failed
+	// EventUsageLimit is EventFailure on a rate or usage limit. The hook
+	// params have no field for the reason, so it travels as its own name.
+	EventUsageLimit = "usage_limit"
 )
 
 const (
@@ -46,6 +52,9 @@ var Concurrent = []string{wire.MethodLocalAsk}
 type Hub interface {
 	SetStatus(id, status string, activity *string)
 	SetMeta(id string, m wire.SessionMeta)
+	SetExit(id string, status string, exit *wire.SessionExit)
+	ClearExit(id string)
+	HookExitAllowed(id string) bool
 }
 
 // Approvals is the part of the approvals store the handlers use.
@@ -130,7 +139,7 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	switch ev.Event {
 	case EventPrompt, EventTool, EventToolDone, EventPermission, EventAttention,
-		EventNotify, EventStop, EventStart, EventMeta:
+		EventNotify, EventStop, EventStart, EventMeta, EventEnd, EventFailure, EventUsageLimit:
 	default:
 		return nil, invalid("unknown hook event")
 	}
@@ -138,7 +147,13 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		// Nothing to attribute the event to; the hook is a no-op.
 		return struct{}{}, nil
 	}
+	// The exit detail is cleaned from the text as sent: clip drops the
+	// escape character but would leave the rest of a sequence behind.
+	rawMessage := ev.Data.Message
 	ev.Data.Message = clip(ev.Data.Message, wire.MaxBody)
+	if clearsExit(ev.Event) {
+		h.Hub.ClearExit(id)
+	}
 	switch ev.Event {
 	case EventPrompt:
 		h.Hub.SetStatus(id, statusWorking, nil)
@@ -163,8 +178,59 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		h.publishNotify(id, wire.LevelDone, agentTitle(ev.Agent)+" finished", ev.Data.Message)
 	case EventStart, EventMeta:
 		h.mergeMeta(id, ev.Data)
+	case EventEnd, EventFailure, EventUsageLimit:
+		h.hookExit(id, ev.Event, rawMessage)
 	}
 	return struct{}{}, nil
+}
+
+// hookExit records an exit an agent hook reported. One that arrives after
+// a relaunch, before the new run's first hook, comes from the run the
+// relaunch killed and is dropped.
+func (h *Handlers) hookExit(id, event, rawMessage string) {
+	if !h.Hub.HookExitAllowed(id) {
+		return
+	}
+	h.closeAgentPrompts(id)
+	switch event {
+	case EventEnd:
+		// The wrapper reports the real code once the process is gone.
+		code := 0
+		h.Hub.SetExit(id, wire.StatusEnded, &wire.SessionExit{Code: &code, Reason: wire.ExitReasonExit})
+	default:
+		reason := wire.ExitReasonError
+		if event == EventUsageLimit {
+			reason = wire.ExitReasonUsageLimit
+		}
+		h.Hub.SetExit(id, wire.StatusFailed, &wire.SessionExit{Reason: reason, Detail: ExitDetail(rawMessage)})
+	}
+}
+
+// clearsExit reports whether a hook event shows the agent running again
+// after it ended or failed. The status line, notifications and the exit
+// events themselves do not: Claude keeps drawing its status line and
+// reports an idle prompt while it sits stopped on a usage limit.
+func clearsExit(event string) bool {
+	switch event {
+	case EventMeta, EventNotify, EventAttention, EventEnd, EventFailure, EventUsageLimit:
+		return false
+	}
+	return true
+}
+
+// ExitDetail cleans agent text into a SessionExit detail: cleaned like a
+// push body, its first line only, at most wire.MaxExitDetail runes, and
+// nil when nothing is left.
+func ExitDetail(s string) *string {
+	line, _, _ := strings.Cut(detect.CleanLine(s), "\n")
+	line = strings.TrimSpace(line)
+	if r := []rune(line); len(r) > wire.MaxExitDetail {
+		line = strings.TrimSpace(string(r[:wire.MaxExitDetail]))
+	}
+	if line == "" || (wire.SessionExit{Reason: wire.ExitReasonError, Detail: &line}).Validate() != nil {
+		return nil
+	}
+	return &line
 }
 
 // closeAgentPrompts closes the session's pending prompt approvals as

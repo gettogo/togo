@@ -217,6 +217,33 @@ import UIKit
         #expect(rows.first?.isHunk == false && rows.allSatisfy { if case .notice = $0 { false } else { true } })
     }
 
+    @Test func markedLineStaysWithinTheColumnCap() {
+        let line = String(repeating: "\u{202E}", count: 2_000)
+        let rows = HiddenCharacters.reveal(CodeRow.file(TextFile(lines: [line], clipped: [0])))
+        guard case .line(_, _, let shown, _, let tokens, _, let clipped)? = rows.last else { Issue.record("expected a line"); return }
+        #expect(shown.utf16.count <= ReviewLimits.maxColumns)
+        #expect(clipped)
+        #expect(tokens.allSatisfy { $0.range.upperBound <= shown.utf16.count })
+        // The cut never lands inside a marker.
+        #expect(shown.hasSuffix("⟩"))
+        let split = HiddenCharacters.reveal([.split(left: nil, right: CodeRowSide(number: 1, text: line, kind: .added, tokens: [], changes: []))])
+        guard case .split(_, let right?)? = split.dropFirst().first else { Issue.record("expected a pair"); return }
+        #expect(right.text.utf16.count <= ReviewLimits.maxColumns)
+        #expect(split.last == .notice(CodeCopy.clippedNotice))
+    }
+
+    @Test func leadingByteOrderMarkIsNotHidden() {
+        let rows = HiddenCharacters.reveal(CodeRow.file(TextFile(lines: ["\u{FEFF}let a = 1", "let b = 2"])))
+        #expect(rows.count == 2 && rows.allSatisfy { if case .notice = $0 { false } else { true } })
+        guard case .line(_, _, let first, _, _, _, _) = rows[0] else { Issue.record("expected a line"); return }
+        #expect(first == "\u{FEFF}let a = 1")
+        // Anywhere else it is marked and raises the banner.
+        let later = HiddenCharacters.reveal(CodeRow.file(TextFile(lines: ["let a = 1", "let\u{FEFF} b"])))
+        #expect(later.first == .notice("This file contains hidden characters."))
+        let inside = HiddenCharacters.reveal(CodeRow.file(TextFile(lines: ["a\u{FEFF}b"])))
+        #expect(inside.first == .notice("This file contains hidden characters."))
+    }
+
     @Test func hiddenCharactersAreMarkedInAFile() async {
         let text = "let a = 1\nlet b\u{200B} = 2\n"
         let model = await viewer("x.ts", FsReadResult(path: "x.ts", size: text.utf8.count, encoding: .utf8, content: text, truncated: false))

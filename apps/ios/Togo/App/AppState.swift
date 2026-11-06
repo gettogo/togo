@@ -151,6 +151,8 @@ struct WorkspaceState: Equatable, Sendable {
 
 enum AppRoute: Hashable, Sendable {
     case settings
+    /// Finished sessions, from the list or the sidebar.
+    case archive
     case settingsPage(SettingsPage)
 }
 

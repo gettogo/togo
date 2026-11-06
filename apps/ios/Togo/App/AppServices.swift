@@ -7,7 +7,8 @@ import UIKit
 /// state can be built from values in tests and previews.
 @MainActor protocol AppServices: AnyObject {
     var hosts: [HostRecordView] { get }
-    /// Single consumer: `AppStore.run()`.
+    /// A new stream on every call, one per window's store. It first yields the latest snapshot
+    /// of each machine, so a window opened later starts where the others are.
     func snapshots() -> AsyncStream<HostViewSnapshot>
     /// Reconnects every machine now, including one that stopped retrying after a failed sign-in.
     func refresh() async
@@ -100,6 +101,8 @@ extension AppServices {
     var onFontSize: (Double) -> Void = { _ in }
     /// The key bar's Compose key.
     var onCompose: () -> Void = {}
+    /// The key bar's Dictate key.
+    var onDictate: () -> Void = {}
     /// An image pasted into the terminal, as the pasteboard encoded it.
     var onPasteImage: (Data) -> Void = { _ in }
     /// Text into the session as a paste, and the Enter key, for the compose bar.

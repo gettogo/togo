@@ -1,0 +1,55 @@
+{
+  "description": "Restore a session without resuming its conversation: the same id, bib, name, cwd and command start again in a new tmux session, and the record leaves session.restorable. Harness deviation: TOGO_HOME holds the record of one Claude Code session that a host restart ended: id s_abcdefghij, bib 01, command claude --model opus, cwd <home>/proj, created 2026-11-03T10:00:00Z, ended 2026-11-03T11:30:00Z, with a conversation the agent can resume; no tmux session exists for it. The login-shell PATH holds an executable claude that waits at its prompt until killed.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.restore",
+    "params": {
+      "id": "s_abcdefghij",
+      "resume": false
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "id": "s_abcdefghij",
+      "bib": "01",
+      "name": "Claude Code",
+      "agent": "claude",
+      "cwd": "<home>/proj",
+      "createdAt": "2026-11-03T12:00:00Z",
+      "status": "idle",
+      "activity": null,
+      "attachedClients": 0,
+      "managed": true,
+      "muted": false,
+      "meta": {
+        "model": null,
+        "contextPercent": null,
+        "costUsd": null
+      },
+      "command": [
+        "claude",
+        "--model",
+        "opus"
+      ],
+      "exit": null
+    }
+  }
+}

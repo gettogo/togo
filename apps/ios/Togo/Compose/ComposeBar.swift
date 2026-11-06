@@ -65,14 +65,19 @@ struct ComposeHistory {
     @ObservationIgnored private var localText: String
     @ObservationIgnored private let draft: Binding<String>?
     private(set) var history: [String]
+    /// The caret in the field, in UTF-16 units; nil puts dictated text at the end.
+    var selection: NSRange?
     let images: ImagePasteFlow
+    /// Nil hides the microphone.
+    private(set) var dictation: DictationModel?
     private let store: ComposeHistory
     private let paste: @MainActor (String) -> Void
     private let pressEnter: @MainActor () -> Void
 
     init(
         text: String = "", draft: Binding<String>? = nil, history: ComposeHistory, images: ImagePasteFlow,
-        paste: @escaping @MainActor (String) -> Void, pressEnter: @escaping @MainActor () -> Void
+        paste: @escaping @MainActor (String) -> Void, pressEnter: @escaping @MainActor () -> Void,
+        speech: DictationSpeech? = nil
     ) {
         self.localText = text
         self.draft = draft
@@ -81,6 +86,12 @@ struct ComposeHistory {
         self.images = images
         self.paste = paste
         self.pressEnter = pressEnter
+        if let speech {
+            dictation = DictationModel(
+                engine: speech.engine, locale: speech.locale, history: speech.history,
+                insert: { [weak self] in self?.insertDictated($0) }, clock: speech.clock
+            )
+        }
     }
 
     var canSend: Bool {
@@ -98,11 +109,36 @@ struct ComposeHistory {
         history = Array(([message] + history.filter { $0 != message }).prefix(ComposeHistory.limit))
         store.save(history)
         text = ""
+        selection = nil
     }
 
     func recall(_ entry: String) {
         text = entry
+        selection = nil
     }
+
+    /// Dictated words go in at the caret, after a space when they would run into a word.
+    /// They only ever land in the field: nothing is pasted and Enter is never pressed.
+    func insertDictated(_ words: String) {
+        let clean = PasteText.sanitize(words)
+        guard !clean.isEmpty else { return }
+        let current = text as NSString
+        var range = selection ?? NSRange(location: current.length, length: 0)
+        range.location = min(max(range.location, 0), current.length)
+        range.length = min(max(range.length, 0), current.length - range.location)
+        let before = current.substring(to: range.location)
+        let piece = DictationModel.needsSpace(between: before, and: clean) ? " " + clean : clean
+        text = current.replacingCharacters(in: range, with: piece)
+        selection = NSRange(location: range.location + (piece as NSString).length, length: 0)
+    }
+}
+
+/// What a compose bar dictates with.
+struct DictationSpeech {
+    var engine: any SpeechEngine
+    var locale: Locale
+    var history: DictationHistory
+    var clock: DictationClock = .system
 }
 
 /// A multi-line field above the key bar for writing a whole message before it reaches the
@@ -161,6 +197,9 @@ struct ComposeBar: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
             }
+            if let dictation = model.dictation {
+                DictationLine(model: dictation)
+            }
             ImageStatusRow(flow: model.images)
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 4) {
@@ -169,6 +208,7 @@ struct ComposeBar: View {
                         photoButton
                         historyMenu
                         Spacer(minLength: 0)
+                        dictationButton
                         sendButton
                     }
                 }
@@ -178,6 +218,7 @@ struct ComposeBar: View {
                     photoButton
                     field
                     historyMenu
+                    dictationButton
                     sendButton
                 }
                 .padding(.horizontal, 6)
@@ -186,6 +227,11 @@ struct ComposeBar: View {
         }
         .background(Color.togoInk)
         .motion(Motion.fade, value: model.images.phase)
+        .motion(.fade, value: dictationStage)
+        .onDisappear {
+            // Leaving the bar ends a dictation; what was heard stays in the draft.
+            model.dictation?.relinquish()
+        }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             photo = nil
@@ -207,7 +253,7 @@ struct ComposeBar: View {
 
     private var field: some View {
         ComposeTextField(
-            text: $model.text, focusOnAppear: focusOnAppear,
+            text: $model.text, selection: $model.selection, focusOnAppear: focusOnAppear,
             onPasteImage: { data in Task { await model.images.begin(data) } }, onSubmit: model.send
         )
         .frame(maxWidth: .infinity)
@@ -217,6 +263,22 @@ struct ComposeBar: View {
                 .strokeBorder(Color.togoLine)
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder private var dictationButton: some View {
+        if let dictation = model.dictation {
+            DictationButton(model: dictation)
+        }
+    }
+
+    /// Which line dictation shows, without the words and level that change many times a second.
+    private var dictationStage: Int {
+        switch model.dictation?.phase {
+        case nil, .idle?, .finishing?, .preparing(nil)?: 0
+        case .preparing?: 1
+        case .listening?: 2
+        case .failed?: 3
+        }
     }
 
     @ViewBuilder private var photoButton: some View {

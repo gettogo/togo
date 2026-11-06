@@ -78,6 +78,9 @@ type Sender struct {
 	Sleep func(ctx context.Context, d time.Duration) error
 	// Logf receives one line per failed push, with ids hashed. Nil discards.
 	Logf func(format string, args ...any)
+	// Muted reports whether this whole machine is muted: only clear pushes
+	// go out. Nil means never.
+	Muted func() bool
 	// Host is the machine name sealed into every push; empty means the
 	// short form of os.Hostname.
 	Host string
@@ -86,6 +89,9 @@ type Sender struct {
 	// Tap sees every relay request, as hashes; nil for everything but
 	// end-to-end tests (see TapEnv).
 	Tap func(TapRecord)
+	// Remind sends one reminder for a needs_you left unanswered; nil means
+	// none. Its Deliver defaults to the Sender's own gated send.
+	Remind *Reminders
 
 	initOnce sync.Once
 	queue    chan wire.Event
@@ -94,6 +100,7 @@ type Sender struct {
 	mu          sync.Mutex
 	lastPush    map[string]time.Time // session id -> last rate-limited push
 	pausedUntil map[string]time.Time // device token -> relay 429 deadline
+	exits       map[string]string    // session id -> the exit last announced
 
 	liveMu  sync.Mutex
 	liveDev map[string]*deviceLive // device id -> its activity
@@ -105,9 +112,13 @@ func (s *Sender) init() {
 		s.queue = make(chan wire.Event, queueSize)
 		s.lastPush = map[string]time.Time{}
 		s.pausedUntil = map[string]time.Time{}
+		s.exits = map[string]string{}
 		s.liveDev = map[string]*deviceLive{}
 		if s.Live == nil {
 			s.Live = &LiveTracker{}
+		}
+		if s.Remind != nil && s.Remind.Deliver == nil {
+			s.Remind.Deliver = s.deliverReminder
 		}
 		h := s.Host
 		if h == "" {
@@ -172,7 +183,10 @@ func (s *Sender) process(ctx context.Context, ev wire.Event) {
 	}
 	s.observe(ev, sid, info, s.now())
 	if m, ok := s.message(ev, sid, info); ok {
-		s.Deliver(ctx, m)
+		s.afterDeliver(m, s.Deliver(ctx, m), sid)
+	}
+	if s.Remind != nil && sid != "" {
+		s.cancelReminders(ev, sid)
 	}
 	s.pumpLive(ctx)
 }
@@ -240,6 +254,23 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 			return Message{}, false
 		}
 		p.Title, p.Body = pl.Title, pl.Body
+	case wire.SessionEvent:
+		sess, ok := sessionOf(pl.Session)
+		if !ok || !s.exitChanged(sess) {
+			return Message{}, false
+		}
+		p.Kind = sess.Status
+		p.Bib = sess.Bib
+		agent := sess.Agent
+		p.Agent = &agent
+		p.Title = sess.Name
+		exit := *sess.Exit
+		p.Exit = &exit
+	case wire.SessionRemovedEvent:
+		s.mu.Lock()
+		delete(s.exits, sid)
+		s.mu.Unlock()
+		return Message{}, false
 	case wire.JobEvent:
 		j := pl.Job
 		if j.Status == "running" {
@@ -257,7 +288,7 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 
 	// A clear always goes out: skipping it could leave an earlier needs_you
 	// on the lock screen or Watch after the approval closed.
-	if p.Kind != wire.PushClear && (info.Muted || s.Hub.ForegroundSubscribers() > 0) {
+	if p.Kind != wire.PushClear && (info.Muted || (s.Muted != nil && s.Muted()) || s.Hub.ForegroundSubscribers() > 0) {
 		return Message{}, false
 	}
 	if p.Kind != wire.PushNeedsYou && p.Kind != wire.PushClear && !s.admit(sid, now) {

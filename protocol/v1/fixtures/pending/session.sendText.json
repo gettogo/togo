@@ -1,0 +1,42 @@
+{
+  "description": "Type a reply into an agent waiting at its prompt; submit presses Enter after the text. The text reaches the pane literally. Harness deviation: the login-shell PATH holds an executable claude that waits at its prompt until killed. Its status is done before the request.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.sendText",
+    "params": {
+      "id": "s_abcdefghij",
+      "text": "Run the tests again",
+      "submit": true
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {}
+  }
+}

@@ -78,12 +78,15 @@ type liveSession struct {
 // concurrent use.
 //
 // The focus is the oldest pending request's session, else the session
-// that most recently started working, else the last focus, shown as done.
+// that most recently started working, else the last focus, shown as done,
+// or as ended or failed when that session's agent exited.
 type LiveTracker struct {
 	mu      sync.Mutex
 	reqs    map[string]liveRequest
 	working map[string]liveSession
-	last    LiveState // last computed state, the source of done
+	exited  map[string]string // session id -> ended or failed
+	lastID  string            // session of the last working focus
+	last    LiveState         // last computed state, the source of done
 	hasLast bool
 	quietAt time.Time // when nothing was left waiting or working
 	rose    bool      // waiting went from 0 to more since the last Next
@@ -96,6 +99,7 @@ func (t *LiveTracker) lazy() {
 	if t.reqs == nil {
 		t.reqs = map[string]liveRequest{}
 		t.working = map[string]liveSession{}
+		t.exited = map[string]string{}
 	}
 }
 
@@ -130,8 +134,9 @@ func (t *LiveTracker) Close(rid string, now time.Time) {
 }
 
 // Session records a session's status. needs_you is ignored, since pending
-// requests already say so; working starts the session's clock once; any
-// other status means it stopped.
+// requests already say so; working starts the session's clock once; ended
+// and failed are kept for the done slot; any other status means it
+// stopped.
 func (t *LiveTracker) Session(id, status string, bib *string, agent string, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -139,7 +144,14 @@ func (t *LiveTracker) Session(id, status string, bib *string, agent string, now 
 	switch {
 	case status == wire.LevelNeedsYou:
 		return
+	case status == wire.StatusEnded || status == wire.StatusFailed:
+		delete(t.working, id)
+		t.exited[id] = status
+		if t.lastID == "" {
+			t.lastID = id
+		}
 	case status == wire.LiveWorking:
+		delete(t.exited, id)
 		s, ok := t.working[id]
 		if !ok {
 			s.since = now
@@ -148,6 +160,7 @@ func (t *LiveTracker) Session(id, status string, bib *string, agent string, now 
 		t.working[id] = s
 	default:
 		delete(t.working, id)
+		delete(t.exited, id)
 	}
 	t.settle(now)
 }
@@ -224,8 +237,13 @@ func (t *LiveTracker) state() (LiveState, bool) {
 			}
 		}
 		st = LiveState{Bib: s.bib, Agent: s.agent, Status: wire.LiveWorking, Since: s.since.Unix()}
+		t.lastID = sid
 	case t.hasLast:
-		st = LiveState{Bib: t.last.Bib, Agent: t.last.Agent, Status: wire.PushDone, Since: t.quietAt.Unix()}
+		status := wire.PushDone
+		if x, ok := t.exited[t.lastID]; ok {
+			status = x
+		}
+		st = LiveState{Bib: t.last.Bib, Agent: t.last.Agent, Status: status, Since: t.quietAt.Unix()}
 	default:
 		return LiveState{}, false
 	}

@@ -391,3 +391,29 @@ func TestCaptureErrorKeepsPendingPrompt(t *testing.T) {
 		t.Fatalf("PromptGone after a clean capture = %d, want 1", h.gone)
 	}
 }
+
+func TestSetIdleChangesDoneDelay(t *testing.T) {
+	t.Setenv("TOGO_IDLE_SECONDS", "")
+	h := newHarness(t)
+	h.w.SetIdle(15 * time.Second)
+	h.signal(t, wire.SignalOutput, "")
+	h.advance(7 * time.Second)
+	h.w.Tick(context.Background())
+	if len(h.events) != 0 {
+		t.Fatalf("done at 7s: %+v", h.events)
+	}
+	h.advance(8 * time.Second)
+	h.w.Tick(context.Background())
+	if len(h.events) != 1 || h.events[0].Level != wire.LevelDone {
+		t.Fatalf("no done at 15s: %+v", h.events)
+	}
+}
+
+func TestSetIdleYieldsToEnv(t *testing.T) {
+	t.Setenv("TOGO_IDLE_SECONDS", "2")
+	h := newHarness(t)
+	h.w.SetIdle(15 * time.Second)
+	if got := h.w.idleWindow(); got != 6*time.Second {
+		t.Fatalf("idle = %v", got)
+	}
+}

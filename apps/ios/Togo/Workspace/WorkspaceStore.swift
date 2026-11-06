@@ -53,7 +53,7 @@ extension AppStore {
         case .session(let n):
             selectTab(number: n)
         case .controlCenter:
-            workspaceOpen = false
+            showControlCenter()
         case .detach:
             if let focused = focusedTab?.id {
                 close(focused)
@@ -62,6 +62,18 @@ extension AppStore {
             startNewSession()
         case .paste:
             break
+        case .toggleSidebar:
+            toggleSidebar()
+        case .splitToggle:
+            toggleSplit()
+        case .focusLeft:
+            focus(.primary)
+        case .focusRight:
+            focus(.secondary)
+        case .previousTab:
+            stepTab(-1)
+        case .nextTab:
+            stepTab(1)
         }
     }
 

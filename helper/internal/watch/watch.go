@@ -84,6 +84,18 @@ type Watcher struct {
 	// armed reports the tap command recorded on each session; nil skips
 	// the check, so every unattached session is attached.
 	armed func(context.Context) (map[string]string, error)
+	// agentGone checks the pane before an exit report counts.
+	agentGone func(context.Context, string) (bool, error)
+	// settledGone checks the pane for an agent gone without a report: gone,
+	// in a pane that did not just start.
+	settledGone func(context.Context, string) (bool, error)
+	// pruneRecord prunes the restore record; nil skips it. pruned is
+	// set after the first reconcile.
+	pruneRecord func(context.Context) error
+	pruned      bool
+	// scans counts the reconciles that listed the sessions. The first
+	// restores stored exits; the first two look for agents already gone.
+	scans int
 
 	mu       sync.Mutex
 	sessions map[string]*entry
@@ -118,7 +130,32 @@ func New(cfg Config) (*Watcher, error) {
 	}
 	w.piped = cfg.Tmux.PipedSessions
 	w.armed = cfg.Tmux.TapCommands
+	w.agentGone = w.paneGone
+	w.settledGone = w.paneSettledGone
+	w.pruneRecord = cfg.Sessions.Settle
 	return w, nil
+}
+
+// SetIdle changes the idle window. TOGO_IDLE_SECONDS, when set, still wins,
+// so tests that pin the window keep it.
+func (w *Watcher) SetIdle(d time.Duration) {
+	if d <= 0 || envIdleSet() {
+		return
+	}
+	w.mu.Lock()
+	w.idle = d
+	w.mu.Unlock()
+}
+
+func (w *Watcher) idleWindow() time.Duration {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.idle
+}
+
+func envIdleSet() bool {
+	n, err := strconv.ParseFloat(os.Getenv("TOGO_IDLE_SECONDS"), 64)
+	return err == nil && n > 0
 }
 
 func idleFromEnv() time.Duration {
@@ -188,6 +225,10 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 			armed = a
 		}
 	}
+	w.mu.Lock()
+	w.scans++
+	scan := w.scans
+	w.mu.Unlock()
 	live := map[string]bool{}
 	for _, s := range all {
 		if !s.Managed {
@@ -207,6 +248,9 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 			e.attached = true
 			e.screenCheck = true
 		}
+		if scan <= startScans {
+			w.restoreExit(ctx, s, e, scan)
+		}
 		e.mu.Unlock()
 	}
 
@@ -225,7 +269,14 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 		gone = append(gone, vanished{id, e.attached})
 		e.mu.Unlock()
 	}
+	prune := w.pruneRecord != nil && (!w.pruned || len(gone) > 0)
+	w.pruned = true
 	w.mu.Unlock()
+	if prune {
+		// Sessions that vanished under a live server were ended at the
+		// desk, not by a restart; the record must not offer them later.
+		_ = w.pruneRecord(ctx)
+	}
 	for _, g := range gone {
 		if w.cfg.Prompts != nil {
 			w.cfg.Prompts.SessionGone(ctx, g.id)
@@ -296,11 +347,16 @@ func (w *Watcher) snapshot() map[string]*entry {
 // Tick inspects every session whose output has been silent for the idle
 // window, and every session whose tap was just attached.
 func (w *Watcher) Tick(ctx context.Context) {
-	now := w.now()
+	now, idle := w.now(), w.idleWindow()
 	for id, e := range w.snapshot() {
 		e.mu.Lock()
 		switch {
-		case e.silent(now, w.idle):
+		case e.silent(now, idle) && w.Ended(id):
+			// Silence after the agent ended or failed is not a done:
+			// neither for output its hooks saw before the exit, nor for
+			// output from the shell the pane fell back to.
+			e.awaitingIdle, e.working = false, false
+		case e.silent(now, idle):
 			e.awaitingIdle = false
 			e.screenCheck = false
 			w.settle(ctx, id, e)
@@ -335,7 +391,7 @@ func (w *Watcher) settle(ctx context.Context, id string, e *entry) {
 	}
 }
 
-// Signal handles one tap signal.
+// Signal handles one signal from a tap or a launch wrapper.
 func (w *Watcher) Signal(ctx context.Context, sig wire.Signal) error {
 	if managed, err := session.ValidateID(sig.SessionID); err != nil {
 		return err
@@ -351,6 +407,8 @@ func (w *Watcher) Signal(ctx context.Context, sig wire.Signal) error {
 		w.output(ctx, sig.SessionID, e)
 	case wire.SignalBell, wire.SignalOSC9, wire.SignalOSC777:
 		w.attention(ctx, sig, e)
+	case wire.SignalExit:
+		return w.exit(ctx, sig, e)
 	default:
 		return &session.InvalidParamsError{Msg: "unknown signal kind"}
 	}
@@ -358,6 +416,9 @@ func (w *Watcher) Signal(ctx context.Context, sig wire.Signal) error {
 }
 
 func (w *Watcher) output(ctx context.Context, id string, e *entry) {
+	if w.Ended(id) {
+		return
+	}
 	if e.prompt != "" {
 		p, ok, err := w.inspect(ctx, id)
 		if err != nil {

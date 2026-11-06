@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/api"
+	"github.com/gettogo/togo/helper/internal/authkeys"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -146,8 +147,15 @@ func (s *Service) validatePair(p wire.PairParams) error {
 		return invalid("env must be sandbox or production")
 	case !s.validRelay(p.RelayURL):
 		return invalid("relayUrl must be an https URL")
+	case p.SSHKey != "" && !validSSHKey(p.SSHKey):
+		return invalid("sshKey must be an OpenSSH public key with no options or comment")
 	}
 	return nil
+}
+
+func validSSHKey(s string) bool {
+	_, _, err := authkeys.ParseKey(s)
+	return err == nil
 }
 
 func validKey(s string) bool {

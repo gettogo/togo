@@ -21,6 +21,22 @@ type sessionState struct {
 	// has been read or set.
 	muted bool
 	known bool
+	// exitStatus is wire.StatusEnded or wire.StatusFailed while the
+	// session's agent has exited, with exit saying how; both are cleared
+	// by the next agent hook or a relaunch. The session's @togo_exit
+	// option keeps them across a daemon restart: exitKnown is false until
+	// the hub has read or written it, and the first listing seen then
+	// supplies the stored exit.
+	exitStatus string
+	exit       *wire.SessionExit
+	exitKnown  bool
+	// exitRestored marks an exit read back or found at start, which is
+	// never announced as new.
+	exitRestored bool
+	// awaitRun is set when the agent was started again and cleared by the
+	// first hook of the new run, so a late exit hook from the run the
+	// relaunch killed is not taken for the new one's.
+	awaitRun bool
 }
 
 func (h *Hub) stateLocked(id string) *sessionState {
@@ -41,6 +57,119 @@ func (h *Hub) SetStatus(id, status string, activity *string) {
 	st.status, st.activity = status, activity
 	h.mu.Unlock()
 	h.publishSession(id)
+}
+
+// SetExit records that the session's agent exited, status being
+// wire.StatusEnded or wire.StatusFailed, and publishes the session. The
+// status derived from hooks and output is dropped, so once the exit clears
+// the session reads as tmux reports it until the agent says otherwise. An
+// exit that fails validation, or any other status, is ignored.
+func (h *Hub) SetExit(id string, status string, exit *wire.SessionExit) {
+	if exit == nil || exit.Validate() != nil || (status != wire.StatusEnded && status != wire.StatusFailed) {
+		return
+	}
+	e := *exit
+	h.exitMu.Lock()
+	h.mu.Lock()
+	st := h.stateLocked(id)
+	st.exitStatus, st.exit, st.exitKnown, st.exitRestored = status, &e, true, false
+	st.status, st.activity = "", nil
+	h.mu.Unlock()
+	h.saveExit(id, &session.SavedExit{Status: status, Exit: e})
+	h.exitMu.Unlock()
+	h.publishSession(id)
+}
+
+// RestoreExit records an exit the daemon did not see happen: one stored
+// before a restart, or an agent found gone when the daemon started. It is
+// kept like SetExit's, but subscribers see it as restored, so it sends no
+// push. A session the hub already holds an exit for is left alone.
+func (h *Hub) RestoreExit(id string, status string, exit *wire.SessionExit) {
+	if exit == nil || exit.Validate() != nil || (status != wire.StatusEnded && status != wire.StatusFailed) {
+		return
+	}
+	e := *exit
+	h.exitMu.Lock()
+	h.mu.Lock()
+	st := h.stateLocked(id)
+	if st.exitStatus != "" {
+		h.mu.Unlock()
+		h.exitMu.Unlock()
+		return
+	}
+	st.exitStatus, st.exit, st.exitKnown, st.exitRestored = status, &e, true, true
+	st.status, st.activity = "", nil
+	h.mu.Unlock()
+	h.saveExit(id, &session.SavedExit{Status: status, Exit: e})
+	h.exitMu.Unlock()
+	h.publishSession(id)
+}
+
+// ClearExit returns the session to its derived status and publishes it
+// when it was ended or failed. Hooks call it when the agent shows it is
+// running, which also marks the current run as started.
+func (h *Hub) ClearExit(id string) {
+	h.exitMu.Lock()
+	h.mu.Lock()
+	st := h.stateLocked(id)
+	was := st.exitStatus != ""
+	// Before the hub has read the session's stored exit, there may be one
+	// to remove.
+	stored := was || !st.exitKnown
+	st.exitStatus, st.exit, st.exitKnown, st.exitRestored = "", nil, true, false
+	st.awaitRun = false
+	h.mu.Unlock()
+	if stored {
+		h.saveExit(id, nil)
+	}
+	h.exitMu.Unlock()
+	if was {
+		h.publishSession(id)
+	}
+}
+
+// saveExit writes the session's exit to its @togo_exit option, or removes
+// it for nil. Callers hold exitMu, so the option ends up matching the
+// hub's last change. A failed write costs only the restart case: the
+// session's exit is still correct while this daemon runs.
+func (h *Hub) saveExit(id string, e *session.SavedExit) {
+	ctx, cancel := context.WithTimeout(context.Background(), lookupTimeout)
+	defer cancel()
+	if err := h.svc.SaveExit(ctx, id, e); err != nil && h.svc.Logf != nil {
+		h.svc.Logf("hub: session %s: keeping the exit: %v", id, err)
+	}
+}
+
+// HookExitAllowed reports whether an exit reported by an agent hook can
+// belong to the session's current run: false after a relaunch until the
+// new run's first hook, since the run the relaunch killed may still report
+// its own end.
+func (h *Hub) HookExitAllowed(id string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	st, ok := h.sessions[id]
+	return !ok || !st.awaitRun
+}
+
+// Ended reports whether the session's agent has exited: its status is
+// ended or failed until a hook or a relaunch clears it.
+func (h *Hub) Ended(id string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	st, ok := h.sessions[id]
+	return ok && st.exitStatus != ""
+}
+
+// Exit returns the session's exit status and exit, or "" and nil.
+func (h *Hub) Exit(id string) (string, *wire.SessionExit) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	st, ok := h.sessions[id]
+	if !ok || st.exit == nil {
+		return "", nil
+	}
+	e := *st.exit
+	return st.exitStatus, &e
 }
 
 // SetMeta records what an agent reported about a session and publishes the
@@ -108,11 +237,23 @@ func (h *Hub) decorateLocked(sessions []session.Session) []session.Session {
 		} else {
 			st.muted, st.known = s.Muted, true
 		}
+		if !st.exitKnown {
+			st.exitKnown = true
+			if e := s.SavedExit; e != nil {
+				exit := e.Exit
+				st.exitStatus, st.exit, st.exitRestored = e.Status, &exit, true
+			}
+		}
 		if st.status != "" {
 			s.Status, s.Activity = st.status, st.activity
 		}
+		if st.exitStatus != "" {
+			exit := *st.exit
+			s.Status, s.Activity, s.Exit = st.exitStatus, nil, &exit
+			s.ExitRestored = st.exitRestored
+		}
 		if waiting[s.ID] {
-			s.Status = statusNeedsYou
+			s.Status, s.Exit = statusNeedsYou, nil
 		}
 		s.Meta = st.meta
 	}

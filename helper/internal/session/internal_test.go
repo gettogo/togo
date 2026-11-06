@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/tmux"
 	"github.com/gettogo/togo/helper/internal/tmux/tmuxtest"
 )
@@ -87,18 +86,6 @@ func TestLowestFreeBib(t *testing.T) {
 	var ipe *InvalidParamsError
 	if !errors.As(err, &ipe) || ipe.Msg != "all 99 session numbers in use" {
 		t.Fatalf("all used: error = %v, want InvalidParamsError(all 99 session numbers in use)", err)
-	}
-}
-
-func TestAgentCommand(t *testing.T) {
-	shell, _ := agents.Lookup("shell")
-	if got := agentCommand(shell, "/bin/zsh"); got != nil {
-		t.Errorf("shell agent command = %v, want nil so tmux runs the default shell", got)
-	}
-	claude, _ := agents.Lookup("claude")
-	want := []string{"/bin/zsh", "-lic", `claude; exec "$SHELL" -l`}
-	if got := agentCommand(claude, "/bin/zsh"); !reflect.DeepEqual(got, want) {
-		t.Errorf("claude command = %v, want %v", got, want)
 	}
 }
 

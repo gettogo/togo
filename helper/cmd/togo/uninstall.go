@@ -32,12 +32,15 @@ func runUninstall(ctx context.Context, args []string, env map[string]string, std
 	if err != nil {
 		return fail(stderr, err)
 	}
-	if err := svc.Uninstall(ctx); err != nil {
+	if err := uninstallService(ctx, svc, stderr); err != nil {
 		code = fail(stderr, err)
 	} else {
 		fmt.Fprintln(stdout, "service: uninstalled")
 	}
 	if home, err := state.Home(); err == nil {
+		if c := uninstallAwake(ctx, home, stdout, stderr); c != exitOK {
+			code = c
+		}
 		fmt.Fprintf(stdout, "Left %s in place; delete it to remove sessions and keys.\n", home)
 	}
 	return code

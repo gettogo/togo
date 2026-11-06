@@ -13,7 +13,7 @@ import (
 
 // claudeBase are the events installed without --block. Notification carries
 // the permission prompt when PermissionRequest is not hooked.
-var claudeBase = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop"}
+var claudeBase = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "StopFailure", "SessionEnd"}
 
 const permissionRequest = "PermissionRequest"
 

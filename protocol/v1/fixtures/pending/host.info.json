@@ -1,0 +1,40 @@
+{
+  "description": "Network interfaces a phone needs to wake this machine with a magic packet. Harness deviation: the interface seam returns en0 with MAC 02:00:00:00:00:01 and IPv4 192.168.1.20, and the machine reports wake on LAN enabled.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "host.info",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "interfaces": [
+        {
+          "name": "en0",
+          "mac": "02:00:00:00:00:01",
+          "ipv4": [
+            "192.168.1.20"
+          ]
+        }
+      ],
+      "wakeOnLan": true
+    }
+  }
+}

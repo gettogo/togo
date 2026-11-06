@@ -1,0 +1,31 @@
+{
+  "description": "Dismiss a restorable session: its record is deleted and nothing runs. Harness deviation: TOGO_HOME holds the record of one Claude Code session that a host restart ended: id s_abcdefghij, bib 01, command claude --model opus, cwd <home>/proj, created 2026-11-03T10:00:00Z, ended 2026-11-03T11:30:00Z, with a conversation the agent can resume; no tmux session exists for it.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.dismiss",
+    "params": {
+      "id": "s_abcdefghij"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {}
+  }
+}

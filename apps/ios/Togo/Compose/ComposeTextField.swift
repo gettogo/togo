@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 /// pasted image, which is the quickest way to share a screenshot with an agent.
 struct ComposeTextField: UIViewRepresentable {
     @Binding var text: String
+    /// The caret, kept so dictated words go in where it is.
+    @Binding var selection: NSRange?
     let focusOnAppear: Bool
     let onPasteImage: (Data) -> Void
     let onSubmit: () -> Void
@@ -25,9 +27,16 @@ struct ComposeTextField: UIViewRepresentable {
         context.coordinator.parent = self
         view.onPasteImage = onPasteImage
         view.onSubmit = onSubmit
+        context.coordinator.applying = true
+        defer { context.coordinator.applying = false }
         if view.text != text {
             view.text = text
             view.refreshPlaceholder()
+        }
+        // Text set from outside, such as a dictation, moves the caret to where it asks.
+        if let selection, view.markedTextRange == nil, view.selectedRange != selection,
+           NSMaxRange(selection) <= (view.text as NSString).length {
+            view.selectedRange = selection
         }
     }
 
@@ -45,6 +54,8 @@ struct ComposeTextField: UIViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, UITextViewDelegate {
         var parent: ComposeTextField
+        /// Set while SwiftUI pushes text in, so the echo is not written back mid-update.
+        var applying = false
 
         init(parent: ComposeTextField) {
             self.parent = parent
@@ -53,6 +64,11 @@ struct ComposeTextField: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
             (textView as? PastingTextView)?.refreshPlaceholder()
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !applying, textView.markedTextRange == nil, parent.selection != textView.selectedRange else { return }
+            parent.selection = textView.selectedRange
         }
     }
 }

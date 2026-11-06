@@ -53,6 +53,18 @@
         { "if": { "properties": { "method": { "const": "fs.read" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsReadParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "fs.upload" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsUploadParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "ports.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "awake.status" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "awake.set" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/AwakeSetParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "agents.check" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/AgentsCheckParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.relaunch" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRelaunchParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.restorable" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "session.restore" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRestoreParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.dismiss" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "session.sendText" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionSendTextParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "notify.get" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "notify.set" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/NotifySetParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "authkeys.remove" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/AuthkeysRemoveParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "host.info" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
         { "if": { "properties": { "method": { "const": "local.signal" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalSignalParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.hook" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalHookParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.ask" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalAskParams" } }, "required": ["params"] } },
@@ -101,7 +113,7 @@
       ]
     },
     "Error": {
-      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (approval no longer answerable; data {reason: \"answered\" | \"prompt_gone\" | \"expired\", by?: \"desk\" | \"phone\"}, by present when reason is answered; or a git write refused, data GitConflictData: nothing changed except for reasons partial and raced), -32007 \"not_managed\" (write call on an unmanaged session, including git.stage, git.unstage, git.discard and git.commit). `data` is omitted when a code defines none.",
+      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail, or for the methods that name one a fixed word: session.create args, program or not_installed; agents.check program; session.restore not_installed; session.sendText text; authkeys.remove key}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve; session.restore: the session's folder no longer exists), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (the target is not in a state that allows the call; data {reason, by?}. approval.answer: answered, prompt_gone or expired, with by \"desk\" | \"phone\" when reason is answered; git writes: a refusal with data GitConflictData, nothing changed except for reasons partial and raced; session.relaunch: running (the agent still runs); session.sendText: shell (the session is the plain shell, not an agent), ended (the agent exited, or a shell is back in the foreground of the agent's pane) or needs_you (an approval is pending); authkeys.remove: symlink, missing or not_regular (authorized_keys is a symlink, absent, or not a regular file)), -32007 \"not_managed\" (write call on an unmanaged session, including git.stage, git.unstage, git.discard and git.commit), -32008 \"refused\" (the helper will not do this until the user sets it up on the machine; data {reason: \"needs_admin_setup\"}). `data` is omitted when a code defines none.",
       "type": "object",
       "properties": {
         "code": { "type": "integer" },
@@ -167,7 +179,7 @@
                 "anyOf": [
                   {
                     "type": "object",
-                    "properties": { "reason": { "enum": ["answered", "prompt_gone", "expired"] }, "by": { "enum": ["desk", "phone"] } },
+                    "properties": { "reason": { "enum": ["answered", "prompt_gone", "expired", "running", "shell", "ended", "needs_you", "symlink", "missing", "not_regular"] }, "by": { "enum": ["desk", "phone"] } },
                     "required": ["reason"],
                     "additionalProperties": false
                   },
@@ -178,7 +190,22 @@
             "required": ["data"]
           }
         },
-        { "if": { "properties": { "code": { "const": -32007 } } }, "then": { "properties": { "message": { "const": "not_managed" } } } }
+        { "if": { "properties": { "code": { "const": -32007 } } }, "then": { "properties": { "message": { "const": "not_managed" } } } },
+        {
+          "if": { "properties": { "code": { "const": -32008 } } },
+          "then": {
+            "properties": {
+              "message": { "const": "refused" },
+              "data": {
+                "type": "object",
+                "properties": { "reason": { "enum": ["needs_admin_setup"] } },
+                "required": ["reason"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["data"]
+          }
+        }
       ]
     },
     "ManagedSessionId": {
@@ -213,15 +240,47 @@
         "agent": { "description": "Agent id from agents.list. Unmanaged sessions report `shell`.", "type": "string" },
         "cwd": { "description": "Absolute working directory of the session's active pane.", "type": "string" },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
-        "status": { "description": "`needs_you` while an approval for the session is pending, else the status the helper derived from hooks and output, else `exited` when the pane is dead and `idle` otherwise. Helpers without events.v1 report only `idle` and `exited`.", "enum": ["working", "needs_you", "done", "idle", "exited"] },
+        "status": { "description": "`needs_you` while an approval for the session is pending, else the status the helper derived from hooks and output, else `exited` when the pane is dead and `idle` otherwise. Helpers without events.v1 report only `idle` and `exited`. With lifecycle.v1, a managed agent session whose agent process exits is `ended` (exit code 0, or interrupted) or `failed` (non-zero exit, an error or a usage limit), never `done`; both carry `exit`. A later agent hook for the session clears them.", "enum": ["working", "needs_you", "done", "idle", "exited", "ended", "failed"] },
         "activity": { "description": "Short description of what the agent is doing, or null when unknown.", "type": ["string", "null"] },
         "attachedClients": { "type": "integer", "minimum": 0 },
         "managed": { "type": "boolean" },
         "muted": { "description": "Pushes for this session are suppressed (session.setMute). False by default; always false for unmanaged sessions.", "type": "boolean" },
-        "meta": { "description": "Agent-reported model and usage, all null until an agent hook reports them.", "$ref": "#/$defs/SessionMeta" }
+        "meta": { "description": "Agent-reported model and usage, all null until an agent hook reports them.", "$ref": "#/$defs/SessionMeta" },
+        "command": { "description": "launch.v1: the argv the session's agent was started with, program then args, for managed agent sessions; null for shell and unmanaged sessions. Absent from helpers without launch.v1.", "type": ["array", "null"], "items": { "type": "string" } },
+        "exit": { "description": "lifecycle.v1: how the agent process ended while status is ended or failed, else null. Absent from helpers without lifecycle.v1.", "anyOf": [{ "$ref": "#/$defs/SessionExit" }, { "type": "null" }] }
       },
       "required": ["id", "bib", "name", "agent", "cwd", "createdAt", "status", "activity", "attachedClients", "managed", "muted", "meta"],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "ended" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "exit": {
+                "$ref": "#/$defs/SessionExit",
+                "properties": { "reason": { "enum": ["exit", "interrupted"] } },
+                "if": { "properties": { "reason": { "const": "exit" } } },
+                "then": { "properties": { "code": { "const": 0 } } }
+              }
+            },
+            "required": ["exit"]
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "exit": {
+                "$ref": "#/$defs/SessionExit",
+                "properties": { "reason": { "enum": ["exit", "error", "usage_limit"] } },
+                "if": { "properties": { "reason": { "const": "exit" } } },
+                "then": { "properties": { "code": { "type": "integer", "minimum": 1 } } }
+              }
+            },
+            "required": ["exit"]
+          }
+        }
+      ],
       "oneOf": [
         {
           "properties": {
@@ -264,7 +323,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -301,8 +360,153 @@
         "cwd": { "type": "string" },
         "name": { "description": "Trimmed of leading and trailing Unicode whitespace, then 1-64 Unicode scalar values (Go runes, not bytes or grapheme clusters), with no control characters (Unicode Cc), else -32602. Omitted, or empty after trimming, means the agent's display name.", "type": "string" },
         "cols": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 20, "maximum": 500 }] },
-        "rows": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 5, "maximum": 300 }] }
+        "rows": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 5, "maximum": 300 }] },
+        "program": { "description": "launch.v1. Only with agent \"custom\", and then required; with any other agent -32602 reason program. Either a bare name matching ^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$ found on the login-shell PATH, or an absolute path of at most 1024 bytes equal to its filepath.Clean form; either way it must name a regular executable file. Anything else is -32602 reason program; a well-formed name or path that is not found is -32602 reason not_installed. A managed agent that is not installed is also -32602 reason not_installed. name defaults to the program's base name.", "type": "string" },
+        "args": { "description": "launch.v1. Extra arguments for the agent's program, each delivered as one argv entry exactly as sent and never read by a shell or by tmux. 0-64 entries, each 1-4096 bytes of valid UTF-8 with no control characters (Unicode Cc, which includes NUL), at most 16,384 bytes in total; not allowed with agent \"shell\" (or with agent absent). Anything else is -32602 reason args.", "type": "array", "items": { "type": "string" } }
       },
+      "additionalProperties": false
+    },
+    "SessionExit": {
+      "description": "lifecycle.v1: how a session's agent process ended. code is the exit status, null when the process did not report one (killed by a signal, or a usage limit seen by a hook). reason: exit (the process exited; code says how), interrupted (stopped by Ctrl-C or a signal), error (the agent reported an error), usage_limit (the agent stopped on a usage limit). detail is a short plain-text explanation written by the helper, never raw terminal or agent text: it is cleaned exactly like a push body (ANSI sequences, control, bidirectional, zero-width, box drawing and block element characters removed, white space collapsed), cut to its first line and to 200 Unicode scalar values, and null when nothing is left. An ended session carries exit with code 0 or interrupted, or exit with code null when the helper found the agent already gone as it started; a failed one carries exit with a non-zero code, error or usage_limit.",
+      "type": "object",
+      "properties": {
+        "code": { "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 255 }, { "type": "null" }] },
+        "reason": { "enum": ["exit", "interrupted", "error", "usage_limit"] },
+        "detail": { "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200b-\\u200f\\u202a-\\u202e\\u2060\\u2066-\\u2069\\u2500-\\u259f\\ufeff]*$" }, { "type": "null" }] }
+      },
+      "required": ["code", "reason", "detail"],
+      "additionalProperties": false
+    },
+    "AgentsCheckParams": {
+      "description": "agents.check (launch.v1) -> AgentsCheckResult. program follows the SessionCreateParams.program rules; a malformed one is -32602 reason program.",
+      "type": "object",
+      "properties": { "program": { "type": "string" } },
+      "required": ["program"],
+      "additionalProperties": false
+    },
+    "AgentsCheckResult": {
+      "description": "installed: program names a regular executable file, found on the login-shell PATH for a bare name. path is its absolute path, or null when installed is false.",
+      "type": "object",
+      "properties": {
+        "installed": { "type": "boolean" },
+        "path": { "type": ["string", "null"] }
+      },
+      "required": ["installed", "path"],
+      "additionalProperties": false
+    },
+    "SessionRelaunchParams": {
+      "description": "session.relaunch (launch.v1) -> Session. Runs the session's command again in its pane, keeping id, bib, name and cwd; exit becomes null. Bad id: -32602; unknown: -32001; u_ id: -32007; the agent still running: -32006 reason running.",
+      "type": "object",
+      "properties": { "id": { "$ref": "#/$defs/SessionIdParam" } },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "RestorableSession": {
+      "description": "restore.v1: a managed session that a host restart ended, as the helper recorded it. command is as in Session. endedAt is when the helper last saw it. resumable: the agent can continue its previous conversation (session.restore with resume true).",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/ManagedSessionId" },
+        "bib": { "type": "string", "pattern": "^(0[1-9]|[1-9][0-9])$" },
+        "name": { "type": "string" },
+        "agent": { "type": "string" },
+        "command": { "type": ["array", "null"], "items": { "type": "string" } },
+        "cwd": { "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "endedAt": { "$ref": "#/$defs/Timestamp" },
+        "resumable": { "type": "boolean" }
+      },
+      "required": ["id", "bib", "name", "agent", "command", "cwd", "createdAt", "endedAt", "resumable"],
+      "additionalProperties": false
+    },
+    "SessionRestorableResult": {
+      "description": "session.restorable (restore.v1). Newest endedAt first.",
+      "type": "object",
+      "properties": { "sessions": { "type": "array", "items": { "$ref": "#/$defs/RestorableSession" } } },
+      "required": ["sessions"],
+      "additionalProperties": false
+    },
+    "SessionRestoreParams": {
+      "description": "session.restore (restore.v1) -> Session. Starts a restorable session again with its id, bib, name, cwd and command, and removes it from session.restorable. resume true continues the agent's previous conversation when the record is resumable. Unknown id: -32001; the folder no longer exists: -32003; the agent no longer installed: -32602 reason not_installed.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/SessionIdParam" },
+        "resume": { "type": "boolean" }
+      },
+      "required": ["id", "resume"],
+      "additionalProperties": false
+    },
+    "SessionSendTextParams": {
+      "description": "session.sendText (reply.v1) -> {}. Types text into the agent's pane literally; submit presses Enter after it. text: 1-8000 Unicode scalar values with no control characters (Unicode Cc) other than newline, else -32602 reason text. Bad id: -32602; unknown: -32001; u_ id: -32007. Refused with -32006 and nothing typed when the session is the plain shell, not an agent (reason shell), the agent has exited or a shell is back in the foreground of its pane (ended), or an approval is pending (needs_you).",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/SessionIdParam" },
+        "text": { "type": "string" },
+        "submit": { "type": "boolean" }
+      },
+      "required": ["id", "text", "submit"],
+      "additionalProperties": false
+    },
+    "NotifySettings": {
+      "description": "notify.get and notify.set result (notify.v1): this machine's push settings. idleSeconds: quiet output after work before done is sent, 3-600, default 6. muted: this machine sends no pushes except clear, which takes away notifications already shown; default false. remindMinutes: one reminder for an approval still waiting after this many minutes, 0 (off) or 2-120, default 10.",
+      "type": "object",
+      "properties": {
+        "idleSeconds": { "type": "integer", "minimum": 3, "maximum": 600 },
+        "muted": { "type": "boolean" },
+        "remindMinutes": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 2, "maximum": 120 }] }
+      },
+      "required": ["idleSeconds", "muted", "remindMinutes"],
+      "additionalProperties": false
+    },
+    "NotifySetParams": {
+      "description": "notify.set (notify.v1) -> NotifySettings. At least one field; fields left out keep their value. A value outside the NotifySettings ranges is -32602 and nothing changes.",
+      "type": "object",
+      "properties": {
+        "idleSeconds": { "type": "integer" },
+        "muted": { "type": "boolean" },
+        "remindMinutes": { "type": "integer" }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "SSHPublicKey": {
+      "description": "An OpenSSH public key: type and base64 blob, no options and no comment.",
+      "type": "string",
+      "pattern": "^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa) [A-Za-z0-9+/]+={0,2}$"
+    },
+    "AuthkeysRemoveParams": {
+      "description": "authkeys.remove (authkeys.v1) -> AuthkeysRemoveResult. Removes from ~/.ssh/authorized_keys the lines whose key blob equals publicKey and whose comment starts with togo@; every other byte and the file mode stay. A malformed key: -32602 reason key. authorized_keys a symlink, missing or not a regular file: -32006 reason symlink, missing or not_regular, and nothing is written.",
+      "type": "object",
+      "properties": { "publicKey": { "$ref": "#/$defs/SSHPublicKey" } },
+      "required": ["publicKey"],
+      "additionalProperties": false
+    },
+    "AuthkeysRemoveResult": {
+      "description": "removed: lines removed, 0 when none matched.",
+      "type": "object",
+      "properties": { "removed": { "type": "integer", "minimum": 0 } },
+      "required": ["removed"],
+      "additionalProperties": false
+    },
+    "HostInfo": {
+      "description": "host.info (hostinfo.v1): what a phone needs to wake this machine. interfaces: up, non-loopback interfaces with a hardware address, each with its lowercase MAC and IPv4 addresses. wakeOnLan: the machine reports wake on LAN enabled, false when disabled, null when unknown.",
+      "type": "object",
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "mac": { "type": "string", "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$" },
+              "ipv4": { "type": "array", "items": { "type": "string", "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$" } }
+            },
+            "required": ["name", "mac", "ipv4"],
+            "additionalProperties": false
+          }
+        },
+        "wakeOnLan": { "type": ["boolean", "null"] }
+      },
+      "required": ["interfaces", "wakeOnLan"],
       "additionalProperties": false
     },
     "SessionKillParams": {
@@ -708,7 +912,7 @@
       "additionalProperties": false
     },
     "Event": {
-      "description": "params of the `event` notification. The kind-specific fields sit beside the header fields. seq is strictly increasing per daemon and starts at 1. Every subscriber receives every event (no per-connection filtering), so a seq gap always means lost events and the client must call events.subscribe again. The helper writes the events.subscribe response before any event for that subscription; a client drops every event with seq <= the response seq. sessionId equals session.id for kind session, is non-null for session.removed and approval.open/closed of a session, and is null for events that belong to no session (notify and job without a session).",
+      "description": "params of the `event` notification. The kind-specific fields sit beside the header fields. seq is strictly increasing per daemon and starts at 1. Every subscriber receives every event (no per-connection filtering), so a seq gap always means lost events and the client must call events.subscribe again. The helper writes the events.subscribe response before any event for that subscription; a client drops every event with seq <= the response seq. sessionId equals session.id for kind session, is non-null for session.removed and approval.open/closed of a session, and is null for events that belong to no session (notify and job without a session, and awake, which a helper with awake.v1 sends whenever its awake status changes).",
       "type": "object",
       "properties": {
         "seq": {
@@ -725,7 +929,8 @@
             "approval.open",
             "approval.closed",
             "notify",
-            "job"
+            "job",
+            "awake"
           ]
         },
         "sessionId": {
@@ -875,12 +1080,31 @@
               "job"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "awake"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "awake": {
+                "$ref": "#/$defs/AwakeStatus"
+              }
+            },
+            "required": [
+              "awake"
+            ]
+          }
         }
       ],
       "unevaluatedProperties": false
     },
     "SessionRefParams": {
-      "description": "Params naming one session: git.status, git.branches, ports.list. Bad id: -32602; unknown: -32001.",
+      "description": "Params naming one session: git.status, git.branches, ports.list, session.dismiss. Bad id: -32602; unknown: -32001. session.dismiss (restore.v1) -> {} deletes a restorable session's record without running anything.",
       "type": "object",
       "properties": {
         "id": {
@@ -1054,6 +1278,10 @@
         },
         "liveActivityCommand": {
           "type": "boolean"
+        },
+        "sshKey": {
+          "description": "The public key this device uses to sign in over SSH, so authkeys.remove can take it off the machine when the device forgets it. Send it only when the helper advertises authkeys.v1: an older helper rejects push.pair with a field it does not know.",
+          "$ref": "#/$defs/SSHPublicKey"
         }
       },
       "required": [
@@ -1511,6 +1739,35 @@
       ],
       "additionalProperties": false
     },
+    "AwakeStatus": {
+      "description": "awake.status and awake.set result, and the awake event payload (awake.v1): whether the helper is keeping the machine awake. mode: off never holds; plugged (default) holds a sleep assertion while any managed session is working or needs_you and for 2 minutes after, which keeps a closed laptop awake on AC power only; battery also disables sleep so a closed lid stays awake on battery. held: a sleep block is in place now. reason: unsupported (platformSupported false), off, idle (no session working or waiting), active, grace (held for 2 minutes after the last active session), on_battery (plugged mode held on battery: a closed lid still sleeps), needs_admin_setup (battery mode before its one-time setup on the machine; behaves like plugged), battery_floor (battery mode paused at or below batteryFloor until 5 points above it or charging), thermal (battery mode paused by a thermal warning on battery), failed (detail says why). power and batteryPercent describe the power source; batteryPercent is absent without a battery or when unknown. needsAdmin: battery mode needs `togo awake battery` run on the machine first.",
+      "type": "object",
+      "properties": {
+        "mode": { "enum": ["off", "plugged", "battery"] },
+        "held": { "type": "boolean" },
+        "reason": {
+          "enum": ["unsupported", "off", "idle", "active", "grace", "on_battery", "needs_admin_setup", "battery_floor", "thermal", "failed"]
+        },
+        "detail": { "type": "string", "maxLength": 1024 },
+        "power": { "enum": ["ac", "battery", "unknown"] },
+        "batteryPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "batteryFloor": { "type": "integer", "minimum": 10, "maximum": 50 },
+        "platformSupported": { "type": "boolean" },
+        "needsAdmin": { "type": "boolean" }
+      },
+      "required": ["mode", "held", "reason", "power", "batteryFloor", "platformSupported", "needsAdmin"],
+      "additionalProperties": false
+    },
+    "AwakeSetParams": {
+      "description": "awake.set -> AwakeStatus. At least one field. Changing mode to battery before the one-time setup on the machine is -32008 refused with data.reason needs_admin_setup; off and plugged are always allowed. An unknown mode or a batteryFloor outside 10-50 is -32602.",
+      "type": "object",
+      "properties": {
+        "mode": { "enum": ["off", "plugged", "battery"] },
+        "batteryFloor": { "type": "integer", "minimum": 10, "maximum": 50 }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
     "PortsListResult": {
       "description": "ports.list. TCP ports in the LISTEN state held by processes in the session's process tree, ordered by port.",
       "type": "object",
@@ -1552,7 +1809,7 @@
       "additionalProperties": false
     },
     "LocalSignalParams": {
-      "description": "local.signal -> {}. Sent by `togo tap` for a bell, an OSC 9 or OSC 777 notification, or the first output after quiet. local.* methods are served only by the daemon, on connections it accepts on its unix socket from the same user; `serve --stdio` proxies to that socket, so its connections get them too. The in-process server that `serve --stdio` falls back to without a daemon does not serve them.",
+      "description": "local.signal -> {}. Sent by `togo tap` for a bell, an OSC 9 or OSC 777 notification, or the first output after quiet, and by the launch wrapper with kind exit and the agent's exit status in code (0-255, required for exit and allowed only with it). local.* methods are served only by the daemon, on connections it accepts on its unix socket from the same user; `serve --stdio` proxies to that socket, so its connections get them too. The in-process server that `serve --stdio` falls back to without a daemon does not serve them.",
       "type": "object",
       "properties": {
         "sessionId": {
@@ -1563,7 +1820,8 @@
             "bell",
             "osc9",
             "osc777",
-            "output"
+            "output",
+            "exit"
           ]
         },
         "title": {
@@ -1571,13 +1829,21 @@
         },
         "body": {
           "type": "string"
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
         }
       },
       "required": [
         "sessionId",
         "kind"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": { "properties": { "kind": { "const": "exit" } } },
+      "then": { "properties": { "code": true }, "required": ["code"] },
+      "else": { "properties": { "code": false } }
     },
     "LocalHookParams": {
       "description": "local.hook -> {}. One agent hook invocation, reduced by the adapter; the raw payload is never forwarded.",
@@ -1865,7 +2131,7 @@
       "additionalProperties": false
     },
     "PushPlaintext": {
-      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid.",
+      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting.",
       "type": "object",
       "properties": {
         "v": {
@@ -1877,7 +2143,10 @@
             "done",
             "job",
             "notify",
-            "clear"
+            "clear",
+            "ended",
+            "failed",
+            "offline"
           ]
         },
         "sessionId": {
@@ -1939,6 +2208,16 @@
             "null"
           ],
           "maxLength": 64
+        },
+        "exit": {
+          "$ref": "#/$defs/SessionExit"
+        },
+        "active": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reminder": {
+          "const": true
         }
       },
       "required": [
@@ -2003,7 +2282,10 @@
                 "enum": [
                   "done",
                   "job",
-                  "notify"
+                  "notify",
+                  "ended",
+                  "failed",
+                  "offline"
                 ]
               }
             }
@@ -2014,6 +2296,18 @@
               "options": false
             }
           }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["ended", "failed"] } } },
+          "else": { "properties": { "exit": false } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "offline" } } },
+          "else": { "properties": { "active": false } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "needs_you" } } },
+          "else": { "properties": { "reminder": false } }
         }
       ]
     },
@@ -2112,7 +2406,10 @@
           "enum": [
             "needs_you",
             "working",
-            "done"
+            "done",
+            "ended",
+            "failed",
+            "offline"
           ]
         },
         "waiting": {
@@ -2280,7 +2577,19 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.commit" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "type": "object", "properties": { "hash": { "type": "string" }, "short": { "type": "string" } }, "required": ["hash", "short"], "additionalProperties": false } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.read" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsReadResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.upload" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsUploadResult" } } } } } },
-        { "if": { "properties": { "request": { "properties": { "method": { "const": "ports.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/PortsListResult" } } } } } }
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "ports.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/PortsListResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "awake.status" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AwakeStatus" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "awake.set" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AwakeStatus" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "agents.check" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AgentsCheckResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.relaunch" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/Session" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.restorable" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/SessionRestorableResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.restore" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/Session" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.dismiss" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "session.sendText" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "notify.get" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/NotifySettings" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "notify.set" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/NotifySettings" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "authkeys.remove" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AuthkeysRemoveResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "host.info" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HostInfo" } } } } } }
       ]
     }
   }

@@ -597,3 +597,34 @@ func TestCaptureFitsFrameWhenEscapeHeavy(t *testing.T) {
 		t.Errorf("text does not end with the newest line: %.60q", text[max(0, len(text)-60):])
 	}
 }
+
+// A togo tmux server started by an older helper lacks exit-empty off, and
+// would exit with its last session. The daemon applies the option to it
+// at start; with no server running there is nothing to do.
+func TestKeepServerAppliesExitEmptyToARunningServer(t *testing.T) {
+	s := newService(t)
+	ctx := context.Background()
+	if err := s.KeepServer(ctx); err != nil {
+		t.Fatalf("KeepServer with no server: %v", err)
+	}
+	if err := s.Tmux.NewSession(ctx, tmux.NewSessionOpts{Name: "old", Dir: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	exitEmpty := func() string {
+		t.Helper()
+		out, err := exec.Command(s.Tmux.Bin, append(append([]string{}, s.Tmux.Socket...), "show-options", "-sv", "exit-empty")...).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if got := exitEmpty(); got != "on" {
+		t.Fatalf("exit-empty on a server started without the config = %q, want on", got)
+	}
+	if err := s.KeepServer(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := exitEmpty(); got != "off" {
+		t.Fatalf("exit-empty after KeepServer = %q, want off", got)
+	}
+}

@@ -1,0 +1,63 @@
+{
+  "description": "Create a Claude Code session with the user's own flags. Each entry of args reaches the program as one argv entry, byte for byte, after the program; none of it is read by a shell or by tmux. command reports the program then args. Harness deviation: the login-shell PATH holds an executable claude that waits at its prompt until killed.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.create",
+    "params": {
+      "agent": "claude",
+      "cwd": "~/proj",
+      "args": [
+        "--model",
+        "opus",
+        "--append-system-prompt",
+        "Say \"done\"; then $(stop) `now` #{session_name}"
+      ]
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "id": "s_abcdefghij",
+      "bib": "01",
+      "name": "Claude Code",
+      "agent": "claude",
+      "cwd": "<home>/proj",
+      "createdAt": "2026-11-03T12:00:00Z",
+      "status": "idle",
+      "activity": null,
+      "attachedClients": 0,
+      "managed": true,
+      "muted": false,
+      "meta": {
+        "model": null,
+        "contextPercent": null,
+        "costUsd": null
+      },
+      "command": [
+        "claude",
+        "--model",
+        "opus",
+        "--append-system-prompt",
+        "Say \"done\"; then $(stop) `now` #{session_name}"
+      ],
+      "exit": null
+    }
+  }
+}

@@ -34,6 +34,23 @@ type fakeHub struct {
 	status   string
 	activity *string
 	meta     wire.SessionMeta
+	// exitStatus and exit mirror SetExit; clears counts ClearExit calls.
+	exitStatus string
+	exit       *wire.SessionExit
+	clears     int
+	// stale is true while hook exits belong to a run a relaunch killed.
+	stale bool
+}
+
+func (h *fakeHub) HookExitAllowed(string) bool { return !h.stale }
+
+func (h *fakeHub) SetExit(_ string, status string, exit *wire.SessionExit) {
+	h.exitStatus, h.exit = status, exit
+}
+
+func (h *fakeHub) ClearExit(string) {
+	h.exitStatus, h.exit = "", nil
+	h.clears++
 }
 
 func (h *fakeHub) SetStatus(_ string, status string, activity *string) {

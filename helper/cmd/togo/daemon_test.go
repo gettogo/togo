@@ -27,6 +27,9 @@ func TestMain(m *testing.M) {
 	// as a daemon; tests that want a daemon opt in.
 	startDaemon = func(string) error { return errors.New("daemon start disabled in tests") }
 	serviceRunner = func(context.Context, []string) error { return errors.New("service manager disabled in tests") }
+	// Daemons started here, in process or from the built binary, never hold
+	// the real machine awake or read its power state.
+	os.Setenv(awakeTestEnv, "1")
 
 	dir, err := os.MkdirTemp("", "togobin")
 	if err != nil {

@@ -38,24 +38,23 @@ import UIKit
     private(set) var terminalsMade: [TabID] = []
     /// Whether each of those was started by the user, in the same order.
     private(set) var terminalsUserStarted: [Bool] = []
-    private let stream: AsyncStream<HostViewSnapshot>
-    private let continuation: AsyncStream<HostViewSnapshot>.Continuation
+    /// Every subscriber gets every snapshot, as each window's store does from the live services.
+    private let hub = SnapshotHub()
 
     init(hosts: [HostRecordView] = Samples.hosts) {
         self.hosts = hosts
-        (stream, continuation) = AsyncStream.makeStream(of: HostViewSnapshot.self)
     }
 
     func publish(_ snapshot: HostViewSnapshot) {
-        continuation.yield(snapshot)
+        hub.publish(snapshot)
     }
 
     func finish() {
-        continuation.finish()
+        hub.finish()
     }
 
     func snapshots() -> AsyncStream<HostViewSnapshot> {
-        stream
+        hub.stream()
     }
 
     func answer(hostID: HostID, requestID: String, decision: Decision) async throws {

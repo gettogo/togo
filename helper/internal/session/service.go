@@ -51,8 +51,11 @@ func (e *TmuxUnavailableError) Error() string {
 }
 
 // InvalidParamsError is a rejected input. Msg is safe to show to the user.
+// Reason, when set, is the protocol's data.reason word for the rejection
+// (wire.ReasonArgs and the like); otherwise Msg is reported.
 type InvalidParamsError struct {
-	Msg string
+	Msg    string
+	Reason string
 }
 
 // Error returns Msg.
@@ -74,6 +77,17 @@ type Session struct {
 	// the process that set it.
 	Muted bool             `json:"muted"`
 	Meta  wire.SessionMeta `json:"meta"`
+	// Command is the agent's argv; nil for the shell and unmanaged sessions.
+	Command []string `json:"command"`
+	// Exit is how the agent ended while Status is ended or failed, else nil.
+	Exit *wire.SessionExit `json:"exit"`
+	// SavedExit is the exit stored in the session's @togo_exit option. It
+	// is not sent: the hub, which owns the exit, reads it after a restart.
+	SavedExit *SavedExit `json:"-"`
+	// ExitRestored is set by the hub on a session whose Exit it read back
+	// after a restart, or found when it started, rather than saw happen:
+	// it was announced before, or happened while nothing was watching.
+	ExitRestored bool `json:"-"`
 }
 
 // Service runs session operations. Construct it with NewService, or set the
@@ -86,12 +100,19 @@ type Service struct {
 	User *tmux.Client
 	// Recent records the folders sessions are created in.
 	Recent *state.Recent
+	// Manifest records managed sessions so a restart can offer them
+	// again. Nil records nothing.
+	Manifest *Manifest
 	// LockFile serializes bib allocation across processes.
 	LockFile string
 	// Shell runs agent commands; empty means /bin/sh.
 	Shell string
 	// Path is searched for agent commands; empty means state.LoginPath.
 	Path string
+	// TogoPath is the helper a session runs to report its agent's exit.
+	TogoPath string
+	// Logf receives problems with stored session state. Nil discards them.
+	Logf func(format string, args ...any)
 	// NewID and Now are test seams; nil means a random id and time.Now.
 	NewID func() string
 	Now   func() time.Time
@@ -100,19 +121,6 @@ type Service struct {
 	tmuxChecked bool
 	tmuxErr     error
 }
-
-const tmuxConf = `set -g mouse on
-set -g set-clipboard on
-set -s escape-time 0
-set -g history-limit 50000
-set -g default-terminal "tmux-256color"
-set -g status off
-set-environment -g COLORTERM truecolor
-set -as terminal-features 'xterm*:RGB'
-set -g allow-passthrough on
-set -s extended-keys on
-set -as terminal-features 'xterm*:extkeys'
-`
 
 // TmuxFallbacks are where package managers and systems install tmux, for
 // when the login PATH does not name it either. home is the user's home
@@ -145,6 +153,7 @@ func NewService(ctx context.Context, home string) (*Service, error) {
 		Tmux:     &tmux.Client{Bin: bin, Socket: []string{"-L", label}, Config: conf},
 		User:     &tmux.Client{Bin: bin},
 		Recent:   &state.Recent{File: filepath.Join(home, "recent.json")},
+		Manifest: &Manifest{Path: filepath.Join(home, "sessions.json")},
 		LockFile: filepath.Join(home, "run", "bib.lock"),
 		Shell:    cmp.Or(os.Getenv("SHELL"), "/bin/sh"),
 	}, nil
@@ -195,7 +204,7 @@ func (s *Service) listManaged(ctx context.Context) ([]Session, error) {
 		// example by someone running tmux -L togo by hand, and could not
 		// be described as a valid managed session.
 		if managedIDPattern.MatchString(info.Name) && validBib(info.Bib) {
-			out = append(out, managedSession(info))
+			out = append(out, s.withExit(s.withCommand(managedSession(info), info.Argv), info.Exit))
 		}
 	}
 	slices.SortFunc(out, func(a, b Session) int { return strings.Compare(*a.Bib, *b.Bib) })
@@ -231,7 +240,11 @@ func (s *Service) Kill(ctx context.Context, id string) error {
 	if err := s.checkTmux(ctx); err != nil {
 		return err
 	}
-	if err := s.Tmux.KillSession(ctx, id); err != nil {
+	err := s.Tmux.KillSession(ctx, id)
+	if err == nil || errors.Is(err, tmux.ErrNoSession) {
+		s.forget(id)
+	}
+	if err != nil {
 		return notFoundOr(err, id)
 	}
 	return nil
@@ -256,7 +269,11 @@ func (s *Service) Rename(ctx context.Context, id, name string) (Session, error) 
 	if err := s.Tmux.SetOption(ctx, id, optionName, name); err != nil {
 		return Session{}, notFoundOr(err, id)
 	}
-	return s.find(ctx, id)
+	sess, err := s.find(ctx, id)
+	if err == nil {
+		s.rememberName(sess)
+	}
+	return sess, err
 }
 
 // SetMuted records whether pushes for a managed session are suppressed and
@@ -427,25 +444,6 @@ func notFoundOr(err error, id string) error {
 		return fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
 	return fmt.Errorf("session %s: %w", id, err)
-}
-
-// isBibNumber reports whether s is one or two ASCII digits. strconv.Atoi
-// alone would also accept signs such as "+1".
-func isBibNumber(s string) bool {
-	if len(s) < 1 || len(s) > 2 {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-func validBib(bib string) bool {
-	n, err := strconv.Atoi(bib)
-	return len(bib) == 2 && isBibNumber(bib) && err == nil && n >= 1
 }
 
 func managedSession(info tmux.SessionInfo) Session {

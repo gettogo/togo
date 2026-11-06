@@ -54,6 +54,11 @@ type Env struct {
 	Fallbacks map[string][]string
 	// Run executes bin with args and returns its combined output.
 	Run func(ctx context.Context, bin string, args ...string) (string, error)
+	// Awake reports how the machine is kept awake; nil leaves the line out.
+	Awake func(ctx context.Context) Check
+	// Login and User feed the linger line on Linux; a nil Login leaves it out.
+	Login LoginInfo
+	User  string
 }
 
 const (
@@ -89,13 +94,17 @@ func DefaultFallbacks(home string) map[string][]string {
 // DefaultEnv returns the production environment for the given login PATH.
 func DefaultEnv(loginPath string) Env {
 	home, _ := os.UserHomeDir()
-	return Env{
+	e := &Env{
 		Path:      loginPath,
 		Home:      home,
 		GOOS:      runtime.GOOS,
 		Fallbacks: DefaultFallbacks(home),
 		Run:       execRun,
 	}
+	if e.GOOS == "linux" {
+		e.Login, e.User = defaultLogin(e)
+	}
+	return *e
 }
 
 func execRun(ctx context.Context, bin string, args ...string) (string, error) {
@@ -106,7 +115,7 @@ func execRun(ctx context.Context, bin string, args ...string) (string, error) {
 }
 
 // Run performs every check in a fixed order: tmux, mosh-server, etserver,
-// firewall, then tailscale when it applies.
+// firewall, tailscale when it applies, then awake and linger.
 func Run(ctx context.Context, e Env) []Check {
 	checks := []Check{
 		checkTmux(ctx, e),
@@ -116,6 +125,12 @@ func Run(ctx context.Context, e Env) []Check {
 	}
 	if c, ok := checkTailscale(ctx, e); ok {
 		checks = append(checks, c)
+	}
+	if e.Awake != nil {
+		checks = append(checks, e.Awake(ctx))
+	}
+	if e.GOOS == "linux" && e.Login != nil {
+		checks = append(checks, LingerCheck(e))
 	}
 	return checks
 }

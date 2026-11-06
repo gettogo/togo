@@ -155,7 +155,7 @@ struct SettingsView: View {
         case .privacy:
             PrivacySettingsView(settings: settings, biometry: values.biometry, update: actions.update)
         case .dictation:
-            DictationSettingsView()
+            DictationSettingsView(settings: settings, update: actions.update)
         case .diagnostics:
             DiagnosticsView()
         case .about:

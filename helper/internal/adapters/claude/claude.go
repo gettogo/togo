@@ -1,13 +1,15 @@
 // Package claude translates Claude Code hook and status line payloads into
 // Togo hook events. Field names follow the Claude Code hooks reference
 // (code.claude.com/docs/en/hooks: common input fields, PreToolUse,
-// PermissionRequest, Notification, Stop, SessionStart) and the status line
+// PermissionRequest, Notification, Stop, StopFailure, SessionStart,
+// SessionEnd) and the status line
 // reference (code.claude.com/docs/en/statusline: model.display_name,
 // context_window.used_percentage, cost.total_cost_usd). Only the fields the
 // helper uses are read; the raw payload never leaves this package.
 package claude
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +30,7 @@ const (
 	maxCommand  = 1024
 	maxMessage  = wire.MaxBody
 	maxModel    = 80
+	maxDetail   = wire.MaxExitDetail
 	approveText = "Allow"
 	denyText    = "Deny"
 )
@@ -71,6 +74,9 @@ var ErrUnsupported = errors.New("claude: unsupported event")
 func Map(event string, stdin []byte, env map[string]string) (wire.HookEvent, Output, error) {
 	if len(stdin) > MaxPayload {
 		return wire.HookEvent{}, Output{}, errors.New("claude: payload too large")
+	}
+	if event == "StopFailure" || event == "SessionEnd" {
+		return mapExit(event, stdin, env), Output{}, nil
 	}
 	var p payload
 	if err := json.Unmarshal(stdin, &p); err != nil {
@@ -121,6 +127,62 @@ func Map(event string, stdin []byte, env map[string]string) (wire.HookEvent, Out
 		return wire.HookEvent{}, Output{}, fmt.Errorf("%w %q", ErrUnsupported, clean(event, 40))
 	}
 	return ev, out, nil
+}
+
+// mapExit maps StopFailure and SessionEnd. Their payloads have not been
+// pinned against a real capture, so they are read leniently: each field is
+// taken as a string, any other JSON value as its text, and a payload that
+// cannot be read at all still ends or fails the session, because dropping
+// the event would let the session read as done.
+func mapExit(event string, stdin []byte, env map[string]string) wire.HookEvent {
+	var obj map[string]json.RawMessage
+	_ = json.Unmarshal(stdin, &obj)
+	ev := wire.HookEvent{Agent: agentName, SessionID: SessionID(env), Cwd: clean(text(obj["cwd"]), 4096)}
+	ev.Data.AgentSessionID = clean(text(obj["session_id"]), 128)
+	if event == "SessionEnd" {
+		switch text(obj["reason"]) {
+		case "clear", "resume":
+			// The conversation changes but the process keeps running;
+			// SessionStart follows. Recorded as a meta event, which
+			// changes nothing.
+			ev.Event = local.EventMeta
+		default:
+			ev.Event = local.EventEnd
+		}
+		return ev
+	}
+	ev.Event = local.EventFailure
+	if usageLimit(text(obj["error"])) {
+		ev.Event = local.EventUsageLimit
+	}
+	// last_assistant_message holds the API error text here, not a reply
+	// from the model.
+	line, _, _ := strings.Cut(detect.CleanLine(firstNonEmpty(text(obj["last_assistant_message"]), text(obj["error_details"]))), "\n")
+	ev.Data.Message = clean(line, maxDetail)
+	return ev
+}
+
+// text is a JSON string's value, or the compact text of any other value,
+// bounded by MaxPayload; null and absent are "".
+func text(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var b bytes.Buffer
+	if json.Compact(&b, raw) != nil || b.String() == "null" {
+		return ""
+	}
+	return b.String()
+}
+
+// usageLimit reports whether a StopFailure error type names a rate or
+// usage limit.
+func usageLimit(errType string) bool {
+	return errType == "rate_limit"
 }
 
 // SessionID returns the managed session id from TOGO_SESSION, or nil.

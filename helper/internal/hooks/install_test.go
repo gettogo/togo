@@ -136,7 +136,7 @@ func TestMovedBinaryUpdatesCommandInPlace(t *testing.T) {
 	e.o.Binary = "/new/togo"
 	mustOK(t, Install(e.o, []string{Claude}))
 	got := read(t, settingsPath(e))
-	if strings.Contains(got, "/opt/togo") || strings.Count(got, "hook claude Stop") != 1 {
+	if strings.Contains(got, "/opt/togo") || strings.Count(got, "hook claude Stop\"") != 1 {
 		t.Errorf("stale or duplicated entry:\n%s", got)
 	}
 }
@@ -419,5 +419,43 @@ func TestInstallKeepsFileMode(t *testing.T) {
 	st, err := os.Stat(settingsPath(e))
 	if err != nil || st.Mode().Perm() != 0o640 {
 		t.Errorf("mode = %v, err = %v", st.Mode(), err)
+	}
+}
+
+func TestInstallAddsSessionEndAndStopFailure(t *testing.T) {
+	e := newEnv(t)
+	user := `{"hooks":{"SessionEnd":[{"hooks":[{"type":"command","command":"backup.sh"}]}]}}`
+	write(t, settingsPath(e), []byte(user))
+	mustOK(t, Install(e.o, []string{Claude}))
+	first := read(t, settingsPath(e))
+	var doc struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(first), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range []string{"SessionEnd", "StopFailure"} {
+		var cmds []string
+		for _, g := range doc.Hooks[ev] {
+			for _, h := range g.Hooks {
+				cmds = append(cmds, h.Command)
+			}
+		}
+		want := []string{"'/opt/togo/bin/togo' hook claude " + ev}
+		if ev == "SessionEnd" {
+			want = append([]string{"backup.sh"}, want...)
+		}
+		if strings.Join(cmds, "|") != strings.Join(want, "|") {
+			t.Errorf("%s commands %q, want %q", ev, cmds, want)
+		}
+	}
+	rs := Install(e.o, []string{Claude})
+	mustOK(t, rs)
+	if rs[0].State != "unchanged" || read(t, settingsPath(e)) != first {
+		t.Errorf("second install changed the file (state %s)", rs[0].State)
 	}
 }

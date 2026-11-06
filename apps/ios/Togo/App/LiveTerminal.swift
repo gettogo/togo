@@ -94,6 +94,7 @@ import UIKit
     private func installKeyBar() {
         let bar = KeyBarView(config: keyBarConfig, engine: engine)
         bar.onCompose = { [weak handle] in handle?.onCompose() }
+        bar.onDictate = { [weak handle] in handle?.onDictate() }
     }
 
     private func shutDown() {

@@ -37,7 +37,9 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        items = try c.decodeIfPresent([KeyBarItem].self, forKey: .items) ?? []
+        // A bar synced from a newer build can hold a key this build does not know; that key
+        // is dropped rather than losing the whole bar.
+        items = (try c.decodeIfPresent([Droppable<KeyBarItem>].self, forKey: .items) ?? []).compactMap(\.value)
     }
 
     public static let standard = KeyBarConfig(items: [
@@ -46,7 +48,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         KeyBarItem(title: "Alt", action: .altLatch),
         .keys("Tab", "Tab"),
         .keys("Back Tab", "S-Tab"),
-    ] + arrows + [compose, paste, hide])
+    ] + arrows + [compose, dictate, paste, hide])
 
     public static let claude = KeyBarConfig(items: [
         .keys("Esc", "Esc"),
@@ -54,7 +56,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         .keys("Mode", "S-Tab"),
         .keys("Interrupt", "C-c"),
         .keys("Ctrl O", "C-o"),
-    ] + arrows + [compose, paste, hide])
+    ] + arrows + [compose, dictate, paste, hide])
 
     /// The bar for OMP sessions: the standard bar with Interrupt repeated at the end.
     public static let omp = KeyBarConfig(items: standard.items + [.keys("Interrupt", "C-c")])
@@ -69,6 +71,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
     }
 
     private static let compose = KeyBarItem(title: "Compose", symbol: "square.and.pencil", action: .compose)
+    private static let dictate = KeyBarItem(title: "Dictate", symbol: "mic", action: .dictate)
     private static let paste = KeyBarItem(title: "Paste", symbol: "doc.on.clipboard", action: .paste)
     private static let hide = KeyBarItem(title: "Hide keyboard", symbol: "keyboard.chevron.compact.down", action: .hideKeyboard)
 }
@@ -79,5 +82,14 @@ extension KeyBarItem {
         // A preset that fails to parse is a programming error caught by the preset tests.
         let steps = (try? KeySequence.parse(sequence)) ?? []
         return KeyBarItem(title: title, symbol: symbol, action: .steps(steps))
+    }
+}
+
+/// An element that decodes to nil instead of failing its array.
+private struct Droppable<Value: Decodable>: Decodable {
+    var value: Value?
+
+    init(from decoder: any Decoder) throws {
+        value = try? Value(from: decoder)
     }
 }

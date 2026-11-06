@@ -4,43 +4,6 @@ import TogoKit
 import TogoTerminal
 import UIKit
 
-/// What `LiveServices` needs from a machine's monitor; `HostMonitor` in the app.
-protocol HostWatch: Sendable {
-    /// Single consumer: `LiveServices`.
-    var snapshots: AsyncStream<HostSnapshot> { get }
-    func start() async
-    func stop() async
-    func setForeground(_ on: Bool) async
-    func refresh() async
-    func perform(_ op: SessionOp) async throws -> Session?
-}
-
-extension HostMonitor: HostWatch {}
-
-/// Helper requests outside the monitor's connection; `HelperChannels` in the app. A request
-/// with a `prompter` may ask the user for a password or code if its channel has to sign in.
-protocol HelperCalling: Sendable {
-    func call<T: Sendable>(
-        _ record: HostRecord, prompter: (any ConnectionPrompter)?, _ body: @Sendable (HelperClient) async throws -> T
-    ) async throws -> T
-    func drop(_ id: UUID) async
-    func dropAll() async
-}
-
-extension HelperChannels: HelperCalling {}
-
-enum LiveServiceError: Error, LocalizedError {
-    case unknownMachine
-    case needsHelper
-
-    var errorDescription: String? {
-        switch self {
-        case .unknownMachine: String(localized: "live.unknownMachine", defaultValue: "This machine is no longer in Togo.")
-        case .needsHelper: String(localized: "live.needsHelper", defaultValue: "This needs the Togo helper on the machine.")
-        }
-    }
-}
-
 /// The app's services against real machines: the synced host and settings stores, one monitor
 /// per machine, and helper and terminal connections made on demand.
 @MainActor @Observable final class LiveServices: AppServices {
@@ -105,8 +68,7 @@ enum LiveServiceError: Error, LocalizedError {
     /// False until the stored machines are read, so a launch with machines never flashes first run.
     private(set) var hostsLoaded = false
     @ObservationIgnored private var listeners: [Task<Void, Never>] = []
-    @ObservationIgnored private let stream: AsyncStream<HostViewSnapshot>
-    @ObservationIgnored private let sink: AsyncStream<HostViewSnapshot>.Continuation
+    @ObservationIgnored private let hub = SnapshotHub()
 
     /// Both record stores must be made with `syncSwitch`'s value, so nothing merges from
     /// iCloud before the device's own choice is known. `device` keeps the settings that never sync.
@@ -119,7 +81,6 @@ enum LiveServiceError: Error, LocalizedError {
         hostStore = HostStore(records: hostRecords)
         settingsStore = SettingsStore(records: settingsRecords, syncSwitch: syncSwitch, device: device)
         deps = dependencies
-        (stream, sink) = AsyncStream.makeStream(of: HostViewSnapshot.self)
     }
 
     /// Loads the stores, starts a monitor per machine and follows changes from other devices.
@@ -180,7 +141,7 @@ enum LiveServiceError: Error, LocalizedError {
     // MARK: AppServices
 
     func snapshots() -> AsyncStream<HostViewSnapshot> {
-        stream
+        hub.stream()
     }
 
     func refresh() async {
@@ -396,6 +357,7 @@ enum LiveServiceError: Error, LocalizedError {
     private func stopWatching(_ id: HostID, dropChannel: Bool = true) {
         feeds.removeValue(forKey: id)?.cancel()
         latest[id] = nil
+        hub.forget(id)
         agentsRequested.remove(id)
         if let watch = watches.removeValue(forKey: id) {
             Task { await watch.stop() }
@@ -427,7 +389,7 @@ enum LiveServiceError: Error, LocalizedError {
     }
 
     private func publish(_ snapshot: HostSnapshot, record: HostRecord) {
-        sink.yield(mapper.map(snapshot, noHelper: record.noHelper, now: deps.now()))
+        hub.publish(mapper.map(snapshot, noHelper: record.noHelper, now: deps.now()))
     }
 
     /// Rows show agent names from the machine's own list once it arrives.
@@ -455,7 +417,6 @@ enum LiveServiceError: Error, LocalizedError {
         guard !record.noHelper else { throw LiveServiceError.needsHelper }
         return record
     }
-
 
     // MARK: Settings
 

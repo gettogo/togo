@@ -17,6 +17,8 @@ public enum KeyAction: Hashable, Codable, Sendable {
     case dpad
     /// Opens or closes the app's compose bar; the bar itself sends nothing.
     case compose
+    /// Opens the compose bar and listens; the words land in the bar, never in the terminal.
+    case dictate
 }
 
 @MainActor

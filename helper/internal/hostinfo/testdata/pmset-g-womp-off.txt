@@ -1,0 +1,10 @@
+System-wide power settings:
+Currently in use:
+ standby              1
+ powernap             1
+ networkoversleep     0
+ disksleep            10
+ sleep                1 (sleep prevented by powerd)
+ womp                 0
+ autorestart          0
+ displaysleep         10

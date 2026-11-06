@@ -62,4 +62,13 @@ struct KeySequenceTests {
         let sparse = try JSONDecoder().decode(KeyBarConfig.self, from: Data("{}".utf8))
         #expect(sparse.items.isEmpty)
     }
+
+    /// A bar synced from a newer build may hold a key this build does not know: that key is
+    /// dropped and the rest of the bar stays.
+    @Test func unknownKeyActionIsDropped() throws {
+        let json = #"{"items":[{"title":"Esc","action":{"compose":{}}},{"title":"Beam","action":{"teleport":{}}},"#
+            + #"{"title":"Paste","action":{"paste":{}}}]}"#
+        let config = try JSONDecoder().decode(KeyBarConfig.self, from: Data(json.utf8))
+        #expect(config.items.map(\.title) == ["Esc", "Paste"])
+    }
 }

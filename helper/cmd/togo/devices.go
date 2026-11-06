@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/authkeys"
 	"github.com/gettogo/togo/helper/internal/push"
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -78,6 +81,16 @@ func runDevices(args []string, env map[string]string, stdout, stderr io.Writer) 
 		}
 		return exitOK
 	case args[0] == "revoke" && len(args) == 2:
+		list, err := svc.Devices().List()
+		if err != nil {
+			return fail(stderr, err)
+		}
+		var dev push.Device
+		for _, d := range list {
+			if d.DeviceID == args[1] {
+				dev = d
+			}
+		}
 		if err := svc.Devices().Remove(args[1]); err != nil {
 			if errors.Is(err, push.ErrUnknownDevice) {
 				return fail(stderr, fmt.Errorf("no paired device %q", args[1]))
@@ -85,10 +98,69 @@ func runDevices(args []string, env map[string]string, stdout, stderr io.Writer) 
 			return fail(stderr, err)
 		}
 		fmt.Fprintf(stdout, "revoked %s\n", args[1])
+		if dev.SSHKey != "" {
+			removeDeviceKey(env, dev, stdout, stderr)
+		}
 		return exitOK
 	}
 	return usageError(stderr, errors.New("devices takes ls or revoke <deviceId>"))
 }
+
+// removeDeviceKey takes a revoked device's key out of
+// ~/.ssh/authorized_keys. The device is already unpaired, so a file it
+// cannot edit is reported and left for the user rather than failing.
+func removeDeviceKey(env map[string]string, dev push.Device, stdout, stderr io.Writer) {
+	path, err := authorizedKeysPath(env)
+	if err == nil {
+		var n int
+		n, err = authkeys.Remove(path, dev.SSHKey)
+		if err == nil && n > 0 {
+			fmt.Fprintln(stdout, "Removed this device's key from ~/.ssh/authorized_keys.")
+			return
+		}
+		if err == nil {
+			fmt.Fprintln(stdout, "No key for this device was found in ~/.ssh/authorized_keys.")
+			return
+		}
+	}
+	var c *authkeys.Conflict
+	if !errors.As(err, &c) {
+		fmt.Fprintf(stderr, "togo: could not remove this device's key from ~/.ssh/authorized_keys: %v\n", err)
+		return
+	}
+	byHand := "; remove the line containing " + keyHint(dev.SSHKey) + " (comment starts with " + authkeys.CommentPrefix + ") by hand."
+	switch c.Reason {
+	case authkeys.ReasonSymlink:
+		fmt.Fprintln(stdout, "~/.ssh/authorized_keys is a link"+byHand)
+	case authkeys.ReasonNotRegular:
+		fmt.Fprintln(stdout, "~/.ssh/authorized_keys is not a regular file"+byHand)
+	default:
+		fmt.Fprintln(stdout, "~/.ssh/authorized_keys does not exist, so there was no key to remove.")
+	}
+}
+
+// authorizedKeysPath is ~/.ssh/authorized_keys under HOME from env, so
+// tests and the CLI agree on the home they mean.
+func authorizedKeysPath(env map[string]string) (string, error) {
+	if home := env["HOME"]; home != "" {
+		return filepath.Join(home, ".ssh", "authorized_keys"), nil
+	}
+	return authkeys.DefaultPath()
+}
+
+// keyHint names a key line by its type and the end of its blob. The
+// start of a blob only repeats the type, so the end is what tells two keys
+// apart. The comment is not used: the phone writes its own hostname there,
+// which the pairing store does not know.
+func keyHint(key string) string {
+	keyType, blob, _ := strings.Cut(key, " ")
+	if len(blob) > keyHintLen {
+		blob = "…" + blob[len(blob)-keyHintLen:]
+	}
+	return keyType + " " + blob
+}
+
+const keyHintLen = 16
 
 func onOff(b bool) string {
 	if b {

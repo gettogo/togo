@@ -40,7 +40,7 @@ import UIKit
         let expected: [(String, ShortcutAction)] = (1...9).map { ("\($0)", .session($0)) } + [
             ("t", .newSession), ("k", .controlCenter), ("w", .detach), ("v", .paste),
         ]
-        #expect(commands.count == expected.count)
+        #expect(commands.count == expected.count + 6)
         for (input, action) in expected {
             let command = commands.first { $0.input == input }
             #expect(command != nil, "missing ⌘\(input)")
@@ -50,7 +50,32 @@ import UIKit
             #expect(command.wantsPriorityOverSystemBehavior)
             #expect(ShortcutAction(command: command) == action)
         }
-        #expect(!commands.contains { $0.modifierFlags.contains(.control) || $0.modifierFlags.contains(.alternate) })
+        // Ctrl and Option chords without Command belong to the remote program.
+        #expect(commands.allSatisfy { $0.modifierFlags.contains(.command) })
+    }
+
+    @Test func terminalPassesNewShortcutsUp() {
+        let expected: [(String, UIKeyModifierFlags, ShortcutAction)] = [
+            ("s", [.command, .control], .toggleSidebar),
+            ("\\", .command, .splitToggle),
+            (UIKeyCommand.inputLeftArrow, [.command, .alternate], .focusLeft),
+            (UIKeyCommand.inputRightArrow, [.command, .alternate], .focusRight),
+            ("[", [.command, .shift], .previousTab),
+            ("]", [.command, .shift], .nextTab),
+        ]
+        let h = EngineHarness()
+        var received: [ShortcutAction] = []
+        h.engine.onShortcut = { received.append($0) }
+        let commands = h.engine.view.keyCommands ?? []
+        for (input, modifiers, action) in expected {
+            let command = commands.first { $0.input == input && $0.modifierFlags == modifiers }
+            #expect(command != nil, "missing \(action)")
+            guard let command else { continue }
+            #expect(!command.title.isEmpty)
+            #expect(command.wantsPriorityOverSystemBehavior)
+            (h.engine.view as? TogoTerminalView)?.performShortcut(command)
+        }
+        #expect(received == expected.map(\.2))
     }
 
     @Test func terminalViewOffersShortcuts() {

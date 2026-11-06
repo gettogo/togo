@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -157,5 +159,136 @@ func TestPushTestSealsNotifyToEveryDevice(t *testing.T) {
 	var p wire.PushPlaintext
 	if err := json.Unmarshal(plain, &p); err != nil || p.Kind != wire.PushNotify {
 		t.Fatalf("plaintext %s, %v", plain, err)
+	}
+}
+
+const revokeKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBERERERERERERERERERERERERERERERERERERERERER"
+
+// revokeEnv is a temp TOGO_HOME and a temp HOME whose ~/.ssh/authorized_keys
+// holds keys, or no ~/.ssh at all when keys is empty.
+func revokeEnv(t *testing.T, keys string) (map[string]string, string) {
+	t.Helper()
+	home := t.TempDir()
+	path := filepath.Join(home, ".ssh", "authorized_keys")
+	if keys != "" {
+		if err := os.Mkdir(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(keys), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return map[string]string{"TOGO_HOME": t.TempDir(), "HOME": home}, path
+}
+
+func pairWithKey(t *testing.T, env map[string]string, id, name, key string) {
+	t.Helper()
+	svc, err := pushService(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, pub, _ := seal.GenerateX25519()
+	raw, _ := json.Marshal(wire.PairParams{
+		DeviceID: id, Name: name, X25519: b64(pub[:]),
+		ApprovalKey: "ERERERERERERERERERERERERERERERERERERERERERE",
+		APNsToken:   testToken, Env: wire.EnvSandbox, RelayURL: "https://relay.example.test",
+		SSHKey: key,
+	})
+	if _, err := svc.Methods()[wire.MethodPushPair](context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertUnpaired(t *testing.T, env map[string]string) {
+	t.Helper()
+	svc, _ := pushService(env)
+	list, err := svc.Devices().List()
+	if err != nil || len(list) != 0 {
+		t.Fatalf("after revoke: %d devices, %v", len(list), err)
+	}
+}
+
+func TestRevokeRemovesKey(t *testing.T) {
+	other := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIi me@laptop\n"
+	env, path := revokeEnv(t, other+revokeKey+" togo@Desk iPhone\n")
+	pairWithKey(t, env, "dev_a", "Desk iPhone", revokeKey)
+	var out, errOut bytes.Buffer
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	assertUnpaired(t, env)
+	if got, _ := os.ReadFile(path); string(got) != other {
+		t.Errorf("authorized_keys %q, want %q", got, other)
+	}
+	if !strings.Contains(out.String(), "Removed this device's key from ~/.ssh/authorized_keys.\n") {
+		t.Errorf("output %q", out.String())
+	}
+
+	// A second phone whose key is not in the file.
+	pairWithKey(t, env, "dev_b", "Spare", revokeKey)
+	out.Reset()
+	if code := run([]string{"devices", "revoke", "dev_b"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "No key for this device was found in ~/.ssh/authorized_keys.\n") {
+		t.Errorf("output %q", out.String())
+	}
+}
+
+func TestRevokeWithoutKeyStillUnpairs(t *testing.T) {
+	line := revokeKey + " togo@Desk iPhone\n"
+	env, path := revokeEnv(t, line)
+	pairWithKey(t, env, "dev_a", "Desk iPhone", "")
+	var out, errOut bytes.Buffer
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	assertUnpaired(t, env)
+	if got, _ := os.ReadFile(path); string(got) != line {
+		t.Errorf("authorized_keys changed: %q", got)
+	}
+	if strings.Contains(out.String(), "authorized_keys") {
+		t.Errorf("output mentions authorized_keys for a device without a key: %q", out.String())
+	}
+}
+
+func TestRevokeConflictStillUnpairs(t *testing.T) {
+	line := revokeKey + " togo@Desk\x1b[31m iPhone\n"
+	target, _ := revokeEnv(t, line)
+	env, path := revokeEnv(t, "")
+	if err := os.Mkdir(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	targetPath := filepath.Join(target["HOME"], ".ssh", "authorized_keys")
+	if err := os.Symlink(targetPath, path); err != nil {
+		t.Fatal(err)
+	}
+	pairWithKey(t, env, "dev_a", "Desk\x1b[31m iPhone", revokeKey)
+	var out, errOut bytes.Buffer
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	assertUnpaired(t, env)
+	if got, _ := os.ReadFile(targetPath); string(got) != line {
+		t.Errorf("link target changed: %q", got)
+	}
+	want := "~/.ssh/authorized_keys is a link; remove the line containing ssh-ed25519 …ERERERERERERERER (comment starts with togo@) by hand.\n"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("output %q, want %q", out.String(), want)
+	}
+	if strings.Contains(out.String(), "\x1b") {
+		t.Errorf("output carries the device name's escape: %q", out.String())
+	}
+
+	// No ~/.ssh at all.
+	env, _ = revokeEnv(t, "")
+	pairWithKey(t, env, "dev_a", "Desk iPhone", revokeKey)
+	out.Reset()
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	assertUnpaired(t, env)
+	if !strings.Contains(out.String(), "~/.ssh/authorized_keys does not exist") {
+		t.Errorf("output %q", out.String())
 	}
 }

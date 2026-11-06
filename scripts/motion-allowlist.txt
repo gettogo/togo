@@ -1,9 +1,7 @@
 # Lines that still animate without a motion role, checked by scripts/check-motion.sh.
 # Format: <path under apps/ios/Togo><TAB><trimmed source line>. Delete a line when its code
 # moves to a role; never add one.
-App/RootView.swift	.onAppear { withAnimation(Motion.fade) { shown = true } }
 ControlCenter/ApproveButton.swift	.animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: configuration.isPressed)
-ControlCenter/ControlCenterView.swift	withAnimation(Motion.motion(Motion.collapse, reduce: reduceMotion)) {
 ControlCenter/RequestCardView.swift	.animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: card.phase)
 Design/Components/ActionStyles.swift	.animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: configuration.isPressed)
 Design/Components/PawWalk.swift	withAnimation(Motion.pawStep) { lit = (lit + 1) % Self.paws.count }

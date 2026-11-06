@@ -104,6 +104,7 @@ func (s Service) Install(ctx context.Context) error {
 		if err := s.Run(ctx, []string{"systemctl", "--user", "restart", systemdUnit}); err != nil {
 			return fmt.Errorf("systemctl restart: %w", err)
 		}
+		s.afterInstall(ctx)
 		return nil
 	}
 	if err := s.Run(ctx, []string{"launchctl", "bootstrap", s.domain(), s.Path()}); err != nil {

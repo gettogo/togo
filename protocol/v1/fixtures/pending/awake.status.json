@@ -1,0 +1,37 @@
+{
+  "description": "awake.status on an idle Mac. Harness deviation: the awake service runs on fakes for a supported Mac that reads AC power at 100%, has no active session, has default awake settings and no sudoers rule for battery mode.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "awake.status"
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "mode": "plugged",
+      "held": false,
+      "reason": "idle",
+      "power": "ac",
+      "batteryPercent": 100,
+      "batteryFloor": 20,
+      "platformSupported": true,
+      "needsAdmin": true
+    }
+  }
+}

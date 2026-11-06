@@ -15,7 +15,17 @@ enum HiddenCharacters {
     /// ranges moved to match, and a banner first when any was found.
     static func reveal(_ rows: [CodeRow]) -> [CodeRow] {
         var found = Found()
-        let shown = rows.map { reveal($0, &found) }
+        var shown: [CodeRow] = []
+        shown.reserveCapacity(rows.count)
+        for (index, row) in rows.enumerated() {
+            let (revealed, cut) = reveal(row, &found)
+            shown.append(revealed)
+            // A side-by-side row has no room for the inline marker, so a line cut here is said
+            // under the pair, unless the parser already said it.
+            if cut, !(rows.indices.contains(index + 1) && rows[index + 1] == .notice(CodeCopy.clippedNotice)) {
+                shown.append(.notice(CodeCopy.clippedNotice))
+            }
+        }
         guard found.any else { return rows }
         return [.notice(found.direction ? directionBanner : banner)] + shown
     }
@@ -69,28 +79,32 @@ enum HiddenCharacters {
         var direction = false
     }
 
-    private static func reveal(_ row: CodeRow, _ found: inout Found) -> CodeRow {
+    /// The row with its markers, and whether a side-by-side pair lost text to the column cap.
+    private static func reveal(_ row: CodeRow, _ found: inout Found) -> (CodeRow, Bool) {
         switch row {
         case let .line(number, oldNumber, text, kind, tokens, changes, clipped):
-            guard let shown = reveal(text, &found) else { return row }
-            return .line(
+            let first = number == 1 || oldNumber == 1
+            guard let shown = reveal(text, first: first, &found) else { return (row, false) }
+            return (.line(
                 number: number, oldNumber: oldNumber, text: shown.text, kind: kind, tokens: shown.tokens(tokens),
-                changes: changes.map(shown.move), clipped: clipped
-            )
+                changes: changes.map(shown.move), clipped: clipped || shown.cut
+            ), false)
         case let .split(left, right):
-            return .split(left: left.map { reveal($0, &found) }, right: right.map { reveal($0, &found) })
+            let (newLeft, leftCut) = left.map { reveal($0, &found) } ?? (nil, false)
+            let (newRight, rightCut) = right.map { reveal($0, &found) } ?? (nil, false)
+            return (.split(left: newLeft, right: newRight), leftCut || rightCut)
         case .hunk, .notice:
-            return row
+            return (row, false)
         }
     }
 
-    private static func reveal(_ side: CodeRowSide, _ found: inout Found) -> CodeRowSide {
-        guard let shown = reveal(side.text, &found) else { return side }
+    private static func reveal(_ side: CodeRowSide, _ found: inout Found) -> (CodeRowSide, Bool) {
+        guard let shown = reveal(side.text, first: side.number == 1, &found) else { return (side, false) }
         var side = side
         side.text = shown.text
         side.tokens = shown.tokens(side.tokens)
         side.changes = side.changes.map(shown.move)
-        return side
+        return (side, shown.cut)
     }
 
     /// One line with its markers: the new text, where each old UTF-16 offset went, and the
@@ -99,24 +113,30 @@ enum HiddenCharacters {
         var text: String
         var map: [Int]
         var markers: [Range<Int>]
+        /// The text was cut to `ReviewLimits.maxColumns` after marking.
+        var cut = false
 
         func move(_ range: Range<Int>) -> Range<Int> {
-            let lower = map[min(range.lowerBound, map.count - 1)]
-            return lower..<max(lower, map[min(range.upperBound, map.count - 1)])
+            let limit = text.utf16.count
+            let lower = min(map[min(range.lowerBound, map.count - 1)], limit)
+            return lower..<min(limit, max(lower, map[min(range.upperBound, map.count - 1)]))
         }
 
         /// Token colours stay on the text they covered; each marker draws in the comment colour
         /// over whatever token it sits in.
         func tokens(_ tokens: [TokenSpan]) -> [TokenSpan] {
-            tokens.map { TokenSpan(range: move($0.range), kind: $0.kind) } + markers.map { TokenSpan(range: $0, kind: .hidden) }
+            let limit = text.utf16.count
+            return tokens.map { TokenSpan(range: move($0.range), kind: $0.kind) }
+                + markers.filter { $0.upperBound <= limit }.map { TokenSpan(range: $0, kind: .hidden) }
         }
     }
 
-    private static func reveal(_ text: String, _ found: inout Found) -> Shown? {
+    /// `first` is the first line of a file, where a byte-order mark is the encoding's, not text.
+    private static func reveal(_ text: String, first: Bool, _ found: inout Found) -> Shown? {
         // Printable ASCII and tabs, the common case, hold nothing hidden.
         if text.utf8.allSatisfy({ ($0 >= 0x20 && $0 < 0x7F) || $0 == 0x09 }) { return nil }
         let scalars = Array(text.unicodeScalars)
-        guard scalars.indices.contains(where: { hides(scalars, at: $0) }) else { return nil }
+        guard scalars.indices.contains(where: { hides(scalars, at: $0, first: first) }) else { return nil }
         var shown = String.UnicodeScalarView()
         var map: [Int] = []
         var markers: [Range<Int>] = []
@@ -125,7 +145,7 @@ enum HiddenCharacters {
             let scalar = scalars[index]
             let width = scalar.utf16.count
             map.append(contentsOf: repeatElement(offset, count: width))
-            if hides(scalars, at: index) {
+            if hides(scalars, at: index, first: first) {
                 let marker = DisplayText.marker(scalar)
                 shown.append(contentsOf: marker.unicodeScalars)
                 markers.append(offset..<(offset + marker.utf16.count))
@@ -138,11 +158,31 @@ enum HiddenCharacters {
             }
         }
         map.append(offset)
-        return Shown(text: String(shown), map: map, markers: markers)
+        return clip(Shown(text: String(shown), map: map, markers: markers))
     }
 
-    /// Tabs are code's own; every other hidden character is marked.
-    private static func hides(_ scalars: [Unicode.Scalar], at index: Int) -> Bool {
-        scalars[index] != "\t" && DisplayText.isHidden(scalars[index])
+    /// Markers are wider than the characters they stand for, so the cap on a line's width is
+    /// applied to what is shown. A cut never lands inside a marker or a surrogate pair.
+    private static func clip(_ shown: Shown) -> Shown {
+        let limit = ReviewLimits.maxColumns
+        guard shown.text.utf16.count > limit else { return shown }
+        var end = limit
+        if let inside = shown.markers.first(where: { $0.lowerBound < end && end < $0.upperBound }) {
+            end = inside.lowerBound
+        }
+        let units = shown.text.utf16
+        let index = units.index(units.startIndex, offsetBy: end)
+        if end > 0, UTF16.isTrailSurrogate(units[index]) { end -= 1 }
+        var result = shown
+        result.text = String(shown.text.unicodeScalars[..<units.index(units.startIndex, offsetBy: end)])
+        result.cut = true
+        return result
+    }
+
+    /// Tabs are code's own and so is a byte-order mark opening a file; every other hidden
+    /// character is marked.
+    private static func hides(_ scalars: [Unicode.Scalar], at index: Int, first: Bool) -> Bool {
+        if scalars[index] == "\t" || (first && index == 0 && scalars[index] == "\u{FEFF}") { return false }
+        return DisplayText.isHidden(scalars[index])
     }
 }

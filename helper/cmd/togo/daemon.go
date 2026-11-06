@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"runtime"
+	"sync"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/awake"
 	"github.com/gettogo/togo/helper/internal/daemon"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/sockd"
@@ -24,6 +28,18 @@ func init() {
 	})
 	addUsage("  daemon                                        run the helper daemon in the foreground")
 	addUsage("  daemon restart [--when-idle]                  restart the daemon once no approval is pending")
+}
+
+// awakeTestEnv, when set, makes the daemon report keeping awake as
+// unsupported and touch no power state. The end-to-end tests set it.
+const awakeTestEnv = "TOGO_TEST_AWAKE_OFF"
+
+// hostAwake returns the OS side of keeping this machine awake.
+var hostAwake = func() awake.Config {
+	if os.Getenv(awakeTestEnv) != "" {
+		return awake.Config{}
+	}
+	return awake.ForHost(runtime.GOOS, os.Getpid())
 }
 
 // runDaemon serves the unix socket until SIGINT or SIGTERM, or until
@@ -52,6 +68,14 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 	// after brew removed this version's directory still finds a binary.
 	tapPath := daemon.StableExecutable(exe)
 	d := daemon.New()
+	// The daemon exits as soon as Run returns, so the awake service is
+	// shut down here rather than left to its own goroutine: the hold and
+	// any disablesleep must be released on SIGINT and SIGTERM.
+	var (
+		mu    sync.Mutex
+		built *daemon.Components
+	)
+	hostAwake := hostAwake()
 	err = daemon.Run(ctx, daemon.Config{
 		Home:   home,
 		Daemon: d,
@@ -60,17 +84,25 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 			if err != nil {
 				return nil, err
 			}
-			c, err := daemon.Compose(h, daemon.ComposeOptions{Home: home, TogoPath: tapPath, Logf: logger.Printf})
+			c, err := daemon.Compose(h, daemon.ComposeOptions{Home: home, TogoPath: tapPath, Awake: &hostAwake, Logf: logger.Printf})
 			if err != nil {
 				return nil, err
 			}
 			d.SetPending(c.PendingApprovals)
+			mu.Lock()
+			built = c
+			mu.Unlock()
 			go c.Run(ctx)
 			return c.Handler(), nil
 		},
 		Info: info,
 		Logf: logger.Printf,
 	})
+	mu.Lock()
+	if built != nil {
+		built.Awake.Shutdown(context.WithoutCancel(ctx))
+	}
+	mu.Unlock()
 	// Exit 0 so launchd (KeepAlive unless SuccessfulExit) and systemd
 	// (Restart=on-failure) do not keep relaunching a daemon that lost to
 	// one serve already started.

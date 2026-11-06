@@ -12,17 +12,23 @@ const (
 	PushJob      = "job"
 	PushNotify   = "notify"
 	PushClear    = "clear"
+	PushEnded    = "ended"
+	PushFailed   = "failed"
+	PushOffline  = "offline"
 )
 
 // LiveWorking is the Live Activity status while an agent works with nothing
-// waiting; the other statuses are PushNeedsYou and PushDone.
+// waiting; the other statuses are PushNeedsYou, PushDone, PushEnded,
+// PushFailed and PushOffline.
 const LiveWorking = "working"
 
 // PushPlaintext is sealed for one device and sent through the relay.
 // RequestID and Options are set for needs_you; clear sets RequestID only and
 // leaves Title and Body empty; the other kinds set neither. Subject is set
 // for needs_you when the approval has one. Host is the machine's short
-// display name. TS is Unix milliseconds.
+// display name. TS is Unix milliseconds. Exit is set only for ended and
+// failed, Active (sessions working) only for offline, and Reminder only on
+// the one reminder for a needs_you still waiting.
 type PushPlaintext struct {
 	V         int      `json:"v"`
 	Kind      string   `json:"kind"`
@@ -36,6 +42,10 @@ type PushPlaintext struct {
 	TS        int64    `json:"ts"`
 	Subject   *Subject `json:"subject,omitempty"`
 	Host      *string  `json:"host,omitempty"`
+
+	Exit     *SessionExit `json:"exit,omitempty"`
+	Active   *int         `json:"active,omitempty"`
+	Reminder bool         `json:"reminder,omitempty"`
 }
 
 // MarshalJSON writes options as [] for needs_you even when there are none,

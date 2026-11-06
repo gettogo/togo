@@ -1,0 +1,67 @@
+{
+  "description": "A session whose agent exited with code 0 is ended, not done, and carries the exit. Harness deviation: the login-shell PATH holds an executable claude that exits with code 0 at once, and the helper has seen that exit before the request.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "sessions": [
+        {
+          "id": "s_abcdefghij",
+          "bib": "01",
+          "name": "Claude Code",
+          "agent": "claude",
+          "cwd": "<home>/proj",
+          "createdAt": "2026-11-03T12:00:00Z",
+          "status": "ended",
+          "activity": null,
+          "attachedClients": 0,
+          "managed": true,
+          "muted": false,
+          "meta": {
+            "model": null,
+            "contextPercent": null,
+            "costUsd": null
+          },
+          "command": [
+            "claude"
+          ],
+          "exit": {
+            "code": 0,
+            "reason": "exit",
+            "detail": null
+          }
+        }
+      ]
+    }
+  }
+}

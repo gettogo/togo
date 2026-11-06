@@ -122,10 +122,8 @@ struct WorkspaceView: View {
         let reconnecting = tab.link.isReconnecting
         return ZStack {
             Color.togoInk
-            if let handle = terminals.handle(for: tab.id) {
-                TabTerminalView(handle: handle)
-                    .opacity(reconnecting ? 0.6 : 1)
-            }
+            TerminalSlot(tab: tab.id, terminals: terminals)
+                .opacity(reconnecting ? 0.6 : 1)
             if let overlay {
                 ConnectingOverlay(kind: overlay) { retry(tab) }
                     .transition(.opacity)

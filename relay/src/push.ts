@@ -32,7 +32,7 @@ declare global {
   }
 }
 
-interface PushBody {
+export interface PushBody {
   token: string;
   env: ApnsEnvironment;
   ciphertext?: string;
@@ -42,10 +42,16 @@ interface PushBody {
   liveActivity?: LiveActivity;
 }
 
+export type SendResult =
+  | { status: "sent"; apnsId: string }
+  | { status: "limited"; retryAfter: number }
+  | { status: "unregistered" }
+  | { status: "failed"; reason: string };
+
 export async function handlePush(request: Request, env: Env): Promise<Response> {
   let body: PushBody;
   try {
-    body = parsePush(await readCapped(request));
+    body = validatePushBody(await readCapped(request));
   } catch (err) {
     if (err instanceof FieldError) return json(400, { error: "bad_request", field: err.field });
     throw err;
@@ -56,13 +62,29 @@ export async function handlePush(request: Request, env: Env): Promise<Response> 
   const ipGate = await limiter(env, `ip:${ip}`).admit(IP_LIMIT, WINDOW_MS);
   if (ipGate.status === "limited") return limited(ipGate.retryAfter);
 
+  const result = await sendOne(env, body);
+  switch (result.status) {
+    case "sent":
+      return json(202, { apnsId: result.apnsId });
+    case "limited":
+      return limited(result.retryAfter);
+    case "unregistered":
+      return json(410, { error: "unregistered" });
+    case "failed":
+      return json(502, { error: "apns", reason: result.reason });
+  }
+}
+
+// Sends one validated body to APNs under the per-token limit. Used by
+// POST /v1/push and by the mailbox when a will fires.
+export async function sendOne(env: Env, body: PushBody): Promise<SendResult> {
   // Keyed by env as well: a caller naming the wrong env gets BadDeviceToken
   // from APNs and must not be able to affect the token's real env.
   const tokHash = await sha256Hex(`${body.env}|${body.token}`);
   const tokLimiter = limiter(env, `tok:${tokHash.slice(0, 32)}`);
   const tokGate: Admission = await tokLimiter.admit(TOKEN_LIMIT, WINDOW_MS);
-  if (tokGate.status === "unregistered") return json(410, { error: "unregistered" });
-  if (tokGate.status === "limited") return limited(tokGate.retryAfter);
+  if (tokGate.status === "unregistered") return { status: "unregistered" };
+  if (tokGate.status === "limited") return { status: "limited", retryAfter: tokGate.retryAfter };
 
   let result: ApnsResult;
   try {
@@ -77,19 +99,19 @@ export async function handlePush(request: Request, env: Env): Promise<Response> 
   } catch (err) {
     if (err instanceof ConfigError) {
       console.error("apns config invalid", err.message);
-      return json(502, { error: "apns", reason: "relay_config" });
+      return { status: "failed", reason: "relay_config" };
     }
     console.error("apns fetch failed", `tok=${tokHash.slice(0, 6)}`);
-    return json(502, { error: "apns", reason: "unreachable" });
+    return { status: "failed", reason: "unreachable" };
   }
 
-  if (result.status === 200) return json(202, { apnsId: result.apnsId });
+  if (result.status === 200) return { status: "sent", apnsId: result.apnsId };
   console.warn("apns rejected", `tok=${tokHash.slice(0, 6)}`, result.status, result.reason);
   if (isUnregistered(result)) {
     await tokLimiter.markUnregistered();
-    return json(410, { error: "unregistered" });
+    return { status: "unregistered" };
   }
-  return json(502, { error: "apns", reason: result.reason });
+  return { status: "failed", reason: result.reason ?? `status_${result.status}` };
 }
 
 function apnsPayload(body: PushBody): unknown {
@@ -123,7 +145,8 @@ async function readCapped(request: Request): Promise<unknown> {
   }
 }
 
-function parsePush(raw: unknown): PushBody {
+// Throws FieldError naming the first bad field.
+export function validatePushBody(raw: unknown): PushBody {
   if (!isObject(raw)) throw new FieldError("body");
   const { token, env, ciphertext, collapseId, kind, liveActivity, target } = raw;
   if (typeof token !== "string" || !TOKEN_RE.test(token.toLowerCase())) {

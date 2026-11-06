@@ -1,0 +1,33 @@
+{
+  "description": "Remove this device's key from ~/.ssh/authorized_keys. Only lines with the same key and a comment starting togo@ go; every other byte and the file mode stay. Harness deviation: <home>/.ssh/authorized_keys, mode 0600, holds the line `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBERERERERERERERERERERERERERERERERERERERERER togo@test-iphone` and one other key.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "authkeys.remove",
+    "params": {
+      "publicKey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBERERERERERERERERERERERERERERERERERERERERER"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "removed": 1
+    }
+  }
+}

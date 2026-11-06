@@ -7,11 +7,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/daemon"
+	"github.com/gettogo/togo/helper/internal/mailbox"
 	"github.com/gettogo/togo/helper/internal/state"
 )
 
@@ -58,7 +60,7 @@ func runService(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		}
 		fmt.Fprintf(stdout, "Installed %s\n", svc.Path())
 	case "uninstall":
-		if err := svc.Uninstall(ctx); err != nil {
+		if err := uninstallService(ctx, svc, stderr); err != nil {
 			return fail(stderr, err)
 		}
 		fmt.Fprintln(stdout, "Uninstalled")
@@ -100,4 +102,27 @@ func userService() (daemon.Service, error) {
 		UID:      os.Getuid(),
 		Run:      serviceRunner,
 	}, nil
+}
+
+// uninstallService stops and removes the service. When a service is
+// installed it first writes the stop marker, which tells the daemon the stop
+// is on purpose, so it withdraws the silence alert it left with the relay
+// instead of letting the relay report the machine as gone quiet. If the
+// uninstall fails the daemon may still be running, so the marker is removed
+// again: a later OS shutdown must leave the alert armed.
+func uninstallService(ctx context.Context, svc daemon.Service, stderr io.Writer) error {
+	marker := filepath.Join(svc.TogoHome, mailbox.StopMarkerName)
+	wrote := false
+	if _, err := os.Lstat(svc.Path()); err == nil {
+		if err := state.WriteFile(marker, nil); err != nil {
+			fmt.Fprintf(stderr, "togo: %v\n", err)
+		} else {
+			wrote = true
+		}
+	}
+	err := svc.Uninstall(ctx)
+	if err != nil && wrote {
+		_ = os.Remove(marker)
+	}
+	return err
 }

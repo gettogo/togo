@@ -275,19 +275,24 @@ func TestTmuxMissingReportsNullFound(t *testing.T) {
 
 // agents.list may run the login shell, which can take seconds; a client
 // that gives up on the call must stop it, so the lookup takes the request
-// context.
+// context. The lookup stands in for state.LoginPath, whose result is cached
+// for the process, so the test never sees a PATH from an earlier run or the
+// machine's own.
 func TestAgentsListUsesRequestContext(t *testing.T) {
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	shell := filepath.Join(t.TempDir(), "fakesh")
-	if err := os.WriteFile(shell, []byte("#!/bin/sh\nPATH="+bin+"\neval \"$2\"\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("SHELL", shell)
 	t.Setenv("PATH", t.TempDir())
-	a := &api.API{Sessions: &session.Service{}}
+	a := &api.API{
+		Sessions: &session.Service{},
+		LoginPath: func(ctx context.Context) string {
+			if ctx.Err() != nil {
+				return os.Getenv("PATH")
+			}
+			return bin
+		},
+	}
 
 	claudeInstalled := func(ctx context.Context) bool {
 		t.Helper()

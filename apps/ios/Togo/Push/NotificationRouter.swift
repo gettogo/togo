@@ -22,6 +22,18 @@ struct NotificationResponse: Sendable, Equatable {
     /// Answers from a notification action. Tapping the notification itself is handled here.
     var onAction: @MainActor (NotificationResponse) async -> Void = { _ in }
 
+    /// Taps open in the store `target` returns when they arrive, the window last in front, and
+    /// a banner is quiet only for the session on screen there.
+    func deliver(to target: @escaping @MainActor () -> AppStore?) {
+        open = { target()?.open($0) }
+        frontSession = {
+            guard let store = target(), store.workspaceOpen, let tab = store.selectedTab,
+                  let bib = store.session(for: tab)?.bib ?? tab.bib else { return nil }
+            let machine = store.machineName(for: tab.hostID)
+            return machine.isEmpty ? nil : (bib, machine)
+        }
+    }
+
     /// A banner for the session the user is looking at would only repeat the screen.
     func presentation(for link: String?) -> UNNotificationPresentationOptions {
         if let link, let url = URL(string: link), case .session(let bib, let host)? = DeepLink(url: url),

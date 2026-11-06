@@ -42,6 +42,12 @@ import TogoKit
     var panesVisible = false
     /// Open tabs, most recently put on screen first.
     var recentTabs: [TabID] = []
+    /// The workspace sits beside the session sidebar instead of in a cover over the list.
+    var workspaceInline = false
+    /// The window is wide enough for two panes, so ⌘\ can open one.
+    var panesFit = false
+    /// The session sidebar of a regular-width window.
+    var sidebar = SidebarState()
     /// Why the last answer to a card did not arrive, by card id. It sits on the card the user
     /// will answer again rather than in `notice`, which belongs to the whole screen.
     private(set) var answerFailures: [String: String] = [:]
@@ -64,9 +70,9 @@ import TogoKit
         self.firstRun = firstRun
     }
 
-    /// Applies every snapshot the services publish until the stream ends.
-    /// The services' snapshot stream has one consumer, so a second call while the first is
-    /// running returns at once. Every window shares this store and its one loop.
+    /// Applies every snapshot the services publish until the stream ends or the task is
+    /// cancelled. Each window's store runs its own loop; a second call on the same store while
+    /// the first is running returns at once.
     func run() async {
         guard !isRunning else { return }
         isRunning = true
@@ -115,7 +121,14 @@ import TogoKit
         switch snapshot.reachability {
         case .online:
             closeEndedTabs(on: snapshot.hostID, listed: Set(snapshot.sessions.map(\.id)))
-        case .failed, .keyMissing:
+        case .failed:
+            // A helper being installed or updated drops the connection until it is back, which
+            // the monitor reports as a failure too; the review waits for it.
+            switch snapshot.helper {
+            case .missing, .outdated: break
+            case .checking, .present: endReview(hostID: snapshot.hostID, sessionID: nil, why: ReviewEntryCopy.machineLost(machineName(for: snapshot.hostID)))
+            }
+        case .keyMissing:
             endReview(hostID: snapshot.hostID, sessionID: nil, why: ReviewEntryCopy.machineLost(machineName(for: snapshot.hostID)))
         case .connecting, .waking, .offline, .authNeeded:
             break

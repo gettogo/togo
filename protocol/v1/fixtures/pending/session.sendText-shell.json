@@ -1,0 +1,48 @@
+{
+  "description": "A reply to a plain shell session, which runs no agent, is refused with reason shell so it is never run as a command; nothing is typed. A shell back in the foreground of an agent session is refused with reason ended instead.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.sendText",
+    "params": {
+      "id": "s_abcdefghij",
+      "text": "Run the tests again",
+      "submit": true
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "error": {
+      "code": -32006,
+      "message": "conflict",
+      "data": {
+        "reason": "shell"
+      }
+    }
+  }
+}

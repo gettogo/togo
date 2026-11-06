@@ -98,6 +98,8 @@ public struct GestureConfig: Equatable, Sendable {
     private let haptics = UISelectionFeedbackGenerator()
     private var touchMouse: TouchMouse?
     private var linkMenu: LinkMenu?
+    /// Trackpad and mouse: the I-beam, clicks, hover and scrolling.
+    let pointer: PointerController?
 
     /// Gestures that read or write the grid need a `SwiftTermEngine`; with any other engine
     /// only the session swipes and the edge pan are installed.
@@ -105,6 +107,7 @@ public struct GestureConfig: Equatable, Sendable {
         self.target = engine as? any GestureTarget
         self.view = view
         self.bindings = bindings
+        pointer = (engine as? any PointerTarget).map { PointerController(target: $0, host: view) }
         super.init()
         if let target {
             touchMouse = TouchMouse(target: target)

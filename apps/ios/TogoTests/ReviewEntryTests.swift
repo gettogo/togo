@@ -279,6 +279,28 @@ import UIKit
         #expect(store.reviewing == nil)
     }
 
+    @Test func aHelperUpdateKeepsTheReviewOpen() {
+        let store = reviewFromList()
+        let machine = store.controlCenter.machines[0]
+        func during(_ helper: HelperState, _ reach: Reachability) -> HostViewSnapshot {
+            HostViewSnapshot(
+                hostID: machine.id, reachability: reach, helper: helper, sessions: machine.sessions, requests: [],
+                at: Date(), capabilities: Self.everything
+            )
+        }
+        // The helper restarts: the connection drops and the monitor reports it as failed while the
+        // old helper is gone or the new one has not answered yet.
+        store.apply(during(.outdated(found: "0.2.0"), .failed("The connection closed.")))
+        #expect(store.reviewing != nil)
+        store.apply(during(.missing, .failed("The connection closed.")))
+        #expect(store.reviewing != nil)
+        store.apply(during(.present(version: "0.3.0", live: true), .online))
+        #expect(store.reviewing != nil, "The review recovers when the machine reconnects")
+        // A key that is gone is not coming back.
+        store.apply(during(.outdated(found: "0.2.0"), .keyMissing))
+        #expect(store.reviewing == nil)
+    }
+
     @Test func aCommitMessageKeepsTheReviewReadOnly() {
         let store = reviewFromList()
         store.reviewHasDraft = true

@@ -157,3 +157,76 @@ func TestPermissionSubjectKindFromTool(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionEndMapsToEnd(t *testing.T) {
+	ev, out, err := Map("SessionEnd", fixture(t, "session_end.json"), env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.Event != local.EventEnd || ev.SessionID == nil || out.Text != "" {
+		t.Fatalf("event %+v text %q, want end", ev, out.Text)
+	}
+	// /clear and /resume end the conversation, not the process.
+	ev, _, err = Map("SessionEnd", fixture(t, "session_end_clear.json"), env)
+	if err != nil || ev.Event == local.EventEnd {
+		t.Fatalf("clear mapped to %q (%v), want no end", ev.Event, err)
+	}
+}
+
+func TestStopFailureUsageLimit(t *testing.T) {
+	ev, _, err := Map("StopFailure", fixture(t, "stop_failure_rate_limit.json"), env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.Event != local.EventUsageLimit || ev.Data.Message != "API Error: Rate limit reached" {
+		t.Fatalf("event %q message %q", ev.Event, ev.Data.Message)
+	}
+}
+
+func TestStopFailureOtherError(t *testing.T) {
+	ev, _, err := Map("StopFailure", fixture(t, "stop_failure_error.json"), env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.Event != local.EventFailure {
+		t.Fatalf("event %q, want failure", ev.Event)
+	}
+	if want := "API Error: Invalid API key · Please run /login"; ev.Data.Message != want {
+		t.Fatalf("message %q, want %q", ev.Data.Message, want)
+	}
+	detail := local.ExitDetail(ev.Data.Message)
+	if detail == nil || (wire.SessionExit{Reason: wire.ExitReasonError, Detail: detail}).Validate() != nil {
+		t.Fatalf("detail %v does not validate", detail)
+	}
+	long, _ := json.Marshal(map[string]string{"error": "server_error", "last_assistant_message": strings.Repeat("x", 500)})
+	ev, _, _ = Map("StopFailure", long, env)
+	if n := len([]rune(ev.Data.Message)); n != wire.MaxExitDetail {
+		t.Fatalf("message is %d runes, want %d", n, wire.MaxExitDetail)
+	}
+}
+
+// TestExitPayloadsReadLeniently: unexpected types and extra fields keep
+// the event, so a stop is never lost to a payload change.
+func TestExitPayloadsReadLeniently(t *testing.T) {
+	for _, c := range []struct {
+		name, event, payload, kind, message string
+	}{
+		{"details object", "StopFailure", `{"error":"server_error","error_details":{"status":500,"msg":"\u001b[31mboom"},"extra":[1]}`, local.EventFailure, `{"status":500,"msg":"\u001b[31mboom"}`},
+		{"details number", "StopFailure", `{"error":"rate_limit","error_details":429}`, local.EventUsageLimit, "429"},
+		{"message object", "StopFailure", `{"error":"unknown","last_assistant_message":{"text":"x"}}`, local.EventFailure, `{"text":"x"}`},
+		{"error number", "StopFailure", `{"error":7,"session_id":5}`, local.EventFailure, ""},
+		{"not json", "StopFailure", `not json`, local.EventFailure, ""},
+		{"null details", "StopFailure", `{"error_details":null}`, local.EventFailure, ""},
+		{"reason object", "SessionEnd", `{"reason":{"why":"x"},"new_field":true}`, local.EventEnd, ""},
+		{"session end not json", "SessionEnd", `[`, local.EventEnd, ""},
+	} {
+		ev, _, err := Map(c.event, []byte(c.payload), env)
+		if err != nil {
+			t.Errorf("%s: %v", c.name, err)
+			continue
+		}
+		if ev.Event != c.kind || ev.Data.Message != c.message || ev.SessionID == nil || ev.Agent != "claude" {
+			t.Errorf("%s: event %q message %q", c.name, ev.Event, ev.Data.Message)
+		}
+	}
+}

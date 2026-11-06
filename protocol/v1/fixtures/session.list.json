@@ -51,7 +51,9 @@
             "model": null,
             "contextPercent": null,
             "costUsd": null
-          }
+          },
+          "command": null,
+          "exit": null
         }
       ]
     }

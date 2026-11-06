@@ -1,0 +1,34 @@
+{
+  "description": "Look up a program on the login-shell PATH before offering it as a custom agent. path is the absolute path found, or null when installed is false. Harness deviation: <home>/bin is on the login-shell PATH and holds an executable aider.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "agents.check",
+    "params": {
+      "program": "aider"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "installed": true,
+      "path": "<home>/bin/aider"
+    }
+  }
+}

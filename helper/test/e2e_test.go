@@ -115,6 +115,8 @@ func isolatedEnv(t *testing.T) (env, vars []string, label string) {
 		"TOGO_TMUX_LABEL=" + label,
 		"TMUX=",
 		"TMUX_TMPDIR=" + tmuxDir,
+		// Never hold the real machine awake or read its power state.
+		"TOGO_TEST_AWAKE_OFF=1",
 	}
 	env = append(os.Environ(), vars...)
 	// kill-server must see the same TMUX_TMPDIR as the helper, or it looks in

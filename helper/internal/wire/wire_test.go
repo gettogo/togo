@@ -134,6 +134,14 @@ func TestEmptySlicesEncodeAsArrays(t *testing.T) {
 	if !strings.Contains(string(b), `"options":[]`) {
 		t.Errorf("Approval = %s", b)
 	}
+	b, _ = json.Marshal(RestorableResult{})
+	if string(b) != `{"sessions":[]}` {
+		t.Errorf("RestorableResult = %s", b)
+	}
+	b, _ = json.Marshal(HostInfo{Interfaces: []HostInterface{{Name: "en0"}}})
+	if string(b) != `{"interfaces":[{"name":"en0","mac":"","ipv4":[]}],"wakeOnLan":null}` {
+		t.Errorf("HostInfo = %s", b)
+	}
 }
 
 func TestPushPlaintextOptionsOnlyForNeedsYou(t *testing.T) {

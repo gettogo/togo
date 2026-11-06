@@ -58,6 +58,10 @@ type SessionInfo struct {
 	Bib, Agent, Title, CreatedTag string
 	// Muted is true when the user option @togo_muted is "1".
 	Muted bool
+	// Argv holds the user option @togo_argv, or "" when unset.
+	Argv string
+	// Exit holds the user option @togo_exit, or "" when unset.
+	Exit string
 }
 
 // NewSessionOpts configures NewSession.
@@ -119,12 +123,14 @@ const listFormat = `#{session_name}` + "\x1f" +
 	`#{@togo_agent}` + "\x1f" +
 	`#{@togo_name}` + "\x1f" +
 	`#{@togo_created}` + "\x1f" +
-	`#{@togo_muted}` + "\x1e"
+	`#{@togo_muted}` + "\x1f" +
+	`#{@togo_argv}` + "\x1f" +
+	`#{@togo_exit}` + "\x1e"
 
 // ListSessions returns every session on the client's socket. When no server
 // is running it returns nil, nil. Output is split on the "\x1e\n" record
 // delimiter, so newlines inside a session name or option value stay inside
-// their field; records without exactly 10 fields are skipped, not an error.
+// their field; records without exactly 12 fields are skipped, not an error.
 func (c *Client) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 	out, err := c.run(ctx, "list-sessions", "-F", listFormat)
 	if err != nil {
@@ -139,7 +145,7 @@ func (c *Client) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 // parseListOutput parses the output of "list-sessions -F listFormat" into
 // session records. Output is split on the "\x1e\n" record delimiter, so
 // newlines inside a session name or option value stay inside their field.
-// Records without exactly 10 fields are skipped, not an error; a record with
+// Records without exactly 12 fields are skipped, not an error; a record with
 // a non-numeric created or attached field is an error.
 func parseListOutput(out string) ([]SessionInfo, error) {
 	sessions := []SessionInfo{}
@@ -149,7 +155,7 @@ func parseListOutput(out string) ([]SessionInfo, error) {
 			continue
 		}
 		fields := strings.Split(record, "\x1f")
-		if len(fields) != 10 {
+		if len(fields) != 12 {
 			continue
 		}
 		created, err := strconv.ParseInt(fields[1], 10, 64)
@@ -171,6 +177,8 @@ func parseListOutput(out string) ([]SessionInfo, error) {
 			Title:      fields[7],
 			CreatedTag: fields[8],
 			Muted:      fields[9] == "1",
+			Argv:       fields[10],
+			Exit:       fields[11],
 		})
 	}
 	return sessions, nil
@@ -260,6 +268,19 @@ func (c *Client) SetOption(ctx context.Context, session, key, value string) erro
 		return err
 	}
 	_, err := c.run(ctx, "set-option", "-t", "="+session+":", escapeArg(key), escapeArg(value))
+	if errors.Is(err, errNoServer) {
+		return ErrNoSession
+	}
+	return err
+}
+
+// UnsetOption removes a user option from the session with the exact given
+// name. When no server is running the error is ErrNoSession.
+func (c *Client) UnsetOption(ctx context.Context, session, key string) error {
+	if err := checkOption(key, ""); err != nil {
+		return err
+	}
+	_, err := c.run(ctx, "set-option", "-u", "-t", "="+session+":", escapeArg(key))
 	if errors.Is(err, errNoServer) {
 		return ErrNoSession
 	}

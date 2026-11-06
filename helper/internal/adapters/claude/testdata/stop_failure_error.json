@@ -1,0 +1,1 @@
+{"session_id":"abc123","transcript_path":"/Users/u/.claude/projects/p/t.jsonl","cwd":"/Users/u/proj","permission_mode":"default","hook_event_name":"StopFailure","error":"authentication_failed","error_details":"401","last_assistant_message":"╭───╮\n│ \u001b[31mAPI Error:\u001b[0m  Invalid API key · Please run /login │\n╰───╯\nsecond line"}

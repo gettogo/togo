@@ -6,6 +6,7 @@ package api
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // Method serves one extension method. An error that is a *CodeError reaches
@@ -49,6 +51,9 @@ type API struct {
 	// method (fs.listDir with a ref) without editing this file. It must not
 	// be modified while the API is serving.
 	Ext map[string]Method
+	// LoginPath finds the PATH agents.list searches when Sessions.Path is
+	// empty. Nil means state.LoginPath.
+	LoginPath func(ctx context.Context) string
 }
 
 // Handle dispatches one protocol method.
@@ -104,17 +109,34 @@ func (a *API) sessionList(ctx context.Context) (any, error) {
 }
 
 func (a *API) sessionCreate(ctx context.Context, raw json.RawMessage) (any, error) {
-	var p struct {
-		Agent string `json:"agent"`
-		Cwd   string `json:"cwd"`
-		Name  string `json:"name"`
-		Cols  int    `json:"cols"`
-		Rows  int    `json:"rows"`
-	}
+	var p wire.SessionCreateParams
 	if err := decode(raw, &p); err != nil {
 		return nil, err
 	}
-	return a.Sessions.Create(ctx, session.CreateOpts{Agent: p.Agent, Cwd: p.Cwd, Name: p.Name, Cols: p.Cols, Rows: p.Rows})
+	return a.Sessions.Create(ctx, session.CreateOpts{
+		Agent: p.Agent, Cwd: p.Cwd, Name: p.Name, Cols: p.Cols, Rows: p.Rows,
+		Program: p.Program, Args: p.Args,
+	})
+}
+
+// AgentsCheck serves agents.check from s: it reports whether a program the
+// user names would be found for a custom session, and where.
+func AgentsCheck(s *session.Service) Method {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p wire.AgentsCheckParams
+		if err := decode(raw, &p); err != nil {
+			return nil, err
+		}
+		path, ok, err := s.CheckProgram(ctx, p.Program)
+		if err != nil {
+			return nil, err
+		}
+		res := wire.AgentsCheckResult{Installed: ok}
+		if ok {
+			res.Path = &path
+		}
+		return res, nil
+	}
 }
 
 func (a *API) sessionKill(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -180,7 +202,11 @@ func (a *API) agentsList(ctx context.Context) any {
 	// already on that PATH shows up while the app is open.
 	path := a.Sessions.Path
 	if path == "" {
-		path = state.LoginPath(ctx)
+		lookup := a.LoginPath
+		if lookup == nil {
+			lookup = state.LoginPath
+		}
+		path = lookup(ctx)
 	}
 	type entry struct {
 		ID        string `json:"id"`
@@ -274,7 +300,7 @@ func (a *API) mapError(method string, err error) *rpc.Error {
 		}
 		return rpc.NewError(rpc.CodeTmuxUnavailable, map[string]any{"found": found, "required": "3.2"})
 	case errors.As(err, &invalid):
-		return rpc.InvalidParams(invalid.Msg)
+		return rpc.InvalidParams(cmp.Or(invalid.Reason, invalid.Msg))
 	}
 	if a.Logf != nil {
 		a.Logf("%s: %s", method, fmt.Sprint(err))

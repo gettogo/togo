@@ -1,0 +1,20 @@
+{
+  "description": "The agent in session 01 stopped on a usage limit. Seal it with label push and aad hostId + \"|\" + deviceId.",
+  "kind": "push",
+  "plaintext": {
+    "v": 1,
+    "kind": "failed",
+    "sessionId": "s_abcdefghij",
+    "bib": "01",
+    "agent": "claude",
+    "title": "Claude Code stopped",
+    "body": "Usage limit reached",
+    "ts": 1793707200000,
+    "exit": {
+      "code": null,
+      "reason": "usage_limit",
+      "detail": "Usage limit reached"
+    },
+    "host": "studio"
+  }
+}

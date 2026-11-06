@@ -2,8 +2,9 @@
 # Validate protocol v1 schema and every golden fixture (JSON Schema 2020-12, ajv strict mode).
 # fixtures/plaintext holds sealed-payload examples (push and answer
 # plaintexts), which are not RPC exchanges and use their own wrapper schema.
-# fixtures/pending holds exchanges for methods no helper serves yet; they are
-# validated here but not replayed against the helper.
+# fixtures/pending holds exchanges one side does not handle yet (the helper
+# or the app); they are validated here and run only by the harness of the
+# side that handles them (awake.* by the helper's awake package).
 # Needs Node (npx). Usage: protocol/validate.sh
 set -eu
 dir=$(cd "$(dirname "$0")" && pwd)

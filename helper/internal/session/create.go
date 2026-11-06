@@ -10,9 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/fsx"
-	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/tmux"
 )
 
@@ -34,29 +32,22 @@ const (
 
 // CreateOpts are the inputs to Create. Zero values select the defaults: the
 // shell agent, the home directory, the agent's display name and 80x24.
+// Program names the program for wire.AgentCustom; Args are argv entries
+// passed to the agent after its program, never read as shell text.
 type CreateOpts struct {
 	Agent, Cwd, Name string
 	Cols, Rows       int
+	Program          string
+	Args             []string
 }
 
 // Create starts a managed session and returns it as List would. Bad input
 // is an *InvalidParamsError, except a bad Cwd, which wraps
 // fsx.ErrInvalidPath.
 func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
-	agentID := o.Agent
-	if agentID == "" {
-		agentID = "shell"
-	}
-	a, ok := agents.Lookup(agentID)
-	if !ok {
-		return Session{}, &InvalidParamsError{Msg: fmt.Sprintf("unknown agent %q", agentID)}
-	}
 	name, err := normalizeName(o.Name)
 	if err != nil {
 		return Session{}, err
-	}
-	if name == "" {
-		name = a.Name
 	}
 	cols, err := sizeOrDefault("cols", o.Cols, defaultCols, minCols, maxCols)
 	if err != nil {
@@ -74,18 +65,28 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
+	a, launch, err := ValidateLaunch(o.Agent, o.Program, o.Args, s.loginPath(ctx))
+	if err != nil {
+		return Session{}, err
+	}
+	if name == "" {
+		name = a.Name
+	}
 	if err := s.checkTmux(ctx); err != nil {
 		return Session{}, err
 	}
-	path := s.Path
-	if path == "" {
-		path = state.LoginPath(ctx)
-	}
-	if !agents.Installed(a, path) {
-		return Session{}, &InvalidParamsError{Msg: fmt.Sprintf("agent %q is not installed", a.ID)}
-	}
 
 	created := s.now().UTC().Truncate(time.Second)
+	options := map[string]string{
+		optionAgent:   a.ID,
+		optionName:    name,
+		optionCreated: created.Format(time.RFC3339),
+	}
+	if argv := launch.Argv(); argv != nil {
+		if options[optionArgv], err = encodeArgv(argv); err != nil {
+			return Session{}, err
+		}
+	}
 	var id, bib string
 	err = withLock(ctx, s.LockFile, func() error {
 		var err error
@@ -98,28 +99,33 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 			return err
 		}
 		id = s.newID()
-		return s.Tmux.NewSession(ctx, tmux.NewSessionOpts{
+		options[optionBib] = bib
+		err = s.Tmux.NewSession(ctx, tmux.NewSessionOpts{
 			Name:    id,
 			Dir:     dir,
 			Cols:    cols,
 			Rows:    rows,
-			Command: agentCommand(a, s.shell()),
-			Options: map[string]string{
-				optionBib:     bib,
-				optionAgent:   a.ID,
-				optionName:    name,
-				optionCreated: created.Format(time.RFC3339),
-			},
-			Env: map[string]string{"TOGO_SESSION": id, "TOGO_BIB": bib},
+			Command: launchWrapper(s.shell(), s.TogoPath, launch),
+			Options: options,
+			Env:     map[string]string{"TOGO_SESSION": id, "TOGO_BIB": bib},
 		})
+		if err == nil {
+			s.remember(ManifestEntry{ID: id, Bib: bib, Name: name, Agent: a.ID, Cwd: dir, Command: launch.Argv(), CreatedAt: created})
+		}
+		return err
 	})
 	if err != nil {
 		return Session{}, fmt.Errorf("create session: %w", err)
 	}
+	return s.started(ctx, id, bib, name, a.ID, dir, created, launch.Argv())
+}
+
+// started returns a session just started in tmux as List would. When the
+// pane's process already exited and tmux destroyed the session, the caller
+// still gets the session it started, as exited.
+func (s *Service) started(ctx context.Context, id, bib, name, agent, dir string, created time.Time, argv []string) (Session, error) {
 	sess, err := s.find(ctx, id)
 	if errors.Is(err, ErrNotFound) {
-		// The pane's process already exited and tmux destroyed the
-		// session. The caller still gets the session it created.
 		cwd, evalErr := filepath.EvalSymlinks(dir)
 		if evalErr != nil {
 			cwd = dir
@@ -128,11 +134,12 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 			ID:        id,
 			Bib:       &bib,
 			Name:      name,
-			Agent:     a.ID,
+			Agent:     agent,
 			Cwd:       cwd,
 			CreatedAt: created,
 			Status:    statusExited,
 			Managed:   true,
+			Command:   argv,
 		}, nil
 	}
 	return sess, err
@@ -148,18 +155,6 @@ func (s *Service) nextBib(ctx context.Context) (string, error) {
 		used[info.Bib] = true
 	}
 	return lowestFreeBib(used)
-}
-
-// agentCommand returns the initial pane argv. The shell agent gets none, so
-// tmux starts its default shell. Other agents run in an interactive login
-// shell, which sets up PATH the way the user's terminal does, and fall back
-// to a login shell when they exit so the pane stays usable. Only registry
-// strings ever enter the -c text.
-func agentCommand(a agents.Agent, shell string) []string {
-	if a.Command == "" {
-		return nil
-	}
-	return []string{shell, "-lic", a.Command + `; exec "$SHELL" -l`}
 }
 
 // normalizeName trims Unicode whitespace and checks the result is at most 64

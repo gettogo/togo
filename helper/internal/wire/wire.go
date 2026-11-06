@@ -25,6 +25,13 @@ const (
 	CapGit       = "git.v1"
 	CapPorts     = "ports.v1"
 	CapGitWrite  = "gitwrite.v1"
+	CapLaunch    = "launch.v1"
+	CapLifecycle = "lifecycle.v1"
+	CapRestore   = "restore.v1"
+	CapNotify    = "notify.v1"
+	CapReply     = "reply.v1"
+	CapAuthkeys  = "authkeys.v1"
+	CapHostInfo  = "hostinfo.v1"
 )
 
 // App-facing methods.
@@ -97,6 +104,13 @@ const (
 	ConflictAnswered   = "answered"
 	ConflictPromptGone = "prompt_gone"
 	ConflictExpired    = "expired"
+	ConflictRunning    = "running"
+	ConflictShell      = "shell"
+	ConflictEnded      = "ended"
+	ConflictNeedsYou   = "needs_you"
+	ConflictSymlink    = "symlink"
+	ConflictMissing    = "missing"
+	ConflictNotRegular = "not_regular"
 
 	ByDesk  = "desk"
 	ByPhone = "phone"
@@ -391,14 +405,18 @@ const (
 	SignalOSC9   = "osc9"
 	SignalOSC777 = "osc777"
 	SignalOutput = "output"
+	// SignalExit is sent by the launch wrapper when the agent exits.
+	SignalExit = "exit"
 )
 
-// Signal is the local.signal params.
+// Signal is the local.signal params. Code is the agent's exit status, set
+// for SignalExit only.
 type Signal struct {
 	SessionID string `json:"sessionId"`
 	Kind      string `json:"kind"`
 	Title     string `json:"title,omitempty"`
 	Body      string `json:"body,omitempty"`
+	Code      *int   `json:"code,omitempty"`
 }
 
 // HookEvent is the local.hook params: one agent hook invocation, reduced by
@@ -538,6 +556,9 @@ type PairParams struct {
 	Platform               string `json:"platform,omitempty"`
 	LiveActivityStartToken string `json:"liveActivityStartToken,omitempty"`
 	LiveActivityCommand    bool   `json:"liveActivityCommand,omitempty"`
+	// SSHKey is the public key the device signs in with over SSH; Device
+	// stores it under the same name.
+	SSHKey string `json:"sshKey,omitempty"`
 }
 
 // EffectivePlatform returns Platform, or PlatformIOS for devices that paired
@@ -558,7 +579,8 @@ type PairResult struct {
 }
 
 // Device is a paired phone as the pairing store keeps it. It is never sent
-// to the app and its tokens and keys are never logged.
+// to the app and its tokens and keys are never logged. Its SSH key is the
+// embedded PairParams.SSHKey, which authkeys.remove takes off the machine.
 type Device struct {
 	PairParams
 	PairedAt time.Time `json:"pairedAt"`

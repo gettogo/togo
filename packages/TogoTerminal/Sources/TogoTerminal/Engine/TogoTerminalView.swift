@@ -30,6 +30,7 @@ final class TogoTerminalView: TerminalView {
     let chordRepeater: ChordRepeater
 
     private let wheelPan = UIPanGestureRecognizer()
+    private var selectionThroughLineEnd = false
 
     override init(frame: CGRect, font: UIFont?, options: TerminalOptions) {
         chordRepeater = ChordRepeater()
@@ -113,8 +114,11 @@ final class TogoTerminalView: TerminalView {
     /// SwiftTerm's copy writes the pasteboard itself and also ends the selection drag, so it
     /// still runs; the text is read first because the copy clears the selection.
     override func copy(_ sender: Any?) {
-        let text = getSelection()
+        var text = getSelection()
+        if selectionThroughLineEnd, text?.hasSuffix("\n") == true { text = text.map { String($0.dropLast()) } }
         super.copy(sender)
+        if selectionThroughLineEnd, let text { UIPasteboard.general.string = text }
+        selectionThroughLineEnd = false
         if let text { onCopy?(text) }
     }
 
@@ -140,6 +144,25 @@ final class TogoTerminalView: TerminalView {
     /// know, so the shortcut action is claimed here instead.
     override func target(forAction action: Selector, withSender sender: Any?) -> Any? {
         action == #selector(performShortcut(_:)) ? self : super.target(forAction: action, withSender: sender)
+    }
+
+    /// A pointer click-drag: selects from `start` up to, not including, `end`. SwiftTerm keeps
+    /// an end column inside the row, so an end past the last column runs to the next row's
+    /// start and the copy drops the line break that brings.
+    func select(from start: GridCell, to end: GridCell) {
+        let top = terminalStateSnapshot().viewportRow
+        selectionThroughLineEnd = end.col >= terminalDimensions.cols
+        let stop = selectionThroughLineEnd ? Position(col: 0, row: end.row + top + 1) : Position(col: end.col, row: end.row + top)
+        setSelectionRange(start: Position(col: start.col, row: start.row + top), end: stop)
+    }
+
+    /// Display widths of a visible row's cells: 2 and 0 for the halves of a wide glyph.
+    func cellWidths(row: Int) -> [Int] {
+        terminalStateSnapshot().visibleRows.dropFirst(row).first?.cellWidths ?? []
+    }
+
+    func showEditMenu(at point: CGPoint) {
+        showStandardContextMenu(at: point)
     }
 
     @objc func performShortcut(_ command: UIKeyCommand) {

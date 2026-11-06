@@ -1,0 +1,58 @@
+{
+  "description": "Create a session that runs a program the user names. agent custom requires program; a bare name is looked up on the login-shell PATH. name defaults to the program's base name. Harness deviation: <home>/bin is on the login-shell PATH and holds an executable aider that waits for input until killed.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "session.create",
+    "params": {
+      "agent": "custom",
+      "cwd": "~/proj",
+      "program": "aider",
+      "args": [
+        "--no-auto-commits"
+      ]
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "id": "s_abcdefghij",
+      "bib": "01",
+      "name": "aider",
+      "agent": "custom",
+      "cwd": "<home>/proj",
+      "createdAt": "2026-11-03T12:00:00Z",
+      "status": "idle",
+      "activity": null,
+      "attachedClients": 0,
+      "managed": true,
+      "muted": false,
+      "meta": {
+        "model": null,
+        "contextPercent": null,
+        "costUsd": null
+      },
+      "command": [
+        "aider",
+        "--no-auto-commits"
+      ],
+      "exit": null
+    }
+  }
+}

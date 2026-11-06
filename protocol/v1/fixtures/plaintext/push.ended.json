@@ -1,0 +1,20 @@
+{
+  "description": "The agent in session 01 exited with code 0. Never sent as done. Seal it with label push and aad hostId + \"|\" + deviceId.",
+  "kind": "push",
+  "plaintext": {
+    "v": 1,
+    "kind": "ended",
+    "sessionId": "s_abcdefghij",
+    "bib": "01",
+    "agent": "claude",
+    "title": "Claude Code ended",
+    "body": "Exited with code 0",
+    "ts": 1793707200000,
+    "exit": {
+      "code": 0,
+      "reason": "exit",
+      "detail": null
+    },
+    "host": "studio"
+  }
+}

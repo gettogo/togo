@@ -36,13 +36,15 @@ type fakeRelay struct {
 	reject  int // upgrades still to refuse with 503
 	acked   chan string
 	conned  chan struct{}
-	unknown []string // ack ids that matched nothing
+	unknown []string    // ack ids that matched nothing
+	wills   chan string // will frames received
+	willAt  []int       // dials so far when each will frame arrived
 }
 
 func newFakeRelay(t *testing.T, keys Keys) *fakeRelay {
 	r := &fakeRelay{t: t, hostID: keys.HostID,
 		bearer: "Bearer " + base64.RawURLEncoding.EncodeToString(keys.MailboxSecret),
-		acked:  make(chan string, 64), conned: make(chan struct{}, 64)}
+		acked:  make(chan string, 64), conned: make(chan struct{}, 64), wills: make(chan string, 64)}
 	r.srv = httptest.NewServer(http.HandlerFunc(r.serve))
 	t.Cleanup(r.srv.Close)
 	return r
@@ -94,6 +96,11 @@ func (r *fakeRelay) serve(w http.ResponseWriter, req *http.Request) {
 			c.Write(ctx, websocket.MessageText, []byte(`{"type":"pong"}`))
 		case "ack":
 			r.ack(f.ID)
+		case "will":
+			r.mu.Lock()
+			r.willAt = append(r.willAt, len(r.dials))
+			r.mu.Unlock()
+			r.wills <- string(data)
 		}
 	}
 }
@@ -148,6 +155,8 @@ type harness struct {
 	devs    []Device
 	cancel  context.CancelFunc
 	done    chan error
+	config  func(*Config) // adjusts the config before Run starts
+	runner  func(*runner) // adjusts the runner before it starts
 }
 
 type logBuf struct {
@@ -192,9 +201,12 @@ func newHarness(t *testing.T, mutate func(*harness)) *harness {
 		PingInterval:   50 * time.Millisecond,
 		RescanInterval: 10 * time.Millisecond,
 	}
+	if h.config != nil {
+		h.config(&cfg)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancel, h.done = cancel, make(chan error, 1)
-	go func() { h.done <- Run(ctx, cfg) }()
+	go func() { h.done <- run(ctx, cfg, h.runner) }()
 	t.Cleanup(func() {
 		cancel()
 		select {

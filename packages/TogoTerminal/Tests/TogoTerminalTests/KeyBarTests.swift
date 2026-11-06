@@ -176,4 +176,28 @@ import UIKit
         #expect(toggles == 2)
         #expect(h.joinedInput.isEmpty)
     }
+
+    @Test func keyBarDefaultHasDictateKey() throws {
+        let h = EngineHarness()
+        let dictate = try item("Dictate", in: .standard)
+        #expect(dictate.symbol == "mic")
+        #expect(dictate.action == .dictate)
+        #expect(try item("Dictate", in: .claude).action == .dictate)
+        let bar = KeyBarView(config: .standard, engine: h.engine)
+        var requests = 0
+        bar.onDictate = { requests += 1 }
+        bar.perform(dictate)
+        #expect(requests == 1)
+        #expect(h.joinedInput.isEmpty)
+    }
+
+    /// The system keyboard's own dictation arrives as one insert and takes the paste filter.
+    @Test func dictationIntoTerminalIsFiltered() async {
+        let h = EngineHarness()
+        _ = KeyBarView(config: .standard, engine: h.engine)
+        h.engine.textInputView.insertText("a\u{1b}b")
+        #expect(await waitUntil { !h.input.isEmpty })
+        await settle()
+        #expect(h.joinedInput == Data("ab".utf8))
+    }
 }

@@ -46,6 +46,14 @@ type Config struct {
 	MaxBackoff     time.Duration // default 30 s
 	PingInterval   time.Duration // default 30 s
 	RescanInterval time.Duration // how often the device list is reread; default 5 s
+
+	// Will, when set, is sent on every connect and again whenever it
+	// changes.
+	Will WillSource
+	// StopMarker is the path of the stop marker ($TOGO_HOME/stopping). Run
+	// removes a stale one at start; when ctx ends and the marker exists,
+	// each connection sends DisarmFrame before closing. Empty disables both.
+	StopMarker string
 }
 
 func (c *Config) defaults() {
@@ -76,6 +84,10 @@ func (c *Config) defaults() {
 // devices, and none while no live device is paired. It returns nil when ctx
 // ends, or an error at once if the keys are unusable.
 func Run(ctx context.Context, cfg Config) error {
+	return run(ctx, cfg, nil)
+}
+
+func run(ctx context.Context, cfg Config, adjust func(*runner)) error {
 	cfg.defaults()
 	if len(cfg.Keys.MailboxSecret) != 32 || cfg.Keys.HostID == "" {
 		return errors.New("mailbox: host keys incomplete")
@@ -83,18 +95,29 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.Answer == nil || cfg.Devices == nil {
 		return errors.New("mailbox: Answer and Devices are required")
 	}
-	r := &runner{cfg: cfg, v: NewVerifier(cfg.Keys, cfg.Devices, cfg.Options, cfg.Now)}
+	clearStopMarker(cfg.StopMarker)
+	r := &runner{cfg: cfg, v: NewVerifier(cfg.Keys, cfg.Devices, cfg.Options, cfg.Now), root: ctx}
+	if adjust != nil {
+		adjust(r)
+	}
 	return r.supervise(ctx)
 }
 
 type runner struct {
-	cfg Config
-	v   *Verifier
+	cfg  Config
+	v    *Verifier
+	root context.Context // Run's context; a relay's own context ends earlier when it is dropped
+
+	beforeDisarm func() // test hook, run before a disarm is written
 }
 
 func (r *runner) supervise(ctx context.Context) error {
 	var wg sync.WaitGroup
 	live := map[string]context.CancelFunc{}
+	// exited is closed when a relay's worker has returned. A relay dropped
+	// and wanted again waits for its old worker, so the old connection's
+	// disarm can never land after the new connection's will.
+	exited := map[string]chan struct{}{}
 	defer func() {
 		for _, cancel := range live {
 			cancel()
@@ -111,15 +134,35 @@ func (r *runner) supervise(ctx context.Context) error {
 				delete(live, u)
 			}
 		}
+		for u, ch := range exited {
+			if _, ok := live[u]; !ok {
+				select {
+				case <-ch:
+					delete(exited, u)
+				default:
+				}
+			}
+		}
 		for u := range want {
 			if _, ok := live[u]; ok {
 				continue
 			}
+			prev := exited[u]
+			done := make(chan struct{})
+			exited[u] = done
 			cctx, cancel := context.WithCancel(ctx)
 			live[u] = cancel
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				defer close(done)
+				if prev != nil {
+					select {
+					case <-prev:
+					case <-cctx.Done():
+						return
+					}
+				}
 				r.relayLoop(cctx, u)
 			}()
 		}
@@ -215,8 +258,52 @@ func (r *runner) session(ctx context.Context, relayURL string) (time.Duration, w
 	lastRead.Store(time.Now().UnixNano())
 	go r.pinger(sctx, conn, &lastRead)
 
+	// Reads use a context that outlives ctx: the websocket closes the
+	// connection when a read's context ends, and a deliberate stop still
+	// needs the socket to withdraw the will.
+	rctx, rstop := context.WithCancel(context.WithoutCancel(ctx))
+	defer rstop()
+	type result struct {
+		up   time.Duration
+		code websocket.StatusCode
+	}
+	done := make(chan result, 1)
+	go func() {
+		up, code := r.readLoop(ctx, rctx, sctx, conn, &lastRead, start)
+		done <- result{up, code}
+	}()
+
+	var changed <-chan struct{}
+	var sent []byte
+	if r.cfg.Will != nil {
+		changed = r.cfg.Will.Changed()
+		if err := r.sendWill(sctx, conn, relayURL, &sent); err != nil {
+			conn.CloseNow()
+		}
+	}
 	for {
-		_, data, err := conn.Read(sctx)
+		select {
+		case res := <-done:
+			return res.up, res.code
+		case <-ctx.Done():
+			r.disarmOnStop(conn)
+			conn.CloseNow()
+			res := <-done
+			return res.up, res.code
+		case <-changed:
+			changed = r.cfg.Will.Changed()
+			if err := r.sendWill(sctx, conn, relayURL, &sent); err != nil {
+				conn.CloseNow()
+			}
+		}
+	}
+}
+
+// readLoop reads relay frames until the connection fails, acking each
+// message once handled.
+func (r *runner) readLoop(ctx, rctx, sctx context.Context, conn *websocket.Conn, lastRead *atomic.Int64, start time.Time) (time.Duration, websocket.StatusCode) {
+	for {
+		_, data, err := conn.Read(rctx)
 		if err != nil {
 			code := websocket.CloseStatus(err)
 			if ctx.Err() == nil {

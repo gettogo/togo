@@ -33,7 +33,7 @@ struct WorkspaceSnapshotTests {
     /// Builds a fresh store, pool and engine on every call, so each appearance renders its own.
     private func screen(
         tabs: [String] = ["s-04"], selected: String = "s-04", link: LinkPhase = mosh, requests: [RequestCard] = [],
-        reachability: Reachability = .online, noteShown: Bool = false
+        reachability: Reachability = .online, noteShown: Bool = false, shownElsewhere: Bool = false
     ) -> some View {
         let services = FakeAppServices(hosts: Self.hosts)
         services.terminalPhases = []
@@ -47,6 +47,11 @@ struct WorkspaceSnapshotTests {
         store.select(TabID(hostID: Self.macbook, sessionID: selected))
         let terminals = TerminalPool()
         terminals.sync(with: store)
+        if shownElsewhere {
+            let other = WindowID()
+            terminals.sync(window: other, with: store)
+            terminals.show(TabID(hostID: Self.macbook, sessionID: selected), in: other)
+        }
         for id in tabs {
             store.setLink(id == selected ? link : Self.mosh, for: TabID(hostID: Self.macbook, sessionID: id))
         }
@@ -64,6 +69,12 @@ struct WorkspaceSnapshotTests {
     @Test func threeTabs() {
         assertScreen(named: "three-tabs") {
             screen(tabs: ["s-01", "s-04", "s-05"], selected: "s-04")
+        }
+    }
+
+    @Test func shownInAnotherWindow() {
+        assertScreen(named: "elsewhere") {
+            screen(shownElsewhere: true)
         }
     }
 

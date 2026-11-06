@@ -65,7 +65,9 @@ func init() {
 		return runServe(ctx, args, stdin, stdout, stderr)
 	})
 	register("doctor", func(ctx context.Context, args []string, _ map[string]string, _ io.Reader, stdout, _ io.Writer) int {
-		return runDoctor(args, doctor.DefaultEnv(state.LoginPath(ctx)), stdout)
+		e := doctor.DefaultEnv(state.LoginPath(ctx))
+		e.Awake = awakeDoctorCheck
+		return runDoctor(args, e, stdout)
 	})
 	register("version", func(_ context.Context, _ []string, _ map[string]string, _ io.Reader, stdout, _ io.Writer) int {
 		fmt.Fprintf(stdout, "togo %s\n", version.String())
@@ -112,8 +114,19 @@ var newService = func(ctx context.Context) (*session.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return session.NewService(ctx, home)
+	svc, err := session.NewService(ctx, home)
+	if err != nil {
+		return nil, err
+	}
+	// Agent sessions started here report their exit as the daemon's do.
+	// Without a path the session still runs; it just reports nothing.
+	svc.TogoPath, _ = togoBinary()
+	return svc, nil
 }
+
+// togoBinary locates the helper binary sessions run to report an agent's
+// exit. Tests replace it, since their binary is the test runner.
+var togoBinary = executable
 
 func environ(kvs []string) map[string]string {
 	env := make(map[string]string, len(kvs))

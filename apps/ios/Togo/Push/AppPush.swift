@@ -81,7 +81,8 @@ import WidgetKit
         return AppPush(directory: directory)
     }
 
-    func connect(services: LiveServices, store: AppStore) {
+    /// `activeStore` is the window last in front; taps and the Watch's list follow it.
+    func connect(services: LiveServices, activeStore: @escaping @MainActor () -> AppStore?) {
         source.services = services
         let notifications = SystemNotifications()
         let actions = NotificationActionHandler(dependencies: .init(
@@ -102,28 +103,21 @@ import WidgetKit
         ))
         AppDelegate.registrar = registrar
         AppDelegate.clear = clear
-        router.open = { store.open($0) }
+        router.deliver(to: activeStore)
         router.onAction = { response in
             await actions.handle(
                 actionIdentifier: response.actionIdentifier, userInfo: response.userInfo, target: response.link
             )
         }
-        router.frontSession = {
-            guard store.workspaceOpen, let id = store.workspace.selected,
-                  let tab = store.workspace.tabs.first(where: { $0.id == id }), let bib = tab.bib,
-                  let machine = services.hosts.first(where: { $0.id == id.hostID })?.name
-            else { return nil }
-            return (bib, machine)
-        }
         UNUserNotificationCenter.current().delegate = router
         watchNetwork(services)
         Task { await live.start() }
-        connectWatch(services: services, store: store)
+        connectWatch(services: services, activeStore: activeStore)
     }
 
     /// The Watch gets the pairings to answer with and the sessions to list; a Watch that
     /// reports new keys or a new token has every online machine paired again.
-    private func connectWatch(services: LiveServices, store: AppStore) {
+    private func connectWatch(services: LiveServices, activeStore: @escaping @MainActor () -> AppStore?) {
         guard let watch else { return }
         watch.onDevicesChanged = { [weak services] in services?.pairOnlineMachines() }
         watch.currentRequests = { [pending = self.pending] in pending.all() }
@@ -131,7 +125,7 @@ import WidgetKit
         watch.sendPairings(pairings.all())
         let pending = self.pending
         watchFeed = Task { [weak watch] in
-            let sessions = Observations { WatchSession.rows(store.controlCenter.machines) }
+            let sessions = Observations { WatchSession.rows(activeStore()?.controlCenter.machines ?? []) }
             var last: [WatchSession]?
             for await rows in sessions where rows != last {
                 last = rows

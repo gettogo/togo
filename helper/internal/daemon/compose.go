@@ -10,16 +10,21 @@ import (
 	"maps"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/approval"
+	"github.com/gettogo/togo/helper/internal/authkeys"
+	"github.com/gettogo/togo/helper/internal/awake"
 	"github.com/gettogo/togo/helper/internal/fsread"
 	"github.com/gettogo/togo/helper/internal/gitx"
+	"github.com/gettogo/togo/helper/internal/hostinfo"
 	"github.com/gettogo/togo/helper/internal/hub"
 	"github.com/gettogo/togo/helper/internal/local"
 	"github.com/gettogo/togo/helper/internal/mailbox"
+	"github.com/gettogo/togo/helper/internal/notify"
 	"github.com/gettogo/togo/helper/internal/ports"
 	"github.com/gettogo/togo/helper/internal/push"
 	"github.com/gettogo/togo/helper/internal/rpc"
@@ -34,6 +39,14 @@ var Capabilities = []string{
 	"session.v1", "agents.v1", "fs.v1", "capture.v1",
 	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1",
 	"gitwrite.v1",
+	awake.Capability,
+	notify.Capability,
+	hostinfo.Capability,
+	wire.CapAuthkeys,
+	wire.CapReply,
+	wire.CapLaunch,
+	wire.CapLifecycle,
+	wire.CapRestore,
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read
@@ -50,7 +63,11 @@ type ComposeOptions struct {
 	RelayClient *http.Client
 	// Getenv reads test-only switches; nil means os.Getenv.
 	Getenv func(string) string
-	Logf   func(format string, args ...any)
+	// Awake holds the OS side of keeping the machine awake (see
+	// awake.ForHost). Nil reports the platform as unsupported and touches
+	// nothing, which is what tests want.
+	Awake *awake.Config
+	Logf  func(format string, args ...any)
 }
 
 // Components are the services the daemon composes into its handler.
@@ -63,9 +80,13 @@ type Components struct {
 	Push      *push.Service
 	Sender    *push.Sender
 	Upload    *upload.Service
+	Awake     *awake.Manager
+	Notify    *notify.Store
+	Will      *push.WillKeeper
 
-	logf      func(format string, args ...any)
-	followups chan string
+	logf       func(format string, args ...any)
+	followups  chan string
+	stopMarker string
 }
 
 // Compose wires every service around base, whose Sessions must be set, and
@@ -102,6 +123,37 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		Tap: push.FileTap(getenv(push.TapEnv)),
 	}
 	c.Upload = &upload.Service{Home: o.Home, Sessions: svc, Logf: logf}
+	ac := awake.Config{}
+	if o.Awake != nil {
+		ac = *o.Awake
+	}
+	ac.Home, ac.Pub, ac.Logf = o.Home, c.Hub, logf
+	if c.Awake, err = awake.New(ac); err != nil {
+		return nil, err
+	}
+	c.Hub.OnEvent(c.Awake.Observe)
+	c.Notify = &notify.Store{Path: filepath.Join(o.Home, "notify.json"), Logf: logf}
+	c.Notify.OnChange = func(s notify.Settings) {
+		c.Watch.SetIdle(time.Duration(s.IdleSeconds) * time.Second)
+		c.Sender.Remind.Reschedule()
+	}
+	c.Watch.SetIdle(time.Duration(c.Notify.Get().IdleSeconds) * time.Second)
+	c.Sender.Muted = func() bool { return c.Notify.Get().Muted }
+	c.Sender.Remind = &push.Reminders{
+		After:   func() time.Duration { return time.Duration(c.Notify.Get().RemindMinutes) * time.Minute },
+		Pending: c.approvalPending,
+	}
+	c.Will = &push.WillKeeper{Hub: c.Hub, Devices: c.Push.Devices(), Keys: c.Push.HostKeys, Muted: c.Sender.Muted, Logf: logf,
+		Sessions: func(ctx context.Context) ([]session.Session, error) {
+			list, err := svc.List(ctx)
+			return c.Hub.Decorate(list), err
+		}}
+	c.Will.Subscribe()
+	c.stopMarker = filepath.Join(o.Home, mailbox.StopMarkerName)
+	svc.TogoPath, svc.Logf = o.TogoPath, logf
+	if svc.Manifest != nil {
+		svc.Manifest.Logf = logf
+	}
 	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach}
 	git := gitx.Git{}
 
@@ -116,6 +168,15 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		(&fsread.Service{Sessions: svc, Git: git}).Methods(),
 		(&ports.Service{Sessions: svc, Panes: svc.Tmux}).Methods(),
 		c.Upload.Methods(),
+		c.Awake.Methods(),
+		c.Notify.Methods(),
+		(&hostinfo.Service{}).Methods(),
+		authkeys.Methods(authkeys.DefaultPath),
+		{wire.MethodAgentsCheck: api.AgentsCheck(svc)},
+		{wire.MethodSessionSendText: api.SendText(svc, c.Hub.Decorate)},
+		{wire.MethodSessionRelaunch: c.Hub.SessionRelaunch},
+		{wire.MethodSessionRestorable: api.Restorable(svc), wire.MethodSessionDismiss: api.Dismiss(svc)},
+		{wire.MethodSessionRestore: api.Restore(svc, c.restored)},
 	} {
 		for name := range m {
 			if _, dup := ext[name]; dup {
@@ -164,12 +225,19 @@ func (c *Components) PendingApprovals() int {
 
 // Run drives the background services until ctx ends.
 func (c *Components) Run(ctx context.Context) {
+	keep, cancel := context.WithTimeout(ctx, 5*time.Second)
+	if err := c.API.Sessions.KeepServer(keep); err != nil {
+		c.logf("daemon: %v", err)
+	}
+	cancel()
 	var wg sync.WaitGroup
 	wg.Go(func() { c.Watch.Run(ctx) })
 	wg.Go(func() { c.Sender.Run(ctx) })
 	wg.Go(func() { c.Upload.Run(ctx) })
 	wg.Go(func() { c.runMailbox(ctx) })
 	wg.Go(func() { c.runFollowups(ctx) })
+	wg.Go(func() { c.Awake.Run(ctx) })
+	wg.Go(func() { c.Will.Run(ctx) })
 	wg.Wait()
 }
 
@@ -257,8 +325,10 @@ func (c *Components) runMailbox(ctx context.Context) {
 		Answer:  c.Approvals.Answer,
 		// A device registers new tokens through the mailbox; the next push
 		// reads them from the store.
-		Register: c.Push.Devices().UpdateTokens,
-		Logf:     c.logf,
+		Register:   c.Push.Devices().UpdateTokens,
+		Logf:       c.logf,
+		Will:       c.Will,
+		StopMarker: c.stopMarker,
 	})
 	if err != nil {
 		c.logf("mailbox: %v", err)
@@ -370,6 +440,16 @@ func isDone(payload any) bool {
 		return p.Level == wire.LevelDone
 	case *wire.NotifyEvent:
 		return p != nil && p.Level == wire.LevelDone
+	}
+	return false
+}
+
+// approvalPending reports whether a request is still waiting for an answer.
+func (c *Components) approvalPending(requestID string) bool {
+	for _, a := range c.Approvals.Pending("") {
+		if a.RequestID == requestID {
+			return true
+		}
 	}
 	return false
 }

@@ -16,11 +16,17 @@ struct FixtureTests {
         try checkFixtures(files)
     }
 
-    /// Exchanges for methods no helper serves yet still round-trip through the app's types.
+    /// Pending exchanges the app already handles (methods no helper serves
+    /// yet) still round-trip through the app's types. The rest of pending/
+    /// is helper-side work the app does not model yet; its harness runs it.
+    static let appPendingFixtures: Set<String> = ["approval.list-subject.json", "push.pair-watch.json"]
+
     @Test func pendingFixturesValidate() throws {
         let pending = Self.fixturesDirectory.appending(path: "pending", directoryHint: .isDirectory)
         guard FileManager.default.fileExists(atPath: pending.path) else { return }
-        try checkFixtures(Self.fixtures(in: pending))
+        let files = try Self.fixtures(in: pending).filter { Self.appPendingFixtures.contains($0.lastPathComponent) }
+        #expect(files.count == Self.appPendingFixtures.count)
+        try checkFixtures(files)
     }
 
     private static func fixtures(in directory: URL) throws -> [URL] {

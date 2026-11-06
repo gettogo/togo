@@ -350,3 +350,20 @@ func TestFallbackBodyIsCleaned(t *testing.T) {
 		t.Fatalf("body = %q, want %q", m.Plaintext.Body, want)
 	}
 }
+
+func TestMutedSendsOnlyClear(t *testing.T) {
+	e := newEnv(t, 1)
+	e.sender.Muted = func() bool { return true }
+	e.handle(approvalOpen("r_abcdefghij"))
+	e.handle(notifyEv("s_abcdefghij", wire.LevelNeedsYou))
+	e.handle(notifyEv("s_abcdefghij", wire.LevelDone))
+	if n := len(e.relay.received()); n != 0 {
+		t.Fatalf("relay got %d pushes from a muted machine", n)
+	}
+	e.handle(wire.Event{Kind: wire.EventApprovalClosed, SessionID: sid("s_abcdefghij"),
+		Payload: wire.ApprovalClosedEvent{RequestID: "r_abcdefghij", Resolution: wire.ResolutionDesk}})
+	got := e.relay.received()
+	if len(got) != 1 || e.open(t, got[0].Ciphertext, "dev_a").Kind != wire.PushClear {
+		t.Fatalf("relay got %+v, want one clear", got)
+	}
+}

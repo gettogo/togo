@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/tmux/tmuxtest"
@@ -255,5 +256,50 @@ func TestLsMarksUnmanagedSessionsWithDash(t *testing.T) {
 	}
 	if row := strings.Fields(lines[1]); len(row) < 4 || row[0] != "-" || row[1] != "Shell" || row[2] != "mine" {
 		t.Errorf("row = %q, want bib -, agent Shell, name mine", lines[1])
+	}
+}
+
+func TestNewAgentSessionReportsExit(t *testing.T) {
+	useTestHost(t)
+	t.Setenv("HOME", t.TempDir())
+	bin := realPath(t, t.TempDir())
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nexit 3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	report := filepath.Join(bin, "report")
+	togo := filepath.Join(bin, "togo")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + report + ".tmp && mv " + report + ".tmp " + report + "\n"
+	if err := os.WriteFile(togo, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origBinary, origService := togoBinary, newService
+	togoBinary = func() (string, error) { return togo, nil }
+	newService = func(ctx context.Context) (*session.Service, error) {
+		svc, err := origService(ctx)
+		if svc != nil {
+			svc.Path = bin
+		}
+		return svc, err
+	}
+	t.Cleanup(func() { togoBinary, newService = origBinary, origService })
+	// The pane's login shell looks claude up on PATH; only the stand-in
+	// may be found there.
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+
+	if code, _, stderr := runCLI(t, nil, "new", "claude", "--dir", t.TempDir(), "--detach"); code != 0 {
+		t.Fatalf("new claude: code=%d stderr=%q", code, stderr)
+	}
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		b, err := os.ReadFile(report)
+		if err == nil {
+			if string(b) != "session-exit\n3\n" {
+				t.Fatalf("helper ran with %q, want session-exit 3", b)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("a desk-started session never reported its exit: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

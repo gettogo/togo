@@ -1,0 +1,37 @@
+{
+  "description": "A symlinked authorized_keys is refused and nothing is written. Harness deviation: <home>/.ssh/authorized_keys is a symlink to a file holding the line `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBERERERERERERERERERERERERERERERERERERERERER togo@test-iphone`.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "authkeys.remove",
+    "params": {
+      "publicKey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBERERERERERERERERERERERERERERERERERERERERER"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": {
+      "code": -32006,
+      "message": "conflict",
+      "data": {
+        "reason": "symlink"
+      }
+    }
+  }
+}

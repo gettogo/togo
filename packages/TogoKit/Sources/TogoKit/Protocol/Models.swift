@@ -113,6 +113,10 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
     public var managed: Bool
     public var muted: Bool = false
     public var meta: SessionMeta = .init()
+    /// launch.v1 and lifecycle.v1 fields, kept as sent: nil when the helper
+    /// omits the key, .null when it sends null.
+    public var command: JSONValue? = nil
+    public var exit: JSONValue? = nil
 
     public init(
         id: String, bib: String?, name: String, agent: String, cwd: String, createdAt: Date,
@@ -135,6 +139,7 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, bib, name, agent, cwd, createdAt, status, activity, attachedClients, managed, muted, meta
+        case command, exit
     }
 
     public init(from decoder: any Decoder) throws {
@@ -152,6 +157,8 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         // Helpers without mute.v1 and events.v1 omit both keys.
         muted = try container.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         meta = try container.decodeIfPresent(SessionMeta.self, forKey: .meta) ?? .init()
+        command = container.contains(.command) ? try container.decode(JSONValue.self, forKey: .command) : nil
+        exit = container.contains(.exit) ? try container.decode(JSONValue.self, forKey: .exit) : nil
     }
 
     // bib and activity are required keys in the schema, so nil encodes as null, not as a missing key.
@@ -169,6 +176,8 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         try container.encode(managed, forKey: .managed)
         try container.encode(muted, forKey: .muted)
         try container.encode(meta, forKey: .meta)
+        try container.encodeIfPresent(command, forKey: .command)
+        try container.encodeIfPresent(exit, forKey: .exit)
     }
 }
 

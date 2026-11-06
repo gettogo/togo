@@ -15,6 +15,7 @@ const (
 	CodeUnsupportedVersion = -32005
 	CodeConflict           = -32006
 	CodeNotManaged         = -32007
+	CodeRefused            = -32008
 )
 
 // Error is a JSON-RPC error object.
@@ -38,6 +39,7 @@ var messages = map[int]string{
 	CodeUnsupportedVersion: "unsupported_version",
 	CodeConflict:           "conflict",
 	CodeNotManaged:         "not_managed",
+	CodeRefused:            "refused",
 }
 
 // NewError returns an Error with the protocol's canonical message for code.
