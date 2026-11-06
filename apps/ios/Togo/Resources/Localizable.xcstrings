@@ -1247,6 +1247,50 @@
         }
       }
     },
+    "dictation.engine" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Engine"
+          }
+        }
+      }
+    },
+    "dictation.engine.apple" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple"
+          }
+        }
+      }
+    },
+    "dictation.engine.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple’s speech is built into iOS. Whisper is a model you download once."
+          }
+        }
+      }
+    },
+    "dictation.engine.whisper" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whisper"
+          }
+        }
+      }
+    },
     "dictation.hint" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1474,6 +1518,160 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dictation isn’t available for this language."
+          }
+        }
+      }
+    },
+    "dictation.whisper.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel Download"
+          }
+        }
+      }
+    },
+    "dictation.whisper.credit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whisper is by OpenAI, converted for this device by Argmax. Both are MIT licensed."
+          }
+        }
+      }
+    },
+    "dictation.whisper.damaged" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Whisper model is damaged, so dictation uses Apple speech. Download it again in Settings, Dictation."
+          }
+        }
+      }
+    },
+    "dictation.whisper.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Model"
+          }
+        }
+      }
+    },
+    "dictation.whisper.deleteFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t delete the Whisper model. Try again."
+          }
+        }
+      }
+    },
+    "dictation.whisper.download" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download %1$@, %2$@"
+          }
+        }
+      }
+    },
+    "dictation.whisper.downloaded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded"
+          }
+        }
+      }
+    },
+    "dictation.whisper.downloading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading %@"
+          }
+        }
+      }
+    },
+    "dictation.whisper.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The download didn’t finish. Dictation keeps using Apple speech."
+          }
+        }
+      }
+    },
+    "dictation.whisper.failedToHear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whisper couldn’t turn that into text."
+          }
+        }
+      }
+    },
+    "dictation.whisper.failedToLoad" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whisper couldn’t start. Try again in a moment."
+          }
+        }
+      }
+    },
+    "dictation.whisper.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded once from Hugging Face, then runs on this device."
+          }
+        }
+      }
+    },
+    "dictation.whisper.installedFooter" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded once from Hugging Face, then runs on this device. Delete the model to free %@ and go back to Apple speech."
+          }
+        }
+      }
+    },
+    "dictation.whisper.missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download the Whisper model in Settings, Dictation."
           }
         }
       }

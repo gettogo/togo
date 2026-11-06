@@ -59,9 +59,65 @@ struct LaunchTests {
         #expect(settled.beaconOpacity == 1)
     }
 
-    @Test func touchesPassThroughAfterHalfASecond() {
-        #expect(LaunchFrame(time: .milliseconds(499), reduceMotion: false).blocksTouches)
-        #expect(!LaunchFrame(time: .milliseconds(500), reduceMotion: false).blocksTouches)
+    /// A touch on the overlay, at any moment of it, lands on the screen underneath: the
+    /// outermost modifier of every frame turns hit testing off. (A hosting view's own hit test
+    /// answers itself whatever its content, so the view's modifiers are read instead.)
+    @Test func overlayNeverBlocksTouches() {
+        func hitTestingOff(_ value: Any) -> Bool {
+            let mirror = Mirror(reflecting: value)
+            if String(describing: mirror.subjectType).hasPrefix("_AllowsHitTestingModifier") {
+                return mirror.children.contains { $0.label == "allowsHitTesting" && ($0.value as? Bool) == false }
+            }
+            return mirror.children.contains { hitTestingOff($0.value) }
+        }
+        func outermost(_ body: Any) -> Any? {
+            Mirror(reflecting: body).children.first { $0.label == "modifier" }?.value
+        }
+        for milliseconds in [0, 300, 600, 850, 1_000] {
+            for reduceMotion in [false, true] {
+                let body = LaunchOverlayFrame(frame: LaunchFrame(time: .milliseconds(milliseconds), reduceMotion: reduceMotion)).body
+                #expect(outermost(body).map(hitTestingOff) == true, "the overlay takes touches at \(milliseconds) ms")
+            }
+        }
+    }
+
+    @Test func interactiveSignpostFiresOnce() {
+        var signposts = 0
+        var launches = 0
+        var deferred: [String] = []
+        var turns: [@MainActor () -> Void] = []
+        let perf = PerfSignposts(
+            emit: { signposts += 1 }, recordLaunch: { launches += 1 }, nextTurn: { turns.append($0) }
+        )
+        perf.afterInteractive { deferred.append("tips") }
+        perf.afterInteractive { deferred.append("push") }
+        #expect(!perf.isInteractive)
+        #expect(deferred.isEmpty, "work waiting for the first screen runs only once it is up")
+
+        perf.interactive()
+        perf.interactive()
+        perf.interactive()
+        #expect(perf.isInteractive)
+        #expect(signposts == 1)
+        #expect(launches == 1, "the launch time is recorded once, when the first screen is up")
+        #expect(deferred.isEmpty, "nothing deferred runs in the turn that draws the first screen")
+
+        // One item per run-loop turn, so the frames between them still draw.
+        perf.afterInteractive { deferred.append("late") }
+        var ran = 0
+        while !turns.isEmpty {
+            turns.removeFirst()()
+            ran += 1
+            #expect(deferred.count == ran, "each turn runs exactly one item")
+        }
+        #expect(deferred == ["tips", "push", "late"])
+
+        // Once the queue is drained, work asked for runs at once, and nothing runs twice.
+        perf.afterInteractive { deferred.append("after") }
+        perf.interactive()
+        #expect(deferred == ["tips", "push", "late", "after"])
+        #expect(turns.isEmpty)
+        #expect(signposts == 1)
     }
 
     @Test func overlayIsOpaqueUntilTheFadeAndGoneAtTheEnd() {

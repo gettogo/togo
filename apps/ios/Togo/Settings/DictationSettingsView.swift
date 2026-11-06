@@ -66,6 +66,7 @@ struct DictationSettingsView: View {
     @FocusedValue(\.appStore) private var store
     @Environment(\.openURL) private var openURL
     @State private var model: DictationSettingsModel
+    @State private var engine: WhisperSettingsModel
     let settings: AppSettings
     let update: (AppSettings) -> Void
     private let insertOverride: ((String) -> Void)?
@@ -73,11 +74,13 @@ struct DictationSettingsView: View {
     /// `insert` stands in for the window's store, for previews and snapshots.
     init(
         settings: AppSettings, update: @escaping (AppSettings) -> Void,
-        model: DictationSettingsModel = DictationSettingsModel(), insert: ((String) -> Void)? = nil
+        model: DictationSettingsModel = DictationSettingsModel(), engine: WhisperSettingsModel = WhisperSettingsModel(),
+        insert: ((String) -> Void)? = nil
     ) {
         self.settings = settings
         self.update = update
         _model = State(initialValue: model)
+        _engine = State(initialValue: engine)
         insertOverride = insert
     }
 
@@ -87,6 +90,7 @@ struct DictationSettingsView: View {
 
     var body: some View {
         List {
+            DictationEngineSection(model: engine, update: update)
             Section {
                 languagePicker
             } footer: {
@@ -111,7 +115,15 @@ struct DictationSettingsView: View {
         .groupedList()
         .navigationTitle(DictationCopy.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: settings.dictationLocale) { await model.load(locale) }
+        .onChange(of: settings, initial: true) {
+            engine.settings = settings
+            SpeechEngines.select(settings)
+        }
+        .task(id: [settings.dictationLocale, settings.dictationEngine.rawValue, settings.whisperModel]) {
+            // Selected here too, so the languages and model shown are the chosen engine's.
+            SpeechEngines.select(settings)
+            await model.load(locale)
+        }
     }
 
     // MARK: Language

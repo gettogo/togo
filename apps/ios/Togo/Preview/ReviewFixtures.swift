@@ -143,6 +143,28 @@ enum ReviewFixtures {
         return lines.joined(separator: "\n") + "\n"
     }()
 
+    /// `bigDiff`'s shape with minified lines 2,000 columns wide, as a bundled build changes.
+    static let wideDiff: String = {
+        var lines = [
+            "diff --git a/\(bigDiffPath) b/\(bigDiffPath)", "index 1111111..2222222 100644",
+            "--- a/\(bigDiffPath)", "+++ b/\(bigDiffPath)", "@@ -1,500 +1,500 @@",
+        ]
+        func row(_ n: Int, _ value: Int) -> String {
+            var line = ""
+            var cell = 0
+            while line.utf8.count < 2_000 {
+                line += "\"r\(n)c\(cell)\":{\"v\":\(value + cell),\"t\":\"item\"},"
+                cell += 1
+            }
+            return String(line.prefix(2_000))
+        }
+        for n in 0..<500 {
+            lines.append("-" + row(n, n))
+            lines.append("+" + row(n, n + 1))
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }()
+
     static let log = makeLog(60)
 
     /// `count` commits, newest first, each with its own 40-digit hash.

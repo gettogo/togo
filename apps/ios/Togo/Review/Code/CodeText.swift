@@ -96,21 +96,29 @@ struct CodeText: Sendable {
         return total
     }
 
-    static func lineCount(_ text: CodeText, limit: CGFloat, advance: CGFloat, measure: CodeMeasure?) -> Int {
+    /// `indent` columns start every line after the first; `CodeLinesLayout.continuationIndent`
+    /// keeps it to at most half the columns, so continuation lines always have room.
+    static func lineCount(_ text: CodeText, limit: CGFloat, advance: CGFloat, measure: CodeMeasure?, indent: Int = 0) -> Int {
         if text.plain, !text.words {
             let each = perLine(limit: limit, advance: advance)
-            return max(1, (text.length + each - 1) / each)
+            guard text.length > each else { return 1 }
+            let rest = max(1, each - indent)
+            return 1 + (text.length - each + rest - 1) / rest
         }
-        return breaks(text, limit: limit, advance: advance, measure: measure).count
+        return breaks(text, limit: limit, advance: advance, measure: measure, indent: indent).count
     }
 
     /// UTF-16 offsets where each visual line starts. A line holds as many characters as fit in
-    /// `limit` points; a single character wider than that gets a line of its own.
-    static func breaks(_ text: CodeText, limit: CGFloat, advance: CGFloat, measure: CodeMeasure?) -> [Int] {
+    /// `limit` points, less `indent` advances after the first line; a single character wider
+    /// than that gets a line of its own.
+    static func breaks(_ text: CodeText, limit: CGFloat, advance: CGFloat, measure: CodeMeasure?, indent: Int = 0) -> [Int] {
         if text.plain, !text.words {
             let each = perLine(limit: limit, advance: advance)
-            return Array(stride(from: 0, to: max(text.length, 1), by: each))
+            guard text.length > each else { return [0] }
+            let rest = max(1, each - indent)
+            return [0] + Array(stride(from: each, to: text.length, by: rest))
         }
+        let continuation = limit - CGFloat(indent) * advance
         var starts = [0]
         var x: CGFloat = 0
         var offset = 0
@@ -119,8 +127,10 @@ struct CodeText: Sendable {
         var space: (offset: Int, x: CGFloat)?
         for character in text.string {
             let width = width(of: character, column: &column, advance: advance, measure: measure)
-            if x > 0, x + width > limit + 0.01 {
-                if let found = space, found.offset > starts[starts.count - 1], x - found.x + width <= limit + 0.01 {
+            let room = starts.count == 1 ? limit : continuation
+            if x > 0, x + width > room + 0.01 {
+                let next = continuation
+                if let found = space, found.offset > starts[starts.count - 1], x - found.x + width <= next + 0.01 {
                     starts.append(found.offset)
                     x -= found.x
                 } else {

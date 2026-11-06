@@ -50,8 +50,15 @@ import WatchConnectivity
         let session = WCSession.default
         let bridge = WatchBridge(link: SystemWatchLink(session: session))
         session.delegate = bridge
-        session.activate()
         return bridge
+    }
+
+    /// Activates the session `live()` made. Waits for the first screen, so a launch does not
+    /// pay for the Watch.
+    /// `WCSession` may be activated from any thread; its delegate calls hop to the main actor.
+    nonisolated static func activate() {
+        guard WCSession.isSupported() else { return }
+        WCSession.default.activate()
     }
 
     /// What the phone knows now: every session, and which requests it knows are closed. Only

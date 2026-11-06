@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import TogoKit
+import TogoTerminal
 @testable import Togo
 
 @MainActor struct DiagnosticsHookTests {
@@ -137,6 +138,52 @@ extension DiagnosticsHookTests {
         #expect(await recorder.log.events().count == 2)
     }
 
+    @Test func burstFrameStatsAreNumbersOnly() async {
+        let recorder = DiagnosticsRecorder(directory: FileManager.default.temporaryDirectory.appendingPathComponent("hooks-\(UUID().uuidString)"))
+        var pacing = FrameStats()
+        for frame in 0..<120 { pacing.record(timestamp: Double(frame) / 120, targetTimestamp: Double(frame + 1) / 120) }
+        recorder.frames(
+            TerminalBinding.Burst(frames: 240, bytes: 4 << 20, p95Work: .microseconds(3_456), maxWork: .microseconds(5_001)),
+            pacing: pacing
+        )
+        await recorder.settle()
+        let event = await recorder.log.events().first { $0.name == "frames" }
+        #expect(event?.category == .perf)
+        #expect(event?.fields["frames"] == .int(240))
+        #expect(event?.fields["bytes"] == .int(4 << 20))
+        #expect(event?.fields["work_p95_ms"] == .double(3.46))
+        #expect(event?.fields["work_max_ms"] == .double(5))
+        #expect(event?.fields["dropped"] == .double(0))
+        let words = event?.fields.values.contains { if case .int = $0 { false } else if case .double = $0 { false } else { true } }
+        #expect(words == false, "frame stats carry only numbers")
+    }
+
+    /// iOS can start the process before the tap to warm it up; that launch time counts the wait
+    /// for the tap, so it is left out rather than reported as a slow launch.
+    @Test func prewarmedLaunchIsNotRecorded() async {
+        let recorder = DiagnosticsRecorder(directory: FileManager.default.temporaryDirectory.appendingPathComponent("hooks-\(UUID().uuidString)"))
+        recorder.recordLaunch(environment: ["ActivePrewarm": "1"])
+        await recorder.settle()
+        #expect(await recorder.log.events().allSatisfy { $0.name != "launch" })
+        recorder.recordLaunch(environment: [:])
+        await recorder.settle()
+        #expect(await recorder.log.events().contains { $0.name == "launch" })
+    }
+
+    @Test func launchIsRecordedOnlyWhenAsked() async {
+        let recorder = DiagnosticsRecorder(directory: FileManager.default.temporaryDirectory.appendingPathComponent("hooks-\(UUID().uuidString)"))
+        await recorder.settle()
+        #expect(await recorder.log.events().isEmpty, "making the recorder records nothing; the first screen records the launch")
+        recorder.recordLaunch()
+        await recorder.settle()
+        let launch = await recorder.log.events().first { $0.name == "launch" }
+        guard case .int(let ms)? = launch?.fields["ms"] else {
+            Issue.record("no launch time")
+            return
+        }
+        #expect(ms > 0)
+    }
+
     @Test func clearForgetsMachines() async {
         let recorder = DiagnosticsRecorder(directory: FileManager.default.temporaryDirectory.appendingPathComponent("hooks-\(UUID().uuidString)"))
         let id = Samples.studio
@@ -148,5 +195,52 @@ extension DiagnosticsHookTests {
         await recorder.clear()
         let report = await recorder.report(settings: AppSettings())
         #expect(report.machines.isEmpty && report.events.isEmpty)
+    }
+}
+
+extension DiagnosticsHookTests {
+    private func linkRecorder() -> DiagnosticsRecorder {
+        DiagnosticsRecorder(directory: FileManager.default.temporaryDirectory.appendingPathComponent("hooks-\(UUID().uuidString)"))
+    }
+
+    private func phases(_ recorder: DiagnosticsRecorder) async -> [DiagnosticEvent] {
+        await recorder.settle()
+        return await recorder.log.events().filter { $0.category == .link }
+    }
+
+    @Test func reconnectPhasesRecorded() async {
+        let recorder = linkRecorder()
+        let observe = recorder.linkStates(host: Samples.studio, preference: .auto)
+        observe(.live(.mosh, notes: []))
+        observe(.roaming)
+        observe(.reconnecting(attempt: 1))
+        observe(.reconnecting(attempt: 2))
+        let events = await phases(recorder)
+        #expect(events.map(\.fields["phase"]) == [.word("roaming"), .word("reconnecting"), .word("reconnecting")])
+        #expect(events.map(\.fields["attempt"]) == [nil, .int(1), .int(2)])
+        #expect(events.allSatisfy { $0.fields["transport"] == .word(TransportKind.mosh.rawValue) && $0.fields["machine"] != nil })
+    }
+
+    @Test func endedRecordedOnce() async {
+        let recorder = linkRecorder()
+        let observe = recorder.linkStates(host: Samples.studio, preference: .ssh)
+        observe(.reconnecting(attempt: 1))
+        observe(.ended)
+        observe(.ended)
+        let events = await phases(recorder)
+        #expect(events.filter { $0.fields["phase"] == .word("ended") }.count == 1)
+    }
+
+    @Test func noFreeTextFromLinkErrors() async {
+        let recorder = linkRecorder()
+        let observe = recorder.linkStates(host: Samples.studio, preference: .auto)
+        observe(.waking("mac-mini.tail1234.ts.net"))
+        observe(.failed("jamie@mini refused 100.101.5.7 /Users/jamie/Dev"))
+        observe(.reconnecting(attempt: 3))
+        observe(.ended)
+        let events = await phases(recorder)
+        let dump = String(decoding: (try? JSONEncoder().encode(events)) ?? Data(), as: UTF8.self)
+        for secret in ["mac-mini", "jamie", "100.101.5.7", "/Users"] { #expect(!dump.contains(secret)) }
+        #expect(!events.contains { $0.fields["phase"] == .word("failed") || $0.fields["phase"] == .word("waking") })
     }
 }

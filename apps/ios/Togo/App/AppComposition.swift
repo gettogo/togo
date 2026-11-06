@@ -56,7 +56,7 @@ import TogoMosh
         let helpers = HelperChannels(env: env)
         // Each store listens to its own backend: a backend's change stream has one consumer.
         func backend() -> any KeyValueBackend { isolated ? MemoryBackend() : DefaultsBackend() }
-        func remote() -> (any KeyValueBackend)? { isolated ? nil : UbiquitousBackend() }
+        func remote() -> (any KeyValueBackend)? { isolated ? nil : FirstUseBackend { UbiquitousBackend() } }
         let syncSwitch = SyncSwitch(backend: isolated ? MemoryBackend() : DefaultsBackend(namespace: "device."))
         let hostRecords = SyncedRecordStore<HostRecord>(
             prefix: "host.", local: backend(), remote: remote(), deviceID: deviceID, clock: { Date() },
@@ -138,6 +138,7 @@ import TogoMosh
             self?.terminals.restartTabs(on: id)
         }
         push?.connect(services: services) { [weak self] in self?.activeStore }
+        services.showLocalHosts()
     }
 
     /// Fake services with nothing behind them, for tests and the UI tests' launch.
@@ -214,20 +215,29 @@ import TogoMosh
         }
     }
 
-    /// Called by each window as it appears; only the first call starts anything.
+    /// Called by each window as it appears; only the first call starts anything. Machines
+    /// already listed from this device connect once the first screen is up; with none listed
+    /// the stores load now, since the first screen waits for them.
     func start() {
         guard !started else { return }
         started = true
-        if let live { Task { await live.start() } }
+        if let live {
+            if live.hostsLoaded {
+                PerfSignposts.app.afterInteractive { Task { await live.start() } }
+            } else {
+                Task { await live.start() }
+            }
+        }
         #if DEBUG
         uiTestMachines?.start()
         #endif
+        // Each step on its own run-loop turn, so the first screen keeps drawing between them.
+        guard let push else { return }
+        PerfSignposts.app.afterInteractive { push.start() }
         // Never asks: permission comes up when a machine first can send pushes, or from Settings.
-        if let registrar = push?.registrar {
-            Task { await registrar.refresh() }
-        }
+        PerfSignposts.app.afterInteractive { [registrar = push.registrar] in Task { await registrar.refresh() } }
         #if DEBUG
-        if let push { PushE2E.start(push) }
+        PerfSignposts.app.afterInteractive { PushE2E.start(push) }
         #endif
     }
 

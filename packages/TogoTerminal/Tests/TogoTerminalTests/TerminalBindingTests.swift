@@ -119,15 +119,41 @@ import Testing
         binding.stop()
     }
 
-    @Test func feedPerFrameAtMostBudget() async {
-        let engine = FakeEngine(), ticker = ManualTicker()
-        let source = PatternSource(total: 1 << 20, chunk: 1 << 20)
-        let binding = Self.binding(engine, ticker, read: { source.next() })
+    /// Parsing costs 100 ns a byte on a clock the engine advances, so the binding's timing is exact.
+    final class TimedEngine: TerminalEngine {
+        var onInput: (Data) -> Void = { _ in }
+        var onResize: ((cols: Int, rows: Int)) -> Void = { _ in }
+        var size: (cols: Int, rows: Int) = (80, 24)
+        var elapsed = Duration.zero
+        var received = 0
+        func feed(_ bytes: ArraySlice<UInt8>) {
+            elapsed += .nanoseconds(100 * bytes.count)
+            received += bytes.count
+        }
+        func send(_ key: KeyStroke) {}
+        func paste(_ text: String) {}
+    }
+
+    @Test func feedStopsAtFrameBudget() async {
+        let engine = TimedEngine(), ticker = ManualTicker()
+        let source = PatternSource(total: 1 << 18, chunk: 1 << 18)
+        let binding = TerminalBinding(
+            engine: engine, ticker: ticker, read: { source.next() }, send: { _ in }, resize: { _, _ in },
+            now: { engine.elapsed }
+        )
         binding.start()
-        #expect(await eventually { binding.pendingBytes == 1 << 20 })
-        ticker.tick()
-        #expect(engine.feeds == [256 * 1024])
-        #expect(binding.pendingBytes == 768 * 1024)
+        #expect(await eventually { binding.pendingBytes == 1 << 18 })
+        for _ in 0..<3 {
+            let before = engine.elapsed
+            ticker.tick()
+            let spent = engine.elapsed - before
+            #expect(spent <= binding.frameBudget, "a frame parsed for \(spent)")
+            #expect(spent >= binding.frameBudget * 3 / 4, "a frame left most of its budget unused: \(spent)")
+        }
+        // What did not fit waits for the next frames, in order.
+        #expect(binding.pendingBytes == (1 << 18) - engine.received)
+        #expect(binding.pendingBytes > 0)
+        #expect(ticker.running)
         binding.stop()
     }
 
@@ -155,7 +181,7 @@ import Testing
         binding.stop()
         #expect(engine.received == total)
         #expect(!engine.outOfOrder)
-        #expect(peakPending <= 2 * 256 * 1024 + chunk)
+        #expect(peakPending <= TerminalBinding.maxPending + chunk)
         Attachment.record("worst main-actor ping: \(worstPing)", named: "flood-ping.txt")
         // Unoptimised Debug code parses several times slower; the 50 ms target is for Release.
         #if DEBUG
@@ -214,5 +240,71 @@ enum MainActorHeavyWork {
         await body()
         busy = false
         if !waiters.isEmpty { waiters.removeFirst().resume() }
+    }
+}
+
+/// Frame pacing counts only frames drawn while output was moving.
+@MainActor struct FramePacingTests {
+    private func run(_ ticker: DisplayLinkTicker, from start: CFTimeInterval, frames: Int) {
+        let step = 1.0 / 120
+        for frame in 0..<frames {
+            let at = start + Double(frame) * step
+            ticker.tick(timestamp: at, targetTimestamp: at + step)
+        }
+    }
+
+    @Test func idleGapBetweenBurstsIsNotADroppedFrame() {
+        let ticker = DisplayLinkTicker()
+        ticker.recordsFrameStats = true
+        ticker.start()
+        run(ticker, from: 100, frames: 10)
+        ticker.stop()
+        // The terminal sat idle for five seconds, then output came again.
+        ticker.start()
+        run(ticker, from: 105, frames: 40)
+        ticker.stop()
+        #expect(ticker.frameStats.droppedFraction == 0, "the idle gap was counted as a dropped frame")
+        #expect(abs(ticker.frameStats.p95Interval - 1.0 / 120) < 1e-6)
+        #expect(ticker.frameStats.count == 39, "only the frames of this burst are in its pacing")
+    }
+}
+
+extension TerminalBindingTests {
+    /// Costs `cost` per byte; the test makes output dearer between frames.
+    final class VariableEngine: TerminalEngine {
+        var onInput: (Data) -> Void = { _ in }
+        var onResize: ((cols: Int, rows: Int)) -> Void = { _ in }
+        var size: (cols: Int, rows: Int) = (80, 24)
+        var elapsed = Duration.zero
+        var cost = Duration.nanoseconds(1)
+        var received = 0
+        func feed(_ bytes: ArraySlice<UInt8>) {
+            elapsed += cost * bytes.count
+            received += bytes.count
+        }
+        func send(_ key: KeyStroke) {}
+        func paste(_ text: String) {}
+    }
+
+    /// Output that turns from plain text to dense colour must not blow a frame by the size of
+    /// the piece learned on the plain text.
+    @Test func denserOutputOverrunsAFrameByAtMostOneProbe() async {
+        let engine = VariableEngine(), ticker = ManualTicker()
+        let source = PatternSource(total: 1 << 22, chunk: 1 << 18)
+        let binding = TerminalBinding(
+            engine: engine, ticker: ticker, read: { source.next() }, send: { _ in }, resize: { _, _ in },
+            now: { engine.elapsed }
+        )
+        binding.start()
+        #expect(await eventually { binding.pendingBytes >= 1 << 18 })
+        ticker.tick()
+        engine.cost = .nanoseconds(100)
+        #expect(await eventually { binding.pendingBytes >= 1 << 18 })
+        let before = engine.elapsed
+        ticker.tick()
+        let spent = engine.elapsed - before
+        let probe = Duration.nanoseconds(100) * TerminalBinding.firstChunk
+        #expect(spent <= binding.frameBudget + probe, "a frame parsed for \(spent)")
+        binding.stop()
     }
 }

@@ -1,6 +1,7 @@
 import Foundation
 import Synchronization
 import TogoKit
+import TogoTerminal
 import UIKit
 
 /// Keeps the diagnostics log fed from what the app already knows: machine reachability, link
@@ -8,11 +9,7 @@ import UIKit
 /// as tokens and errors as code words. Nothing leaves the device unless the person shares it.
 final class DiagnosticsRecorder: Sendable {
     /// The log in Application Support. Tests get a folder of their own.
-    static let shared: DiagnosticsRecorder = {
-        let recorder = DiagnosticsRecorder(directory: standardDirectory)
-        recorder.recordLaunch()
-        return recorder
-    }()
+    static let shared = DiagnosticsRecorder(directory: standardDirectory)
 
     private static var standardDirectory: URL {
         let environment = ProcessInfo.processInfo.environment
@@ -39,6 +36,7 @@ final class DiagnosticsRecorder: Sendable {
         var seen: [UUID: Seen] = [:]
         var machines: [UUID: MachineFacts] = [:]
         var lastPush: String?
+        var lastError: [UUID: String] = [:]
     }
 
     let log: DiagnosticsLog
@@ -77,10 +75,26 @@ final class DiagnosticsRecorder: Sendable {
         await withCheckedContinuation { jobs.yield(.settle($0)) }
     }
 
-    /// Time from the process starting to the services being ready.
-    func recordLaunch() {
-        guard let started = Self.processStart else { return }
+    /// Time from the process starting to the first screen answering touches. Called once, by
+    /// `PerfSignposts.interactive()`. A process iOS started ahead of the tap to warm it up
+    /// waited for the person, not for the app, so its time is not recorded.
+    func recordLaunch(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        guard environment["ActivePrewarm"] != "1", let started = Self.processStart else { return }
         record(.perf, "launch", ["ms": .int(Int(now().timeIntervalSince(started) * 1000))])
+    }
+
+    /// A burst of terminal output drained: frames it took, parse time per frame and how evenly
+    /// the display link ticked meanwhile.
+    func frames(_ burst: TerminalBinding.Burst, pacing: FrameStats) {
+        func milliseconds(_ duration: Duration) -> Double {
+            (Double(duration.components.seconds) * 1_000 + Double(duration.components.attoseconds) / 1e15).roundedTo(2)
+        }
+        record(.perf, "frames", [
+            "frames": .int(burst.frames), "bytes": .int(burst.bytes),
+            "work_p95_ms": .double(milliseconds(burst.p95Work)), "work_max_ms": .double(milliseconds(burst.maxWork)),
+            "interval_p95_ms": .double((pacing.p95Interval * 1_000).roundedTo(2)),
+            "dropped": .double(pacing.droppedFraction.roundedTo(3)),
+        ])
     }
 
     /// Push outcomes are recorded when they change, not on every foreground.
@@ -157,12 +171,59 @@ final class DiagnosticsRecorder: Sendable {
                     phase("waking", [:])
                     onWaking(host)
                 }
+                state.withLock { _ = $0.lastError.removeValue(forKey: host) }
                 phase("live", ["transport": .word(attachment.kind.rawValue), "fallbacks": .int(attachment.notes.count)])
                 return attachment
             } catch {
-                phase(error is CancellationError ? "cancelled" : "failed", ["error": .word(Self.code(for: error))])
+                let code = Self.code(for: error)
+                state.withLock { $0.lastError[host] = code }
+                phase(error is CancellationError ? "cancelled" : "failed", ["error": .word(code)])
                 throw error
             }
+        }
+    }
+
+    /// Watches a terminal's link states for what happens after the first connect: roaming,
+    /// reconnecting with its attempt number, and the end of the session (once). The first
+    /// connect's phases come from `observing`; free-text reasons in the states are ignored.
+    func linkStates(host: UUID, preference: TransportPreference) -> @Sendable (LinkState) -> Void {
+        struct Seen { var transport = ""; var roaming = false; var ended = false }
+        let token = log.token(for: host)
+        let seen = Mutex(Seen(transport: preference.rawValue))
+        return { [self] linkState in
+            var fields: [String: DiagnosticValue] = ["machine": .machine(token)]
+            let phase: String
+            let transport: String
+            switch linkState {
+            case .live(let kind, _):
+                seen.withLock { $0.transport = kind.rawValue; $0.roaming = false }
+                return
+            case .roaming:
+                let repeated = seen.withLock { seen -> Bool in
+                    defer { seen.roaming = true }
+                    return seen.roaming
+                }
+                guard !repeated else { return }
+                phase = "roaming"
+            case .reconnecting(let attempt):
+                seen.withLock { $0.roaming = false }
+                phase = "reconnecting"
+                fields["attempt"] = .int(attempt)
+            case .ended:
+                let first = seen.withLock { seen -> Bool in
+                    defer { seen.ended = true }
+                    return !seen.ended
+                }
+                guard first else { return }
+                phase = "ended"
+            case .waking, .connecting, .failed:
+                return
+            }
+            transport = seen.withLock { $0.transport }
+            fields["phase"] = .word(phase)
+            fields["transport"] = .word(transport)
+            if phase != "ended", let code = state.withLock({ $0.lastError[host] }) { fields["error"] = .word(code) }
+            record(.link, "phase", fields)
         }
     }
 
@@ -261,5 +322,12 @@ extension PushRegistrar.Authorization {
         case .provisional: "provisional"
         case .authorized: "authorized"
         }
+    }
+}
+
+private extension Double {
+    func roundedTo(_ places: Int) -> Double {
+        let scale = pow(10, Double(places))
+        return (self * scale).rounded() / scale
     }
 }

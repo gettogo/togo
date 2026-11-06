@@ -1,5 +1,5 @@
 .PHONY: lint test build check-trailers relay-test \
-	ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-snapshots ios-snapshots-record \
+	ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-launch-perf ios-scroll-perf ios-snapshots ios-snapshots-record \
 	ios-release-check release-build release-test install-test tokens tokens-check togopush-test watch-test
 
 IOS_DIR := apps/ios
@@ -64,6 +64,31 @@ ios-ui-test: ios-gen
 	xcodebuild -project $(IOS_PROJECT) -scheme TogoUITests -derivedDataPath $(IOS_DERIVED) \
 		-skipPackagePluginValidation -skipMacroValidation -quiet \
 		-configuration Debug -destination '$(IOS_TEST_DEST)' test
+
+# Budgets the system measures: cold launch to responsive (Release, median of five under 1 s)
+# and a wide-diff fling (hitch ratio under 5 ms/s). On an overloaded Mac the tests skip and
+# say the budget is unverified; ENFORCE=1 makes a skip fail instead.
+PERF_RESULTS := $(IOS_DERIVED)/perf
+ios-launch-perf: ios-gen
+	rm -rf $(PERF_RESULTS)/launch.xcresult
+	TEST_RUNNER_TOGO_ENFORCE_FRAME_BUDGET=$(ENFORCE) \
+	xcodebuild -project $(IOS_PROJECT) -scheme TogoUITests -derivedDataPath $(IOS_DERIVED) \
+		-skipPackagePluginValidation -skipMacroValidation -quiet \
+		-configuration Release -destination '$(IOS_TEST_DEST)' -resultBundlePath $(PERF_RESULTS)/launch.xcresult \
+		-only-testing:TogoUITests/LaunchPerformanceUITests test
+	ENFORCE=$(ENFORCE) ./scripts/ios-perf-check.sh $(PERF_RESULTS)/launch.xcresult ApplicationFirstFramePresentationResponsive 1.0
+
+# The scripted machines only exist in Debug builds, so the fling is measured in Debug. The
+# simulator reports a scroll's duration but not its hitches, so the hitch budget is checked
+# on a device: IOS_TEST_DEST='platform=iOS,name=<device>'.
+ios-scroll-perf: ios-gen
+	rm -rf $(PERF_RESULTS)/scroll.xcresult
+	TEST_RUNNER_TOGO_ENFORCE_FRAME_BUDGET=$(ENFORCE) \
+	xcodebuild -project $(IOS_PROJECT) -scheme TogoUITests -derivedDataPath $(IOS_DERIVED) \
+		-skipPackagePluginValidation -skipMacroValidation -quiet \
+		-configuration Debug -destination '$(IOS_TEST_DEST)' -resultBundlePath $(PERF_RESULTS)/scroll.xcresult \
+		-only-testing:TogoUITests/ReviewUITests/testWideDiffFlingUnderHitchBudget test
+	ENFORCE=$(ENFORCE) ./scripts/ios-perf-check.sh $(PERF_RESULTS)/scroll.xcresult hitchTimeRatio 5
 
 # References only match renders from the iPhone 17 simulator at its default settings.
 ios-snapshots: ios-gen

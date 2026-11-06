@@ -20,6 +20,8 @@ import UIKit
     /// failed attach into signed out.
     init(
         connect: @escaping LinkConnect, settings: AppSettings, wasAsked: @escaping @Sendable () -> Bool = { false },
+        diagnostics: DiagnosticsRecorder? = nil,
+        onState: @escaping @Sendable (LinkState) -> Void = { _ in },
         onStop: @escaping @MainActor (ObjectIdentifier) -> Void
     ) {
         engine = SwiftTermEngine(settings: Self.terminalSettings(settings), theme: BuiltInThemes.all[0])
@@ -35,8 +37,10 @@ import UIKit
             cols: size.cols > 0 ? size.cols : 80, rows: size.rows > 0 ? size.rows : 24
         )
         self.link = link
+        let ticker = DisplayLinkTicker()
+        ticker.recordsFrameStats = diagnostics != nil
         binding = TerminalBinding(
-            engine: engine, ticker: DisplayLinkTicker(),
+            engine: engine, ticker: ticker,
             read: { await link.read() },
             send: { await link.send($0) },
             resize: { cols, rows in await link.resize(cols: cols, rows: rows) }
@@ -69,8 +73,15 @@ import UIKit
         gestures.onFontSize = { [weak handle] in handle?.onFontSize(Double($0)) }
         feed = Task {
             for await state in link.states {
+                onState(state)
                 sink.yield(Self.phase(state, asked: wasAsked()))
             }
+        }
+        // A long burst of output is summed up in numbers: how it paced, never what it said.
+        binding.onBurst = { [weak ticker] burst in
+            guard let ticker else { return }
+            diagnostics?.frames(burst, pacing: ticker.frameStats)
+            ticker.resetFrameStats()
         }
         binding.start()
         Task { await link.start() }

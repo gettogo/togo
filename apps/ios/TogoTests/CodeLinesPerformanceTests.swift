@@ -172,7 +172,58 @@ import XCTest
         let median = sorted[sorted.count / 2]
         let report = "hitch ratio \(ratio) ms/s, median \(median * 1_000) ms, slowest \((sorted.last ?? 0) * 1_000) ms"
         print("CodeLines fling: frames \(frames.count), \(report)")
-        // Sliding sideways redraws every visible row, so this guards the typical frame.
+        // New tiles come into view as the code slides, so this guards the typical frame.
         XCTAssertLessThan(median, Self.frameBudget, report)
+    }
+
+    /// A fast sideways fling over a diff of 2,000-column lines, decelerating the way a scroll
+    /// view does, there and back. Sliding only moves tiles drawn once, so frames stay in budget.
+    func testNoWrapHorizontalFlingUnderHitchBudget() throws {
+        let file = try XCTUnwrap(DiffParser.parse(GitDiff(diff: ReviewFixtures.wideDiff, truncated: false, binary: [])).first)
+        let lines = file.hunks.flatMap(\.lines)
+        let tokens = Tokenizer.tokenize(lines.map(\.text), language: .json)
+        var byLine: [DiffLine: [TokenSpan]] = [:]
+        for (line, spans) in zip(lines, tokens) { byLine[line] = spans }
+        let rows = CodeRow.unified(file) { byLine[$0] ?? [] }
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let view = CodeLinesUIView(frame: window.bounds)
+        let controller = UIViewController()
+        controller.view = view
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        view.update(rows: rows, wrap: false, showsOldNumbers: true, scrollTo: nil, onLongPress: nil)
+        window.layoutIfNeeded()
+        CATransaction.flush()
+
+        let collection = view.collectionView
+        let start = -collection.adjustedContentInset.left
+        let end = collection.contentSize.width - collection.bounds.width + collection.adjustedContentInset.right
+        XCTAssertGreaterThan(end, 10_000)
+        var frames: [Double] = []
+        // `UIScrollView.DecelerationRate.normal` keeps 0.998 of the speed each millisecond.
+        let decay = pow(0.998, Self.frameBudget * 1_000)
+        for direction in [1.0, -1.0] {
+            var velocity = 14_000.0 * direction
+            var x = Double(collection.contentOffset.x)
+            while abs(velocity) > 30 {
+                x = min(max(x + velocity * Self.frameBudget, Double(start)), Double(end))
+                velocity *= decay
+                let begin = CACurrentMediaTime()
+                collection.contentOffset.x = CGFloat(x)
+                collection.layoutIfNeeded()
+                CATransaction.flush()
+                frames.append(CACurrentMediaTime() - begin)
+                if x == Double(start) || x == Double(end) { break }
+            }
+        }
+        let hitch = frames.reduce(0) { $0 + max(0, $1 - Self.frameBudget) }
+        let ratio = hitch * 1_000 / (Double(frames.count) * Self.frameBudget)
+        let report = "frames \(frames.count), hitch ratio \(ratio) ms/s, slowest \((frames.max() ?? 0) * 1_000) ms"
+        print("CodeLines wide fling: \(report)")
+        try skipIfHostBusy(over: ratio >= 5, report)
+        XCTAssertLessThan(ratio, 5, report)
     }
 }

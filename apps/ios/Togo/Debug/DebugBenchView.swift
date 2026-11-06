@@ -50,8 +50,7 @@ import TogoTerminal
         ticker.recordsFrameStats = true
         let binding = TerminalBinding(
             engine: engine, ticker: ticker,
-            read: { source.next() }, send: { _ in }, resize: { _, _ in },
-            frameBudget: Self.chunk
+            read: { source.next() }, send: { _ in }, resize: { _, _ in }
         )
         binding.start()
         while !source.isDone || binding.pendingBytes > 0 {

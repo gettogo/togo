@@ -108,6 +108,9 @@ extension HelperError {
         try await enter(.diff)
         switch source {
         case .worktree(let path), .staged(let path), .untracked(let path):
+            if path == ReviewFixtures.bigDiffPath, UITestLaunch.current.wideDiff {
+                return GitDiff(diff: ReviewFixtures.wideDiff, truncated: false, binary: [])
+            }
             return ReviewFixtures.diffs[path] ?? GitDiff(diff: "", truncated: false, binary: [])
         case .commit(_, let path?):
             return ReviewFixtures.diffs[path] ?? GitDiff(diff: "", truncated: false, binary: [])

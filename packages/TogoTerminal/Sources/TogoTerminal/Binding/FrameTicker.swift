@@ -16,8 +16,11 @@ import QuartzCore
 
     public init() {}
 
+    /// Each run starts its pacing afresh: the ticker runs only while output moves, so the time
+    /// it was stopped is idle, not a late frame, and an earlier run is another burst.
     public func start() {
         guard link == nil else { return }
+        frameStats = FrameStats()
         let link = CADisplayLink(target: DisplayLinkTarget(owner: self), selector: #selector(DisplayLinkTarget.tick(_:)))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
@@ -34,8 +37,12 @@ import QuartzCore
     }
 
     fileprivate func tick(_ link: CADisplayLink) {
+        tick(timestamp: link.timestamp, targetTimestamp: link.targetTimestamp)
+    }
+
+    func tick(timestamp: CFTimeInterval, targetTimestamp: CFTimeInterval) {
         if recordsFrameStats {
-            frameStats.record(timestamp: link.timestamp, targetTimestamp: link.targetTimestamp)
+            frameStats.record(timestamp: timestamp, targetTimestamp: targetTimestamp)
         }
         onFrame()
     }

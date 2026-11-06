@@ -31,6 +31,9 @@ public struct FrameStats: Sendable {
         expectedDuration = targetTimestamp - timestamp
     }
 
+    /// Frame intervals kept.
+    public var count: Int { samples.count }
+
     public var p95Interval: CFTimeInterval {
         let sorted = samples.map(\.interval).sorted()
         guard !sorted.isEmpty else { return 0 }

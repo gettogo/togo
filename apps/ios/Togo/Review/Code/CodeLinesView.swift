@@ -65,6 +65,7 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
         collectionView.alwaysBounceVertical = true
         collectionView.contentInsetAdjustmentBehavior = .always
         collectionView.accessibilityCustomRotors = [hunkRotor()]
+        collectionView.accessibilityIdentifier = "code-lines"
         collectionView.frame = bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(collectionView)
@@ -179,7 +180,9 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CodeLineCell.reuseIdentifier, for: indexPath)
         if let cell = cell as? CodeLineCell, let metrics {
-            cell.configure(row: rows[indexPath.item], render: renderer.render(indexPath.item, layout: layout), metrics: metrics)
+            let render = renderer.render(indexPath.item, layout: layout)
+            let tiles = renderer.tileSource(indexPath.item, render: render, height: layout.height(ofRow: indexPath.item))
+            cell.configure(row: rows[indexPath.item], render: render, metrics: metrics, tiles: tiles)
         }
         return cell
     }

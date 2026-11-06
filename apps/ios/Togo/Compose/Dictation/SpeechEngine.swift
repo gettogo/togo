@@ -1,4 +1,5 @@
 import Foundation
+import TogoKit
 
 /// Whether dictation can listen in a language right now, and if not, what stands in the way.
 enum DictationAvailability: Equatable, Sendable {
@@ -41,17 +42,15 @@ enum DictationError: Error, Equatable {
     var onLevel: (@MainActor (Float) -> Void)? { get set }
 }
 
-/// The engine the app dictates with. One microphone, so one engine for every compose bar.
+/// The engine the app dictates with. One microphone, so one engine for every compose bar: it
+/// runs Apple's speech or Whisper, as this device's settings choose.
 @MainActor enum SpeechEngines {
-    static let shared: any SpeechEngine = make()
+    static let selected = SelectedSpeechEngine(choice: .shared)
+    static var shared: any SpeechEngine { selected }
 
-    private static func make() -> any SpeechEngine {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-ui-fake-speech") {
-            return FakeSpeechEngine.scripted()
-        }
-        #endif
-        return AppleSpeechEngine()
+    /// Applies the engine choice in `settings` from the next dictation on.
+    static func select(_ settings: AppSettings) {
+        selected.select(settings)
     }
 
     /// The language to listen for: the stored choice, or the system's when there is none.

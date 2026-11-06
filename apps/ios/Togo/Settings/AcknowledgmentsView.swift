@@ -32,6 +32,8 @@ struct Acknowledgment: Identifiable, Equatable, Sendable {
         Acknowledgment(id: "swift-nio", name: "swift-nio", license: apache),
         Acknowledgment(id: "swift-nio-ssh", name: "swift-nio-ssh", license: apache, modified: true),
         Acknowledgment(id: "swiftterm", name: "SwiftTerm", license: "MIT"),
+        Acknowledgment(id: "argmax-oss-swift", name: "WhisperKit", license: "MIT"),
+        Acknowledgment(id: "swift-transformers", name: "swift-transformers, in WhisperKit", license: apache),
     ]
 }
 

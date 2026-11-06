@@ -81,6 +81,8 @@ final class CodeRender: NSObject {
 /// so what is drawn always fills the row the layout made for it.
 @MainActor final class CodeRenderer {
     private let cache = NSCache<NSNumber, CodeRender>()
+    /// Text of rows that scroll sideways, drawn in tiles that a fling only moves.
+    let tiles = CodeTileCache()
     private(set) var rows: [CodeRow] = []
     private(set) var metrics: CodeMetrics?
     private var traits = UITraitCollection()
@@ -94,6 +96,7 @@ final class CodeRender: NSObject {
     /// Starts over with new rows, text size or appearance.
     func reset(rows: [CodeRow], metrics: CodeMetrics, traits: UITraitCollection) {
         cache.removeAllObjects()
+        tiles.removeAll()
         self.rows = rows
         self.metrics = metrics
         self.traits = traits
@@ -104,6 +107,7 @@ final class CodeRender: NSObject {
         let limits = [layout.width, layout.codeLimit, layout.sideLimit, layout.bannerLimit]
         if limits != self.limits || layout.wrap != wrap {
             cache.removeAllObjects()
+            tiles.removeAll()
             self.limits = limits
             wrap = layout.wrap
         }
@@ -114,6 +118,17 @@ final class CodeRender: NSObject {
     }
 
     private func color(_ color: UIColor) -> CGColor { color.resolvedColor(with: traits).cgColor }
+
+    /// Where a row that scrolls sideways gets its text tiles; nil for rows drawn whole.
+    func tileSource(_ index: Int, render: CodeRender, height: CGFloat) -> CodeTileView.Source? {
+        guard render.scrolls, render.halves.count == 1, let half = render.halves.first, let metrics else { return nil }
+        let scale = max(traits.displayScale, 1)
+        return CodeTileView.Source(
+            cache: tiles, row: index, text: half.text, height: height,
+            style: CodeTextDrawing.Style(metrics: metrics, word: half.word, underline: color(.togoMute), hairline: 1 / scale),
+            appearance: traits.userInterfaceStyle.rawValue * 10 + Int(scale), scale: scale
+        )
+    }
 
     private func build(_ row: CodeRow, text: CodeLinesLayout.Row, layout: CodeLinesLayout) -> CodeRender {
         guard let m = metrics else { return CodeRender(halves: [], scrolls: false) }
@@ -130,9 +145,10 @@ final class CodeRender: NSObject {
             let side = CodeRowSide(number: nil, text: source, kind: kind ?? .context, tokens: tokens, changes: changes)
             let starts = wrap ? layout.breaks(shown, limit: layout.codeLimit) : [0]
             let segments = wrap ? nil : Self.segments(shown, layout: layout)
+            let indent = wrap ? CGFloat(layout.indent(shown, limit: layout.codeLimit)) * layout.advance : 0
             let half = self.half(
-                side, shown: shown, starts: starts, segments: segments, numbers: numbers, minX: 0, width: width,
-                textX: m.gutterWidth
+                side, shown: shown, starts: starts, segments: segments, indent: indent, numbers: numbers, minX: 0,
+                width: width, textX: m.gutterWidth
             )
             return CodeRender(halves: [half], scrolls: !wrap)
         case let (.split(left, right), .split(leftShown, rightShown)):
@@ -140,6 +156,7 @@ final class CodeRender: NSObject {
             let halves = [(left, leftShown, CGFloat(0)), (right, rightShown, halfWidth)].map { side, shown, minX in
                 let side = side ?? CodeRowSide(number: nil, text: "", kind: .context, tokens: [], changes: [])
                 return half(side, shown: shown, starts: layout.breaks(shown, limit: layout.sideLimit),
+                            indent: CGFloat(layout.indent(shown, limit: layout.sideLimit)) * layout.advance,
                             numbers: [(side.number, minX + CodeMetrics.pad + m.numberWidth)], minX: minX,
                             width: minX == 0 ? halfWidth : width - halfWidth, textX: minX + m.sideGutterWidth)
             }
@@ -155,8 +172,8 @@ final class CodeRender: NSObject {
     }
 
     private func half(
-        _ side: CodeRowSide, shown: CodeText, starts: [Int], segments: [Int]? = nil, numbers: [(Int?, CGFloat)],
-        minX: CGFloat, width: CGFloat, textX: CGFloat
+        _ side: CodeRowSide, shown: CodeText, starts: [Int], segments: [Int]? = nil, indent: CGFloat,
+        numbers: [(Int?, CGFloat)], minX: CGFloat, width: CGFloat, textX: CGFloat
     ) -> CodeRender.Half {
         guard let m = metrics else { preconditionFailure("metrics are set before rows render") }
         let gutter = attributes(DiffPalette.gutter, m.font)
@@ -173,7 +190,7 @@ final class CodeRender: NSObject {
         return CodeRender.Half(
             minX: minX, width: width, background: DiffPalette.background(side.kind).map(color),
             word: DiffPalette.word(side.kind).map(color), numbers: lines, glyph: glyph,
-            text: Self.block(styled.0, x: textX, starts: starts, segments: segments, highlights: styled.1)
+            text: Self.block(styled.0, x: textX, starts: starts, segments: segments, indent: indent, highlights: styled.1)
         )
     }
 
@@ -204,10 +221,11 @@ final class CodeRender: NSObject {
     /// Lines no longer than this many advances draw as one segment.
     static let segmentColumns = 64
 
-    /// One Core Text line per visual line, starting at each of `starts`. With `segments`, the
-    /// single unwrapped line is cut at those offsets instead.
+    /// One Core Text line per visual line, starting at each of `starts`, lines after the first
+    /// `indent` points in. With `segments`, the single unwrapped line is cut at those offsets instead.
     static func block(
-        _ string: NSAttributedString, x: CGFloat, starts: [Int], segments: [Int]? = nil, highlights: [Range<Int>]
+        _ string: NSAttributedString, x: CGFloat, starts: [Int], segments: [Int]? = nil, indent: CGFloat = 0,
+        highlights: [Range<Int>]
     ) -> CodeRender.Block {
         let length = string.length
         let typesetter = CTTypesetterCreateWithAttributedString(string)
@@ -221,7 +239,7 @@ final class CodeRender: NSObject {
             block.lines.append(line)
             block.ranges.append(start..<end)
             block.rows.append(segments == nil ? index : 0)
-            block.offsets.append(segments == nil ? 0 : offset)
+            block.offsets.append(segments == nil ? (index == 0 ? 0 : indent) : offset)
             block.widths.append(width)
             offset += width
         }
@@ -231,14 +249,18 @@ final class CodeRender: NSObject {
     /// Segment offsets for a line drawn without wrapping, or nil when it is short.
     static func segments(_ shown: CodeText, layout: CodeLinesLayout) -> [Int]? {
         guard shown.length > segmentColumns else { return nil }
-        return layout.breaks(shown, limit: CGFloat(segmentColumns) * layout.advance)
+        return CodeFlow.breaks(shown, limit: CGFloat(segmentColumns) * layout.advance, advance: layout.advance, measure: layout.measure)
     }
 }
 
-/// One row on screen. A single layer draws the whole row, so a cell costs one draw call.
+/// One row on screen. One layer draws the gutter and backgrounds; a row that scrolls sideways
+/// shows its text in tiles over it, so sliding the code moves layers and redraws nothing.
 final class CodeLineCell: UICollectionViewCell {
     static let reuseIdentifier = "CodeLineCell"
     private let canvas = CodeCanvas()
+    private let tileView = CodeTileView()
+    private var tileSource: CodeTileView.Source?
+    private var shift: CGFloat = 0
     var row: CodeRow?
 
     override init(frame: CGRect) {
@@ -246,6 +268,9 @@ final class CodeLineCell: UICollectionViewCell {
         canvas.frame = contentView.bounds
         canvas.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         contentView.addSubview(canvas)
+        tileView.isHidden = true
+        tileView.accessibilityElementsHidden = true
+        contentView.addSubview(tileView)
         isAccessibilityElement = true
     }
 
@@ -254,20 +279,45 @@ final class CodeLineCell: UICollectionViewCell {
         fatalError("init(coder:) is not used")
     }
 
-    func configure(row: CodeRow, render: CodeRender, metrics: CodeMetrics) {
+    /// `tiles` draws the text of a row that scrolls sideways; without it the canvas draws it.
+    func configure(row: CodeRow, render: CodeRender, metrics: CodeMetrics, tiles: CodeTileView.Source? = nil) {
         self.row = row
         canvas.render = render
         canvas.metrics = metrics
+        canvas.drawsText = tiles == nil
         canvas.setNeedsDisplay()
+        tileSource = tiles
+        tileView.isHidden = tiles == nil
+        placeTiles()
+        tileView.show(tiles, shift: shift)
         accessibilityTraits = row.isHunk ? .header : .staticText
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard tileSource != nil else { return }
+        placeTiles()
+        tileView.scroll(to: shift)
+    }
+
+    private func placeTiles() {
+        guard let source = tileSource else { return }
+        let x = CodeTileView.pixelAligned(source.text.x, scale: source.scale)
+        let frame = CGRect(x: x, y: 0, width: max(0, contentView.bounds.width - x), height: contentView.bounds.height)
+        if tileView.frame != frame { tileView.frame = frame }
     }
 
     /// Cells sit at the horizontal scroll offset, so their x is how far the code has slid.
     override func apply(_ layoutAttributes: UICollectionViewLayoutAttributes) {
         super.apply(layoutAttributes)
-        guard canvas.shift != layoutAttributes.frame.minX else { return }
-        canvas.shift = layoutAttributes.frame.minX
-        canvas.setNeedsDisplay()
+        guard shift != layoutAttributes.frame.minX else { return }
+        shift = layoutAttributes.frame.minX
+        canvas.shift = shift
+        if tileSource != nil {
+            tileView.scroll(to: shift)
+        } else {
+            canvas.setNeedsDisplay()
+        }
     }
 
     override var accessibilityLabel: String? {
@@ -280,6 +330,7 @@ private final class CodeCanvas: UIView {
     var render: CodeRender?
     var metrics: CodeMetrics?
     var shift: CGFloat = 0
+    var drawsText = true
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -315,28 +366,14 @@ private final class CodeCanvas: UIView {
                 context.textPosition = CGPoint(x: glyph.x, y: metrics.baseline)
                 CTLineDraw(glyph.line, context)
             }
+            guard drawsText, area.maxX > half.text.x else { continue }
             context.saveGState()
             let shift = render.scrolls ? shift : 0
             context.clip(to: CGRect(x: half.text.x, y: 0, width: area.maxX - half.text.x, height: bounds.height))
-            let text = half.text
-            for (index, line) in text.lines.enumerated() {
-                let top = CGFloat(text.rows[index]) * metrics.lineHeight
-                let x = text.x - shift + text.offsets[index]
-                guard x < area.maxX, x + text.widths[index] > text.x else { continue }
-                let range = text.ranges[index]
-                for word in text.highlights where word.overlaps(range) {
-                    let start = CTLineGetOffsetForStringIndex(line, max(word.lowerBound, range.lowerBound), nil)
-                    let end = CTLineGetOffsetForStringIndex(line, min(word.upperBound, range.upperBound), nil)
-                    if let tint = half.word {
-                        context.setFillColor(tint)
-                        context.fill(CGRect(x: x + start, y: top, width: end - start, height: metrics.lineHeight))
-                    }
-                    context.setFillColor(underline)
-                    context.fill(CGRect(x: x + start, y: top + metrics.baseline + 2, width: end - start, height: hairline * 2))
-                }
-                context.textPosition = CGPoint(x: x, y: top + metrics.baseline)
-                CTLineDraw(line, context)
-            }
+            CodeTextDrawing.draw(
+                half.text, in: context, originX: half.text.x - shift, visible: half.text.x...area.maxX,
+                style: CodeTextDrawing.Style(metrics: metrics, word: half.word, underline: underline, hairline: hairline)
+            )
             context.restoreGState()
         }
         if let divider = render.divider, let first = render.halves.first {

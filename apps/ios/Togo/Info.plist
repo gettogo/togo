@@ -47,7 +47,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Find and connect to the machines on your network.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Togo listens only while you hold the microphone button, and turns speech into text on this device.</string>
+	<string>Togo uses the microphone only while you dictate into a session, and turns speech into text on this device.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Speech becomes text on this device. Nothing is sent anywhere.</string>
 	<key>NSSupportsLiveActivities</key>

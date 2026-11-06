@@ -149,6 +149,9 @@ struct WorkspaceComposeBar: View {
             let dictation = model(for: tab, handle: handle).dictation
             Task { await dictation?.toggle() }
         }
+        .onChange(of: store.services.settings, initial: true) { _, settings in
+            SpeechEngines.select(settings)
+        }
         .onChange(of: store.services.settings.dictationLocale) { _, identifier in
             for model in models.values {
                 model.dictation?.locale = SpeechEngines.locale(identifier)

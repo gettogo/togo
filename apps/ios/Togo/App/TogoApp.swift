@@ -21,12 +21,13 @@ struct TogoApp: App {
         let launch = UITestLaunch.current
         if launch.fakes {
             // Without configuring TipKit no tip shows, so no popover covers what a test taps.
-            if launch.skipIntro { LaunchGate.app.skip() } else { TogoTips.configure() }
+            if launch.skipIntro { LaunchGate.app.skip() } else { PerfSignposts.app.afterInteractive { TogoTips.configure() } }
             return AppComposition(uiTest: launch)
         }
         #endif
-        TogoTips.configure()
-        return AppComposition(isolated: AppComposition.isRunningTests)
+        // TipKit opens its datastore as it is configured; the first screen does not wait for it.
+        PerfSignposts.app.afterInteractive { TogoTips.configure() }
+        return PerfSignposts.measure("composition") { AppComposition(isolated: AppComposition.isRunningTests) }
     }
 
     var body: some Scene {
@@ -53,7 +54,10 @@ struct TogoApp: App {
             case .active:
                 composition.live?.setForeground(true)
                 composition.review?.setForeground(true)
-                composition.push?.becameActive()
+                // At a cold launch Live Activities and widgets wait for the first screen too.
+                if let push = composition.push {
+                    PerfSignposts.app.afterInteractive { push.becameActive() }
+                }
             case .background:
                 // Forwards are marked paused first; the helper connections close once they stopped.
                 composition.review?.setForeground(false)

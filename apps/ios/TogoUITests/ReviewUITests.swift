@@ -8,6 +8,32 @@ import XCTest
         continueAfterFailure = false
     }
 
+    // MARK: Budgets
+
+    /// A fast sideways fling over a diff of 2,000-column lines, with wrapping off. The hitch
+    /// ratio of each fling is measured by the system's scrolling signposts; `make ios-scroll-perf`
+    /// holds it under 5 ms/s from the result bundle, which XCTest does not expose to the test.
+    /// Only a device reports hitches; a simulator run measures the fling's duration alone.
+    func testWideDiffFlingUnderHitchBudget() throws {
+        try skipBudgetIfOverloaded("Scrolling")
+        let app = launchTogo(arguments: ["-ui-wide-diff"])
+        openChanges(app, bib: "01", name: "api", count: 9)
+        let file = changeRow(app, "table.json")
+        XCTAssertTrue(reveal(file, in: app), "table.json is not listed")
+        file.tap()
+        let code = app.collectionViews["code-lines"]
+        XCTAssertTrue(code.waitForExistence(timeout: 10), "The diff never showed its code")
+
+        let options = XCTMeasureOptions()
+        options.iterationCount = 5
+        options.invocationOptions = [.manuallyStop]
+        measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: options) {
+            code.swipeLeft(velocity: .fast)
+            stopMeasuring()
+            code.swipeRight(velocity: .fast)
+        }
+    }
+
     // MARK: Flows
 
     func testStageAndCommitFromWorkspace() {

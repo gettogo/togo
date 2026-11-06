@@ -55,6 +55,60 @@ import UIKit
         #expect(!layout.scrollsHorizontally)
     }
 
+    // MARK: Hanging indent
+
+    @Test func continuationIndentsPastLeadingWhitespace() {
+        let line = CodeText("    let x = " + String(repeating: "a", count: 80))
+        #expect(CodeLinesLayout.continuationIndent(for: line, columns: 40) == 6)
+        #expect(CodeLinesLayout.continuationIndent(for: CodeText("let x = 1"), columns: 40) == 2)
+        // A tab is measured after it is expanded to its stop.
+        #expect(CodeLinesLayout.continuationIndent(for: CodeText("\tx"), columns: 40) == ReviewLimits.tabWidth + 2)
+
+        let layout = layout([.code(line)], wrap: true)
+        layout.update(width: 50 + 40 * 10 + CodeLinesLayout.trailingInset)
+        let starts = layout.breaks(line, limit: layout.codeLimit)
+        // The first line fills 40 columns; each continuation starts 6 in and holds 34.
+        #expect(starts == [0, 40, 74])
+        #expect(layout.lineCount(line, limit: layout.codeLimit) == 3)
+    }
+
+    @Test func indentCappedAtHalfWidth() {
+        let deep = CodeText(String(repeating: " ", count: 30) + String(repeating: "b", count: 50))
+        #expect(CodeLinesLayout.continuationIndent(for: deep, columns: 40) == 20)
+        #expect(CodeLinesLayout.continuationIndent(for: deep, columns: 41) == 20)
+        #expect(CodeLinesLayout.continuationIndent(for: deep, columns: 100) == 32)
+        let blank = CodeText(String(repeating: " ", count: 90))
+        #expect(CodeLinesLayout.continuationIndent(for: blank, columns: 40) == 20)
+        // Even at the cap every continuation line still takes at least one character.
+        #expect(CodeLinesLayout.continuationIndent(for: deep, columns: 1) == 0)
+    }
+
+    @Test func rowHeightMatchesIndentedBreaks() throws {
+        let plain = CodeText("        return " + String(repeating: "x", count: 150))
+        let mixed = CodeText("    let name = \"" + String(repeating: "日本語", count: 20) + "\" // 😀 done")
+        let banner = CodeText("@@ -1,4 +1,9 @@ " + String(repeating: "word ", count: 30), words: true)
+        let rows: [CodeLinesLayout.Row] = [.code(plain), .code(mixed), .banner(banner), .split(plain, mixed)]
+        for columns in [12, 24, 40, 77] {
+            let layout = measured(rows, columns: columns)
+            let font = try #require(layout.measure?.font)
+            for (index, text) in [plain, mixed].enumerated() {
+                let starts = layout.breaks(text, limit: layout.codeLimit)
+                #expect(layout.height(ofRow: index) == CGFloat(starts.count) * layout.lineHeight)
+                let indent = CGFloat(CodeLinesLayout.continuationIndent(for: text, columns: layout.codeColumns)) * layout.advance
+                for (line, start) in starts.enumerated() {
+                    let end = line + 1 < starts.count ? starts[line + 1] : text.length
+                    let room = layout.codeLimit - (line == 0 ? 0 : indent)
+                    #expect(drawnWidth(text, start..<end, font: font) <= room + 0.5, "line \(line) at \(columns) columns")
+                }
+            }
+            // Hunk headers keep breaking between words, without an indent.
+            let bannerStarts = layout.breaks(banner, limit: layout.bannerLimit)
+            #expect(layout.height(ofRow: 2) == CGFloat(bannerStarts.count) * layout.lineHeight)
+            let side = max(layout.breaks(plain, limit: layout.sideLimit).count, layout.breaks(mixed, limit: layout.sideLimit).count)
+            #expect(layout.height(ofRow: 3) == CGFloat(side) * layout.lineHeight)
+        }
+    }
+
     @Test func displayColumnsTabsAndWide() {
         #expect(CodeLinesLayout.displayColumns("\tab", tabWidth: 4) == 6)
         #expect(CodeLinesLayout.displayColumns("日本", tabWidth: 4) == 4)

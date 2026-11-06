@@ -84,6 +84,17 @@ import UIKit
         deps = dependencies
     }
 
+    /// Lists the machines saved on this device straight away, so the first frame shows them.
+    /// With none saved it waits for `start()`, which also merges iCloud, so a new device with
+    /// machines elsewhere never flashes first run. Monitors start in `start()`.
+    func showLocalHosts() {
+        guard !hostsLoaded else { return }
+        let local = hostStore.localHosts()
+        guard !local.isEmpty else { return }
+        hosts = local.map(Self.view(of:))
+        hostsLoaded = true
+    }
+
     /// Loads the stores, starts a monitor per machine and follows changes from other devices.
     func start() async {
         guard !started else { return }
@@ -257,7 +268,8 @@ import UIKit
         let prompts = attachPrompts
         let terminal = LiveTerminal(
             connect: deps.diagnostics.observing(connect, host: hostID, preference: preference),
-            settings: settings, wasAsked: { prompter.askedLastAttempt }
+            settings: settings, wasAsked: { prompter.askedLastAttempt }, diagnostics: deps.diagnostics,
+            onState: deps.diagnostics.linkStates(host: hostID, preference: preference)
         ) { [weak self] id in
             prompts.withdraw(owner: ObjectIdentifier(prompter))
             self?.terminals[id] = nil

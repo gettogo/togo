@@ -79,6 +79,18 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
         return result
     }
 
+    /// The records on this device as they are, without merging iCloud or changing anything,
+    /// for drawing the first screen before the store is first used.
+    public nonisolated func localRecords() -> [String: Value] {
+        var result: [String: Value] = [:]
+        for key in local.allKeys() where key.hasPrefix(prefix) {
+            guard let data = local.data(forKey: key),
+                  let value = (try? Self.decoder.decode(Stamped<Value>.self, from: data))?.value else { continue }
+            result[String(key.dropFirst(prefix.count))] = value
+        }
+        return result
+    }
+
     public func put(_ id: String, _ value: Value) {
         prepare()
         let key = prefix + id

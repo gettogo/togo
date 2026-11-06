@@ -62,13 +62,26 @@ final class CodeLinesLayout: UICollectionViewLayout {
     var sideLimit: CGFloat { CGFloat(sideColumns) * advance }
     var bannerLimit: CGFloat { CGFloat(bannerColumns) * advance }
 
-    /// Visual lines `text` takes within `limit`; the renderer draws exactly these.
+    /// Visual lines `text` takes within `limit`; the renderer draws exactly these. Wrapped
+    /// code hangs its continuation lines under the code, past the line's own indent.
     func lineCount(_ text: CodeText, limit: CGFloat) -> Int {
-        CodeFlow.lineCount(text, limit: limit, advance: advance, measure: measure)
+        CodeFlow.lineCount(text, limit: limit, advance: advance, measure: measure, indent: indent(text, limit: limit))
     }
 
     func breaks(_ text: CodeText, limit: CGFloat) -> [Int] {
-        CodeFlow.breaks(text, limit: limit, advance: advance, measure: measure)
+        CodeFlow.breaks(text, limit: limit, advance: advance, measure: measure, indent: indent(text, limit: limit))
+    }
+
+    /// Columns a continuation line of `text` starts in, when it wraps within `limit`.
+    func indent(_ text: CodeText, limit: CGFloat) -> Int {
+        text.words ? 0 : Self.continuationIndent(for: text, columns: CodeFlow.perLine(limit: limit, advance: advance))
+    }
+
+    /// The line's leading whitespace plus two columns, so wrapped code reads as one statement,
+    /// capped at half of `columns` so a deeply indented line still has room.
+    nonisolated static func continuationIndent(for text: CodeText, columns: Int) -> Int {
+        let leading = text.string.utf8.prefix { $0 == 0x20 }.count
+        return min(leading + 2, columns / 2)
     }
 
     /// Lays the rows out for a visible width; does nothing when that width was already used.

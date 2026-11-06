@@ -28,6 +28,11 @@ public actor HostStore {
         Self.ordered(await records.all())
     }
 
+    /// The machines saved on this device, read at once and in order. iCloud merges later.
+    public nonisolated func localHosts() -> [HostRecord] {
+        Self.ordered(records.localRecords())
+    }
+
     public func save(_ record: HostRecord) async {
         await records.put(Self.key(record.id), record)
     }

@@ -440,3 +440,19 @@ private func eventually(_ condition: @Sendable () async -> Bool) async -> Bool {
         #expect(!loaded.approveWithoutUnlock)
     }
 }
+
+@Test func localHostsReadOnlyThisDeviceWithoutMerging() async throws {
+    let clock = StoreClock()
+    let local = MemoryBackend(), remote = MemoryBackend()
+    let ada = record("ada"), bea = record("bea"), cyd = record("cyd")
+    local.set(try stamp(bea, at: clock.read(), device: "phone"), forKey: "host.\(bea.id.uuidString)")
+    local.set(try stamp(ada, at: clock.read(), device: "phone"), forKey: "host.\(ada.id.uuidString)")
+    local.set(try stamp(nil, at: clock.read(), device: "phone"), forKey: "host.\(UUID().uuidString)")
+    remote.set(try stamp(cyd, at: clock.read(), device: "pad"), forKey: "host.\(cyd.id.uuidString)")
+    let records = makeStore(local: local, remote: remote, device: "phone", clock: clock)
+    let hosts = HostStore(records: records)
+
+    #expect(hosts.localHosts().map(\.profile.name) == ["ada", "bea"], "sorted, without removed or iCloud-only machines")
+    #expect(local.allKeys().count == 3, "reading changes nothing")
+    #expect(await hosts.hosts().map(\.profile.name) == ["ada", "bea", "cyd"], "the store's first use still merges")
+}

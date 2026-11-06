@@ -47,21 +47,63 @@ struct DictationSnapshotTests {
         let history = DictationHistory(defaults: defaults)
         history.add("Run the migration on staging first")
         history.add("Explain why the cache misses after a deploy")
+        let whisper = whisperEngine()
         assertScreen(named: "dictation-settings") {
-            let engine = FakeSpeechEngine()
-            engine.availabilityResult = .needsModel(bytes: 64_000_000)
-            return NavigationStack {
-                DictationSettingsView(
-                    settings: AppSettings(), update: { _ in },
-                    model: DictationSettingsModel(
-                        engine: engine, history: history,
-                        locales: FakeSpeechEngine.sampleLocales, availability: .needsModel(bytes: 64_000_000),
-                        displayLocale: Locale(identifier: "en-US")
-                    ),
-                    insert: { _ in }
-                )
-            }
-            .togoControls()
+            settings(history: history, availability: .needsModel(bytes: 64_000_000), engine: WhisperSettingsModel(whisper: whisper))
         }
+    }
+
+    @Test func whisperChosen() {
+        let whisper = whisperEngine()
+        assertScreen(named: "dictation-whisper") {
+            settings(engine: WhisperSettingsModel(whisper: whisper, showsWhisper: true))
+        }
+    }
+
+    @Test func whisperDownloading() {
+        let whisper = whisperEngine()
+        assertScreen(named: "dictation-whisper-downloading") {
+            settings(engine: WhisperSettingsModel(whisper: whisper, showsWhisper: true, fraction: 0.42))
+        }
+    }
+
+    @Test func whisperDownloaded() async throws {
+        let whisper = whisperEngine()
+        try await whisper.installModel(locale: Locale(identifier: "en-US")) { _ in }
+        var chosen = AppSettings()
+        chosen.dictationEngine = .whisper
+        chosen.whisperModel = WhisperModel.base.id
+        assertScreen(named: "dictation-whisper-downloaded") {
+            settings(chosen, engine: WhisperSettingsModel(whisper: whisper))
+        }
+    }
+
+    private func whisperEngine() -> WhisperEngine {
+        let root = FileManager.default.temporaryDirectory.appending(path: "whisper-snapshots-\(UUID().uuidString)")
+        return WhisperEngine(
+            store: WhisperModelStore(root: root), loader: FakeWhisperLoader(), microphone: { FakeWhisperMicrophone() }
+        )
+    }
+
+    private func settings(
+        _ settings: AppSettings = AppSettings(), history: DictationHistory? = nil,
+        availability: DictationAvailability = .ready, engine: WhisperSettingsModel
+    ) -> some View {
+        let history = history ?? DictationHistory(defaults: UserDefaults(suiteName: "dictation-settings-\(UUID().uuidString)")!)
+        let speech = FakeSpeechEngine()
+        speech.availabilityResult = availability
+        return NavigationStack {
+            DictationSettingsView(
+                settings: settings, update: { _ in },
+                model: DictationSettingsModel(
+                    engine: speech, history: history,
+                    locales: FakeSpeechEngine.sampleLocales, availability: availability,
+                    displayLocale: Locale(identifier: "en-US")
+                ),
+                engine: engine,
+                insert: { _ in }
+            )
+        }
+        .togoControls()
     }
 }

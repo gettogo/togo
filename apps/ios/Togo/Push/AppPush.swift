@@ -25,6 +25,7 @@ import WidgetKit
     private var sharedApproveWithoutUnlock: Bool?
     private let path = NWPathMonitor()
     private var watchFeed: Task<Void, Never>?
+    private var pendingStart: (@MainActor () -> Void)?
 
     /// Reads settings from the services, which are built after this.
     private final class SettingsSource {
@@ -75,9 +76,10 @@ import WidgetKit
     }
 
     /// Nil when the process lacks the app group.
+    /// Makes the objects only: nothing reaches the notification center, the Watch or the
+    /// network until `start()`.
     static func make() -> AppPush? {
         guard let directory = SharedGroup.storeDirectory(SharedGroup.ios) else { return nil }
-        NotificationCategories.register()
         return AppPush(directory: directory)
     }
 
@@ -109,10 +111,29 @@ import WidgetKit
                 actionIdentifier: response.actionIdentifier, userInfo: response.userInfo, target: response.link
             )
         }
+        // The system hands a notification tap that launched the app only to a delegate set
+        // during launch, so this one line cannot wait for the first screen.
         UNUserNotificationCenter.current().delegate = router
-        watchNetwork(services)
-        Task { await live.start() }
-        connectWatch(services: services, activeStore: activeStore)
+        pendingStart = { [weak self, weak services] in
+            guard let self, let services else { return }
+            // Both talk to system daemons and are safe off the main thread, so they do not
+            // take a frame from the first screen.
+            Task.detached(priority: .utility) {
+                NotificationCategories.register()
+                WatchBridge.activate()
+            }
+            watchNetwork(services)
+            Task { await live.start() }
+            connectWatch(services: services, activeStore: activeStore)
+        }
+    }
+
+    /// Registers the lock-screen actions, wakes the Watch session and starts following the
+    /// network and Live Activities. Runs once the first screen is up; later calls do nothing.
+    func start() {
+        let work = pendingStart
+        pendingStart = nil
+        work?()
     }
 
     /// The Watch gets the pairings to answer with and the sessions to list; a Watch that

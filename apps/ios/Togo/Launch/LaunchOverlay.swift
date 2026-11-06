@@ -22,8 +22,6 @@ enum LaunchTimeline {
     static let fadeStart = beaconStart + beaconLight + hold
     static let fade = Duration.milliseconds(200)
     static let total = fadeStart + fade
-    /// After this the control center underneath takes touches even while the mark is fading.
-    static let touchesPassAt = Duration.milliseconds(500)
 
     /// Under Reduce Motion the whole mark shows at once, holds, and cross-fades.
     static let reducedFade = Duration.milliseconds(200)
@@ -46,11 +44,9 @@ struct LaunchFrame: Equatable {
     var beaconScale: Double
     var beaconOpacity: Double
     var overlayOpacity: Double
-    var blocksTouches: Bool
 
     init(time: Duration, reduceMotion: Bool) {
         typealias T = LaunchTimeline
-        blocksTouches = time < T.touchesPassAt
         if reduceMotion {
             chevron = 1
             paws = Array(repeating: 1, count: T.pawCount)
@@ -131,7 +127,8 @@ struct LaunchOverlayFrame: View {
         .background(Color.togoInk)
         .ignoresSafeArea()
         .opacity(frame.overlayOpacity)
-        .allowsHitTesting(frame.blocksTouches)
+        // The screen underneath takes touches from the first frame, while the mark plays.
+        .allowsHitTesting(false)
     }
 }
 

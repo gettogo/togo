@@ -21,7 +21,7 @@ let package = Package(
         .testTarget(
             name: "TogoTerminalTests",
             dependencies: ["TogoTerminal"],
-            exclude: ["Fixtures"],
+            exclude: ["Fixtures/sample.ghostty", "Fixtures/sample.itermcolors", "Fixtures/sample.Xresources"],
             swiftSettings: [.treatAllWarnings(as: .error)]
         ),
     ],

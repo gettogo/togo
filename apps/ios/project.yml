@@ -29,6 +29,11 @@ packages:
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     exactVersion: 1.19.7
+  # WhisperKit (Argmax, MIT), the optional second dictation engine. Its only package
+  # dependency, swift-argument-parser, serves its command line tool and never links.
+  argmax-oss-swift:
+    url: https://github.com/argmaxinc/argmax-oss-swift
+    exactVersion: 1.1.1
 
 targets:
   Togo:
@@ -46,6 +51,8 @@ targets:
       - package: TogoTerminal
       - package: TogoMosh
       - package: TogoPush
+      - package: argmax-oss-swift
+        product: WhisperKit
       - target: TogoWatch
       - target: TogoWidgets
       - target: TogoNotificationService
@@ -77,7 +84,7 @@ targets:
         CADisableMinimumFrameDurationOnPhone: true
         NSFaceIDUsageDescription: Unlock your SSH keys.
         NSLocalNetworkUsageDescription: Find and connect to the machines on your network.
-        NSMicrophoneUsageDescription: "Togo listens only while you hold the microphone button, and turns speech into text on this device."
+        NSMicrophoneUsageDescription: "Togo uses the microphone only while you dictate into a session, and turns speech into text on this device."
         NSSpeechRecognitionUsageDescription: "Speech becomes text on this device. Nothing is sent anywhere."
         # A tab dragged between windows or panes.
         UTExportedTypeDeclarations:

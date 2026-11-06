@@ -30,8 +30,12 @@ struct RootView: View {
                 Color.togoInk.ignoresSafeArea()
             } else if hasNoMachines {
                 FirstRunView(tutorial: tutorial) { store.sheet = .addMachine }
+                    .task { PerfSignposts.interactive() }
             } else {
+                // The control center, or the sidebar beside the workspace, is the app's first
+                // usable screen; what launch put off starts once it is up.
                 controlCenter
+                    .task { PerfSignposts.interactive() }
             }
         }
         .sheet(item: formSheet) { sheet in

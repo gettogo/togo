@@ -11,6 +11,8 @@ struct UITestLaunch {
     var skipIntro: Bool
     /// Starts with no machines, on the first-run screen.
     var firstRun: Bool
+    /// The large generated file's diff has lines 2,000 columns wide, for the scrolling budget.
+    var wideDiff: Bool
 
     static let current = UITestLaunch(arguments: ProcessInfo.processInfo.arguments)
 
@@ -18,6 +20,7 @@ struct UITestLaunch {
         fakes = arguments.contains("-ui-fakes")
         skipIntro = arguments.contains("-ui-skip-launch")
         firstRun = arguments.contains("-ui-first-run")
+        wideDiff = arguments.contains("-ui-wide-diff")
     }
 
     /// A defaults suite emptied on every launch, so one test's guide progress and settings
