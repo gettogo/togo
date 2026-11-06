@@ -119,7 +119,7 @@ enum FilesCopy {
             entries = try await services.listDir(subject, path: path, ref: ref, base: base).entries
             state = .ready
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(ServiceErrors.message(error))
         }
     }
 
@@ -239,7 +239,7 @@ enum FilesCopy {
             state = .ready
             search()
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(ServiceErrors.message(error))
         }
     }
 

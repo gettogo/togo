@@ -29,7 +29,9 @@ struct RootView: View {
             if !store.services.hostsLoaded {
                 Color.togoInk.ignoresSafeArea()
             } else if hasNoMachines {
-                FirstRunView(tutorial: tutorial) { store.sheet = .addMachine }
+                FirstRunView(tutorial: tutorial, launchPlaying: launchShown) {
+                    store.sheet = .addMachine
+                }
                     .task { PerfSignposts.interactive() }
             } else {
                 // The control center, or the sidebar beside the workspace, is the app's first
@@ -39,19 +41,24 @@ struct RootView: View {
             }
         }
         .sheet(item: formSheet) { sheet in
-            RootSheet(sheet: sheet, store: store, onboarding: onboarding, zoom: zoom, tutorial: tutorial)
+            RootSheet(
+                sheet: sheet, store: store, onboarding: onboarding, zoom: zoom, tutorial: tutorial,
+                settings: { AnyView(settingsSheet) }
+            )
         }
-        // From the sessions list; over the workspace, the workspace presents it.
-        .reviewPresentation(store: store, terminals: terminals, active: !store.workspaceOpen)
+        // From the sessions list, the board or the empty detail; while the workspace is on
+        // screen, the workspace presents it.
+        .reviewPresentation(store: store, terminals: terminals, active: !store.workspaceOnScreen)
         // Terminals follow the tabs even while the workspace is closed, so a session that ends
         // or is killed from the list lets go of its connection at once.
         .onChange(of: store.workspace, initial: true) { terminals.sync(window: window, with: store) }
         // While a sheet is up, the sheet carries the questions itself; one presenter shows one sheet.
-        .attachPrompts(store.services.attachPrompts, active: !store.workspaceOpen && store.sheet == nil)
+        .attachPrompts(store.services.attachPrompts, active: !store.workspaceOnScreen && store.sheet == nil)
         .focusedSceneValue(\.appStore, store)
         .togoControls()
         .readsFold()
-        .overlay { if launchShown { LaunchOverlay { launchShown = false } } }
+        // Every cold launch; it hands over once the first screen is ready.
+        .launchOverlay(shown: $launchShown, ready: store.services.hostsLoaded)
     }
 
     /// Every sheet but the review, which has its own presentation.
@@ -87,6 +94,20 @@ struct RootView: View {
         case .settingsPage(let page):
             SettingsView(values: settingsValues, actions: settingsActions).page(page)
         }
+    }
+
+    /// Settings beside the sidebar: a sheet with its own stack, so it never covers the session
+    /// in the detail. Its pages push inside it.
+    private var settingsSheet: some View {
+        NavigationStack {
+            SettingsView(values: settingsValues, actions: settingsActions)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(role: .close) { store.sheet = nil }
+                    }
+                }
+        }
+        .togoControls()
     }
 
     private var settingsValues: SettingsValues {

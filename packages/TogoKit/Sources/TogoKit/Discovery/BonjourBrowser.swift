@@ -18,11 +18,12 @@ public struct DiscoveredHost: Sendable, Hashable, Identifiable {
     }
 }
 
-/// Browses `_ssh._tcp` on the local network and resolves each service to an IPv4 address.
+/// Browses `_ssh._tcp` on the local network and resolves each service to an address the user
+/// could have typed: its `.local` host name, else an IPv4 or routable IPv6 address.
 ///
-/// Resolving opens and immediately cancels a TCP connection to the service, because
-/// Network only reports the address of a Bonjour endpoint once a connection reaches it.
-/// IPv4 is asked for so the address has no interface scope and stays valid as typed.
+/// The host name comes from mDNS. The address comes from opening and at once cancelling a TCP
+/// connection to the service, because Network only reports the address of a Bonjour endpoint
+/// once a connection reaches it. `DiscoveredAddress` picks between them.
 public actor BonjourBrowser {
     public enum Status: Sendable, Equatable {
         case browsing
@@ -42,6 +43,10 @@ public actor BonjourBrowser {
     private var browser: NWBrowser?
     private var resolving: [String: NWConnection] = [:]
     private var resolved: [String: DiscoveredHost] = [:]
+    private var hostNames: [String: String] = [:]
+    private var addresses: [String: String] = [:]
+    private var ports: [String: Int] = [:]
+    private var lookupsFinished: Set<String> = []
     private var visible: [String: String] = [:]
 
     /// `kDNSServiceErr_PolicyDenied`: the user turned Local Network off for the app.
@@ -105,6 +110,10 @@ public actor BonjourBrowser {
         visible = Dictionary(services.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         // A machine that leaves and comes back may have a new address, so it resolves again.
         resolved = resolved.filter { visible[$0.key] != nil }
+        hostNames = hostNames.filter { visible[$0.key] != nil }
+        addresses = addresses.filter { visible[$0.key] != nil }
+        ports = ports.filter { visible[$0.key] != nil }
+        lookupsFinished = lookupsFinished.filter { visible[$0] != nil }
         for service in services where resolved[service.id] == nil && resolving[service.id] == nil {
             resolve(service)
         }
@@ -124,6 +133,12 @@ public actor BonjourBrowser {
             Task { await self?.finishResolving(service, remote: remote) }
         }
         connection.start(queue: queue)
+        if case .service(let name, let type, let domain, _) = service.endpoint {
+            Task { [weak self] in
+                let found = await BonjourHostName.lookUp(name: name, type: type, domain: domain, timeout: Self.resolveTimeout)
+                await self?.foundHostName(service, found)
+            }
+        }
         Task { [weak self] in
             try? await Task.sleep(for: Self.resolveTimeout)
             await self?.abandon(service.id, connection)
@@ -132,7 +147,6 @@ public actor BonjourBrowser {
 
     private func finishResolving(_ service: Service, remote: NWEndpoint) {
         resolving[service.id] = nil
-        guard visible[service.id] != nil else { return }
         guard case .hostPort(let host, let port) = remote else { return }
         let address = switch host {
         case .ipv4(let ip): "\(ip)"
@@ -140,9 +154,36 @@ public actor BonjourBrowser {
         case .name(let name, _): name
         @unknown default: "\(host)"
         }
+        addresses[service.id] = address
+        ports[service.id] = Int(port.rawValue)
+        choose(service)
+    }
+
+    /// Called once per lookup, with nil when mDNS gave no name in time.
+    private func foundHostName(_ service: Service, _ found: BonjourHostName.Target?) {
+        lookupsFinished.insert(service.id)
+        if let found {
+            hostNames[service.id] = found.host
+            if ports[service.id] == nil { ports[service.id] = found.port }
+        }
+        choose(service)
+    }
+
+    /// Publishes the best address known so far; the host name replaces an address found first.
+    /// A machine with neither a name nor a usable address is still listed once the lookup is
+    /// over, with no address, and the form asks for one.
+    private func choose(_ service: Service) {
+        guard visible[service.id] != nil else { return }
+        let candidates = addresses[service.id].map { [$0] } ?? []
+        guard let address = DiscoveredAddress.listed(
+            hostName: hostNames[service.id], addresses: candidates,
+            lookupFinished: lookupsFinished.contains(service.id)
+        ) else { return }
+        // Bonjour stays on the local network, but the hint follows the address the machine
+        // answered from, not the name chosen over it.
+        let tailnet = candidates.contains(where: TailnetHint.isTailnet) || TailnetHint.isTailnet(address)
         resolved[service.id] = DiscoveredHost(
-            id: service.id, name: service.name, host: address, port: Int(port.rawValue),
-            tailnet: TailnetHint.isTailnet(address)
+            id: service.id, name: service.name, host: address, port: ports[service.id] ?? 22, tailnet: tailnet
         )
         publish()
     }

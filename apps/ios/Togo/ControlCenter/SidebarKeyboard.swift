@@ -18,7 +18,7 @@ struct SidebarKeyboard: Equatable {
         rows.first { TabID(hostID: $0.hostID, sessionID: $0.id) == cursor }
     }
 
-    /// ⌘⌫: the row to confirm ending, only where its menu offers Kill.
+    /// ⌘⌫: the row to confirm ending, only where its menu offers End session.
     func rowToEnd(in rows: [SessionRow], machines: [MachineSection]) -> SessionRow? {
         guard let row = row(in: rows) else { return nil }
         let machine = machines.first { $0.id == row.hostID }

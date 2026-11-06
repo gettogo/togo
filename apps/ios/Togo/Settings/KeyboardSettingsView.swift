@@ -21,7 +21,7 @@ enum KeyBarPreset: CaseIterable, Sendable {
     }
 }
 
-/// The edits the keyboard bar page makes, kept apart from the view so they can be tested.
+/// The edits the key bar page makes, kept apart from the view so they can be tested.
 struct KeyBarEditor: Equatable {
     var config: KeyBarConfig
 
@@ -84,7 +84,7 @@ struct KeyboardSettingsView: View {
             .groupedRows()
         }
         .groupedList()
-        .navigationTitle(settingsText("settings.keyboard.title", "Keyboard bar"))
+        .navigationTitle(settingsText("settings.keyboard.title", "Key bar"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { EditButton() }
         .confirmationDialog(
@@ -176,7 +176,7 @@ private struct KeyBarItemRow: View {
             // "Esc" sends `Esc`; repeating the title under itself says nothing.
             KeySequence.format(steps) == item.title ? nil : KeySequence.format(steps)
         case .ctrlLatch: settingsText("settings.keyboard.latch.ctrl", "Holds Ctrl for the next key")
-        case .altLatch: settingsText("settings.keyboard.latch.alt", "Holds Option for the next key")
+        case .altLatch: settingsText("settings.keyboard.latch.alt", "Holds Alt (Option) for the next key")
         case .paste, .hideKeyboard, .dpad, .compose, .dictate: nil
         }
     }

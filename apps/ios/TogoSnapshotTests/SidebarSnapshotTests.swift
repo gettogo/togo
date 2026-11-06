@@ -34,7 +34,9 @@ struct SidebarSnapshotTests {
         for id in tabs {
             store.setLink(.live(transport: "SSH", note: nil), for: id)
         }
+        // The app's root reads the fold, so the shell sees it in its own coordinates.
         return AdaptiveRoot(store: store, terminals: terminals, now: Samples.now) { _ in EmptyView() }
+            .readsFold()
             .togoControls()
     }
 

@@ -143,7 +143,9 @@ struct SignInPromptView: View {
                 }
             }
             .accessibilityLabel(Text(verbatim: spec.label))
-            .textContentType(request.kind == .code ? .oneTimeCode : .password)
+            // A password is the machine's and is never saved by iOS; a plain answer, such as a user
+            // name, gets no content type so QuickType doesn't offer codes or passwords for it.
+            .modifier(SecretIfNeeded(secret: spec.secret))
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .font(.body.monospaced())
@@ -162,5 +164,13 @@ struct SignInPromptView: View {
     private func submit() {
         guard !values.contains(where: \.isEmpty) else { return }
         onSubmit(values)
+    }
+}
+
+private struct SecretIfNeeded: ViewModifier {
+    let secret: Bool
+
+    func body(content: Content) -> some View {
+        if secret { content.keptSecret() } else { content }
     }
 }

@@ -12,6 +12,10 @@ struct OnboardingSnapshotTests {
         assertScreen(FirstRunView {}, named: "first-run")
     }
 
+    @Test func notificationAsk() {
+        assertScreen(stack(NotificationAskView(machine: "Studio", onTurnOn: {}, onNotNow: {})), named: "notification-ask")
+    }
+
     @Test func discoveryFound() {
         assertScreen(stack(discovery(OnboardingSamples.hosts, .searching), root: true), named: "discovery-found")
     }

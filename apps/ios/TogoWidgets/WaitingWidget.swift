@@ -123,11 +123,13 @@ private struct OldestLine: View {
                 Text(verbatim: bib)
                     .font(.system(font, design: .monospaced))
                     .monospacedDigit()
-                    .fixedSize()
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
             Text(verbatim: oldest.agent)
                 .font(.system(font))
                 .lineLimit(1)
+                .layoutPriority(1)
         }
     }
 }

@@ -2,7 +2,6 @@ import Foundation
 
 /// Every string the new session flow shows. Keys share the `new.` prefix in the catalog.
 enum NewSessionCopy {
-    static let cancel = String(localized: "new.cancel", defaultValue: "Cancel")
     static let machineTitle = String(localized: "new.machine.title", defaultValue: "Machine")
     static let machinePrompt = String(localized: "new.machine.prompt", defaultValue: "Where should it run?")
     static let folderTitle = String(localized: "new.folder.title", defaultValue: "Folder")
@@ -33,7 +32,7 @@ enum NewSessionCopy {
     static let up = String(localized: "new.folder.up", defaultValue: "Parent folder")
     static let retry = String(localized: "new.retry", defaultValue: "Try again")
 
-    static let plainBody = String(localized: "new.plain.body", defaultValue: "Starts a tmux session in your home folder")
+    static let plainBody = String(localized: "new.plain.body", defaultValue: "A shell in your home folder that keeps running.")
     static let plainStart = String(localized: "new.plain.start", defaultValue: "Start")
 
     static let agentLoading = String(localized: "new.agent.loading", defaultValue: "Looking for agents")

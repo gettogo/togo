@@ -7,7 +7,7 @@ enum DraftAuth: Hashable, Sendable, CaseIterable {
 
     var label: String {
         switch self {
-        case .deviceKey: String(localized: "onboard.auth.deviceKey", defaultValue: "This phone's key")
+        case .deviceKey: String(localized: "onboard.auth.deviceKey", defaultValue: "This device's key")
         case .importedKey: String(localized: "onboard.auth.importedKey", defaultValue: "Import a key")
         case .password: String(localized: "onboard.auth.password", defaultValue: "Password")
         }
@@ -25,6 +25,20 @@ struct ImportedKey: Hashable, Sendable {
 struct MachineDraft: Hashable, Sendable {
     enum Field: Hashable, Sendable, CaseIterable {
         case name, address, port, user, key, jump
+        /// The password or key passphrase, whichever the chosen sign-in method shows.
+        case secret
+    }
+
+    /// Where Return goes from `field`, or nil when the form is complete enough to connect.
+    /// The user name leads to the password or passphrase when the sign-in method has one.
+    func field(after field: Field) -> Field? {
+        switch field {
+        case .name: .address
+        case .address: .port
+        case .port: .user
+        case .user: auth == .deviceKey ? nil : .secret
+        case .secret, .key, .jump: nil
+        }
     }
 
     var name = ""
@@ -52,6 +66,16 @@ struct MachineDraft: Hashable, Sendable {
     }
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Shown under an address that carries an interface zone, such as `fe80::…%en0`. It still
+    /// connects on the network it was found on, so it is a note, not an error.
+    var addressNote: String? {
+        guard SavedAddress.hasZone(address) else { return nil }
+        return String(
+            localized: "onboard.form.zonedAddress",
+            defaultValue: "This address only works on one network. Use the machine's name instead, such as macbook.local."
+        )
+    }
 
     /// One message per field that is wrong, written as what to do next.
     var errors: [Field: String] {
@@ -123,6 +147,14 @@ struct MachineDraft: Hashable, Sendable {
     private static func port(_ text: String) -> Int? {
         guard let value = Int(text.trimmingCharacters(in: .whitespaces)), (1...65535).contains(value) else { return nil }
         return value
+    }
+
+    /// The text for a jump host in the form, the inverse of `endpoint(_:)`: an address with colons
+    /// goes in brackets so its port can't be read as part of it.
+    static func jumpText(_ endpoint: HostEndpoint) -> String {
+        let host = endpoint.host.contains(":") ? "[\(endpoint.host)]" : endpoint.host
+        let port = endpoint.port == 22 ? "" : ":\(endpoint.port)"
+        return "\(endpoint.user)@\(host)\(port)"
     }
 
     /// Parses `user@host`, `user@host:port` or `user@[v6 address]:port`.

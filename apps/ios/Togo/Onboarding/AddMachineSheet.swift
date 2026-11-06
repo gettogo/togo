@@ -11,33 +11,60 @@ struct AddMachineSheet: View {
 
     var body: some View {
         NavigationStack(path: $flow.path) {
+            root
+                .toolbar { cancel }
+            .navigationDestination(for: AddMachineFlow.Route.self) { route in
+                // Editing a machine opens straight on the form, and a pull down is off once a
+                // step is pushed, so every step can close the sheet, not only the first. The
+                // notification step comes after the machine is saved and has its own Not now.
+                switch route {
+                case .form:
+                    form
+                        .toolbar { cancel }
+                case .connect:
+                    ConnectStep(flow: flow)
+                        .task(id: flow.attempt) { await flow.runAttempt() }
+                        .toolbar { cancel }
+                case .notifications:
+                    NotificationAskView(
+                        machine: flow.machineName,
+                        onTurnOn: { Task { await flow.answerNotifications(turnOn: true) } },
+                        onNotNow: { Task { await flow.answerNotifications(turnOn: false) } }
+                    )
+                }
+            }
+        }
+        .task {
+            if !flow.startsOnForm { await flow.discover() }
+        }
+        .interactiveDismissDisabled(flow.startsOnForm || !flow.path.isEmpty)
+        .onDisappear { flow.cancel() }
+        .togoControls()
+    }
+
+    @ViewBuilder private var root: some View {
+        if flow.startsOnForm {
+            form
+        } else {
             DiscoveryList(
                 hosts: flow.hosts, phase: flow.discovery,
                 onChoose: flow.choose, onEnterAddress: flow.enterAddress
             )
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "onboard.cancel", defaultValue: "Cancel")) { dismiss() }
-                }
-            }
-            .navigationDestination(for: AddMachineFlow.Route.self) { route in
-                switch route {
-                case .form:
-                    MachineForm(
-                        draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
-                        onImportKey: { text, label in Task { await flow.importKey(text, label: label) } },
-                        onConnect: flow.connect
-                    )
-                case .connect:
-                    ConnectStep(flow: flow)
-                        .task(id: flow.attempt) { await flow.runAttempt() }
-                }
-            }
         }
-        .task { await flow.discover() }
-        .interactiveDismissDisabled(!flow.path.isEmpty)
-        .onDisappear { flow.cancel() }
-        .togoControls()
+    }
+
+    private var form: some View {
+        MachineForm(
+            draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
+            onImportKey: { text, label in Task { await flow.importKey(text, label: label) } },
+            onConnect: flow.connect
+        )
+    }
+
+    private var cancel: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button(String(localized: "onboard.cancel", defaultValue: "Cancel")) { dismiss() }
+        }
     }
 }
 
@@ -50,7 +77,48 @@ extension AddMachineSheet {
             finish: { _ in store.sheet = nil }
         )
         if let tutorial { flow.onDetected = { tutorial.record($0) } }
+        flow.notificationAsk = .asking(store.services)
         self.init(flow: flow)
+    }
+}
+
+extension AddMachineFlow.NotificationAsk {
+    /// Asks while iOS has not had an answer yet; turning on also pairs the machines online.
+    @MainActor static func asking(_ services: any AppServices) -> Self {
+        Self(
+            needed: { services.pushAuthorization == .notDetermined },
+            turnOn: { await services.turnOnNotifications() }
+        )
+    }
+}
+
+/// Offered once a machine with the helper is saved, so the system's notification alert only
+/// ever follows a tap that asked for it.
+struct NotificationAskView: View {
+    let machine: String
+    let onTurnOn: () -> Void
+    let onNotNow: () -> Void
+
+    var body: some View {
+        OnboardingStep(
+            title: String(localized: "onboard.notifications.title", defaultValue: "Get notified when an agent needs you"),
+            message: String(
+                localized: "onboard.notifications.message",
+                defaultValue: "Togo can tell you when an agent on \(machine) is waiting for an answer, even while the app is closed."
+            )
+        ) {
+            EmptyView()
+        } actions: {
+            Button(String(localized: "onboard.notifications.turnOn", defaultValue: "Turn on notifications"), action: onTurnOn)
+                .buttonStyle(.primary)
+            Button(String(localized: "onboard.notifications.notNow", defaultValue: "Not now"), action: onNotNow)
+                .buttonStyle(.secondary)
+        }
+        .background(Color.togoInk)
+        .navigationTitle(machine)
+        .navigationBarTitleDisplayMode(.inline)
+        // The machine is saved; there is nothing to go back to.
+        .navigationBarBackButtonHidden()
     }
 }
 

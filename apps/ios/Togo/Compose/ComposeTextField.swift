@@ -87,8 +87,12 @@ final class PastingTextView: UITextView {
         tintColor = .togoSnow
         backgroundColor = .clear
         textContainerInset = UIEdgeInsets(top: 9, left: 10, bottom: 9, right: 10)
-        // Agents read prose; autocorrect and smart punctuation help here, unlike in the terminal.
+        // Agents read prose, so autocorrect stays. Prompts also hold commands, flags and paths that an
+        // agent may run as typed, so `--` stays two hyphens and quotes stay straight.
         autocapitalizationType = .sentences
+        smartDashesType = .no
+        smartQuotesType = .no
+        smartInsertDeleteType = .no
         placeholderLabel.text = placeholder
         placeholderLabel.font = font
         placeholderLabel.adjustsFontForContentSizeCategory = true

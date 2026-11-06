@@ -10,11 +10,23 @@ struct RootSheet: View {
     let zoom: Namespace.ID
     var tutorial: TutorialModel?
 
+    var settings: (() -> AnyView)?
+
     var body: some View {
-        content
+        presented
             // New session asks for agents and folders; if that needs a password or code, the
             // question shows over this sheet.
             .attachPrompts(store.services.attachPrompts, active: true)
+    }
+
+    /// New session sets its own heights, since browsing folders takes it to full height.
+    @ViewBuilder private var presented: some View {
+        switch sheet {
+        case .newSession: content
+        case .signIn: content.togoSheet(.prompt)
+        case .settings: content.togoSheet(.page)
+        default: content.togoSheet(.form)
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -37,13 +49,16 @@ struct RootSheet: View {
                         store.open(hostID: hostID, sessionID: sessionID)
                     }
                 ).prefilled(hostID.flatMap { store.takeNewSessionPrefill(for: $0) }),
-                zoom: hostID == nil ? .init(sourceID: ControlCenterView.newSessionSourceID, namespace: zoom) : nil
+                zoom: hostID == nil && store.newSessionZooms
+                    ? .init(sourceID: ControlCenterView.newSessionSourceID, namespace: zoom) : nil
             )
         case .signIn(let id):
             SignInSheet(model: SignInModel(
                 hostID: id, machine: store.machineName(for: id), services: store.services,
                 finish: { store.sheet = nil }
             ))
+        case .settings:
+            settings?()
         case .review:
             // RootView presents the review itself, as a cover on a phone.
             EmptyView()
@@ -63,8 +78,9 @@ extension AddMachineFlow {
             finish: { _ in store.sheet = nil }
         )
         if let tutorial { flow.onDetected = { tutorial.record($0) } }
+        flow.notificationAsk = .asking(store.services)
         flow.draft = draft
-        flow.path = [.form]
+        flow.startsOnForm = true
         return flow
     }
 
@@ -87,7 +103,7 @@ extension AddMachineFlow {
         draft.symbol = HostSymbol(rawValue: record.symbol) ?? .laptop
         draft.wake = record.wake
         if let jump = profile.jumps.first {
-            draft.jump = jump.port == 22 ? "\(jump.user)@\(jump.host)" : "\(jump.user)@\(jump.host):\(jump.port)"
+            draft.jump = MachineDraft.jumpText(jump)
         }
         switch profile.auth {
         case .password:
@@ -102,7 +118,7 @@ extension AddMachineFlow {
         }
         if let tutorial { flow.onDetected = { tutorial.record($0) } }
         flow.draft = draft
-        flow.path = [.form]
+        flow.startsOnForm = true
         return flow
     }
 }

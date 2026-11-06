@@ -41,7 +41,7 @@ import TogoKit
             AwakeCopy.reason(status(mode: .battery, reason: .batteryFloor, floor: 20))
                 == "Paused until the battery is above 25%."
         )
-        #expect(AwakeCopy.reason(status(reason: .thermal)) == "Paused while the Mac is hot.")
+        #expect(AwakeCopy.reason(status(reason: .thermal)) == "Paused while the machine is hot.")
         #expect(AwakeCopy.reason(status(reason: .unsupported)) == "This machine can't be kept awake by Togo.")
         #expect(AwakeCopy.reason(status(reason: .failed, detail: "pmset: denied")) == "Couldn't keep it awake: pmset: denied")
         #expect(AwakeCopy.reason(status(reason: .idle)) == "")

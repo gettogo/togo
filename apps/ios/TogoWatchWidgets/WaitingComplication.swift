@@ -99,9 +99,10 @@ struct WaitingComplicationView: View {
                 HStack(spacing: 4) {
                     if entry.oldestBib != nil {
                         Text(oldestBib).font(.system(.footnote, design: .monospaced))
+                            .lineLimit(1).truncationMode(.middle)
                     }
                     if let agent = entry.oldestAgent {
-                        Text(agent).font(.footnote).lineLimit(1)
+                        Text(agent).font(.footnote).lineLimit(1).layoutPriority(1)
                     }
                 }
                 .foregroundStyle(.secondary)

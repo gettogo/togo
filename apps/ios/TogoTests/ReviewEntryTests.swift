@@ -107,16 +107,33 @@ import UIKit
         var machine = Samples.controlCenter.machines[0]
         let row = machine.sessions[0]
 
+        // A connected helper too old for review keeps the actions, disabled, with what to do.
         machine.capabilities = [Capability.events]
-        #expect(SessionActions.actions(for: row, on: machine).review.isEmpty)
+        var actions = SessionActions.actions(for: row, on: machine)
+        #expect(actions.review == [.changes, .files, .ports])
+        #expect(!actions.allows(.changes) && !actions.allows(.files) && !actions.allows(.ports))
+        #expect(actions.reviewNote == "Update the helper on Studio to review changes.")
 
         machine.capabilities = [Capability.git]
-        var actions = SessionActions.actions(for: row, on: machine)
-        #expect(actions.review == [.changes, .files])
-        #expect(actions.allows(.changes))
+        actions = SessionActions.actions(for: row, on: machine)
+        #expect(actions.review == [.changes, .files, .ports])
+        #expect(actions.allows(.changes) && actions.allows(.files))
+        #expect(!actions.allows(.ports))
+        #expect(actions.reviewNote == "Update the helper on Studio to see its ports.")
+
+        // Until the helper has said what it offers, nothing is claimed about it.
+        machine.helper = .checking
+        machine.capabilities = []
+        #expect(SessionActions.actions(for: row, on: machine).review.isEmpty)
+        machine.helper = .present(version: "0.3.0", live: true)
+        machine.reachability = .connecting
+        #expect(SessionActions.actions(for: row, on: machine).review.isEmpty)
+        machine.reachability = .online
 
         machine.capabilities = [Capability.git, Capability.ports]
-        #expect(SessionActions.actions(for: row, on: machine).review == [.changes, .files, .ports])
+        actions = SessionActions.actions(for: row, on: machine)
+        #expect(actions.review == [.changes, .files, .ports])
+        #expect(actions.disabled.isEmpty && actions.reviewNote == nil)
 
         machine.helper = .missing
         machine.capabilities = []

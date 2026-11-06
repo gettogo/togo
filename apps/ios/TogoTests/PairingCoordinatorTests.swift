@@ -129,7 +129,8 @@ private final class RecordingRegister: PushTokenRegistering {
         #expect(helper.pairs.isEmpty)
     }
 
-    @Test func asksPermissionWhenFirstMachineComesOnline() async {
+    /// The system alert only follows a tap that asked for it, never a machine connecting.
+    @Test func neverAsksPermissionByItself() async {
         let permissions = FakePermissions(.notDetermined)
         let registrar = PushRegistrar(permissions: permissions, registerForRemote: {})
         registrar.didRegister(token: Self.tokenA)
@@ -137,10 +138,16 @@ private final class RecordingRegister: PushTokenRegistering {
             keys: keys, store: store, unpairs: unpairs, registrar: registrar, settings: { AppSettings() },
             liveTokens: { _ in (update: nil, start: nil) }, watch: { [] }, register: register, hostedRelay: Self.relay, deviceName: "iPhone"
         )
+        coordinator.isForeground = true
         await online(coordinator)
+        await online(coordinator)
+        #expect(permissions.asked.withLock { $0 } == 0)
+        #expect(helper.pairs.isEmpty)
+
+        await registrar.requestAuthorization()
         await online(coordinator)
         #expect(permissions.asked.withLock { $0 } == 1)
-        #expect(helper.pairs.count == 1)
+        #expect(helper.pairs.count == 1, "once allowed, the machine pairs")
     }
 
     @Test func liveTokensPerMachine() async {
@@ -290,23 +297,6 @@ private final class RecordingRegister: PushTokenRegistering {
         var attempts = 0
         await coordinator.retryUnpairs { _, _ in attempts += 1 }
         #expect(attempts == 0)
-    }
-
-    @Test func noPermissionPromptInBackground() async {
-        let permissions = FakePermissions(.notDetermined)
-        let registrar = PushRegistrar(permissions: permissions, registerForRemote: {})
-        let coordinator = PairingCoordinator(
-            keys: keys, store: store, unpairs: unpairs, registrar: registrar, settings: { AppSettings() },
-            liveTokens: { _ in (update: nil, start: nil) }, watch: { [] }, register: register, hostedRelay: Self.relay, deviceName: "iPhone"
-        )
-        coordinator.isForeground = false
-        await online(coordinator)
-        #expect(permissions.asked.withLock { $0 } == 0)
-        #expect(helper.pairs.isEmpty)
-
-        coordinator.isForeground = true
-        await online(coordinator)
-        #expect(permissions.asked.withLock { $0 } == 1)
     }
 
     @Test func backgroundTokenChangeUsesRegisterSender() async {

@@ -165,8 +165,80 @@ enum ServiceErrors {
         return false
     }
 
+    /// What the person reads for a failure. Errors TogoKit and the app word themselves say
+    /// "machine" here; anything else, such as a POSIX or URL error, gets a plain fallback.
     static func message(_ error: any Error) -> String {
-        error.localizedDescription
+        if let text = ServiceErrorCopy.known(error) { return text }
+        if error is any LocalizedError { return error.localizedDescription }
+        return ServiceErrorCopy.fallback
+    }
+}
+
+enum ServiceErrorCopy {
+    static let fallback = String(localized: "error.fallback", defaultValue: "Something went wrong. Try again.")
+
+    static func known(_ error: any Error) -> String? {
+        switch error {
+        case let error as HelperError: helper(error)
+        case let error as SSHError: ssh(error)
+        case let error as MoshBootstrapError: mosh(error)
+        default: nil
+        }
+    }
+
+    private static func helper(_ error: HelperError) -> String? {
+        switch error {
+        case .timeout:
+            String(localized: "error.helper.timeout", defaultValue: "The Togo helper on the machine didn't answer in time.")
+        case .closed:
+            String(localized: "error.helper.closed", defaultValue: "The connection to the Togo helper on the machine closed.")
+        case .notReady:
+            String(localized: "error.helper.notReady", defaultValue: "The Togo helper on the machine isn't ready yet.")
+        case .unsupported:
+            String(
+                localized: "error.helper.unsupported",
+                defaultValue: "The Togo helper on the machine is too old for this. Update it there."
+            )
+        case .malformedResponse:
+            String(
+                localized: "error.helper.malformed",
+                defaultValue: "The Togo helper on the machine sent a reply that couldn't be read."
+            )
+        default: nil
+        }
+    }
+
+    private static func ssh(_ error: SSHError) -> String? {
+        switch error {
+        case .hostKeyRejected:
+            String(localized: "error.ssh.keyRejected", defaultValue: "The machine's key wasn't trusted, so the connection was closed.")
+        case .authFailed(let tried) where tried.isEmpty:
+            String(localized: "error.ssh.authFailed", defaultValue: "The machine didn't accept the login.")
+        case .authFailed:
+            String(localized: "error.ssh.authFailedTried", defaultValue: "The machine didn't accept the login. Check your key or password.")
+        case .timeout:
+            String(localized: "error.ssh.timeout", defaultValue: "The machine took too long to answer.")
+        case .channelClosed(let status) where status != nil:
+            String(localized: "error.ssh.commandStopped", defaultValue: "The command on the machine stopped.")
+        default: nil
+        }
+    }
+
+    private static func mosh(_ error: MoshBootstrapError) -> String {
+        switch error {
+        case .serverMissing:
+            String(
+                localized: "error.mosh.missing",
+                defaultValue: "Mosh isn't installed on the machine. Install it there, or connect with SSH."
+            )
+        case .noConnectLine:
+            String(
+                localized: "error.mosh.noStart",
+                defaultValue: "Mosh didn't start on the machine. A missing UTF-8 locale is a common cause."
+            )
+        case .malformedKey:
+            String(localized: "error.mosh.badKey", defaultValue: "Mosh sent a session key that couldn't be read.")
+        }
     }
 }
 

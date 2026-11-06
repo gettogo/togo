@@ -86,6 +86,7 @@ struct MachinesSettingsView: View {
                 )
             }
             .togoControls()
+            .togoSheet(.form)
         }
         .confirmationDialog(
             settingsText("settings.machines.remove.title", "Remove \(removal.pending?.name ?? "")?"),
@@ -129,6 +130,12 @@ struct MachinesSettingsView: View {
                         }
                     }
                     .contextMenu {
+                        if case .outdated = machine.helper {
+                            // Editing connects again and walks through installing the new helper.
+                            Button(settingsText("settings.machines.updateHelper", "Update helper"), systemImage: "arrow.down.circle") {
+                                edit(machine.id)
+                            }
+                        }
                         Button(settingsText("settings.machines.edit", "Edit"), systemImage: "pencil") { edit(machine.id) }
                         Button(settingsText("settings.machines.remove", "Remove"), systemImage: "trash", role: .destructive) {
                             removal.request(machine)

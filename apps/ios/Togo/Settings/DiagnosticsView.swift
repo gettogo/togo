@@ -101,7 +101,7 @@ struct DiagnosticsPage: View {
             } footer: {
                 Text(settingsText(
                     "diagnostics.included",
-                    "A report holds the app and iOS versions, this device's model, a summary of your settings and recent connection events. Machines appear as codes such as m-1a2b3c4d. It never holds machine names, addresses, user names, folders, session names, prompts, terminal text, keys or passwords."
+                    "Includes app and iOS versions, device model, a settings summary and recent connection events. Machines show as codes. Never includes names, addresses, folders, session names, prompts, terminal text, keys or passwords."
                 ))
             }
             .groupedRows()
@@ -167,9 +167,7 @@ struct DiagnosticsPreview: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button { dismiss() } label: {
-                        Label(settingsText("diagnostics.done", "Done"), systemImage: "xmark")
-                    }
+                    Button(settingsText("diagnostics.done", "Done")) { dismiss() }
                 }
             }
         }

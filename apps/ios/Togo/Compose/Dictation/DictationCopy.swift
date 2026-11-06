@@ -9,11 +9,11 @@ enum DictationCopy {
     static let stop = String(localized: "dictation.stop", defaultValue: "Stop dictating")
     static let listening = String(localized: "dictation.listening", defaultValue: "Listening")
     static let denied = String(
-        localized: "dictation.denied", defaultValue: "Togo can\u{2019}t use the microphone. Turn it on in Settings."
+        localized: "dictation.denied", defaultValue: "Togo can't use the microphone. Turn it on in Settings."
     )
-    static let openSettings = String(localized: "dictation.openSettings", defaultValue: "Open Settings")
+    static let openSettings = String(localized: "dictation.openSettings", defaultValue: "Open settings")
     static let unsupported = String(
-        localized: "dictation.unsupported", defaultValue: "Dictation isn\u{2019}t available for this language."
+        localized: "dictation.unsupported", defaultValue: "Dictation isn't available for this language."
     )
     static let dismiss = String(localized: "dictation.dismiss", defaultValue: "Dismiss")
     static let stopped = String(localized: "dictation.stopped", defaultValue: "Dictation stopped.")
@@ -59,9 +59,9 @@ enum DictationCopy {
         localized: "dictation.settings.speechFooter",
         defaultValue: "Speech becomes text on this device. Audio and words never leave it."
     )
-    static let recent = String(localized: "dictation.settings.recent", defaultValue: "Recent Dictations")
+    static let recent = String(localized: "dictation.settings.recent", defaultValue: "Recent dictations")
     static let insert = String(localized: "dictation.settings.insert", defaultValue: "Insert")
-    static let clear = String(localized: "dictation.settings.clear", defaultValue: "Clear Recent Dictations")
+    static let clear = String(localized: "dictation.settings.clear", defaultValue: "Clear recent dictations")
     static let noneYet = String(localized: "dictation.settings.none", defaultValue: "Nothing dictated yet.")
     static let recentFooter = String(
         localized: "dictation.settings.recentFooter",

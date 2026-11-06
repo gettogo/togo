@@ -25,7 +25,8 @@ struct KeyImportTests {
         let info = try await store.importKey(openSSH: text, passphrase: "pw", label: "laptop")
         #expect(typeAndBlob(info.publicKeyLine) == (try openSSHPublic(scratch, key, passphrase: "pw")))
         #expect(info.kind == .ed25519)
-        #expect(info.publicKeyLine.hasSuffix(" " + PublicKeyLine.deviceComment))
+        let comment = String(info.publicKeyLine.split(separator: " ").last ?? "")
+        #expect(comment.hasPrefix("togo-"))
         await #expect(throws: KeyError.badPassphrase) {
             try await store.importKey(openSSH: text, passphrase: "wrong", label: "x")
         }

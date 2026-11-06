@@ -232,11 +232,11 @@ public enum LifecycleWords {
         reason.flatMap { knownReasons.contains($0) ? $0 : nil }
     }
 
-    /// "Exit code 1" for an agent that exited on its own with a code other than 0. Ctrl-C and
+    /// "Exited with code 1" for an agent that exited on its own with a code other than 0. Ctrl-C and
     /// a usage limit say all there is in the status.
     public static func detail(reason: String?, code: Int?) -> String? {
         guard let code, code != 0, reason == "exit" || reason == "error" else { return nil }
-        return String(localized: "lifecycle.exitCode", defaultValue: "Exit code \(code)")
+        return String(localized: "lifecycle.exitCode", defaultValue: "Exited with code \(code)")
     }
 
     /// Whether a stopped agent is still alive at its prompt, waiting for words. The helper

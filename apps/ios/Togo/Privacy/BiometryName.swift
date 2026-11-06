@@ -22,4 +22,6 @@ enum BiometryName {
 /// "iPhone" or "iPad", for copy about what stays on this device.
 enum DeviceName {
     @MainActor static var model: String { UIDevice.current.model }
+    /// The SF Symbol that draws this device in diagrams.
+    @MainActor static var symbol: String { model == "iPad" ? "ipad" : "iphone" }
 }

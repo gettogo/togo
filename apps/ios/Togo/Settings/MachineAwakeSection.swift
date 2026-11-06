@@ -42,7 +42,7 @@ enum AwakeCopy {
             let above = status.batteryFloor + 5
             return settingsText("awake.reason.batteryFloor", "Paused until the battery is above \(above)%.")
         case .thermal:
-            return settingsText("awake.reason.thermal", "Paused while the Mac is hot.")
+            return settingsText("awake.reason.thermal", "Paused while the machine is hot.")
         case .unsupported:
             return settingsText("awake.reason.unsupported", "This machine can't be kept awake by Togo.")
         case .failed:
@@ -69,7 +69,7 @@ enum AwakeCopy {
     static func sheetBody(name: String) -> String {
         settingsText(
             "awake.sheet.body",
-            "To stay awake on battery with the lid closed, run this once on \(name). It asks for your password and adds one sleep rule."
+            "Run this once on \(name) to keep it awake on battery with the lid closed. It asks for your password."
         )
     }
 }

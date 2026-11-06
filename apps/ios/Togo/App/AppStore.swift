@@ -40,6 +40,8 @@ import TogoKit
     var reviewEnded: String?
     /// The open review holds a commit message the user has typed.
     var reviewHasDraft = false
+    /// The open review's screens and models, kept while a fold moves it between presenters.
+    @ObservationIgnored var openReview: ReviewSession?
     /// Compose text per tab. Cleared when it is sent and when the tab closes.
     var drafts: [TabID: String] = [:]
     /// The board of every session, shown over the workspace.

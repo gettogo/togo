@@ -251,6 +251,16 @@ private struct ManualPortRow: View {
                     .frame(minHeight: 44)
                     .accessibilityLabel(PortsCopy.manualTitle)
                     .onSubmit(submit)
+                    // The number pad has no Return key.
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            if focused {
+                                Spacer()
+                                Button(PortsCopy.open, action: submit)
+                                    .disabled(model.manualText.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                        }
+                    }
                 Button(PortsCopy.open, action: submit)
                     .buttonStyle(.secondary(.fit))
                     .disabled(model.manualText.trimmingCharacters(in: .whitespaces).isEmpty)

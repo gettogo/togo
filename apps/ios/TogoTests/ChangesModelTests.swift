@@ -121,7 +121,7 @@ import TogoKit
         let confirmation = model.pendingConfirmation
         #expect(confirmation?.title == "Undo the rename?")
         #expect(confirmation?.message == "src/db.ts comes back and src/store.ts is removed.")
-        #expect(confirmation?.button == "Undo Rename")
+        #expect(confirmation?.button == "Undo rename")
         #expect(confirmation?.files == ["src/store.ts"])
         // The old path comes back, so it goes with what the user saw.
         #expect(confirmation?.selection.seen["src/db.ts"] == GitSeen(status: "R.", fingerprint: nil))
@@ -136,7 +136,7 @@ import TogoKit
         services.failures[.discard] = HelperError.conflict(GitConflict.caseRename.rawValue)
         model.requestDiscard(["src/store.ts"])
         await model.confirm()
-        #expect(model.notice?.message == "Can't undo a rename that only changes letter case from the phone. Use git on Studio.")
+        #expect(model.notice?.message == "Can't undo a rename that only changes letter case from this device. Use git on Studio.")
         #expect(model.notice?.canRetry == false)
     }
 

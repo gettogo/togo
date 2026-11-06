@@ -63,7 +63,7 @@ struct ControlCenterView: View {
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button(ControlCenterCopy.settings, systemImage: "gearshape") { store.path.append(.settings) }
+            Button(ControlCenterCopy.settings, systemImage: "gearshape") { store.showSettings() }
                 .foregroundStyle(Color.togoSnow)
         }
         if !store.services.hosts.isEmpty {

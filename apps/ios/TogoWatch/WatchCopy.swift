@@ -38,10 +38,10 @@ enum WatchCopy {
         guard let machine, !machine.isEmpty else {
             return String(
                 localized: "watch.notSetUp.unnamed",
-                defaultValue: "This Watch isn't set up for this machine yet. Open Togo on iPhone."
+                defaultValue: "Not set up for this machine. Open Togo on iPhone."
             )
         }
-        return String(localized: "watch.notSetUp", defaultValue: "This Watch isn't set up for \(machine) yet. Open Togo on iPhone.")
+        return String(localized: "watch.notSetUp", defaultValue: "Not set up for \(machine). Open Togo on iPhone.")
     }
 
     /// "As of 12:04", in the Watch's own time format.

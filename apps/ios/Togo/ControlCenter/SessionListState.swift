@@ -23,16 +23,52 @@ extension AppStore {
             }
         }
         let order = Dictionary(hosts.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return sections.sorted { (order[$0.id] ?? .max) < (order[$1.id] ?? .max) }
+        var seen = Set<HostID>()
+        return sections
+            .filter { seen.insert($0.id).inserted }
+            .map { section in
+                // The heading reads the machine's record, so a rename shows at once.
+                var section = section.listed
+                if let host = hosts.first(where: { $0.id == section.id }) {
+                    section.name = host.name
+                    section.symbol = host.symbol
+                }
+                return section
+            }
+            .sorted { (order[$0.id] ?? .max) < (order[$1.id] ?? .max) }
     }
 
     /// Requests are what "Needs you" means, so the other filters hide them.
     var listRequests: [RequestCard] {
         guard filter == .all || filter == .needsYou else { return [] }
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        var seen = Set<String>()
         return controlCenter.requests.filter { card in
             needle.isEmpty || [card.title, card.agentName, card.bib ?? ""]
                 .contains { $0.localizedStandardContains(needle) }
+        }
+        .filter { seen.insert($0.id).inserted }
+    }
+
+    /// Every row of the sidebar that carries an identity, in list order. The list keys its
+    /// rows by these; a repeat, even across sections, makes its batch update inconsistent.
+    var sidebarRowIDs: [SidebarRowID] {
+        let narrowed = listNarrowed
+        return [.board] + listRequests.map { .card($0.id) } + listMachines.flatMap { machine in
+            let restorable = !narrowed && machine.reachability == .online ? machine.restorable : []
+            return machine.sessions.map { SidebarRowID.session(TabID(hostID: machine.id, sessionID: $0.id)) }
+                + restorable.map { SidebarRowID.restorable(TabID(hostID: machine.id, sessionID: $0.id)) }
+        }
+    }
+
+    /// The sidebar's selection, only while its row is in the list: the focused tab can be a
+    /// session the filter hides, an archived one or one the machine has not listed yet, and
+    /// the list must not be asked to select a row it does not have.
+    var listedSidebarSelection: SidebarItem? {
+        switch sidebarSelection {
+        case .board: .board
+        case .session(let id)? where sidebarRowIDs.contains(.session(id)): .session(id)
+        case .session, nil: nil
         }
     }
 
@@ -68,6 +104,26 @@ extension AppStore {
     }
 }
 
+/// The identity of a sidebar row that has one.
+enum SidebarRowID: Hashable, Sendable {
+    case board
+    case card(String)
+    case session(TabID)
+    case restorable(TabID)
+}
+
+extension MachineSection {
+    /// Each session once, and a restorable session only while no live row has its id (a
+    /// restore can land in a snapshot before the restorable list drops it).
+    var listed: MachineSection {
+        var section = self
+        var seen = Set<String>()
+        section.sessions = sessions.filter { seen.insert($0.id).inserted }
+        section.restorable = restorable.filter { seen.insert($0.id).inserted }
+        return section
+    }
+}
+
 /// Takes answered cards away once the list has shown their outcome. Every list that shows
 /// cards carries it; in a regular window the sidebar is the only one on screen.
 struct RequestCollapse: ViewModifier {
@@ -92,8 +148,6 @@ struct RequestCollapse: ViewModifier {
 struct SessionFilterPicker: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var store: AppStore
-    /// The sidebar is too narrow for four segments, so it always takes the menu.
-    var menu = false
 
     var body: some View {
         let picker = Picker(ControlCenterCopy.filter, selection: $store.filter) {
@@ -101,7 +155,7 @@ struct SessionFilterPicker: View {
                 Text(ControlCenterCopy.filterName(filter)).tag(filter)
             }
         }
-        if menu || dynamicTypeSize.isAccessibilitySize {
+        if dynamicTypeSize.isAccessibilitySize {
             picker
                 .pickerStyle(.menu)
                 .foregroundStyle(Color.togoSnow)

@@ -25,6 +25,14 @@ enum ReviewEntryCopy {
         String(localized: "review.entry.helperMissing", defaultValue: "Changes, files and ports need the Togo helper on \(machine).")
     }
 
+    static func helperOutdated(_ machine: String) -> String {
+        String(localized: "review.entry.helperOutdated", defaultValue: "Update the helper on \(machine) to review changes.")
+    }
+
+    static func helperOutdatedPorts(_ machine: String) -> String {
+        String(localized: "review.entry.helperOutdatedPorts", defaultValue: "Update the helper on \(machine) to see its ports.")
+    }
+
     static func machineRemoved(_ machine: String) -> String {
         String(localized: "review.entry.machineRemoved", defaultValue: "\(machine) was removed from Togo.")
     }

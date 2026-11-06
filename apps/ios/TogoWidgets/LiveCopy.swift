@@ -68,7 +68,7 @@ enum LiveStatus: Equatable {
 /// The words and links the Live Activity and the waiting widget share.
 enum LiveCopy {
     /// Shown when the pairing record for an activity's machine is gone or unreadable.
-    static let unknownMachine = String(localized: "live.machine.unknown", defaultValue: "Mac")
+    static let unknownMachine = String(localized: "live.machine.unknown", defaultValue: "Machine")
 
     static func waiting(_ count: Int) -> String {
         String(localized: "live.waiting", defaultValue: "\(count) waiting")

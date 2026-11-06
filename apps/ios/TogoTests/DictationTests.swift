@@ -138,7 +138,7 @@ struct DictationTests {
         await dictation.press()
         #expect(dictation.phase == .failed(DictationCopy.denied))
         #expect(dictation.opensSettings)
-        #expect(DictationCopy.denied == "Togo can\u{2019}t use the microphone. Turn it on in Settings.")
+        #expect(DictationCopy.denied == "Togo can't use the microphone. Turn it on in Settings.")
         #expect(engine.startCalls == 0)
         dictation.dismiss()
         #expect(dictation.phase == .idle)
@@ -166,7 +166,7 @@ struct DictationTests {
                 == "Download speech for English (US), 64 MB"
         )
         #expect(DictationCopy.language(for: Locale(identifier: "en-US"), in: Locale(identifier: "en-US")) == "English (US)")
-        #expect(DictationCopy.unsupported == "Dictation isn\u{2019}t available for this language.")
+        #expect(DictationCopy.unsupported == "Dictation isn't available for this language.")
     }
 
     @Test func unsupportedLocaleSaysSo() async {

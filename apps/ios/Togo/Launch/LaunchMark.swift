@@ -4,22 +4,28 @@ import SwiftUI
 /// paw prints walking up and to the right, and the beacon they walk towards. The two files
 /// differ only in colour, which the palette's light and dark values already carry.
 ///
-/// Every part takes its own progress so the launch can stroke, walk and light it in turn.
+/// Every part takes its own scale so the launch can walk the paws and light the beacon in turn.
 struct LaunchMark: View {
-    var chevron: Double = 1
+    /// The side of the launch screen's `LaunchMark` image: the SVG's whole 64-unit box at this
+    /// many points, centred on the screen. The launch overlay starts from exactly this.
+    static let launchScreenSide: CGFloat = 164
+
     var paws: [Double] = Array(repeating: 1, count: MarkGeometry.paws.count)
     var beaconScale: Double = 1
-    var beaconOpacity: Double = 1
-    /// Width of the drawn mark, from the chevron's left cap to the beacon's right edge. The
-    /// frame is the SVG's whole box scaled to match, so the mark keeps the file's optical centre.
-    var width: CGFloat = 132
+    /// The beacon's glow, spreading out as it lights.
+    var glowScale: Double = 1
+    var glowOpacity: Double = 0
+    /// The side of the SVG's whole box, so the mark keeps the file's optical centre.
+    var side: CGFloat = LaunchMark.launchScreenSide
 
     var body: some View {
-        let unit = width / MarkGeometry.inkWidth
-        let size = MarkGeometry.viewBox * unit
+        let unit = side / MarkGeometry.viewBox
         ZStack {
+            MarkPart(path: MarkGeometry.beacon)
+                .fill(Color.togoAccent)
+                .scaleEffect(glowScale, anchor: MarkGeometry.beaconAnchor)
+                .opacity(glowOpacity)
             MarkPart(path: MarkGeometry.chevron)
-                .trim(from: 0, to: chevron)
                 .stroke(
                     Color.togoSnow,
                     style: StrokeStyle(lineWidth: MarkGeometry.chevronWidth * unit, lineCap: .round, lineJoin: .round)
@@ -27,14 +33,13 @@ struct LaunchMark: View {
             ForEach(MarkGeometry.paws.indices, id: \.self) { index in
                 MarkPart(path: MarkGeometry.paw(index))
                     .fill(Color.togoSnow)
-                    .opacity(paws[index])
+                    .scaleEffect(paws[index], anchor: MarkGeometry.pawAnchor(index))
             }
             MarkPart(path: MarkGeometry.beacon)
                 .fill(Color.togoAccent)
                 .scaleEffect(beaconScale, anchor: MarkGeometry.beaconAnchor)
-                .opacity(beaconOpacity)
         }
-        .frame(width: size, height: size)
+        .frame(width: side, height: side)
     }
 }
 
@@ -53,9 +58,6 @@ private struct MarkPart: Shape {
 private enum MarkGeometry {
     static let viewBox: CGFloat = 64
     static let chevronWidth: CGFloat = 4.5
-    /// The drawn extent in box units: the stroked chevron's round cap to the beacon's edge.
-    static let inkWidth = beacon.boundingRect.maxX
-        - chevron.strokedPath(StrokeStyle(lineWidth: chevronWidth, lineCap: .round)).boundingRect.minX
     static let nudge = CGAffineTransform(translationX: -0.2, y: 0.4)
 
     static let chevron = Path { path in
@@ -85,6 +87,12 @@ private enum MarkGeometry {
             .concatenating(CGAffineTransform(translationX: placement.x, y: placement.y))
             .concatenating(nudge)
         return print.applying(transform)
+    }
+
+    /// A print steps from its own pad, not the mark's centre.
+    static func pawAnchor(_ index: Int) -> UnitPoint {
+        let pad = CGPoint(x: paws[index].x, y: paws[index].y).applying(nudge)
+        return UnitPoint(x: pad.x / viewBox, y: pad.y / viewBox)
     }
 
     private static let beaconCentre = CGPoint(x: 54, y: 24.5).applying(nudge)

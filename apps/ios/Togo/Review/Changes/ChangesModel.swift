@@ -164,9 +164,9 @@ struct ChangeRow: Identifiable, Hashable {
             // A screen that went away stopped the read; nothing went wrong.
             if Task.isCancelled || error is CancellationError { return }
             if status == nil {
-                phase = .failed(error.localizedDescription)
+                phase = .failed(ServiceErrors.message(error))
             } else {
-                notice = Notice(message: error.localizedDescription, canRetry: false)
+                notice = Notice(message: ServiceErrors.message(error), canRetry: false)
             }
             return
         }
@@ -208,7 +208,7 @@ struct ChangeRow: Identifiable, Hashable {
         do {
             selection = try ReviewSelection.all(in: status) { Self.kind(of: $0, isIn: kind) }
         } catch {
-            notice = Notice(message: error.localizedDescription, canRetry: false)
+            notice = Notice(message: ServiceErrors.message(error), canRetry: false)
             return
         }
         if kind == .staged {
@@ -225,7 +225,7 @@ struct ChangeRow: Identifiable, Hashable {
         do {
             selection = try ReviewSelection(status, paths: paths)
         } catch {
-            notice = Notice(message: error.localizedDescription, canRetry: false)
+            notice = Notice(message: ServiceErrors.message(error), canRetry: false)
             if case .notShown? = error as? ReviewSelection.Failure { Task { await refresh() } }
             return
         }

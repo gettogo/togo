@@ -18,9 +18,8 @@ struct AgentStep: View {
                 }
             }
         }
-        // At large text sizes the list runs under the Start button; the hard edge marks where.
+        // The list scrolls under the Start button behind the system's soft edge.
         .safeAreaBar(edge: .bottom) { footer }
-        .scrollEdgeEffectStyle(.hard, for: .bottom)
     }
 
     @ViewBuilder private var agents: some View {

@@ -152,7 +152,7 @@ struct ReviewCodingTests {
         let unmanaged = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notManaged, message: "not_managed"))
         #expect(unmanaged.localizedDescription == "That session was not started from Togo, so it cannot be changed from here.")
         let invalid = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.invalidParams, message: "invalid params"))
-        #expect(invalid.localizedDescription == "The Togo helper on the host turned that request down. Update the app or the helper.")
+        #expect(invalid.localizedDescription == "The Togo helper on the machine turned that request down. Update the app or the helper.")
         #expect(HelperError.conflict("stale").localizedDescription == "This file changed since you looked. Check it again.")
     }
 

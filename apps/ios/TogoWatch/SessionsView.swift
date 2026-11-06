@@ -38,6 +38,8 @@ struct SessionsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Text(PromptText.clean(machine.name, maxLines: 1))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                         }
                     }
                 }
@@ -60,6 +62,8 @@ private struct SessionRow: View {
             HStack(spacing: 6) {
                 Text(PromptText.clean(session.bib, maxLines: 1))
                     .font(.system(.footnote, design: .monospaced).weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Text(PromptText.clean(session.agentName, maxLines: 1))
                     .font(.footnote)
                     .lineLimit(1)

@@ -124,7 +124,7 @@ struct NotificationTextTests {
     func stopped(_ kind: PushPayload.Kind, code: Int?, reason: String) -> PushPayload {
         PushPayload(
             kind: kind, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
-            title: "Claude Code stopped", body: "Exited with code 1", ts: 1_793_707_200_000,
+            title: "Claude Code stopped", body: "Exit code 1", ts: 1_793_707_200_000,
             exit: PushExit(code: code, reason: reason, detail: nil)
         )
     }
@@ -133,7 +133,7 @@ struct NotificationTextTests {
         let text = try #require(build(stopped(.failed, code: 1, reason: "exit")))
         #expect(text.title == "01 Claude Code")
         #expect(text.subtitle == "")
-        #expect(text.body == "Stopped with an error · Exit code 1")
+        #expect(text.body == "Stopped with an error · Exited with code 1")
         #expect(text.category == "togo.ended")
         #expect(text.threadID == "s_abcdefghij")
         #expect(text.interruption == .active)
@@ -143,7 +143,7 @@ struct NotificationTextTests {
         let cases: [(PushPayload.Kind, Int?, String, String)] = [
             (.ended, 0, "exit", "Ended"),
             (.ended, 130, "interrupted", "Ended"),
-            (.failed, 2, "exit", "Stopped with an error · Exit code 2"),
+            (.failed, 2, "exit", "Stopped with an error · Exited with code 2"),
             (.failed, nil, "error", "Stopped with an error"),
             (.failed, nil, "usage_limit", "Hit a usage limit"),
             (.ended, nil, "restart", "Ended by restart"),

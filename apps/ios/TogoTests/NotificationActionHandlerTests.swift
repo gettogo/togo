@@ -126,7 +126,7 @@ struct NotificationActionHandlerTests {
         ))
         let payload = PushPayload(
             kind: .failed, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
-            title: "Claude Code stopped", body: "Exited with code 1", ts: Int64(start.timeIntervalSince1970 * 1000),
+            title: "Claude Code stopped", body: "Exit code 1", ts: Int64(start.timeIntervalSince1970 * 1000),
             exit: PushExit(code: 1, reason: "exit", detail: nil)
         )
         let envelope = try Seal.seal(

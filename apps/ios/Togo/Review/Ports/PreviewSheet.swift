@@ -175,7 +175,7 @@ private struct WebPreview: View {
     private func fail(_ error: any Error) {
         // A newer navigation replaced this one; nothing failed.
         if (error as NSError).code == NSURLErrorCancelled { return }
-        failure = error.localizedDescription
+        failure = ServiceErrors.message(error)
     }
 }
 

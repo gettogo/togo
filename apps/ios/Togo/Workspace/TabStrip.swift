@@ -5,6 +5,7 @@ import SwiftUI
 /// rest are plain text. A chip drags into a pane or another window.
 struct TabStrip: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
 
     struct Chip: Identifiable, Equatable {
         var id: TabID
@@ -93,13 +94,28 @@ struct TabStrip: View {
         .buttonStyle(.plain)
         .motion(.tabSettle, value: isSelected)
         .accessibilityAddTraits(isSelected || isBeside ? .isSelected : [])
-        .draggable(chip.id)
+        .modifier(ChipDrag(id: chip.id, enabled: canOpenBeside || supportsMultipleWindows))
         .contextMenu {
             if canOpenBeside && !isBeside {
                 Button(PanesCopy.openBeside, systemImage: "rectangle.split.2x1") { onOpenBeside(chip.id) }
             }
             OpenInWindowButton(tab: chip.id)
             Button(WorkspaceCopy.closeTab, systemImage: "xmark") { onClose(chip.id) }
+        }
+    }
+}
+
+/// Lifts a chip only where something can take it: a second pane or another window. Elsewhere
+/// the long press belongs to the chip's menu.
+private struct ChipDrag: ViewModifier {
+    let id: TabID
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.draggable(id)
+        } else {
+            content
         }
     }
 }

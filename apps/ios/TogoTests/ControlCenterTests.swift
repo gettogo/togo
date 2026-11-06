@@ -89,7 +89,7 @@ import TogoKit
         #expect(SessionAction.allCases.filter(\.needsConfirmation) == [.kill])
 
         let confirmation = SessionActions.killConfirmation(for: row)
-        #expect(confirmation.title == "Kill 04 Claude Code?")
+        #expect(confirmation.title == "End 04 Claude Code?")
         #expect(confirmation.message == "The agent stops and its screen is gone.")
     }
 

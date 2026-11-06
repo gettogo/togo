@@ -293,7 +293,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This Watch isn't set up for %@ yet. Open Togo on iPhone."
+            "value" : "Not set up for %@. Open Togo on iPhone."
           }
         }
       }
@@ -304,7 +304,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This Watch isn't set up for this machine yet. Open Togo on iPhone."
+            "value" : "Not set up for this machine. Open Togo on iPhone."
           }
         }
       }

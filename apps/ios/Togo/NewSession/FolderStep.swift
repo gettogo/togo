@@ -4,6 +4,8 @@ import TogoKit
 struct FolderStep: View {
     let model: NewSessionModel
     let onStart: () async -> Void
+    /// Opens the browser as its own page, so the back button returns to the places.
+    let onBrowse: () async -> Void
     let onChoose: (String) async -> Void
 
     var body: some View {
@@ -13,20 +15,7 @@ struct FolderStep: View {
             StepScaffold(title: NewSessionCopy.folderTitle) {
                 places
             }
-            // Browsing is its own page so the navigation bar's back button returns to the places.
-            .navigationDestination(isPresented: browsingShown) {
-                StepScaffold(title: NewSessionCopy.browse) {
-                    BrowseList(model: model, onChoose: onChoose)
-                }
-            }
         }
-    }
-
-    private var browsingShown: Binding<Bool> {
-        Binding(
-            get: { model.browsing != .idle },
-            set: { shown in if !shown { model.leaveBrowsing() } }
-        )
     }
 
     private var places: some View {
@@ -41,7 +30,7 @@ struct FolderStep: View {
                     Task { await onChoose("~") }
                 }
                 ChoiceRow(symbol: "folder", title: Text(verbatim: NewSessionCopy.browse), chevron: true) {
-                    Task { await model.browse("~") }
+                    Task { await onBrowse() }
                 }
             }
         }
@@ -109,6 +98,18 @@ struct FolderRow: View {
         let muted = Text(verbatim: parent).foregroundStyle(Color.togoMute)
         let strong = Text(verbatim: last).bold().foregroundStyle(Color.togoSnow)
         return Text("\(muted)\(strong)")
+    }
+}
+
+/// The folder browser page, above the folder step.
+struct BrowseStep: View {
+    let model: NewSessionModel
+    let onChoose: (String) async -> Void
+
+    var body: some View {
+        StepScaffold(title: NewSessionCopy.browse) {
+            BrowseList(model: model, onChoose: onChoose)
+        }
     }
 }
 

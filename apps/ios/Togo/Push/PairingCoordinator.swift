@@ -127,10 +127,10 @@ extension RelayRegisterSender: PushTokenRegistering {}
         set { sentChoices.set(newValue, forKey: Self.sentChoicesKey) }
     }
 
-    /// A machine's helper connected. The first helper that can send pushes while the user is
-    /// looking at the app is the moment it asks for notification permission; a machine that
-    /// connects in the background never brings up the question. `sshKey` is this device's
-    /// public key on the machine, which only a helper that can remove it is given.
+    /// A machine's helper connected: pairs it once notifications are allowed. It never asks for
+    /// permission itself; the question follows a tap, after adding a machine or in Settings.
+    /// `sshKey` is this device's public key on the machine, which only a helper that can
+    /// remove it is given.
     func machineOnline(
         hostID: HostID, name: String, capabilities: Set<String>, sshKey: String? = nil,
         pair: (PushPairParams) async throws -> PushPairResult
@@ -140,9 +140,6 @@ extension RelayRegisterSender: PushTokenRegistering {}
         defer {
             pairing.remove(hostID)
             removedWhilePairing[hostID] = nil
-        }
-        if registrar.authorization == .notDetermined, isForeground {
-            await registrar.requestAuthorization()
         }
         guard registrar.authorization.allowsPush, let apnsToken = registrar.apnsToken else { return }
 

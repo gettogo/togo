@@ -54,7 +54,7 @@ import TogoKit
            let key = try await keys.list().first(where: { $0.id == id }) {
             return key
         }
-        let key = try await keys.generateDeviceKey(label: String(localized: "onboard.key.deviceLabel", defaultValue: "Togo on this phone"))
+        let key = try await keys.generateDeviceKey(label: String(localized: "onboard.key.deviceLabel", defaultValue: "Togo on this \(DeviceName.model)"))
         UserDefaults.standard.set(key.id, forKey: Self.deviceKeyDefault)
         return key
     }
@@ -96,7 +96,7 @@ import TogoKit
     /// A declined prompt the user can answer, such as a code after the key was accepted, comes
     /// back as `needsAnswer` before anything reads as a refused key.
     nonisolated static func outcome(for error: any Error, promptDeclined: Bool, request: SignInRequest? = nil) -> ConnectOutcome {
-        guard let error = error as? SSHError else { return .failed(error.localizedDescription) }
+        guard let error = error as? SSHError else { return .failed(ServiceErrors.message(error)) }
         if promptDeclined, let request {
             switch error {
             case .cancelled, .authFailed: return .needsAnswer(request)
@@ -115,7 +115,7 @@ import TogoKit
         case .timeout:
             return .unreachable
         case .unreachable, .channelClosed:
-            return .failed(error.localizedDescription)
+            return .failed(ServiceErrors.message(error))
         }
     }
 

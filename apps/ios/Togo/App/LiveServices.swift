@@ -108,6 +108,11 @@ import UIKit
         deps.shareSettings(settings)
         await hostRecords.setSyncEnabled(settings.syncEnabled)
         reconcile(await hostStore.hosts())
+        // Addresses saved with an interface zone (`fe80::…%en0`) become the machine's name when
+        // it answers to one; the others keep theirs and the edit form explains. Off the launch
+        // path: a lookup can take seconds, and the store's changes reconcile when it is done.
+        let hostStore = self.hostStore
+        Task { _ = await hostStore.tidyAddresses() }
         hostsLoaded = true
         retryUnpairs()
         if let pairing = deps.pairing {

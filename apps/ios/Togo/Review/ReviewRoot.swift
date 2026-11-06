@@ -23,6 +23,22 @@ struct ReviewNavigation: Equatable {
         }
     }
 
+    /// After the window changes between compact and regular, as when a Duo folds or unfolds: a
+    /// diff or file open beside the list is pushed onto the stack, and one pushed last moves
+    /// beside the list. Running it again changes nothing.
+    mutating func relayout(to layout: ReviewRoot.Layout) {
+        switch layout {
+        case .stack:
+            guard let detail else { return }
+            path.append(detail)
+            self.detail = nil
+        case .split:
+            guard detail == nil, let last = path.last, last.opensBeside else { return }
+            path.removeLast()
+            detail = last
+        }
+    }
+
     /// Another tab starts from its list, with nothing from the last tab open beside it.
     mutating func select(_ tab: ReviewTab) {
         guard tab != self.tab else { return }
@@ -55,17 +71,13 @@ struct ReviewRoot: View {
     private let ended: String?
     private let onDraft: (Bool) -> Void
 
-    @State private var navigation: ReviewNavigation
-    @State private var changes: ChangesModel
-    @State private var history: HistoryModel
-    @State private var files: FilesModel
-    /// One per sheet: the ports screen stops its listener and forwards when it leaves.
-    @State private var ports: PortsModel
+    @State private var session: ReviewSession
 
-    /// `navigation` restores screens already open, for previews and snapshots.
+    /// `navigation` restores screens already open, for previews and snapshots. `session` is the
+    /// store's open review, which outlives this view when a fold moves the review.
     init(
         subject: ReviewSubject, services: any ReviewServices, initialTab: ReviewTab, machine: String = "",
-        sendToSession: ((String) -> Void)?, navigation: ReviewNavigation? = nil,
+        sendToSession: ((String) -> Void)?, navigation: ReviewNavigation? = nil, session: ReviewSession? = nil,
         onSelectTab: @escaping (ReviewTab) -> Void = { _ in }, onWrite: @escaping () -> Void = {},
         ended: String? = nil, onDraft: @escaping (Bool) -> Void = { _ in }
     ) {
@@ -78,13 +90,17 @@ struct ReviewRoot: View {
         self.initialTab = initialTab
         self.machine = machine
         self.sendToSession = sendToSession
-        let tab = Self.tabs(for: subject).contains(initialTab) ? initialTab : .changes
-        _navigation = State(initialValue: navigation ?? ReviewNavigation(tab: tab))
-        _changes = State(initialValue: ChangesModel(subject: subject, services: services, machine: machine))
-        _history = State(initialValue: HistoryModel(subject: subject, services: services))
-        _files = State(initialValue: FilesModel(subject: subject, services: services, path: "", ref: nil))
-        _ports = State(initialValue: PortsModel(subject: subject, services: services))
+        _session = State(initialValue: session ?? ReviewSession(
+            subject: subject, services: services, tab: initialTab, machine: machine, navigation: navigation
+        ))
     }
+
+    private var navigation: ReviewNavigation {
+        get { session.navigation }
+        nonmutating set { session.navigation = newValue }
+    }
+
+    private var changes: ChangesModel { session.changes }
 
     /// Ports shows only when the machine's helper lists ports.
     static func tabs(for subject: ReviewSubject) -> [ReviewTab] {
@@ -124,6 +140,8 @@ struct ReviewRoot: View {
         }
         // The store follows the picker, so a shortcut for the tab left behind opens it again.
         .onChange(of: navigation.tab) { _, tab in onSelectTab(tab) }
+        // Folding or unfolding moves an open diff between the stack and the detail.
+        .onChange(of: layout, initial: true) { _, layout in navigation.relayout(to: layout) }
         .onChange(of: changes.successes) { onWrite() }
         .onChange(of: changes.status?.files.count) { onWrite() }
         .onChange(of: ended, initial: true) { _, why in changes.ended = why }
@@ -134,14 +152,14 @@ struct ReviewRoot: View {
     // MARK: Layouts
 
     private var stack: some View {
-        NavigationStack(path: $navigation.path) {
+        NavigationStack(path: Bindable(session).navigation.path) {
             tabRoot
         }
     }
 
     private var split: some View {
         NavigationSplitView {
-            NavigationStack(path: $navigation.path) {
+            NavigationStack(path: Bindable(session).navigation.path) {
                 tabRoot
             }
             .environment(\.openReviewRoute, navigation.detail)
@@ -183,9 +201,9 @@ struct ReviewRoot: View {
     @ViewBuilder private var tabContent: some View {
         switch navigation.tab {
         case .changes: ChangesView(model: changes, onOpen: open)
-        case .history: HistoryView(model: history, onOpen: open)
-        case .files: FileBrowserView(model: files, onOpen: open)
-        case .ports: PortsView(model: ports)
+        case .history: HistoryView(model: session.history, onOpen: open)
+        case .files: FileBrowserView(model: session.files, onOpen: open)
+        case .ports: PortsView(model: session.ports)
         }
     }
 
@@ -249,6 +267,16 @@ struct ReviewRoot: View {
     }
 }
 
+private extension ReviewRoute {
+    /// Diffs and files open beside the list in a split view; folders and commits go down it.
+    var opensBeside: Bool {
+        switch self {
+        case .diff, .file: true
+        case .folder, .commit: false
+        }
+    }
+}
+
 /// A diff that tells the root when a write went through, so a list beside it reads again.
 private struct DiffDestination: View {
     @Environment(\.reviewEnded) private var ended
@@ -272,7 +300,8 @@ extension EnvironmentValues {
 
 extension View {
     /// Shows the store's review sheet over this view while `active`: a full-screen cover in a
-    /// compact window, a large sheet in a regular one. The terminal keeps running underneath.
+    /// compact window, a large sheet in a regular one, chosen when it opens and kept until it
+    /// closes. The terminal keeps running underneath.
     func reviewPresentation(store: AppStore, terminals: TerminalPool, active: Bool) -> some View {
         modifier(ReviewPresenter(store: store, terminals: terminals, active: active))
     }
@@ -288,32 +317,34 @@ private struct ReviewPresenter: ViewModifier {
     func body(content: Content) -> some View {
         content
             .fullScreenCover(item: request(regular: false)) { request in
-                root(request)
+                root(request, regular: false)
                     .modifier(ReviewEntrance())
             }
             .sheet(item: request(regular: true)) { request in
                 // Page-sized, so the sheet keeps a regular width and shows the split view: a
                 // form sheet would be compact inside and fall back to the phone's stack.
-                root(request)
+                root(request, regular: true)
                     .presentationDetents([.large])
                     .presentationSizing(.page)
                     .modifier(ReviewEntrance())
             }
             // Under Reduce Motion the cover does not slide; the review fades in where it stands.
             .transaction(value: store.reviewing?.id) { if reduceMotion { $0.disablesAnimations = true } }
+            .onChange(of: store.reviewing?.id) { _, open in if open == nil { store.reviewClosed() } }
     }
 
     private func request(regular: Bool) -> Binding<ReviewRequest?> {
         Binding {
-            guard active, (ReviewRoot.layout(for: sizeClass) == .split) == regular else { return nil }
-            return store.reviewing
+            guard active, let request = store.reviewing else { return nil }
+            let kept = store.openReview?.subject == request.subject ? store.openReview?.regular : nil
+            return ReviewPresentation.regular(kept: kept, sizeClass: sizeClass) == regular ? request : nil
         } set: { request in
             if request == nil, store.reviewing != nil { store.sheet = nil }
         }
     }
 
-    private func root(_ request: ReviewRequest) -> some View {
-        ReviewHost(store: store, terminals: terminals, request: request)
+    private func root(_ request: ReviewRequest, regular: Bool) -> some View {
+        ReviewHost(store: store, terminals: terminals, request: request, regular: regular)
     }
 }
 
@@ -322,13 +353,18 @@ private struct ReviewHost: View {
     let store: AppStore
     let terminals: TerminalPool
     let request: ReviewRequest
+    let regular: Bool
 
     var body: some View {
         let tab = TabID(hostID: request.subject.hostID, sessionID: request.subject.sessionID)
+        let machine = store.machineName(for: request.subject.hostID)
         ReviewRoot(
             subject: request.subject, services: store.reviewServices, initialTab: request.tab,
-            machine: store.machineName(for: request.subject.hostID),
+            machine: machine,
             sendToSession: ReviewRoot.sendToSession { [terminals] in terminals.handle(for: tab) },
+            session: store.keptReview(
+                for: request.subject, services: store.reviewServices, tab: request.tab, machine: machine, regular: regular
+            ),
             onSelectTab: { [store, request] tab in
                 if store.reviewing?.subject == request.subject { store.sheet = .review(request.subject, tab) }
             },

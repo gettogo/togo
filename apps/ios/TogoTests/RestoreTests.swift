@@ -149,7 +149,7 @@ import TogoKit
 
         tools.fail("session.restore", code: -32008, message: "refused", data: #"{"reason":"other"}"#)
         await store.restore(row, on: Samples.studio, resume: false, tools: tools)
-        #expect(store.notice?.text == "Couldn't restore 01 app: The Togo helper on the host turned that down.")
+        #expect(store.notice?.text == "Couldn't restore 01 app: The Togo helper on the machine turned that down.")
         #expect(store.controlCenter.machines[0].restorable.count == 1)
 
         // Already restored or dismissed from another phone: the row goes away.

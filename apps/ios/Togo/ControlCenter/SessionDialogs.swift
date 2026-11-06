@@ -25,6 +25,8 @@ struct SessionDialogs: ViewModifier {
                 isPresented: presented($rename), presenting: rename
             ) { row in
                 TextField(ControlCenterCopy.name, text: $name)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                 Button(ControlCenterCopy.rename) { Task { await store.rename(row, to: name) } }
                 Button(ControlCenterCopy.cancel, role: .cancel) {}
             }

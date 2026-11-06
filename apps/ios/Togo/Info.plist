@@ -43,7 +43,7 @@
 		<string>_ssh._tcp</string>
 	</array>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Unlock your SSH keys.</string>
+	<string>Unlock Togo and your saved keys and passwords.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Find and connect to the machines on your network.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -69,6 +69,8 @@
 	<dict>
 		<key>UIColorName</key>
 		<string>Ink</string>
+		<key>UIImageName</key>
+		<string>LaunchMark</string>
 	</dict>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

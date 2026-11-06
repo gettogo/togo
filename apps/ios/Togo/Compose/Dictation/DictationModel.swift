@@ -293,7 +293,7 @@ import TogoTerminal
         case .denied: DictationCopy.denied
         case .engine(let reason): reason
         case .interrupted, .routeLost: DictationCopy.stopped
-        case nil: error.localizedDescription
+        case nil: ServiceErrors.message(error)
         }
     }
 

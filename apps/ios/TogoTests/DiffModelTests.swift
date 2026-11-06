@@ -509,11 +509,11 @@ import UIKit
         status.files.append(ReviewFixtures.file("src/store.ts", "R", "M", from: "src/db.ts"))
         let model = model(.worktree(path: "src/store.ts"), services: FakeReviewServices(status: status))
         await model.load()
-        #expect(model.discardActionTitle == "Undo Rename")
+        #expect(model.discardActionTitle == "Undo rename")
         await model.perform(.discard)
         #expect(model.pendingDiscard?.title == "Undo the rename?")
         #expect(model.pendingDiscard?.message == "src/db.ts comes back and src/store.ts is removed.")
-        #expect(model.pendingDiscard?.button == "Undo Rename")
+        #expect(model.pendingDiscard?.button == "Undo rename")
         await model.confirmDiscard()
         #expect(model.emptyTitle == "Rename undone")
         #expect(model.emptyMessage == "src/db.ts is back as it was in the last commit.")
@@ -534,7 +534,7 @@ import UIKit
         #expect(model.pendingDiscard?.message == "src/Store.ts comes back and src/store.ts is removed.")
         await model.confirmDiscard()
         #expect(model.message == DiffModel.Message(
-            text: "Can't undo a rename that only changes letter case from the phone. Use git on Studio.", retry: false
+            text: "Can't undo a rename that only changes letter case from this device. Use git on Studio.", retry: false
         ))
     }
 

@@ -197,7 +197,7 @@ struct NotificationServiceCoreTests {
     func stopped(_ kind: PushPayload.Kind, code: Int?, reason: String, secondsAgo: Int64 = 0) -> PushPayload {
         PushPayload(
             kind: kind, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
-            title: "Claude Code stopped", body: "Exited with code 1", ts: 1_793_707_200_000 - secondsAgo * 1000,
+            title: "Claude Code stopped", body: "Exit code 1", ts: 1_793_707_200_000 - secondsAgo * 1000,
             exit: PushExit(code: code, reason: reason, detail: nil)
         )
     }
@@ -208,7 +208,7 @@ struct NotificationServiceCoreTests {
         let result = core.process(try sealed(stopped(.failed, code: 1, reason: "exit")))
         let content = result.content
         #expect(content.categoryIdentifier == "togo.ended")
-        #expect(content.body == "Stopped with an error · Exit code 1")
+        #expect(content.body == "Stopped with an error · Exited with code 1")
         #expect(content.targetContentIdentifier == "togo://session/01?host=studio")
         let togo = try #require(content.userInfo["togo"] as? [String: String])
         #expect(togo == ["hostId": Self.hostID, "sessionId": "s_abcdefghij"])

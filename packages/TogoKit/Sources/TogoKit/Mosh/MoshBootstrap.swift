@@ -23,9 +23,9 @@ public enum MoshBootstrapError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .serverMissing:
-            "mosh-server was not found on the host. Install mosh there, or connect with SSH."
+            "mosh-server was not found on the machine. Install mosh there, or connect with SSH."
         case .noConnectLine:
-            "mosh-server did not start on the host. A missing UTF-8 locale is a common cause."
+            "mosh-server did not start on the machine. A missing UTF-8 locale is a common cause."
         case .malformedKey:
             "mosh-server sent a session key that could not be read."
         }
@@ -49,7 +49,7 @@ public enum MoshBootstrap {
     /// The script is one line with no backslashes, so it survives the outer quoting
     /// under fish (which unescapes `\\` and `\'` inside single quotes) and csh (which
     /// rejects newlines inside quotes). Backslashes and newlines inside argv are
-    /// rebuilt on the host from shell variables instead.
+    /// rebuilt on the machine from shell variables instead.
     public static func command(argv: [String], serverPath: String?, ports: PortRange?) -> String {
         let candidates = serverPath.map { [quoteBackslashFree($0)] }
             ?? searchPath.map(quoteBackslashFree) + [#""$HOME/.nix-profile/bin/mosh-server""#]

@@ -170,6 +170,7 @@ extension View {
                     }
             }
             .id(question.id)
+            .togoSheet(.prompt)
             // Only Cancel declines the question, so a swipe cannot leave it waiting.
             .interactiveDismissDisabled()
             .togoControls()

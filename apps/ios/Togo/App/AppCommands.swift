@@ -54,7 +54,7 @@ struct AppCommands: Commands {
         Toggle(BoardCopy.toggle, isOn: Binding(get: { store?.boardShown ?? false }, set: { _ in store?.toggleBoard() }))
             .keyboardShortcut("b", modifiers: [.command, .control])
             .disabled(store == nil || reviewOpen)
-        Toggle(ZenCopy.zenMode, isOn: Binding(get: { store?.zen ?? false }, set: { _ in store?.toggleZen() }))
+        Toggle(String(localized: "cmd.zenMode", defaultValue: "Zen Mode"), isOn: Binding(get: { store?.zen ?? false }, set: { _ in store?.toggleZen() }))
             .keyboardShortcut("f", modifiers: [.command, .control])
             .disabled(!zenAvailable || reviewOpen)
         let split = store?.workspace.secondary != nil
@@ -127,7 +127,10 @@ extension AppStore {
         guard reviewing == nil, workspace.tabs.indices.contains(number - 1) else { return }
         selectTab(number: number)
         workspaceOpen = true
-        if workspaceInline { boardShown = false }
+        if workspaceInline {
+            boardShown = false
+            path = []
+        }
     }
 
     func requestFind() {

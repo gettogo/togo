@@ -35,7 +35,7 @@ enum ControlCenterCopy {
 
     static let firstRunTitle = String(localized: "cc.firstRun.title", defaultValue: "Add a machine")
     static let firstRunMessage = String(
-        localized: "cc.firstRun.message", defaultValue: "Togo connects over SSH to your Mac or Linux box."
+        localized: "cc.firstRun.message", defaultValue: "Togo connects over SSH to your Mac or Linux machine."
     )
     static let addMachine = String(localized: "cc.firstRun.add", defaultValue: "Add machine")
     static let withoutHelper = String(localized: "cc.firstRun.withoutHelper", defaultValue: "Connect without the helper")
@@ -50,14 +50,19 @@ enum ControlCenterCopy {
     static let waking = String(localized: "cc.machine.waking", defaultValue: "Waking")
     static let connecting = String(localized: "cc.machine.connecting", defaultValue: "Connecting")
     static let noHelper = String(localized: "cc.machine.noHelper", defaultValue: "No helper")
-    static let noSessions = String(localized: "cc.machine.noSessions", defaultValue: "No sessions yet")
     static let plainSSH = String(
-        localized: "cc.machine.plainSSH", defaultValue: "Plain SSH. Install the helper to see agent status."
+        localized: "cc.machine.plainSSH", defaultValue: "No helper. Install it to see what agents are doing."
     )
     static let install = String(localized: "cc.machine.install", defaultValue: "Install")
     static let tryAgain = String(localized: "cc.machine.tryAgain", defaultValue: "Try again")
     static let signInAgain = String(localized: "cc.machine.signInAgain", defaultValue: "Sign in again")
     static let edit = String(localized: "cc.machine.edit", defaultValue: "Edit")
+    static let update = String(localized: "cc.machine.update", defaultValue: "Update")
+
+    /// A connected helper older than this app needs; Update walks through installing the new one.
+    static func helperOutdated(_ version: String) -> String {
+        String(localized: "cc.machine.helperOutdated", defaultValue: "Helper \(version) needs an update.")
+    }
 
     /// Keys never sync, so a machine added on another device can name one this device lacks.
     static func keyMissing(device: String) -> String {
@@ -87,7 +92,7 @@ enum ControlCenterCopy {
     static let mute = String(localized: "cc.action.mute", defaultValue: "Mute")
     static let unmute = String(localized: "cc.action.unmute", defaultValue: "Unmute")
     static let copyPath = String(localized: "cc.action.copyPath", defaultValue: "Copy path")
-    static let kill = String(localized: "cc.action.kill", defaultValue: "Kill")
+    static let kill = String(localized: "cc.action.kill", defaultValue: "End session")
     static let cancel = String(localized: "cc.action.cancel", defaultValue: "Cancel")
     static let name = String(localized: "cc.rename.field", defaultValue: "Name")
     static let startedOutside = String(localized: "cc.row.startedOutside", defaultValue: "Started outside Togo")
@@ -101,7 +106,7 @@ enum ControlCenterCopy {
     }
 
     static func killTitle(_ label: String) -> String {
-        String(localized: "cc.kill.title", defaultValue: "Kill \(label)?")
+        String(localized: "cc.kill.title", defaultValue: "End \(label)?")
     }
 
     static let killMessage = String(localized: "cc.kill.message", defaultValue: "The agent stops and its screen is gone.")

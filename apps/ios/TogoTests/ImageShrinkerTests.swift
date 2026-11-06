@@ -79,7 +79,7 @@ struct ImageShrinkerTests {
         await flow.begin(try #require(Fixtures.noise(width: 8, height: 8).pngData()))
 
         #expect(flow.phase == .unsupported)
-        #expect(flow.phase.message == "This machine\u{2019}s helper can\u{2019}t receive images yet.")
+        #expect(flow.phase.message == "This machine's helper can't receive images yet.")
         #expect(uploads == 0 && pasted.isEmpty)
     }
 
@@ -113,7 +113,7 @@ struct ImageShrinkerTests {
             return png
         }
         #expect(flow.phase == .loadFailed)
-        #expect(flow.phase.message == "Couldn\u{2019}t load that photo.")
+        #expect(flow.phase.message == "Couldn't load that photo.")
         await flow.retry()
         #expect(attempts == 2)
         #expect(flow.isAnnotating)

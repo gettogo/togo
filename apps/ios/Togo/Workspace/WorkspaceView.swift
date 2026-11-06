@@ -105,6 +105,8 @@ struct WorkspaceView: View {
                 isPresented: presented($renameTarget), presenting: renameTarget
             ) { row in
                 TextField(ControlCenterCopy.name, text: $renameText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                 Button(ControlCenterCopy.rename) { Task { await store.rename(row, to: renameText) } }
                 Button(ControlCenterCopy.cancel, role: .cancel) {}
             }

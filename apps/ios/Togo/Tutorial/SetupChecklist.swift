@@ -32,8 +32,8 @@ extension SetupItem {
     var title: String {
         switch self {
         case .remoteLogin: String(localized: "tutorial.setup.remoteLogin", defaultValue: "Turn on Remote Login (SSH)")
-        case .reachable: String(localized: "tutorial.setup.reachable", defaultValue: "Make sure the phone can reach it")
-        case .phoneKey: String(localized: "tutorial.setup.phoneKey", defaultValue: "Add this phone's key")
+        case .reachable: String(localized: "tutorial.setup.reachable", defaultValue: "Make sure your device can reach it")
+        case .phoneKey: String(localized: "tutorial.setup.phoneKey", defaultValue: "Add this device's key")
         case .mosh: String(localized: "tutorial.setup.mosh", defaultValue: "Install Mosh")
         case .helper: String(localized: "tutorial.setup.helper", defaultValue: "Install the Togo helper")
         }
@@ -74,20 +74,20 @@ extension SetupItem {
                 ), command: os == .macOS ? #"echo "$(scutil --get LocalHostName).local""# : "hostname"),
                 SetupStep(text: String(
                     localized: "tutorial.setup.reachable.away",
-                    defaultValue: "Away from that network, put the machine and this phone on the same Tailscale network, or use a public address that forwards to its SSH port."
+                    defaultValue: "Away from that network, put the machine and this device on the same Tailscale network, or use a public address that forwards to its SSH port."
                 )),
             ]
         case (.phoneKey, _):
             [SetupStep(text: String(
                 localized: "tutorial.setup.phoneKey.steps",
-                defaultValue: "When you add a machine, Togo shows this phone's public key. Paste it on its own line in ~/.ssh/authorized_keys on the machine."
+                defaultValue: "When you add a machine, Togo shows this device's public key. Paste it on its own line in ~/.ssh/authorized_keys on the machine."
             ))]
         case (.mosh, .macOS):
             [
                 SetupStep(
                     text: String(
                         localized: "tutorial.setup.mosh.why",
-                        defaultValue: "Mosh keeps a session attached when you change networks or the phone sleeps. With Homebrew:"
+                        defaultValue: "Mosh keeps a session attached when you change networks or your device sleeps. With Homebrew:"
                     ),
                     command: "brew install mosh"
                 ),
@@ -97,7 +97,7 @@ extension SetupItem {
                 SetupStep(
                     text: String(
                         localized: "tutorial.setup.mosh.why.linux",
-                        defaultValue: "Mosh keeps a session attached when you change networks or the phone sleeps. On Debian or Ubuntu:"
+                        defaultValue: "Mosh keeps a session attached when you change networks or your device sleeps. On Debian or Ubuntu:"
                     ),
                     command: "sudo apt install mosh"
                 ),
@@ -303,7 +303,7 @@ struct SetupPage: View {
     var expanded: SetupItem?
 
     var body: some View {
-        TutorialPageLayout(page: .setup) {
+        TutorialPageLayout(page: .setup, centered: false) {
             SetupChecklist(ticked: model.ticked, detected: model.detected, expanded: expanded, onToggle: model.toggle)
         }
     }

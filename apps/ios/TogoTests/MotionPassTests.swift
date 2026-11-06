@@ -137,11 +137,13 @@ import UIKit
         #expect(LaunchTimeline.beaconGrowth.spring != nil)
         #expect(LaunchTimeline.eased.unitCurve != nil)
         #expect(Motion.spec(.fade).curve.unitCurve != nil)
+        #expect(LaunchTimeline.handoffCurve.unitCurve != nil)
     }
 
     @Test func launchTimesComeFromRoles() {
-        #expect(LaunchTimeline.pawFade == .milliseconds(Int(Motion.nominalDuration(.pawStep) * 1000)))
-        #expect(LaunchTimeline.fade == .milliseconds(Int(Motion.nominalDuration(.fade) * 1000)))
+        #expect(LaunchTimeline.pawStep == .milliseconds(Int(Motion.nominalDuration(.pawStep) * 2000)))
+        #expect(LaunchTimeline.handoff == .milliseconds(Int(Motion.nominalDuration(.chrome) * 1000)))
+        #expect(LaunchTimeline.reducedFade == .milliseconds(Int(Motion.nominalDuration(.fade) * 1000)))
         #expect(LaunchTimeline.reducedFade <= .milliseconds(200))
     }
 }

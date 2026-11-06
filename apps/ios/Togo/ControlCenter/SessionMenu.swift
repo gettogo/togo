@@ -40,7 +40,7 @@ struct SessionMenu<Openers: View>: View {
         }
     }
 
-    /// Changes, Files and Ports, after the row's own actions and before Kill when there is one.
+    /// Changes, Files and Ports, after the row's own actions and before End session when there is one.
     @ViewBuilder private var reviewItems: some View {
         if !actions.review.isEmpty {
             Divider()

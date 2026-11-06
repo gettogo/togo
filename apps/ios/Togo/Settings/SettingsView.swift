@@ -111,6 +111,12 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section {
+                row(.machines)
+                if let agentLibrary { agentsRow(agentLibrary) }
+                row(.notifications)
+            }
+            .groupedRows()
+            Section {
                 row(.terminal)
                 row(.keyboard)
                 row(.gestures)
@@ -118,9 +124,6 @@ struct SettingsView: View {
             }
             .groupedRows()
             Section {
-                row(.machines)
-                if let agentLibrary { agentsRow(agentLibrary) }
-                row(.notifications)
                 row(.sync)
                 row(.privacy)
             }
@@ -241,7 +244,7 @@ struct SettingsView: View {
     private func title(_ page: SettingsPage) -> String {
         switch page {
         case .terminal: settingsText("settings.terminal.title", "Terminal")
-        case .keyboard: settingsText("settings.keyboard.title", "Keyboard bar")
+        case .keyboard: settingsText("settings.keyboard.title", "Key bar")
         case .shortcuts: settingsText("settings.builder.title", "New shortcut")
         case .gestures: settingsText("settings.gestures.title", "Gestures")
         case .machines: settingsText("settings.machines.title", "Machines")
@@ -317,7 +320,7 @@ extension HelperState {
         switch self {
         case .checking: settingsText("settings.helper.checking", "Checking for the helper")
         case .present(let version, true): settingsText("settings.helper.live", "Helper \(version)")
-        case .present(let version, false): settingsText("settings.helper.polling", "Helper \(version), refreshes every few seconds")
+        case .present(let version, false): settingsText("settings.helper.polling", "Helper \(version)")
         case .missing: settingsText("settings.helper.missing", "Helper not installed")
         case .outdated(let found): settingsText("settings.helper.outdated", "Helper \(found) needs an update")
         }

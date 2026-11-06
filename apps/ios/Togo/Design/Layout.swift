@@ -37,14 +37,39 @@ extension View {
     }
 }
 
+/// In book posture the column keeps to one page, the wider one, so no line of text or control
+/// crosses the fold.
 private struct ScreenMargins: ViewModifier {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.fold) private var fold
+    @Environment(\.foldOrigin) private var anchor
+    /// Where the screen sits across the window, which the fold is measured against.
+    @State private var span = Span()
 
     func body(content: Content) -> some View {
+        let page = sizeClass == .regular ? fold.readingPage(from: anchor, minX: span.minX, width: span.width) : nil
         content
             .frame(maxWidth: sizeClass == .regular ? Layout.readableWidth : .infinity, alignment: .leading)
             .padding(.horizontal, Layout.margin)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: page.map { $0.upperBound - $0.lowerBound } ?? .infinity)
+            .padding(.leading, page?.lowerBound ?? 0)
+            .frame(maxWidth: .infinity, alignment: page == nil ? .center : .leading)
+            // Only the horizontal span, so scrolling does not measure again.
+            .onGeometryChange(for: Span.self) { proxy in
+                let frame = proxy.frame(in: .global)
+                return Span(minX: frame.minX, width: frame.width)
+            } action: { new in
+                // The first measure places the column; later ones, such as a fold, move it.
+                var transaction = Transaction()
+                transaction.disablesAnimations = span.width == 0
+                withTransaction(transaction) { span = new }
+            }
+            .motion(.paneFlow, value: page)
+    }
+
+    private struct Span: Equatable {
+        var minX: CGFloat = 0
+        var width: CGFloat = 0
     }
 }
 

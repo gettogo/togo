@@ -70,7 +70,7 @@ struct ImportHostsView: View {
                 Button {
                     choosingFile = true
                 } label: {
-                    Label(settingsText("import.hosts.chooseFile", "Choose File"), systemImage: "doc")
+                    Label(settingsText("import.hosts.chooseFile", "Choose file"), systemImage: "doc")
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         .contentShape(.rect)
                 }
@@ -84,7 +84,7 @@ struct ImportHostsView: View {
                     }
                     Text(settingsText(
                         "import.hosts.keysNote",
-                        "Keys aren't imported. New machines use this iPhone's key; pick another in each machine's details."
+                        "Keys aren't imported. New machines use this \(DeviceName.model)'s key; pick another in each machine's details."
                     ))
                 }
                 .font(.footnote)

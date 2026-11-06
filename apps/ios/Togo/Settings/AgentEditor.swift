@@ -43,6 +43,8 @@ struct AgentEditor: View {
         List {
             Section {
                 TextField(settingsText("settings.agents.name", "Name"), text: $draft.name)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .frame(minHeight: 44)
             }
             .groupedRows()
@@ -66,7 +68,7 @@ struct AgentEditor: View {
                 Text(settingsText("settings.agents.agent", "Agent"))
             } footer: {
                 if draft.isCustom {
-                    Text(settingsText("settings.agents.program.footer", "A name found on the machine's PATH, or a full path."))
+                    Text(settingsText("settings.agents.program.footer", "A program name on the machine, or its full path."))
                 }
             }
             .groupedRows()

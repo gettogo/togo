@@ -47,6 +47,11 @@ struct CommitSheet: View {
             TextField(ChangesCopy.messagePlaceholder, text: $model.message, axis: .vertical)
                 .font(.body)
                 .lineLimit(5...14)
+                // Quotes and dashes go into git history as typed, so the keyboard's curly versions are undone.
+                .onChange(of: model.message) { old, new in
+                    let plain = CommitMessageText.straightened(new, previous: old)
+                    if plain != new { model.message = plain }
+                }
                 .focused($messageFocused)
                 .accessibilityLabel(ChangesCopy.messageLabel)
                 .listRowBackground(Color.togoGrouped)

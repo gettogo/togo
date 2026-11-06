@@ -27,7 +27,7 @@ public enum HostKeyStoreError: Error, Equatable, LocalizedError {
     case unreadable(String)
 
     public var errorDescription: String? {
-        "The list of trusted host keys could not be read, so Togo will not connect until it is fixed."
+        "The list of trusted machine keys could not be read, so Togo will not connect until it is fixed."
     }
 }
 

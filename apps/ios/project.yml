@@ -62,8 +62,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-        # No icon until the brand mark is final; XcodeGen defaults to AppIcon.
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOLS: YES
         # Palette.swift declares Color.togo* itself; Xcode's extensions would
         # add a second, differently named set.
@@ -77,12 +76,15 @@ targets:
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # The mark at the size and place of the launch overlay's first frame, so the
+        # overlay picks up from it without a jump.
         UILaunchScreen:
           UIColorName: Ink
+          UIImageName: LaunchMark
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         CADisableMinimumFrameDurationOnPhone: true
-        NSFaceIDUsageDescription: Unlock your SSH keys.
+        NSFaceIDUsageDescription: Unlock Togo and your saved keys and passwords.
         NSLocalNetworkUsageDescription: Find and connect to the machines on your network.
         NSMicrophoneUsageDescription: "Togo uses the microphone only while you dictate into a session, and turns speech into text on this device."
         NSSpeechRecognitionUsageDescription: "Speech becomes text on this device. Nothing is sent anywhere."
@@ -141,6 +143,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.watchkitapp
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES

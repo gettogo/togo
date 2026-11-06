@@ -81,9 +81,6 @@ struct AdaptiveRoot<Destination: View>: View {
     @ViewBuilder let destination: (AppRoute) -> Destination
     /// The last tab on screen, so closing the cover shrinks into its row instead of nowhere.
     @State private var zoomSource: TabID?
-    #if DEBUG
-    @State private var debugToolsShown = false
-    #endif
 
     var body: some View {
         GeometryReader { proxy in
@@ -126,7 +123,6 @@ struct AdaptiveRoot<Destination: View>: View {
         NavigationStack(path: $store.path) {
             ControlCenterView(store: store, zoom: zoom, now: now, board: board)
                 .navigationDestination(for: AppRoute.self, destination: destination)
-                .modifier(DebugTools(shown: debugShown))
         }
         .fullScreenCover(isPresented: $store.workspaceOpen) {
             WorkspaceView(store: store, terminals: terminals)
@@ -140,9 +136,8 @@ struct AdaptiveRoot<Destination: View>: View {
 
     private func split(_ detail: ShellLayout.Detail) -> some View {
         NavigationSplitView(columnVisibility: columnVisibility) {
-            SessionSidebar(store: store, terminals: terminals, now: now)
-                .navigationSplitViewColumnWidth(sidebarWidth)
-                .modifier(DebugTools(shown: debugShown))
+            SessionSidebar(store: store, terminals: terminals, zoom: zoom, now: now)
+                .modifier(SidebarColumnWidth(bookWidth: PaneLayout.sidebarWidth(fold: fold)))
         } detail: {
             NavigationStack(path: $store.path) {
                 detailRoot(detail)
@@ -162,13 +157,17 @@ struct AdaptiveRoot<Destination: View>: View {
         case .board:
             BoardView(store: store, services: board)
         case .empty:
-            EmptyDetail(newSession: store.services.hosts.isEmpty ? nil : { store.startNewSession() })
+            EmptyDetail(
+                action: store.emptyDetailAction, sidebarHidden: store.sidebar.isHidden,
+                run: { action in
+                    switch action {
+                    case .newSession: store.startNewSession()
+                    case .addMachine: store.showSheet(.addMachine)
+                    }
+                },
+                showSidebar: { store.sidebar.hidden = false }
+            )
         }
-    }
-
-    /// Book posture gives the sidebar the leading page exactly.
-    private var sidebarWidth: CGFloat {
-        PaneLayout.sidebarWidth(fold: fold) ?? PaneLayout.sidebarIdealWidth
     }
 
     private var columnVisibility: Binding<NavigationSplitViewVisibility> {
@@ -178,32 +177,17 @@ struct AdaptiveRoot<Destination: View>: View {
             store.sidebar.hidden = visibility == .detailOnly
         }
     }
-
-    private var debugShown: Binding<Bool> {
-        #if DEBUG
-        $debugToolsShown
-        #else
-        .constant(false)
-        #endif
-    }
 }
 
-/// The debug screens, from a toolbar button in debug builds.
-private struct DebugTools: ViewModifier {
-    @Binding var shown: Bool
+/// The sidebar takes 280 to 400 pt and starts at 320; book posture gives it the leading page
+/// exactly. One modifier either way, so a fold never rebuilds the sidebar.
+private struct SidebarColumnWidth: ViewModifier {
+    let bookWidth: CGFloat?
 
     func body(content: Content) -> some View {
-        #if DEBUG
-        content
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Debug tools", systemImage: "ladybug") { shown = true }
-                }
-            }
-            .fullScreenCover(isPresented: $shown) { DebugEntry.root() }
-        #else
-        content
-        #endif
+        content.navigationSplitViewColumnWidth(
+            min: bookWidth ?? 280, ideal: bookWidth ?? PaneLayout.sidebarIdealWidth, max: bookWidth ?? 400
+        )
     }
 }
 

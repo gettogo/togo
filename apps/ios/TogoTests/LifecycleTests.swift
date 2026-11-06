@@ -35,7 +35,7 @@ import TogoKit
         let cases: [(SessionStatus, SessionExit?, String, String?)] = [
             (.ended, SessionExit(code: 0, reason: .exit), "Ended", nil),
             (.ended, SessionExit(code: 130, reason: .interrupted), "Ended", nil),
-            (.failed, SessionExit(code: 1, reason: .exit), "Stopped with an error", "Exit code 1"),
+            (.failed, SessionExit(code: 1, reason: .exit), "Stopped with an error", "Exited with code 1"),
             (.failed, SessionExit(code: nil, reason: .error, detail: "panic"), "Stopped with an error", nil),
             (.failed, SessionExit(code: nil, reason: .usageLimit, detail: "Usage limit reached"), "Hit a usage limit", nil),
             (.ended, SessionExit(code: nil, reason: .restart), "Ended by restart", nil),
@@ -50,7 +50,7 @@ import TogoKit
         #expect(StatusWord.label(.failed) == "Stopped with an error")
         #expect(StatusWord.label(.exited) == "Ended")
         #expect(LifecycleCopy.line(status: .failed, exit: SessionExit(code: 1, reason: .exit))
-            == "Stopped with an error · Exit code 1")
+            == "Stopped with an error · Exited with code 1")
         #expect(LifecycleCopy.line(status: .working, exit: nil) == nil)
         #expect(StatusWord.label(.failed, exit: SessionExit(code: nil, reason: .usageLimit)) == "Hit a usage limit")
         var failed = row(.failed, SessionExit(code: 1, reason: .exit))

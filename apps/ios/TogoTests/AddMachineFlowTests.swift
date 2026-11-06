@@ -32,6 +32,24 @@ struct AddMachineFlowTests {
         #expect(flow.draft.symbol == .laptop)
     }
 
+    /// A machine found with no usable address opens the form with the address empty, so the
+    /// form asks for it instead of saving something that only works on one network.
+    @Test func machineFoundWithoutAnAddressAsksForOne() {
+        let flow = AddMachineFlow(services: FakeOnboardingServices(), save: { _ in }, finish: { _ in })
+        flow.choose(DiscoveredHost(id: "mac", name: "Sam's Mac", host: "", port: 22, tailnet: false))
+        flow.draft.user = "sam"
+        flow.connect()
+        #expect(flow.draft.errors.keys.contains(.address))
+    }
+
+    @Test func zonedAddressExplainsItself() {
+        var draft = MachineDraft()
+        draft.address = "fe80::1c2b%en0"
+        #expect(draft.addressNote != nil)
+        draft.address = "studio.local"
+        #expect(draft.addressNote == nil)
+    }
+
     @Test func newHostKeyWaitsForTheUser() async {
         let services = FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)], newKey: OnboardingSamples.hostKey)
         let flow = flow(services)
@@ -110,6 +128,53 @@ struct AddMachineFlowTests {
         #expect(saved.records.first?.helperPath == "/Users/sam/.togo/bin/togo")
     }
 
+    /// Notifications are offered after the save, as their own step; only "Turn on" asks iOS.
+    @Test func savedWithHelperOffersNotificationsBeforeClosing() async {
+        let saved = SavedRecords()
+        var turnedOn = 0
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)]), saved: saved)
+        flow.notificationAsk = .init(needed: { true }, turnOn: { turnedOn += 1 })
+        flow.connect()
+        await flow.runAttempt()
+        await flow.save(withHelper: true)
+        #expect(saved.records.count == 1, "the machine is saved before the question")
+        #expect(flow.path.last == .notifications)
+        #expect(saved.finished.isEmpty)
+        #expect(turnedOn == 0, "showing the question does not ask iOS")
+
+        await flow.answerNotifications(turnOn: true)
+        #expect(turnedOn == 1)
+        #expect(saved.finished == saved.records.map(\.id))
+    }
+
+    @Test func notNowClosesWithoutAsking() async {
+        let saved = SavedRecords()
+        var turnedOn = 0
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)]), saved: saved)
+        flow.notificationAsk = .init(needed: { true }, turnOn: { turnedOn += 1 })
+        flow.connect()
+        await flow.runAttempt()
+        await flow.save(withHelper: true)
+        await flow.answerNotifications(turnOn: false)
+        #expect(turnedOn == 0)
+        #expect(saved.finished == saved.records.map(\.id))
+    }
+
+    @Test func noNotificationQuestionWithoutHelperOrOnceAnswered() async {
+        for (outcome, withHelper, needed) in [
+            (OnboardingSamples.noHelper, false, true), (OnboardingSamples.ready, true, false),
+        ] {
+            let saved = SavedRecords()
+            let flow = flow(FakeOnboardingServices(outcomes: [.ready(outcome)]), saved: saved)
+            flow.notificationAsk = .init(needed: { needed }, turnOn: {})
+            flow.connect()
+            await flow.runAttempt()
+            await flow.save(withHelper: withHelper)
+            #expect(!flow.path.contains(.notifications))
+            #expect(saved.finished == saved.records.map(\.id), "the sheet closes straight after saving")
+        }
+    }
+
     private func passwordFlow(_ services: FakeOnboardingServices, saved: SavedRecords) -> AddMachineFlow {
         let flow = flow(services, saved: saved)
         flow.draft.auth = .password
@@ -178,6 +243,8 @@ struct AddMachineFlowTests {
         services.keyLabels = ["elsewhere": "Work laptop key"]
         let known = AddMachineFlow.editing(record, store: store, services: services, tutorial: nil)
         #expect(known.draft.importedKey == ImportedKey(id: "elsewhere", label: "Work laptop key"))
+        #expect(known.startsOnForm && known.path.isEmpty, "the form is the first screen, so Back has nowhere to go")
+        #expect(known.notificationAsk == nil, "editing never asks about notifications")
     }
 
     @Test func jumpHostParses() {

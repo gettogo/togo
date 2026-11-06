@@ -264,7 +264,7 @@ import UIKit
               let store = hosts[id].flatMap(store(of:)) ?? listing(id)?.store else { return }
         handle.onShortcut = { [weak store] in store?.perform($0) }
         handle.onSwipe = { [weak store] in store?.step($0, from: id) }
-        handle.onEdgeSwipe = { [weak store] in store?.workspaceOpen = false }
+        handle.onEdgeSwipe = { [weak store] in store?.edgeSwipe() }
         handle.onCompose = { [weak store] in store?.toggleCompose(id) }
         handle.onDictate = { [weak store] in store?.dictate(id) }
         handle.hidesComposeKeys = store.zen

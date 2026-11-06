@@ -11,9 +11,12 @@ import UIKit
 struct SessionSidebar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.machineTools) private var machineTools
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @Bindable var store: AppStore
     /// For Escape, which puts keyboard focus back in the focused pane's terminal.
     var terminals: TerminalPool?
+    /// The new-session sheet grows out of the plus button in this namespace.
+    var zoom: Namespace.ID?
     /// A fixed clock for previews and snapshots; nil follows the time of day.
     var now: Date?
 
@@ -23,19 +26,23 @@ struct SessionSidebar: View {
     @State private var searching = false
     @FocusState private var searchFocused: Bool
     @FocusState private var listFocused: Bool
+    /// Stands in for `zoom` where no presenter shares one, as in previews.
+    @Namespace private var ownZoom
 
-    init(store: AppStore, terminals: TerminalPool? = nil, now: Date? = nil) {
+    init(store: AppStore, terminals: TerminalPool? = nil, zoom: Namespace.ID? = nil, now: Date? = nil) {
         self.store = store
         self.terminals = terminals
+        self.zoom = zoom
         self.now = now
     }
 
     var body: some View {
+        // No fill of its own: the sidebar list draws the floating glass pane over the detail.
         TimelineView(.everyMinute) { context in
             list(now: now ?? context.date)
         }
-        .background(Color.togoInk)
         .navigationTitle(ControlCenterCopy.title)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
         .modifier(RequestCollapse(store: store))
@@ -55,7 +62,7 @@ struct SessionSidebar: View {
 
     private func list(now: Date) -> some View {
         ScrollViewReader { scroller in
-            List {
+            List(selection: selection) {
                 if let notice = store.notice {
                     Section {
                         Label(notice.text, systemImage: notice.isError ? "exclamationmark.circle" : "info.circle")
@@ -64,14 +71,17 @@ struct SessionSidebar: View {
                     }
                 }
                 Section {
-                    SessionFilterPicker(store: store, menu: true)
+                    Label(BoardCopy.title, systemImage: "square.grid.2x2")
+                        .tag(SidebarItem.board)
                 }
                 requests
                 ForEach(machines) { machine in
                     MachineSectionView(
                         machine: machine, etAvailable: etAvailable(machine.id), now: now, narrowed: narrowed,
-                        highlighted: Set(store.visibleTabs), cursor: listFocused ? keys.cursor : nil, draggable: true,
-                        restoring: store.restoring, wakeNote: store.wakeNotes[machine.id], perform: perform
+                        highlighted: Set(store.visibleTabs), cursor: listFocused ? keys.cursor : nil,
+                        selected: selectedTab, draggable: rowsDrag,
+                        restoring: store.restoring, wakeNote: store.wakeNotes[machine.id], sidebar: true,
+                        perform: perform
                     )
                 }
                 emptyResult
@@ -82,12 +92,21 @@ struct SessionSidebar: View {
                         }
                         .buttonStyle(.plain)
                         .hoverEffect(.highlight)
-                        .listRowBackground(Color.togoInk)
                     }
                 }
             }
             .listStyle(.sidebar)
+            // The brand's raised surface, opaque, instead of the system's grey glass.
             .scrollContentBackground(.hidden)
+            .background(Color.togoRaised)
+            .containerBackground(Color.togoRaised, for: .navigation)
+            .overlay(alignment: .trailing) {
+                Rectangle().fill(Color.togoLine).frame(width: 1).ignoresSafeArea()
+            }
+            // A pull to refresh never frosts the rows under the bar.
+            .scrollEdgeEffectStyle(.hard, for: .top)
+            // The last rows scroll clear of the floating bottom bar.
+            .contentMargins(.bottom, Self.bottomBarClearance, for: .scrollContent)
             .searchable(text: $store.query, isPresented: $searching, placement: .sidebar, prompt: ControlCenterCopy.searchPrompt)
             .searchFocused($searchFocused)
             .refreshable { await store.services.refresh() }
@@ -120,7 +139,8 @@ struct SessionSidebar: View {
                         failure: store.answerFailures[card.id],
                         onOpen: card.sessionID.map { sessionID in
                             { show(TabID(hostID: card.hostID, sessionID: sessionID)) }
-                        }
+                        },
+                        surface: .clear
                     ) { decision in
                         Task { await store.answer(card.id, decision) }
                     }
@@ -139,33 +159,78 @@ struct SessionSidebar: View {
     @ViewBuilder private var emptyResult: some View {
         if narrowed && machines.isEmpty && visibleRequests.isEmpty {
             let query = store.query.trimmingCharacters(in: .whitespacesAndNewlines)
-            Text(query.isEmpty ? ControlCenterCopy.filterEmpty(store.filter) : ControlCenterCopy.noMatches(query))
-                .font(.body)
-                .foregroundStyle(Color.togoMute)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .listRowBackground(Color.clear)
+            // In a section of its own: a loose row between sections leaves the list to guess
+            // its section, and a filter change that adds it while machines leave crashed it.
+            Section {
+                Text(query.isEmpty ? ControlCenterCopy.filterEmpty(store.filter) : ControlCenterCopy.noMatches(query))
+                    .font(.body)
+                    .foregroundStyle(Color.togoMute)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowBackground(Color.clear)
+            }
         }
     }
 
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        // Symbol and title on every item: vertical bars show the symbol, overflow the title.
-        ToolbarItem(placement: .topBarTrailing) {
-            BoardChoiceMenu(store: store)
+    /// Native selection: the board row, or the focused pane's session. Picking a row flows the
+    /// detail to it.
+    private var selection: Binding<SidebarItem?> {
+        Binding {
+            store.listedSidebarSelection
+        } set: { item in
+            guard let item, item != store.listedSidebarSelection else { return }
+            if case .session(let id) = item { keys.cursor = id }
+            withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
+                store.sidebarSelection = item
+            }
         }
+    }
+
+    /// Two items at most beside the system's sidebar button, so nothing folds into an overflow
+    /// menu; the global actions sit in the bottom bar. Symbol and title on every item: vertical
+    /// bars show the symbol, overflow the title.
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button(ControlCenterCopy.settings, systemImage: "gearshape") { store.path = [.settings] }
-                .foregroundStyle(Color.togoSnow)
+            SidebarFilterMenu(store: store)
         }
         if !store.services.hosts.isEmpty {
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
                 Button(ControlCenterCopy.newSession, systemImage: "plus") { store.sheet = .newSession(nil) }
-                    .foregroundStyle(Color.togoSnow)
+                    .buttonStyle(.glassProminent)
+                    .tint(Color.togoSnow)
+                    .foregroundStyle(Color.togoInk)
+            }
+            .matchedTransitionSource(id: ControlCenterView.newSessionSourceID, in: zoomNamespace)
+        }
+        // Only while the sidebar shows: hidden, its bar would float over the detail instead.
+        if !store.sidebar.isHidden {
+            ToolbarItem(placement: .bottomBar) {
+                Button(ControlCenterCopy.settings, systemImage: "gearshape") { store.showSettings() }
+            }
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            ToolbarItem(placement: .bottomBar) {
+                Button { store.showSheet(.addMachine) } label: { AddMachineSymbol() }
+                .accessibilityLabel(SidebarCopy.addMachine)
             }
         }
     }
 
     // MARK: Derived state
+
+    /// The height of the floating bottom bar and its margin.
+    static let bottomBarClearance: CGFloat = 72
+
+    private var zoomNamespace: Namespace.ID { zoom ?? ownZoom }
+
+    /// A row drags into a pane or out to a window of its own, so only where one can take it.
+    private var rowsDrag: Bool {
+        supportsMultipleWindows || store.panesFit || store.workspace.secondary != nil
+    }
+
+    private var selectedTab: TabID? {
+        if case .session(let id)? = store.listedSidebarSelection { id } else { nil }
+    }
 
     private var narrowed: Bool { store.listNarrowed }
     private var machines: [MachineSection] { store.listMachines }
@@ -197,13 +262,9 @@ struct SessionSidebar: View {
     }
 
     private func show(_ id: TabID) {
-        if let row = rows.first(where: { $0.hostID == id.hostID && $0.id == id.sessionID }) {
-            show(row)
-        } else {
-            withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
-                store.boardShown = false
-                store.open(hostID: id.hostID, sessionID: id.sessionID)
-            }
+        keys.cursor = id
+        withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
+            store.showSession(id)
         }
     }
 
@@ -235,6 +296,8 @@ extension AppStore {
     /// primary, so the workspace shows one large terminal unless the user opened a second.
     func showFromSidebar(_ row: SessionRow, transport: TransportPreference? = nil) {
         boardShown = false
+        // Whatever the detail had pushed would otherwise stay on top of the session.
+        if workspaceInline { path = [] }
         let id = TabID(hostID: row.hostID, sessionID: row.id)
         guard panesVisible, workspace.secondary != nil, workspace.focused == .secondary else {
             open(hostID: row.hostID, sessionID: row.id, transport: transport)

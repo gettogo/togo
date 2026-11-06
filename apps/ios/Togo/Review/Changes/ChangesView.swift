@@ -29,6 +29,7 @@ struct ChangesView: View {
             }
             .sheet(isPresented: $model.isCommitSheetOpen) {
                 CommitSheet(model: model)
+                    .togoSheet(.form)
             }
             .haptic(.done, trigger: model.successes)
             .haptic(.discard, trigger: model.discards)

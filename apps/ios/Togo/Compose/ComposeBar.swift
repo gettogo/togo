@@ -16,16 +16,16 @@ enum ComposeCopy {
         String(localized: "compose.to", defaultValue: "To \(bib)")
     }
     static let sendingImage = String(localized: "compose.sendingImage", defaultValue: "Sending image")
-    static let uploadFailed = String(localized: "compose.uploadFailed", defaultValue: "Couldn\u{2019}t send the image.")
+    static let uploadFailed = String(localized: "compose.uploadFailed", defaultValue: "Couldn't send the image.")
     static let tooLarge = String(localized: "compose.tooLarge", defaultValue: "This image is too large to send.")
     static let unsupported = String(
-        localized: "compose.unsupported", defaultValue: "This machine\u{2019}s helper can\u{2019}t receive images yet."
+        localized: "compose.unsupported", defaultValue: "This machine's helper can't receive images yet."
     )
     static let noHelper = String(
-        localized: "compose.noHelper", defaultValue: "This machine has no Togo helper, so images can\u{2019}t be sent."
+        localized: "compose.noHelper", defaultValue: "This machine has no Togo helper, so images can't be sent."
     )
     static let unreadable = String(localized: "compose.unreadable", defaultValue: "The image could not be read.")
-    static let loadFailed = String(localized: "compose.loadFailed", defaultValue: "Couldn\u{2019}t load that photo.")
+    static let loadFailed = String(localized: "compose.loadFailed", defaultValue: "Couldn't load that photo.")
 }
 
 /// The last sends for one session, newest first. Kept on this device only.

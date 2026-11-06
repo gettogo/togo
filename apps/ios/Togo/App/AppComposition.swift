@@ -194,7 +194,7 @@ import TogoMosh
 
     #if DEBUG
     convenience init(uiTest launch: UITestLaunch) {
-        let machines = UITestMachines(firstRun: launch.firstRun)
+        let machines = UITestMachines(firstRun: launch.firstRun, oneMachine: launch.oneMachine, oldHelper: launch.oldHelper)
         let defaults = launch.defaults()
         self.init(
             services: machines.services, reviewServices: ReviewFakes.uiTestServices(),

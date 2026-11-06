@@ -50,11 +50,11 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
             else { "That request was already answered, or it is no longer waiting." }
         case .refused(let reason): Self.describeRefused(reason)
         case .rpc(let error): Self.describe(error)
-        case .timeout: "The Togo helper on the host did not answer in time."
-        case .closed: "The connection to the Togo helper on the host closed."
-        case .notReady: "The Togo helper on the host is not ready yet."
-        case .unsupported: "The Togo helper on the host is too old for this. Update it on the host."
-        case .malformedResponse: "The Togo helper on the host sent a reply that could not be read."
+        case .timeout: "The Togo helper on the machine did not answer in time."
+        case .closed: "The connection to the Togo helper on the machine closed."
+        case .notReady: "The Togo helper on the machine is not ready yet."
+        case .unsupported: "The Togo helper on the machine is too old for this. Update it on the machine."
+        case .malformedResponse: "The Togo helper on the machine sent a reply that could not be read."
         case .tooLarge: "That file is too large to send. The limit is about 700 KB."
         case .partialWrite(let changed): Self.describePartial(changed)
         case .racedCommit(let hash): Self.describeRaced(hash)
@@ -77,7 +77,7 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
     private static func describeRefused(_ reason: String) -> String {
         switch reason {
         case "needs_admin_setup": "This needs a one-time setup on the machine first."
-        default: "The Togo helper on the host turned that down."
+        default: "The Togo helper on the machine turned that down."
         }
     }
 
@@ -105,7 +105,7 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         case .filtered: "This file uses a git filter such as LFS. Stage it at your desk."
         case .unmerged: "Resolve the conflict first."
         case .nothingStaged: "Nothing is staged to commit."
-        case .identity: "Set your git name and email on the host first."
+        case .identity: "Set your git name and email on the machine first."
         case .unbornAmend: "There is no commit to amend yet."
         case .partial: describePartial([])
         case .raced: describeRaced("")
@@ -117,14 +117,14 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         switch error.code {
         case RPCErrorCode.notFound: "This session has ended."
         case RPCErrorCode.tmuxUnavailable: "The host needs tmux 3.2 or later."
-        case RPCErrorCode.notReady: "The Togo helper on the host was asked before it was ready."
-        case RPCErrorCode.invalidPath: "That folder does not exist on the host."
-        case RPCErrorCode.unsupportedVersion: "The Togo helper on the host speaks a different protocol version. Update the app or the helper."
+        case RPCErrorCode.notReady: "The Togo helper on the machine was asked before it was ready."
+        case RPCErrorCode.invalidPath: "That folder does not exist on the machine."
+        case RPCErrorCode.unsupportedVersion: "The Togo helper on the machine speaks a different protocol version. Update the app or the helper."
         case RPCErrorCode.conflict: "That request was already answered."
         case RPCErrorCode.refused: describeRefused("")
         case RPCErrorCode.notManaged: "That session was not started from Togo, so it cannot be changed from here."
-        case RPCErrorCode.invalidParams: "The Togo helper on the host turned that request down. Update the app or the helper."
-        default: "The Togo helper on the host could not do that."
+        case RPCErrorCode.invalidParams: "The Togo helper on the machine turned that request down. Update the app or the helper."
+        default: "The Togo helper on the machine could not do that."
         }
     }
 }

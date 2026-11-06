@@ -14,12 +14,16 @@ struct RequestCardView: View {
     var failure: String?
     var onOpen: (() -> Void)?
     let onAnswer: (Decision) -> Void
+    /// The card's fill. The sidebar already sits on the raised surface, so there the question
+    /// is a plain row grouped by spacing.
+    var surface: Color
 
     init(
         card: RequestCard, machineName: String? = nil, failure: String? = nil, onOpen: (() -> Void)? = nil,
-        onAnswer: @escaping (Decision) -> Void
+        surface: Color = .togoRaised, onAnswer: @escaping (Decision) -> Void
     ) {
         self.card = card
+        self.surface = surface
         self.machineName = machineName
         self.failure = failure
         self.onOpen = onOpen
@@ -75,7 +79,7 @@ struct RequestCardView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.togoRaised, in: .rect(cornerRadius: 16))
+        .background(surface, in: .rect(cornerRadius: 16))
         .motion(.confirm, value: card.phase)
         .haptic(.approve, trigger: card.phase) { sent($0) == .approved }
         .haptic(.deny, trigger: card.phase) { sent($0) == .denied }

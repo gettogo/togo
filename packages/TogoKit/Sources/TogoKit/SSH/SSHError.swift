@@ -14,26 +14,26 @@ public enum SSHError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .hostKeyChanged(let host, let expected, let presented):
-            "The host key for \(Self.displayHost(host)) is not the one you trusted. "
+            "The key for \(Self.displayHost(host)) is not the one you trusted. "
                 + "Trusted: \(expected.joined(separator: ", ")). Sent now: \(presented). "
-                + "If nobody changed or reinstalled this host, someone may be intercepting the connection. "
+                + "If nobody changed or reinstalled this machine, someone may be intercepting the connection. "
                 + "Togo will not connect until the old key is removed."
         case .hostKeyRejected:
-            "The host key was not trusted, so the connection was closed."
+            "The machine's key was not trusted, so the connection was closed."
         case .authFailed(let tried) where tried.isEmpty:
-            "The server did not accept the login."
+            "The machine did not accept the login."
         case .authFailed(let tried):
-            "The server did not accept the login (tried \(tried.map(Self.methodName).joined(separator: ", ")))."
+            "The machine did not accept the login (tried \(tried.map(Self.methodName).joined(separator: ", ")))."
         case .cancelled:
             "The connection was cancelled."
         case .unreachable(let detail):
             detail.hasSuffix(".") ? detail : detail + "."
         case .timeout:
-            "The server took too long to answer."
+            "The machine took too long to answer."
         case .channelClosed(nil):
             "The connection closed unexpectedly."
         case .channelClosed:
-            "The remote command stopped."
+            "The command on the machine stopped."
         }
     }
 

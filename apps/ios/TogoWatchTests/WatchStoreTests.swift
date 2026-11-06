@@ -269,6 +269,6 @@ private final class Clock: Sendable {
         await store.answerFromNotification(hostId: "h_unknown", requestId: "r_mirrored", decision: "approve")
         #expect(store.outcome("r_mirrored") == .notSetUp)
         #expect(store.failureNotice("r_mirrored") == WatchCopy.notSetUp(machine: nil))
-        #expect(WatchCopy.notSetUp(machine: "Studio") == "This Watch isn't set up for Studio yet. Open Togo on iPhone.")
+        #expect(WatchCopy.notSetUp(machine: "Studio") == "Not set up for Studio. Open Togo on iPhone.")
     }
 }

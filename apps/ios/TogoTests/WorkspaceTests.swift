@@ -346,10 +346,10 @@ import UIKit
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { _ in }.pngData())
         let old = ImagePasteFlow(support: .unsupported, upload: { _, _ in "" }, paste: { _ in })
         await old.begin(png)
-        #expect(old.phase.message == "This machine\u{2019}s helper can\u{2019}t receive images yet.")
+        #expect(old.phase.message == "This machine's helper can't receive images yet.")
         let plain = ImagePasteFlow(support: .none, upload: { _, _ in "" }, paste: { _ in })
         await plain.begin(png)
-        #expect(plain.phase.message == "This machine has no Togo helper, so images can\u{2019}t be sent.")
+        #expect(plain.phase.message == "This machine has no Togo helper, so images can't be sent.")
     }
 
     /// Only a tab the user opens, or Try again, may ask a sign-in question.

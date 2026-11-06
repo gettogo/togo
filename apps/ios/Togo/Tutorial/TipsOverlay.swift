@@ -37,7 +37,7 @@ enum TutorialTip: String, CaseIterable, Sendable {
         case .workspace:
             String(
                 localized: "tutorial.tip.workspace.message",
-                defaultValue: "The bar above the keyboard has Esc, Ctrl, Tab and arrows. Use the compose bar to write a longer message and send it at once."
+                defaultValue: "Esc, Ctrl, Tab and arrows sit above the keyboard. Use compose for longer messages."
             )
         case .request:
             String(
@@ -47,7 +47,7 @@ enum TutorialTip: String, CaseIterable, Sendable {
         case .offline:
             String(
                 localized: "tutorial.tip.offline.message",
-                defaultValue: "Togo can't reach this machine; it may be asleep or off the network. Its sessions are still on the machine and come back when it does."
+                defaultValue: "Can't reach this machine. It may be asleep. Its sessions come back when it does."
             )
         }
     }

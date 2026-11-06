@@ -43,7 +43,7 @@ import TogoKit
             availability = await engine.availability(locale: locale)
         } catch {
             installing = nil
-            availability = .unavailable(error.localizedDescription)
+            availability = .unavailable(ServiceErrors.message(error))
         }
     }
 

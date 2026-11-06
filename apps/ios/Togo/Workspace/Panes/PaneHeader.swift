@@ -65,11 +65,11 @@ struct PaneHeader: View {
 
 enum PanesCopy {
     static let swap = String(localized: "panes.swap", defaultValue: "Swap")
-    static let closePane = String(localized: "panes.closePane", defaultValue: "Close Pane")
-    static let paneMenu = String(localized: "panes.paneMenu", defaultValue: "Pane Options")
-    static let openBeside = String(localized: "panes.openBeside", defaultValue: "Open Beside")
+    static let closePane = String(localized: "panes.closePane", defaultValue: "Close pane")
+    static let paneMenu = String(localized: "panes.paneMenu", defaultValue: "Pane options")
+    static let openBeside = String(localized: "panes.openBeside", defaultValue: "Open beside")
     static let keyboard = String(localized: "panes.keyboard", defaultValue: "Keyboard")
-    static let divider = String(localized: "panes.divider", defaultValue: "Pane Divider")
+    static let divider = String(localized: "panes.divider", defaultValue: "Pane divider")
     static let dividerHint = String(
         localized: "panes.dividerHint", defaultValue: "Swipe up or down to change how the width is shared."
     )

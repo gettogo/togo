@@ -20,7 +20,7 @@ struct SyncSettingsView: View {
                     if !iCloudAvailable {
                         Text(settingsText("settings.sync.unavailable", "Sign in to iCloud in Settings to sync."))
                     }
-                    Text(settingsText("settings.sync.footer", "Private keys stay on this iPhone."))
+                    Text(settingsText("settings.sync.footer", "Private keys stay on this \(DeviceName.model)."))
                 }
             }
             .groupedRows()

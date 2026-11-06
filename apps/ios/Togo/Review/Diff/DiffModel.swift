@@ -212,7 +212,7 @@ enum DiffMode: String, CaseIterable, Sendable {
             resetHunks()
         } catch {
             guard generation == self.generation else { return }
-            phase = .failed(error.localizedDescription)
+            phase = .failed(ServiceErrors.message(error))
         }
     }
 
@@ -468,7 +468,7 @@ enum DiffMode: String, CaseIterable, Sendable {
 
     private func message(for error: any Error) -> Message {
         let conflict = (error as? HelperError)?.gitConflict
-        let text = conflict == .caseRename ? ChangesCopy.refusal(error, machine: machine) : error.localizedDescription
+        let text = conflict == .caseRename ? ChangesCopy.refusal(error, machine: machine) : ServiceErrors.message(error)
         return Message(text: text, retry: conflict == .locked)
     }
 

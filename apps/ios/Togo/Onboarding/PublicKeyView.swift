@@ -13,7 +13,7 @@ struct PublicKeyView: View {
 
     var body: some View {
         OnboardingStep(
-            title: String(localized: "onboard.publicKey.title", defaultValue: "Add this phone's key"),
+            title: String(localized: "onboard.publicKey.title", defaultValue: "Add this device's key"),
             message: String(
                 localized: "onboard.publicKey.message",
                 defaultValue: "Add this key to ~/.ssh/authorized_keys on \(machine)"
@@ -42,7 +42,7 @@ struct PublicKeyView: View {
             }
             Text(String(
                 localized: "onboard.publicKey.hint",
-                defaultValue: "Only the public half leaves the phone. Send it to yourself, then paste it on its own line."
+                defaultValue: "Only the public half leaves the device. Send it to yourself, then paste it on its own line."
             ))
             .font(.footnote)
             .foregroundStyle(Color.togoMute)

@@ -11,6 +11,7 @@ struct NewSessionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model: NewSessionModel
     @State private var path: [NewSessionModel.Step]
+    @State private var detent = SheetStyle.formStart
     private let zoom: Zoom?
 
     init(model: NewSessionModel, zoom: Zoom? = nil) {
@@ -24,21 +25,33 @@ struct NewSessionSheet: View {
             NavigationStack(path: $path) {
                 screen(for: model.firstStep)
                     .navigationDestination(for: NewSessionModel.Step.self) { screen(for: $0) }
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(NewSessionCopy.cancel) { dismiss() }
-                        }
-                    }
             }
         }
+        .togoSheet(.form, detent: $detent)
         .tint(.primary)
         .toggleStyle(.systemSwitch)
         .task { await model.start() }
-        .onChange(of: path) { model.step = path.last ?? model.firstStep }
+        .onChange(of: path) {
+            // Going back from the browser leaves it; choosing in it has left it already.
+            if !path.contains(.browse), model.browsing != .idle { model.leaveBrowsing() }
+            model.step = path.last { $0 != .browse } ?? model.firstStep
+            // A folder tree wants the full height; the system moves the sheet between heights.
+            if path.contains(.browse) { detent = .large }
+        }
         .haptic(.error, trigger: model.createError, when: { $0 != nil })
     }
 
-    @ViewBuilder private func screen(for step: NewSessionModel.Step) -> some View {
+    /// Every step can close the sheet, not only the first; Back stays the system's.
+    private func screen(for step: NewSessionModel.Step) -> some View {
+        page(for: step)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
+    }
+
+    @ViewBuilder private func page(for step: NewSessionModel.Step) -> some View {
         switch step {
         case .machine:
             MachineStep(model: model) { machine in
@@ -47,11 +60,9 @@ struct NewSessionSheet: View {
                 await model.choose(machine)
             }
         case .folder:
-            FolderStep(model: model, onStart: start) { folder in
-                guard path.last != .agent else { return }
-                path.append(.agent)
-                await model.choose(folder: folder)
-            }
+            FolderStep(model: model, onStart: start, onBrowse: browse, onChoose: choose(folder:))
+        case .browse:
+            BrowseStep(model: model, onChoose: choose(folder:))
         case .agent:
             AgentStep(model: model, onStart: start)
         }
@@ -63,6 +74,22 @@ struct NewSessionSheet: View {
         } else {
             content()
         }
+    }
+
+    /// The browser is a value in the path like every other page, so choosing a folder in it
+    /// changes the path once. A page presented by a flag on the root step, popped while the
+    /// agent step is pushed, leaves the stack on an empty page with only a back button.
+    private func browse() async {
+        guard path.last != .browse else { return }
+        path.append(.browse)
+        await model.browse("~")
+    }
+
+    /// One change to the path: the browser, if open, is replaced by the agent step.
+    private func choose(folder: String) async {
+        guard path.last != .agent else { return }
+        path = path.filter { $0 != .browse } + [.agent]
+        await model.choose(folder: folder)
     }
 
     private func start() async {
@@ -90,7 +117,7 @@ struct StepScaffold<Content: View>: View {
             .screenMargins()
             .padding(.vertical, 12)
         }
-        .background(Color.togoInk)
+        // No fill of its own: the sheet's glass shows through.
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .scrollBounceBehavior(.basedOnSize)

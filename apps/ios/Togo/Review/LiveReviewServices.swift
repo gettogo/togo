@@ -297,7 +297,7 @@ import TogoKit
                     emit(entry.localPort, Self.previewClosed)
                 }
             } catch {
-                emit(entry.localPort, error.localizedDescription)
+                emit(entry.localPort, ServiceErrors.message(error))
             }
         }
     }

@@ -89,11 +89,23 @@ enum ConnectPhase: Equatable, Sendable {
 @MainActor @Observable final class AddMachineFlow {
     enum Route: Hashable, Sendable {
         case form, connect
+        /// After a machine with the helper is saved: whether to get notifications, asked once.
+        case notifications
+    }
+
+    /// The notification question after saving: `needed` says whether it is still unanswered,
+    /// and `turnOn` asks iOS for permission.
+    struct NotificationAsk {
+        var needed: @MainActor () -> Bool
+        var turnOn: @MainActor () async -> Void
     }
 
     static let quietAfter: Duration = .seconds(6)
 
     var path: [Route] = []
+    /// Editing or importing a machine opens on the form as the first screen, so Back never
+    /// lands on a search for machines nobody asked for.
+    var startsOnForm = false
     var hosts: [DiscoveredHost] = []
     var discovery: DiscoveryPhase = .searching
     var draft = MachineDraft()
@@ -114,6 +126,10 @@ enum ConnectPhase: Equatable, Sendable {
     var onDetected: (SetupDetection) -> Void = { _ in }
     /// What the user typed for the machine's last question, sent with the next attempt only.
     private var answers: [String]?
+    /// Set when the flow should offer notifications once a machine with the helper is saved.
+    var notificationAsk: NotificationAsk?
+    /// The saved machine, held while the notification question is on screen.
+    private var savedRecord: HostRecord?
 
     init(
         services: any OnboardingServices, id: UUID = UUID(),
@@ -205,7 +221,7 @@ enum ConnectPhase: Equatable, Sendable {
                 deviceKey = try await services.deviceKey()
             } catch {
                 phase = .failed(String(
-                    localized: "onboard.connect.noDeviceKey", defaultValue: "Togo couldn't open this phone's key."
+                    localized: "onboard.connect.noDeviceKey", defaultValue: "Togo couldn't open this device's key."
                 ))
                 return
             }
@@ -259,7 +275,7 @@ enum ConnectPhase: Equatable, Sendable {
             try await services.forgetHostKey(change.hostID)
             retry()
         } catch {
-            phase = .failed(error.localizedDescription)
+            phase = .failed(ServiceErrors.message(error))
         }
     }
 
@@ -305,11 +321,26 @@ enum ConnectPhase: Equatable, Sendable {
             // Stored before the record, so the machine's first sign-in finds it.
             try savePassword(for: profile.id)
             try await save(record)
-            finish(record)
         } catch {
             saveError = String(
                 localized: "onboard.save.failed", defaultValue: "Couldn't save \(machineName). Try again."
             )
+            return
         }
+        // Only a helper sends notifications, so only a machine saved with one is a reason to ask.
+        if withHelper, case .present? = report?.helper, let ask = notificationAsk, ask.needed() {
+            savedRecord = record
+            path.append(.notifications)
+        } else {
+            finish(record)
+        }
+    }
+
+    /// The answer to the notification question. Only "Turn on" brings up the system alert.
+    func answerNotifications(turnOn: Bool) async {
+        guard let record = savedRecord else { return }
+        if turnOn { await notificationAsk?.turnOn() }
+        savedRecord = nil
+        finish(record)
     }
 }

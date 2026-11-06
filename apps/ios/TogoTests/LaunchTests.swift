@@ -1,3 +1,5 @@
+import Foundation
+import SwiftUI
 import Testing
 @testable import Togo
 
@@ -10,53 +12,143 @@ struct LaunchTests {
         #expect(!gate.claim())
     }
 
-    @Test func reduceMotionUsesStaticMark() {
-        for milliseconds in stride(from: 0, through: 300, by: 50) {
-            let frame = LaunchFrame(time: .milliseconds(milliseconds), reduceMotion: true)
-            #expect(frame.chevron == 1)
+    /// The first frame is the system launch screen: the whole mark, at rest, on ink.
+    @Test func firstFrameIsTheWholeMark() {
+        for reduceMotion in [false, true] {
+            let frame = LaunchFrame(time: .zero, reduceMotion: reduceMotion)
             #expect(frame.paws == [1, 1, 1, 1])
             #expect(frame.beaconScale == 1)
-            #expect(frame.beaconOpacity == 1)
+            #expect(frame.glowOpacity == 0)
+            #expect(frame.handoff == 0)
+            #expect(frame.inkOpacity == 1)
+            #expect(frame.markOpacity(movesToTarget: false) == 1)
         }
-        #expect(LaunchFrame(time: .zero, reduceMotion: true).overlayOpacity == 1)
-        #expect(LaunchFrame(time: LaunchTimeline.reducedTotal, reduceMotion: true).overlayOpacity == 0)
+        #expect(LaunchMark.launchScreenSide == 164, "the launch screen image is 164 pt square")
+    }
+
+    @Test func reduceMotionHoldsThenCrossFades() {
+        for milliseconds in stride(from: 0, through: 300, by: 25) {
+            let frame = LaunchFrame(time: .milliseconds(milliseconds), reduceMotion: true)
+            #expect(frame.paws == [1, 1, 1, 1])
+            #expect(frame.beaconScale == 1)
+            #expect(frame.glowOpacity == 0)
+            #expect(frame.markOpacity(movesToTarget: true) == frame.inkOpacity, "the mark never moves; it fades")
+        }
+        #expect(LaunchFrame(time: LaunchTimeline.reducedTotal, reduceMotion: true).inkOpacity == 0)
         #expect(LaunchTimeline.reducedFade <= .milliseconds(200))
     }
 
-    @Test func totalDurationUnder900ms() {
-        let sum = LaunchTimeline.walkStart
-            + LaunchTimeline.pawBeat * LaunchTimeline.pawCount
-            + LaunchTimeline.beaconLight + LaunchTimeline.hold + LaunchTimeline.fade
-        #expect(LaunchTimeline.total == sum)
-        #expect(LaunchTimeline.total <= .milliseconds(900))
-        #expect(LaunchTimeline.draw == .milliseconds(300))
-        #expect(LaunchTimeline.pawBeat == .milliseconds(80))
-        #expect(LaunchTimeline.hold == .milliseconds(100))
-        #expect(LaunchTimeline.fade == .milliseconds(200))
+    @Test func shortEnough() {
+        #expect(LaunchTimeline.total >= .milliseconds(900))
+        #expect(LaunchTimeline.total <= .milliseconds(1_150))
+        #expect(LaunchTimeline.total == LaunchTimeline.handoffStart + LaunchTimeline.handoff)
     }
 
-    @Test func pawsWalkLeftToRightOneBeatApart() {
+    @Test func pawsStepLeftToRightOneBeatApart() {
         let starts = (0..<LaunchTimeline.pawCount).map(LaunchTimeline.pawStart)
+        #expect(starts[0] == LaunchTimeline.rest, "nothing moves until the mark has been seen whole")
         for (earlier, later) in zip(starts, starts.dropFirst()) {
             #expect(later - earlier == LaunchTimeline.pawBeat)
         }
         let midWalk = LaunchFrame(time: starts[1] + .milliseconds(40), reduceMotion: false)
-        #expect(midWalk.paws[0] > midWalk.paws[1])
-        #expect(midWalk.paws[1] > 0)
-        #expect(midWalk.paws[2] == 0)
+        #expect(midWalk.paws[0] > 1)
+        #expect(midWalk.paws[1] > 1)
+        #expect(midWalk.paws[2] == 1)
+        #expect(midWalk.paws[3] == 1)
+        let stepped = LaunchFrame(time: LaunchTimeline.beaconStart + LaunchTimeline.beaconLight, reduceMotion: false)
+        #expect(stepped.paws.allSatisfy { abs($0 - 1) < 0.001 }, "every print is back at rest")
     }
 
-    @Test func beaconLightsAfterTheLastPawAndSettles() {
-        let lastPaw = LaunchTimeline.pawStart(LaunchTimeline.pawCount - 1)
-        #expect(LaunchTimeline.beaconStart > lastPaw)
+    @Test func beaconLightsAfterTheLastPaw() {
+        #expect(LaunchTimeline.beaconStart > LaunchTimeline.pawStart(LaunchTimeline.pawCount - 1))
         let before = LaunchFrame(time: LaunchTimeline.beaconStart - .milliseconds(10), reduceMotion: false)
-        #expect(before.beaconOpacity == 0)
-        let lit = LaunchFrame(time: LaunchTimeline.beaconStart, reduceMotion: false)
-        #expect(abs(lit.beaconScale - 0.6) < 0.001)
-        #expect(lit.beaconOpacity == 0)
-        let settled = LaunchFrame(time: LaunchTimeline.total, reduceMotion: false)
-        #expect(abs(settled.beaconScale - 1) < 0.01)
-        #expect(settled.beaconOpacity == 1)
+        #expect(before.glowOpacity == 0)
+        #expect(before.beaconScale == 1)
+        let lighting = LaunchFrame(time: LaunchTimeline.beaconStart + .milliseconds(120), reduceMotion: false)
+        #expect(lighting.glowOpacity > 0)
+        #expect(lighting.glowScale > 1)
+        #expect(lighting.beaconScale > 1)
+        let end = LaunchFrame(time: LaunchTimeline.total, reduceMotion: false)
+        #expect(end.glowOpacity == 0)
+        #expect(abs(end.beaconScale - 1) < 0.001)
+    }
+
+    @Test func handsOverAtTheEnd() {
+        let start = LaunchFrame(time: LaunchTimeline.handoffStart, reduceMotion: false)
+        #expect(start.inkOpacity == 1)
+        let end = LaunchFrame(time: LaunchTimeline.total, reduceMotion: false)
+        #expect(end.inkOpacity == 0)
+        #expect(end.markOpacity(movesToTarget: false) == 0, "with nowhere to go, the mark fades")
+        #expect(end.markOpacity(movesToTarget: true) == 1, "on first run it lands on the screen's own mark")
+    }
+
+    // MARK: Clock
+
+    private static let t0 = Date(timeIntervalSinceReferenceDate: 0)
+
+    private func run(
+        _ clock: inout LaunchClock, frames: Int, every step: Double, from start: Date = t0,
+        active: Bool = true, ready: Bool = true, reduceMotion: Bool = false
+    ) -> Date {
+        var date = start
+        for _ in 0..<frames {
+            _ = clock.tick(at: date, active: active, ready: ready, reduceMotion: reduceMotion)
+            date += step
+        }
+        return date
+    }
+
+    @Test func clockStartsAtTheFirstFrameDrawn() {
+        var clock = LaunchClock()
+        #expect(clock.tick(at: Self.t0 + 5, active: true, ready: true, reduceMotion: false) == .zero)
+        #expect(clock.tick(at: Self.t0 + 5.016, active: true, ready: true, reduceMotion: false) > .zero)
+    }
+
+    @Test func playsToTheEndAtSixtyFrames() {
+        var clock = LaunchClock()
+        _ = run(&clock, frames: 120, every: 1.0 / 60)
+        #expect(clock.finished(reduceMotion: false))
+        var reduced = LaunchClock()
+        _ = run(&reduced, frames: 30, every: 1.0 / 60, reduceMotion: true)
+        #expect(reduced.finished(reduceMotion: true))
+    }
+
+    /// A main thread busy building the first screen pauses the launch rather than skipping it.
+    @Test func aStallPausesTheWalkInsteadOfSkippingIt() {
+        var clock = LaunchClock()
+        _ = clock.tick(at: Self.t0, active: true, ready: true, reduceMotion: false)
+        let after = clock.tick(at: Self.t0 + 0.8, active: true, ready: true, reduceMotion: false)
+        #expect(after == LaunchTimeline.longestStep)
+        #expect(LaunchFrame(time: after, reduceMotion: false).handoff == 0)
+    }
+
+    @Test func waitsWhileTheSceneIsNotActive() {
+        var clock = LaunchClock()
+        let next = run(&clock, frames: 30, every: 1.0 / 60, active: false)
+        #expect(clock.time == .zero, "the mark holds on its first frame")
+        _ = run(&clock, frames: 120, every: 1.0 / 60, from: next)
+        #expect(clock.finished(reduceMotion: false))
+    }
+
+    @Test func holdsTheHandOffUntilTheFirstScreenIsReady() {
+        var clock = LaunchClock()
+        let next = run(&clock, frames: 70, every: 1.0 / 60, ready: false)
+        #expect(clock.time == LaunchTimeline.handoffStart)
+        _ = run(&clock, frames: 30, every: 1.0 / 60, from: next, ready: true)
+        #expect(clock.finished(reduceMotion: false))
+    }
+
+    @Test func handsOffAnywayAfterTheCap() {
+        var clock = LaunchClock()
+        _ = run(&clock, frames: 60 * 2, every: 1.0 / 60, ready: false)
+        #expect(clock.wall > LaunchTimeline.readyCap)
+        #expect(clock.finished(reduceMotion: false))
+    }
+
+    @Test func goneByTheCeilingWhateverHappens() {
+        var clock = LaunchClock()
+        _ = run(&clock, frames: 5, every: 1, active: false, ready: false)
+        #expect(clock.finished(reduceMotion: false))
     }
 
     /// A touch on the overlay, at any moment of it, lands on the screen underneath: the
@@ -75,8 +167,11 @@ struct LaunchTests {
         }
         for milliseconds in [0, 300, 600, 850, 1_000] {
             for reduceMotion in [false, true] {
-                let body = LaunchOverlayFrame(frame: LaunchFrame(time: .milliseconds(milliseconds), reduceMotion: reduceMotion)).body
-                #expect(outermost(body).map(hitTestingOff) == true, "the overlay takes touches at \(milliseconds) ms")
+                for target in [nil, CGRect(x: 20, y: 80, width: 120, height: 120)] {
+                    let frame = LaunchFrame(time: .milliseconds(milliseconds), reduceMotion: reduceMotion)
+                    let body = LaunchOverlayFrame(frame: frame, target: target).body
+                    #expect(outermost(body).map(hitTestingOff) == true, "the overlay takes touches at \(milliseconds) ms")
+                }
             }
         }
     }
@@ -119,12 +214,16 @@ struct LaunchTests {
         #expect(turns.isEmpty)
         #expect(signposts == 1)
     }
+}
 
-    @Test func overlayIsOpaqueUntilTheFadeAndGoneAtTheEnd() {
-        #expect(LaunchFrame(time: LaunchTimeline.fadeStart, reduceMotion: false).overlayOpacity == 1)
-        #expect(LaunchFrame(time: LaunchTimeline.total, reduceMotion: false).overlayOpacity == 0)
-        let chevronDone = LaunchFrame(time: LaunchTimeline.draw, reduceMotion: false)
-        #expect(chevronDone.chevron == 1)
-        #expect(LaunchFrame(time: .zero, reduceMotion: false).chevron == 0)
+struct PrivacyCoverTests {
+    /// A cold launch is inactive for a moment before it turns active; the cover would hide
+    /// the launch then. Once the scene has been active, leaving it is covered.
+    @Test func coverWaitsForTheFirstActivation() {
+        #expect(!PrivacyCoverRule.covers(.inactive, wasActive: false))
+        #expect(!PrivacyCoverRule.covers(.active, wasActive: false))
+        #expect(PrivacyCoverRule.covers(.inactive, wasActive: true))
+        #expect(PrivacyCoverRule.covers(.background, wasActive: false))
+        #expect(PrivacyCoverRule.covers(.background, wasActive: true))
     }
 }

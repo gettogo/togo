@@ -184,6 +184,8 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     case newSession(HostID?)
     case signIn(HostID)
     case review(ReviewSubject, ReviewTab)
+    /// Settings beside the sidebar, where pushing it would cover the session in the detail.
+    case settings
 
     var id: Self { self }
 }

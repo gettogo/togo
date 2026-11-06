@@ -135,9 +135,14 @@ struct TerminalDemo: UIViewControllerRepresentable {
     }
 }
 
-/// The session page: the terminal demo, then the keys, gestures and shortcuts it describes.
+/// The session page: the terminal demo, then under Learn more the keys, gestures and shortcuts
+/// it describes.
 struct SessionPage: View {
     let playing: Bool
+    /// Opens Learn more, for snapshots.
+    var expanded = false
+
+    @Environment(\.hardwareKeyboard) private var keyboard
 
     var body: some View {
         TutorialPageLayout(page: .session) {
@@ -149,40 +154,46 @@ struct SessionPage: View {
                     localized: "tutorial.session.demo",
                     defaultValue: "A terminal where an agent edits a test and asks to run npm test, with the key bar below it."
                 ))
-            VStack(alignment: .leading, spacing: 20) {
-                TutorialPoint(
-                    String(localized: "tutorial.session.keyBar.title", defaultValue: "The key bar"),
-                    systemImage: "keyboard",
-                    String(
-                        localized: "tutorial.session.keyBar.detail",
-                        defaultValue: "Esc, Ctrl, Tab and the arrows sit above the keyboard. Tap Ctrl once for the next key, twice to keep it on."
-                    )
+            TutorialMore(expanded: expanded) { details }
+        }
+    }
+
+    @ViewBuilder private var details: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            TutorialPoint(
+                String(localized: "tutorial.session.keyBar.title", defaultValue: "The key bar"),
+                systemImage: "keyboard",
+                String(
+                    localized: "tutorial.session.keyBar.detail",
+                    defaultValue: "Esc, Ctrl, Tab and the arrows sit above the keyboard. Tap Ctrl once for the next key, twice to keep it on."
                 )
-                TutorialPoint(
-                    String(localized: "tutorial.session.compose.title", defaultValue: "The compose bar"),
-                    systemImage: "text.cursor",
-                    String(
-                        localized: "tutorial.session.compose.detail",
-                        defaultValue: "Write a longer message with dictation and autocorrect, then send it to the agent in one go."
-                    )
+            )
+            TutorialPoint(
+                String(localized: "tutorial.session.compose.title", defaultValue: "The compose bar"),
+                systemImage: "text.cursor",
+                String(
+                    localized: "tutorial.session.compose.detail",
+                    defaultValue: "Write a longer message with dictation and autocorrect, then send it to the agent in one go."
                 )
-            }
-            VStack(alignment: .leading, spacing: 14) {
-                SectionHeading(String(localized: "tutorial.session.gestures", defaultValue: "Gestures"))
-                gesture(
-                    String(localized: "tutorial.session.gesture.swipe", defaultValue: "Swipe with two fingers to move between sessions"),
-                    "hand.draw"
-                )
-                gesture(
-                    String(localized: "tutorial.session.gesture.pinch", defaultValue: "Pinch to make the text larger or smaller"),
-                    "arrow.up.left.and.arrow.down.right"
-                )
-                gesture(String(localized: "tutorial.session.gesture.tab", defaultValue: "Double tap to send Tab"), "hand.tap")
-                gesture(
-                    String(localized: "tutorial.session.gesture.back", defaultValue: "Swipe in from the left edge to go back"),
-                    "chevron.left"
-                )
-            }
+            )
+        }
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeading(String(localized: "tutorial.session.gestures", defaultValue: "Gestures"))
+            gesture(
+                String(localized: "tutorial.session.gesture.swipe", defaultValue: "Swipe with two fingers to move between sessions"),
+                "hand.draw"
+            )
+            gesture(
+                String(localized: "tutorial.session.gesture.pinch", defaultValue: "Pinch to make the text larger or smaller"),
+                "arrow.up.left.and.arrow.down.right"
+            )
+            gesture(String(localized: "tutorial.session.gesture.tab", defaultValue: "Double tap to send Tab"), "hand.tap")
+            gesture(
+                String(localized: "tutorial.session.gesture.back", defaultValue: "Swipe in from the left edge to go back"),
+                "chevron.left"
+            )
+        }
+        if keyboard.hardwareKeyboardConnected {
             VStack(alignment: .leading, spacing: 14) {
                 SectionHeading(
                     String(localized: "tutorial.session.keyboard", defaultValue: "With a hardware keyboard")
@@ -190,7 +201,7 @@ struct SessionPage: View {
                 shortcut("⌘1 – ⌘9", String(localized: "tutorial.session.shortcut.sessions", defaultValue: "Switch sessions"))
                 shortcut("⌘T", String(localized: "tutorial.session.shortcut.new", defaultValue: "New session"))
                 shortcut("⌘K", String(localized: "tutorial.session.shortcut.controlCenter", defaultValue: "Back to your sessions"))
-                shortcut("⌘W", String(localized: "tutorial.session.shortcut.detach", defaultValue: "Detach; the session keeps running"))
+                shortcut("⌘W", String(localized: "tutorial.session.shortcut.detach", defaultValue: "Close the tab. The session keeps running."))
             }
         }
     }

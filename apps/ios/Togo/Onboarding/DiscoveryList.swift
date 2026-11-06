@@ -93,7 +93,7 @@ struct DiscoveryList: View {
                     localized: "onboard.discovery.denied.message",
                     defaultValue: "Turn on Local Network for Togo in Settings, or type the machine's address."
                 ),
-                action: .init(String(localized: "onboard.discovery.openSettings", defaultValue: "Open Settings")) {
+                action: .init(String(localized: "onboard.discovery.openSettings", defaultValue: "Open settings")) {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 }
             )
@@ -139,6 +139,10 @@ private struct HostRow: View {
 
     /// "192.168.1.20" or "100.101.102.103, Tailscale". The port shows only when unusual.
     private var detail: String {
+        // Found by name only: the form asks for the address.
+        if host.host.isEmpty {
+            return String(localized: "onboard.discovery.noAddress", defaultValue: "Type its address on the next screen")
+        }
         let port = String(host.port)
         let address = host.port == 22
             ? host.host

@@ -6,76 +6,101 @@ enum TutorialPage: Int, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .welcome: String(localized: "tutorial.welcome.title", defaultValue: "Your agents keep running on your machine")
-        case .setup: String(localized: "tutorial.setup.title", defaultValue: "What the machine needs")
-        case .helper: String(localized: "tutorial.helper.title", defaultValue: "With or without the helper")
-        case .privacy: String(localized: "tutorial.privacy.title", defaultValue: "Notifications and privacy")
-        case .session: String(localized: "tutorial.session.title", defaultValue: "Working in a session")
-        case .ready: String(localized: "tutorial.ready.title", defaultValue: "Ready to add a machine")
+        case .welcome: String(localized: "tutorial.welcome.title.short", defaultValue: "Your agents keep running")
+        case .setup: String(localized: "tutorial.setup.title.short", defaultValue: "Get your machine ready")
+        case .helper: String(localized: "tutorial.helper.title.short", defaultValue: "The helper adds the rest")
+        case .privacy: String(localized: "tutorial.privacy.title.short", defaultValue: "Private by design")
+        case .session: String(localized: "tutorial.session.title.short", defaultValue: "Made for touch")
+        case .ready: String(localized: "tutorial.ready.title.short", defaultValue: "Add your first machine")
         }
     }
 
+    /// One short sentence. Anything more sits behind Learn more on the page.
     var message: String {
         switch self {
         case .welcome:
             String(
-                localized: "tutorial.welcome.message",
-                defaultValue: "Agents run in tmux on your Mac or Linux machine, not on the phone. Togo attaches to them over SSH or Mosh, and they keep going when you close the app."
+                localized: "tutorial.welcome.message.short",
+                defaultValue: "They run on your Mac or Linux machine, even when this app is closed."
             )
         case .setup:
-            String(
-                localized: "tutorial.setup.message",
-                defaultValue: "Tick each one as you go. Togo also ticks them when it finds them on a machine you add."
-            )
+            String(localized: "tutorial.setup.message.short", defaultValue: "Tick each step as you go.")
         case .helper:
             String(
-                localized: "tutorial.helper.message",
-                defaultValue: "Togo works over plain SSH. The helper is a small program on the machine that adds the rest."
+                localized: "tutorial.helper.message.short",
+                defaultValue: "Plain SSH works. The helper adds status, approvals and notifications."
             )
         case .privacy:
             String(
-                localized: "tutorial.privacy.message",
-                defaultValue: "What reaches your lock screen, and who can read it on the way."
+                localized: "tutorial.privacy.message.short",
+                defaultValue: "Only this device can read your notifications."
             )
         case .session:
             String(
-                localized: "tutorial.session.message",
-                defaultValue: "A session is a real terminal. These keys and gestures make it work on a phone."
+                localized: "tutorial.session.message.short",
+                defaultValue: "Keys, gestures and a compose bar make the terminal easy to use."
             )
         case .ready:
             String(
-                localized: "tutorial.ready.message",
-                defaultValue: "You need the machine's name or address and your user name on it. Or look around a demo machine first."
+                localized: "tutorial.ready.message.short",
+                defaultValue: "You need its name or address and your user name on it."
             )
         }
     }
 }
 
 /// One page of the guide: a title and a sentence, then the page's content, scrolling as one.
+/// With room to spare, the content sits in the middle of the space under the title rather than
+/// leaving an empty band below it; `centered: false` keeps it at the top, for content that grows
+/// as the user opens it, such as the checklist.
 struct TutorialPageLayout<Content: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let page: TutorialPage
+    var centered = true
     @ViewBuilder var content: Content
 
+    private static var topPadding: CGFloat { 8 }
+    private static var bottomPadding: CGFloat { 24 }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(page.title)
-                        .font(.title.weight(.bold))
-                        .foregroundStyle(Color.togoSnow)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(page.message)
-                        .font(.body)
-                        .foregroundStyle(Color.togoMute)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(page.title)
+                            .font(.title.weight(.bold))
+                            .foregroundStyle(Color.togoSnow)
+                            .accessibilityAddTraits(.isHeader)
+                        Text(page.message)
+                            .font(.body)
+                            .foregroundStyle(Color.togoMute)
+                    }
+                    Spacer(minLength: 28)
+                    VStack(alignment: .leading, spacing: 28) {
+                        content
+                    }
+                    if centers {
+                        Spacer(minLength: 0)
+                    }
                 }
-                content
+                .frame(
+                    minHeight: centers ? max(0, proxy.size.height - Self.topPadding - Self.bottomPadding) : nil,
+                    alignment: .top
+                )
+                .screenMargins()
+                .padding(.top, Self.topPadding)
+                .padding(.bottom, Self.bottomPadding)
             }
-            .screenMargins()
-            .padding(.top, 8)
-            .padding(.bottom, 24)
+            .scrollBounceBehavior(.basedOnSize)
+            // At large text sizes a page runs past the screen; the indicator says it scrolls.
+            .scrollIndicatorsFlash(onAppear: true)
         }
-        .scrollBounceBehavior(.basedOnSize)
         .background(Color.togoInk)
+    }
+
+    /// At accessibility sizes the text fills the screen, so the content follows it directly.
+    private var centers: Bool {
+        centered && !dynamicTypeSize.isAccessibilitySize
     }
 }
 
@@ -113,26 +138,74 @@ extension TutorialPoint where Detail == Text {
     }
 }
 
+/// Secondary detail for a page, folded away under "Learn more" so the page shows one idea.
+struct TutorialMore<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expanded: Bool
+    @ViewBuilder var content: Content
+
+    init(expanded: Bool = false, @ViewBuilder content: () -> Content) {
+        _expanded = State(initialValue: expanded)
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Button {
+                withAnimation(Motion.animation(.collapse, reduce: reduceMotion)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(expanded
+                        ? String(localized: "tutorial.more.hide", defaultValue: "Show less")
+                        : String(localized: "tutorial.more.show", defaultValue: "Learn more"))
+                    Image(systemName: "chevron.down")
+                        .font(.footnote.weight(.semibold))
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.togoSnow)
+                .frame(minHeight: 44)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(expanded
+                ? String(localized: "tutorial.more.expanded", defaultValue: "Expanded")
+                : String(localized: "tutorial.more.collapsed", defaultValue: "Collapsed"))
+            if expanded {
+                content.transition(.opacity)
+            }
+        }
+    }
+}
+
 // MARK: Welcome
 
 struct WelcomePage: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let animated: Bool
+    /// Opens Learn more, for snapshots.
+    var expanded = false
 
     var body: some View {
         TutorialPageLayout(page: .welcome) {
-            ConnectionDiagram(animated: animated)
-            VStack(alignment: .leading, spacing: 20) {
+            // At accessibility sizes the sentence says what the diagram shows, and the diagram
+            // would push Learn more off the screen.
+            if !dynamicTypeSize.isAccessibilitySize {
+                ConnectionDiagram(animated: animated)
+            }
+            TutorialMore(expanded: expanded) {
                 TutorialPoint(
                     String(localized: "tutorial.welcome.tmux.title", defaultValue: "Sessions live in tmux"),
                     systemImage: "rectangle.split.3x1",
                     String(
                         localized: "tutorial.welcome.tmux.detail",
-                        defaultValue: "Each agent runs in its own tmux session, so it carries on when the phone sleeps or loses signal."
+                        defaultValue: "Each agent runs in its own tmux session, so it carries on when your device sleeps or loses signal."
                     )
                 )
                 TutorialPoint(
-                    String(localized: "tutorial.welcome.attach.title", defaultValue: "The phone attaches"),
-                    systemImage: "iphone",
+                    String(localized: "tutorial.welcome.attach.title", defaultValue: "Your device attaches"),
+                    systemImage: DeviceName.symbol,
                     String(
                         localized: "tutorial.welcome.attach.detail",
                         defaultValue: "Open a session to see it as it is on the machine, type into it, or answer what the agent asked."
@@ -164,7 +237,7 @@ struct ConnectionDiagram: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(
             localized: "tutorial.welcome.diagram",
-            defaultValue: "This phone connects over SSH or Mosh to your machine, where agents run inside tmux."
+            defaultValue: "This device connects over SSH or Mosh to your machine, where agents run inside tmux."
         ))
         .task {
             guard animated, !reduceMotion, !shown else { return }
@@ -243,25 +316,32 @@ private struct Line: Shape {
 // MARK: Notifications and privacy
 
 struct PrivacyPage: View {
+    @Environment(\.liveActivitiesAvailable) private var liveActivitiesAvailable
+    /// Opens Learn more, for snapshots.
+    var expanded = false
+
     var body: some View {
         TutorialPageLayout(page: .privacy) {
-            VStack(alignment: .leading, spacing: 24) {
+            PrivacyMark()
+            TutorialMore(expanded: expanded) {
                 TutorialPoint(
                     String(localized: "tutorial.privacy.lockScreen.title", defaultValue: "On the lock screen"),
                     systemImage: "bell",
                     String(
                         localized: "tutorial.privacy.lockScreen.detail",
-                        defaultValue: "A notification shows the whole request, so you can answer without opening Togo. It is end-to-end encrypted, and only this phone can read it."
+                        defaultValue: "A notification shows the whole request, so you can answer without opening Togo. It is end-to-end encrypted, and only this device can read it."
                     )
                 )
-                TutorialPoint(
-                    String(localized: "tutorial.privacy.liveActivity.title", defaultValue: "In a Live Activity"),
-                    systemImage: "rectangle.badge.checkmark",
-                    String(
-                        localized: "tutorial.privacy.liveActivity.detail",
-                        defaultValue: "A Live Activity shows only which session it is, its status and for how long. It shows what the agent wrote only if you turn that on."
+                if liveActivitiesAvailable {
+                    TutorialPoint(
+                        String(localized: "tutorial.privacy.liveActivity.title", defaultValue: "In a Live Activity"),
+                        systemImage: "rectangle.badge.checkmark",
+                        String(
+                            localized: "tutorial.privacy.liveActivity.detail",
+                            defaultValue: "A Live Activity shows only which session it is, its status and for how long. It shows what the agent wrote only if you turn that on."
+                        )
                     )
-                )
+                }
                 TutorialPoint(
                     String(localized: "tutorial.privacy.relay.title", defaultValue: "On the way"),
                     systemImage: "lock",
@@ -284,36 +364,47 @@ struct ReadyPage: View {
 
     var body: some View {
         TutorialPageLayout(page: .ready) {
-            VStack(alignment: .leading, spacing: 20) {
-                TutorialPoint(
-                    String(localized: "tutorial.ready.find.title", defaultValue: "Togo looks for machines nearby"),
-                    systemImage: "dot.radiowaves.left.and.right",
-                    String(
-                        localized: "tutorial.ready.find.detail",
-                        defaultValue: "Machines on the same network that offer SSH show up by name. You can also type an address."
-                    )
-                )
-                TutorialPoint(
-                    String(localized: "tutorial.ready.key.title", defaultValue: "This phone makes its own key"),
-                    systemImage: "key",
-                    String(
-                        localized: "tutorial.ready.key.detail",
-                        defaultValue: "The private half never leaves the phone. Togo shows the public half for you to add to the machine."
-                    )
-                )
-                TutorialPoint(
-                    String(localized: "tutorial.ready.later.title", defaultValue: "This guide stays in Settings"),
-                    systemImage: "gearshape",
-                    String(
-                        localized: "tutorial.ready.later.detail",
-                        defaultValue: "Open it again from Settings, Getting started."
-                    )
-                )
-            }
+            NearbyMark()
             if let onDemo {
                 Button(Self.demoTitle, action: onDemo)
                     .buttonStyle(.secondary)
             }
         }
+    }
+}
+
+/// A page's single symbol, large and quiet, for pages whose idea has no diagram.
+struct TutorialMark: View {
+    let systemImage: String
+    let label: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 44, weight: .regular))
+            .foregroundStyle(Color.togoSnow)
+            .frame(width: 112, height: 112)
+            .overlay(Circle().strokeBorder(Color.togoLine, lineWidth: 2))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .accessibilityElement()
+            .accessibilityLabel(label)
+    }
+}
+
+struct PrivacyMark: View {
+    var body: some View {
+        TutorialMark(
+            systemImage: "lock.shield",
+            label: String(localized: "tutorial.privacy.mark", defaultValue: "A lock: notifications are sealed end to end.")
+        )
+    }
+}
+
+struct NearbyMark: View {
+    var body: some View {
+        TutorialMark(
+            systemImage: "dot.radiowaves.left.and.right",
+            label: String(localized: "tutorial.ready.mark", defaultValue: "Togo looks for machines nearby.")
+        )
     }
 }

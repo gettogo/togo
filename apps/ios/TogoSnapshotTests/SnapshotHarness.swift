@@ -17,6 +17,8 @@ enum ScreenVariant: String, CaseIterable, Sendable {
 /// simulator; the other sizes are windows of that size with their own safe area drawn in.
 enum ScreenSize: String, CaseIterable, Sendable {
     case iPhone17, duoFolded, duoOpen, duoTabletop, duoBook, iPadPro13, iPadNarrow
+    /// iPad Pro 13-inch held landscape, full screen and at half the width beside another app.
+    case iPadPro13Landscape, iPadHalf
 
     var size: CGSize {
         switch self {
@@ -27,6 +29,8 @@ enum ScreenSize: String, CaseIterable, Sendable {
         case .duoTabletop: CGSize(width: 669, height: 951)
         case .iPadPro13: CGSize(width: 1032, height: 1376)
         case .iPadNarrow: CGSize(width: 375, height: 1000)
+        case .iPadPro13Landscape: CGSize(width: 1376, height: 1032)
+        case .iPadHalf: CGSize(width: 678, height: 1032)
         }
     }
 
@@ -35,7 +39,8 @@ enum ScreenSize: String, CaseIterable, Sendable {
         case .iPhone17: UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0)
         // The folded Duo keeps a system bar on the trailing edge in portrait.
         case .duoFolded: UIEdgeInsets(top: 0, left: 0, bottom: 34, right: 84)
-        case .duoOpen, .duoTabletop, .duoBook, .iPadPro13, .iPadNarrow: UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0)
+        case .duoOpen, .duoTabletop, .duoBook, .iPadPro13, .iPadNarrow, .iPadPro13Landscape, .iPadHalf:
+            UIEdgeInsets(top: 24, left: 0, bottom: 20, right: 0)
         }
     }
 

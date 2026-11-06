@@ -7,7 +7,8 @@ enum Load<T: Equatable>: Equatable {
 }
 
 @MainActor @Observable final class NewSessionModel {
-    enum Step: Hashable, Sendable { case machine, folder, agent }
+    /// `browse` is the folder browser, a page above the folder step that is still that step.
+    enum Step: Hashable, Sendable { case machine, folder, browse, agent }
 
     /// A machine the session can start on, with the reason it cannot when it is unavailable.
     struct Machine: Identifiable, Equatable {
@@ -28,7 +29,7 @@ enum Load<T: Equatable>: Equatable {
     var step: Step {
         didSet {
             // Leaving the folder step drops any listing still on its way.
-            if step != oldValue, step != .folder { cancelBrowse() }
+            if step != oldValue, step != .folder, step != .browse { cancelBrowse() }
         }
     }
     var hostID: HostID?
@@ -85,7 +86,8 @@ enum Load<T: Equatable>: Equatable {
 
     /// The steps pushed on top of the first one to reach `step`.
     var pushedSteps: [Step] {
-        let order: [Step] = [.machine, .folder, .agent]
+        // The browser opens above the folder step; choosing a folder there replaces it.
+        let order: [Step] = step == .browse ? [.machine, .folder, .browse] : [.machine, .folder, .agent]
         guard let start = order.firstIndex(of: firstStep), let end = order.firstIndex(of: step) else { return [] }
         return Array(order[start...end].dropFirst())
     }
@@ -175,7 +177,7 @@ enum Load<T: Equatable>: Equatable {
         guard hostID != nil, !helperMissing else { return }
         switch step {
         case .machine: break
-        case .folder: if recent == .idle { await loadRecent() }
+        case .folder, .browse: if recent == .idle { await loadRecent() }
         case .agent: if agents == .idle { await loadAgents() }
         }
     }

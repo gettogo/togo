@@ -31,7 +31,7 @@ struct GestureSettingsView: View {
                 )
                 toggle(
                     settingsText("settings.gestures.edge", "Edge swipe"),
-                    settingsText("settings.gestures.edge.detail", "Swipe from the left edge to go back to your sessions."),
+                    settingsText("settings.gestures.edge.detail", "Swipe from the left edge to go back to your sessions or show the sidebar."),
                     \.edgeSwipe
                 )
                 toggle(

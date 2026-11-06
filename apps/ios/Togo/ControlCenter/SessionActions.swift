@@ -139,7 +139,8 @@ enum SessionActions {
     }
 
     /// Changes and Files need the helper's git methods, Ports its port list. Without a helper they
-    /// stay in the menu, disabled, with the reason.
+    /// stay in the menu, disabled, with the reason. A connected helper too old to offer them keeps
+    /// them too, disabled, with a note to update it.
     private static func addReview(to set: inout SessionActionSet, machine: MachineSection) {
         if machine.helper == .missing {
             set.review = SessionAction.reviewActions
@@ -150,11 +151,32 @@ enum SessionActions {
         var review: [SessionAction] = []
         if machine.capabilities.contains(Capability.git) { review += [.changes, .files] }
         if machine.capabilities.contains(Capability.ports) { review.append(.ports) }
-        set.review = review
+        let older = olderHelperLacks(machine)
+        set.review = SessionAction.reviewActions.filter { review.contains($0) || older.contains($0) }
         if !review.isEmpty, let reason = unreachableReason(machine) {
             set.disabled.formUnion(review)
             if reason != set.note { set.reviewNote = reason }
         }
+        if !older.isEmpty {
+            set.disabled.formUnion(older)
+            set.reviewNote = older.contains(.changes)
+                ? ReviewEntryCopy.helperOutdated(machine.name)
+                : ReviewEntryCopy.helperOutdatedPorts(machine.name)
+        }
+    }
+
+    /// The review actions a connected helper does not offer. Only an online machine has told Togo
+    /// what its helper can do, so elsewhere this is empty.
+    private static func olderHelperLacks(_ machine: MachineSection) -> [SessionAction] {
+        guard machine.reachability == .online else { return [] }
+        switch machine.helper {
+        case .present, .outdated: break
+        case .checking, .missing: return []
+        }
+        var lacking: [SessionAction] = []
+        if !machine.capabilities.contains(Capability.git) { lacking += [.changes, .files] }
+        if !machine.capabilities.contains(Capability.ports) { lacking.append(.ports) }
+        return lacking
     }
 
     /// Opening still works while a machine is away, because the terminal retries on its own;

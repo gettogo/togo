@@ -1,12 +1,15 @@
 import SwiftUI
 import TogoKit
 
-/// What Togo does over plain SSH next to what the helper adds, then what the helper is and is
-/// not allowed to do. Side by side when there is room, one above the other at accessibility sizes.
+/// What Togo does over plain SSH next to what the helper adds, then, under Learn more, what the
+/// helper is and is not allowed to do. Side by side when there is room, one above the other at
+/// accessibility sizes.
 struct HelperComparison: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Lines the status words up under the fact's text: the icon column plus its spacing.
     @ScaledMetric(relativeTo: .subheadline) private var statusInset: CGFloat = 26
+    /// Opens Learn more, for snapshots.
+    var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -23,19 +26,14 @@ struct HelperComparison: View {
                     with
                 )
             }
-            boundaries
+            TutorialMore(expanded: expanded) { boundaries }
         }
     }
 
     private var without: some View {
         VStack(alignment: .leading, spacing: 12) {
             fact(String(localized: "tutorial.helper.without.ssh", defaultValue: "Plain SSH and tmux"))
-            fact(String(localized: "tutorial.helper.without.list", defaultValue: "Sessions listed by name"))
             fact(String(localized: "tutorial.helper.without.attach", defaultValue: "Attach, or open a new shell"))
-            fact(String(
-                localized: "tutorial.helper.without.manage",
-                defaultValue: "Rename or end only the sessions Togo started"
-            ))
         }
     }
 
@@ -49,15 +47,8 @@ struct HelperComparison: View {
                 }
                 .padding(.leading, statusInset)
             }
-            fact(String(
-                localized: "tutorial.helper.with.answer",
-                defaultValue: "Approve or deny from the phone and the lock screen"
-            ))
+            fact(String(localized: "tutorial.helper.with.approve", defaultValue: "Approve from the lock screen"))
             fact(String(localized: "tutorial.helper.with.notifications", defaultValue: "Notifications"))
-            fact(String(localized: "tutorial.helper.with.liveActivity", defaultValue: "A Live Activity"))
-            fact(String(localized: "tutorial.helper.with.upload", defaultValue: "File and image upload"))
-            fact(String(localized: "tutorial.helper.with.review", defaultValue: "Review changes before you approve"))
-            fact(String(localized: "tutorial.helper.with.start", defaultValue: "Start an agent in any folder"))
         }
     }
 
@@ -76,7 +67,7 @@ struct HelperComparison: View {
                     systemImage: "network.slash",
                     String(
                         localized: "tutorial.helper.port.detail",
-                        defaultValue: "Togo reaches it through your SSH login and a unix socket only your user can open."
+                        defaultValue: "Togo reaches it only through your SSH login."
                     )
                 )
                 TutorialPoint(
@@ -108,6 +99,7 @@ struct HelperComparison: View {
             Text(title)
                 .font(.headline)
                 .foregroundStyle(Color.togoSnow)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             content
         }
@@ -145,9 +137,11 @@ private struct FactLabelStyle: LabelStyle {
 }
 
 struct HelperPage: View {
+    var expanded = false
+
     var body: some View {
         TutorialPageLayout(page: .helper) {
-            HelperComparison()
+            HelperComparison(expanded: expanded)
         }
     }
 }

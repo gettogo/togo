@@ -16,12 +16,12 @@ enum LifecycleCopy {
             ?? StatusWord.label(status)
     }
 
-    /// "Exit code 1" when the agent exited on its own with a code other than 0.
+    /// "Exited with code 1" when the agent exited on its own with a code other than 0.
     static func detail(_ e: SessionExit) -> String? {
         LifecycleWords.detail(reason: e.reason.rawValue, code: e.code)
     }
 
-    /// "Stopped with an error · Exit code 1": the line the workspace shows under a stopped
+    /// "Stopped with an error · Exited with code 1": the line the workspace shows under a stopped
     /// session's title. Nil while the agent runs.
     static func line(status: SessionStatus, exit: SessionExit?) -> String? {
         guard status == .ended || status == .failed else { return nil }

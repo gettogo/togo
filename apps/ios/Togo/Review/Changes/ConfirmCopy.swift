@@ -40,7 +40,7 @@ enum ChangesCopy {
     static func sectionTitle(_ kind: ChangeSection.Kind) -> String {
         switch kind {
         case .staged: String(localized: "review.changes.section.staged", defaultValue: "Staged")
-        case .changed: String(localized: "review.changes.section.changed", defaultValue: "Not Staged")
+        case .changed: String(localized: "review.changes.section.changed", defaultValue: "Not staged")
         case .untracked: String(localized: "review.changes.section.untracked", defaultValue: "Untracked")
         case .conflicted: String(localized: "review.changes.section.conflicted", defaultValue: "Conflicts")
         }
@@ -119,9 +119,9 @@ enum ChangesCopy {
     static let unstage = String(localized: "review.changes.unstage", defaultValue: "Unstage")
     static let discard = String(localized: "review.changes.discard", defaultValue: "Discard")
     static let delete = String(localized: "review.changes.delete", defaultValue: "Delete")
-    static let undoRename = String(localized: "review.changes.undoRename", defaultValue: "Undo Rename")
-    static let stageAll = String(localized: "review.changes.stageAll", defaultValue: "Stage All")
-    static let unstageAll = String(localized: "review.changes.unstageAll", defaultValue: "Unstage All")
+    static let undoRename = String(localized: "review.changes.undoRename", defaultValue: "Undo rename")
+    static let stageAll = String(localized: "review.changes.stageAll", defaultValue: "Stage all")
+    static let unstageAll = String(localized: "review.changes.unstageAll", defaultValue: "Unstage all")
     static func sectionActions(_ title: String) -> String {
         String(localized: "review.changes.sectionActions", defaultValue: "\(title) actions")
     }
@@ -154,17 +154,17 @@ enum ChangesCopy {
             case .caseRename:
                 return String(
                     localized: "review.changes.caseRename",
-                    defaultValue: "Can't undo a rename that only changes letter case from the phone. Use git on \(machine)."
+                    defaultValue: "Can't undo a rename that only changes letter case from this device. Use git on \(machine)."
                 )
             case .partial:
                 if case .partialWrite(let changed) = error { return partial(changed) }
                 return partial([])
             case .raced:
                 // The helper's sentence names the commit made.
-                return error.localizedDescription
+                return ServiceErrors.message(error)
             }
         }
-        return error.localizedDescription
+        return ServiceErrors.message(error)
     }
 
     /// Said after the list was read again, so it shows where things stand. Names at most three.

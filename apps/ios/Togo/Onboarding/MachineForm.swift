@@ -25,7 +25,10 @@ struct MachineForm: View {
                     .address, String(localized: "onboard.form.address", defaultValue: "Address"), text: $draft.address,
                     prompt: "macbook.local", axis: .vertical
                 )
-                .keyboardType(.URL)
+                .keyboardType(.asciiCapable)
+                if let addressNote = draft.addressNote {
+                    note(addressNote)
+                }
                 field(.port, String(localized: "onboard.form.port", defaultValue: "Port"), text: $draft.port, prompt: "22")
                     .keyboardType(.numberPad)
                 field(.user, String(localized: "onboard.form.user", defaultValue: "User"), text: $draft.user, prompt: String(localized: "onboard.form.userPrompt", defaultValue: "Your user name on the machine"))
@@ -56,7 +59,7 @@ struct MachineForm: View {
                 if draft.auth == .deviceKey {
                     note(String(
                         localized: "onboard.form.deviceKeyNote",
-                        defaultValue: "The key is made on this phone and never leaves it. You add its public half to the machine."
+                        defaultValue: "The key is made on this device and never leaves it. You add its public half to the machine."
                     ))
                 } else if draft.auth == .password, draft.savePassword {
                     note(String(
@@ -85,7 +88,7 @@ struct MachineForm: View {
                         .jump, String(localized: "onboard.form.jumpField", defaultValue: "Jump host"), text: $draft.jump,
                         prompt: "sam@bastion.example.com"
                     )
-                    .keyboardType(.URL)
+                    .keyboardType(.asciiCapable)
                 } label: {
                     Text(String(localized: "onboard.form.jump", defaultValue: "Connect through a jump host"))
                         .foregroundStyle(Color.togoSnow)
@@ -98,6 +101,13 @@ struct MachineForm: View {
             ? String(localized: "onboard.form.title", defaultValue: "New machine") : draft.trimmedName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // The number pad has no Return key, so the chain would stop at Port on a phone.
+            ToolbarItemGroup(placement: .keyboard) {
+                if focus == .port {
+                    Spacer()
+                    Button(String(localized: "onboard.form.next", defaultValue: "Next")) { advance(from: .port) }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button(String(localized: "onboard.form.connect", defaultValue: "Connect"), action: onConnect)
             }
@@ -133,14 +143,18 @@ struct MachineForm: View {
             }
             labelled(String(localized: "onboard.form.passphrase", defaultValue: "Passphrase, if the key has one")) {
                 SecureField("", text: $draft.passphrase)
-                    .textContentType(.password)
+                    .keptSecret()
+                    .focused($focus, equals: .secret)
+                    .submitLabel(.go)
+                    .onSubmit { advance(from: .secret) }
             }
         case .password:
             labelled(String(localized: "onboard.form.passwordField", defaultValue: "Password")) {
                 SecureField("", text: $draft.password)
-                    .textContentType(.password)
+                    .keptSecret()
+                    .focused($focus, equals: .secret)
                     .submitLabel(.go)
-                    .onSubmit(onConnect)
+                    .onSubmit { advance(from: .secret) }
             }
             Toggle(isOn: $draft.savePassword) {
                 Text(String(localized: "onboard.form.savePassword", defaultValue: "Save password on this \(DeviceName.model)"))
@@ -166,7 +180,7 @@ struct MachineForm: View {
                 .focused($focus, equals: field)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .submitLabel(field == .user ? .go : .next)
+                .submitLabel(draft.field(after: field) == nil ? .go : .next)
                 .onSubmit { advance(from: field) }
         }
     }
@@ -198,11 +212,9 @@ struct MachineForm: View {
     }
 
     private func advance(from field: MachineDraft.Field) {
-        switch field {
-        case .name: focus = .address
-        case .address: focus = .port
-        case .port: focus = .user
-        case .user, .jump, .key:
+        if let next = draft.field(after: field) {
+            focus = next
+        } else {
             focus = nil
             onConnect()
         }

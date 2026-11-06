@@ -1,44 +1,48 @@
 import SwiftUI
 
-/// What a person sees before any machine exists: what Togo does and the one way to start.
-/// Given the guide's model, it opens the guide on first launch and offers it again below, so
-/// do not also use `tutorialOnFirstLaunch` around it.
+/// What a person sees before any machine exists: the mark, what Togo is for, and the one way to
+/// start. The guide is there for whoever asks for it; nothing opens by itself.
 struct FirstRunView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let tutorial: TutorialModel?
+    /// True while the launch is on screen. Its mark moves into this screen's mark on the way
+    /// out, so this one waits; under Reduce Motion the launch cross-fades to it instead.
+    var launchPlaying = false
     let onAddMachine: () -> Void
     @State private var guideShown = false
 
-    init(tutorial: TutorialModel? = nil, onAddMachine: @escaping () -> Void) {
+    /// The side of the mark's box here. The launch shrinks into it.
+    static let markSide: CGFloat = 120
+
+    init(tutorial: TutorialModel? = nil, launchPlaying: Bool = false, onAddMachine: @escaping () -> Void) {
         self.tutorial = tutorial
+        self.launchPlaying = launchPlaying
         self.onAddMachine = onAddMachine
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(verbatim: "Togo")
-                        .font(.largeTitle.weight(.bold))
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 16 : 24) {
+                    LaunchMark(side: Self.markSide)
+                        .launchTarget()
+                        .opacity(launchPlaying && !reduceMotion ? 0 : 1)
+                        .accessibilityElement()
+                        .accessibilityLabel(Text(verbatim: "Togo"))
+                        .accessibilityAddTraits([.isHeader, .isImage])
+                    Text(String(localized: "onboard.firstRun.line", defaultValue: "Your coding agents, from anywhere."))
+                        .font(.title2.weight(.semibold))
+                        .multilineTextAlignment(.center)
                         .foregroundStyle(Color.togoSnow)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(String(
-                        localized: "onboard.firstRun.message",
-                        defaultValue: "See the coding agents running on your machines and answer them from here."
-                    ))
-                    .font(.title3)
-                    .foregroundStyle(Color.togoSnow)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                VStack(alignment: .leading, spacing: 16) {
-                    step(String(localized: "onboard.firstRun.step.find", defaultValue: "Pick a Mac or Linux machine you reach over SSH."), "laptopcomputer")
-                    step(String(localized: "onboard.firstRun.step.key", defaultValue: "Check its key and sign in with a key made on this phone."), "key")
-                    step(String(localized: "onboard.firstRun.step.helper", defaultValue: "Add the Togo helper for status, requests and notifications."), "bell")
-                }
+                .screenMargins()
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
-            .screenMargins()
-            .padding(.top, dynamicTypeSize.isAccessibilitySize ? 24 : 72)
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 4) {
                 Button(String(localized: "onboard.firstRun.add", defaultValue: "Add a machine"), action: onAddMachine)
@@ -62,21 +66,9 @@ struct FirstRunView: View {
         }
         guideShown = true
     }
-
-    private func step(_ text: String, _ systemImage: String) -> some View {
-        Label {
-            Text(text)
-                .font(.body)
-                .foregroundStyle(Color.togoMute)
-        } icon: {
-            Image(systemName: systemImage)
-                .foregroundStyle(Color.togoSnow)
-                .frame(width: 28)
-        }
-    }
 }
 
-/// The guide over the first-run screen, opened by itself until it has been finished or skipped.
+/// The guide over the first-run screen, only once it is asked for.
 private struct GuideCover: ViewModifier {
     let tutorial: TutorialModel?
     @Binding var shown: Bool
@@ -84,9 +76,7 @@ private struct GuideCover: ViewModifier {
 
     func body(content: Content) -> some View {
         if let tutorial {
-            content
-                .onAppear { if tutorial.showsOnLaunch { shown = true } }
-                .tutorialCover(tutorial, isPresented: $shown, onAddMachine: onAddMachine)
+            content.tutorialCover(tutorial, isPresented: $shown, onAddMachine: onAddMachine)
         } else {
             content
         }

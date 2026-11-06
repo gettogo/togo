@@ -13,6 +13,8 @@ struct MachineSectionView: View {
     var highlighted: Set<TabID> = []
     /// The row the sidebar's keyboard cursor is on.
     var cursor: TabID?
+    /// The sidebar's selected row, which the system marks; other visible tabs get a quieter fill.
+    var selected: TabID?
     /// Rows can be dragged into a pane, which only the sidebar sits beside.
     var draggable = false
     var restoring: Set<TabID> = []
@@ -20,7 +22,13 @@ struct MachineSectionView: View {
     var wakeEnabled = WakeFeature.isEnabled
     /// What the last wake signal said.
     var wakeNote: String?
+    /// In the sidebar: rows take the list's native selection, the heading carries the machine's
+    /// menu, and rows have no fill so the sidebar's glass shows.
+    var sidebar = false
     let perform: (SessionCommand) -> Void
+
+    /// The list's own row fill in the sidebar; the ink canvas in the compact list.
+    private var rowFill: Color? { sidebar ? nil : Color.togoInk }
 
     var body: some View {
         Section {
@@ -37,16 +45,23 @@ struct MachineSectionView: View {
                     ) { action in
                         perform(.restore(machine.id, session, resume: action == .restoreAndContinue))
                     }
-                    .listRowBackground(Color.togoInk)
+                    .listRowBackground(rowFill)
                     .dismissesRestorable { perform(.dismissRestorable(machine.id, session)) }
                 }
             }
         } header: {
-            Group {
-                if case .offline = machine.reachability {
-                    heading.tutorialTip(.offline)
-                } else {
-                    heading
+            HStack(alignment: .center, spacing: 4) {
+                Group {
+                    if case .offline = machine.reachability {
+                        heading.tutorialTip(.offline)
+                    } else {
+                        heading
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if sidebar {
+                    MachineNewSessionButton(machine: machine, perform: perform)
+                    MachineMenu(machine: machine, perform: perform)
                 }
             }
             .id(SessionRotors.Target.machine(machine.id))
@@ -100,20 +115,20 @@ struct MachineSectionView: View {
     @ViewBuilder private var status: some View {
         switch machine.reachability {
         case .authNeeded:
-            MachineMessage(ControlCenterCopy.signedOut(machine.name), action: ControlCenterCopy.signInAgain) {
+            MachineMessage(ControlCenterCopy.signedOut(machine.name), action: ControlCenterCopy.signInAgain, fill: rowFill) {
                 perform(.signIn(machine.id))
             }
         case .failed(let reason):
-            MachineMessage(reason, action: ControlCenterCopy.tryAgain) { perform(.retry(machine.id)) }
+            MachineMessage(reason, action: ControlCenterCopy.tryAgain, fill: rowFill) { perform(.retry(machine.id)) }
         case .keyMissing:
-            MachineMessage(ControlCenterCopy.keyMissing(device: DeviceName.model), action: ControlCenterCopy.edit) {
+            MachineMessage(ControlCenterCopy.keyMissing(device: DeviceName.model), action: ControlCenterCopy.edit, fill: rowFill) {
                 perform(.edit(machine.id))
             }
         case .connecting, .waking:
             if machine.sessions.isEmpty {
                 PawWalk(machine.reachability == .waking ? ControlCenterCopy.waking : ControlCenterCopy.connecting)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .listRowBackground(Color.togoInk)
+                    .listRowBackground(rowFill)
             }
         case .offline:
             if let wakeNote {
@@ -121,23 +136,43 @@ struct MachineSectionView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .listRowBackground(Color.togoInk)
+                    .listRowBackground(rowFill)
             }
         case .online:
             switch machine.helper {
             case .missing:
-                MachineMessage(ControlCenterCopy.plainSSH, action: ControlCenterCopy.install) {
+                MachineMessage(ControlCenterCopy.plainSSH, action: ControlCenterCopy.install, fill: rowFill) {
                     perform(.installHelper(machine.id))
                 }
             case .checking where machine.sessions.isEmpty:
                 PawWalk(ControlCenterCopy.connecting)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .listRowBackground(Color.togoInk)
+                    .listRowBackground(rowFill)
             case .present, .outdated, .checking:
-                if machine.sessions.isEmpty && machine.restorable.isEmpty {
-                    MachineMessage(ControlCenterCopy.noSessions, action: ControlCenterCopy.newSession) {
-                        perform(.newSession(machine.id))
+                if case .outdated(let found) = machine.helper {
+                    MachineMessage(ControlCenterCopy.helperOutdated(found), action: ControlCenterCopy.update, fill: rowFill) {
+                        perform(.installHelper(machine.id))
                     }
+                }
+                if machine.sessions.isEmpty && machine.restorable.isEmpty && sidebar {
+                    // The heading's plus starts a session here; the row only says there is none.
+                    Text(SidebarCopy.noSessions)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.togoMute)
+                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                        .accessibilityIdentifier("machine.noSessions")
+                } else if machine.sessions.isEmpty && machine.restorable.isEmpty {
+                    // One quiet row: the plus in the bar is the main way to start a session.
+                    Button { perform(.newSession(machine.id)) } label: {
+                        Label(ControlCenterCopy.newSession, systemImage: "plus")
+                            .foregroundStyle(Color.togoMute)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityIdentifier("machine.newSession")
+                    .listRowBackground(rowFill)
                 }
             }
         }
@@ -148,16 +183,9 @@ struct MachineSectionView: View {
     private func sessionRow(_ row: SessionRow) -> some View {
         let actions = SessionActions.actions(for: row, on: machine)
         let id = TabID(hostID: row.hostID, sessionID: row.id)
-        return Button {
-            perform(.open(row, nil))
-        } label: {
-            SessionRowView(row: row, stale: stale, shown: highlighted.contains(id))
-        }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
+        return rowContent(row, id: id)
         .modifier(ZoomSource(id: id, namespace: zoom))
         .modifier(RowDrag(id: id, enabled: draggable))
-        .listRowBackground(rowBackground(id))
         .id(SessionRotors.Target.row(id))
         .swipeActions(edge: .trailing) {
             if actions.allows(.kill) {
@@ -183,6 +211,25 @@ struct MachineSectionView: View {
             }
         }
         .contextMenu { SessionMenu(row: row, actions: actions, etAvailable: etAvailable, perform: perform) }
+    }
+
+    /// In the sidebar a row is a selectable item; the system draws its selection. The compact
+    /// list's rows are buttons over the ink canvas, with the visible tabs filled.
+    @ViewBuilder private func rowContent(_ row: SessionRow, id: TabID) -> some View {
+        if sidebar {
+            SessionRowView(row: row, stale: stale, shown: highlighted.contains(id))
+                .tag(SidebarItem.session(id))
+                .modifier(SidebarRowMarks(secondary: highlighted.contains(id) && id != selected, cursor: cursor == id))
+        } else {
+            Button {
+                perform(.open(row, nil))
+            } label: {
+                SessionRowView(row: row, stale: stale, shown: highlighted.contains(id))
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .listRowBackground(rowBackground(id))
+        }
     }
 
     /// The visible tabs' rows are filled; the keyboard cursor draws a ring.
@@ -238,30 +285,60 @@ struct MachineHeading: View {
     }
 }
 
-/// A sentence about the machine with the one thing to do about it.
+/// A sentence about the machine with the one thing to do about it, as a trailing text button.
+/// At accessibility sizes the button goes under the sentence.
 private struct MachineMessage: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let text: String
     let action: String
+    let fill: Color?
     let run: () -> Void
 
-    init(_ text: String, action: String, run: @escaping () -> Void) {
+    init(_ text: String, action: String, fill: Color?, run: @escaping () -> Void) {
         self.text = text
         self.action = action
+        self.fill = fill
         self.run = run
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        layout {
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button(action, action: run)
-                .buttonStyle(.primary(.fit))
-                .padding(.vertical, 4)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.togoSnow)
+                .buttonStyle(.borderless)
+                .frame(minHeight: 44)
         }
-        .padding(.top, 6)
-        .listRowBackground(Color.togoInk)
+        .listRowBackground(fill)
+    }
+}
+
+/// In the sidebar, the second pane's row gets a quiet fill and the keyboard cursor a ring;
+/// the focused pane's row has the system's selection.
+private struct SidebarRowMarks: ViewModifier {
+    let secondary: Bool
+    let cursor: Bool
+
+    func body(content: Content) -> some View {
+        if secondary || cursor {
+            let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+            content.listRowBackground(
+                ZStack {
+                    if secondary { shape.fill(Color.togoLine) }
+                    if cursor { shape.strokeBorder(Color.togoSnow, lineWidth: 2) }
+                }
+                .padding(.horizontal, 6)
+            )
+        } else {
+            content
+        }
     }
 }
 

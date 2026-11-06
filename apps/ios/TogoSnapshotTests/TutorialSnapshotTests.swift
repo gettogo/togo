@@ -80,6 +80,31 @@ struct TutorialSnapshotTests {
         assertScreen(named: "tutorial-ready") { flow(model) }
     }
 
+    /// Learn more open: the detail each page folds away.
+    @Test func welcomeLearnMore() {
+        assertScreen(named: "tutorial-welcome-more") {
+            NavigationStack { WelcomePage(animated: false, expanded: true) }
+        }
+    }
+
+    @Test func helperLearnMore() {
+        assertScreen(named: "tutorial-helper-more") {
+            NavigationStack { HelperPage(expanded: true) }
+        }
+    }
+
+    @Test func privacyLearnMore() {
+        assertScreen(named: "tutorial-privacy-more") {
+            NavigationStack { PrivacyPage(expanded: true) }
+        }
+    }
+
+    @Test func sessionLearnMore() {
+        assertScreen(named: "tutorial-session-more") {
+            NavigationStack { SessionPage(playing: false, expanded: true) }
+        }
+    }
+
     @Test func demoMachine() {
         assertScreen(named: "tutorial-demo") {
             DemoControlCenter(store: DemoMachine.store(now: Samples.now), now: Samples.now) {}

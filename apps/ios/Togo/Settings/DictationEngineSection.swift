@@ -178,29 +178,29 @@ extension DictationCopy {
     static let engineWhisper = String(localized: "dictation.engine.whisper", defaultValue: "Whisper")
     static let engineFooter = String(
         localized: "dictation.engine.footer",
-        defaultValue: "Apple\u{2019}s speech is built into iOS. Whisper is a model you download once."
+        defaultValue: "Apple's speech is built into iOS. Whisper is a model you download once."
     )
     static let whisperFooter = String(
         localized: "dictation.whisper.footer", defaultValue: "Downloaded once from Hugging Face, then runs on this device."
     )
     static let whisperDownloaded = String(localized: "dictation.whisper.downloaded", defaultValue: "Downloaded")
-    static let whisperCancel = String(localized: "dictation.whisper.cancel", defaultValue: "Cancel Download")
-    static let whisperDelete = String(localized: "dictation.whisper.delete", defaultValue: "Delete Model")
+    static let whisperCancel = String(localized: "dictation.whisper.cancel", defaultValue: "Cancel download")
+    static let whisperDelete = String(localized: "dictation.whisper.delete", defaultValue: "Delete model")
     static let whisperFailed = String(
         localized: "dictation.whisper.failed",
-        defaultValue: "The download didn\u{2019}t finish. Dictation keeps using Apple speech."
+        defaultValue: "The download didn't finish. Dictation keeps using Apple speech."
     )
     static let whisperFailedToLoad = String(
         localized: "dictation.whisper.failedToLoad",
-        defaultValue: "Whisper couldn\u{2019}t start. Try again in a moment."
+        defaultValue: "Whisper couldn't start. Try again in a moment."
     )
     static let whisperDeleteFailed = String(
         localized: "dictation.whisper.deleteFailed",
-        defaultValue: "Couldn\u{2019}t delete the Whisper model. Try again."
+        defaultValue: "Couldn't delete the Whisper model. Try again."
     )
     static let whisperDamaged = String(
         localized: "dictation.whisper.damaged",
-        defaultValue: "The Whisper model is damaged, so dictation uses Apple speech. Download it again in Settings, Dictation."
+        defaultValue: "The Whisper model is damaged, so dictation uses Apple speech. Download it again in Settings > Dictation."
     )
     static let whisperCredit = String(
         localized: "dictation.whisper.credit",
@@ -210,7 +210,7 @@ extension DictationCopy {
         localized: "dictation.whisper.missing", defaultValue: "Download the Whisper model in Settings, Dictation."
     )
     static let whisperFailedToHear = String(
-        localized: "dictation.whisper.failedToHear", defaultValue: "Whisper couldn\u{2019}t turn that into text."
+        localized: "dictation.whisper.failedToHear", defaultValue: "Whisper couldn't turn that into text."
     )
 
     static func whisperDownload(_ name: String, size: String) -> String {

@@ -11,6 +11,10 @@ struct UITestLaunch {
     var skipIntro: Bool
     /// Starts with no machines, on the first-run screen.
     var firstRun: Bool
+    /// Only the first sample machine, so flows that skip choosing a machine start where it is chosen.
+    var oneMachine: Bool
+    /// The first machine runs a helper too old for review, for the update prompts.
+    var oldHelper: Bool
     /// The large generated file's diff has lines 2,000 columns wide, for the scrolling budget.
     var wideDiff: Bool
 
@@ -21,6 +25,8 @@ struct UITestLaunch {
         skipIntro = arguments.contains("-ui-skip-launch")
         firstRun = arguments.contains("-ui-first-run")
         wideDiff = arguments.contains("-ui-wide-diff")
+        oneMachine = arguments.contains("-ui-one-machine")
+        oldHelper = arguments.contains("-ui-old-helper")
     }
 
     /// A defaults suite emptied on every launch, so one test's guide progress and settings
@@ -43,15 +49,20 @@ struct UITestLaunch {
     /// A helper new enough for the review screens: git reads and writes, and the port list.
     static let capabilities: Set<String> = [Capability.events, Capability.git, Capability.gitWrite, Capability.ports]
 
-    init(firstRun: Bool) {
-        services = FakeAppServices(hosts: firstRun ? [] : Samples.hosts)
+    /// The helper on the first machine before git and ports, which still lists sessions.
+    static let oldHelper = HelperState.outdated(found: "0.2.1")
+
+    init(firstRun: Bool, oneMachine: Bool = false, oldHelper: Bool = false) {
+        let hosts = oneMachine ? Array(Samples.hosts.prefix(1)) : Samples.hosts
+        services = FakeAppServices(hosts: firstRun ? [] : hosts)
         if !firstRun {
             let state = Samples.controlCenter
-            for machine in state.machines {
+            for (index, machine) in state.machines.enumerated() where hosts.contains(where: { $0.id == machine.id }) {
+                let old = oldHelper && index == 0
                 snapshots[machine.id] = HostViewSnapshot(
-                    hostID: machine.id, reachability: machine.reachability, helper: machine.helper,
+                    hostID: machine.id, reachability: machine.reachability, helper: old ? Self.oldHelper : machine.helper,
                     sessions: machine.sessions, requests: state.requests.filter { $0.hostID == machine.id },
-                    at: Samples.now, capabilities: Self.capabilities
+                    at: Samples.now, capabilities: old ? [Capability.events] : Self.capabilities
                 )
             }
         }

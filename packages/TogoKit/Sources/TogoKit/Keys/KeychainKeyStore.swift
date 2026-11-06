@@ -94,7 +94,7 @@ public final class KeychainKeyStore: KeyStore {
             id: UUID().uuidString,
             label: label,
             kind: material.kind,
-            publicKeyLine: PublicKeyLine.line(for: publicKey, comment: PublicKeyLine.deviceComment),
+            publicKeyLine: PublicKeyLine.line(for: publicKey, comment: PublicKeyLine.deviceComment(for: publicKey)),
             fingerprint: PublicKeyLine.fingerprint(for: publicKey),
             createdAt: Date()
         )

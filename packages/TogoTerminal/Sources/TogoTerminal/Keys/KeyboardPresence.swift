@@ -1,16 +1,29 @@
 import GameController
+import Observation
 import UIKit
 
-/// Tracks whether a hardware keyboard is attached, so the key bar can step aside.
-@MainActor public final class KeyboardPresence {
+/// Tracks whether a hardware keyboard is attached. The key bar steps aside for it, and the app
+/// reads it from the environment so shortcut hints appear only when a keyboard can use them.
+@MainActor @Observable public final class KeyboardPresence {
+    /// The one instance the app shares. Views read it as `\.hardwareKeyboard`.
+    public static let shared = KeyboardPresence()
+
     public private(set) var hardwareKeyboardConnected: Bool
-    public var onChange: (Bool) -> Void = { _ in }
+    @ObservationIgnored public var onChange: (Bool) -> Void = { _ in }
 
-    private var observers: [any NSObjectProtocol] = []
+    @ObservationIgnored private let isConnected: @MainActor () -> Bool
+    @ObservationIgnored private var observers: [any NSObjectProtocol] = []
+    @ObservationIgnored private let center: NotificationCenter
 
-    public init() {
-        hardwareKeyboardConnected = GCKeyboard.coalesced != nil
-        let center = NotificationCenter.default
+    /// `isConnected` is the source of truth, asked at start and after every connect or disconnect
+    /// notification. It defaults to `GCKeyboard`; tests pass their own.
+    public init(
+        center: NotificationCenter = .default,
+        isConnected: @escaping @MainActor () -> Bool = { GCKeyboard.coalesced != nil }
+    ) {
+        self.center = center
+        self.isConnected = isConnected
+        hardwareKeyboardConnected = isConnected()
         for name in [Notification.Name.GCKeyboardDidConnect, .GCKeyboardDidDisconnect] {
             observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.refresh() }
@@ -19,12 +32,13 @@ import UIKit
     }
 
     isolated deinit {
-        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.forEach(center.removeObserver)
     }
 
-    func refresh(connected: Bool = GCKeyboard.coalesced != nil) {
-        guard connected != hardwareKeyboardConnected else { return }
-        hardwareKeyboardConnected = connected
-        onChange(connected)
+    func refresh(connected: Bool? = nil) {
+        let now = connected ?? isConnected()
+        guard now != hardwareKeyboardConnected else { return }
+        hardwareKeyboardConnected = now
+        onChange(now)
     }
 }

@@ -70,6 +70,7 @@ struct NotificationSettingsView: View {
     let turnOn: () -> Void
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.liveActivitiesAvailable) private var liveActivitiesAvailable
     @State private var ownRelay: Bool
     @State private var relayText: String
     @State private var commandsFor: NotificationMachine?
@@ -95,16 +96,18 @@ struct NotificationSettingsView: View {
         List {
             status
             relay
-            Section {
-                Toggle(settingsText("settings.notifications.live", "Live Activities"), isOn: settings.binding(\.liveActivities, update))
-                    .frame(minHeight: 44)
-            } footer: {
-                Text(settingsText(
-                    "settings.notifications.live.footer",
-                    "Shows what each machine is doing on the Lock Screen and in the Dynamic Island."
-                ))
+            if liveActivitiesAvailable {
+                Section {
+                    Toggle(settingsText("settings.notifications.live", "Live Activities"), isOn: settings.binding(\.liveActivities, update))
+                        .frame(minHeight: 44)
+                } footer: {
+                    Text(settingsText(
+                        "settings.notifications.live.footer",
+                        "Shows what each machine is doing on the Lock Screen and in the Dynamic Island."
+                    ))
+                }
+                .groupedRows()
             }
-            .groupedRows()
             Section {
                 Toggle(
                     settingsText("settings.notifications.approveUnlocked", "Approve without unlocking"),
@@ -114,7 +117,7 @@ struct NotificationSettingsView: View {
             } footer: {
                 Text(settingsText(
                     "settings.notifications.approveUnlocked.footer",
-                    "Anyone holding your locked iPhone could approve commands."
+                    "Anyone holding your locked \(DeviceName.model) could approve commands."
                 ))
             }
             .groupedRows()
@@ -145,7 +148,7 @@ struct NotificationSettingsView: View {
         } message: { _ in
             Text(settingsText(
                 "settings.notifications.commands.message",
-                "Live Activities can't be encrypted. With this on, the command text passes the relay unencrypted. Use it with a relay you run yourself."
+                "Live Activities can't be encrypted, so command text would pass through Togo's relay in plain text. Use this only with a relay you run yourself."
             ))
         }
     }
@@ -158,7 +161,7 @@ struct NotificationSettingsView: View {
                 .frame(minHeight: 44)
             switch notifications.authorization {
             case .denied:
-                Button(settingsText("settings.notifications.openSettings", "Open Settings")) {
+                Button(settingsText("settings.notifications.openSettings", "Open settings")) {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                 }
                 .frame(minHeight: 44)
@@ -219,7 +222,7 @@ struct NotificationSettingsView: View {
                 }
                 Text(settingsText(
                     "settings.notifications.relay.footer",
-                    "Notifications are sealed on your machine and opened on this iPhone, so the relay can't read them. It does see when they're sent, this iPhone's push address, and command text where you turn it on."
+                    "Notifications are sealed on your machine and opened on this \(DeviceName.model), so the relay can't read them. It does see when they're sent, this \(DeviceName.model)'s push address, and command text where you turn it on."
                 ))
             }
         }
@@ -272,11 +275,13 @@ struct NotificationMachinesSection: View {
     let settings: AppSettings
     let change: (NotificationMachine, Bool) -> Void
 
+    @Environment(\.liveActivitiesAvailable) private var liveActivitiesAvailable
+
     var body: some View {
         Section {
             ForEach(machines) { machine in
                 row(machine)
-                if machine.canShowCommands {
+                if machine.canShowCommands, liveActivitiesAvailable {
                     Toggle(isOn: Binding { settings.liveActivityCommand(for: machine.id) } set: { change(machine, $0) }) {
                         Text(settingsText("settings.notifications.commands", "Show command text"))
                         if let note = Self.commandNote(machine, showing: settings.liveActivityCommand(for: machine.id)) {

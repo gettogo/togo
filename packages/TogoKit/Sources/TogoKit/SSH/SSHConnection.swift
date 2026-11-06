@@ -265,7 +265,7 @@ public actor SSHConnection: TCPChannelOpener {
     private static func networkError(_ error: any Error) -> SSHError {
         if let error = error as? SSHError { return error }
         if case ChannelError.connectTimeout = error { return .timeout }
-        return .unreachable("The server could not be reached. Check the address and your network")
+        return .unreachable("The machine could not be reached. Check the address and your network")
     }
 }
 

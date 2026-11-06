@@ -75,6 +75,7 @@ struct NewSessionSnapshotTests {
             DirEntry(name: "app", dir: true), DirEntry(name: "site", dir: true),
             DirEntry(name: ".cache", dir: true), DirEntry(name: "notes.txt", dir: false),
         ]))
+        model.step = .browse
         assertScreen(sheet(model), named: "browse")
     }
 

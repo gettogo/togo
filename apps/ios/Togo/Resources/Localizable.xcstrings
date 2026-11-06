@@ -73,7 +73,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paused while the Mac is hot."
+            "value" : "Paused while the machine is hot."
           }
         }
       }
@@ -106,7 +106,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "To stay awake on battery with the lid closed, run this once on %@. It asks for your password and adds one sleep rule."
+            "value" : "Run this once on %@ to keep it awake on battery with the lid closed. It asks for your password."
           }
         }
       }
@@ -310,6 +310,17 @@
       }
     },
     "Debug" : {},
+    "cmd.zenMode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zen Mode"
+          }
+        }
+      }
+    },
     "diagnostics.clear" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -360,7 +371,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A report holds the app and iOS versions, this device's model, a summary of your settings and recent connection events. Machines appear as codes such as m-1a2b3c4d. It never holds machine names, addresses, user names, folders, session names, prompts, terminal text, keys or passwords."
+            "value" : "Includes app and iOS versions, device model, a settings summary and recent connection events. Machines show as codes. Never includes names, addresses, folders, session names, prompts, terminal text, keys or passwords."
           }
         }
       }
@@ -409,6 +420,160 @@
         }
       }
     },
+    "error.fallback" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Something went wrong. Try again."
+          }
+        }
+      }
+    },
+    "error.helper.closed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The connection to the Togo helper on the machine closed."
+          }
+        }
+      }
+    },
+    "error.helper.malformed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Togo helper on the machine sent a reply that couldn't be read."
+          }
+        }
+      }
+    },
+    "error.helper.notReady" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Togo helper on the machine isn't ready yet."
+          }
+        }
+      }
+    },
+    "error.helper.timeout" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Togo helper on the machine didn't answer in time."
+          }
+        }
+      }
+    },
+    "error.helper.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Togo helper on the machine is too old for this. Update it there."
+          }
+        }
+      }
+    },
+    "error.mosh.badKey" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mosh sent a session key that couldn't be read."
+          }
+        }
+      }
+    },
+    "error.mosh.missing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mosh isn't installed on the machine. Install it there, or connect with SSH."
+          }
+        }
+      }
+    },
+    "error.mosh.noStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mosh didn't start on the machine. A missing UTF-8 locale is a common cause."
+          }
+        }
+      }
+    },
+    "error.ssh.authFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The machine didn't accept the login."
+          }
+        }
+      }
+    },
+    "error.ssh.authFailedTried" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The machine didn't accept the login. Check your key or password."
+          }
+        }
+      }
+    },
+    "error.ssh.commandStopped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The command on the machine stopped."
+          }
+        }
+      }
+    },
+    "error.ssh.keyRejected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The machine's key wasn't trusted, so the connection was closed."
+          }
+        }
+      }
+    },
+    "error.ssh.timeout" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The machine took too long to answer."
+          }
+        }
+      }
+    },
     "import.hosts.already" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -437,7 +602,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose File"
+            "value" : "Choose file"
           }
         }
       }
@@ -448,7 +613,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Added %lld machines. They sign in with this iPhone's key."
+            "value" : "Added %lld machines. They sign in with this device's key."
           }
         }
       }
@@ -459,7 +624,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Added 1 machine. It signs in with this iPhone's key."
+            "value" : "Added 1 machine. It signs in with this device's key."
           }
         }
       }
@@ -569,7 +734,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keys aren't imported. New machines use this iPhone's key; pick another in each machine's details."
+            "value" : "Keys aren't imported. New machines use this %@'s key; pick another in each machine's details."
           }
         }
       }
@@ -999,7 +1164,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exit code %lld"
+            "value" : "Exited with code %lld"
           }
         }
       }
@@ -1769,7 +1934,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A name found on the machine's PATH, or a full path."
+            "value" : "A program name on the machine, or its full path."
           }
         }
       }
@@ -2005,6 +2170,17 @@
         }
       }
     },
+    "settings.machines.updateHelper" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update helper"
+          }
+        }
+      }
+    },
     "settings.notifications.done" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2078,7 +2254,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kill"
+            "value" : "End session"
           }
         }
       }
@@ -2299,7 +2475,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Togo connects over SSH to your Mac or Linux box."
+            "value" : "Togo connects over SSH to your Mac or Linux machine."
           }
         }
       }
@@ -2343,7 +2519,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kill %@?"
+            "value" : "End %@?"
           }
         }
       }
@@ -2355,6 +2531,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connecting"
+          }
+        }
+      }
+    },
+    "cc.machine.helperOutdated" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Helper %@ needs an update."
           }
         }
       }
@@ -2377,17 +2564,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No helper"
-          }
-        }
-      }
-    },
-    "cc.machine.noSessions" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No sessions yet"
           }
         }
       }
@@ -2420,7 +2596,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plain SSH. Install the helper to see agent status."
+            "value" : "No helper. Install it to see what agents are doing."
           }
         }
       }
@@ -2454,6 +2630,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Try again"
+          }
+        }
+      }
+    },
+    "cc.machine.update" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update"
           }
         }
       }
@@ -2849,7 +3036,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t load that photo."
+            "value" : "Couldn't load that photo."
           }
         }
       }
@@ -2937,7 +3124,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This machine’s helper can’t receive images yet."
+            "value" : "This machine's helper can't receive images yet."
           }
         }
       }
@@ -2948,7 +3135,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t send the image."
+            "value" : "Couldn't send the image."
           }
         }
       }
@@ -2959,7 +3146,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Togo can’t use the microphone. Turn it on in Settings."
+            "value" : "Togo can't use the microphone. Turn it on in Settings."
           }
         }
       }
@@ -3058,7 +3245,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple’s speech is built into iOS. Whisper is a model you download once."
+            "value" : "Apple's speech is built into iOS. Whisper is a model you download once."
           }
         }
       }
@@ -3102,7 +3289,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Settings"
+            "value" : "Open settings"
           }
         }
       }
@@ -3135,7 +3322,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear Recent Dictations"
+            "value" : "Clear recent dictations"
           }
         }
       }
@@ -3201,7 +3388,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recent Dictations"
+            "value" : "Recent dictations"
           }
         }
       }
@@ -3300,7 +3487,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dictation isn’t available for this language."
+            "value" : "Dictation isn't available for this language."
           }
         }
       }
@@ -3311,7 +3498,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cancel Download"
+            "value" : "Cancel download"
           }
         }
       }
@@ -3333,7 +3520,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The Whisper model is damaged, so dictation uses Apple speech. Download it again in Settings, Dictation."
+            "value" : "The Whisper model is damaged, so dictation uses Apple speech. Download it again in Settings > Dictation."
           }
         }
       }
@@ -3344,7 +3531,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete Model"
+            "value" : "Delete model"
           }
         }
       }
@@ -3355,7 +3542,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn’t delete the Whisper model. Try again."
+            "value" : "Couldn't delete the Whisper model. Try again."
           }
         }
       }
@@ -3399,7 +3586,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The download didn’t finish. Dictation keeps using Apple speech."
+            "value" : "The download didn't finish. Dictation keeps using Apple speech."
           }
         }
       }
@@ -3410,7 +3597,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Whisper couldn’t turn that into text."
+            "value" : "Whisper couldn't turn that into text."
           }
         }
       }
@@ -3421,7 +3608,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Whisper couldn’t start. Try again in a moment."
+            "value" : "Whisper couldn't start. Try again in a moment."
           }
         }
       }
@@ -3521,17 +3708,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent"
-          }
-        }
-      }
-    },
-    "new.cancel" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancel"
           }
         }
       }
@@ -3773,7 +3949,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Starts a tmux session in your home folder"
+            "value" : "A shell in your home folder that keeps running."
           }
         }
       }
@@ -3828,7 +4004,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This phone's key"
+            "value" : "This device's key"
           }
         }
       }
@@ -3916,7 +4092,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Togo couldn't open this phone's key."
+            "value" : "Togo couldn't open this device's key."
           }
         }
       }
@@ -4053,13 +4229,24 @@
         }
       }
     },
+    "onboard.discovery.noAddress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type its address on the next screen"
+          }
+        }
+      }
+    },
     "onboard.discovery.openSettings" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Settings"
+            "value" : "Open settings"
           }
         }
       }
@@ -4147,7 +4334,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Check its key and sign in with a key made on this phone."
+            "value" : "Check its key and sign in with a key made on this device."
           }
         }
       }
@@ -4191,7 +4378,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The key is made on this phone and never leaves it. You add its public half to the machine."
+            "value" : "The key is made on this device and never leaves it. You add its public half to the machine."
           }
         }
       }
@@ -4438,6 +4625,17 @@
         }
       }
     },
+    "onboard.form.zonedAddress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This address only works on one network. Use the machine's name instead, such as macbook.local."
+          }
+        }
+      }
+    },
     "onboard.helper.adds.notifications" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4488,7 +4686,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The helper is a small program on %@ that runs your agents in tmux. It adds:"
+            "value" : "A small program on %@ that adds:"
           }
         }
       }
@@ -4587,7 +4785,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tmux not installed; the helper needs it"
+            "value" : "tmux isn't installed. The helper needs it."
           }
         }
       }
@@ -4620,7 +4818,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The key %@ sent is not the one you trusted. If nobody reinstalled or changed this machine, someone may be intercepting the connection. Togo will not connect."
+            "value" : "%@ sent a different key than before. If nobody reinstalled it, someone may be intercepting the connection. Togo won't connect."
           }
         }
       }
@@ -4752,7 +4950,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Togo on this phone"
+            "value" : "Togo on this %@"
           }
         }
       }
@@ -4774,7 +4972,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only the public half leaves the phone. Send it to yourself, then paste it on its own line."
+            "value" : "Only the public half leaves the device. Send it to yourself, then paste it on its own line."
           }
         }
       }
@@ -4796,7 +4994,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add this phone's key"
+            "value" : "Add this device's key"
           }
         }
       }
@@ -5214,7 +5412,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Swipe from the left edge to go back to your sessions."
+            "value" : "Swipe from the left edge to go back to your sessions or show the sidebar."
           }
         }
       }
@@ -5379,7 +5577,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Helper %@, refreshes every few seconds"
+            "value" : "Helper %@"
           }
         }
       }
@@ -5412,7 +5610,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Holds Option for the next key"
+            "value" : "Holds Alt (Option) for the next key"
           }
         }
       }
@@ -5500,7 +5698,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyboard bar"
+            "value" : "Key bar"
           }
         }
       }
@@ -5687,7 +5885,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anyone holding your locked iPhone could approve commands."
+            "value" : "Anyone holding your locked %@ could approve commands."
           }
         }
       }
@@ -5742,7 +5940,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Live Activities can't be encrypted. With this on, the command text passes the relay unencrypted. Use it with a relay you run yourself."
+            "value" : "Live Activities can't be encrypted, so command text would pass through Togo's relay in plain text. Use this only with a relay you run yourself."
           }
         }
       }
@@ -5863,7 +6061,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Settings"
+            "value" : "Open settings"
           }
         }
       }
@@ -5907,7 +6105,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notifications are sealed on your machine and opened on this iPhone, so the relay can't read them. It does see when they're sent, this iPhone's push address, and command text where you turn it on."
+            "value" : "Notifications are sealed on your machine and opened on this %@, so the relay can't read them. It does see when they're sent, this %@'s push address, and command text where you turn it on."
           }
         }
       }
@@ -6050,7 +6248,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Private keys stay on this iPhone."
+            "value" : "Private keys stay on this %@."
           }
         }
       }
@@ -6429,24 +6627,57 @@
         }
       }
     },
+    "sidebar.empty.addMachine" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a machine"
+          }
+        }
+      }
+    },
+    "sidebar.empty.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a session in the sidebar, or start a new one."
+          }
+        }
+      }
+    },
     "sidebar.empty.newSession" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New Session"
+            "value" : "New session"
           }
         }
       }
     },
-    "sidebar.empty.shortcut" : {
+    "sidebar.empty.noMachines" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Command T"
+            "value" : "No machines"
+          }
+        }
+      }
+    },
+    "sidebar.empty.showSidebar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show sidebar"
           }
         }
       }
@@ -6457,7 +6688,18 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pick a session, or start one."
+            "value" : "No session open"
+          }
+        }
+      }
+    },
+    "sidebar.filter" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter"
           }
         }
       }
@@ -6638,24 +6880,13 @@
         }
       }
     },
-    "tutorial.helper.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Togo works over plain SSH. The helper is a small program on the machine that adds the rest."
-          }
-        }
-      }
-    },
     "tutorial.helper.port.detail" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Togo reaches it through your SSH login and a unix socket only your user can open."
+            "value" : "Togo reaches it only through your SSH login."
           }
         }
       }
@@ -6693,17 +6924,6 @@
         }
       }
     },
-    "tutorial.helper.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With or without the helper"
-          }
-        }
-      }
-    },
     "tutorial.helper.user.detail" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6737,28 +6957,6 @@
         }
       }
     },
-    "tutorial.helper.with.answer" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Approve or deny from the phone and the lock screen"
-          }
-        }
-      }
-    },
-    "tutorial.helper.with.liveActivity" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A Live Activity"
-          }
-        }
-      }
-    },
     "tutorial.helper.with.notifications" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6770,28 +6968,6 @@
         }
       }
     },
-    "tutorial.helper.with.review" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Review changes before you approve"
-          }
-        }
-      }
-    },
-    "tutorial.helper.with.start" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start an agent in any folder"
-          }
-        }
-      }
-    },
     "tutorial.helper.with.status" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6799,17 +6975,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Each agent's status"
-          }
-        }
-      }
-    },
-    "tutorial.helper.with.upload" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "File and image upload"
           }
         }
       }
@@ -6832,28 +6997,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Attach, or open a new shell"
-          }
-        }
-      }
-    },
-    "tutorial.helper.without.list" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessions listed by name"
-          }
-        }
-      }
-    },
-    "tutorial.helper.without.manage" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rename or end only the sessions Togo started"
           }
         }
       }
@@ -6908,7 +7051,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A notification shows the whole request, so you can answer without opening Togo. It is end-to-end encrypted, and only this phone can read it."
+            "value" : "A notification shows the whole request, so you can answer without opening Togo. It is end-to-end encrypted, and only this device can read it."
           }
         }
       }
@@ -6920,17 +7063,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "On the lock screen"
-          }
-        }
-      }
-    },
-    "tutorial.privacy.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "What reaches your lock screen, and who can read it on the way."
           }
         }
       }
@@ -6957,17 +7089,6 @@
         }
       }
     },
-    "tutorial.privacy.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notifications and privacy"
-          }
-        }
-      }
-    },
     "tutorial.ready.add" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6986,94 +7107,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Explore with a demo machine"
-          }
-        }
-      }
-    },
-    "tutorial.ready.find.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Machines on the same network that offer SSH show up by name. You can also type an address."
-          }
-        }
-      }
-    },
-    "tutorial.ready.find.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Togo looks for machines nearby"
-          }
-        }
-      }
-    },
-    "tutorial.ready.key.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The private half never leaves the phone. Togo shows the public half for you to add to the machine."
-          }
-        }
-      }
-    },
-    "tutorial.ready.key.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This phone makes its own key"
-          }
-        }
-      }
-    },
-    "tutorial.ready.later.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open it again from Settings, Getting started."
-          }
-        }
-      }
-    },
-    "tutorial.ready.later.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This guide stays in Settings"
-          }
-        }
-      }
-    },
-    "tutorial.ready.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You need the machine's name or address and your user name on it. Or look around a demo machine first."
-          }
-        }
-      }
-    },
-    "tutorial.ready.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ready to add a machine"
           }
         }
       }
@@ -7199,17 +7232,6 @@
         }
       }
     },
-    "tutorial.session.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A session is a real terminal. These keys and gestures make it work on a phone."
-          }
-        }
-      }
-    },
     "tutorial.session.shortcut.controlCenter" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7227,7 +7249,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Detach; the session keeps running"
+            "value" : "Close the tab. The session keeps running."
           }
         }
       }
@@ -7250,17 +7272,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Switch sessions"
-          }
-        }
-      }
-    },
-    "tutorial.session.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Working in a session"
           }
         }
       }
@@ -7331,17 +7342,6 @@
         }
       }
     },
-    "tutorial.setup.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tick each one as you go. Togo also ticks them when it finds them on a machine you add."
-          }
-        }
-      }
-    },
     "tutorial.setup.mosh" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7381,7 +7381,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mosh keeps a session attached when you change networks or the phone sleeps. With Homebrew:"
+            "value" : "Mosh keeps a session attached when you change networks or your device sleeps. With Homebrew:"
           }
         }
       }
@@ -7392,7 +7392,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mosh keeps a session attached when you change networks or the phone sleeps. On Debian or Ubuntu:"
+            "value" : "Mosh keeps a session attached when you change networks or your device sleeps. On Debian or Ubuntu:"
           }
         }
       }
@@ -7436,7 +7436,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add this phone's key"
+            "value" : "Add this device's key"
           }
         }
       }
@@ -7447,7 +7447,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When you add a machine, Togo shows this phone's public key. Paste it on its own line in ~/.ssh/authorized_keys on the machine."
+            "value" : "When you add a machine, Togo shows this device's public key. Paste it on its own line in ~/.ssh/authorized_keys on the machine."
           }
         }
       }
@@ -7458,7 +7458,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Make sure the phone can reach it"
+            "value" : "Make sure your device can reach it"
           }
         }
       }
@@ -7469,7 +7469,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Away from that network, put the machine and this phone on the same Tailscale network, or use a public address that forwards to its SSH port."
+            "value" : "Away from that network, put the machine and this device on the same Tailscale network, or use a public address that forwards to its SSH port."
           }
         }
       }
@@ -7551,17 +7551,6 @@
         }
       }
     },
-    "tutorial.setup.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "What the machine needs"
-          }
-        }
-      }
-    },
     "tutorial.skip" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7579,7 +7568,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Togo can't reach this machine; it may be asleep or off the network. Its sessions are still on the machine and come back when it does."
+            "value" : "Can't reach this machine. It may be asleep. Its sessions come back when it does."
           }
         }
       }
@@ -7623,7 +7612,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The bar above the keyboard has Esc, Ctrl, Tab and arrows. Use the compose bar to write a longer message and send it at once."
+            "value" : "Esc, Ctrl, Tab and arrows sit above the keyboard. Use compose for longer messages."
           }
         }
       }
@@ -7656,7 +7645,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The phone attaches"
+            "value" : "Your device attaches"
           }
         }
       }
@@ -7667,7 +7656,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This phone connects over SSH or Mosh to your machine, where agents run inside tmux."
+            "value" : "This device connects over SSH or Mosh to your machine, where agents run inside tmux."
           }
         }
       }
@@ -7694,35 +7683,13 @@
         }
       }
     },
-    "tutorial.welcome.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agents run in tmux on your Mac or Linux machine, not on the phone. Togo attaches to them over SSH or Mosh, and they keep going when you close the app."
-          }
-        }
-      }
-    },
-    "tutorial.welcome.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your agents keep running on your machine"
-          }
-        }
-      }
-    },
     "tutorial.welcome.tmux.detail" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Each agent runs in its own tmux session, so it carries on when the phone sleeps or loses signal."
+            "value" : "Each agent runs in its own tmux session, so it carries on when your device sleeps or loses signal."
           }
         }
       }
@@ -8262,6 +8229,303 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Attach the exported file to the issue if you're comfortable sharing it."
+          }
+        }
+      }
+    },
+    "tutorial.helper.message.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plain SSH works. The helper adds status, approvals and notifications."
+          }
+        }
+      }
+    },
+    "tutorial.helper.title.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The helper adds the rest"
+          }
+        }
+      }
+    },
+    "tutorial.helper.with.approve" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approve from the lock screen"
+          }
+        }
+      }
+    },
+    "tutorial.more.collapsed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapsed"
+          }
+        }
+      }
+    },
+    "tutorial.more.expanded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expanded"
+          }
+        }
+      }
+    },
+    "tutorial.more.hide" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show less"
+          }
+        }
+      }
+    },
+    "tutorial.more.show" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Learn more"
+          }
+        }
+      }
+    },
+    "tutorial.privacy.mark" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A lock: notifications are sealed end to end."
+          }
+        }
+      }
+    },
+    "tutorial.privacy.message.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only this device can read your notifications."
+          }
+        }
+      }
+    },
+    "tutorial.privacy.title.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Private by design"
+          }
+        }
+      }
+    },
+    "tutorial.ready.mark" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Togo looks for machines nearby."
+          }
+        }
+      }
+    },
+    "tutorial.ready.message.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You need its name or address and your user name on it."
+          }
+        }
+      }
+    },
+    "tutorial.ready.title.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add your first machine"
+          }
+        }
+      }
+    },
+    "tutorial.session.message.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keys, gestures and a compose bar make the terminal easy to use."
+          }
+        }
+      }
+    },
+    "tutorial.session.title.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Made for touch"
+          }
+        }
+      }
+    },
+    "tutorial.setup.message.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tick each step as you go."
+          }
+        }
+      }
+    },
+    "tutorial.setup.title.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get your machine ready"
+          }
+        }
+      }
+    },
+    "tutorial.welcome.message.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "They run on your Mac or Linux machine, even when this app is closed."
+          }
+        }
+      }
+    },
+    "tutorial.welcome.title.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your agents keep running"
+          }
+        }
+      }
+    },
+    "sidebar.addMachine" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add machine"
+          }
+        }
+      }
+    },
+    "sidebar.empty.shortcut" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "or press ⌘T"
+          }
+        }
+      }
+    },
+    "sidebar.empty.shortcutHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command T"
+          }
+        }
+      }
+    },
+    "sidebar.machine.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit machine"
+          }
+        }
+      }
+    },
+    "sidebar.machine.installHelper" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install or update helper"
+          }
+        }
+      }
+    },
+    "sidebar.machine.menu" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More for %@"
+          }
+        }
+      }
+    },
+    "sidebar.machine.newSession" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New session here"
+          }
+        }
+      }
+    },
+    "sidebar.machine.signIn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in again"
           }
         }
       }

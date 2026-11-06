@@ -49,6 +49,7 @@ struct BoardView: View {
             onVisible: { id, isVisible in
                 if isVisible { visible.insert(id) } else { visible.remove(id) }
             },
+            newSession: store.services.hosts.isEmpty ? nil : { store.startNewSession() },
             card: cardButton
         )
         .offset(monitor.shift)
@@ -231,6 +232,8 @@ private struct BoardGrid<Card: View>: View {
     let sections: [BoardSection]
     let note: String?
     let onVisible: (TabID, Bool) -> Void
+    /// Offered by the empty board; nil where there is no machine to start one on.
+    var newSession: (() -> Void)?
     @ViewBuilder let card: (BoardCard) -> Card
 
     var body: some View {
@@ -241,7 +244,11 @@ private struct BoardGrid<Card: View>: View {
         }
         .overlay {
             if sections.isEmpty {
-                StateView(kind: .empty, title: BoardCopy.empty, message: BoardCopy.emptyMessage)
+                StateView(
+                    kind: .empty, title: BoardCopy.empty, message: BoardCopy.emptyMessage,
+                    action: newSession.map { .init(ControlCenterCopy.newSession, run: $0) }
+                )
+                .centredInDetail()
             }
         }
     }
@@ -326,6 +333,7 @@ extension AppStore {
     func openBesideFromBoard(_ row: SessionRow) {
         openBeside(TabID(hostID: row.hostID, sessionID: row.id))
         boardShown = false
+        if workspaceInline { path = [] }
         workspaceOpen = true
     }
 }

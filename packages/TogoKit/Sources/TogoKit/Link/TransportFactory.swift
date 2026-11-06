@@ -50,11 +50,11 @@ public struct TransportFactory: Sendable {
 
     /// Mosh's UDP flow goes straight to the server's address, which a jump host hides.
     public static func moshUnavailableReason(_ profile: HostProfile) -> String? {
-        profile.jumps.isEmpty ? nil : "Mosh needs a direct route; this host uses a jump host"
+        profile.jumps.isEmpty ? nil : "Mosh needs a direct route; this machine uses a jump host"
     }
 
     public static func etUnavailableReason(_ profile: HostProfile) -> String? {
-        profile.etAvailable ? nil : "etserver not found on this host"
+        profile.etAvailable ? nil : "etserver not found on this machine"
     }
 }
 

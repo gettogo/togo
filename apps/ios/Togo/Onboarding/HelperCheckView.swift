@@ -54,7 +54,7 @@ struct HelperCheckView: View {
                 : String(localized: "onboard.helper.missing.title", defaultValue: "Add the Togo helper"),
             message: String(
                 localized: "onboard.helper.missing.message",
-                defaultValue: "The helper is a small program on \(machine) that runs your agents in tmux. It adds:"
+                defaultValue: "A small program on \(machine) that adds:"
             )
         ) {
             VStack(alignment: .leading, spacing: 12) {
@@ -124,7 +124,7 @@ struct HelperCheckView: View {
 
     private var tmuxLine: String {
         guard let tmux = report.tmux else {
-            return String(localized: "onboard.helper.tmux.missing", defaultValue: "tmux not installed; the helper needs it")
+            return String(localized: "onboard.helper.tmux.missing", defaultValue: "tmux isn't installed. The helper needs it.")
         }
         if report.tmuxSupported { return tmux }
         return String(localized: "onboard.helper.tmux.old", defaultValue: "\(tmux) is too old; Togo needs 3.2 or newer")

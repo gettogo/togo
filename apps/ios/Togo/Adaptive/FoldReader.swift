@@ -10,6 +10,7 @@ extension View {
 
 private struct FoldReader: ViewModifier {
     @Environment(\.fold) private var inherited
+    @Environment(\.foldOrigin) private var anchor
 
     func body(content: Content) -> some View {
         if #available(iOS 27.1, *) {
@@ -19,10 +20,16 @@ private struct FoldReader: ViewModifier {
                 )
                 let active = regions.first { $0.isActive }?.frame
                 let inactive = regions.first { !$0.isActive }?.frame ?? active
-                // No fold here, as on the outer display or a device without one: the environment's
-                // value passes through unchanged. Only tests and previews set one from outside, in
-                // this view's coordinates; on a device it is `.flat` here.
-                content.environment(\.fold, regions.isEmpty ? inherited : .from(active: active, inactive: inactive))
+                let frame = proxy.frame(in: .global)
+                // No fold reported here, as for a detail column beside the sidebar or on the outer
+                // display: the fold read further out, moved into this view's coordinates, and
+                // none at all when it misses this view.
+                let fold = regions.isEmpty
+                    ? inherited.seen(from: anchor, at: frame.origin, size: proxy.size)
+                    : .from(active: active, inactive: inactive)
+                content
+                    .environment(\.fold, fold)
+                    .environment(\.foldOrigin, frame.origin)
             }
         } else {
             content

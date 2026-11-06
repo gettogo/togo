@@ -139,7 +139,7 @@ extension GitBranches.Branch {
             state = .ready
         } catch {
             guard mine == generation else { return }
-            state = .failed(error.localizedDescription)
+            state = .failed(ServiceErrors.message(error))
         }
     }
 
@@ -186,7 +186,7 @@ extension GitBranches.Branch {
             state = .ready
         } catch {
             guard mine == generation else { return }
-            state = .failed(error.localizedDescription)
+            state = .failed(ServiceErrors.message(error))
         }
     }
 
@@ -243,7 +243,7 @@ extension GitBranches.Branch {
             isCutOff = diff.truncated
             state = parsed.isEmpty ? .empty : .ready
         } catch {
-            state = .failed(error.localizedDescription)
+            state = .failed(ServiceErrors.message(error))
         }
     }
 }

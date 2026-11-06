@@ -190,7 +190,7 @@ import UIKit
             apply(listed)
             phase = .loaded
         } catch {
-            if phase != .loaded { phase = .failed(error.localizedDescription) }
+            if phase != .loaded { phase = .failed(ServiceErrors.message(error)) }
         }
     }
 
@@ -295,7 +295,7 @@ import UIKit
             touch()
             return info.localPort
         } catch {
-            if states[port.port] == .opening { states[port.port] = .failed(error.localizedDescription) }
+            if states[port.port] == .opening { states[port.port] = .failed(ServiceErrors.message(error)) }
             return nil
         }
     }

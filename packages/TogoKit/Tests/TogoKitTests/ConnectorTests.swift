@@ -57,7 +57,7 @@ struct ConnectorTests {
         #expect(attachment.kind == .ssh)
         #expect(attachment.notes == [
             FallbackNote(kind: .mosh, reason: "mosh-server not found on h"),
-            FallbackNote(kind: .et, reason: "etserver not found on this host"),
+            FallbackNote(kind: .et, reason: "etserver not found on this machine"),
         ])
     }
 
@@ -91,7 +91,7 @@ struct ConnectorTests {
         let profile = Self.profile(jumps: [HostEndpoint(host: "jump", user: "u")])
         let attachment = try await connector.attach(Self.request(profile))
         #expect(attachment.kind == .ssh)
-        #expect(attachment.notes == [FallbackNote(kind: .mosh, reason: "Mosh needs a direct route; this host uses a jump host")])
+        #expect(attachment.notes == [FallbackNote(kind: .mosh, reason: "Mosh needs a direct route; this machine uses a jump host")])
         #expect(calls.all == [.ssh])
     }
 
@@ -112,7 +112,7 @@ struct ConnectorTests {
             Self.factory(.mosh, calls: Calls(), unavailable: TransportFactory.moshUnavailableReason),
         ])
         let profile = Self.profile(transport: .mosh, jumps: [HostEndpoint(host: "jump", user: "u")])
-        await #expect(throws: ConnectorError.unavailable("Mosh needs a direct route; this host uses a jump host")) {
+        await #expect(throws: ConnectorError.unavailable("Mosh needs a direct route; this machine uses a jump host")) {
             try await connector.attach(Self.request(profile))
         }
     }
@@ -134,7 +134,7 @@ struct ConnectorTests {
             Self.factory(.et, calls: Calls(), unavailable: TransportFactory.etUnavailableReason),
         ])
         let profile = Self.profile(jumps: [HostEndpoint(host: "j", user: "u")], etAvailable: false)
-        await #expect(throws: ConnectorError.unavailable("etserver not found on this host")) {
+        await #expect(throws: ConnectorError.unavailable("etserver not found on this machine")) {
             _ = try await connector.attach(Self.request(profile))
         }
     }

@@ -52,7 +52,7 @@ struct HostKeyCheckView: View {
             title: String(localized: "onboard.hostKey.changed.title", defaultValue: "This machine's key changed"),
             message: String(
                 localized: "onboard.hostKey.changed.message",
-                defaultValue: "The key \(machine) sent is not the one you trusted. If nobody reinstalled or changed this machine, someone may be intercepting the connection. Togo will not connect."
+                defaultValue: "\(machine) sent a different key than before. If nobody reinstalled it, someone may be intercepting the connection. Togo won't connect."
             )
         ) {
             fingerprint(String(localized: "onboard.hostKey.trusted", defaultValue: "Trusted before"), change.trusted.joined(separator: "\n"))

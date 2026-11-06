@@ -43,7 +43,7 @@ struct CommentSheet: View {
             }
         }
         .tint(.primary)
-        .presentationDetents([.medium, .large])
+        .togoSheet(.prompt)
         .onAppear { focused = canSend }
     }
 

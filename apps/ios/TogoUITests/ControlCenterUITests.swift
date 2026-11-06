@@ -13,7 +13,11 @@ import XCTest
 extension XCUIApplication {
     /// A session row, found by how VoiceOver reads it: bib, name, status, then folder.
     func row(_ bib: String, _ name: String) -> XCUIElement {
-        buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "\(bib), \(name), ")).firstMatch
+        // A button in the compact list; beside the sidebar a selectable row, which may read as a cell.
+        descendants(matching: .any).matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND (elementType == %d OR elementType == %d)",
+            "\(bib), \(name), ", XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue
+        )).firstMatch
     }
 
     /// The button with this label that is on screen, for labels a dialog shares with a swipe action.
@@ -143,13 +147,13 @@ extension XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.swipeLeft()
 
-        guard let kill = app.visibleButton("Kill") else { return XCTFail("Swiping the row offers no Kill") }
+        guard let kill = app.visibleButton("End session") else { return XCTFail("Swiping the row offers no End session") }
         assertTappable(kill)
         kill.tap()
 
         XCTAssertTrue(app.staticTexts["The agent stops and its screen is gone."].waitForExistence(timeout: 5))
         XCTAssertTrue(row.exists, "The row stays until the kill is confirmed")
-        app.visibleButton("Kill")?.tap()
+        app.visibleButton("End session")?.tap()
         XCTAssertTrue(row.waitForNonExistence(timeout: 5))
     }
 
@@ -179,9 +183,16 @@ extension XCTestCase {
         audit(app, glass: ["Cancel"])
         save.tap()
 
+        // Notifications are offered after the save; the system alert only follows "Turn on".
+        let notNow = app.buttons["Not now"]
+        XCTAssertTrue(notNow.waitForExistence(timeout: 5), "Saving a machine with the helper never offers notifications")
+        XCTAssertTrue(app.buttons["Turn on notifications"].exists)
+        audit(app)
+        notNow.tap()
+
         // The form names the machine from its Bonjour name without the owner.
         XCTAssertTrue(app.staticTexts["MacBook Pro"].waitForExistence(timeout: 5), "The new machine has no section")
-        XCTAssertTrue(app.staticTexts["No sessions yet"].exists, "The new machine shows no empty state")
+        XCTAssertTrue(app.buttons["machine.newSession"].exists, "The new machine offers no new session")
     }
 
     func testSettingsPassesTheAudit() {

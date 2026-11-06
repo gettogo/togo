@@ -7,6 +7,10 @@ struct AboutView: View {
     let appVersion: String
     let settings: AppSettings
     let machines: [SettingsMachine]
+    #if DEBUG
+    /// The debug screens, in debug builds only.
+    @State private var developerShown = false
+    #endif
 
     var body: some View {
         List {
@@ -53,8 +57,20 @@ struct AboutView: View {
                 ))
             }
             .groupedRows()
+            #if DEBUG
+            Section {
+                Button { developerShown = true } label: {
+                    Label { Text(verbatim: "Developer") } icon: { Image(systemName: "ladybug") }
+                }
+                .frame(minHeight: 44)
+            }
+            .groupedRows()
+            #endif
         }
         .groupedList()
+        #if DEBUG
+        .fullScreenCover(isPresented: $developerShown) { DebugEntry.root() }
+        #endif
         .navigationTitle(settingsText("settings.about.title", "About"))
         .navigationBarTitleDisplayMode(.inline)
     }

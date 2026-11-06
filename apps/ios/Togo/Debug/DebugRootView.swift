@@ -3,6 +3,7 @@ import SwiftUI
 import TogoKit
 
 struct DebugRootView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var hosts = DebugComposition.shared.hosts
     @State private var editing: HostProfile?
     @State private var adding = false
@@ -38,6 +39,11 @@ struct DebugRootView: View {
                 }
             }
             .navigationTitle("Debug")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
             .navigationDestination(for: HostProfile.self) { DebugSessionsView(profile: $0) }
             .sheet(isPresented: $adding) {
                 NavigationStack { DebugHostForm(existing: nil) { hosts.save($0) } }
