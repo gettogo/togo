@@ -157,7 +157,7 @@ struct SettingsView: View {
         case .dictation:
             DictationSettingsView(settings: settings, update: actions.update)
         case .diagnostics:
-            DiagnosticsView()
+            DiagnosticsView(settings: settings)
         case .about:
             AboutView(appVersion: values.appVersion, machines: values.machines)
         }

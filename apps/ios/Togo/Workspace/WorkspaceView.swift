@@ -3,11 +3,13 @@ import TogoKit
 import UIKit
 
 /// Where the user spends most of their time: the selected session's terminal edge to edge
-/// on an opaque canvas, the header and tab strip above it, and requests from other sessions
-/// dropping in above the key bar.
+/// on an opaque canvas, or two sessions side by side once the user puts one beside the other,
+/// the header and tab strip above, and requests from other sessions dropping in above the key
+/// bar. On a Duo held as a tabletop the terminal stays above the fold and the rest sits below.
 struct WorkspaceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.windowID) private var window
     @Bindable var store: AppStore
     let terminals: TerminalPool
 
@@ -21,6 +23,7 @@ struct WorkspaceView: View {
     @State private var renameTarget: SessionRow?
     @State private var renameText = ""
     @State private var killTarget: WorkspaceTab?
+    @State private var panes = PanesState()
 
     init(store: AppStore, terminals: TerminalPool, noteShown: Bool = false) {
         self.store = store
@@ -29,26 +32,37 @@ struct WorkspaceView: View {
     }
 
     var body: some View {
-        pager
-            .overlay(alignment: .bottom) { incoming }
+        WorkspacePanes(store: store, terminals: terminals, window: window) { geometry, insets in
+            requests(in: geometry, insets: insets)
+        }
+            .onPreferenceChange(PanesReport.Key.self) { report in
+                MainActor.assumeIsolated { if panes.report != report { panes.report = report } }
+            }
             // The tip anchors behind the chrome so its popover never changes the chrome's layout.
-            .safeAreaInset(edge: .top, spacing: 0) { chrome.background { Color.clear.tutorialTip(.workspace) } }
-            .safeAreaInset(edge: .bottom, spacing: 0) { WorkspaceComposeBar(store: store, terminals: terminals) }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                chrome.background { Color.clear.tutorialTip(.workspace) }
+                    .modifier(LeadingPageOnly())
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomBar
+                    .modifier(PaneColumns(state: panes) { [store] in $0.geometry.composeFrame(focused: store.workspace.focused) })
+            }
             .background(Color.togoInk)
             .background { shortcuts }
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
             .attachPrompts(store.services.attachPrompts, active: true)
             .reviewPresentation(store: store, terminals: terminals, active: true)
-            .onChange(of: store.workspace.selected) {
+            .onChange(of: store.focusedTab?.id) { _, id in
                 status = nil
-                store.composing = nil
+                // The Compose key in the other pane moves focus to it with its bar open.
+                if store.composing != id { store.composing = nil }
                 noteShown = false
                 endFind()
             }
             .haptic(.tabSettle, trigger: store.workspace.selected)
             .onChange(of: store.findRequests) {
-                guard let tab = store.selectedTab, terminals.handle(for: tab.id)?.search != nil else { return }
+                guard let tab = store.focusedTab, terminals.handle(for: tab.id)?.search != nil else { return }
                 finding = true
                 findFocused = true
             }
@@ -68,106 +82,50 @@ struct WorkspaceView: View {
             } message: { _ in
                 Text(ControlCenterCopy.killMessage)
             }
+            .coordinateSpace(.named(PaneGeometry.space))
+            .readsFold()
+            .verticalBarsOff()
     }
 
-    // MARK: Pager
+    // MARK: Panes
 
-    /// The terminal sizes itself to the keyboard and the home indicator, so the pager ignores
-    /// both and the grid is resized once, by the terminal.
-    @ViewBuilder private var pager: some View {
-        Group {
-            if reduceMotion {
-                fadingPager
-            } else {
-                TabView(selection: selection) {
-                    ForEach(store.workspace.tabs) { tab in
-                        page(tab)
-                            .tag(Optional(tab.id))
+    /// Chip taps and shortcuts settle like a swipe does. Under Reduce Motion the pages fade.
+    private func show(_ id: TabID) {
+        withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
+            store.choose(id)
+        }
+    }
+
+    private func openBeside(_ id: TabID) {
+        withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
+            store.openBeside(id)
+        }
+    }
+
+    /// The compose bar under the focused pane and, on a tabletop, the Keyboard button.
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            WorkspaceComposeBar(store: store, terminals: terminals)
+            WithPanes(state: panes) { report in
+                if report.geometry.isTabletop, store.composing == nil {
+                    TabletopDeck<EmptyView>.KeyboardButton {
+                        store.focusedTab.flatMap { terminals.handle(for: $0.id) }?.raiseKeyboard()
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
             }
         }
-        .ignoresSafeArea(.container, edges: .bottom)
-        .ignoresSafeArea(.keyboard)
-    }
-
-    /// Under Reduce Motion a horizontal swipe changes tabs without sliding: the tab on screen
-    /// cross-fades into the next one.
-    private var fadingPager: some View {
-        ZStack {
-            ForEach(store.workspace.tabs) { tab in
-                if tab.id == store.workspace.selected {
-                    page(tab)
-                        .transition(.opacity)
-                }
-            }
-        }
-        .animation(Motion.fade, value: store.workspace.selected)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24).onEnded { drag in
-                let width = drag.translation.width
-                guard abs(width) > 60, abs(width) > abs(drag.translation.height) * 2 else { return }
-                store.workspace.ended = nil
-                store.selectTab(offset: width < 0 ? 1 : -1)
-            }
-        )
-    }
-
-    private func page(_ tab: WorkspaceTab) -> some View {
-        let overlay = ConnectingOverlay.Kind(
-            link: tab.link, machine: store.machine(for: tab.hostID), name: store.machineName(for: tab.hostID)
-        )
-        let isSelected = tab.id == store.workspace.selected
-        let reconnecting = tab.link.isReconnecting
-        return ZStack {
-            Color.togoInk
-            TerminalSlot(tab: tab.id, terminals: terminals)
-                .opacity(reconnecting ? 0.6 : 1)
-            if let overlay {
-                ConnectingOverlay(kind: overlay) { retry(tab) }
-                    .transition(.opacity)
-            }
-        }
-        .animation(Motion.fade, value: overlay)
-        .animation(Motion.fade, value: reconnecting)
-        .haptic(.connect, trigger: tab.link.isLive) { $0 && isSelected }
-    }
-
-    private var selection: Binding<TabID?> {
-        Binding {
-            store.workspace.selected
-        } set: { id in
-            guard let id else { return }
-            store.workspace.ended = nil
-            store.select(id)
-        }
-    }
-
-    /// Chip taps and shortcuts settle like a swipe does. Under Reduce Motion the pager jumps and
-    /// the pages fade.
-    private func show(_ id: TabID) {
-        store.workspace.ended = nil
-        withAnimation(reduceMotion ? nil : Motion.tabSettle) {
-            store.select(id)
-        }
-    }
-
-    private func retry(_ tab: WorkspaceTab) {
-        terminals.restart(tab, store: store)
-        Task { await store.services.refresh() }
     }
 
     // MARK: Chrome
 
     private var chrome: some View {
         VStack(spacing: 0) {
-            if let tab = store.selectedTab {
+            if let tab = store.focusedTab {
                 header(tab)
             }
             TabStrip(
-                chips: chips, selected: store.workspace.selected, namespace: chipSpace,
-                onSelect: show, onClose: { store.close($0) }
+                chips: chips, selected: store.focusedTab?.id, beside: besideTab, canOpenBeside: panes.report.canSplit,
+                namespace: chipSpace, onSelect: show, onOpenBeside: openBeside, onClose: { store.close($0) }
             )
             if finding {
                 findBar
@@ -199,6 +157,12 @@ struct WorkspaceView: View {
         }
     }
 
+    /// The tab in the pane that does not have focus, while two panes are on screen.
+    private var besideTab: TabID? {
+        guard store.panesVisible else { return nil }
+        return store.workspace.focused == .primary ? store.workspace.secondary : store.workspace.selected
+    }
+
     private var chips: [TabStrip.Chip] {
         store.workspace.tabs.map { tab in
             let label = store.chipLabel(for: tab)
@@ -211,6 +175,7 @@ struct WorkspaceView: View {
         ConnectWithMenu(etAvailable: etAvailable) { transport in
             store.open(hostID: tab.hostID, sessionID: tab.sessionID, transport: transport)
         }
+        OpenInWindowButton(tab: tab.id)
         Button(WorkspaceCopy.copyLines, systemImage: "doc.on.doc") {
             Task { status = await store.copyLastLines(of: tab) }
         }
@@ -298,14 +263,14 @@ struct WorkspaceView: View {
     }
 
     private func find(backwards: Bool) {
-        guard !findText.isEmpty, let tab = store.selectedTab,
+        guard !findText.isEmpty, let tab = store.focusedTab,
               let search = terminals.handle(for: tab.id)?.search else { return }
         findMissed = !search.find(findText, backwards)
     }
 
     private func endFind() {
         guard finding else { return }
-        if let tab = store.selectedTab {
+        if let tab = store.focusedTab {
             terminals.handle(for: tab.id)?.search?.clear()
         }
         finding = false
@@ -315,6 +280,24 @@ struct WorkspaceView: View {
 
     // MARK: Requests and shortcuts
 
+    /// Cards over the focused pane, clear of the fold, above the bars and the keyboard; on a
+    /// tabletop they sit in the deck under the fold.
+    @ViewBuilder private func requests(in geometry: PaneGeometry, insets: EdgeInsets) -> some View {
+        if let deck = geometry.deck {
+            TabletopDeck { incoming }
+                .frame(width: deck.width, height: max(0, deck.height - insets.bottom))
+                .offset(x: deck.minX, y: deck.minY)
+        } else {
+            let rect = geometry.requestsFrame(focused: store.workspace.focused)
+            incoming
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .frame(width: rect.width, height: max(0, rect.height - insets.bottom), alignment: .bottom)
+                .offset(x: rect.minX, y: rect.minY)
+        }
+    }
+
     private var incoming: some View {
         IncomingRequests(
             cards: store.incomingRequests, failures: store.answerFailures,
@@ -322,16 +305,13 @@ struct WorkspaceView: View {
             machineName: store.machineName(for:),
             onOpen: { card in
                 guard let sessionID = card.sessionID else { return }
-                withAnimation(reduceMotion ? nil : Motion.tabSettle) {
-                    store.open(hostID: card.hostID, sessionID: sessionID)
+                withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
+                    store.openInFocusedPane(hostID: card.hostID, sessionID: sessionID)
                 }
             },
             onAnswer: { card, decision in Task { await store.answer(card.id, decision) } },
             onMore: { store.workspaceOpen = false }
         )
-        .frame(maxWidth: 560)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
     }
 
     /// ⌘1 to ⌘9 while the terminal does not have focus. With focus the terminal claims the
@@ -339,7 +319,9 @@ struct WorkspaceView: View {
     private var shortcuts: some View {
         ForEach(Array(chips.prefix(9).enumerated()), id: \.element.id) { index, chip in
             Button(WorkspaceCopy.goTo([chip.bib, chip.name].compactMap(\.self).joined(separator: " "))) {
-                show(chip.id)
+                withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
+                    store.selectTab(number: index + 1)
+                }
             }
             .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
         }
@@ -352,13 +334,14 @@ struct WorkspaceView: View {
     }
 }
 
-private extension LinkPhase {
-    var isLive: Bool {
-        if case .live = self { true } else { false }
-    }
-
-    var isReconnecting: Bool {
-        if case .reconnecting = self { true } else { false }
+private extension View {
+    /// The workspace is immersive: on a Duo the system's vertical bars give way to the terminal.
+    @ViewBuilder func verticalBarsOff() -> some View {
+        if #available(iOS 27.1, *) {
+            toolbarVerticalBehavior(.disabled)
+        } else {
+            self
+        }
     }
 }
 
@@ -375,3 +358,54 @@ private extension LinkPhase {
         .tint(Color.togoSnow)
 }
 #endif
+
+/// The panes' last report, read only by the small views that place things around the panes, so
+/// a new report never rebuilds the whole workspace.
+@Observable final class PanesState {
+    var report = PanesReport.single
+}
+
+/// Content built from the panes' report.
+private struct WithPanes<Content: View>: View {
+    let state: PanesState
+    @ViewBuilder let content: (PanesReport) -> Content
+
+    var body: some View {
+        content(state.report)
+    }
+}
+
+/// Keeps a full-width bar to the columns the panes give it, such as the leading page of a book,
+/// so nothing in it lands on the fold. Without columns it keeps the full width.
+private struct PaneColumns: ViewModifier {
+    let state: PanesState
+    let pick: (PanesReport) -> CGRect?
+
+    func body(content: Content) -> some View {
+        if let frame = pick(state.report), frame.width > 0 {
+            content
+                .frame(width: frame.width)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .offset(x: frame.minX)
+        } else {
+            content
+        }
+    }
+}
+
+/// In book posture the header and tab strip keep to the page before the fold, so no button or
+/// chip sits on it. Read from the fold itself rather than the panes' report, so the chrome is
+/// laid out once and does not move when the report arrives.
+private struct LeadingPageOnly: ViewModifier {
+    @Environment(\.fold) private var fold
+
+    func body(content: Content) -> some View {
+        if fold.posture == .book, let division = fold.division, division.minX > 0 {
+            content
+                .frame(width: division.minX)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            content
+        }
+    }
+}

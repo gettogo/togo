@@ -25,6 +25,7 @@ import UIKit
         /// A machine reported after the app came to the foreground: the requests it still has
         /// open, so notifications for the others can go.
         var reported: (HostID, Set<String>) -> Void = { _, _ in }
+        var diagnostics: DiagnosticsRecorder = .shared
     }
 
     private(set) var hosts: [HostRecordView] = []
@@ -255,7 +256,8 @@ import UIKit
         }
         let prompts = attachPrompts
         let terminal = LiveTerminal(
-            connect: connect, settings: settings, wasAsked: { prompter.askedLastAttempt }
+            connect: deps.diagnostics.observing(connect, host: hostID, preference: preference),
+            settings: settings, wasAsked: { prompter.askedLastAttempt }
         ) { [weak self] id in
             prompts.withdraw(owner: ObjectIdentifier(prompter))
             self?.terminals[id] = nil
@@ -371,6 +373,7 @@ import UIKit
     private func received(_ snapshot: HostSnapshot) {
         guard let record = records[snapshot.hostID] else { return }
         latest[snapshot.hostID] = snapshot
+        deps.diagnostics.reached(snapshot, record: record)
         publish(snapshot, record: record)
         if snapshot.reach == .online, !record.noHelper {
             pair(record, capabilities: snapshot.capabilities)

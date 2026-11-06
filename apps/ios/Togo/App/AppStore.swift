@@ -40,6 +40,8 @@ import TogoKit
     /// Both panes are on screen. The workspace sets it from its arrangement; while false the
     /// secondary tab waits in state and everything acts on the primary pane.
     var panesVisible = false
+    /// Set while a fold shows the secondary's tab alone, so opening again restores both panes.
+    var panePromotion: PanePromotion?
     /// Open tabs, most recently put on screen first.
     var recentTabs: [TabID] = []
     /// The workspace sits beside the session sidebar instead of in a cover over the list.

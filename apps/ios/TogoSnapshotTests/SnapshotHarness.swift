@@ -59,6 +59,12 @@ enum ScreenSize: String, CaseIterable, Sendable {
         }
     }
 
+    /// A fold given in window coordinates, as `fold` and the tests give it, moved into the safe
+    /// area's coordinates, where the device reports its fold regions.
+    func inSafeArea(_ fold: FoldInfo) -> FoldInfo {
+        self == .iPhone17 ? fold : fold.moved(by: CGPoint(x: -safeArea.left, y: -safeArea.top))
+    }
+
     /// Appended to reference names; empty for the iPhone so existing references keep their names.
     var suffix: String { self == .iPhone17 ? "" : "-\(rawValue)" }
 }
@@ -97,7 +103,7 @@ private let deviceSafeArea = ScreenSize.iPhone17.safeArea
                 .environment(\.dynamicTypeSize, variant.largeText ? .accessibility5 : .large)
                 .environment(\.loopsPaused, true)
                 .environment(\.horizontalSizeClass, size.sizeClass)
-                .environment(\.fold, fold == .flat ? size.fold : fold)
+                .environment(\.fold, size.inSafeArea(fold == .flat ? size.fold : fold))
             assertSnapshot(
                 of: render(UIHostingController(rootView: content), in: variant, size: size),
                 as: .image(precision: precision, perceptualPrecision: perceptualPrecision, scale: 3),

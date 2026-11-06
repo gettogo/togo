@@ -45,8 +45,13 @@ struct IncomingRequests: View {
             }
         }
         .onChange(of: self.cards, initial: true) { old, new in
+            // Cards already waiting when the workspace opens are simply there.
+            guard shown != nil else {
+                shown = new
+                return
+            }
             let answered = old.first.map { first in first.isAnswered && !new.contains { $0.id == first.id } } ?? false
-            withAnimation(Motion.motion(answered ? Motion.collapse : Motion.dropIn, reduce: reduceMotion)) {
+            withAnimation(Motion.animation(answered ? .collapse : .dropIn, reduce: reduceMotion)) {
                 shown = new
             }
         }

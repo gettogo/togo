@@ -130,7 +130,7 @@ struct WorkspaceComposeBar: View {
             if let tab = store.composeTab, store.composing == tab.id, terminals.shows(tab.id, in: window),
                let handle = terminals.handle(for: tab.id) {
                 // With two panes on screen the bar says which one it writes to.
-                ComposeBar(model: model(for: tab, handle: handle), focusOnAppear: true, target: store.panesVisible ? tab.bib : nil)
+                ComposeBar(model: model(for: tab, handle: handle), focusOnAppear: true, target: store.composeTarget)
                     .id(tab.id)
             }
         }

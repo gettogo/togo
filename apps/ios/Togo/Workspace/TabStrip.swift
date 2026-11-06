@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The open sessions as chips under the header, in the order ⌘1 to ⌘9 pick them. The chip on
-/// screen is the only one drawn on a surface; the rest are plain text.
+/// The open sessions as chips under the header, in the order ⌘1 to ⌘9 pick them. Chips of tabs
+/// on screen are drawn on a surface, the focused one in snow and the one beside it in mute; the
+/// rest are plain text. A chip drags into a pane or another window.
 struct TabStrip: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -12,11 +13,32 @@ struct TabStrip: View {
     }
 
     let chips: [Chip]
+    /// The focused pane's tab.
     let selected: TabID?
+    /// The other pane's tab while two panes are on screen.
+    let beside: TabID?
+    /// The window can show a second pane, so chips offer Open Beside.
+    let canOpenBeside: Bool
     /// Incoming request cards shrink into the chip of their session.
     let namespace: Namespace.ID
     let onSelect: (TabID) -> Void
+    let onOpenBeside: (TabID) -> Void
     let onClose: (TabID) -> Void
+
+    init(
+        chips: [Chip], selected: TabID?, beside: TabID? = nil, canOpenBeside: Bool = false, namespace: Namespace.ID,
+        onSelect: @escaping (TabID) -> Void, onOpenBeside: @escaping (TabID) -> Void = { _ in },
+        onClose: @escaping (TabID) -> Void
+    ) {
+        self.chips = chips
+        self.selected = selected
+        self.beside = beside
+        self.canOpenBeside = canOpenBeside
+        self.namespace = namespace
+        self.onSelect = onSelect
+        self.onOpenBeside = onOpenBeside
+        self.onClose = onClose
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -32,7 +54,7 @@ struct TabStrip: View {
             .scrollIndicators(.hidden)
             .onChange(of: selected) { _, id in
                 guard let id else { return }
-                withAnimation(Motion.motion(Motion.tabSettle, reduce: reduceMotion)) {
+                withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
                     proxy.scrollTo(id, anchor: .center)
                 }
             }
@@ -43,6 +65,7 @@ struct TabStrip: View {
 
     private func chipButton(_ chip: Chip) -> some View {
         let isSelected = chip.id == selected
+        let isBeside = chip.id == beside
         return Button {
             onSelect(chip.id)
         } label: {
@@ -61,16 +84,21 @@ struct TabStrip: View {
             .padding(.vertical, 7)
             .background {
                 Capsule()
-                    .fill(isSelected ? Color.togoRaised : Color.clear)
+                    .fill(isSelected || isBeside ? Color.togoRaised : Color.clear)
             }
             .matchedGeometryEffect(id: chip.id, in: namespace, isSource: true)
             .frame(minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .animation(Motion.motion(Motion.tabSettle, reduce: reduceMotion), value: isSelected)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .motion(.tabSettle, value: isSelected)
+        .accessibilityAddTraits(isSelected || isBeside ? .isSelected : [])
+        .draggable(chip.id)
         .contextMenu {
+            if canOpenBeside && !isBeside {
+                Button(PanesCopy.openBeside, systemImage: "rectangle.split.2x1") { onOpenBeside(chip.id) }
+            }
+            OpenInWindowButton(tab: chip.id)
             Button(WorkspaceCopy.closeTab, systemImage: "xmark") { onClose(chip.id) }
         }
     }

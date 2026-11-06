@@ -15,14 +15,7 @@ Tutorial/TutorialFlow.swift	.animation(Motion.motion(Motion.tabSettle, reduce: r
 Tutorial/TutorialFlow.swift	withAnimation(Motion.tabSettle, move)
 Tutorial/TutorialPage.swift	.animation(Motion.motion(Motion.dropIn, reduce: reduceMotion).delay(Double(index) * 0.12), value: complete)
 Tutorial/TutorialPage.swift	withAnimation(Motion.dropIn) { shown = true }
-Workspace/IncomingRequests.swift	withAnimation(Motion.motion(answered ? Motion.collapse : Motion.dropIn, reduce: reduceMotion)) {
 Workspace/ReviewHeaderButtons.swift	.animation(Motion.stateText(reduce: reduceMotion), value: model.changesLabel)
 Workspace/ReviewHeaderButtons.swift	.animation(Motion.stateText(reduce: reduceMotion), value: model.hasPorts)
-Workspace/TabStrip.swift	.animation(Motion.motion(Motion.tabSettle, reduce: reduceMotion), value: isSelected)
-Workspace/TabStrip.swift	withAnimation(Motion.motion(Motion.tabSettle, reduce: reduceMotion)) {
 Workspace/WorkspaceHeader.swift	.animation(Motion.stateText(reduce: reduceMotion), value: line)
 Workspace/WorkspaceHeader.swift	.animation(Motion.stateText(reduce: reduceMotion), value: link)
-Workspace/WorkspaceView.swift	.animation(Motion.fade, value: overlay)
-Workspace/WorkspaceView.swift	.animation(Motion.fade, value: reconnecting)
-Workspace/WorkspaceView.swift	.animation(Motion.fade, value: store.workspace.selected)
-Workspace/WorkspaceView.swift	withAnimation(reduceMotion ? nil : Motion.tabSettle) {

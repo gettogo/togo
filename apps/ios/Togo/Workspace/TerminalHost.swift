@@ -255,7 +255,7 @@ import UIKit
         guard let handle = entries[id]?.handle,
               let store = hosts[id].flatMap(store(of:)) ?? listing(id)?.store else { return }
         handle.onShortcut = { [weak store] in store?.perform($0) }
-        handle.onSwipe = { [weak store] in store?.selectTab(offset: $0) }
+        handle.onSwipe = { [weak store] in store?.step($0, from: id) }
         handle.onEdgeSwipe = { [weak store] in store?.workspaceOpen = false }
         handle.onCompose = { [weak store] in store?.toggleCompose(id) }
         handle.onDictate = { [weak store] in store?.dictate(id) }
@@ -310,6 +310,24 @@ struct TabTerminalView: UIViewControllerRepresentable {
 
 final class TerminalContainer: UIViewController {
     private var wanted: UIViewController?
+
+    /// A container can be put on screen without appearing, as when a pager page that held
+    /// something else starts showing a terminal, so it also attaches when its view reaches a
+    /// window.
+    override func loadView() {
+        let view = WindowView()
+        view.onWindow = { [weak self] in self?.attach() }
+        self.view = view
+    }
+
+    private final class WindowView: UIView {
+        var onWindow: () -> Void = {}
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { onWindow() }
+        }
+    }
 
     func show(_ child: UIViewController) {
         if let wanted, wanted !== child {

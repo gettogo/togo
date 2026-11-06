@@ -2,6 +2,105 @@
   "sourceLanguage" : "en",
   "strings" : {
     "Debug" : {},
+    "diagnostics.clear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        }
+      }
+    },
+    "diagnostics.clear.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear recorded events?"
+          }
+        }
+      }
+    },
+    "diagnostics.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "diagnostics.events" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Events recorded"
+          }
+        }
+      }
+    },
+    "diagnostics.included" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A report holds the app and iOS versions, this device's model, a summary of your settings and recent connection events. Machines appear as codes such as m-1a2b3c4d. It never holds machine names, addresses, user names, folders, session names, prompts, terminal text, keys or passwords."
+          }
+        }
+      }
+    },
+    "diagnostics.machines" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Machines"
+          }
+        }
+      }
+    },
+    "diagnostics.preview" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview"
+          }
+        }
+      }
+    },
+    "diagnostics.sent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Togo never sends this report. It leaves this device only when you share it."
+          }
+        }
+      }
+    },
+    "diagnostics.share" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share report"
+          }
+        }
+      }
+    },
     "Togo" : {},
     "cc.action.cancel" : {
       "extractionState" : "manual",

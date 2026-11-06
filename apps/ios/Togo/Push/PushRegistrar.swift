@@ -66,6 +66,7 @@ struct SystemNotificationPermissions: NotificationPermissions {
     /// hands back the same token or a new one each launch.
     func refresh() async {
         authorization = await permissions.authorization()
+        DiagnosticsRecorder.shared.push(authorization.diagnosticWord)
         if authorization.allowsPush { registerForRemote() }
     }
 
@@ -73,11 +74,14 @@ struct SystemNotificationPermissions: NotificationPermissions {
         let hex = token.map { String(format: "%02x", $0) }.joined()
         guard hex != apnsToken else { return }
         apnsToken = hex
+        DiagnosticsRecorder.shared.push("token_registered")
         let onTokenChange = self.onTokenChange
         Task { await onTokenChange() }
     }
 
     /// Registration fails on simulators without APNs and while offline. The last token stays;
     /// the next launch asks again.
-    func didFail(_ error: Error) {}
+    func didFail(_ error: Error) {
+        DiagnosticsRecorder.shared.push("registration_failed", error: error)
+    }
 }
