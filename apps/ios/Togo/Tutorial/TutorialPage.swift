@@ -169,7 +169,7 @@ struct ConnectionDiagram: View {
         .task {
             guard animated, !reduceMotion, !shown else { return }
             try? await Task.sleep(for: .milliseconds(250))
-            withAnimation(Motion.dropIn) { shown = true }
+            withAnimation(Motion.animation(.dropIn, reduce: reduceMotion)) { shown = true }
         }
     }
 
@@ -218,8 +218,8 @@ struct ConnectionDiagram: View {
                         .padding(.vertical, 3)
                         .background(Color.togoGrouped, in: .rect(cornerRadius: 4))
                         .opacity(complete ? 1 : 0)
-                        .offset(y: complete ? 0 : 6)
-                        .animation(Motion.motion(Motion.dropIn, reduce: reduceMotion).delay(Double(index) * 0.12), value: complete)
+                        .offset(y: complete || reduceMotion ? 0 : 6)
+                        .animation(Motion.animation(.dropIn, reduce: reduceMotion)?.delay(Double(index) * 0.12), value: complete)
                 }
             }
             .padding(8)

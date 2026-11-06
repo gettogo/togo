@@ -16,7 +16,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/session"
 )
 
-const fixturesDir = "../../../protocol/v1/fixtures/pending"
+const fixturesDir = "../../../protocol/v1/fixtures"
 
 func newStore(t *testing.T) *Store {
 	t.Helper()

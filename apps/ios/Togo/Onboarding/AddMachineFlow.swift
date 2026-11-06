@@ -296,7 +296,7 @@ enum ConnectPhase: Equatable, Sendable {
         if case .helper(let found) = phase { report = found }
         let record = HostRecord(
             id: profile.id, profile: profile, symbol: draft.symbol.rawValue,
-            helperPath: withHelper ? report?.path : nil, noHelper: !withHelper
+            helperPath: withHelper ? report?.path : nil, noHelper: !withHelper, wake: draft.wake
         )
         saving = true
         saveError = nil

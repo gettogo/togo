@@ -10,6 +10,7 @@ const MAX_COMMAND = 160;
 const DATE_PAST_SLACK = 60;
 const DATE_MAX_AHEAD = 8 * 3600;
 const STATUSES = ["needs_you", "working", "done", "ended", "failed", "offline"] as const;
+const EXIT_REASONS = ["exit", "interrupted", "error", "usage_limit"] as const;
 const REQUEST_ID_RE = /^r_[a-z2-7]{10}$/;
 const HOST_ID_RE = /^h_[a-z2-7]{26}$/;
 const ATTRIBUTES_TYPE = "TogoActivityAttributes";
@@ -28,6 +29,7 @@ export interface ContentState {
   since: number;
   requestId?: string | null;
   command?: string | null;
+  reason?: (typeof EXIT_REASONS)[number];
 }
 
 export interface LiveActivity {
@@ -64,6 +66,16 @@ export function parseLiveActivity(raw: unknown): LiveActivity {
       throw new FieldError("liveActivity.contentState.command");
     }
     state.command = cs.command;
+  }
+  if (cs.reason !== undefined) {
+    // Only a stopped agent has an exit reason, and only the fixed words may reach the device.
+    if (
+      !(typeof cs.reason === "string" && (EXIT_REASONS as readonly string[]).includes(cs.reason)) ||
+      (state.status !== "ended" && state.status !== "failed")
+    ) {
+      throw new FieldError("liveActivity.contentState.reason");
+    }
+    state.reason = cs.reason as (typeof EXIT_REASONS)[number];
   }
 
   const la: LiveActivity = { event: event as LiveEvent, contentState: state };

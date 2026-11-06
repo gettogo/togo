@@ -20,6 +20,8 @@ struct DeliveredRequest: Hashable, Sendable {
 @MainActor protocol DeliveredNotifications: AnyObject {
     func delivered() async -> [DeliveredRequest]
     func removeDelivered(requestIds: Set<String>) async
+    /// Removes the machine's "stopped answering" notifications.
+    func removeOffline(hostId: String) async
     /// "Could not send. Open Togo to answer." in the request's thread.
     func postSendFailure(threadID: String) async
 }
@@ -48,6 +50,11 @@ struct DeliveredRequest: Hashable, Sendable {
         var relay: any AnswerSending
         var live: (any LiveAnswering)?
         var notifications: any DeliveredNotifications
+        /// Runs a stopped session's command again, by the app's machine id and session id.
+        var runAgain: (@MainActor (HostID, String) -> Void)? = nil
+        /// Sends a reply over the machine's own connection, by the app's machine id, with the
+        /// session it belongs to. Never the relay.
+        var reply: (@MainActor (Reply, String?) -> Void)? = nil
     }
 
     private let deps: Dependencies
@@ -57,9 +64,13 @@ struct DeliveredRequest: Hashable, Sendable {
     }
 
     /// The user picked `actionIdentifier` on a notification. Returns the link to open for
-    /// Open; answers Approve and Deny in place.
+    /// Open, Run again and Reply; answers Approve and Deny in place. Run again and Reply open
+    /// the app on the session and act there, where the user sees what happens. `text` is what
+    /// the user typed for Reply.
     @discardableResult
-    func handle(actionIdentifier: String, userInfo: [AnyHashable: Any], target: String?) async -> DeepLink? {
+    func handle(
+        actionIdentifier: String, userInfo: [AnyHashable: Any], target: String?, text: String? = nil
+    ) async -> DeepLink? {
         switch actionIdentifier {
         case NotificationActionID.approve, NotificationActionID.deny:
             guard let info = userInfo[NotificationServiceCore.infoKey] as? [String: Any],
@@ -70,6 +81,28 @@ struct DeliveredRequest: Hashable, Sendable {
             let decision = actionIdentifier == NotificationActionID.approve ? "approve" : "deny"
             await answer(hostId: hostId, requestId: requestId, decision: decision, threadID: session ?? hostId)
             return nil
+        case NotificationActionID.runAgain:
+            if let info = userInfo[NotificationServiceCore.infoKey] as? [String: Any],
+               let hostId = info["hostId"] as? String,
+               let sessionId = (info["sessionId"] as? String).flatMap({ $0.isEmpty ? nil : $0 }),
+               let host = deps.pairings.pairing(hostId: hostId)?.appHostID {
+                deps.runAgain?(host, sessionId)
+            }
+            return target.flatMap(URL.init(string:)).flatMap(DeepLink.init(url:))
+        case NotificationActionID.reply:
+            if let info = userInfo[NotificationServiceCore.infoKey] as? [String: Any],
+               let hostId = info["hostId"] as? String, let text,
+               let host = deps.pairings.pairing(hostId: hostId)?.appHostID {
+                let session = (info["sessionId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                // A request that takes text gets the words as its answer; otherwise they go to
+                // the agent at its prompt.
+                if let requestId = info["requestId"] as? String {
+                    deps.reply?(.answer(host: host, requestID: requestId, text: text), session)
+                } else if let session {
+                    deps.reply?(.prompt(host: host, session: session, text: text), session)
+                }
+            }
+            return target.flatMap(URL.init(string:)).flatMap(DeepLink.init(url:))
         default:
             return target.flatMap(URL.init(string:)).flatMap(DeepLink.init(url:))
         }
@@ -156,6 +189,10 @@ struct DeliveredRequest: Hashable, Sendable {
             return notification.request.identifier
         }
         center.removeDeliveredNotifications(withIdentifiers: ids)
+    }
+
+    func removeOffline(hostId: String) async {
+        await OfflineNotifications.removeDelivered(hostId: hostId)
     }
 
     func postSendFailure(threadID: String) async {

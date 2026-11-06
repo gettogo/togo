@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Removing a machine always goes through a question first. `confirm` acts on the machine the
 /// user was asked about, once, so a stale dialog can never remove a second time.
@@ -20,6 +21,14 @@ struct MachineRemoval: Equatable {
     }
 }
 
+/// What the machines page needs to offer importing from an SSH config.
+struct MachineImport {
+    var make: () -> ImportHostsModel
+    /// Opens the add-machine form filled in from one imported host.
+    var openInForm: (MachineDraft) -> Void
+    var finished: (Int) -> Void
+}
+
 struct MachinesSettingsView: View {
     let machines: [SettingsMachine]
     let add: () -> Void
@@ -28,7 +37,12 @@ struct MachinesSettingsView: View {
     /// Removed machines still to be told to stop pushing to this iPhone.
     var removing: [PendingRemoval] = []
     var forgetRemoval: (String) -> Void = { _ in }
+    var machineImport: MachineImport?
+    /// The remove question names the kind of device whose key goes.
+    var isPad = UIDevice.current.userInterfaceIdiom == .pad
     @State private var removal = MachineRemoval()
+    @State private var importModel: ImportHostsModel?
+    @State private var draftToOpen: MachineDraft?
 
     var body: some View {
         Group {
@@ -46,6 +60,33 @@ struct MachinesSettingsView: View {
         }
         .navigationTitle(settingsText("settings.machines.title", "Machines"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let machineImport {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(settingsText("import.hosts.title", "Import from SSH config"), systemImage: "square.and.arrow.down") {
+                        importModel = machineImport.make()
+                    }
+                }
+            }
+        }
+        .sheet(item: $importModel, onDismiss: {
+            if let draft = draftToOpen {
+                draftToOpen = nil
+                machineImport?.openInForm(draft)
+            }
+        }) { model in
+            NavigationStack {
+                ImportHostsView(
+                    model: model,
+                    openInForm: { host in
+                        draftToOpen = MachineDraft(imported: host)
+                        importModel = nil
+                    },
+                    finish: { machineImport?.finished($0) }
+                )
+            }
+            .togoControls()
+        }
         .confirmationDialog(
             settingsText("settings.machines.remove.title", "Remove \(removal.pending?.name ?? "")?"),
             isPresented: Binding { removal.pending != nil } set: { if !$0 { removal.cancel() } },
@@ -55,11 +96,21 @@ struct MachinesSettingsView: View {
             Button(settingsText("settings.machines.remove.confirm", "Remove \(machine.name)"), role: .destructive) {
                 removal.confirm(remove)
             }
-        } message: { _ in
-            Text(settingsText(
-                "settings.machines.remove.message",
-                "Its sessions keep running on the machine. You can add it again at any time."
-            ))
+        } message: { machine in
+            Text(machine.removesKey
+                ? (isPad
+                    ? settingsText(
+                        "settings.machines.remove.key.message.ipad",
+                        "Togo removes this iPad's key from \(machine.name) so it can no longer sign in, then forgets the machine."
+                    )
+                    : settingsText(
+                        "settings.machines.remove.key.message.iphone",
+                        "Togo removes this iPhone's key from \(machine.name) so it can no longer sign in, then forgets the machine."
+                    ))
+                : settingsText(
+                    "settings.machines.remove.message",
+                    "Its sessions keep running on the machine. You can add it again at any time."
+                ))
         }
     }
 
@@ -95,8 +146,12 @@ struct MachinesSettingsView: View {
                 Text(settingsText("settings.machines.footer", "Tap a machine to edit it. Swipe left to remove it."))
             }
             .groupedRows()
-            if !removing.isEmpty {
-                PendingRemovalsSection(removals: removing, forget: forgetRemoval)
+            let unpairing = removing.filter { $0.kind == .unpair }
+            if !unpairing.isEmpty {
+                PendingRemovalsSection(removals: unpairing, forget: forgetRemoval)
+            }
+            ForEach(removing.filter { $0.kind != .unpair }) { removal in
+                PendingKeySection(removal: removal, forget: forgetRemoval)
             }
         }
         .groupedList()
@@ -136,6 +191,69 @@ private struct PendingRemovalsSection: View {
                 "settings.machines.forgetNow.footer",
                 "After Forget now, notifications may continue until you run togo devices revoke on that machine."
             ))
+        }
+        .groupedRows()
+    }
+}
+
+#if DEBUG
+extension MachinesSettingsView {
+    /// The page with the remove question already up, for snapshots.
+    init(machines: [SettingsMachine], isPad: Bool, asking machine: SettingsMachine) {
+        self.init(machines: machines, add: {}, edit: { _ in }, remove: { _ in }, isPad: isPad)
+        var removal = MachineRemoval()
+        removal.request(machine)
+        _removal = State(initialValue: removal)
+    }
+}
+#endif
+
+extension PendingRemoval {
+    /// What the user can do about a key still on a removed machine; nil for an unpair.
+    var footer: String? {
+        guard case .key(let comment, let manual) = kind else { return nil }
+        return manual
+            ? settingsText(
+                "settings.machines.removeKey.manual",
+                "Remove the line ending in \(comment) from ~/.ssh/authorized_keys on \(name)."
+            )
+            : settingsText(
+                "settings.machines.removeKey.later", "If \(name) can't be reached, run togo devices revoke on it later."
+            )
+    }
+}
+
+/// A removed machine that may still hold this device's key, with what to do about it below.
+private struct PendingKeySection: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let removal: PendingRemoval
+    let forget: (String) -> Void
+
+    var body: some View {
+        Section {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+            layout {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(settingsText("settings.machines.removeKey", "Remove key"))
+                        .foregroundStyle(Color.togoSnow)
+                    Text(removal.name)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.togoMute)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                Button(settingsText("settings.machines.forgetNow", "Forget now")) { forget(removal.id) }
+                    .font(.subheadline)
+                    .buttonStyle(.borderless)
+            }
+            .padding(.vertical, 4)
+            .frame(minHeight: 44)
+        } footer: {
+            if let footer = removal.footer {
+                Text(footer)
+            }
         }
         .groupedRows()
     }

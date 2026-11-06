@@ -1,0 +1,14 @@
+# Each line uses the motion roles or asks for no animation; neither check may flag them.
+withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
+.animation(Motion.animation(.fade, reduce: reduceMotion), value: x)
+.animation(Motion.animation(.dropIn, reduce: reduceMotion)?.delay(Double(index) * 0.12), value: complete)
+.motion(.confirm, value: configuration.isPressed)
+var transaction = Transaction(animation: nil)
+transaction.animation = nil
+transaction.animation = Motion.animation(.paneFlow, reduce: reduceMotion)
+transaction.animation = reduceMotion ? nil : Motion.animation(.paneFlow, reduce: false)
+Motion.animator(.fade, reduce: reduceMotion) { view.alpha = 0 }?.startAnimation()
+.animation(nil, value: x)
+// withAnimation(.easeOut) in a comment
+TimelineView(.animation) { context in
+if transaction.animation == nil { return }

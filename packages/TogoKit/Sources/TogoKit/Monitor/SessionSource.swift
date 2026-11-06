@@ -11,11 +11,17 @@ public protocol SessionSource: Sendable {
     func call(_ op: SessionOp) async throws -> Session?
     /// Applies to the next `snapshot`, which subscribes with this foreground flag.
     func setForeground(_ on: Bool) async
+    /// The machine's keep-awake state, or nil when the host has no `awake.v1`.
+    func awakeStatus() async throws -> AwakeStatus?
+    /// The machine's network addresses for waking it, or nil when the host has no `hostinfo.v1`.
+    func hostInfo() async throws -> HostInfo?
     func close() async
 }
 
 extension SessionSource {
     public func setForeground(_ on: Bool) async {}
+    public func awakeStatus() async throws -> AwakeStatus? { nil }
+    public func hostInfo() async throws -> HostInfo? { nil }
 }
 
 public enum SessionOp: Sendable {
@@ -78,6 +84,8 @@ public struct HelperSource: SessionSource {
     public func snapshot() async throws -> EventSnapshot { try await link.snapshot() }
     public func call(_ op: SessionOp) async throws -> Session? { try await link.call(op) }
     public func setForeground(_ on: Bool) async { await link.setForeground(on) }
+    public func awakeStatus() async throws -> AwakeStatus? { try await link.awakeStatus() }
+    public func hostInfo() async throws -> HostInfo? { try await link.hostInfo() }
     public func close() async { await link.close() }
 }
 
@@ -185,6 +193,16 @@ actor HelperLink {
             try await client.answer(requestId: requestId, decision: decision)
             return nil
         }
+    }
+
+    func awakeStatus() async throws -> AwakeStatus? {
+        guard capabilities.contains(Capability.awake) else { return nil }
+        return try await readyClient().awakeStatus()
+    }
+
+    func hostInfo() async throws -> HostInfo? {
+        guard capabilities.contains(Capability.hostInfo) else { return nil }
+        return try await readyClient().hostInfo()
     }
 
     func setForeground(_ on: Bool) {

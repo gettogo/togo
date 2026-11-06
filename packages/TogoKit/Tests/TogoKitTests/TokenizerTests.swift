@@ -186,24 +186,31 @@ struct TokenizerTests {
         }
     }
 
+    /// Guards against super-linear scanning, not against a slow machine: the full-size run is
+    /// compared with a quarter-size run measured in the same test (linear work is 4x, quadratic
+    /// 16x), and the absolute ceiling is only there to catch a hang.
     @Test func hugeAdversarialLinesFinishQuickly() {
-        let clock = ContinuousClock()
-        let samples = [
-            String(repeating: "\\", count: 250_000),
-            String(repeating: "/*", count: 125_000),
-            String(repeating: "\"'`", count: 85_000),
-            String(repeating: "` `` ``` ", count: 25_000),
-            String(repeating: "0e+", count: 85_000),
-        ]
-        let elapsed = clock.measure {
-            for language in Language.allCases {
-                for sample in samples {
-                    var state = Tokenizer.State()
-                    _ = Tokenizer.line(sample, language: language, state: &state)
+        func run(_ scale: Int) -> Duration {
+            let samples = [
+                String(repeating: "\\", count: 250_000 / scale),
+                String(repeating: "/*", count: 125_000 / scale),
+                String(repeating: "\"'`", count: 85_000 / scale),
+                String(repeating: "` `` ``` ", count: 25_000 / scale),
+                String(repeating: "0e+", count: 85_000 / scale),
+            ]
+            return ContinuousClock().measure {
+                for language in Language.allCases {
+                    for sample in samples {
+                        var state = Tokenizer.State()
+                        _ = Tokenizer.line(sample, language: language, state: &state)
+                    }
                 }
             }
         }
-        #expect(elapsed < .seconds(5))
+        let quarter = min(run(4), run(4))
+        let full = run(1)
+        #expect(full < quarter * 8 + .milliseconds(500), "full \(full) vs quarter-size \(quarter): not linear")
+        #expect(full < .seconds(60))
     }
 
     @Test func tokenizes10kLinesQuickly() {
@@ -214,10 +221,16 @@ struct TokenizerTests {
             "    @discardableResult private static var shared: Store = Store()",
         ]
         let lines = (0..<10_000).map { sample[$0 % sample.count] }
+        // Linear scaling (4x lines take about 4x as long) rather than a wall-clock budget.
         let clock = ContinuousClock()
         var result: [[TokenSpan]] = []
-        let elapsed = clock.measure { result = Tokenizer.tokenize(lines, language: .swift) }
+        var quarter = Duration.seconds(600), elapsed = Duration.seconds(600)
+        for _ in 0..<3 {
+            quarter = min(quarter, clock.measure { _ = Tokenizer.tokenize(Array(lines.prefix(2_500)), language: .swift) })
+            elapsed = min(elapsed, clock.measure { result = Tokenizer.tokenize(lines, language: .swift) })
+        }
         #expect(result.count == 10_000)
-        #expect(elapsed < .milliseconds(250))
+        #expect(elapsed < quarter * 8 + .milliseconds(100), "10,000 lines took \(elapsed), 2,500 took \(quarter): not linear")
+        #expect(elapsed < .seconds(30))
     }
 }

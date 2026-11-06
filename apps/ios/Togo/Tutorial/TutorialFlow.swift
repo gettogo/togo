@@ -121,7 +121,7 @@ struct TutorialFlow: View {
             transaction.disablesAnimations = true
             withTransaction(transaction, move)
         } else {
-            withAnimation(Motion.tabSettle, move)
+            withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion), move)
         }
     }
 
@@ -149,7 +149,7 @@ struct PageIndicator: View {
                     .frame(width: item == page ? 20 : 8, height: 4)
             }
         }
-        .animation(Motion.motion(Motion.tabSettle, reduce: reduceMotion), value: page)
+        .motion(.tabSettle, value: page)
         .frame(minHeight: 8)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(

@@ -101,7 +101,7 @@ struct ConnectPhaseView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.togoInk)
             .transition(.opacity)
-            .motion(Motion.fade, value: phase)
+            .motion(.fade, value: phase)
             .haptic(.connect, trigger: phase) { $0.isReady }
             .haptic(.error, trigger: phase) { $0.isFailure }
             .navigationTitle(machine)

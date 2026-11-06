@@ -28,7 +28,8 @@ const LiveWorking = "working"
 // for needs_you when the approval has one. Host is the machine's short
 // display name. TS is Unix milliseconds. Exit is set only for ended and
 // failed, Active (sessions working) only for offline, and Reminder only on
-// the one reminder for a needs_you still waiting.
+// the one reminder for a needs_you still waiting. AllowText, needs_you only,
+// is true when the approval takes a typed answer as well as its options.
 type PushPlaintext struct {
 	V         int      `json:"v"`
 	Kind      string   `json:"kind"`
@@ -43,9 +44,10 @@ type PushPlaintext struct {
 	Subject   *Subject `json:"subject,omitempty"`
 	Host      *string  `json:"host,omitempty"`
 
-	Exit     *SessionExit `json:"exit,omitempty"`
-	Active   *int         `json:"active,omitempty"`
-	Reminder bool         `json:"reminder,omitempty"`
+	Exit      *SessionExit `json:"exit,omitempty"`
+	Active    *int         `json:"active,omitempty"`
+	Reminder  bool         `json:"reminder,omitempty"`
+	AllowText bool         `json:"allowText,omitempty"`
 }
 
 // MarshalJSON writes options as [] for needs_you even when there are none,

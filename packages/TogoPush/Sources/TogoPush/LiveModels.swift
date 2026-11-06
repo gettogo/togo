@@ -29,17 +29,20 @@ public struct TogoActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable, Sendable {
         public var bib: String?
         public var agent: String
-        /// `needs_you`, `working` or `done`.
+        /// `needs_you`, `working`, `done`, `ended`, `failed` or `offline`.
         public var status: String
         public var waiting: Int
         /// Unix seconds when the current status began.
         public var since: Int
         public var requestId: String?
         public var command: String?
+        /// Exit reason word (`exit`, `interrupted`, `error` or `usage_limit`); only set when
+        /// `status` is `ended` or `failed`.
+        public var reason: String?
 
         public init(
             bib: String?, agent: String, status: String, waiting: Int, since: Int, requestId: String?,
-            command: String?
+            command: String?, reason: String? = nil
         ) {
             self.bib = bib
             self.agent = agent
@@ -48,6 +51,7 @@ public struct TogoActivityAttributes: ActivityAttributes {
             self.since = since
             self.requestId = requestId
             self.command = command
+            self.reason = reason
         }
 
         /// A field a pushed state leaves out takes a default instead of failing the decode:
@@ -62,6 +66,7 @@ public struct TogoActivityAttributes: ActivityAttributes {
             since = (try? c.decodeIfPresent(Int.self, forKey: .since)) ?? Int(Date().timeIntervalSince1970)
             requestId = try? c.decodeIfPresent(String.self, forKey: .requestId)
             command = try? c.decodeIfPresent(String.self, forKey: .command)
+            reason = try? c.decodeIfPresent(String.self, forKey: .reason)
         }
     }
 

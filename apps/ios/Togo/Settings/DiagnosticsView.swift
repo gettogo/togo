@@ -24,9 +24,14 @@ struct DiagnosticsView: View {
     }
 
     private func load() async {
+        summary = await Self.summary(recorder: recorder, settings: settings)
+    }
+
+    /// The report as it stands, with its file written for sharing.
+    static func summary(recorder: DiagnosticsRecorder, settings: AppSettings) async -> DiagnosticsSummary {
         let report = await recorder.report(settings: settings)
-        summary = DiagnosticsSummary(
-            events: report.events.count, machines: report.machines.count, text: report.text(), file: Self.write(report)
+        return DiagnosticsSummary(
+            events: report.events.count, machines: report.machines.count, text: report.text(), file: write(report)
         )
     }
 

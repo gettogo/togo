@@ -79,6 +79,11 @@ final class FakeSource: SessionSource {
         var ops: [String] = []
         var isClosed = false
         var snapshotError: (any Error)?
+        var awake: AwakeStatus?
+        var awakeCalls = 0
+        var awakeGate: Gate?
+        var hostInfo: HostInfo?
+        var hostInfoCalls = 0
     }
 
     let events: AsyncStream<EventEnvelope>
@@ -116,6 +121,24 @@ final class FakeSource: SessionSource {
         state.withLock { $0.foregroundFlags.append(on) }
     }
 
+    func hostInfo() async throws -> HostInfo? {
+        state.withLock { state in
+            state.hostInfoCalls += 1
+            return state.hostInfo
+        }
+    }
+
+    func setHostInfo(_ info: HostInfo?) { state.withLock { $0.hostInfo = info } }
+    var hostInfoCalls: Int { state.withLock { $0.hostInfoCalls } }
+
+    func awakeStatus() async throws -> AwakeStatus? {
+        if let gate = state.withLock({ $0.awakeGate }) { await gate.passIfOpen() }
+        return state.withLock { state in
+            state.awakeCalls += 1
+            return state.awake
+        }
+    }
+
     func call(_ op: SessionOp) async throws -> Session? {
         state.withLock { $0.ops.append("\(op)") }
         if case .create(let params) = op { return MonitorFixtures.session(params.name ?? "new") }
@@ -130,6 +153,10 @@ final class FakeSource: SessionSource {
     func emit(_ envelope: EventEnvelope) { sink.yield(envelope) }
     func drop() { sink.finish() }
     func failSnapshots(with error: any Error) { state.withLock { $0.snapshotError = error } }
+    func setAwake(_ status: AwakeStatus?, gate: Gate? = nil) {
+        state.withLock { $0.awake = status; $0.awakeGate = gate }
+    }
+    var awakeCalls: Int { state.withLock { $0.awakeCalls } }
 
     var snapshotCalls: Int { state.withLock { $0.snapshotCalls } }
     var foregroundFlags: [Bool] { state.withLock { $0.foregroundFlags } }
@@ -207,6 +234,13 @@ enum MonitorFixtures {
             requestId: requestId, sessionId: "s1", bib: nil, agent: "claude", source: .hook, title: title,
             detail: nil, snippet: "npm test", options: [ApprovalOption(n: 1, label: "Yes", role: .approve)],
             allowText: false, createdAt: epoch, expiresAt: nil
+        )
+    }
+
+    static func awake(held: Bool = true, reason: AwakeReason = .active) -> AwakeStatus {
+        AwakeStatus(
+            mode: .plugged, held: held, reason: reason, power: "ac", batteryFloor: 20, platformSupported: true,
+            needsAdmin: false
         )
     }
 

@@ -84,9 +84,13 @@ public struct HelloResult: Codable, Hashable, Sendable {
 
 public enum SessionStatus: WireEnum {
     case working, needsYou, done, idle, exited
+    /// The agent exited on its own with code 0 or after Ctrl-C (lifecycle.v1).
+    case ended
+    /// The agent crashed, reported an error or stopped on a usage limit (lifecycle.v1).
+    case failed
     case unknown(String)
 
-    public static let known: [SessionStatus] = [.working, .needsYou, .done, .idle, .exited]
+    public static let known: [SessionStatus] = [.working, .needsYou, .done, .idle, .exited, .ended, .failed]
 
     public var rawValue: String {
         switch self {
@@ -95,6 +99,8 @@ public enum SessionStatus: WireEnum {
         case .done: "done"
         case .idle: "idle"
         case .exited: "exited"
+        case .ended: "ended"
+        case .failed: "failed"
         case .unknown(let value): value
         }
     }
@@ -113,15 +119,19 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
     public var managed: Bool
     public var muted: Bool = false
     public var meta: SessionMeta = .init()
-    /// launch.v1 and lifecycle.v1 fields, kept as sent: nil when the helper
-    /// omits the key, .null when it sends null.
-    public var command: JSONValue? = nil
-    public var exit: JSONValue? = nil
+    /// launch.v1: the argv the agent was started with, program then args; nil for shell and
+    /// unmanaged sessions and from helpers without launch.v1.
+    public var command: [String]? = nil
+    /// lifecycle.v1: how the agent ended while `status` is `ended` or `failed`, else nil.
+    public var exit: SessionExit? = nil
+    /// Whether the helper sent `command` and `exit` (as null or a value), so a session
+    /// encodes back the way it arrived. Never part of equality.
+    private var launchKeys = KeyPresence()
 
     public init(
         id: String, bib: String?, name: String, agent: String, cwd: String, createdAt: Date,
         status: SessionStatus, activity: String?, attachedClients: Int, managed: Bool,
-        muted: Bool = false, meta: SessionMeta = .init()
+        muted: Bool = false, meta: SessionMeta = .init(), command: [String]? = nil, exit: SessionExit? = nil
     ) {
         self.id = id
         self.bib = bib
@@ -135,6 +145,9 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         self.managed = managed
         self.muted = muted
         self.meta = meta
+        self.command = command
+        self.exit = exit
+        launchKeys = KeyPresence(present: command != nil || exit != nil)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -157,8 +170,9 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         // Helpers without mute.v1 and events.v1 omit both keys.
         muted = try container.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         meta = try container.decodeIfPresent(SessionMeta.self, forKey: .meta) ?? .init()
-        command = container.contains(.command) ? try container.decode(JSONValue.self, forKey: .command) : nil
-        exit = container.contains(.exit) ? try container.decode(JSONValue.self, forKey: .exit) : nil
+        command = try container.decodeIfPresent([String].self, forKey: .command)
+        exit = try container.decodeIfPresent(SessionExit.self, forKey: .exit)
+        launchKeys = KeyPresence(present: container.contains(.command) || container.contains(.exit))
     }
 
     // bib and activity are required keys in the schema, so nil encodes as null, not as a missing key.
@@ -176,9 +190,20 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         try container.encode(managed, forKey: .managed)
         try container.encode(muted, forKey: .muted)
         try container.encode(meta, forKey: .meta)
-        try container.encodeIfPresent(command, forKey: .command)
-        try container.encodeIfPresent(exit, forKey: .exit)
+        if launchKeys.present || command != nil || exit != nil {
+            try container.encode(command, forKey: .command)
+            try container.encode(exit, forKey: .exit)
+        }
     }
+}
+
+/// Remembers whether a decoded value carried optional keys. Always equal, so it never
+/// changes how two values compare or hash.
+struct KeyPresence: Hashable, Sendable {
+    var present = false
+
+    static func == (lhs: KeyPresence, rhs: KeyPresence) -> Bool { true }
+    func hash(into hasher: inout Hasher) {}
 }
 
 public struct SessionMeta: Codable, Hashable, Sendable {
@@ -260,8 +285,17 @@ public struct CreateSessionParams: Codable, Hashable, Sendable {
     public var name: String?
     public var cols: Int?
     public var rows: Int?
+    /// With agent `custom`: the program to run, a bare name looked up on the host's login PATH.
+    public var program: String?
+    /// Flags for the program, each delivered as one argv entry and never read by a shell.
+    public var args: [String]?
 
-    public init(agent: String? = nil, cwd: String? = nil, name: String? = nil, cols: Int? = nil, rows: Int? = nil) {
+    public init(
+        agent: String? = nil, cwd: String? = nil, name: String? = nil, cols: Int? = nil, rows: Int? = nil,
+        program: String? = nil, args: [String]? = nil
+    ) {
+        self.program = program
+        self.args = args
         self.agent = agent
         self.cwd = cwd
         self.name = name

@@ -26,6 +26,103 @@ struct HostMonitorTests {
         await monitor.stop()
     }
 
+    @Test func monitorFetchesAwakeAfterSubscribe() async throws {
+        let source = FakeSource(
+            snapshots: [EventSnapshot(seq: 0, sessions: [], approvals: [])],
+            capabilities: [Capability.events, Capability.awake]
+        )
+        source.setAwake(F.awake())
+        let monitor = F.monitor(ScriptedFactory([.source(source)]), clock: ManualClock())
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.last?.awake == F.awake() })
+        #expect(source.awakeCalls == 1)
+        await monitor.stop()
+    }
+
+    @Test func awakeEventUpdatesSnapshot() async throws {
+        let source = FakeSource(
+            snapshots: [EventSnapshot(seq: 0, sessions: [], approvals: [])],
+            capabilities: [Capability.events, Capability.awake]
+        )
+        source.setAwake(F.awake(held: false, reason: .idle))
+        let monitor = F.monitor(ScriptedFactory([.source(source)]), clock: ManualClock())
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.last?.awake?.held == false })
+        source.emit(F.event(1, .awake(F.awake(held: true, reason: .grace))))
+        #expect(await eventually { log.last?.awake == F.awake(held: true, reason: .grace) })
+        await monitor.stop()
+    }
+
+    @Test func resyncReadsAwakeAgain() async throws {
+        let source = FakeSource(
+            snapshots: [
+                EventSnapshot(seq: 0, sessions: [], approvals: []),
+                EventSnapshot(seq: 4, sessions: [], approvals: []),
+            ],
+            capabilities: [Capability.events, Capability.awake]
+        )
+        source.setAwake(F.awake(held: false, reason: .idle))
+        let monitor = F.monitor(ScriptedFactory([.source(source)]), clock: ManualClock())
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.last?.awake?.held == false })
+        source.setAwake(F.awake(held: true, reason: .grace))
+        source.emit(F.event(3, .session(F.session("gap"))))
+        #expect(await eventually { source.awakeCalls == 2 && log.last?.awake == F.awake(held: true, reason: .grace) })
+        await monitor.stop()
+    }
+
+    @Test func resyncKeepsAwakeWhenTheReadFails() async throws {
+        let source = FakeSource(
+            snapshots: [
+                EventSnapshot(seq: 0, sessions: [], approvals: []),
+                EventSnapshot(seq: 4, sessions: [], approvals: []),
+            ],
+            capabilities: [Capability.events, Capability.awake]
+        )
+        source.setAwake(F.awake(held: true, reason: .active))
+        let monitor = F.monitor(ScriptedFactory([.source(source)]), clock: ManualClock())
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.last?.awake?.held == true })
+        source.setAwake(nil)
+        source.emit(F.event(3, .session(F.session("gap"))))
+        #expect(await eventually { source.awakeCalls == 2 && source.snapshotCalls == 2 })
+        #expect(log.last?.awake == F.awake(held: true, reason: .active))
+        await monitor.stop()
+    }
+
+    @Test func firstSnapshotDoesNotWaitForAwake() async throws {
+        let gate = Gate()
+        let source = FakeSource(
+            snapshots: [EventSnapshot(seq: 0, sessions: [F.session("s1")], approvals: [])],
+            capabilities: [Capability.events, Capability.awake]
+        )
+        source.setAwake(F.awake(), gate: gate)
+        let monitor = F.monitor(ScriptedFactory([.source(source)]), clock: ManualClock())
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.sessionIDs == ["s1"] })
+        #expect(log.last?.awake == nil)
+        gate.open()
+        #expect(await eventually { log.last?.awake == F.awake() })
+        await monitor.stop()
+    }
+
+    @Test func noAwakeWithoutCapability() async throws {
+        let source = FakeSource(snapshots: [EventSnapshot(seq: 0, sessions: [], approvals: [])])
+        source.setAwake(F.awake())
+        let monitor = F.monitor(ScriptedFactory([.source(source)]), clock: ManualClock())
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.reach == .online })
+        #expect(source.awakeCalls == 0)
+        #expect(log.last?.awake == nil)
+        await monitor.stop()
+    }
+
     @Test func seqGapResubscribes() async throws {
         let replacement = EventSnapshot(seq: 4, sessions: [F.session("s9")], approvals: [F.approval("r9")])
         let source = FakeSource(snapshots: [EventSnapshot(seq: 0, sessions: [], approvals: []), replacement])

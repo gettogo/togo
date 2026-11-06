@@ -236,14 +236,19 @@ final class ScriptedHelper: HelperCalling {
     private let log = Mutex<(requests: [Request], calls: Int)>(([], 0))
     private let client: HelperClient
     private let ready = Mutex<Task<Void, any Error>?>(nil)
+    private let prompted = Mutex(false)
+    /// While false, every call fails as a machine out of reach would.
+    let reachable = Mutex(true)
+    struct Unreachable: Error {}
 
-    init() {
+    init(capabilities: [String] = ["session.v1", "fs.v1", "git.v1", "gitwrite.v1", "ports.v1", "hostinfo.v1"]) {
         let channel = ScriptedChannel()
+        let advertised = capabilities.map { "\"\($0)\"" }.joined(separator: ",")
         client = HelperClient(channel: channel, callTimeout: .seconds(5))
         channel.respond = { [unowned self] id, method, params in
             log.withLock { $0.requests.append(Request(method: method, params: params)) }
             if method == "hello" {
-                return #"{"jsonrpc":"2.0","id":\#(id),"result":{"protocol":1,"helper":{"version":"t","os":"darwin","arch":"arm64","hostname":"h"},"capabilities":["session.v1","fs.v1","git.v1","gitwrite.v1","ports.v1"]}}"#
+                return #"{"jsonrpc":"2.0","id":\#(id),"result":{"protocol":1,"helper":{"version":"t","os":"darwin","arch":"arm64","hostname":"h"},"capabilities":[\#(advertised)]}}"#
             }
             let body = script.withLock { $0[method] } ?? #""result":{}"#
             return #"{"jsonrpc":"2.0","id":\#(id),\#(body)}"#
@@ -252,6 +257,8 @@ final class ScriptedHelper: HelperCalling {
 
     var requests: [Request] { log.withLock { $0.requests.filter { $0.method != "hello" } } }
     var calls: Int { log.withLock { $0.calls } }
+    /// Whether the latest call came with a prompter.
+    var lastPrompterWasGiven: Bool { prompted.withLock { $0 } }
 
     func answer(_ method: String, _ result: String) {
         script.withLock { $0[method] = #""result":\#(result)"# }
@@ -265,6 +272,8 @@ final class ScriptedHelper: HelperCalling {
         _ record: HostRecord, prompter: (any ConnectionPrompter)?, _ body: @Sendable (HelperClient) async throws -> T
     ) async throws -> T {
         log.withLock { $0.calls += 1 }
+        prompted.withLock { $0 = prompter != nil }
+        guard reachable.withLock({ $0 }) else { throw Unreachable() }
         let client = self.client
         let hello = ready.withLock { task in
             if let task { return task }
@@ -276,7 +285,14 @@ final class ScriptedHelper: HelperCalling {
         return try await body(client)
     }
 
-    func drop(_ id: UUID) async {}
+    /// How many requests had been made at each channel close.
+    let dropsAt = Mutex<[Int]>([])
+
+    func drop(_ id: UUID) async {
+        let count = requests.count
+        dropsAt.withLock { $0.append(count) }
+    }
+
     func dropAll() async {}
 }
 

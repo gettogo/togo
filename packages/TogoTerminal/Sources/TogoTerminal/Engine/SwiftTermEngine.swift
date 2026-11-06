@@ -26,6 +26,16 @@ import UIKit
     static let maximumTitleLength = 256
 
     let terminalView: TogoTerminalView
+    /// Speaks new output while VoiceOver runs, this terminal is focused and the setting is on.
+    let outputFeed = OutputFeed(announcer: OutputAnnouncer(clock: ContinuousClock()))
+    /// The words VoiceOver hears around terminal text; the app sets its localized ones.
+    public var accessibilityWords = AccessibilityWords.english
+    /// The screen is read at most this often while the feed listens; the quiet spell is 1.5 s.
+    static let screenReadInterval: Duration = .milliseconds(250)
+    private var screenReadPending = false
+    /// A screen read off the main thread, handed to the feed when it asks.
+    private var readScreen: TerminalScreen?
+    private var cursorLineCache: (value: String?, age: () -> Duration)?
     private let bridge = DelegateBridge()
     private var settings: TerminalSettings
     private var scrollRouter = ScrollRouter()
@@ -61,6 +71,19 @@ import UIKit
         terminalView.onPaste = { [weak self] text in self?.paste(text) }
         terminalView.onCopy = { [weak self] text in self?.onClipboardWrite(text) }
         terminalView.extendedKeyMode = { [weak self] in self?.modifyKeys.mode ?? .legacy }
+        terminalView.cursorLine = { [weak self] in self?.cursorLine() }
+        outputFeed.screen = { [weak self] in self?.readScreen ?? self?.liveScreen() }
+        outputFeed.voiceOverRunning = { UIAccessibility.isVoiceOverRunning }
+        outputFeed.focused = { [weak self] in self?.terminalView.hasFocus ?? false }
+        outputFeed.onActiveChange = { [weak self] in self?.terminalView.notifyUpdateChanges = $0 }
+        outputFeed.announcer.announce = { text in
+            // Queued, so VoiceOver finishes what it is saying and SwiftTerm's layout notices do not cut it off.
+            let queued = NSAttributedString(string: text, attributes: [.accessibilitySpeechQueueAnnouncement: true])
+            UIAccessibility.post(notification: .announcement, argument: queued)
+        }
+        terminalView.onFocusChange = { [weak self] in self?.outputFeed.refresh() }
+        terminalView.onUserInput = { [weak self] in self?.outputFeed.noteInput() }
+        outputFeed.observeAccessibilityChanges()
         apply(settings)
         apply(theme)
     }
@@ -108,6 +131,7 @@ import UIKit
         }
         terminalView.setCursorStyle(Self.cursorStyle(for: settings))
         terminalView.optionAsMetaKey = settings.optionAsMeta
+        outputFeed.enabled = settings.readNewOutput
     }
 
     public func apply(_ theme: TerminalTheme) {
@@ -212,6 +236,53 @@ import UIKit
         terminalView.visibleRowsText(row..<(row + 1)).first ?? ""
     }
 
+    /// The live screen, or nil while scrolled back: then the rows shown are not the live ones.
+    func liveScreen() -> TerminalScreen? {
+        guard let input = terminalView.terminalInputStateSnapshot(), !isScrolledBack(input) else { return nil }
+        return TerminalScreen(rows: terminalView.visibleRowsText(0..<input.dimensions.rows), isAlternate: input.isAlternateBuffer)
+    }
+
+    private func isScrolledBack(_ input: TerminalInputStateSnapshot) -> Bool {
+        !input.isAlternateBuffer && terminalView.canScroll && terminalView.scrollPosition < 1
+    }
+
+    /// Rows changed. One read follows `screenReadInterval` later, whatever the frame rate, and
+    /// never inside the delegate call or a frame. The rows are copied off the main thread
+    /// (SwiftTerm's `visibleRowsText` takes its own lock); only the comparison runs here.
+    func screenChanged() {
+        guard !screenReadPending else { return }
+        screenReadPending = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.screenReadInterval)
+            guard let self else { return }
+            defer { screenReadPending = false }
+            guard outputFeed.isActive,
+                  let input = terminalView.terminalInputStateSnapshot(), !isScrolledBack(input) else { return }
+            let source = RowSource(view: terminalView)
+            let rows = await Task.detached(priority: .utility) {
+                source.view.visibleRowsText(0..<input.dimensions.rows)
+            }.value
+            readScreen = TerminalScreen(rows: rows, isAlternate: input.isAlternateBuffer)
+            outputFeed.screenChanged()
+            readScreen = nil
+        }
+    }
+
+    /// "Cursor line, …", or nil while the cursor is hidden or the view is scrolled back.
+    /// VoiceOver asks after every frame, so one read serves for `screenReadInterval`.
+    func cursorLine() -> String? {
+        if let cache = cursorLineCache, cache.age() < Self.screenReadInterval { return cache.value }
+        var value: String?
+        if !terminalView.cursorHidden.load(ordering: .relaxed),
+           let input = terminalView.terminalInputStateSnapshot(), !isScrolledBack(input) {
+            let state = terminalView.terminalStateSnapshot()
+            let row = state.visibleRows.first { $0.row == state.cursor.row }?.text
+            value = TerminalAccessibility.cursorLine(row, words: accessibilityWords)
+        }
+        cursorLineCache = (value, stopwatch(ContinuousClock()))
+        return value
+    }
+
     var mouseReporting: Bool {
         (terminalView.terminalInputStateSnapshot()?.mouseMode ?? .off) != .off
     }
@@ -287,8 +358,10 @@ import UIKit
     }
 
     /// SwiftTerm's input queue keeps engine writes ordered with keyboard and IME input.
+    /// Every engine write is the user's: key bar keys, pastes, gestures and typed text.
     private func write(_ bytes: [UInt8]) {
         guard !bytes.isEmpty else { return }
+        outputFeed.noteInput()
         terminalView.send(data: bytes[...])
     }
 
@@ -360,6 +433,12 @@ import UIKit
     }
 }
 
+/// Carries the view to a background read. Only `visibleRowsText`, which SwiftTerm makes safe
+/// from any thread, is called there.
+private struct RowSource: @unchecked Sendable {
+    let view: TogoTerminalView
+}
+
 /// Receives SwiftTerm's delegate calls so `SwiftTermEngine`'s public type does not expose a
 /// SwiftTerm conformance.
 @MainActor private final class DelegateBridge: TerminalViewDelegate {
@@ -398,7 +477,9 @@ import UIKit
         engine?.clipboardForRemote()
     }
 
-    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {
+        engine?.screenChanged()
+    }
 }
 
 extension SwiftTermEngine: GestureTarget {

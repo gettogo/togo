@@ -226,7 +226,7 @@ struct ComposeBar: View {
             }
         }
         .background(Color.togoInk)
-        .motion(Motion.fade, value: model.images.phase)
+        .motion(.fade, value: model.images.phase)
         .motion(.fade, value: dictationStage)
         .onDisappear {
             // Leaving the bar ends a dictation; what was heard stays in the draft.
@@ -324,7 +324,7 @@ struct ComposeBar: View {
         }
         .disabled(!model.canSend)
         .accessibilityLabel(ComposeCopy.send)
-        .motion(Motion.confirm, value: model.canSend)
+        .motion(.confirm, value: model.canSend)
     }
 }
 

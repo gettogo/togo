@@ -1,9 +1,11 @@
 import SwiftUI
+import TogoKit
 
 struct AboutView: View {
     static let sourceURL = URL(string: "https://github.com/gettogo/togo")!
 
     let appVersion: String
+    let settings: AppSettings
     let machines: [SettingsMachine]
 
     var body: some View {
@@ -34,6 +36,11 @@ struct AboutView: View {
                 .groupedRows()
             }
             Section {
+                NavigationLink {
+                    ReportProblemView(settings: settings, appVersion: appVersion, machines: machines)
+                } label: {
+                    Text(settingsText("settings.about.report", "Report a problem"))
+                }
                 NavigationLink {
                     AcknowledgmentsView()
                 } label: {

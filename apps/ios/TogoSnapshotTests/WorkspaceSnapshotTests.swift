@@ -18,15 +18,19 @@ struct WorkspaceSnapshotTests {
     }
 
     private static func machine(_ reachability: Reachability) -> MachineSection {
-        MachineSection(
+        var failed = row("06", "tests", .failed, cwd: "/Users/sam/src/tests")
+        failed.exit = SessionExit(code: 1, reason: .exit)
+        return MachineSection(
             id: macbook, name: "MacBook", symbol: .laptop, reachability: reachability,
             helper: .present(version: "0.3.0", live: true),
             sessions: [
                 row("01", "api", .working, cwd: "/Users/sam/src/api"),
                 row("04", "app", .needsYou, cwd: "/Users/sam/src/app"),
                 row("05", "docs", agent: "Codex", .idle, cwd: "/Users/sam/src/docs"),
+                failed,
             ],
-            lastSeen: Samples.now
+            lastSeen: Samples.now,
+            capabilities: [Capability.events, Capability.launch, Capability.lifecycle]
         )
     }
 
@@ -63,6 +67,13 @@ struct WorkspaceSnapshotTests {
     @Test func oneTabLive() {
         assertScreen(named: "one-tab") {
             screen()
+        }
+    }
+
+    /// The agent stopped: the header says how, and Run again sits beside the other buttons.
+    @Test func stoppedSession() {
+        assertScreen(named: "stopped") {
+            screen(tabs: ["s-06"], selected: "s-06")
         }
     }
 

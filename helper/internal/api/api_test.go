@@ -32,6 +32,28 @@ var fixtureNeedsFake = map[string]bool{
 	"tmux-unavailable.json": true, "ports.list.json": true,
 	"events.subscribe.json": true, "events.keepalive.json": true, "session.setMute.json": true,
 	"approval.list.json": true, "approval.answer-conflict.json": true,
+	// Served by the package that owns the method, on its own harness.
+	"agents.check.json":             true,
+	"authkeys.remove-symlink.json":  true,
+	"authkeys.remove.json":          true,
+	"awake.set-needs-admin.json":    true,
+	"awake.set.json":                true,
+	"awake.status.json":             true,
+	"host.info.json":                true,
+	"notify.get.json":               true,
+	"notify.set-bad.json":           true,
+	"notify.set.json":               true,
+	"session.create-args.json":      true,
+	"session.create-bad-args.json":  true,
+	"session.create-custom.json":    true,
+	"session.dismiss.json":          true,
+	"session.list-ended.json":       true,
+	"session.relaunch-running.json": true,
+	"session.relaunch.json":         true,
+	"session.restorable.json":       true,
+	"session.restore.json":          true,
+	"session.sendText-shell.json":   true,
+	"session.sendText.json":         true,
 }
 
 type fixture struct {

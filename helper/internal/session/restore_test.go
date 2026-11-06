@@ -386,11 +386,11 @@ func seedRestorable(t *testing.T, svc *session.Service, cwd string) {
 	}
 }
 
-// runFixture plays the pending fixture name against a and compares the
+// runFixture plays the fixture name against a and compares the
 // last response, with <home> standing for home.
 func runFixture(t *testing.T, a *api.API, home, name string) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "protocol", "v1", "fixtures", "pending", name+".json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "protocol", "v1", "fixtures", name+".json"))
 	if err != nil {
 		t.Fatal(err)
 	}

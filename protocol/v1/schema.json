@@ -2131,7 +2131,7 @@
       "additionalProperties": false
     },
     "PushPlaintext": {
-      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting.",
+      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting. allowText, optional and only on needs_you, is true when the approval takes a typed answer (the phone offers Reply); the answer itself still travels only over SSH.",
       "type": "object",
       "properties": {
         "v": {
@@ -2218,6 +2218,10 @@
         },
         "reminder": {
           "const": true
+        },
+        "allowText": {
+          "description": "Optional, needs_you only: true when the approval takes a typed answer as well as its options. Absent means false.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -2307,7 +2311,7 @@
         },
         {
           "if": { "properties": { "kind": { "const": "needs_you" } } },
-          "else": { "properties": { "reminder": false } }
+          "else": { "properties": { "reminder": false, "allowText": false } }
         }
       ]
     },
@@ -2436,6 +2440,15 @@
             "null"
           ],
           "maxLength": 160
+        },
+        "reason": {
+          "description": "Present only when status is ended or failed: the exit reason word of the session. Never carries exit detail.",
+          "enum": [
+            "exit",
+            "interrupted",
+            "error",
+            "usage_limit"
+          ]
         }
       },
       "required": [
@@ -2447,6 +2460,21 @@
         "requestId",
         "command"
       ],
+      "if": {
+        "required": [
+          "reason"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "enum": [
+              "ended",
+              "failed"
+            ]
+          }
+        }
+      },
       "additionalProperties": false
     },
     "LiveAttributes": {

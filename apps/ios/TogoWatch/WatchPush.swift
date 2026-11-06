@@ -4,8 +4,8 @@ import UserNotifications
 import WatchKit
 
 /// What only the Watch's application delegate hears: its push token, the silent pushes that
-/// keep the request list and complication current, and Approve or Deny on a phone
-/// notification shown on the Watch.
+/// keep the request list and complication current, and the actions on a phone notification
+/// shown on the Watch: Approve or Deny, Reply, and Run again, which the phone carries out.
 ///
 /// Request alerts come from the phone and are mirrored here with their actions; the Watch
 /// gets no alerts of its own. Approve carries `authenticationRequired`, so watchOS asks for
@@ -26,9 +26,12 @@ import WatchKit
             pending: pending, pairings: pairings,
             sender: RelayAnswerSender(keys: keys, pending: pending, clock: { Date() })
         ))
-        core = NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { Date() })
+        core = NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { Date() },
+            doneSilent: { SharedSettings.readDoneSilent(UserDefaults(suiteName: SharedGroup.watch)) })
         link = WatchConnectivityClient(store: store, pairings: pairings, keys: keys)
         super.init()
+        store.sendReply = { [link] in await link.sendReply($0) }
+        store.sendRunAgain = { [link] in await link.sendRunAgain($0) }
     }
 
     func applicationDidFinishLaunching() {
@@ -64,7 +67,35 @@ import WatchKit
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
     ) async {
         let action = response.actionIdentifier
-        let info = response.notification.request.content.userInfo[NotificationServiceCore.infoKey] as? [String: Any]
+        let content = response.notification.request.content
+        let info = content.userInfo[NotificationServiceCore.infoKey] as? [String: Any]
+        if action == UNNotificationDefaultActionIdentifier,
+           let route = ReplyRoute(userInfo: content.userInfo[ReplyRoute.key] as? [String: String]) {
+            // The notice for a reply that did not go: open its reply screen, words and all.
+            await open(route)
+            return
+        }
+        if action == NotificationActionID.reply {
+            let text = (response as? UNTextInputNotificationResponse)?.userText ?? ""
+            let hostId = info?["hostId"] as? String, requestId = info?["requestId"] as? String
+            let sessionId = (info?["sessionId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            guard let hostId else { return }
+            // The phone resolves the helper's host id to its machine.
+            let target: WatchReplyMessage.Target? = requestId.map { .answer(hostId: hostId, requestId: $0) }
+                ?? sessionId.map { .prompt(machineId: hostId, sessionId: $0) }
+            guard let target else { return }
+            let route = ReplyRoute(target: target, title: content.title)
+            await reply(route, text: text, notification: response.notification.request.identifier)
+            return
+        }
+        if action == NotificationActionID.runAgain {
+            // The phone starts it over its own connection, as it does for its own notification.
+            guard let hostId = info?["hostId"] as? String,
+                  let sessionId = (info?["sessionId"] as? String).flatMap({ $0.isEmpty ? nil : $0 })
+            else { return }
+            await runAgain(hostId: hostId, sessionId: sessionId, notification: response.notification.request.identifier)
+            return
+        }
         guard action == NotificationActionID.approve || action == NotificationActionID.deny,
               let requestId = info?["requestId"] as? String, let hostId = info?["hostId"] as? String
         else { return }
@@ -78,15 +109,45 @@ import WatchKit
         [.banner, .list, .sound]
     }
 
-    private func answer(hostId: String, requestId: String, decision: String) async {
-        await store.answerFromNotification(hostId: hostId, requestId: requestId, decision: decision)
-        guard let notice = store.failureNotice(requestId) else { return }
+    /// A reply typed on a notification goes through the phone. When it does not go, the words
+    /// wait in its reply screen and a notice says why; tapping the notice opens that screen.
+    private func reply(_ route: ReplyRoute, text: String, notification: String) async {
+        guard let notice = await store.replyFromNotification(target: route.target, text: text, notification: notification)
+        else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Togo"
+        content.title = WatchCopy.noticeTitle
+        content.body = notice
+        content.categoryIdentifier = NotificationCategoryID.info
+        content.userInfo = [ReplyRoute.key: route.userInfo]
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        )
+    }
+
+    private func runAgain(hostId: String, sessionId: String, notification: String) async {
+        guard let notice = await store.runAgainFromNotification(
+            hostId: hostId, sessionId: sessionId, notification: notification
+        ) else { return }
+        await post(notice: notice)
+    }
+
+    private func post(notice: String) async {
+        let content = UNMutableNotificationContent()
+        content.title = WatchCopy.noticeTitle
         content.body = notice
         content.categoryIdentifier = NotificationCategoryID.info
         try? await UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         )
+    }
+
+    private func open(_ route: ReplyRoute) {
+        store.openReply = route
+    }
+
+    private func answer(hostId: String, requestId: String, decision: String) async {
+        await store.answerFromNotification(hostId: hostId, requestId: requestId, decision: decision)
+        guard let notice = store.failureNotice(requestId) else { return }
+        await post(notice: notice)
     }
 }

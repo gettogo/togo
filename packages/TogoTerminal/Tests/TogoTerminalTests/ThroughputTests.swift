@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import SwiftTerm
 import Testing
-import TogoTerminal
+@testable import TogoTerminal
 
 /// A 4 MB burst drained through the binding into the real engine, one simulated 120 Hz frame
 /// at a time. The ticker is driven by the test, not by a clock, so the frames are exactly the
@@ -94,8 +94,25 @@ import TogoTerminal
     }
 
     @Test func burstDrainsWithinFrameBudget() async {
+        await drain(readingAloud: false)
+    }
+
+    /// The same burst with VoiceOver reading new output: each frame reports changed rows, as
+    /// SwiftTerm does, and the feed's screen reads stay off the frame and inside the budget.
+    @Test func burstDrainsWithinFrameBudgetWhileReadingAloud() async {
+        await drain(readingAloud: true)
+    }
+
+    private func drain(readingAloud: Bool) async {
         let burst = BurstFixture.make(bytes: 4 << 20)
         let engine = CheckingEngine(expected: burst)
+        let feed = engine.inner.outputFeed
+        if readingAloud {
+            feed.voiceOverRunning = { true }
+            feed.focused = { true }
+            feed.refresh()
+            #expect(feed.isActive)
+        }
         let ticker = SimulatedTicker()
         let source = BurstSource(burst)
         let binding = TerminalBinding(
@@ -115,7 +132,10 @@ import TogoTerminal
                 continue
             }
             let cpuStart = Self.threadTime()
-            work.append(clock.measure { ticker.onFrame() })
+            work.append(clock.measure {
+                ticker.onFrame()
+                if readingAloud { engine.inner.screenChanged() }
+            })
             cpu.append(Self.threadTime() - cpuStart)
             // One frame later the reader may top the buffer up.
             await Task.yield()
@@ -137,6 +157,23 @@ import TogoTerminal
         #expect(onCPU < .milliseconds(4), Comment(rawValue: report))
         if ProcessInfo.processInfo.environment["TOGO_ENFORCE_FRAME_BUDGET"] == "1" || Self.hostLoad() <= 1 {
             #expect(wall < .milliseconds(4), Comment(rawValue: report))
+        }
+        if readingAloud {
+            // The comparison of a full screen, the main thread's part of each read: the rows
+            // themselves are copied off the main thread. Two screens alternate, so each read
+            // finds every row new.
+            let full = engine.inner.liveScreen() ?? TerminalScreen(rows: [])
+            let other = TerminalScreen(rows: full.rows.map { $0 + " more" })
+            var flip = false
+            feed.screen = { flip ? other : full }
+            let reads = (0..<20).map { _ in
+                flip.toggle()
+                let start = Self.threadTime()
+                feed.screenChanged()
+                return Self.threadTime() - start
+            }
+            #expect(full.rows.count > 30)
+            #expect(Self.p95(reads) < .milliseconds(4), "screen comparison p95 \(Self.milliseconds(Self.p95(reads))) ms")
         }
     }
 }

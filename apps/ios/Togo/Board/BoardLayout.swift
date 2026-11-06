@@ -47,7 +47,8 @@ enum Board {
         switch status {
         case .needsYou: .needsYou
         case .working: .working
-        case .done: .done
+        // An agent that ended or failed waits on the user like one that finished its turn.
+        case .done, .ended, .failed: .done
         case .idle, .unknown: .idle
         case .exited: nil
         }

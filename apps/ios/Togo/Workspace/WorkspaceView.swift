@@ -10,6 +10,7 @@ struct WorkspaceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
     @Environment(\.windowID) private var window
+    @Environment(\.machineTools) private var machineTools
     @Bindable var store: AppStore
     let terminals: TerminalPool
 
@@ -58,7 +59,8 @@ struct WorkspaceView: View {
                         // Using the chrome keeps it up for another three seconds.
                         chrome.modifier(LeadingPageOnly())
                             .simultaneousGesture(TapGesture().onEnded { zen.reveal() })
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            // Under Reduce Motion the chrome fades in place instead of sliding.
+                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     } else if chromeLayout.revealStrip {
                         ZenRevealStrip { zen.reveal() }
                     }
@@ -67,6 +69,7 @@ struct WorkspaceView: View {
             }
             .onChange(of: store.zen, initial: true) { _, on in
                 if !on { zen.hide() }
+                terminals.zenChanged(on, in: window)
                 var transaction = Transaction(animation: nil)
                 transaction.disablesAnimations = true
                 withTransaction(transaction) { zenLayout = on }
@@ -90,7 +93,7 @@ struct WorkspaceView: View {
                 noteShown = false
                 endFind()
             }
-            .haptic(.tabSettle, trigger: store.workspace.selected)
+            .haptic(.tabSettle, trigger: PaneTabs(store.workspace), change: PaneTabs.settles)
             .onChange(of: store.findRequests) {
                 guard let tab = store.focusedTab, terminals.handle(for: tab.id)?.search != nil else { return }
                 if zenLayout { zen.reveal() }
@@ -179,10 +182,17 @@ struct WorkspaceView: View {
         let row = store.session(for: tab)
         let name = row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? tab.title
         return WorkspaceHeader(
-            bib: row?.bib ?? tab.bib, title: name, link: tab.link, status: status ?? store.workspace.ended, noteShown: $noteShown,
+            bib: row?.bib ?? tab.bib, title: name, link: tab.link,
+            status: status ?? store.workspace.ended ?? row.flatMap { LifecycleCopy.line(status: $0.status, exit: $0.exit) },
+            noteShown: $noteShown,
             onBack: leadingAction, leading: leading,
             accessories: {
                 if let row {
+                    if SessionActions.actions(for: row, on: store.machine(for: tab.hostID)).allows(.runAgain) {
+                        RunAgainButton(running: store.relaunching.contains(tab.id)) {
+                            Task { await store.runAgain(row, tools: machineTools) }
+                        }
+                    }
                     ReviewHeaderButtons(store: store, row: row)
                         .id(tab.id)
                 }
@@ -244,6 +254,14 @@ struct WorkspaceView: View {
                 Section {
                     Button(ReviewCopy.tabName(.files), systemImage: "folder") { store.review(row, tab: .files) }
                     Button(ReviewCopy.tabName(.history), systemImage: "clock") { store.review(row, tab: .history) }
+                }
+            }
+            if allowed.available.contains(.runAgain) {
+                Section {
+                    Button(LifecycleCopy.runAgain, systemImage: SessionAction.runAgain.systemImage(for: row)) {
+                        Task { await store.runAgain(row, tools: machineTools) }
+                    }
+                    .disabled(!allowed.allows(.runAgain) || store.relaunching.contains(tab.id))
                 }
             }
             Section {

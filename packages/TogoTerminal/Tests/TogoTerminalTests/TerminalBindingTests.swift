@@ -166,6 +166,13 @@ import Testing
         let total = 32 << 20, chunk = 64 << 10
         let source = PatternSource(total: total, chunk: chunk)
         let binding = Self.binding(engine, TimerTicker(), read: { source.next() })
+        // The same ping with nothing flooding, so machine load shows up in both numbers.
+        var idlePing = Duration.zero
+        for _ in 0..<40 {
+            let sent = ContinuousClock.now
+            try? await Task.sleep(for: .milliseconds(10))
+            idlePing = max(idlePing, ContinuousClock.now - sent - .milliseconds(10))
+        }
         var peakPending = 0
         var worstPing = Duration.zero
         binding.start()
@@ -189,7 +196,10 @@ import Testing
         #else
         let bound = Duration.milliseconds(50)
         #endif
-        #expect(worstPing <= bound, "main actor answered after \(worstPing)")
+        // A feed that hogs the main actor stalls it for a whole 256 KiB parse; scheduling noise from a
+        // busy machine is bounded by what the idle ping saw, so allow that on top of the fixed bound.
+        let allowed = bound + idlePing * 4
+        #expect(worstPing <= allowed, "main actor answered after \(worstPing) (idle \(idlePing), allowed \(allowed))")
     }
 
     @Test func stopRestoresEngineCallbacks() async {

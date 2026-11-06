@@ -23,7 +23,11 @@ struct NotificationValues: Equatable {
             return NotificationMachine(
                 id: section.id, name: section.name, state: state,
                 helperCommand: state == .paired ? commandsOn.contains(section.id) : nil,
-                commandPending: state == .paired && pending.contains(section.id)
+                commandPending: state == .paired && pending.contains(section.id),
+                supportsNotify: section.capabilities.contains(Capability.notify),
+                supportsAwake: section.capabilities.contains(Capability.awake),
+                awake: section.awake,
+                hasSettings: section.reachability == .online && section.helper != .missing
             )
         }
     }
@@ -46,6 +50,13 @@ struct NotificationMachine: Identifiable, Equatable, Sendable {
     var helperCommand: Bool?
     /// A choice went through the relay and the machine has not confirmed it yet.
     var commandPending = false
+    /// Whether the machine's helper advertised per-machine notification settings.
+    var supportsNotify = false
+    /// Whether the machine's helper advertised keep-awake, and the state its monitor last read.
+    var supportsAwake = false
+    var awake: AwakeStatus?
+    /// Whether the machine can be asked for its settings now.
+    var hasSettings = false
 
     /// Command text is a choice only where the helper can send Live Activity pushes.
     var canShowCommands: Bool { state == .paired || state == .notPaired }
@@ -105,6 +116,14 @@ struct NotificationSettingsView: View {
                     "settings.notifications.approveUnlocked.footer",
                     "Anyone holding your locked iPhone could approve commands."
                 ))
+            }
+            .groupedRows()
+            Section {
+                Picker(settingsText("settings.notifications.done", "Done"), selection: settings.binding(\.doneSilent, update)) {
+                    Text(settingsText("settings.notifications.done.sound", "Sound")).tag(false)
+                    Text(settingsText("settings.notifications.done.silent", "Silent")).tag(true)
+                }
+                .frame(minHeight: 44)
             }
             .groupedRows()
             if !notifications.machines.isEmpty {
@@ -256,14 +275,7 @@ struct NotificationMachinesSection: View {
     var body: some View {
         Section {
             ForEach(machines) { machine in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(machine.name)
-                    Text(Self.stateText(machine.state))
-                        .font(.subheadline)
-                        .foregroundStyle(Color.togoMute)
-                }
-                .frame(minHeight: 44, alignment: .leading)
-                .accessibilityElement(children: .combine)
+                row(machine)
                 if machine.canShowCommands {
                     Toggle(isOn: Binding { settings.liveActivityCommand(for: machine.id) } set: { change(machine, $0) }) {
                         Text(settingsText("settings.notifications.commands", "Show command text"))
@@ -284,6 +296,26 @@ struct NotificationMachinesSection: View {
                 .textCase(nil)
         }
         .groupedRows()
+    }
+
+    @ViewBuilder private func row(_ machine: NotificationMachine) -> some View {
+        let label = VStack(alignment: .leading, spacing: 2) {
+            Text(machine.name)
+            Text(Self.stateText(machine.state))
+                .font(.subheadline)
+                .foregroundStyle(Color.togoMute)
+        }
+        .frame(minHeight: 44, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        if machine.hasSettings {
+            NavigationLink {
+                MachineHelperView(machine: machine.id, name: machine.name, supportsNotify: machine.supportsNotify) {
+                    if machine.supportsAwake { MachineAwakeSection(machine: machine) }
+                }
+            } label: { label }
+        } else {
+            label
+        }
     }
 
     /// Says a changed choice is on its way while the machine has not confirmed it.

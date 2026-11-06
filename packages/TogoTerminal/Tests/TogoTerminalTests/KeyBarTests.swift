@@ -177,6 +177,24 @@ import UIKit
         #expect(h.joinedInput.isEmpty)
     }
 
+    /// While the host keeps its compose bar away, the keys that open it go away too, and come
+    /// back where they were.
+    @Test func composeKeysHideWhileHostHidesCompose() throws {
+        let h = EngineHarness()
+        let bar = KeyBarView(config: .standard, engine: h.engine)
+        let compose = try #require(bar.button(for: try item("Compose", in: .standard)))
+        let dictate = try #require(bar.button(for: try item("Dictate", in: .standard)))
+        let escape = try #require(bar.button(for: try item("Esc", in: .standard)))
+        #expect(!compose.isHidden && !dictate.isHidden)
+
+        bar.hidesCompose = true
+        #expect(compose.isHidden && dictate.isHidden)
+        #expect(!escape.isHidden)
+
+        bar.hidesCompose = false
+        #expect(!compose.isHidden && !dictate.isHidden)
+    }
+
     @Test func keyBarDefaultHasDictateKey() throws {
         let h = EngineHarness()
         let dictate = try item("Dictate", in: .standard)

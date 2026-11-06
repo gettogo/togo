@@ -64,7 +64,7 @@ struct HelperIntegrationTests {
             .deletingLastPathComponent().deletingLastPathComponent()
         let binary = repo.appending(path: "helper/bin/togo")
         guard FileManager.default.isExecutableFile(atPath: binary.path) else {
-            Issue.record("helper binary missing at \(binary.path): run make build")
+            Issue.record("helper binary missing at \(binary.path): run `make build` (or `make togokit-test`, which does), or set TOGO_BIN to a built togo")
             throw CancellationError()
         }
         return binary

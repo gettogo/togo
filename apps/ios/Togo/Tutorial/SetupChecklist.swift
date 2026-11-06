@@ -208,7 +208,7 @@ private struct SetupItemRow: View {
                 .transition(.opacity)
             }
         }
-        .motion(Motion.fade, value: expanded)
+        .motion(.fade, value: expanded)
     }
 
     private var tick: some View {

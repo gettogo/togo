@@ -133,6 +133,8 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
         let maxY = max(-collectionView.adjustedContentInset.top,
                        collectionView.contentSize.height + collectionView.adjustedContentInset.bottom - collectionView.bounds.height)
         let offset = CGPoint(x: collectionView.contentOffset.x, y: min(max(top, -collectionView.adjustedContentInset.top), maxY))
+        // The system's own scroll, not a motion role: an animator on the offset would skip cell
+        // prefetch and show blank rows. It is off under Reduce Motion.
         collectionView.setContentOffset(offset, animated: window != nil && !UIAccessibility.isReduceMotionEnabled)
     }
 

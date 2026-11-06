@@ -167,7 +167,7 @@ private struct ZoomableImage: View {
                         .onEnded { _ in settled = zoom }
                 )
                 .onTapGesture(count: 2) {
-                    withAnimation(Motion.motion(Motion.confirm, reduce: reduceMotion)) {
+                    withAnimation(Motion.animation(.confirm, reduce: reduceMotion)) {
                         zoom = zoom > 1 ? 1 : 3
                         settled = zoom
                     }

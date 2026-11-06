@@ -40,6 +40,8 @@ struct TogoApp: App {
                     }
                 }
                 .privacyCover()
+                .environment(\.machineTools, composition.machineTools)
+                .environment(\.agentLibrary, composition.agentLibrary)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
                     resumeLock.protectedDataBecameUnavailable()
                 }

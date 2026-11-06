@@ -23,18 +23,30 @@ import WatchConnectivity
     /// The phone's pending requests as they are now; a clear republishes from these, since
     /// requests may have arrived since the last publish.
     var currentRequests: (@MainActor () -> [PendingRequest])?
+    /// Sends a reply the Watch typed. Unset, the Watch hears it needs the phone.
+    var onReply: (@MainActor (WatchReplyMessage) async -> ReplyOutcome)?
+    /// Starts a session again for Run again tapped on the Watch. Unset, the Watch hears it
+    /// needs the phone.
+    var onRunAgain: (@MainActor (WatchRunAgainMessage) async -> ReplyOutcome)?
 
     private let link: (any WatchLink)?
     private let defaults: UserDefaults
     private let clock: @Sendable () -> Date
     private var pairings: Data?
     private var context: WatchContext?
+    private var doneSilent: Bool?
     private var lastRequests: [PendingRequest] = []
+    private var lastTextRequests: [String] = []
     /// Requests cleared on the phone, by when. A clear can remove the request from the phone's
     /// store, so the bridge keeps the id until the request is past answering anyway.
     private var cleared: [String: Date] = [:]
 
     private static let devicesKey = "watch.devices"
+    private static let sentKey = "watch.sentReplies"
+    private static let sentWindow: TimeInterval = 600
+    private static let sentLimit = 64
+    /// Replies and runs being carried out, by id.
+    private var inFlight: [String: Task<ReplyOutcome, Never>] = [:]
 
     init(link: (any WatchLink)?, defaults: UserDefaults = .standard, clock: @escaping @Sendable () -> Date = { Date() }) {
         self.link = link
@@ -64,14 +76,17 @@ import WatchConnectivity
     /// What the phone knows now: every session, and which requests it knows are closed. Only
     /// those are named: the phone can miss a request the Watch got, so leaving a request out
     /// must never close it on the Watch.
-    func publish(sessions: [WatchSession], requests: [PendingRequest]) {
+    /// `textRequests` are open requests that take a typed answer, so the Watch offers Reply.
+    func publish(sessions: [WatchSession], requests: [PendingRequest], textRequests: [String]? = nil) {
         let now = clock()
         lastRequests = requests
+        if let textRequests { lastTextRequests = textRequests }
         cleared = cleared.filter { now.timeIntervalSince($0.value) < RequestLifetime.seconds }
         let waiting = Set(RequestLifetime.waiting(requests, now: now).map(\.requestId))
         let closed = requests.filter { $0.answered != .sending && !waiting.contains($0.requestId) }.map(\.requestId)
         context = WatchContext(
-            sessions: sessions, closedRequestIds: Set(closed).union(cleared.keys).sorted(), at: now
+            sessions: sessions, closedRequestIds: Set(closed).union(cleared.keys).sorted(), at: now,
+            textRequestIds: lastTextRequests
         )
         flush()
     }
@@ -96,6 +111,14 @@ import WatchConnectivity
         flush()
     }
 
+    /// Whether "done" notifications are silent. The Watch's notification extension cannot read
+    /// the phone's app group, so the choice travels with the rest.
+    func sendDoneSilent(_ on: Bool) {
+        guard doneSilent != on else { return }
+        doneSilent = on
+        flush()
+    }
+
     /// The Watch sent its push identity. A Watch id seen before is replaced.
     func received(device data: Data) {
         guard let device = try? JSONDecoder().decode(WatchDevice.self, from: data),
@@ -115,8 +138,61 @@ import WatchConnectivity
         var message: [String: Any] = [:]
         if let pairings { message[WatchLinkKey.pairings] = pairings }
         if let context, let data = try? JSONEncoder().encode(context) { message[WatchLinkKey.context] = data }
+        if let doneSilent { message[WatchLinkKey.doneSilent] = doneSilent }
         guard !message.isEmpty else { return }
         try? link.updateApplicationContext(message)
+    }
+
+    /// A message the Watch sent with `sendMessage`, a reply or a run again, and the outcome
+    /// it gets back. Anything unreadable is refused, and the Watch keeps its words.
+    func handle(message: [String: Any]) async -> [String: Any] {
+        if let run = WatchRunAgainMessage(message: message) {
+            return await runAgain(run).message
+        }
+        guard let reply = WatchReplyMessage(message: message) else {
+            return ReplyOutcome.refused(ReplyCopy.unreadable).message
+        }
+        return await self.reply(to: reply).message
+    }
+
+    func reply(to message: WatchReplyMessage) async -> ReplyOutcome {
+        guard let onReply else { return .needsPhone }
+        return await once(message.id) { await onReply(message) }
+    }
+
+    func runAgain(_ message: WatchRunAgainMessage) async -> ReplyOutcome {
+        guard let onRunAgain else { return .needsPhone }
+        return await once(message.id) { await onRunAgain(message) }
+    }
+
+    /// Each id is carried out at most once. The Watch keeps the id across retries, so a retry
+    /// while the first attempt still runs waits for that attempt, and one after it went is told
+    /// it went. Ids that went are kept for ten minutes, on disk, at most 64 of them.
+    private func once(_ id: String, _ run: @escaping @MainActor () async -> ReplyOutcome) async -> ReplyOutcome {
+        var sent = sentReplies(now: clock())
+        if sent[id] != nil { return .sent }
+        if let running = inFlight[id] { return await running.value }
+        let task = Task { @MainActor in await run() }
+        inFlight[id] = task
+        let outcome = await task.value
+        inFlight[id] = nil
+        if outcome == .sent {
+            sent = sentReplies(now: clock())
+            sent[id] = clock().timeIntervalSince1970
+            if sent.count > Self.sentLimit {
+                for (id, _) in sent.sorted(by: { $0.value < $1.value }).prefix(sent.count - Self.sentLimit) {
+                    sent[id] = nil
+                }
+            }
+            defaults.set(sent, forKey: Self.sentKey)
+        }
+        return outcome
+    }
+
+    /// Reply ids that went, by when, without the ones past ten minutes.
+    private func sentReplies(now: Date) -> [String: Double] {
+        let stored = defaults.dictionary(forKey: Self.sentKey) as? [String: Double] ?? [:]
+        return stored.filter { now.timeIntervalSince1970 - $0.value < Self.sentWindow }
     }
 
     // MARK: WCSessionDelegate
@@ -136,6 +212,16 @@ import WatchConnectivity
 
     nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
         Task { @MainActor in self.flush() }
+    }
+
+    nonisolated func session(
+        _ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void
+    ) {
+        nonisolated(unsafe) let answer = replyHandler
+        nonisolated(unsafe) let payload = message
+        Task { @MainActor in
+            answer(await self.handle(message: payload))
+        }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
@@ -170,9 +256,23 @@ extension WatchSession {
                 WatchSession(
                     hostName: machine.name, bib: row.bib ?? row.name, agentName: row.agentName,
                     status: row.status.rawValue,
-                    activity: row.activity.map { PromptText.clean($0, maxLines: 1) }.flatMap { $0.isEmpty ? nil : $0 }
+                    activity: row.activity.map { PromptText.clean($0, maxLines: 1) }.flatMap { $0.isEmpty ? nil : $0 },
+                    exitReason: row.exit?.reason.rawValue, exitCode: row.exit?.code,
+                    machineId: machine.id.uuidString, sessionId: row.id
                 )
             }
         }
+    }
+}
+
+/// What the Watch hears from the phone's screens: every session, and the open requests that
+/// take a typed answer.
+struct WatchFeed: Equatable {
+    var sessions: [WatchSession]
+    var textRequests: [String]
+
+    init(_ state: ControlCenterState) {
+        sessions = WatchSession.rows(state.machines)
+        textRequests = state.requests.filter { $0.allowText && $0.phase == .open }.map(\.id)
     }
 }

@@ -24,7 +24,7 @@ struct SessionMenu<Openers: View>: View {
                 Divider()
                 menuButton(action, role: .destructive) { perform(.kill(row)) }
                     .disabled(actions.disabled.contains(action))
-            case .rename, .mute, .copyPath:
+            case .rename, .mute, .copyPath, .runAgain:
                 menuButton(action) { perform(command(action)) }
                     .disabled(actions.disabled.contains(action))
             case .changes, .files, .ports:
@@ -65,6 +65,7 @@ struct SessionMenu<Openers: View>: View {
         case .mute: .toggleMute(row)
         case .copyPath: .copyPath(row)
         case .kill: .kill(row)
+        case .runAgain: .runAgain(row)
         case .changes: .review(row, .changes)
         case .files: .review(row, .files)
         case .ports: .review(row, .ports)

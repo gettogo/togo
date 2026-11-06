@@ -93,6 +93,14 @@ import UIKit
         settle()
     }
 
+    /// Zen in `window` hides the Compose and Dictate keys on the terminals that window shows,
+    /// and on no other. A terminal that moves to another window takes that window's setting.
+    func zenChanged(_ on: Bool, in window: WindowID) {
+        for (id, entry) in entries where hosts[id] == window {
+            entry.handle.hidesComposeKeys = on
+        }
+    }
+
     /// Every attached tab on the machine reconnects, for example with an edited address.
     func restartTabs(on hostID: HostID) {
         for id in entries.keys where id.hostID == hostID {
@@ -259,6 +267,7 @@ import UIKit
         handle.onEdgeSwipe = { [weak store] in store?.workspaceOpen = false }
         handle.onCompose = { [weak store] in store?.toggleCompose(id) }
         handle.onDictate = { [weak store] in store?.dictate(id) }
+        handle.hidesComposeKeys = store.zen
         handle.onPasteImage = { [weak store] in store?.pasteImage($0, into: id) }
     }
 

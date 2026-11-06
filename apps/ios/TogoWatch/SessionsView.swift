@@ -23,6 +23,12 @@ struct SessionsView: View {
                     Section {
                         ForEach(Array(machine.sessions.enumerated()), id: \.offset) { _, session in
                             SessionRow(session: session)
+                            if session.acceptsReply, let machine = session.machineId, let id = session.sessionId {
+                                ReplyLink(
+                                    store: store, target: .prompt(machineId: machine, sessionId: id),
+                                    title: "\(session.bib) \(session.agentName)"
+                                )
+                            }
                         }
                     } header: {
                         VStack(alignment: .leading, spacing: 4) {
@@ -59,7 +65,7 @@ private struct SessionRow: View {
                     .lineLimit(1)
             }
             .foregroundStyle(.secondary)
-            Text(WatchCopy.status(session.status))
+            Text(WatchCopy.status(session))
                 .font(.body)
             if let activity = session.activity, !activity.isEmpty {
                 Text(PromptText.clean(activity, maxLines: 1))

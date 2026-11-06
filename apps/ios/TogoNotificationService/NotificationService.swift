@@ -33,7 +33,16 @@ final class NotificationService: UNNotificationServiceExtension {
         if result.pendingChanged {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
         }
-        gate.finish(result.content)
+        guard let host = result.clearsOfflineOf else {
+            gate.finish(result.content)
+            return
+        }
+        // This machine is answering again: take its "stopped answering" alert away first.
+        let content = UncheckedContent(result.content)
+        Task {
+            await OfflineNotifications.removeDelivered(hostId: host)
+            gate.finish(content.value)
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
@@ -51,5 +60,13 @@ private struct UncheckedHandler: @unchecked Sendable {
 
     func call(_ content: UNNotificationContent) {
         handler(content)
+    }
+}
+
+private struct UncheckedContent: @unchecked Sendable {
+    let value: UNNotificationContent
+
+    init(_ value: UNNotificationContent) {
+        self.value = value
     }
 }

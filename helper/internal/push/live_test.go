@@ -288,3 +288,113 @@ func TestUpdateTokensUnknownDevice(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+func TestLiveStateCarriesExitReasonOnlyWhenEndedOrFailed(t *testing.T) {
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	tr := &LiveTracker{}
+	tr.Session("s_x", wire.LiveWorking, nil, "claude", "", now)
+	st, _, ok := tr.Next(now)
+	if !ok || st.Status != wire.LiveWorking || st.Reason != "" {
+		t.Fatalf("working state %+v ok=%v", st, ok)
+	}
+	raw, err := json.Marshal(st)
+	if err != nil || strings.Contains(string(raw), `"reason"`) {
+		t.Fatalf("working JSON %s err=%v", raw, err)
+	}
+
+	now = now.Add(time.Second)
+	tr.Session("s_x", wire.StatusFailed, nil, "claude", wire.ExitReasonUsageLimit, now)
+	st, _, ok = tr.Next(now)
+	if !ok || st.Status != wire.StatusFailed || st.Reason != "usage_limit" {
+		t.Fatalf("failed state %+v ok=%v", st, ok)
+	}
+	raw, err = json.Marshal(st)
+	if err != nil || !strings.Contains(string(raw), `"reason":"usage_limit"`) {
+		t.Fatalf("failed JSON %s err=%v", raw, err)
+	}
+
+}
+
+func TestLiveUpdateCarriesExitReasonOnTheWire(t *testing.T) {
+	e := newEnv(t, 0)
+	e.pair(t, "dev_a", updateToken)
+	e.handle(sessionEv("s_aaaaaaaaaa", "02", "working"))
+	e.clock = e.clock.Add(time.Second)
+	code := 1
+	detail := "secret detail"
+	ev := sessionEv("s_aaaaaaaaaa", "02", wire.StatusFailed)
+	pl := ev.Payload.(wire.SessionEvent)
+	sess := pl.Session.(session.Session)
+	sess.Exit = &wire.SessionExit{Code: &code, Reason: wire.ExitReasonUsageLimit, Detail: &detail}
+	pl.Session = sess
+	ev.Payload = pl
+	e.handle(ev)
+	e.clock = e.clock.Add(time.Minute)
+	e.tick()
+	_, raw := e.livePushes()
+	last := string(raw[len(raw)-1])
+	if !strings.Contains(last, `"reason":"usage_limit"`) || strings.Contains(last, "secret detail") {
+		t.Fatalf("failed update body %s", last)
+	}
+}
+
+func exitedLiveBody(t *testing.T, status string, exit *wire.SessionExit) string {
+	t.Helper()
+	e := newEnv(t, 0)
+	e.pair(t, "dev_a", updateToken)
+	e.handle(sessionEv("s_aaaaaaaaaa", "02", "working"))
+	e.clock = e.clock.Add(time.Second)
+	ev := sessionEv("s_aaaaaaaaaa", "02", status)
+	pl := ev.Payload.(wire.SessionEvent)
+	sess := pl.Session.(session.Session)
+	sess.Exit = exit
+	pl.Session = sess
+	ev.Payload = pl
+	e.handle(ev)
+	e.clock = e.clock.Add(time.Minute)
+	e.tick()
+	_, raw := e.livePushes()
+	return string(raw[len(raw)-1])
+}
+
+func TestLiveReasonUsesFixedVocabulary(t *testing.T) {
+	code := 1
+	for _, r := range []string{"exit", "interrupted", "error", "usage_limit"} {
+		body := exitedLiveBody(t, wire.StatusFailed, &wire.SessionExit{Code: &code, Reason: r})
+		if !strings.Contains(body, `"reason":"`+r+`"`) {
+			t.Fatalf("%s missing from %s", r, body)
+		}
+	}
+	// A session exit never carries "restart", so the Live Activity takes it as unknown too.
+	for _, r := range []string{"rm -rf secret", "", "Usage_Limit", "brand_new", "restart"} {
+		body := exitedLiveBody(t, wire.StatusFailed, &wire.SessionExit{Code: &code, Reason: r})
+		if strings.Contains(body, `"reason"`) || strings.Contains(body, "rm -rf") {
+			t.Fatalf("reason %q reached the body: %s", r, body)
+		}
+	}
+}
+
+func TestLiveReasonOmittedWithoutExit(t *testing.T) {
+	if body := exitedLiveBody(t, wire.StatusEnded, nil); strings.Contains(body, `"reason"`) {
+		t.Fatalf("ended without exit carries a reason: %s", body)
+	}
+}
+
+func TestLiveReasonClearsWhenWorkingAgainOrDone(t *testing.T) {
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	tr := &LiveTracker{}
+	tr.Session("s_x", wire.LiveWorking, nil, "claude", "", now)
+	tr.Next(now)
+	tr.Session("s_x", wire.StatusFailed, nil, "claude", "usage_limit", now.Add(time.Second))
+	if st, _, _ := tr.Next(now.Add(time.Second)); st.Reason != "usage_limit" {
+		t.Fatalf("failed state %+v", st)
+	}
+	tr.Session("s_x", wire.LiveWorking, nil, "claude", "", now.Add(2*time.Second))
+	if st, _, _ := tr.Next(now.Add(2 * time.Second)); st.Status != wire.LiveWorking || st.Reason != "" {
+		t.Fatalf("working again %+v", st)
+	}
+	tr.Session("s_x", "idle", nil, "claude", "", now.Add(3*time.Second))
+	if st, _, _ := tr.Next(now.Add(3 * time.Second)); st.Status != wire.PushDone || st.Reason != "" {
+		t.Fatalf("done state %+v", st)
+	}
+}

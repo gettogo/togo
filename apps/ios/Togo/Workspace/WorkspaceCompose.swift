@@ -38,6 +38,8 @@ extension AppStore {
     /// The Dictate key: opens the tab's compose bar and starts a dictation that listens until
     /// the next tap. The words land in the bar; nothing reaches the session until Send.
     func dictate(_ id: TabID) {
+        // Dictation listens in the compose bar, which zen mode keeps away.
+        guard !zen else { return }
         if panesVisible {
             if id == workspace.secondary { workspace.focused = .secondary }
             if id == workspace.selected { workspace.focused = .primary }
@@ -164,6 +166,13 @@ struct WorkspaceComposeBar: View {
             let model = model(for: tab, handle: handle)
             Task { await model.images.begin(pasted.data) }
         }
+        .onChange(of: store.replyDrafts) {
+            // A reply that was not delivered lands in an open bar too, after what is typed there.
+            for (id, model) in models {
+                guard let draft = store.takeReplyDraft(id) else { continue }
+                model.text = model.text.isEmpty ? draft : model.text + "\n" + draft
+            }
+        }
     }
 
     private func model(for tab: WorkspaceTab, handle: TerminalHandle) -> ComposeModel {
@@ -182,6 +191,11 @@ struct WorkspaceComposeBar: View {
             engine: SpeechEngines.shared, locale: SpeechEngines.locale(store.services.settings.dictationLocale),
             history: DictationHistory()
         )
+        // A reply that was not delivered waits here, after any draft already kept for the tab.
+        if let reply = store.takeReplyDraft(id) {
+            let kept = store.drafts[id] ?? ""
+            store.drafts[id] = kept.isEmpty ? reply : kept + "\n" + reply
+        }
         let model = ComposeModel(
             draft: draft, history: ComposeHistory(hostID: tab.hostID, sessionID: tab.sessionID), images: images,
             paste: { handle.paste($0) }, pressEnter: { handle.pressEnter() }, speech: speech

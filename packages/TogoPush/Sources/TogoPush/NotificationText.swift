@@ -30,12 +30,26 @@ public enum NotificationCategoryID {
     public static let request = "togo.request"
     public static let requestDenyOnly = "togo.request.deny"
     public static let info = "togo.info"
+    /// A session whose agent stopped and can be run again.
+    public static let ended = "togo.ended"
+    /// The agent waits at its prompt for words: a done, or a stop on a usage limit, where the
+    /// agent is still alive. Offers Reply.
+    public static let prompt = "togo.prompt"
+    /// Requests that take a typed answer: the request's buttons and Reply.
+    public static let requestReply = "togo.request.reply"
+    public static let requestDenyOnlyReply = "togo.request.deny.reply"
+    /// A request that takes a typed answer and offers no option a button can pick: Reply and Open.
+    public static let requestText = "togo.request.text"
 }
 
 public enum NotificationActionID {
     public static let approve = "togo.approve"
     public static let deny = "togo.deny"
     public static let open = "togo.open"
+    /// Opens the app and runs the session's command again in place.
+    public static let runAgain = "togo.run-again"
+    /// Types the user's words into the agent, over the machine's own connection only.
+    public static let reply = "togo.reply"
 }
 
 /// How an agent's name reads in a notification.
@@ -74,12 +88,33 @@ public enum NotificationTextBuilder {
             }
             return NotificationText(
                 title: title, subtitle: PromptText.clean(p.title, maxLines: 1), body: subjectText(p),
-                category: category(p.options ?? []), threadID: thread, interruption: .timeSensitive
+                category: category(p.options ?? [], allowText: p.allowText == true), threadID: thread,
+                interruption: .timeSensitive
             )
         case .done:
             return NotificationText(
-                title: header(p), subtitle: String(localized: "notif.done", defaultValue: "Done"), body: PromptText.clean(p.body), category: NotificationCategoryID.info,
+                title: header(p), subtitle: String(localized: "notif.done", defaultValue: "Done"), body: PromptText.clean(p.body),
+                category: replyCategory(p), threadID: thread, interruption: .active
+            )
+        case .ended, .failed:
+            let status = LifecycleWords.status(status: p.kind.rawValue, reason: p.exit?.reason, code: p.exit?.code)
+                ?? LifecycleWords.ended
+            let detail = p.exit.flatMap { LifecycleWords.detail(reason: $0.reason, code: $0.code) }
+            return NotificationText(
+                title: header(p), subtitle: "", body: [status, detail].compactMap { $0 }.joined(separator: " · "),
+                category: stoppedCategory(p),
                 threadID: thread, interruption: .active
+            )
+        case .offline:
+            // The machine's name comes from the pairing and the count from `active`; the
+            // payload's own title and body are never shown.
+            let name = PromptText.clean(hostName ?? p.host ?? "", maxLines: 1)
+            let host = name.isEmpty ? String(localized: "notif.offline.machine", defaultValue: "A machine") : name
+            return NotificationText(
+                title: String(localized: "notif.offline.title", defaultValue: "\(host) stopped answering"),
+                subtitle: "", body: offlineBody(active: p.active),
+                category: NotificationCategoryID.info, threadID: hostId.isEmpty ? thread : hostId,
+                interruption: .timeSensitive
             )
         case .job:
             return NotificationText(
@@ -92,6 +127,15 @@ public enum NotificationTextBuilder {
                 title: title.isEmpty ? header(p) : title, subtitle: "", body: PromptText.clean(p.body),
                 category: NotificationCategoryID.info, threadID: thread, interruption: .active
             )
+        }
+    }
+
+    /// How many sessions were working when the machine went quiet.
+    public static func offlineBody(active: Int?) -> String {
+        switch active ?? 0 {
+        case 1: String(localized: "notif.offline.one", defaultValue: "1 session was working.")
+        case let n where n > 1: String(localized: "notif.offline.many", defaultValue: "\(n) sessions were working.")
+        default: String(localized: "notif.offline.some", defaultValue: "Sessions were working.")
         }
     }
 
@@ -113,14 +157,35 @@ public enum NotificationTextBuilder {
         return PromptText.clean(subject.text)
     }
 
-    /// Lock-screen actions only when the options let the helper pick the answer by role.
-    private static func category(_ options: [PushOption]) -> String {
+    /// Reply needs the session it types into; without one there is nothing to offer.
+    private static func replyCategory(_ p: PushPayload) -> String {
+        guard let session = p.sessionId, !session.isEmpty else { return NotificationCategoryID.info }
+        return NotificationCategoryID.prompt
+    }
+
+    /// Lock-screen buttons only when the options let the helper pick the answer by role; Reply
+    /// beside them when the request takes a typed answer.
+    private static func category(_ options: [PushOption], allowText: Bool) -> String {
         let roles = Set(options.map(\.role))
-        switch (roles.contains("approve"), roles.contains("deny")) {
-        case (true, true): return NotificationCategoryID.request
-        case (false, true): return NotificationCategoryID.requestDenyOnly
+        switch (roles.contains("approve"), roles.contains("deny"), allowText) {
+        case (true, true, false): return NotificationCategoryID.request
+        case (true, true, true): return NotificationCategoryID.requestReply
+        case (false, true, false): return NotificationCategoryID.requestDenyOnly
+        case (false, true, true): return NotificationCategoryID.requestDenyOnlyReply
+        case (_, _, true): return NotificationCategoryID.requestText
         default: return NotificationCategoryID.info
         }
+    }
+
+    /// A stop runs again, unless the agent is still alive at its prompt (a usage limit or an
+    /// error it reported), which gets Reply. Both need the session they act on.
+    private static func stoppedCategory(_ p: PushPayload) -> String {
+        let status = p.kind.rawValue, reason = p.exit?.reason, code = p.exit?.code
+        if LifecycleWords.agentWaiting(status: status, reason: reason, code: code) { return replyCategory(p) }
+        guard LifecycleWords.canRunAgain(status: status, reason: reason, code: code),
+              let session = p.sessionId, !session.isEmpty
+        else { return NotificationCategoryID.info }
+        return NotificationCategoryID.ended
     }
 
     /// The helper sends the job's status, or its message when it has one.
@@ -130,5 +195,62 @@ public enum NotificationTextBuilder {
         case "failed": String(localized: "notif.job.failed", defaultValue: "Failed")
         default: PromptText.clean(body)
         }
+    }
+}
+
+/// How a session whose agent stopped reads, in the app, its notifications, the Live Activity and
+/// on the Watch. Only the status and the exit reason and code choose the words; the helper's own
+/// text is never shown.
+public enum LifecycleWords {
+    public static let ended = String(localized: "lifecycle.ended", defaultValue: "Ended")
+    public static let error = String(localized: "lifecycle.error", defaultValue: "Stopped with an error")
+    public static let usageLimit = String(localized: "lifecycle.usageLimit", defaultValue: "Hit a usage limit")
+    public static let restart = String(localized: "lifecycle.restart", defaultValue: "Ended by restart")
+
+    /// The words for `ended` and `failed`; nil for any other status. `reason` and `code` come
+    /// from the session's exit when the helper reported one. A reason a newer helper adds
+    /// reads as the status alone.
+    public static func status(status: String, reason: String?, code: Int?) -> String? {
+        guard status == "ended" || status == "failed" else { return nil }
+        switch reason {
+        case "usage_limit": return usageLimit
+        case "restart": return restart
+        case "error": return error
+        case "interrupted": return ended
+        case "exit": return (code ?? 0) == 0 ? ended : error
+        default: return status == "failed" ? error : ended
+        }
+    }
+
+    /// The exit reason words a helper sends. `exit` is left out: it says nothing the status
+    /// does not, and the exit code that qualifies it is not carried everywhere.
+    private static let knownReasons: Set<String> = ["interrupted", "error", "usage_limit", "restart"]
+
+    /// `reason` when it is one of the words above, else nil, so an unknown or empty word reads
+    /// as the plain status instead of reaching the screen.
+    public static func knownReason(_ reason: String?) -> String? {
+        reason.flatMap { knownReasons.contains($0) ? $0 : nil }
+    }
+
+    /// "Exit code 1" for an agent that exited on its own with a code other than 0. Ctrl-C and
+    /// a usage limit say all there is in the status.
+    public static func detail(reason: String?, code: Int?) -> String? {
+        guard let code, code != 0, reason == "exit" || reason == "error" else { return nil }
+        return String(localized: "lifecycle.exitCode", defaultValue: "Exit code \(code)")
+    }
+
+    /// Whether a stopped agent is still alive at its prompt, waiting for words. The helper
+    /// records a usage limit or an error the agent reported as failed with no exit code; the
+    /// code arrives only once the process is gone. It takes a reply then, and refuses to start
+    /// the agent again.
+    public static func agentWaiting(status: String, reason: String?, code: Int?) -> Bool {
+        status == "failed" && code == nil && (reason == "error" || reason == "usage_limit")
+    }
+
+    /// Whether a stopped agent can be started again: it ended or failed and is not still alive
+    /// at its prompt. A usage limit never runs again.
+    public static func canRunAgain(status: String, reason: String?, code: Int?) -> Bool {
+        (status == "ended" || status == "failed") && reason != "usage_limit"
+            && !agentWaiting(status: status, reason: reason, code: code)
     }
 }

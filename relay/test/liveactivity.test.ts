@@ -103,6 +103,28 @@ describe("end, stale and content state", () => {
     expect(states).toEqual([full, { ...state, requestId: null, command: null }]);
   });
 
+  it("reason passes through for ended and failed", async () => {
+    const { calls } = mockApns();
+    const failed = { ...state, status: "failed", reason: "usage_limit" };
+    const ended = { ...state, status: "ended", reason: "interrupted" };
+    await push(live({ event: "update", contentState: failed }));
+    await push(live({ event: "end", contentState: ended }));
+    const states = calls.map((c) => (c.body as { aps: { "content-state": unknown } }).aps["content-state"]);
+    expect(states).toEqual([failed, ended]);
+  });
+
+  it("reason outside the vocabulary or on another status is 400 liveActivity.contentState.reason", async () => {
+    for (const cs of [
+      { ...state, status: "failed", reason: "rm -rf secret" },
+      { ...state, status: "ended", reason: "restart" },
+      { ...state, status: "failed", reason: 5 },
+      { ...state, status: "failed", reason: null },
+      { ...state, status: "working", reason: "usage_limit" },
+    ]) {
+      await expectField(live({ event: "update", contentState: cs }), "liveActivity.contentState.reason");
+    }
+  });
+
   it("contentState command over 160 chars is 400 liveActivity.contentState.command", async () => {
     mockApns();
     await expectField(

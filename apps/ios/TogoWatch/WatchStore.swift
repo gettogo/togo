@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 import TogoPush
@@ -56,6 +57,17 @@ import WidgetKit
     private(set) var outcomes: [String: Outcome] = [:]
     /// Bumped when a tap is refused, so the screen shows why at once.
     private(set) var revision = 0
+    /// Open requests the phone named as taking a typed answer.
+    private(set) var textRequestIds: Set<String> = []
+    /// Sends a reply through the phone, which alone reaches the machine with it. Set by the
+    /// app delegate once the phone link exists.
+    @ObservationIgnored var sendReply: @MainActor (WatchReplyMessage) async -> ReplyOutcome = { _ in .needsPhone }
+    /// Hands Run again to the phone, which starts the session over its own connection.
+    @ObservationIgnored var sendRunAgain: @MainActor (WatchRunAgainMessage) async -> ReplyOutcome = { _ in .needsPhone }
+    /// A reply screen to show over everything, opened from a notice about a reply that did not go.
+    var openReply: ReplyRoute?
+    /// One reply screen per request or session, so typed words outlast leaving the screen.
+    @ObservationIgnored private var replies: [WatchReplyMessage.Target: WatchReplyModel] = [:]
 
     @ObservationIgnored private let deps: Dependencies
 
@@ -146,11 +158,12 @@ import WidgetKit
             deps.pending.upsert(PendingRequest(
                 requestId: requestId, hostId: hostId, sessionId: push.sessionId, bib: push.bib, agent: push.agent,
                 host: push.host, title: PromptText.clean(push.title, maxLines: 2), subject: push.subject,
-                options: push.options ?? [], receivedAt: deps.clock(), answered: nil
+                options: push.options ?? [], receivedAt: deps.clock(), answered: nil,
+                allowText: push.allowText == true ? true : nil
             ))
         case .clear:
             close(requestId)
-        case .done, .job, .notify:
+        case .done, .job, .notify, .ended, .failed, .offline:
             return
         }
         changed()
@@ -162,8 +175,59 @@ import WidgetKit
         if let sessionsAsOf, context.at < sessionsAsOf { return }
         sessions = context.sessions
         sessionsAsOf = context.at
+        textRequestIds = Set(context.textRequestIds ?? [])
         for requestId in context.closedRequestIds { close(requestId) }
         changed()
+    }
+
+    /// Reply is offered on a request the phone named as taking text, or whose own push said so,
+    /// while it is still open.
+    func canReply(_ requestId: String) -> Bool {
+        let takesText = textRequestIds.contains(requestId) || deps.pending.request(requestId)?.allowText == true
+        return takesText && state(of: requestId).isActionable
+    }
+
+    /// A Reply typed on a notification shown here. Only these words are sent; a draft in the
+    /// target's reply screen is never sent with them and never changed by them. When they do
+    /// not go they become the draft, unless there is one already. Returns the notice to show,
+    /// or nil when they went. The id comes from the notification and the words, so the same
+    /// reply delivered twice is typed once.
+    func replyFromNotification(target: WatchReplyMessage.Target, text: String, notification: String) async -> String? {
+        let digest = SHA256.hash(data: Data("\(notification)\n\(text)".utf8))
+        let id = digest.prefix(16).map { String(format: "%02x", $0) }.joined()
+        let notice: String? = switch await sendReply(WatchReplyMessage(id: id, target: target, text: text)) {
+        case .sent: nil
+        case .needsPhone: WatchCopy.needsPhone
+        case .refused(let sentence), .failed(let sentence): sentence
+        }
+        if let notice {
+            let model = replyModel(target)
+            if model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.keep(text, problem: notice) }
+        }
+        return notice
+    }
+
+    /// Run again tapped on a phone notification shown on the Watch. The phone starts the
+    /// session; nil when it did, else the notice to show. The id comes from the notification,
+    /// so a second delivery of the same tap starts nothing twice.
+    func runAgainFromNotification(hostId: String, sessionId: String, notification: String) async -> String? {
+        let digest = SHA256.hash(data: Data("runAgain\n\(notification)".utf8))
+        let id = digest.prefix(16).map { String(format: "%02x", $0) }.joined()
+        return switch await sendRunAgain(WatchRunAgainMessage(id: id, machineId: hostId, sessionId: sessionId)) {
+        case .sent: nil
+        case .needsPhone: WatchCopy.runAgainNeedsPhone
+        case .refused(let sentence), .failed(let sentence): sentence
+        }
+    }
+
+    /// The reply screen's model for a request or session, the same one each time.
+    func replyModel(_ target: WatchReplyMessage.Target) -> WatchReplyModel {
+        if let model = replies[target] { return model }
+        let model = WatchReplyModel(target: target) { [weak self] message in
+            await self?.sendReply(message) ?? .needsPhone
+        }
+        replies[target] = model
+        return model
     }
 
     /// Approve or deny from the Watch's own screens. Approve needs an approve option.

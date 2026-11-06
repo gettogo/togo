@@ -15,14 +15,14 @@ enum DraftAuth: Hashable, Sendable, CaseIterable {
 }
 
 /// A key imported from a file, already in the keychain.
-struct ImportedKey: Equatable, Sendable {
+struct ImportedKey: Hashable, Sendable {
     var id: String
     var label: String
 }
 
 /// The machine form's fields as typed. Validation reads them as strings so a half-typed
 /// port shows an inline error instead of silently becoming 22.
-struct MachineDraft: Equatable, Sendable {
+struct MachineDraft: Hashable, Sendable {
     enum Field: Hashable, Sendable, CaseIterable {
         case name, address, port, user, key, jump
     }
@@ -39,6 +39,8 @@ struct MachineDraft: Equatable, Sendable {
     /// Keeps the password in this device's keychain so Togo can sign in on its own.
     var savePassword = true
     var jump = ""
+    /// The wake target the machine reported; kept as is when the machine is edited.
+    var wake: WakeTarget?
 
     init() {}
 
@@ -60,6 +62,10 @@ struct MachineDraft: Equatable, Sendable {
         let host = address.trimmingCharacters(in: .whitespaces)
         if host.isEmpty {
             errors[.address] = String(localized: "onboard.form.error.addressEmpty", defaultValue: "Enter a host name or IP address.")
+        } else if host.hasPrefix("-") {
+            errors[.address] = String(
+                localized: "onboard.form.error.addressDash", defaultValue: "A host name can't start with a dash."
+            )
         } else if host.contains(where: { $0.isWhitespace || $0 == "@" || $0 == "/" }) {
             errors[.address] = String(
                 localized: "onboard.form.error.addressShape", defaultValue: "Enter only the host name, without a user or path."
@@ -71,6 +77,8 @@ struct MachineDraft: Equatable, Sendable {
         let user = user.trimmingCharacters(in: .whitespaces)
         if user.isEmpty {
             errors[.user] = String(localized: "onboard.form.error.userEmpty", defaultValue: "Enter the user name you sign in with.")
+        } else if user.hasPrefix("-") {
+            errors[.user] = String(localized: "onboard.form.error.userDash", defaultValue: "A user name can't start with a dash.")
         } else if user.contains(where: \.isWhitespace) {
             errors[.user] = String(localized: "onboard.form.error.userSpaces", defaultValue: "User names can't contain spaces.")
         }
@@ -138,7 +146,8 @@ struct MachineDraft: Equatable, Sendable {
             port = parsed
             host = String(host[..<colon])
         }
-        guard !user.isEmpty, !host.isEmpty, !(user + host).contains(where: \.isWhitespace) else { return nil }
+        guard !user.isEmpty, !host.isEmpty, !user.hasPrefix("-"), !host.hasPrefix("-"),
+              !(user + host).contains(where: \.isWhitespace) else { return nil }
         return HostEndpoint(host: host, port: port, user: user)
     }
 

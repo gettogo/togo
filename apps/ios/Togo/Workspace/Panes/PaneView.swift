@@ -52,6 +52,16 @@ struct PaneView: View {
         } isTargeted: { targeted = $0 }
     }
 
+    // MARK: Link
+
+    /// While a link reconnects the terminal stays on screen, dimmed, so it is still readable.
+    static func terminalOpacity(for link: LinkPhase) -> Double {
+        link.isReconnecting ? 0.55 : 1
+    }
+
+    /// Dimming eases in and out slowly, and lands at once under Reduce Motion.
+    static let dimRole = MotionRole.dim
+
     // MARK: Actions
 
     static func tapped(_ pane: Pane, store: AppStore) {
@@ -135,7 +145,7 @@ struct PaneView: View {
             } else {
                 TerminalSlot(tab: tab.id, terminals: terminals)
                     .id(tab.id)
-                    .opacity(reconnecting ? 0.6 : 1)
+                    .opacity(Self.terminalOpacity(for: tab.link))
             }
             if let overlay {
                 ConnectingOverlay(kind: overlay) { retry(tab) }
@@ -143,7 +153,7 @@ struct PaneView: View {
             }
         }
         .motion(.fade, value: overlay)
-        .motion(.fade, value: reconnecting)
+        .motion(Self.dimRole, value: reconnecting)
         .haptic(.connect, trigger: tab.link.isLive) { $0 && isShown }
     }
 
@@ -176,6 +186,29 @@ struct PaneView: View {
     private func retry(_ tab: WorkspaceTab) {
         terminals.restart(tab, store: store)
         Task { await store.services.refresh() }
+    }
+}
+
+/// The tab each pane shows, for the tick a pane plays when it settles on a tab.
+struct PaneTabs: Equatable {
+    var primary: TabID?
+    var secondary: TabID?
+
+    init(_ workspace: WorkspaceState) {
+        primary = workspace.selected
+        secondary = workspace.secondary
+    }
+
+    init(primary: TabID?, secondary: TabID?) {
+        self.primary = primary
+        self.secondary = secondary
+    }
+
+    /// A pane settled on another tab. Swapping the panes is one settle, and closing the second
+    /// pane is none.
+    static func settles(from old: PaneTabs, to new: PaneTabs) -> Bool {
+        guard old != new else { return false }
+        return !(new.secondary == nil && new.primary == old.primary)
     }
 }
 

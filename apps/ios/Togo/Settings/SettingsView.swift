@@ -53,6 +53,16 @@ struct SettingsMachine: Identifiable, Equatable, Sendable {
     var address: String
     var symbol: HostSymbol
     var helper: HelperState
+    /// Removing it takes this device's key off the machine first.
+    var removesKey = false
+    /// The agent editor can look a program up here: the machine is online and its helper
+    /// launches agents, so the check neither fails nor asks to sign in.
+    var checksAgents = false
+
+    static func checksAgents(_ section: MachineSection?) -> Bool {
+        guard let section, section.reachability == .online, section.helper != .missing else { return false }
+        return section.capabilities.contains(Capability.launch)
+    }
 }
 
 struct SettingsActions {
@@ -66,6 +76,8 @@ struct SettingsActions {
     var turnOnNotifications: () -> Void
     /// Stops trying to unpair a removed machine.
     var forgetRemoval: (String) -> Void
+    /// Nil hides the import button on the machines page.
+    var machineImport: MachineImport?
 
     init(
         update: @escaping (AppSettings) -> Void,
@@ -74,7 +86,8 @@ struct SettingsActions {
         removeMachine: @escaping (HostID) -> Void = { _ in },
         openGuide: @escaping () -> Void = {},
         turnOnNotifications: @escaping () -> Void = {},
-        forgetRemoval: @escaping (String) -> Void = { _ in }
+        forgetRemoval: @escaping (String) -> Void = { _ in },
+        machineImport: MachineImport? = nil
     ) {
         self.update = update
         self.addMachine = addMachine
@@ -83,6 +96,7 @@ struct SettingsActions {
         self.openGuide = openGuide
         self.turnOnNotifications = turnOnNotifications
         self.forgetRemoval = forgetRemoval
+        self.machineImport = machineImport
     }
 }
 
@@ -90,6 +104,7 @@ struct SettingsActions {
 /// also the destination for `AppRoute.settingsPage`.
 struct SettingsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.agentLibrary) private var agentLibrary
     let values: SettingsValues
     let actions: SettingsActions
 
@@ -104,6 +119,7 @@ struct SettingsView: View {
             .groupedRows()
             Section {
                 row(.machines)
+                if let agentLibrary { agentsRow(agentLibrary) }
                 row(.notifications)
                 row(.sync)
                 row(.privacy)
@@ -143,7 +159,8 @@ struct SettingsView: View {
             MachinesSettingsView(
                 machines: values.machines, add: actions.addMachine,
                 edit: actions.editMachine, remove: actions.removeMachine,
-                removing: values.pendingRemovals, forgetRemoval: actions.forgetRemoval
+                removing: values.pendingRemovals, forgetRemoval: actions.forgetRemoval,
+                machineImport: actions.machineImport
             )
         case .notifications:
             NotificationSettingsView(
@@ -159,7 +176,7 @@ struct SettingsView: View {
         case .diagnostics:
             DiagnosticsView(settings: settings)
         case .about:
-            AboutView(appVersion: values.appVersion, machines: values.machines)
+            AboutView(appVersion: values.appVersion, settings: settings, machines: values.machines)
         }
     }
 
@@ -167,6 +184,25 @@ struct SettingsView: View {
         var changed = values.settings
         changed.keyBarConfig = bar
         actions.update(changed)
+    }
+
+    /// Saved agents live in their own store rather than in `values`, so this row reads it.
+    private func agentsRow(_ agentLibrary: AgentLibrary) -> some View {
+        NavigationLink {
+            AgentsSettingsView(library: agentLibrary, machines: values.machines)
+        } label: {
+            LabeledContent {
+                Text(agentLibrary.presets.isEmpty ? settingsText("settings.machines.none", "None") : String(agentLibrary.presets.count))
+                    .foregroundStyle(Color.togoMute)
+            } label: {
+                let title = settingsText("settings.agents.title", "Agents")
+                if dynamicTypeSize.isAccessibilitySize {
+                    Text(title)
+                } else {
+                    Label(title, systemImage: "sparkles")
+                }
+            }
+        }
     }
 
     /// Opens the guide full screen rather than pushing a page, so it has no chevron.
@@ -307,7 +343,7 @@ extension SettingsValues {
             machines: [
                 SettingsMachine(
                     id: Samples.studio, name: "Studio", address: "studio.local", symbol: .desktop,
-                    helper: .present(version: "0.3.0", live: true)
+                    helper: .present(version: "0.3.0", live: true), checksAgents: true
                 ),
                 SettingsMachine(
                     id: Samples.build, name: "Build box", address: "build.tail1234.ts.net", symbol: .server,

@@ -76,7 +76,7 @@ struct RequestCardView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.togoRaised, in: .rect(cornerRadius: 16))
-        .animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: card.phase)
+        .motion(.confirm, value: card.phase)
         .haptic(.approve, trigger: card.phase) { sent($0) == .approved }
         .haptic(.deny, trigger: card.phase) { sent($0) == .denied }
         .haptic(.error, trigger: failure) { $0 != nil }

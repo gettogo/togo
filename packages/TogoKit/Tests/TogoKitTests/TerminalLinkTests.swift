@@ -233,7 +233,9 @@ struct TerminalLinkTests {
         await link.resize(cols: 80, rows: 24)
         await link.resize(cols: 90, rows: 30)
         await link.resize(cols: 100, rows: 30)
-        try await Task.sleep(for: .milliseconds(300))
+        // Wait for the flush instead of guessing how long a loaded machine needs.
+        #expect(await eventually(.seconds(20)) { await !transport.resizes.isEmpty })
+        try await Task.sleep(for: .milliseconds(150))
         #expect(await transport.resizes == [.resize(100, 30)])
         #expect(await link.resizesSent == 1)
         await link.stop()

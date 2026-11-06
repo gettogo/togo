@@ -73,7 +73,10 @@ import WatchKit
     }
 
     /// The phone's latest pairings and context. The pairings replace the Watch's own.
-    func received(pairings data: Data?, context contextData: Data?) {
+    func received(pairings data: Data?, context contextData: Data?, doneSilent: Bool? = nil) {
+        if let doneSilent {
+            SharedSettings.writeDoneSilent(doneSilent, to: UserDefaults(suiteName: SharedGroup.watch))
+        }
         if let data, let list = try? JSONDecoder().decode([Pairing].self, from: data) {
             let keep = Set(list.map(\.hostId))
             for stale in pairings.all() where !keep.contains(stale.hostId) {
@@ -83,6 +86,29 @@ import WatchKit
         }
         if let contextData, let context = try? JSONDecoder().decode(WatchContext.self, from: contextData) {
             store.apply(context: context)
+        }
+    }
+
+    /// Hands a reply to the phone, which sends it over its own connection to the machine. A
+    /// phone out of reach, or one that does not answer, means the phone is needed.
+    func sendReply(_ reply: WatchReplyMessage) async -> ReplyOutcome {
+        await send(reply.message)
+    }
+
+    /// Hands Run again to the phone, which starts the session over its own connection.
+    func sendRunAgain(_ run: WatchRunAgainMessage) async -> ReplyOutcome {
+        await send(run.message)
+    }
+
+    private func send(_ message: [String: Any]) async -> ReplyOutcome {
+        guard let session, session.activationState == .activated, session.isReachable else { return .needsPhone }
+        nonisolated(unsafe) let payload = message
+        return await withCheckedContinuation { continuation in
+            session.sendMessage(payload, replyHandler: { answer in
+                continuation.resume(returning: ReplyOutcome(message: answer))
+            }, errorHandler: { _ in
+                continuation.resume(returning: .needsPhone)
+            })
         }
     }
 
@@ -99,8 +125,9 @@ import WatchKit
         let latest = session.receivedApplicationContext
         let pairings = latest[WatchLinkKey.pairings] as? Data
         let context = latest[WatchLinkKey.context] as? Data
+        let silent = latest[WatchLinkKey.doneSilent] as? Bool
         Task { @MainActor in
-            self.received(pairings: pairings, context: context)
+            self.received(pairings: pairings, context: context, doneSilent: silent)
             self.sendDevice()
         }
     }
@@ -108,6 +135,7 @@ import WatchKit
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         let pairings = applicationContext[WatchLinkKey.pairings] as? Data
         let context = applicationContext[WatchLinkKey.context] as? Data
-        Task { @MainActor in self.received(pairings: pairings, context: context) }
+        let silent = applicationContext[WatchLinkKey.doneSilent] as? Bool
+        Task { @MainActor in self.received(pairings: pairings, context: context, doneSilent: silent) }
     }
 }

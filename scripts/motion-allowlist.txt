@@ -1,21 +1,2 @@
-# Lines that still animate without a motion role, checked by scripts/check-motion.sh.
-# Format: <path under apps/ios/Togo><TAB><trimmed source line>. Delete a line when its code
-# moves to a role; never add one.
-ControlCenter/ApproveButton.swift	.animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: configuration.isPressed)
-ControlCenter/RequestCardView.swift	.animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: card.phase)
-Design/Components/ActionStyles.swift	.animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: configuration.isPressed)
-Design/Components/PawWalk.swift	withAnimation(Motion.pawStep) { lit = (lit + 1) % Self.paws.count }
-Design/Components/StatusWord.swift	.animation(Motion.stateText(reduce: reduceMotion), value: status)
-Launch/LaunchOverlay.swift	static let curve = UnitCurve.easeOut
-Review/Diff/DiffScreen.swift	.animation(Motion.motion(Motion.fade, reduce: reduceMotion), value: model.message)
-Review/Files/FileViewer.swift	withAnimation(Motion.motion(Motion.confirm, reduce: reduceMotion)) {
-Review/ReviewRoot.swift	.onAppear { withAnimation(Motion.fade) { shown = true } }
-Settings/ShortcutBuilderView.swift	.animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: selected)
-Tutorial/TutorialFlow.swift	.animation(Motion.motion(Motion.tabSettle, reduce: reduceMotion), value: page)
-Tutorial/TutorialFlow.swift	withAnimation(Motion.tabSettle, move)
-Tutorial/TutorialPage.swift	.animation(Motion.motion(Motion.dropIn, reduce: reduceMotion).delay(Double(index) * 0.12), value: complete)
-Tutorial/TutorialPage.swift	withAnimation(Motion.dropIn) { shown = true }
-Workspace/ReviewHeaderButtons.swift	.animation(Motion.stateText(reduce: reduceMotion), value: model.changesLabel)
-Workspace/ReviewHeaderButtons.swift	.animation(Motion.stateText(reduce: reduceMotion), value: model.hasPorts)
-Workspace/WorkspaceHeader.swift	.animation(Motion.stateText(reduce: reduceMotion), value: line)
-Workspace/WorkspaceHeader.swift	.animation(Motion.stateText(reduce: reduceMotion), value: link)
+# Stays empty: scripts/check-motion.sh fails on any line here. Every animation in the app uses
+# a motion role.

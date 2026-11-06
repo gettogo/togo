@@ -84,7 +84,7 @@ struct ChangesView: View {
         }
         .groupedList()
         .refreshable { await model.refresh() }
-        .motion(Motion.fade, value: model.sections)
+        .motion(.fade, value: model.sections)
         .safeAreaInset(edge: .bottom) {
             if model.canWrite {
                 Button(ChangesCopy.commit) { model.openCommitSheet() }

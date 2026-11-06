@@ -48,7 +48,11 @@ func (s *Sender) observe(ev wire.Event, sid string, info SessionInfo, now time.T
 			s.Live.Remove(sess.ID, now)
 			return
 		}
-		s.Live.Session(sess.ID, sess.Status, sess.Bib, sess.Agent, now)
+		reason := ""
+		if sess.Exit != nil {
+			reason = liveReason(sess.Exit.Reason)
+		}
+		s.Live.Session(sess.ID, sess.Status, sess.Bib, sess.Agent, reason, now)
 	case wire.SessionRemovedEvent:
 		if sid != "" {
 			s.Live.Remove(sid, now)
@@ -203,6 +207,17 @@ func (s *Sender) anyPendingLocked() bool {
 		}
 	}
 	return false
+}
+
+// liveReason is the exit reason as the Live Activity may carry it: one of
+// a fixed vocabulary, else empty so the key is left out. The content state
+// is not sealed, so no other text may reach it.
+func liveReason(r string) string {
+	switch r {
+	case wire.ExitReasonExit, wire.ExitReasonInterrupted, wire.ExitReasonError, wire.ExitReasonUsageLimit:
+		return r
+	}
+	return ""
 }
 
 // mask drops the command for a device that did not opt in to command text.

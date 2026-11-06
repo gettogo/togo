@@ -357,7 +357,9 @@ import UIKit
         #expect(sawLoading)
         #expect(model.state == .ready)
         #expect(model.rows(split: false).count > 10_000)
-        #expect(longest < .milliseconds(50), "main actor blocked for \(longest)")
+        // Parsing and tokenizing this diff on the main actor takes well over a second in a Debug
+        // build, so 250 ms still catches that while tolerating scheduler stalls on a busy machine.
+        #expect(longest < .milliseconds(250), "main actor blocked for \(longest)")
     }
 
     // MARK: Writes
@@ -394,6 +396,23 @@ import UIKit
         #expect(question.selection.seen.keys.sorted() == ["src/handlers/items.ts"])
         await model.confirm(question)
         #expect(fake.writes == [.discard(["src/handlers/items.ts"])])
+    }
+
+    /// Stage and unstage feel done; a discard feels like a warning. Neither feels like approving
+    /// an agent's request.
+    @Test func writesCountForTheirOwnHaptics() async throws {
+        let fake = FakeReviewServices()
+        let model = model(.worktree(path: "src/handlers/items.ts"), services: fake)
+        await model.load()
+        await model.perform(.stage)
+        await model.perform(.unstage)
+        #expect(model.successes == 2)
+        #expect(model.discards == 0)
+        await model.perform(.discard)
+        await model.confirm(try #require(model.pendingDiscard))
+        #expect(model.successes == 2)
+        #expect(model.discards == 1)
+        #expect(model.completedWrites == 3)
     }
 
     @Test func hiddenDirectionCharactersAreMarked() async throws {

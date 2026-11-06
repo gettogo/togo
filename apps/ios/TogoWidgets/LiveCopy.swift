@@ -3,11 +3,13 @@ import SwiftUI
 import TogoPush
 
 /// A session's state as a Live Activity shows it. Anything outside the known set reads
-/// "Waiting", so a newer helper can never put a raw value on the lock screen. An activity past
+/// "Waiting", so a newer helper can never put a raw value on the lock screen. A stopped agent
+/// reads as the app says it, using the exit reason word the activity carries; a reason this
+/// build does not know reads as the plain status. An activity past
 /// its stale date no longer claims anything current: a request reads as expired, anything
 /// else as not updated, both without the accent or a running clock.
 enum LiveStatus: Equatable {
-    case needsYou, working, done, other, expired, notUpdated
+    case needsYou, working, done, ended, failed, offline, other, expired, notUpdated
 
     init(_ raw: String, stale: Bool = false) {
         if stale {
@@ -18,6 +20,9 @@ enum LiveStatus: Equatable {
         case "needs_you": self = .needsYou
         case "working": self = .working
         case "done": self = .done
+        case "ended": self = .ended
+        case "failed": self = .failed
+        case "offline": self = .offline
         default: self = .other
         }
     }
@@ -27,10 +32,26 @@ enum LiveStatus: Equatable {
         case .needsYou: String(localized: "live.status.needsYou", defaultValue: "Needs you")
         case .working: String(localized: "live.status.working", defaultValue: "Working")
         case .done: String(localized: "live.status.done", defaultValue: "Done")
+        case .ended: LifecycleWords.ended
+        case .failed: LifecycleWords.error
+        case .offline: String(localized: "live.status.offline", defaultValue: "Offline")
         case .other: String(localized: "live.status.other", defaultValue: "Waiting")
         case .expired: String(localized: "live.status.expired", defaultValue: "Request expired")
         case .notUpdated: String(localized: "live.status.notUpdated", defaultValue: "Not updated")
         }
+    }
+
+    /// The status in words, with the exit reason word for a stopped agent. The reason only
+    /// matters for ended and failed; `exit` says nothing the status does not, and any word
+    /// this build does not know reads as the plain status.
+    func word(reason: String?) -> String {
+        let status: String
+        switch self {
+        case .ended: status = "ended"
+        case .failed: status = "failed"
+        default: return word
+        }
+        return LifecycleWords.status(status: status, reason: LifecycleWords.knownReason(reason), code: nil) ?? word
     }
 
     /// A finished session has nothing to time, and a stale one cannot say how long.
@@ -38,6 +59,10 @@ enum LiveStatus: Equatable {
 
     /// The waiting count only means something while it is current.
     var showsCount: Bool { self != .expired && self != .notUpdated }
+
+    /// The compact island has room for one thing: while the machine is silent that is the word
+    /// "Offline", not a count.
+    var showsCompactCount: Bool { showsCount && self != .offline }
 }
 
 /// The words and links the Live Activity and the waiting widget share.

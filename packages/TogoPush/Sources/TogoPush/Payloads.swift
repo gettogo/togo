@@ -7,6 +7,12 @@ public struct PushPayload: Codable, Sendable, Equatable {
     public enum Kind: String, Codable, Sendable {
         case needsYou = "needs_you"
         case done, job, notify, clear
+        /// The agent exited on its own; never a "done".
+        case ended
+        /// The agent crashed, hit an error or stopped on a usage limit.
+        case failed
+        /// The machine went quiet while sessions were working.
+        case offline
     }
 
     public var v: Int
@@ -22,11 +28,21 @@ public struct PushPayload: Codable, Sendable, Equatable {
     public var options: [PushOption]?
     public var subject: PushSubject?
     public var ts: Int64
+    /// How the agent ended; set for `ended` and `failed`.
+    public var exit: PushExit?
+    /// How many sessions were working; set for `offline`.
+    public var active: Int?
+    /// True for the one reminder of a request that is still waiting.
+    public var reminder: Bool?
+    /// True when a request takes a typed answer as well as its options. Absent from older
+    /// helpers, which reads as false.
+    public var allowText: Bool?
 
     public init(
         v: Int = 1, kind: Kind, sessionId: String? = nil, bib: String? = nil, agent: String? = nil,
         host: String? = nil, title: String, body: String, requestId: String? = nil, options: [PushOption]? = nil,
-        subject: PushSubject? = nil, ts: Int64
+        subject: PushSubject? = nil, ts: Int64, exit: PushExit? = nil, active: Int? = nil, reminder: Bool? = nil,
+        allowText: Bool? = nil
     ) {
         self.v = v
         self.kind = kind
@@ -40,6 +56,24 @@ public struct PushPayload: Codable, Sendable, Equatable {
         self.options = options
         self.subject = subject
         self.ts = ts
+        self.exit = exit
+        self.active = active
+        self.reminder = reminder
+        self.allowText = allowText
+    }
+}
+
+/// Why an agent stopped, as the helper reports it. `reason` is `exit`, `interrupted`,
+/// `error`, `usage_limit` or a value a newer helper adds.
+public struct PushExit: Codable, Sendable, Equatable {
+    public var code: Int?
+    public var reason: String
+    public var detail: String?
+
+    public init(code: Int?, reason: String, detail: String?) {
+        self.code = code
+        self.reason = reason
+        self.detail = detail
     }
 }
 

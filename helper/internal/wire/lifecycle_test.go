@@ -157,7 +157,7 @@ func TestNewFixturesDecode(t *testing.T) {
 		"host.info":                {empty, func() any { return &HostInfo{} }},
 	} {
 		t.Run(name, func(t *testing.T) {
-			raw, err := os.ReadFile("../../../protocol/v1/fixtures/pending/" + name + ".json")
+			raw, err := os.ReadFile("../../../protocol/v1/fixtures/" + name + ".json")
 			if err != nil {
 				t.Fatal(err)
 			}

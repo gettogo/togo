@@ -1,34 +1,13 @@
 import SwiftUI
+import UIKit
 
 /// The only animation curves the app uses. Each one belongs to one kind of change, so the same
 /// motion always means the same thing.
 enum Motion {
-    /// A tab settling under the finger after a swipe.
-    static let tabSettle = animation(.tabSettle)
-    /// A request arriving from the top.
-    static let dropIn = animation(.dropIn)
-    /// An answered request shrinking away.
-    static let collapse = animation(.collapse)
-    /// A button morphing into its confirmation.
-    static let confirm = animation(.confirm)
-    /// The Reduce Motion stand-in for every movement, and plain appearance changes.
-    static let fade = animation(.fade)
-    /// One paw print lighting while a connection is made.
-    static let pawStep = animation(.pawStep)
-
     /// A tapped row growing into its terminal. The system zoom already cross-fades under
     /// Reduce Motion.
     static func rowGrow(sourceID: some Hashable, in namespace: Namespace.ID) -> some NavigationTransition {
         .zoom(sourceID: sourceID, in: namespace)
-    }
-
-    static func motion(_ animation: Animation, reduce: Bool) -> Animation {
-        reduce ? fade : animation
-    }
-
-    /// Status text changes in place; under Reduce Motion it swaps with no animation at all.
-    static func stateText(reduce: Bool) -> Animation? {
-        animation(.fade, reduce: reduce)
     }
 
     /// The role's curve, or under Reduce Motion its short cross-fade, or nil when the change
@@ -42,8 +21,54 @@ enum Motion {
         }
     }
 
-    private static func animation(_ role: MotionRole) -> Animation {
-        spec(role).curve.animation
+    /// The role's nominal length in seconds: an eased curve's duration, or a spring's response.
+    /// A spring keeps settling a little past its response.
+    static func nominalDuration(_ role: MotionRole) -> Double {
+        spec(role).curve.duration
+    }
+
+    /// A UIKit animator that moves the way the role does, or under Reduce Motion its short
+    /// cross-fade. Nil when the change should land with no animation: run `animations` directly.
+    static func animator(
+        _ role: MotionRole, reduce: Bool, animations: @escaping @MainActor () -> Void
+    ) -> UIViewPropertyAnimator? {
+        let spec = spec(role)
+        guard reduce else {
+            return UIViewPropertyAnimator(
+                duration: spec.curve.duration, timingParameters: timingParameters(role)
+            ).adding(animations)
+        }
+        switch spec.reduced {
+        case let .fade(duration):
+            return UIViewPropertyAnimator(
+                duration: duration, timingParameters: UICubicTimingParameters(animationCurve: .easeOut)
+            ).adding(animations)
+        case .instant:
+            return nil
+        }
+    }
+
+    /// The role's curve for a `UIViewPropertyAnimator`, so UIKit moves the way SwiftUI does.
+    /// Prefer `animator(_:reduce:animations:)`, which also honours Reduce Motion.
+    static func timingParameters(_ role: MotionRole) -> UITimingCurveProvider {
+        switch spec(role).curve {
+        case let .spring(response, damping):
+            // A unit mass with the stiffness and damping SwiftUI derives from response and
+            // damping fraction.
+            let stiffness = pow(2 * .pi / response, 2)
+            return UISpringTimingParameters(
+                mass: 1, stiffness: stiffness, damping: 4 * .pi * damping / response, initialVelocity: .zero
+            )
+        case .easeOut: return UICubicTimingParameters(animationCurve: .easeOut)
+        case .easeInOut: return UICubicTimingParameters(animationCurve: .easeInOut)
+        }
+    }
+}
+
+private extension UIViewPropertyAnimator {
+    func adding(_ animations: @escaping @MainActor () -> Void) -> Self {
+        addAnimations(animations)
+        return self
     }
 }
 
@@ -61,6 +86,29 @@ struct MotionSpec: Equatable, Sendable {
             case let .easeOut(duration): .easeOut(duration: duration)
             case let .easeInOut(duration): .easeInOut(duration: duration)
             }
+        }
+
+        /// An eased curve's duration, or a spring's response.
+        var duration: Double {
+            switch self {
+            case let .spring(response, _): response
+            case let .easeOut(duration), let .easeInOut(duration): duration
+            }
+        }
+
+        /// The eased curve as a unit curve, for frames computed from time. Nil for a spring.
+        var unitCurve: UnitCurve? {
+            switch self {
+            case .spring: nil
+            case .easeOut: .easeOut
+            case .easeInOut: .easeInOut
+            }
+        }
+
+        /// The spring, for frames computed from time. Nil for an eased curve.
+        var spring: Spring? {
+            guard case let .spring(response, damping) = self else { return nil }
+            return Spring(response: response, dampingRatio: damping)
         }
     }
 
@@ -85,21 +133,6 @@ extension View {
     /// Animates changes to `value` the way `role` moves, honouring Reduce Motion.
     func motion(_ role: MotionRole, value: some Equatable) -> some View {
         modifier(MotionRoleModifier(role: role, value: value))
-    }
-
-    /// `animation(_:value:)` that falls back to a cross-fade under Reduce Motion.
-    func motion(_ animation: Animation, value: some Equatable) -> some View {
-        modifier(MotionModifier(animation: animation, value: value))
-    }
-}
-
-private struct MotionModifier<Value: Equatable>: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let animation: Animation
-    let value: Value
-
-    func body(content: Content) -> some View {
-        content.animation(Motion.motion(animation, reduce: reduceMotion), value: value)
     }
 }
 

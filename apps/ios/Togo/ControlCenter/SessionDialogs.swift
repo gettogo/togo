@@ -39,9 +39,10 @@ struct SessionDialogs: ViewModifier {
 }
 
 extension AppStore {
-    /// Runs a row, card or machine command. `open` shows a session; `kill` and `rename` ask first.
+    /// Runs a row, card or machine command. `open` shows a session; `kill` and `rename` ask
+    /// first; `tools` reach the helper for Run again and restoring.
     func run(
-        _ command: SessionCommand, open: (SessionRow, TransportPreference?) -> Void,
+        _ command: SessionCommand, tools: any MachineTools, open: (SessionRow, TransportPreference?) -> Void,
         kill: (SessionRow) -> Void, rename: (SessionRow) -> Void
     ) {
         switch command {
@@ -55,6 +56,12 @@ extension AppStore {
             UIPasteboard.general.string = row.cwd
         case .kill(let row):
             kill(row)
+        case .runAgain(let row):
+            Task { await runAgain(row, tools: tools) }
+        case .restore(let hostID, let session, let resume):
+            Task { await restore(session, on: hostID, resume: resume, tools: tools) }
+        case .dismissRestorable(let hostID, let session):
+            Task { await dismissRestorable(session, on: hostID, tools: tools) }
         case .review(let row, let tab):
             review(row, tab: tab)
         case .newSession(let hostID):
@@ -64,6 +71,8 @@ extension AppStore {
             Task { await services.refresh() }
         case .signIn(let hostID):
             sheet = .signIn(hostID)
+        case .wake(let hostID):
+            Task { await wake(hostID) }
         case .installHelper(let hostID), .edit(let hostID):
             sheet = .editMachine(hostID)
         }

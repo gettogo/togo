@@ -8,33 +8,39 @@ enum LaunchTimeline {
     static let pawCount = 4
     /// Time between one paw print and the next.
     static let pawBeat = Duration.milliseconds(80)
-    /// Each print fading in; the same length as `Motion.pawStep`, so the walk reads like the
-    /// one shown while connecting.
-    static let pawFade = Duration.milliseconds(120)
+    /// Each print fading in with the `pawStep` role, so the walk reads like the one shown
+    /// while connecting.
+    static let pawFade = length(of: .pawStep)
     /// The walk sets off on the chevron's last beat, so the prompt hands over to the trail
     /// without a pause.
     static let walkStart = draw - pawBeat
     /// The beacon lights on the beat after the last print, as if the walk arrived there.
     static let beaconStart = walkStart + pawBeat * pawCount
-    /// The beacon switching on. Its growth is a spring and keeps settling through the hold.
+    /// The beacon switching on. It grows in like an arrival (`dropIn`) and keeps settling
+    /// through the hold.
     static let beaconLight = Duration.milliseconds(60)
     static let hold = Duration.milliseconds(100)
     static let fadeStart = beaconStart + beaconLight + hold
-    static let fade = Duration.milliseconds(200)
+    /// The mark handing over to the screen underneath with the `fade` role.
+    static let fade = length(of: .fade)
     static let total = fadeStart + fade
 
     /// Under Reduce Motion the whole mark shows at once, holds, and cross-fades.
-    static let reducedFade = Duration.milliseconds(200)
+    static let reducedFade = fade
     static let reducedTotal = hold + reducedFade
 
     static func pawStart(_ index: Int) -> Duration {
         walkStart + pawBeat * index
     }
 
-    /// Every eased segment eases out, like `Motion.fade` and `Motion.pawStep`.
-    static let curve = UnitCurve.easeOut
-    static let beaconSpring = Spring(response: 0.35, dampingRatio: 0.8)
+    /// Every eased segment moves like the `pawStep` and `fade` roles.
+    static let eased = Motion.spec(.pawStep).curve
+    static let beaconGrowth = Motion.spec(.dropIn).curve
     static let beaconFromScale = 0.6
+
+    private static func length(of role: MotionRole) -> Duration {
+        .milliseconds(Int((Motion.nominalDuration(role) * 1000).rounded()))
+    }
 }
 
 /// The launch at one moment. A pure function of time, so snapshots can stop it on any frame.
@@ -60,17 +66,17 @@ struct LaunchFrame: Equatable {
         beaconOpacity = Self.progress(time, from: T.beaconStart, over: T.beaconLight)
         beaconScale = time < T.beaconStart
             ? T.beaconFromScale
-            : T.beaconSpring.value(
+            : T.beaconGrowth.spring?.value(
                 fromValue: T.beaconFromScale, toValue: 1, initialVelocity: 0,
                 time: (time - T.beaconStart).inSeconds
-            )
+            ) ?? 1
         overlayOpacity = 1 - Self.progress(time, from: T.fadeStart, over: T.fade)
     }
 
     /// Eased progress of a segment that starts at `start` and lasts `length`, clamped to 0...1.
     private static func progress(_ time: Duration, from start: Duration, over length: Duration) -> Double {
         let linear = ((time - start).inSeconds / length.inSeconds).clamped(to: 0...1)
-        return LaunchTimeline.curve.value(at: linear)
+        return LaunchTimeline.eased.unitCurve?.value(at: linear) ?? linear
     }
 }
 

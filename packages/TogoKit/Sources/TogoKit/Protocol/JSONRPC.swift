@@ -50,6 +50,12 @@ public struct RPCErrorObject: Codable, Error, Equatable, Sendable {
         self.message = message
         self.data = data
     }
+
+    /// The word the helper names in `data.reason` for a conflict or refusal, nil when absent.
+    public var reason: String? {
+        if case .object(let fields)? = data, case .string(let reason)? = fields["reason"] { return reason }
+        return nil
+    }
 }
 
 /// Any message from the helper: a response (`id` with `result` or `error`) or a
@@ -97,4 +103,5 @@ public enum RPCErrorCode {
     public static let unsupportedVersion = -32005
     public static let conflict = -32006
     public static let notManaged = -32007
+    public static let refused = -32008
 }

@@ -15,6 +15,11 @@ import UIKit
     public var onCompose: (() -> Void)?
     /// Called by a `.dictate` item. The host opens its compose bar and listens there.
     public var onDictate: (() -> Void)?
+    /// Hides the Compose and Dictate keys while the host keeps its compose bar away, as in a
+    /// mode that shows the terminal alone.
+    public var hidesCompose = false {
+        didSet { refreshComposeKeys() }
+    }
 
     private weak var engine: SwiftTermEngine?
     private let stack = UIStackView()
@@ -149,6 +154,12 @@ import UIKit
             buttons[item.id]?.isHidden = isShowingDPad
         }
         invalidateIntrinsicContentSize()
+    }
+
+    private func refreshComposeKeys() {
+        for item in config.items where item.action == .compose || item.action == .dictate {
+            buttons[item.id]?.isHidden = hidesCompose
+        }
     }
 
     private func refreshVisibility() {

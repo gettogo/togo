@@ -15,7 +15,7 @@ struct SnapshotMapper {
         seen = seen.filter { $0.key.hostID != hostID }
     }
 
-    mutating func map(_ snapshot: HostSnapshot, noHelper: Bool, now: Date) -> HostViewSnapshot {
+    mutating func map(_ snapshot: HostSnapshot, noHelper: Bool, wake: WakeTarget? = nil, now: Date) -> HostViewSnapshot {
         let hostID = snapshot.hostID
         let names = agentNames[hostID] ?? [:]
         let rows = snapshot.sessions.map { session in
@@ -37,7 +37,7 @@ struct SnapshotMapper {
         return HostViewSnapshot(
             hostID: hostID, reachability: Self.reachability(snapshot, now: now),
             helper: Self.helper(snapshot, noHelper: noHelper), sessions: rows, requests: cards, at: now,
-            capabilities: snapshot.capabilities,
+            capabilities: snapshot.capabilities, awake: snapshot.awake, wake: wake,
             closed: Dictionary(
                 snapshot.closed.map { ($0.requestId, Self.outcome($0.resolution)) }, uniquingKeysWith: { _, last in last }
             )
@@ -49,7 +49,7 @@ struct SnapshotMapper {
         let since: Date
         if let previous = seen[key], previous.status == session.status {
             since = previous.since
-        } else if seen[key] == nil, session.status == .done || session.status == .exited {
+        } else if seen[key] == nil, session.status.isFinished {
             // A session already finished when first seen has been finished for an unknown time;
             // its creation time is the earliest it could have been, so an old one archives at once.
             since = session.createdAt
@@ -60,7 +60,8 @@ struct SnapshotMapper {
         return SessionRow(
             id: session.id, hostID: hostID, bib: session.bib, name: session.name, agent: session.agent,
             agentName: agentName, status: session.status, activity: session.activity, cwd: session.cwd,
-            muted: session.muted, managed: session.managed, meta: session.meta, statusSince: since
+            muted: session.muted, managed: session.managed, meta: session.meta, statusSince: since,
+            exit: session.status.isFinished ? session.exit : nil
         )
     }
 

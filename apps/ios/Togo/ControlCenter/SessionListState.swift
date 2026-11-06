@@ -134,6 +134,7 @@ struct ArchiveRow: View {
 /// The archive as a screen of its own: rows open in the workspace, beside the sidebar or in
 /// the cover.
 struct ArchiveScreen: View {
+    @Environment(\.machineTools) private var machineTools
     let store: AppStore
 
     var body: some View {
@@ -141,7 +142,7 @@ struct ArchiveScreen: View {
             if case .open(let row, let transport) = command, store.workspaceInline {
                 store.showFromSidebar(row, transport: transport)
             } else {
-                store.run(command, open: { row, transport in
+                store.run(command, tools: machineTools, open: { row, transport in
                     store.open(hostID: row.hostID, sessionID: row.id, transport: transport)
                 }, kill: { _ in }, rename: { _ in })
             }

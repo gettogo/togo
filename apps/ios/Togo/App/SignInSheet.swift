@@ -106,7 +106,7 @@ struct SignInPhaseView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.togoInk)
-            .motion(Motion.fade, value: phase)
+            .motion(.fade, value: phase)
             .navigationTitle(machine)
             .navigationBarTitleDisplayMode(.inline)
     }

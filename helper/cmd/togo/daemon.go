@@ -127,6 +127,7 @@ var (
 	restartPendingWait = 10 * time.Minute
 	restartExitWait    = 10 * time.Second
 	restartServiceWait = 15 * time.Second
+	restartStartWait   = daemon.StartWait
 )
 
 func runDaemonRestart(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -231,7 +232,7 @@ func ensureDaemon(ctx context.Context, home string) error {
 			}
 		}
 	}
-	c, err := daemon.Connect(ctx, socket, func() error { return startDaemon(home) }, daemon.StartWait)
+	c, err := daemon.Connect(ctx, socket, func() error { return startDaemon(home) }, restartStartWait)
 	if err != nil {
 		return err
 	}

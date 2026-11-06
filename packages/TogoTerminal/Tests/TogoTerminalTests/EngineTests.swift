@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import SwiftTerm
 import UIKit
 @testable import TogoTerminal
 
@@ -226,5 +227,38 @@ let esc = "\u{1b}"
         h.feed("\(esc)]2;build\u{07}")
         #expect(await waitUntil { !titles.isEmpty })
         #expect(titles == ["build"])
+    }
+
+    @Test func readNewOutputFollowsFocusAndSetting() {
+        let h = EngineHarness()
+        let feed = h.engine.outputFeed
+        feed.voiceOverRunning = { true }
+        feed.focused = { true }
+        feed.refresh()
+        #expect(feed.isActive)
+        #expect(h.engine.terminalView.notifyUpdateChanges)
+        var settings = TerminalSettings()
+        settings.readNewOutput = false
+        h.engine.apply(settings)
+        #expect(!feed.enabled)
+        #expect(!feed.isActive)
+        #expect(!h.engine.terminalView.notifyUpdateChanges)
+    }
+
+    @Test func liveScreenReportsTheAlternateScreen() async {
+        let h = EngineHarness()
+        h.feed("$ ls")
+        #expect(await waitUntil { h.engine.liveScreen()?.rows.first == "$ ls" })
+        #expect(h.engine.liveScreen()?.isAlternate == false)
+        h.feed("\u{1b}[?1049h~")
+        #expect(await waitUntil { h.engine.liveScreen()?.isAlternate == true })
+    }
+
+    @Test func cursorLineIsNotNamedWhileTheCursorIsHidden() async {
+        let h = EngineHarness()
+        h.feed("$ ls")
+        #expect(await waitUntil { h.engine.terminalView.accessibilityValue == "Cursor line, $ ls" })
+        h.feed("\u{1b}[?25l")
+        #expect(await waitUntil { h.engine.terminalView.accessibilityValue == nil })
     }
 }

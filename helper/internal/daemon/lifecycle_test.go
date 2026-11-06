@@ -78,7 +78,7 @@ func serve(t *testing.T, h rpc.Handler, frames ...json.RawMessage) json.RawMessa
 func TestLifecycleFixtures(t *testing.T) {
 	for _, name := range []string{"session.list-ended", "session.relaunch", "session.relaunch-running"} {
 		t.Run(name, func(t *testing.T) {
-			raw, err := os.ReadFile(filepath.Join("..", "..", "..", "protocol", "v1", "fixtures", "pending", name+".json"))
+			raw, err := os.ReadFile(filepath.Join("..", "..", "..", "protocol", "v1", "fixtures", name+".json"))
 			if err != nil {
 				t.Fatal(err)
 			}

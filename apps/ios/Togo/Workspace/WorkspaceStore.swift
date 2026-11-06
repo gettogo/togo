@@ -97,6 +97,8 @@ extension AppStore {
     func forgetMachine(_ hostID: HostID) {
         endReview(hostID: hostID, sessionID: nil, why: ReviewEntryCopy.machineRemoved(machineName(for: hostID)))
         removedMachines.insert(hostID)
+        restoreLoaded.remove(hostID)
+        restoring = restoring.filter { $0.hostID != hostID }
         controlCenter.machines.removeAll { $0.id == hostID }
         controlCenter.requests.removeAll { $0.hostID == hostID }
         controlCenter.archived.removeAll { $0.hostID == hostID }

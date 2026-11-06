@@ -65,6 +65,39 @@ struct SettingsSnapshotTests {
         assertScreen(named: "settings-machines-removing") { page(.machines, removing) }
     }
 
+    @Test func machinesRemovingKeys() {
+        var removing = values
+        removing.machines = [values.machines[0]]
+        removing.pendingRemovals = [
+            PendingRemoval(id: "h_build", name: "Build box"),
+            PendingRemoval(
+                id: PendingRemoval.keyID(Samples.build), name: "Build box",
+                kind: .key(comment: "togo@Sams-iPhone", manual: false)
+            ),
+            PendingRemoval(
+                id: PendingRemoval.keyID(Samples.studio), name: "Mini",
+                kind: .key(comment: "togo@Sams-iPhone", manual: true)
+            ),
+        ]
+        assertScreen(named: "settings-machines-removing-keys") { page(.machines, removing) }
+    }
+
+    @Test func removeMachineQuestion() {
+        var machine = values.machines[0]
+        machine.removesKey = true
+        assertScreen(named: "settings-machines-remove-question") {
+            screen(MachinesSettingsView(machines: values.machines, isPad: false, asking: machine))
+        }
+    }
+
+    @Test func removeMachineQuestionOnIPad() {
+        var machine = values.machines[0]
+        machine.removesKey = true
+        assertScreen(named: "settings-machines-remove-question-ipad") {
+            screen(MachinesSettingsView(machines: values.machines, isPad: true, asking: machine))
+        }
+    }
+
     @Test func noMachines() {
         var empty = values
         empty.machines = []
@@ -91,5 +124,24 @@ struct SettingsSnapshotTests {
 
     @Test func acknowledgments() {
         assertScreen(screen(AcknowledgmentsView()), named: "settings-acknowledgments")
+    }
+}
+
+@MainActor
+struct ReportProblemSnapshotTests {
+    private let issue = IssueLink.url(app: "1.0 (42)", os: "27.2", device: "iPhone", helpers: ["0.3.0"])
+
+    @Test func page() {
+        assertScreen(named: "settings-report-problem") {
+            NavigationStack {
+                ReportProblemPage(file: URL(fileURLWithPath: "/tmp/togo-diagnostics-2026-11-05.json"), issue: issue)
+            }.togoControls()
+        }
+    }
+
+    @Test func exportNotReady() {
+        assertScreen(named: "settings-report-problem-waiting") {
+            NavigationStack { ReportProblemPage(file: nil, issue: issue) }.togoControls()
+        }
     }
 }

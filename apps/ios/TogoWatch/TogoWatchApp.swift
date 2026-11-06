@@ -21,7 +21,7 @@ struct TogoWatchApp: App {
 
 /// Waiting first, Sessions a swipe below.
 struct WatchRootView: View {
-    let store: WatchStore
+    @Bindable var store: WatchStore
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -34,6 +34,11 @@ struct WatchRootView: View {
             }
         }
         .tabViewStyle(.verticalPage)
+        .sheet(item: $store.openReply) { route in
+            NavigationStack {
+                ReplyView(model: store.replyModel(route.target), title: route.title)
+            }
+        }
         .onChange(of: scenePhase) { _, state in
             if state == .active { store.reload() }
         }

@@ -64,7 +64,7 @@ struct DiscoveryList: View {
         .scrollContentBackground(.hidden)
         .listRowSeparatorTint(Color.togoLine)
         .listSectionSpacing(28)
-        .motion(Motion.fade, value: hosts)
+        .motion(.fade, value: hosts)
     }
 
     @ViewBuilder private var emptyRow: some View {

@@ -30,6 +30,10 @@ public struct HostSnapshot: Sendable, Equatable {
     public var lastSeen: Date?
     public var capabilities: Set<String>
     public var closed: [ClosedApproval] = []
+    /// Keep-awake state; nil until the helper reports it or when it has no `awake.v1`.
+    public var awake: AwakeStatus?
+    /// The machine's interfaces for Wake-on-LAN; nil until read or when it has no `hostinfo.v1`.
+    public var hostInfo: HostInfo?
 
     public init(
         hostID: UUID, reach: Reach = .connecting, helper: HelperPresence = .unknown, sessions: [Session] = [],
@@ -64,6 +68,8 @@ public struct HostSnapshot: Sendable, Equatable {
             removeApproval(requestId)
             closed.append(ClosedApproval(requestId: requestId, resolution: resolution))
             if closed.count > Self.closedLimit { closed.removeFirst(closed.count - Self.closedLimit) }
+        case .awake(let status):
+            awake = status
         case .notify, .job, .unknown:
             break
         }

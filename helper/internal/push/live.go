@@ -37,6 +37,8 @@ const (
 // Unix seconds. RequestID is the focused request while one is waiting.
 // Command is the focused request's subject, cleaned; it leaves the host
 // only for devices that opted in, and is null for every other device.
+// Reason is the exit reason word of an ended or failed session and is
+// left out otherwise; it never carries exit detail.
 type LiveState struct {
 	Bib       *string `json:"bib"`
 	Agent     string  `json:"agent"`
@@ -45,11 +47,13 @@ type LiveState struct {
 	Since     int64   `json:"since"`
 	RequestID *string `json:"requestId"`
 	Command   *string `json:"command"`
+	Reason    string  `json:"reason,omitempty"`
 }
 
 func (a LiveState) equal(b LiveState) bool {
 	return eqPtr(a.Bib, b.Bib) && a.Agent == b.Agent && a.Status == b.Status && a.Waiting == b.Waiting &&
-		a.Since == b.Since && eqPtr(a.RequestID, b.RequestID) && eqPtr(a.Command, b.Command)
+		a.Since == b.Since && eqPtr(a.RequestID, b.RequestID) && eqPtr(a.Command, b.Command) &&
+		a.Reason == b.Reason
 }
 
 func eqPtr(a, b *string) bool {
@@ -85,6 +89,7 @@ type LiveTracker struct {
 	reqs    map[string]liveRequest
 	working map[string]liveSession
 	exited  map[string]string // session id -> ended or failed
+	reasons map[string]string // session id -> exit reason word
 	lastID  string            // session of the last working focus
 	last    LiveState         // last computed state, the source of done
 	hasLast bool
@@ -100,6 +105,7 @@ func (t *LiveTracker) lazy() {
 		t.reqs = map[string]liveRequest{}
 		t.working = map[string]liveSession{}
 		t.exited = map[string]string{}
+		t.reasons = map[string]string{}
 	}
 }
 
@@ -135,9 +141,9 @@ func (t *LiveTracker) Close(rid string, now time.Time) {
 
 // Session records a session's status. needs_you is ignored, since pending
 // requests already say so; working starts the session's clock once; ended
-// and failed are kept for the done slot; any other status means it
-// stopped.
-func (t *LiveTracker) Session(id, status string, bib *string, agent string, now time.Time) {
+// and failed are kept for the done slot along with the exit reason word;
+// any other status means it stopped.
+func (t *LiveTracker) Session(id, status string, bib *string, agent, reason string, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.lazy()
@@ -147,11 +153,13 @@ func (t *LiveTracker) Session(id, status string, bib *string, agent string, now 
 	case status == wire.StatusEnded || status == wire.StatusFailed:
 		delete(t.working, id)
 		t.exited[id] = status
+		t.reasons[id] = reason
 		if t.lastID == "" {
 			t.lastID = id
 		}
 	case status == wire.LiveWorking:
 		delete(t.exited, id)
+		delete(t.reasons, id)
 		s, ok := t.working[id]
 		if !ok {
 			s.since = now
@@ -161,13 +169,14 @@ func (t *LiveTracker) Session(id, status string, bib *string, agent string, now 
 	default:
 		delete(t.working, id)
 		delete(t.exited, id)
+		delete(t.reasons, id)
 	}
 	t.settle(now)
 }
 
 // Remove forgets a session that is gone or muted.
 func (t *LiveTracker) Remove(id string, now time.Time) {
-	t.Session(id, "", nil, "", now)
+	t.Session(id, "", nil, "", "", now)
 }
 
 func (t *LiveTracker) settle(now time.Time) {
@@ -244,6 +253,9 @@ func (t *LiveTracker) state() (LiveState, bool) {
 			status = x
 		}
 		st = LiveState{Bib: t.last.Bib, Agent: t.last.Agent, Status: status, Since: t.quietAt.Unix()}
+		if _, ended := t.exited[t.lastID]; ended {
+			st.Reason = t.reasons[t.lastID]
+		}
 	default:
 		return LiveState{}, false
 	}

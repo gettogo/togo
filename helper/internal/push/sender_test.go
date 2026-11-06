@@ -74,6 +74,57 @@ func TestNeedsYouPlaintextMatchesFixture(t *testing.T) {
 	}
 }
 
+// TestNeedsYouAllowTextMatchesFixture: an approval that takes a typed answer
+// says so in its push, so the phone can offer Reply; one that does not leaves
+// the field out.
+func TestNeedsYouAllowTextMatchesFixture(t *testing.T) {
+	raw, err := os.ReadFile("../../../protocol/v1/fixtures/plaintext/push.needs_you-text.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fx struct {
+		Plaintext json.RawMessage `json:"plaintext"`
+	}
+	if err := json.Unmarshal(raw, &fx); err != nil {
+		t.Fatal(err)
+	}
+	e := newEnv(t, 1)
+	e.clock = time.UnixMilli(1793707200000)
+	e.sender.Host = "studio"
+	ev := withSubject(approvalOpen("r_abcdefghij"), wire.SubjectCommand, "npm test")
+	a := ev.Payload.(wire.ApprovalOpenEvent)
+	a.Approval.AllowText = true
+	ev.Payload = a
+	e.handle(ev)
+	e.handle(approvalOpen("r_bbbbbbbbbb"))
+	got := e.relay.received()
+	if len(got) != 2 {
+		t.Fatalf("relay got %d pushes", len(got))
+	}
+	keys, _ := e.svc.HostKeys()
+	plain, err := openRaw(e.phones[0], got[0].Ciphertext, keys.HostID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotJSON, want any
+	if err := json.Unmarshal(plain, &gotJSON); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(fx.Plaintext, &want); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotJSON, want) {
+		t.Fatalf("plaintext\n got %s\nwant %s", plain, fx.Plaintext)
+	}
+	plain, err = openRaw(e.phones[0], got[1].Ciphertext, keys.HostID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(plain), "allowText") {
+		t.Fatalf("buttons-only approval carries allowText: %s", plain)
+	}
+}
+
 func TestNoPushWhileForegroundSubscriber(t *testing.T) {
 	e := newEnv(t, 1)
 	e.hub.fg.Store(1)

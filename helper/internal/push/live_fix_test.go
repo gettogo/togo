@@ -58,7 +58,7 @@ func TestLiveAgentFallsBackToShell(t *testing.T) {
 		t.Fatalf("start with unknown agent: %+v", la)
 	}
 	tr := &LiveTracker{}
-	tr.Session("s_x", wire.LiveWorking, nil, "", e.clock)
+	tr.Session("s_x", wire.LiveWorking, nil, "", "", e.clock)
 	if st, _, ok := tr.Next(e.clock); !ok || st.Agent != agentShell || st.Status != wire.LiveWorking {
 		t.Fatalf("working session without agent: %+v ok=%v", st, ok)
 	}

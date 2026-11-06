@@ -81,8 +81,12 @@ enum DiffMode: String, CaseIterable, Sendable {
     var ended: String?
     private(set) var pendingDiscard: Confirmation?
     private(set) var busy = false
-    /// Counts writes that went through, for the success haptic.
+    /// Counts writes that went through, so the review can refresh.
     private(set) var completedWrites = 0
+    /// Bumped on a stage or unstage that went through, for the done haptic.
+    private(set) var successes = 0
+    /// Bumped on a discard that went through, for the warning haptic.
+    private(set) var discards = 0
     private(set) var canGoToNextHunk = false
     private(set) var canGoToPreviousHunk = false
 
@@ -441,6 +445,7 @@ enum DiffMode: String, CaseIterable, Sendable {
             case .discard: fresh = try await services.discard(subject, paths: selection.paths, seen: selection.seen)
             }
             completedWrites += 1
+            if action == .discard { discards += 1 } else { successes += 1 }
             self.status = fresh
             switch action {
             case .stage:

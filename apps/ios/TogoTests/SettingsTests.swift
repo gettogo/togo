@@ -40,6 +40,7 @@ import TogoTerminal
         #expect(settings.keyBarConfig == .standard)
         #expect(settings.gestures == GestureBindings())
         #expect(settings.customThemes.isEmpty)
+        #expect(settings.readNewOutput)
     }
 
     @Test func settingsDropOnlyTheBadImportedTheme() throws {
@@ -57,6 +58,7 @@ import TogoTerminal
         var settings = AppSettings()
         settings.keyBarConfig = .claude
         settings.gestures.touchMouse = true
+        settings.readNewOutput = false
         let decoded = try JSONDecoder().decode(AppSettings.self, from: try JSONEncoder().encode(settings))
         #expect(decoded == settings)
     }

@@ -10,6 +10,7 @@ struct AgentStep: View {
         StepScaffold(title: NewSessionCopy.agentTitle) {
             VStack(alignment: .leading, spacing: 24) {
                 agents
+                if case .loaded = model.agents, model.showsFlags { launchOptions }
                 nameField
                 // At large text sizes the pinned footer would cover the list, so the error scrolls.
                 if dynamicTypeSize.isAccessibilitySize, let error = model.createError {
@@ -33,16 +34,56 @@ struct AgentStep: View {
             VStack(spacing: 0) {
                 ForEach(model.offeredAgents, id: \.id) { agent in
                     ChoiceRow(
-                        symbol: Self.symbol(for: agent.id), title: Text(verbatim: agent.name),
-                        selected: agent.installed && agent.id == model.selectedAgent?.id,
+                        symbol: AgentPresetText.symbol(for: agent.id), title: Text(verbatim: agent.name),
+                        selected: agent.installed && agent.id == model.selectedRegistryID,
                         enabled: agent.installed,
-                        action: { model.agentID = agent.id }
+                        action: { model.choose(agent: agent.id) }
                     ) {
                         if !agent.installed {
                             Text(verbatim: NewSessionCopy.notInstalled(on: model.machineName))
                         }
                     }
                 }
+                ForEach(model.presets) { preset in
+                    presetRow(preset)
+                }
+            }
+        }
+    }
+
+    private func presetRow(_ preset: AgentPreset) -> some View {
+        ChoiceRow(
+            symbol: AgentPresetText.symbol(for: preset.agent), title: Text(verbatim: preset.name),
+            selected: preset.id == model.selectedPreset?.id,
+            enabled: model.canUse(preset),
+            action: { model.choose(preset: preset) }
+        ) {
+            if !model.flagsAvailable {
+                Text(verbatim: NewSessionCopy.flagsNeedUpdate(model.machineName))
+            } else if !model.canUse(preset) {
+                Text(verbatim: NewSessionCopy.notInstalled(on: model.machineName))
+            } else if model.isRemembered(preset) {
+                Text(NewSessionCopy.lastUsedHere)
+            } else {
+                Text(verbatim: AgentPresetText.commandLine(preset))
+                    .font(.system(.subheadline, design: .monospaced))
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+        }
+    }
+
+    private var launchOptions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            FlagsField(
+                text: Bindable(model).flags, enabled: model.flagsAvailable,
+                footer: model.flagsFooter, error: model.flagsError
+            )
+            if model.selectedPreset != nil {
+                Toggle(NewSessionCopy.rememberFolder, isOn: Bindable(model).rememberFolder)
+                    .font(.body)
+                    .foregroundStyle(Color.togoSnow)
+                    .frame(minHeight: 44)
             }
         }
     }
@@ -65,19 +106,10 @@ struct AgentStep: View {
     private var footer: some View {
         VStack(spacing: 12) {
             if !dynamicTypeSize.isAccessibilitySize, let error = model.createError { InlineError(message: error) }
-            StartButton(title: NewSessionCopy.start(model.selectedAgent?.name ?? ""), creating: model.creating, onStart: onStart)
+            StartButton(title: model.startTitle, creating: model.creating, onStart: onStart)
                 .disabled(!model.canStart)
         }
         .screenMargins()
         .padding(.vertical, 12)
-    }
-
-    private static func symbol(for agentID: String) -> String {
-        switch agentID {
-        case "claude": "asterisk"
-        case "codex": "curlybraces"
-        case "omp": "cube"
-        default: "terminal"
-        }
     }
 }

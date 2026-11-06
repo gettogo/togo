@@ -84,6 +84,19 @@ struct TerminalSettingsView: View {
                 }
             }
             .groupedRows()
+            Section {
+                Toggle(
+                    settingsText("settings.terminal.readOutput", "Read new output"),
+                    isOn: settings.binding(\.readNewOutput, update)
+                )
+                .frame(minHeight: 44)
+            } footer: {
+                Text(settingsText(
+                    "settings.terminal.readOutput.footer",
+                    "With VoiceOver on, new output in the focused terminal is read aloud once it settles."
+                ))
+            }
+            .groupedRows()
         }
         .groupedList()
     }

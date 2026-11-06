@@ -24,9 +24,13 @@ import WidgetKit
     /// `application(_:didReceiveRemoteNotification:)`. Returns whether anything changed.
     @discardableResult
     func didReceiveRemoteNotification(_ userInfo: [AnyHashable: Any]) async -> Bool {
-        guard let opened = deps.core.open(userInfo: userInfo), opened.payload.kind == .clear,
-              let requestId = opened.payload.requestId
-        else { return false }
+        guard let opened = deps.core.open(userInfo: userInfo) else { return false }
+        // Anything the machine sends means it is answering again.
+        if opened.payload.kind != .offline {
+            deps.pending.clearOfflineMark(hostId: opened.pairing.hostId)
+            await deps.notifications.removeOffline(hostId: opened.pairing.hostId)
+        }
+        guard opened.payload.kind == .clear, let requestId = opened.payload.requestId else { return false }
         await clear([requestId])
         return true
     }
@@ -39,6 +43,10 @@ import WidgetKit
     ///   - reported: host ids (`h_…`) whose live snapshot arrived.
     func didEnterForeground(open: Set<String>, reported: Set<String>) async {
         deps.pending.prune()
+        for hostId in reported {
+            deps.pending.clearOfflineMark(hostId: hostId)
+            await deps.notifications.removeOffline(hostId: hostId)
+        }
         let gone = await deps.notifications.delivered()
             .filter { reported.contains($0.hostId) && !open.contains($0.requestId) }
             .map(\.requestId)

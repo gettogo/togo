@@ -14,7 +14,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/rpc"
 )
 
-const fixturesDir = "../../../protocol/v1/fixtures/pending"
+const fixturesDir = "../../../protocol/v1/fixtures"
 
 func mac(s string) net.HardwareAddr {
 	m, err := net.ParseMAC(s)

@@ -60,7 +60,8 @@ import WidgetKit
             keys: keys, store: pairings, unpairs: unpairs, registrar: registrar,
             settings: { source.services?.settings ?? AppSettings() },
             liveTokens: { hostId in (hostId.flatMap(live.updateToken(hostId:)), live.startToken) },
-            watch: { watch?.devices ?? [] }
+            watch: { watch?.devices ?? [] },
+            keyRemovals: PendingKeyRemovalStore(file: directory.appending(path: "pending-key-removals.json"))
         )
         let pairing = self.pairing
         link.pairing = pairing
@@ -83,14 +84,33 @@ import WidgetKit
         return AppPush(directory: directory)
     }
 
-    /// `activeStore` is the window last in front; taps and the Watch's list follow it.
-    func connect(services: LiveServices, activeStore: @escaping @MainActor () -> AppStore?) {
+    /// `activeStore` is the window last in front; taps, replies and the Watch's list follow it.
+    /// `quietTools` reach a machine only over a channel that opens without asking the user
+    /// anything; replies from the Watch use them.
+    func connect(
+        services: LiveServices, tools: any MachineTools, quietTools: any MachineTools,
+        activeStore: @escaping @MainActor () -> AppStore?
+    ) {
         source.services = services
         let notifications = SystemNotifications()
+        let replies = ReplySender(tools: tools, label: { Self.label($0, in: activeStore()) })
         let actions = NotificationActionHandler(dependencies: .init(
             pairings: pairings, pending: pending,
             relay: RelayAnswerSender(keys: keys, pending: pending, clock: { Date() }),
-            live: services, notifications: notifications
+            live: services, notifications: notifications,
+            runAgain: { host, session in
+                Task { await activeStore()?.runAgain(hostID: host, sessionID: session, tools: tools) }
+            },
+            reply: { reply, session in
+                Task {
+                    // Before any window has a store the words still go; only the notice is lost.
+                    if let store = activeStore() {
+                        await store.deliverReply(reply, session: session, via: replies)
+                    } else {
+                        _ = await replies.send(reply)
+                    }
+                }
+            }
         ))
         self.actions = actions
         let live = self.live, pending = self.pending
@@ -107,9 +127,11 @@ import WidgetKit
         AppDelegate.clear = clear
         router.deliver(to: activeStore)
         router.onAction = { response in
-            await actions.handle(
-                actionIdentifier: response.actionIdentifier, userInfo: response.userInfo, target: response.link
+            let link = await actions.handle(
+                actionIdentifier: response.actionIdentifier, userInfo: response.userInfo, target: response.link,
+                text: response.userText
             )
+            if let link { activeStore()?.open(link) }
         }
         // The system hands a notification tap that launched the app only to a delegate set
         // during launch, so this one line cannot wait for the first screen.
@@ -124,7 +146,7 @@ import WidgetKit
             }
             watchNetwork(services)
             Task { await live.start() }
-            connectWatch(services: services, activeStore: activeStore)
+            connectWatch(services: services, quietTools: quietTools, activeStore: activeStore)
         }
     }
 
@@ -138,21 +160,41 @@ import WidgetKit
 
     /// The Watch gets the pairings to answer with and the sessions to list; a Watch that
     /// reports new keys or a new token has every online machine paired again.
-    private func connectWatch(services: LiveServices, activeStore: @escaping @MainActor () -> AppStore?) {
+    private func connectWatch(
+        services: LiveServices, quietTools: any MachineTools, activeStore: @escaping @MainActor () -> AppStore?
+    ) {
         guard let watch else { return }
+        // The Watch's words go only over this phone's own connection, and only when it opens
+        // without asking; otherwise the Watch hears it needs the phone.
+        let quiet = ReplySender(tools: quietTools, quiet: true, label: { Self.label($0, in: activeStore()) })
+        let pairings = self.pairings, pending = self.pending
+        // Checked against the window in front; with no window yet the Watch hears it needs the phone.
+        watch.onReply = { message in
+            guard let store = activeStore() else { return .needsPhone }
+            return await WatchReplyGate.handler(store: store, pairings: pairings, pending: pending, sender: quiet)(message)
+        }
+        // Run again tapped on the Watch starts the session the same quiet way.
+        watch.onRunAgain = { message in
+            guard let store = activeStore() else { return .needsPhone }
+            return await WatchRunAgainGate.handler(store: store, pairings: pairings, tools: quietTools)(message)
+        }
         watch.onDevicesChanged = { [weak services] in services?.pairOnlineMachines() }
         watch.currentRequests = { [pending = self.pending] in pending.all() }
         pairing.onPairingsChanged = { [weak watch] in watch?.sendPairings($0) }
         watch.sendPairings(pairings.all())
-        let pending = self.pending
         watchFeed = Task { [weak watch] in
-            let sessions = Observations { WatchSession.rows(activeStore()?.controlCenter.machines ?? []) }
-            var last: [WatchSession]?
-            for await rows in sessions where rows != last {
-                last = rows
-                watch?.publish(sessions: rows, requests: pending.all())
+            let feed = Observations { WatchFeed(activeStore()?.controlCenter ?? ControlCenterState()) }
+            var last: WatchFeed?
+            for await next in feed where next != last {
+                last = next
+                watch?.publish(sessions: next.sessions, requests: pending.all(), textRequests: next.textRequests)
             }
         }
+    }
+
+    /// The name a reply goes under, from the window in front when there is one.
+    private static func label(_ reply: Reply, in store: AppStore?) -> String {
+        store?.replyLabel(reply) ?? ReplyCopy.theAgent
     }
 
     /// The app came forward: Live Activities for requests that are over end, and a machine
@@ -182,6 +224,8 @@ import WidgetKit
     /// The notification service runs in its own process and reads this from the app group.
     /// The lock-screen actions are registered again whenever it changes.
     func share(_ settings: AppSettings) {
+        SharedSettings.writeDoneSilent(settings.doneSilent, to: SharedSettings.defaults)
+        watch?.sendDoneSilent(settings.doneSilent)
         guard settings.approveWithoutUnlock != sharedApproveWithoutUnlock else { return }
         sharedApproveWithoutUnlock = settings.approveWithoutUnlock
         NotificationCategories.setApproveWithoutUnlock(settings.approveWithoutUnlock)

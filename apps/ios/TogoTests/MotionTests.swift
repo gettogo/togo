@@ -36,20 +36,13 @@ struct MotionTests {
         }
     }
 
-    @Test func aliasesMatchRoles() {
-        let aliases: [(Animation, MotionRole)] = [
-            (Motion.tabSettle, .tabSettle), (Motion.dropIn, .dropIn), (Motion.collapse, .collapse),
-            (Motion.confirm, .confirm), (Motion.fade, .fade), (Motion.pawStep, .pawStep),
-        ]
-        for (alias, role) in aliases {
-            #expect(alias == Motion.animation(role, reduce: false), "\(role)")
-        }
-        #expect(Motion.tabSettle == .spring(response: 0.30, dampingFraction: 0.86))
-        #expect(Motion.dropIn == .spring(response: 0.42, dampingFraction: 0.78))
-        #expect(Motion.collapse == .easeOut(duration: 0.25))
-        #expect(Motion.confirm == .easeOut(duration: 0.15))
-        #expect(Motion.fade == .easeOut(duration: 0.2))
-        #expect(Motion.pawStep == .easeOut(duration: 0.12))
+    @Test func rolesMatchTokens() {
+        #expect(Motion.animation(.tabSettle, reduce: false) == .spring(response: 0.30, dampingFraction: 0.86))
+        #expect(Motion.animation(.dropIn, reduce: false) == .spring(response: 0.42, dampingFraction: 0.78))
+        #expect(Motion.animation(.collapse, reduce: false) == .easeOut(duration: 0.25))
+        #expect(Motion.animation(.confirm, reduce: false) == .easeOut(duration: 0.15))
+        #expect(Motion.animation(.fade, reduce: false) == .easeOut(duration: 0.2))
+        #expect(Motion.animation(.pawStep, reduce: false) == .easeOut(duration: 0.12))
         #expect(Motion.spec(.chrome).curve == .easeInOut(0.22))
         #expect(Motion.spec(.shrinkIntoTab).curve == .spring(response: 0.36, damping: 0.84))
     }
@@ -60,8 +53,6 @@ struct MotionTests {
         #expect(Motion.animation(.fade, reduce: true) == nil)
         #expect(Motion.animation(.dim, reduce: true) == nil)
         #expect(Motion.animation(.listen, reduce: true) == nil)
-        #expect(Motion.stateText(reduce: true) == nil)
-        #expect(Motion.stateText(reduce: false) == Motion.fade)
     }
 
     @Test func hapticsAreOnePerAction() {

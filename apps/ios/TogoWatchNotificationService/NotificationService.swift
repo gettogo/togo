@@ -30,13 +30,23 @@ final class NotificationService: UNNotificationServiceExtension {
             keys: KeychainDeviceKeys(accessGroup: nil),
             pairings: PairingStore(directory: directory),
             pending: PendingStore(directory: directory, clock: { Date() }),
-            clock: { Date() }
+            clock: { Date() },
+            doneSilent: { SharedSettings.readDoneSilent(UserDefaults(suiteName: SharedGroup.watch)) }
         )
         let result = core.process(request.content)
         if result.pendingChanged {
             WidgetCenter.shared.reloadTimelines(ofKind: "togo.watch.waiting")
         }
-        gate.finish(result.content)
+        guard let host = result.clearsOfflineOf else {
+            gate.finish(result.content)
+            return
+        }
+        // This machine is answering again: take its "stopped answering" alert away first.
+        let content = UncheckedContent(result.content)
+        Task {
+            await OfflineNotifications.removeDelivered(hostId: host)
+            gate.finish(content.value)
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
@@ -54,5 +64,13 @@ private struct UncheckedHandler: @unchecked Sendable {
 
     func call(_ content: UNNotificationContent) {
         handler(content)
+    }
+}
+
+private struct UncheckedContent: @unchecked Sendable {
+    let value: UNNotificationContent
+
+    init(_ value: UNNotificationContent) {
+        self.value = value
     }
 }

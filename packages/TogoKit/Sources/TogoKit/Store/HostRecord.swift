@@ -8,13 +8,19 @@ public struct HostRecord: Codable, Sendable, Equatable, Identifiable {
     public var symbol: String
     public var helperPath: String?
     public var noHelper: Bool
+    /// Where to send a Wake-on-LAN packet, as the machine last reported it.
+    public var wake: WakeTarget?
 
-    public init(id: UUID, profile: HostProfile, symbol: String, helperPath: String? = nil, noHelper: Bool = false) {
+    public init(
+        id: UUID, profile: HostProfile, symbol: String, helperPath: String? = nil, noHelper: Bool = false,
+        wake: WakeTarget? = nil
+    ) {
         self.id = id
         self.profile = profile
         self.symbol = symbol
         self.helperPath = helperPath
         self.noHelper = noHelper
+        self.wake = wake
     }
 }
 

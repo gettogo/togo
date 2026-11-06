@@ -96,7 +96,9 @@ struct RootView: View {
             machines: store.services.hosts.map { host in
                 SettingsMachine(
                     id: host.id, name: host.name, address: host.address, symbol: host.symbol,
-                    helper: sections[host.id]?.helper ?? .checking
+                    helper: sections[host.id]?.helper ?? .checking,
+                    removesKey: store.services.removesKey(host.id),
+                    checksAgents: SettingsMachine.checksAgents(sections[host.id])
                 )
             },
             pendingRemovals: store.services.pendingRemovals,
@@ -135,7 +137,26 @@ struct RootView: View {
             },
             openGuide: openGuide,
             turnOnNotifications: { Task { await store.services.turnOnNotifications() } },
-            forgetRemoval: { store.services.forgetRemoval($0) }
+            forgetRemoval: { store.services.forgetRemoval($0) },
+            machineImport: MachineImport(
+                make: {
+                    let services = store.services
+                    return ImportHostsModel(
+                        existing: { services.hosts.compactMap { services.hostRecord($0.id) } },
+                        deviceKeyID: { try await onboarding.deviceKey().id },
+                        save: { try await services.saveHost($0) }
+                    )
+                },
+                openInForm: { store.sheet = .addMachineFilled($0) },
+                finished: { count in
+                    store.notice = Notice(
+                        text: count == 1
+                            ? String(localized: "import.hosts.doneOne", defaultValue: "Added 1 machine. It signs in with this iPhone's key.")
+                            : String(localized: "import.hosts.done", defaultValue: "Added \(count) machines. They sign in with this iPhone's key."),
+                        isError: false
+                    )
+                }
+            )
         )
     }
 }

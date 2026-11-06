@@ -23,7 +23,10 @@ extension LiveServices {
         guard let pairing = deps.pairing else { return }
         let helpers = deps.helpers
         Task {
-            await pairing.machineOnline(hostID: record.id, name: record.profile.name, capabilities: capabilities) { params in
+            await pairing.machineOnline(
+                hostID: record.id, name: record.profile.name, capabilities: capabilities,
+                sshKey: pairing.deviceKey(record)?.publicKey
+            ) { params in
                 try await helpers.call(record, prompter: nil) { try await $0.pair(params) }
             }
         }
@@ -36,25 +39,68 @@ extension LiveServices {
         }
     }
 
-    /// Tells a removed machine's helper to forget this device, then closes its channel. Returns
-    /// false when push is off, leaving the channel to the caller.
+    /// This device's key on the machine when removing the machine takes it off: a key Togo
+    /// made, and no other machine in Togo at the same address and user signs in with it.
+    func removableKey(_ record: HostRecord) -> DeviceKeyLine? {
+        guard let pairing = deps.pairing, let key = pairing.deviceKey(record), key.helperCanRemove,
+              !pairing.stillUses(key, at: record, besides: record.id, in: Array(records.values))
+        else { return nil }
+        return key
+    }
+
+    /// Whether the remove question can promise the key goes: the machine has a helper that can
+    /// take it off, as far as the app knows.
+    func removesKey(_ id: HostID) -> Bool {
+        guard let record = records[id], !record.noHelper, removableKey(record) != nil else { return false }
+        let known = latest[id]?.capabilities ?? []
+        return known.isEmpty || known.contains(Capability.authkeys)
+    }
+
+    /// Tells a removed machine's helper to forget this device, then takes this device's key
+    /// off it over the same channel, then closes the channel. The key goes last so the machine
+    /// can still be reached if the unpair has to be asked again. Returns false when push is
+    /// off, leaving the channel to the caller.
     func unpair(_ record: HostRecord, reachable: Bool) -> Bool {
         guard let pairing = deps.pairing else { return false }
         let helpers = deps.helpers
-        let unpair = reachable && !record.noHelper ? HelperUnpair.now(record, helpers: helpers) : nil
-        Task {
-            await pairing.machineRemoved(hostID: record.id, connection: HelperUnpair.connection(record), unpair: unpair)
+        let live = reachable && !record.noHelper
+        let unpair = live ? HelperUnpair.now(record, helpers: helpers) : nil
+        // Capabilities are empty for a machine not seen since launch: a retry finds out.
+        let known = latest[record.id]?.capabilities ?? []
+        let step = removableKey(record).map { key in
+            KeyRemovalStep(
+                key: key, name: record.profile.name,
+                supported: !record.noHelper && (known.isEmpty || known.contains(Capability.authkeys)),
+                removeKey: live ? HelperUnpair.removeKey(record, helpers: helpers) : nil
+            )
+        }
+        pairing.enqueue {
+            await pairing.machineRemoved(
+                hostID: record.id, connection: HelperUnpair.connection(record), key: step, unpair: unpair
+            )
             await helpers.drop(record.id)
         }
         return true
     }
 
-    /// Asks removed machines again to stop pushing. Only while the app is in front, and never
-    /// with a question: the app's own connections sign in with saved credentials or fail.
-    func retryUnpairs() {
-        guard let pairing = deps.pairing, foreground else { return }
-        let helpers = deps.helpers, current = Set(records.keys)
-        Task { await pairing.retryUnpairs(HelperUnpair.retry(helpers: helpers, skipping: current)) }
+    /// Asks removed machines again to stop pushing, and to drop this device's key after. Only
+    /// while the app is in front, and never with a question: the app's own connections sign in
+    /// with saved credentials or fail. Returns the queued work, which tests wait on.
+    @discardableResult func retryUnpairs() -> Task<Void, Never>? {
+        guard let pairing = deps.pairing, foreground else { return nil }
+        let helpers = deps.helpers, current = Set(records.keys), all = Array(records.values)
+        pairing.enqueue {
+            let opened = Set(
+                pairing.pendingUnpairs.compactMap { HelperUnpair.machine($0.connection) }
+                    + pairing.pendingKeyRemovals.filter { !$0.manual }.map(\.id)
+            ).subtracting(current)
+            await pairing.retryUnpairs(
+                current: all, removeKey: HelperUnpair.retryKey(helpers: helpers),
+                HelperUnpair.retry(helpers: helpers, skipping: current)
+            )
+            for id in opened { await helpers.drop(id) }
+        }
+        return Task { await pairing.settled() }
     }
 
     /// The command text choice goes through each machine's relay at once; machines online now
@@ -70,6 +116,12 @@ extension LiveServices {
         confirmedCommands = pairing.confirmedCommands
         pendingCommands = pairing.pendingCommands
         pendingRemovals = pairing.pendingUnpairs.map { PendingRemoval(id: $0.id, name: $0.pairing.machineName) }
+            + pairing.pendingKeyRemovals.map {
+                PendingRemoval(
+                    id: PendingRemoval.keyID($0.id), name: $0.machineName,
+                    kind: .key(comment: $0.key.comment, manual: $0.manual)
+                )
+            }
     }
 
     /// The saved password was kept for the unpair; it goes once the machine is not back in Togo.
@@ -79,6 +131,10 @@ extension LiveServices {
     }
 
     func forgetRemoval(_ id: String) {
-        deps.pairing?.forgetUnpair(hostId: id)
+        if let host = PendingRemoval.hostID(fromKeyID: id) {
+            _ = deps.pairing?.forgetKeyRemoval(host)
+        } else {
+            deps.pairing?.forgetUnpair(hostId: id)
+        }
     }
 }

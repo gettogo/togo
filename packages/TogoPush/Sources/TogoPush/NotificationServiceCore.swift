@@ -19,6 +19,15 @@ public struct NotificationServiceCore: Sendable {
         public var content: UNNotificationContent
         /// True when a request was added to `PendingStore`, so widgets should reload.
         public var pendingChanged: Bool
+        /// The machine whose delivered "stopped answering" notifications should be removed,
+        /// because it just sent something else.
+        public var clearsOfflineOf: String?
+
+        public init(content: UNNotificationContent, pendingChanged: Bool, clearsOfflineOf: String? = nil) {
+            self.content = content
+            self.pendingChanged = pendingChanged
+            self.clearsOfflineOf = clearsOfflineOf
+        }
     }
 
     /// The `userInfo` key holding the envelope.
@@ -28,6 +37,11 @@ public struct NotificationServiceCore: Sendable {
     /// A push older than this is a replay or arrived too late to answer; the helper refuses
     /// answers to it anyway.
     public static let maxAge: TimeInterval = 600
+    /// An offline push is sealed ahead of time. The helper replaces it every 6 hours
+    /// (`willRefresh` in helper/internal/push/will.go) and the relay drops one unsent after 24
+    /// hours (`WILL_TTL_MS` in relay/src/will.ts), so the oldest seal that can still arrive is
+    /// the 24 hour limit plus one refresh interval of slack.
+    public static let offlineMaxAge: TimeInterval = 30 * 3600
     /// How far ahead of this device's clock a push may claim to be.
     public static let maxSkew: TimeInterval = 60
 
@@ -35,10 +49,15 @@ public struct NotificationServiceCore: Sendable {
     private let pairings: PairingStore
     private let pending: PendingStore
     private let clock: @Sendable () -> Date
+    private let doneSilent: @Sendable () -> Bool
 
+    /// - Parameter doneSilent: whether a "done" is delivered without sound; read for each push
+    ///   so a change in the app applies at once.
     public init(
-        keys: any DeviceKeyStore, pairings: PairingStore, pending: PendingStore, clock: @escaping @Sendable () -> Date
+        keys: any DeviceKeyStore, pairings: PairingStore, pending: PendingStore, clock: @escaping @Sendable () -> Date,
+        doneSilent: @escaping @Sendable () -> Bool = { SharedSettings.readDoneSilent() }
     ) {
+        self.doneSilent = doneSilent
         self.keys = keys
         self.pairings = pairings
         self.pending = pending
@@ -81,8 +100,17 @@ public struct NotificationServiceCore: Sendable {
 
         let p = opened.payload
         let age = clock().timeIntervalSince1970 - Double(p.ts) / 1000
-        guard age <= Self.maxAge, age >= -Self.maxSkew else {
+        let limit = p.kind == .offline ? Self.offlineMaxAge : Self.maxAge
+        guard age <= limit, age >= -Self.maxSkew else {
             return Result(content: Self.generic(), pendingChanged: false)
+        }
+        if p.kind == .offline {
+            guard pending.claimOffline(hostId: opened.pairing.hostId, ts: p.ts) else {
+                return Result(content: Self.generic(), pendingChanged: false)
+            }
+        } else {
+            // Heard from the machine: its next silence is a new outage.
+            pending.clearOfflineMark(hostId: opened.pairing.hostId)
         }
         let content = UNMutableNotificationContent()
         content.title = text.title
@@ -96,17 +124,33 @@ public struct NotificationServiceCore: Sendable {
         case .timeSensitive: .timeSensitive
         case .passive: .passive
         }
+        if p.kind == .done, doneSilent() {
+            // Only a done is quieted; requests, stops and outages keep their sound.
+            content.sound = nil
+            content.interruptionLevel = .passive
+        }
         if let bib = p.bib, var link = URLComponents(string: "togo://session/\(bib)") {
             link.queryItems = [URLQueryItem(name: "host", value: opened.pairing.machineName)]
             content.targetContentIdentifier = link.string
         }
+
+        if text.category == NotificationCategoryID.ended || text.category == NotificationCategoryID.prompt,
+           let sessionId = p.sessionId, !sessionId.isEmpty {
+            // Run again and Reply name the session they act on, by identifiers only.
+            content.userInfo = [Self.infoKey: ["hostId": opened.pairing.hostId, "sessionId": sessionId]]
+        }
+
+        if p.kind == .offline {
+            content.userInfo = [Self.infoKey: ["hostId": opened.pairing.hostId, OfflineNotifications.flag: "1"]]
+        }
+        let clearsOffline = p.kind == .offline ? nil : opened.pairing.hostId
 
         var changed = false
         if p.kind == .needsYou, let requestId = p.requestId {
             if let known = pending.request(requestId), known.answered != nil {
                 // Answered already, here or in another process: show it, offer nothing.
                 content.categoryIdentifier = NotificationCategoryID.info
-                return Result(content: content, pendingChanged: false)
+                return Result(content: content, pendingChanged: false, clearsOfflineOf: clearsOffline)
             }
             // Only identifiers and option labels: the app answers from these, and the
             // question and command stay out of anything the system keeps beside the text.
@@ -119,11 +163,12 @@ public struct NotificationServiceCore: Sendable {
             pending.upsert(PendingRequest(
                 requestId: requestId, hostId: opened.pairing.hostId, sessionId: p.sessionId, bib: p.bib, agent: p.agent,
                 host: p.host ?? opened.pairing.machineName, title: PromptText.clean(p.title, maxLines: 1),
-                subject: p.subject, options: p.options ?? [], receivedAt: clock(), answered: nil
+                subject: p.subject, options: p.options ?? [], receivedAt: clock(), answered: nil,
+                allowText: p.allowText == true ? true : nil
             ))
             changed = true
         }
-        return Result(content: content, pendingChanged: changed)
+        return Result(content: content, pendingChanged: changed, clearsOfflineOf: clearsOffline)
     }
 }
 
@@ -156,5 +201,30 @@ public final class DeliveryGate: Sendable {
             return (pending.deliver, pending.deliver == nil ? nil : pending.fallback)
         }
         if let deliver, let fallback { deliver(fallback) }
+    }
+}
+
+/// Finds the delivered "stopped answering" notifications of a machine, so a later push from it
+/// can take them away.
+public enum OfflineNotifications {
+    /// The `userInfo` entry that marks one.
+    public static let flag = "offline"
+
+    public static func identifiers(
+        in delivered: [(identifier: String, userInfo: [AnyHashable: Any])], hostId: String
+    ) -> [String] {
+        delivered.compactMap { item in
+            guard let info = item.userInfo[NotificationServiceCore.infoKey] as? [String: Any],
+                  info[flag] != nil, info["hostId"] as? String == hostId
+            else { return nil }
+            return item.identifier
+        }
+    }
+
+    /// Removes them from the notification center.
+    public static func removeDelivered(hostId: String, center: UNUserNotificationCenter = .current()) async {
+        let delivered = await center.deliveredNotifications().map { ($0.request.identifier, $0.request.content.userInfo) }
+        let ids = identifiers(in: delivered.map { (identifier: $0.0, userInfo: $0.1) }, hostId: hostId)
+        if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
     }
 }

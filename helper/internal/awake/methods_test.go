@@ -14,7 +14,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/rpc"
 )
 
-const fixturesDir = "../../../protocol/v1/fixtures/pending"
+const fixturesDir = "../../../protocol/v1/fixtures"
 
 // fixtureManager is the host the awake fixtures describe: a supported Mac
 // on AC power at 100%, nothing active, default settings, no sudoers rule.

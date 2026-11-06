@@ -64,8 +64,9 @@ final class PipeChannel: ExecChannel {
         await sendJSON(#"{"jsonrpc":"2.0","id":\#(id),"result":\#(result)}"#)
     }
 
-    func fail(_ id: Int, code: Int, message: String) async {
-        await sendJSON(#"{"jsonrpc":"2.0","id":\#(id),"error":{"code":\#(code),"message":"\#(message)"}}"#)
+    func fail(_ id: Int, code: Int, message: String, data: String? = nil) async {
+        let extra = data.map { #","data":\#($0)"# } ?? ""
+        await sendJSON(#"{"jsonrpc":"2.0","id":\#(id),"error":{"code":\#(code),"message":"\#(message)"\#(extra)}}"#)
     }
 
     func sendJSON(_ json: String) async {

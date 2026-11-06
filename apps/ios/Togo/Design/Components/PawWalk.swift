@@ -37,7 +37,7 @@ struct PawWalk: View {
             guard !reduceMotion, !paused else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.step)
-                withAnimation(Motion.pawStep) { lit = (lit + 1) % Self.paws.count }
+                withAnimation(Motion.animation(.pawStep, reduce: reduceMotion)) { lit = (lit + 1) % Self.paws.count }
             }
         }
     }

@@ -5,6 +5,7 @@ import UIKit
 /// The home screen: requests waiting on the user, then every machine's sessions, then the
 /// archive. Each machine section explains itself when it cannot show live rows.
 struct ControlCenterView: View {
+    @Environment(\.machineTools) private var machineTools
     @Bindable var store: AppStore
     /// Shared with whoever presents the new session sheet and the workspace, so they can zoom
     /// out of the plus button and the tapped row.
@@ -111,7 +112,7 @@ struct ControlCenterView: View {
             ForEach(machines) { machine in
                 MachineSectionView(
                     machine: machine, etAvailable: etAvailable(machine.id), now: now, narrowed: narrowed, zoom: zoom,
-                    perform: perform
+                    restoring: store.restoring, wakeNote: store.wakeNotes[machine.id], perform: perform
                 )
             }
             emptyResult
@@ -123,9 +124,10 @@ struct ControlCenterView: View {
         .scrollContentBackground(.hidden)
         .searchable(text: $store.query, placement: .navigationBarDrawer, prompt: ControlCenterCopy.searchPrompt)
         .refreshable { await store.services.refresh() }
-        .motion(Motion.dropIn, value: visibleRequests.map(\.id))
+        .motion(.dropIn, value: visibleRequests.map(\.id))
         .sessionRotors(machines, requests: visibleRequests)
         .modifier(RequestCollapse(store: store))
+        .task(id: store.restoreCandidates) { await store.loadRestorable(tools: machineTools) }
     }
 
     @ViewBuilder private var requests: some View {
@@ -194,7 +196,8 @@ struct ControlCenterView: View {
 
     private func perform(_ command: SessionCommand) {
         store.run(
-            command, open: { row, transport in store.open(hostID: row.hostID, sessionID: row.id, transport: transport) },
+            command, tools: machineTools,
+            open: { row, transport in store.open(hostID: row.hostID, sessionID: row.id, transport: transport) },
             kill: { killTarget = $0 }, rename: { renameTarget = $0 }
         )
     }

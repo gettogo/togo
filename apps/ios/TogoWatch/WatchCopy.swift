@@ -1,4 +1,5 @@
 import Foundation
+import TogoPush
 
 /// Every string the Watch app shows.
 enum WatchCopy {
@@ -15,6 +16,18 @@ enum WatchCopy {
     static let sending = String(localized: "watch.sending", defaultValue: "Sending")
     static let answerOnPhone = String(localized: "watch.answerOnPhone", defaultValue: "Open Togo on iPhone to answer")
     static let sendFailed = String(localized: "watch.sendFailed", defaultValue: "Could not send. Try again.")
+    /// The title of a notice the Watch posts itself.
+    static let noticeTitle = String(localized: "watch.notice.title", defaultValue: "Togo")
+    static let reply = String(localized: "watch.reply", defaultValue: "Reply")
+    static let send = String(localized: "watch.reply.send", defaultValue: "Send")
+    static let replyPlaceholder = String(localized: "watch.reply.placeholder", defaultValue: "Message")
+    static let replySent = String(localized: "watch.reply.sent", defaultValue: "Sent")
+    /// The phone could not reach the machine without asking; the words stay on the Watch.
+    static let needsPhone = String(localized: "watch.reply.needsPhone", defaultValue: "Open Togo on your iPhone to send this.")
+    /// The phone could not start the session again without asking.
+    static let runAgainNeedsPhone = String(
+        localized: "watch.runAgain.needsPhone", defaultValue: "Open Togo on your iPhone to run it again."
+    )
     static let sessions = String(localized: "watch.sessions.title", defaultValue: "Sessions")
     static let noSessions = String(
         localized: "watch.sessions.empty", defaultValue: "Open Togo on iPhone to see your sessions"
@@ -41,6 +54,12 @@ enum WatchCopy {
         return String(localized: "watch.sessions.asOf", defaultValue: "As of \(time)")
     }
 
+    /// The session status in words; a stopped agent says how it stopped, as on the phone.
+    static func status(_ session: WatchSession) -> String {
+        LifecycleWords.status(status: session.status, reason: session.exitReason, code: session.exitCode)
+            ?? status(session.status)
+    }
+
     /// The session status in words.
     static func status(_ wire: String) -> String {
         switch wire {
@@ -48,7 +67,8 @@ enum WatchCopy {
         case "working": String(localized: "watch.status.working", defaultValue: "Working")
         case "done": String(localized: "watch.status.done", defaultValue: "Done")
         case "idle": String(localized: "watch.status.idle", defaultValue: "Idle")
-        case "exited": String(localized: "watch.status.exited", defaultValue: "Exited")
+        case "exited", "ended": LifecycleWords.ended
+        case "failed": LifecycleWords.error
         default: String(localized: "watch.status.unknown", defaultValue: "Unknown")
         }
     }

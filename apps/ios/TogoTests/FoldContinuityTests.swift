@@ -157,6 +157,43 @@ import UIKit
         await link.stop()
     }
 
+    /// A pick from the sidebar flows the detail with `paneFlow`. When the new tab's header is a
+    /// line taller, the terminal's frame follows the spring every frame; the link still sends one
+    /// resize, once the spring has settled.
+    @Test func sidebarOpenSendsOneResize() async throws {
+        let transport = SizeRecordingTransport()
+        let clock = ManualClock()
+        let link = TerminalLink(
+            connect: { _, _, _ in
+                try await transport.connect()
+                return Attachment(transport: transport, kind: .ssh, notes: [], connection: Self.connection())
+            },
+            path: StillPath(), clock: clock, cols: 80, rows: 30
+        )
+        await link.start()
+        for await state in link.states {
+            if case .live = state { break }
+        }
+
+        let spring = try #require(Motion.spec(.paneFlow).curve.spring)
+        var rows = 30
+        for frame in stride(from: 16, through: 1_000, by: 16) {
+            let height = spring.value(fromValue: 30.0, toValue: 28.0, initialVelocity: 0, time: Double(frame) / 1_000)
+            rows = Int(height.rounded())
+            await link.resize(cols: 80, rows: rows)
+            await Task.yield()
+            clock.advance(.milliseconds(16))
+        }
+        #expect(rows == 28)
+        clock.advance(.milliseconds(200))
+
+        #expect(await eventually { await link.resizesSent == 1 })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await transport.sizes.count == 1)
+        #expect(await transport.sizes.last?.rows == 28)
+        await link.stop()
+    }
+
     nonisolated private static func connection() -> SSHConnection {
         let secrets = MemorySecretStore()
         let biometrics = BiometricSession()

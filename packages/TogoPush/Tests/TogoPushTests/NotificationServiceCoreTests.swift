@@ -184,6 +184,217 @@ struct NotificationServiceCoreTests {
         #expect(opened.pairing.hostId == Self.hostID)
     }
 
+    func sealed(_ p: PushPayload) throws -> UNNotificationContent {
+        let envelope = try Seal.seal(
+            to: keys.agreementKey().publicKey, JSONEncoder().encode(p), label: Labels.push,
+            aad: Data("\(Self.hostID)|\(try keys.deviceID())".utf8)
+        )
+        let content = UNMutableNotificationContent()
+        content.userInfo = ["aps": ["mutable-content": 1], "c": envelope]
+        return content
+    }
+
+    func stopped(_ kind: PushPayload.Kind, code: Int?, reason: String, secondsAgo: Int64 = 0) -> PushPayload {
+        PushPayload(
+            kind: kind, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
+            title: "Claude Code stopped", body: "Exited with code 1", ts: 1_793_707_200_000 - secondsAgo * 1000,
+            exit: PushExit(code: code, reason: reason, detail: nil)
+        )
+    }
+
+    /// Run again needs the session it starts, so a stopped push carries its ids and nothing else.
+    @Test func stoppedPushCarriesSessionForRunAgain() throws {
+        pair(Self.hostID, name: "studio")
+        let result = core.process(try sealed(stopped(.failed, code: 1, reason: "exit")))
+        let content = result.content
+        #expect(content.categoryIdentifier == "togo.ended")
+        #expect(content.body == "Stopped with an error · Exit code 1")
+        #expect(content.targetContentIdentifier == "togo://session/01?host=studio")
+        let togo = try #require(content.userInfo["togo"] as? [String: String])
+        #expect(togo == ["hostId": Self.hostID, "sessionId": "s_abcdefghij"])
+        #expect(!result.pendingChanged)
+
+        let limited = core.process(try sealed(stopped(.failed, code: nil, reason: "usage_limit"))).content
+        #expect(limited.categoryIdentifier == "togo.prompt", "a usage limit offers Reply, not Run again")
+        #expect(limited.userInfo["togo"] as? [String: String] == ["hostId": Self.hostID, "sessionId": "s_abcdefghij"])
+    }
+
+    func offline(
+        secondsAgo: Int64 = 0, active: Int? = 2, title: String = "attacker says hi", host: String? = "studio"
+    ) -> PushPayload {
+        PushPayload(
+            kind: .offline, sessionId: nil, bib: nil, agent: nil, host: host,
+            title: title, body: "free text the phone must not show", ts: 1_793_707_200_000 - secondsAgo * 1000,
+            active: active
+        )
+    }
+
+    @Test func offlineRendersHostAndCount() throws {
+        pair(Self.hostID, name: "Studio Mac")
+        let one = core.process(try sealed(offline(active: 1))).content
+        #expect(one.title == "Studio Mac stopped answering")
+        #expect(one.subtitle == "")
+        #expect(one.body == "1 session was working.")
+        #expect(one.categoryIdentifier == "togo.info")
+        #expect(one.threadIdentifier == Self.hostID)
+        #expect(one.targetContentIdentifier == nil)
+        let two = core.process(try sealed(offline(secondsAgo: -10, active: 2))).content
+        #expect(two.body == "2 sessions were working.")
+        #expect(two.title == "Studio Mac stopped answering")
+        let togo = try #require(two.userInfo["togo"] as? [String: String])
+        #expect(togo == ["hostId": Self.hostID, "offline": "1"])
+        let unnamed = core.process(try sealed(offline(secondsAgo: -20, active: 3, host: nil))).content
+        #expect(unnamed.title == "Studio Mac stopped answering", "the paired record names the machine, not the payload")
+    }
+
+    @Test func offlineIsTimeSensitive() throws {
+        pair(Self.hostID, name: "studio")
+        let content = core.process(try sealed(offline(active: 2))).content
+        #expect(content.interruptionLevel == .timeSensitive)
+        let text = try #require(NotificationTextBuilder.build(offline(active: 2), hostId: Self.hostID, hostName: "studio"))
+        #expect(text.interruption == .timeSensitive)
+        #expect(!text.body.contains("free text"))
+    }
+
+    @Test func offlineSealedHoursAgoStillRenders() throws {
+        pair(Self.hostID, name: "studio")
+        let result = core.process(try sealed(offline(secondsAgo: 29 * 3600)))
+        #expect(result.content.title == "studio stopped answering")
+        #expect(result.content.body == "2 sessions were working.")
+        #expect(result.content.interruptionLevel == .timeSensitive)
+        #expect(result.content.categoryIdentifier == "togo.info")
+        let newer = core.process(try sealed(offline(secondsAgo: 7 * 3600))).content
+        #expect(newer.title == "studio stopped answering")
+    }
+
+    @Test func offlineOlderThanLimitFallsBack() throws {
+        pair(Self.hostID, name: "studio")
+        expectGeneric(core.process(try sealed(offline(secondsAgo: 31 * 3600))).content, "past 30 hours")
+        var future = offline(active: 2)
+        future.ts += 120_000
+        expectGeneric(core.process(try sealed(future)).content, "claims to be from the future")
+    }
+
+    @Test func nonOfflineStillUses600s() throws {
+        pair(Self.hostID, name: "studio")
+        var done = PushPayload(kind: .done, sessionId: "s_abcdefghij", bib: "01", agent: "claude", title: "", body: "x", ts: 0)
+        done.ts = 1_793_707_200_000 - 700_000
+        expectGeneric(core.process(try sealed(done)).content, "700 s old")
+        done.ts = 1_793_707_200_000 - 500_000
+        #expect(core.process(try sealed(done)).content.categoryIdentifier == "togo.prompt")
+        expectGeneric(core.process(try sealed(stopped(.failed, code: 1, reason: "exit", secondsAgo: 3600))).content, "stopped, an hour old")
+    }
+
+    @Test func offlineReplayRefused() throws {
+        pair(Self.hostID, name: "studio")
+        let first = offline(secondsAgo: 3600)
+        #expect(core.process(try sealed(first)).content.title == "studio stopped answering")
+        expectGeneric(core.process(try sealed(first)).content, "the same seal again")
+        var older = first
+        older.ts -= 1000
+        expectGeneric(core.process(try sealed(older)).content, "an older seal")
+        let refreshed = offline(secondsAgo: 60)
+        #expect(core.process(try sealed(refreshed)).content.title == "studio stopped answering")
+    }
+
+    @Test func replayWithoutAnyContactStillRefused() throws {
+        pair(Self.hostID, name: "studio")
+        let will = offline(secondsAgo: 3600)
+        #expect(core.process(try sealed(will)).content.title == "studio stopped answering")
+        expectGeneric(core.process(try sealed(will)).content, "the same frame, nothing heard from the machine")
+    }
+
+    @Test func secondOutageAfterPushShows() throws {
+        pair(Self.hostID, name: "studio")
+        let will = offline(secondsAgo: 3600)
+        #expect(core.process(try sealed(will)).content.title == "studio stopped answering")
+        let done = PushPayload(kind: .done, sessionId: "s_abcdefghij", bib: "01", agent: "claude", title: "", body: "x", ts: 1_793_707_200_000 - 1000)
+        #expect(core.process(try sealed(done)).clearsOfflineOf == Self.hostID)
+        #expect(core.process(try sealed(will)).content.title == "studio stopped answering", "same seal, new outage")
+    }
+
+    @Test func secondOutageAfterReconnectShows() throws {
+        pair(Self.hostID, name: "studio")
+        let will = offline(secondsAgo: 3600)
+        #expect(core.process(try sealed(will)).content.title == "studio stopped answering")
+        pending.clearOfflineMark(hostId: Self.hostID)
+        #expect(core.process(try sealed(will)).content.title == "studio stopped answering")
+    }
+
+    @Test func staleLaterPushDoesNotClearOffline() throws {
+        pair(Self.hostID, name: "studio")
+        var done = PushPayload(kind: .done, sessionId: "s_abcdefghij", bib: "01", agent: "claude", title: "", body: "x", ts: 0)
+        done.ts = 1_793_707_200_000 - 3_600_000
+        #expect(core.process(try sealed(done)).clearsOfflineOf == nil, "a push that is refused proves nothing about now")
+    }
+
+    @Test func laterPushClearsOffline() throws {
+        pair(Self.hostID, name: "studio")
+        let offlineResult = core.process(try sealed(offline(active: 2)))
+        #expect(offlineResult.clearsOfflineOf == nil)
+        let done = PushPayload(
+            kind: .done, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
+            title: "", body: "Finished", ts: 1_793_707_200_000
+        )
+        #expect(core.process(try sealed(done)).clearsOfflineOf == Self.hostID)
+        #expect(core.process(try sealed(payload())).clearsOfflineOf == Self.hostID)
+
+        let delivered: [(identifier: String, userInfo: [AnyHashable: Any])] = [
+            ("a", offlineResult.content.userInfo),
+            ("b", ["togo": ["hostId": Self.otherHostID, "offline": "1"]]),
+            ("c", ["togo": ["hostId": Self.hostID, "sessionId": "s_abcdefghij"]]),
+        ]
+        #expect(OfflineNotifications.identifiers(in: delivered, hostId: Self.hostID) == ["a"])
+    }
+
+    @Test func silentDoneStripsSound() throws {
+        pair(Self.hostID, name: "studio")
+        let silent = NotificationServiceCore(
+            keys: keys, pairings: pairings, pending: pending, clock: { Self.now }, doneSilent: { true }
+        )
+        func loud(_ p: PushPayload) throws -> UNNotificationContent {
+            let content = try sealed(p).mutableCopy() as! UNMutableNotificationContent
+            content.sound = .default
+            return content
+        }
+        let done = PushPayload(
+            kind: .done, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
+            title: "", body: "Finished", ts: 1_793_707_200_000
+        )
+        let quiet = silent.process(try loud(done)).content
+        #expect(quiet.sound == nil)
+        #expect(quiet.interruptionLevel == .passive)
+        #expect(quiet.body == "Finished")
+
+        // Only done is quieted: a request, a stop and an outage keep their sound.
+        let request = silent.process(try loud(payload())).content
+        #expect(request.sound != nil)
+        #expect(request.interruptionLevel == .timeSensitive)
+        let failed = silent.process(try loud(stopped(.failed, code: 1, reason: "exit"))).content
+        #expect(failed.sound != nil)
+        #expect(silent.process(try loud(offline())).content.sound != nil)
+
+        // Off by default: a done keeps its sound.
+        let normal = NotificationServiceCore(
+            keys: keys, pairings: pairings, pending: pending, clock: { Self.now }, doneSilent: { false }
+        )
+        let kept = normal.process(try loud(done)).content
+        #expect(kept.sound != nil)
+        #expect(kept.interruptionLevel == .active)
+    }
+
+    @Test func watchKeepsItsOwnDoneSilentChoice() throws {
+        let suite = "togo-test-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(!SharedSettings.readDoneSilent(defaults))
+        SharedSettings.writeDoneSilent(true, to: defaults)
+        #expect(SharedSettings.readDoneSilent(defaults))
+        SharedSettings.writeDoneSilent(false, to: defaults)
+        #expect(!SharedSettings.readDoneSilent(defaults))
+        #expect(WatchLinkKey.doneSilent == "doneSilent")
+    }
+
     @Test func approveNeedsUnlockUnlessTurnedOff() throws {
         func actions(_ id: String, without: Bool) throws -> [UNNotificationAction] {
             try #require(NotificationCategorySet.make(approveWithoutUnlock: without).first { $0.identifier == id }).actions

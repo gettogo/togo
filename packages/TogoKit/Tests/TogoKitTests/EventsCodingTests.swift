@@ -227,6 +227,23 @@ struct EventsCodingTests {
         #expect(decoded.platform == .ios)
         #expect(decoded.liveActivityCommand == false)
         #expect(decoded.liveActivityStartToken == nil)
+        #expect(decoded.sshKey == nil)
+        #expect(!String(decoding: try JSONEncoder().encode(decoded), as: UTF8.self).contains("sshKey"))
+    }
+
+    @Test func pairParamsCarrySSHKey() throws {
+        var params = PushPairParams(
+            deviceId: "d", name: "n", x25519: "k", approvalKey: "k", apnsToken: "ab", env: .sandbox,
+            relayUrl: "https://relay.example.test"
+        )
+        params.sshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB7"
+        let json = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(params))
+        guard case .object(let object) = json else {
+            Issue.record("params did not encode as an object")
+            return
+        }
+        #expect(object["sshKey"] == .string("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB7"))
+        #expect(try JSONDecoder().decode(PushPairParams.self, from: JSONEncoder().encode(params)) == params)
     }
 
     private static func kind(of event: HelperEvent) -> String {
@@ -237,6 +254,7 @@ struct EventsCodingTests {
         case .approvalClosed: "approval.closed"
         case .notify: "notify"
         case .job: "job"
+        case .awake: "awake"
         case .unknown(let kind): kind
         }
     }

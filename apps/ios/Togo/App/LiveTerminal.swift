@@ -26,6 +26,7 @@ import UIKit
     ) {
         engine = SwiftTermEngine(settings: Self.terminalSettings(settings), theme: BuiltInThemes.all[0])
         engine.view.accessibilityLabel = WorkspaceCopy.terminal
+        engine.accessibilityWords = AccessibilityWords(cursorLine: WorkspaceCopy.cursorLine, blank: WorkspaceCopy.blankLine)
         controller = ThemedTerminalController(
             terminal: TerminalViewController(engine: engine, gestureConfig: Self.gestureConfig(settings.gestures)),
             choice: Self.themeChoice(settings)
@@ -106,6 +107,8 @@ import UIKit
         let bar = KeyBarView(config: keyBarConfig, engine: engine)
         bar.onCompose = { [weak handle] in handle?.onCompose() }
         bar.onDictate = { [weak handle] in handle?.onDictate() }
+        bar.hidesCompose = handle.hidesComposeKeys
+        handle.onHidesComposeKeys = { [weak bar] in bar?.hidesCompose = $0 }
     }
 
     private func shutDown() {
@@ -122,7 +125,8 @@ import UIKit
             fontName: settings.fontName == SettingsValues.systemFonts[0] ? nil : settings.fontName,
             fontSize: CGFloat(settings.fontSize),
             cursor: CursorShape(rawValue: settings.cursor) ?? .block,
-            themeID: settings.themeID
+            themeID: settings.themeID,
+            readNewOutput: settings.readNewOutput
         )
     }
 

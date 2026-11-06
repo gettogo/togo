@@ -1,10 +1,12 @@
 import Foundation
 
 /// A `togo://` link: `togo://session/<bib>?host=<name>` opens a session and
-/// `togo://new?host=<name>` starts one. Links come from anywhere, so anything else is refused.
+/// `togo://new?host=<name>` starts one, optionally with `folder=<path>` and `agent=<preset id>`
+/// filled in on the sheet. Links come from anywhere, so anything else is refused, and a folder
+/// or agent that does not check out is dropped; nothing starts until the user taps Start.
 enum DeepLink: Equatable, Sendable {
     case session(bib: String, host: String?)
-    case newSession(host: String?)
+    case newSession(host: String?, folder: String? = nil, preset: UUID? = nil)
 
     static let scheme = "togo"
     /// Bibs are short numbers; the bound keeps a hostile link from putting a novel in the notice.
@@ -13,8 +15,8 @@ enum DeepLink: Equatable, Sendable {
     init?(url: URL) {
         guard url.scheme?.lowercased() == Self.scheme,
               let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        let host = parts.queryItems?.first { $0.name == "host" }?.value?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        func item(_ name: String) -> String? { parts.queryItems?.first { $0.name == name }?.value }
+        let host = item("host")?.trimmingCharacters(in: .whitespacesAndNewlines)
         let machine = host?.isEmpty == false ? host : nil
         let path = url.pathComponents.filter { $0 != "/" }
         switch parts.host?.lowercased() {
@@ -24,7 +26,10 @@ enum DeepLink: Equatable, Sendable {
             self = .session(bib: bib, host: machine)
         case "new":
             guard path.isEmpty else { return nil }
-            self = .newSession(host: machine)
+            self = .newSession(
+                host: machine, folder: item("folder").flatMap(NewSessionPrefill.folder),
+                preset: item("agent").flatMap(UUID.init(uuidString:))
+            )
         default:
             return nil
         }
@@ -45,11 +50,33 @@ extension AppStore {
                 try? await Task.sleep(for: Self.linkPatience)
                 if self?.pendingLink == link { self?.pendingLink = nil }
             }
-        case .newSession(let host):
+        case .newSession(let host, let folder, let preset):
             guard !services.hosts.isEmpty else { return }
             let hostID = host.flatMap { name in services.hosts.first { Self.sameName($0.name, name) }?.id }
-            showSheet(.newSession(hostID))
+            let prefill = hostID.flatMap { id in
+                folder == nil && preset == nil ? nil : NewSessionPrefill(hostID: id, folder: folder, presetID: preset)
+            }
+            newSessionPrefill = prefill
+            let target = AppSheet.newSession(hostID)
+            guard sheet == target, prefill != nil else {
+                showSheet(target)
+                return
+            }
+            // The same sheet is up already; it opens again so it starts from the prefill.
+            sheet = nil
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: Self.coverDismissal)
+                self?.showSheet(target)
+            }
         }
+    }
+
+    /// The prefill for a new-session sheet on `hostID`, once: the sheet that reads it takes it,
+    /// and a sheet for another machine, or one on its way out, leaves it.
+    func takeNewSessionPrefill(for hostID: HostID) -> NewSessionPrefill? {
+        guard let prefill = newSessionPrefill, prefill.hostID == hostID, sheet == .newSession(hostID) else { return nil }
+        newSessionPrefill = nil
+        return prefill
     }
 
     /// Called after every snapshot. A pending session link resolves once every machine it

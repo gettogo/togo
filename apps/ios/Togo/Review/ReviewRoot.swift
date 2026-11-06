@@ -349,7 +349,7 @@ private struct ReviewEntrance: ViewModifier {
         if reduceMotion {
             content
                 .opacity(shown ? 1 : 0)
-                .onAppear { withAnimation(Motion.fade) { shown = true } }
+                .onAppear { withAnimation(Motion.animation(.rowGrow, reduce: reduceMotion)) { shown = true } }
         } else {
             content
         }

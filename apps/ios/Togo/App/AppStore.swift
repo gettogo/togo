@@ -15,12 +15,21 @@ import TogoKit
     var workspaceOpen = false
     var firstRun: Bool
     var notice: Notice?
+    /// What the last wake signal to a machine said, shown under its name.
+    var wakeNotes: [HostID: String] = [:]
+    /// Sends a wake packet; tests replace it.
+    @ObservationIgnored var sendWake: @Sendable (WakeTarget) async throws -> Void = { try await WakeOnLAN.send($0) }
     /// The tab whose compose bar is open, if any.
     var composing: TabID?
+    /// Words a reply could not deliver, waiting for their tab's compose bar to take them.
+    var replyDrafts: [TabID: String] = [:]
     /// An image pasted into a terminal, waiting for that tab's compose bar to take it.
     var pastedImage: PastedImage?
     /// A session link waiting for its machine to report.
     var pendingLink: DeepLink?
+    /// What a link asked the next new-session sheet to start with. The sheet that reads it
+    /// takes it, so it is not observed.
+    @ObservationIgnored var newSessionPrefill: NewSessionPrefill?
     /// Bumped by ⌘F; the workspace opens its find bar when it changes.
     var findRequests = 0
     /// Bumped when a stage, unstage, discard or commit in the review goes through, so the
@@ -53,6 +62,14 @@ import TogoKit
     /// Why the last answer to a card did not arrive, by card id. It sits on the card the user
     /// will answer again rather than in `notice`, which belongs to the whole screen.
     private(set) var answerFailures: [String: String] = [:]
+    /// Sessions whose command is being run again, so a second tap waits for the first.
+    var relaunching: Set<TabID> = []
+    /// Machines whose restorable sessions were fetched on their current connection.
+    var restoreLoaded: Set<HostID> = []
+    /// Restorable sessions being started or dismissed, so a second tap waits for the first.
+    var restoring: Set<TabID> = []
+    /// The last notice a failed restore set, so a later success clears only that one.
+    @ObservationIgnored var restoreNotice: Notice?
     /// Machines removed while their monitor may still have a snapshot on the way. A snapshot
     /// for one is dropped unless the machine is back in the services' list.
     @ObservationIgnored var removedMachines: Set<HostID> = []
@@ -108,6 +125,16 @@ import TogoKit
         section.reachability = snapshot.reachability
         section.helper = snapshot.helper
         section.capabilities = snapshot.capabilities
+        section.awake = snapshot.awake
+        section.wake = snapshot.wake
+        if case .offline = snapshot.reachability {} else { wakeNotes[snapshot.hostID] = nil }
+        if snapshot.reachability != .online {
+            // The next time the machine is online is a new connection and a new hello.
+            restoreLoaded.remove(snapshot.hostID)
+        }
+        if !snapshot.capabilities.contains(Capability.restore) {
+            section.restorable = []
+        }
         section.sessions = live.sorted(by: Self.bibOrder)
         if snapshot.reachability == .online {
             section.lastSeen = snapshot.at
@@ -267,8 +294,7 @@ import TogoKit
         var live: [SessionRow] = []
         var archived: [SessionRow] = []
         for row in rows {
-            let finished = row.status == .done || row.status == .exited
-            if finished && now.timeIntervalSince(row.statusSince) > archiveAfter {
+            if row.status.isFinished && now.timeIntervalSince(row.statusSince) > archiveAfter {
                 archived.append(row)
             } else {
                 live.append(row)
@@ -278,7 +304,7 @@ import TogoKit
     }
 
     /// Bib order never depends on status, so a row the user is about to tap never moves.
-    private static func bibOrder(_ a: SessionRow, _ b: SessionRow) -> Bool {
+    static func bibOrder(_ a: SessionRow, _ b: SessionRow) -> Bool {
         switch (a.bib.flatMap { Int($0) }, b.bib.flatMap { Int($0) }) {
         case let (x?, y?) where x != y: return x < y
         case (_?, nil): return true
@@ -339,7 +365,7 @@ import TogoKit
         controlCenter.requests[index].phase = phase
     }
 
-    private func update(_ row: SessionRow, _ change: (inout SessionRow) -> Void) {
+    func update(_ row: SessionRow, _ change: (inout SessionRow) -> Void) {
         guard let m = controlCenter.machines.firstIndex(where: { $0.id == row.hostID }),
               let s = controlCenter.machines[m].sessions.firstIndex(where: { $0.id == row.id }) else { return }
         change(&controlCenter.machines[m].sessions[s])

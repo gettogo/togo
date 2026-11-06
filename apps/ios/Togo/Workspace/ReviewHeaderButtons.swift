@@ -84,7 +84,7 @@ enum ReviewEntryCopy {
     nonisolated static func settles(_ status: SessionStatus) -> Bool {
         switch status {
         case .idle, .done, .needsYou: true
-        case .working, .exited, .unknown: false
+        case .working, .exited, .ended, .failed, .unknown: false
         }
     }
 
@@ -113,7 +113,6 @@ enum ReviewEntryCopy {
 /// accessibility sizes the count becomes a symbol so the title keeps its line.
 struct ReviewHeaderButtons: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: AppStore
     let row: SessionRow
     @State private var model: ReviewHeaderModel
@@ -144,8 +143,8 @@ struct ReviewHeaderButtons: View {
             }
         }
         .foregroundStyle(Color.togoSnow)
-        .animation(Motion.stateText(reduce: reduceMotion), value: model.changesLabel)
-        .animation(Motion.stateText(reduce: reduceMotion), value: model.hasPorts)
+        .motion(.fade, value: model.changesLabel)
+        .motion(.fade, value: model.hasPorts)
         .task(id: store.reviewSubject(for: row)) { await model.select(store.reviewSubject(for: row)) }
         .onChange(of: row.status) { _, status in
             Task { await model.statusChanged(to: status) }

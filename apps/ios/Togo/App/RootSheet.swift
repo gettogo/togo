@@ -3,6 +3,7 @@ import TogoKit
 
 /// The sheet for each `AppSheet`, built against the app's services.
 struct RootSheet: View {
+    @Environment(\.agentLibrary) private var agentLibrary
     let sheet: AppSheet
     let store: AppStore
     let onboarding: any OnboardingServices
@@ -20,6 +21,8 @@ struct RootSheet: View {
         switch sheet {
         case .addMachine:
             AddMachineSheet(store: store, services: onboarding, tutorial: tutorial)
+        case .addMachineFilled(let draft):
+            AddMachineSheet(flow: AddMachineFlow.filled(draft, store: store, services: onboarding, tutorial: tutorial))
         case .editMachine(let id):
             if let record = store.services.hostRecord(id) {
                 AddMachineSheet(flow: AddMachineFlow.editing(record, store: store, services: onboarding, tutorial: tutorial))
@@ -28,11 +31,12 @@ struct RootSheet: View {
             NewSessionSheet(
                 model: NewSessionModel(
                     services: store.services, hostID: hostID, machines: store.controlCenter.machines,
+                    library: agentLibrary ?? .inMemory(),
                     open: { hostID, sessionID in
                         store.sheet = nil
                         store.open(hostID: hostID, sessionID: sessionID)
                     }
-                ),
+                ).prefilled(hostID.flatMap { store.takeNewSessionPrefill(for: $0) }),
                 zoom: hostID == nil ? .init(sourceID: ControlCenterView.newSessionSourceID, namespace: zoom) : nil
             )
         case .signIn(let id):
@@ -48,6 +52,22 @@ struct RootSheet: View {
 }
 
 extension AddMachineFlow {
+    /// The add-machine flow on the form step with `draft` already typed in, such as a host
+    /// read from an SSH config.
+    static func filled(
+        _ draft: MachineDraft, store: AppStore, services: any OnboardingServices, tutorial: TutorialModel?
+    ) -> AddMachineFlow {
+        let flow = AddMachineFlow(
+            services: services,
+            save: { try await store.services.saveHost($0) },
+            finish: { _ in store.sheet = nil }
+        )
+        if let tutorial { flow.onDetected = { tutorial.record($0) } }
+        flow.draft = draft
+        flow.path = [.form]
+        return flow
+    }
+
     /// The add-machine flow on the form step, filled in from a stored machine. Saving replaces
     /// the record under the same id, so its monitor starts over with the new details.
     static func editing(
@@ -65,6 +85,7 @@ extension AddMachineFlow {
         draft.port = String(profile.endpoint.port)
         draft.user = profile.endpoint.user
         draft.symbol = HostSymbol(rawValue: record.symbol) ?? .laptop
+        draft.wake = record.wake
         if let jump = profile.jumps.first {
             draft.jump = jump.port == 22 ? "\(jump.user)@\(jump.host)" : "\(jump.user)@\(jump.host):\(jump.port)"
         }

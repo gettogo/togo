@@ -245,7 +245,6 @@ struct ShortcutBuilderView: View {
 }
 
 private struct KeyCap: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let key: ShortcutDraft.Key
     let selected: Bool
     let action: () -> Void
@@ -271,7 +270,7 @@ private struct KeyCap: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: selected)
+        .motion(.confirm, value: selected)
     }
 }
 

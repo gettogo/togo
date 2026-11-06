@@ -8,6 +8,9 @@ enum WorkspaceCopy {
     static let tabs = String(localized: "ws.tabs", defaultValue: "Open sessions")
     /// VoiceOver reads the screen's text as the value, so the label only names what it is.
     static let terminal = String(localized: "ws.terminal", defaultValue: "Terminal")
+    /// VoiceOver's name for the terminal row the cursor is on, and for an empty one.
+    static let cursorLine = String(localized: "ws.terminal.cursorLine", defaultValue: "Cursor line")
+    static let blankLine = String(localized: "ws.terminal.blank", defaultValue: "blank")
     static let closeTab = String(localized: "ws.closeTab", defaultValue: "Close tab")
 
     static func ended(_ label: String) -> String {

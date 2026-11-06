@@ -238,6 +238,8 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 		p.RequestID = a.RequestID
 		p.Options = a.Options
 		p.Subject = a.Subject
+		// Carried into the reminder too, which copies this plaintext.
+		p.AllowText = a.AllowText
 		m.CollapseID = a.RequestID
 	case wire.ApprovalClosedEvent:
 		p.Kind = wire.PushClear

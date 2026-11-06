@@ -282,11 +282,20 @@ public actor HostMonitor {
         state.helper = connected.helper
         state.capabilities = connected.capabilities
         replace(with: connected.snapshot)
+        state.awake = nil
+        state.hostInfo = nil
+        publish()
+        // The sessions go out first: a slow keep-awake read must not hold the machine back.
+        await loadAwake(from: connected.source)
+        guard tag == generation else { return }
         publish()
         let events = connected.source.events
         feed = hasEvents
             ? Task { await self.consume(events, generation: tag) }
             : Task { await self.poll(generation: tag) }
+        // After the feed starts, so a slow read holds nothing back.
+        await loadHostInfo(from: connected.source)
+        if tag == generation, state.hostInfo != nil { publish() }
         if connected.foreground != isForeground {
             await connected.source.setForeground(isForeground)
             await resync(tag)
@@ -408,14 +417,37 @@ public actor HostMonitor {
             }
             guard tag == generation else { return }
             replace(with: snapshot)
-            let backlog = held
-            held = []
-            for event in backlog where !ingest(event) {
-                syncAgain = true
-                break
-            }
+            guard replayHeld() else { continue }
+            // Read keep-awake after the replay so an older held event cannot overwrite it.
+            await loadAwake(from: source)
+            guard tag == generation else { return }
+            if !replayHeld() { syncAgain = true }
             publish()
         } while syncAgain && tag == generation
+    }
+
+    /// Folds the events held during a sync into the state; false when one leaves a gap.
+    private func replayHeld() -> Bool {
+        let backlog = held
+        held = []
+        for event in backlog where !ingest(event) {
+            syncAgain = true
+            return false
+        }
+        return true
+    }
+
+    /// Reads the keep-awake state after a snapshot. A failed read keeps what the state had:
+    /// the next event or snapshot corrects it.
+    private func loadAwake(from source: any SessionSource) async {
+        guard state.capabilities.contains(Capability.awake) else { return }
+        if let status = try? await source.awakeStatus() { state.awake = status }
+    }
+
+    /// Reads where to send a wake packet once per connection. A failed read leaves it unset.
+    private func loadHostInfo(from source: any SessionSource) async {
+        guard state.capabilities.contains(Capability.hostInfo) else { return }
+        if let info = try? await source.hostInfo() { state.hostInfo = info }
     }
 
     private func poll(generation tag: Int) async {

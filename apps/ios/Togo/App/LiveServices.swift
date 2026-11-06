@@ -26,6 +26,9 @@ import UIKit
         /// open, so notifications for the others can go.
         var reported: (HostID, Set<String>) -> Void = { _, _ in }
         var diagnostics: DiagnosticsRecorder = .shared
+        /// Whether wake targets are learned from what machines report; off while the app
+        /// cannot send wake packets.
+        var wakeEnabled = WakeFeature.isEnabled
     }
 
     private(set) var hosts: [HostRecordView] = []
@@ -40,6 +43,8 @@ import UIKit
     @ObservationIgnored var onMachineRemoved: (HostID) -> Void = { _ in }
     /// A machine's address or credentials changed. Its terminals reconnect with the new ones.
     @ObservationIgnored var onMachineChanged: (HostID) -> Void = { _ in }
+    /// Every machine view as it is published, for readers that serve the whole app.
+    @ObservationIgnored var onPublish: (HostViewSnapshot) -> Void = { _ in }
     /// Runs when the app goes to the background, before the helper connections close: port
     /// previews over them stop first so they can reopen on return.
     @ObservationIgnored var beforeDroppingHelpers: @MainActor () async -> Void = {}
@@ -47,7 +52,7 @@ import UIKit
         didSet { settingsChanged(from: oldValue) }
     }
 
-    @ObservationIgnored private let hostStore: HostStore
+    @ObservationIgnored let hostStore: HostStore
     @ObservationIgnored private let hostRecords: SyncedRecordStore<HostRecord>
     @ObservationIgnored private let settingsStore: SettingsStore
     @ObservationIgnored let deps: Dependencies
@@ -331,7 +336,9 @@ import UIKit
     private func reconcile(_ all: [HostRecord]) {
         let incoming = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         let removed = records.keys.filter { incoming[$0] == nil }
-        let changed = records.keys.filter { incoming[$0] != nil && incoming[$0] != records[$0] }
+        // A new wake target is no reason to reconnect.
+        let changed = records.keys.filter { incoming[$0] != nil && incoming[$0]?.withoutWake != records[$0]?.withoutWake }
+        let rewoken = records.keys.filter { incoming[$0] != nil && incoming[$0]?.wake != records[$0]?.wake && !changed.contains($0) }
         // A removed machine's channel and saved password stay until its helper is told to stop pushing.
         let paired = deps.pairing?.pairedOrPairing ?? []
         let unpairing = Set(removed.filter { id in records[id].map { unpair($0, reachable: latest[id]?.reach == .online) } ?? false })
@@ -350,6 +357,9 @@ import UIKit
             onMachineRemoved(id)
         }
         changed.forEach(onMachineChanged)
+        for id in rewoken {
+            if let snapshot = latest[id], let record = records[id] { publish(snapshot, record: record) }
+        }
     }
 
     private func startWatching(_ record: HostRecord) {
@@ -387,6 +397,7 @@ import UIKit
         latest[snapshot.hostID] = snapshot
         deps.diagnostics.reached(snapshot, record: record)
         publish(snapshot, record: record)
+        learnWake(from: snapshot, record: record)
         if snapshot.reach == .online, !record.noHelper {
             pair(record, capabilities: snapshot.capabilities)
             if foreground, unreported.remove(record.id) != nil {
@@ -404,7 +415,9 @@ import UIKit
     }
 
     private func publish(_ snapshot: HostSnapshot, record: HostRecord) {
-        hub.publish(mapper.map(snapshot, noHelper: record.noHelper, now: deps.now()))
+        let view = mapper.map(snapshot, noHelper: record.noHelper, wake: record.wake, now: deps.now())
+        hub.publish(view)
+        onPublish(view)
     }
 
     /// Rows show agent names from the machine's own list once it arrives.

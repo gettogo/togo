@@ -104,6 +104,39 @@ import UIKit
         #expect(store.composing == one)
     }
 
+    /// The Dictate key opens the compose bar too, so it waits for zen to end like Compose does.
+    @Test func dictateWaitsForZenToEnd() {
+        let store = store()
+        store.toggleZen()
+        store.dictate(one)
+        #expect(store.composing == nil)
+        #expect(store.dictationRequest == nil)
+        store.toggleZen()
+        store.dictate(one)
+        #expect(store.composing == one)
+    }
+
+    /// Zen in one window leaves the Compose and Dictate keys alone on a terminal another window
+    /// shows, and a terminal moving into a zen window takes that window's setting.
+    @Test func zenKeysStayInTheirWindow() throws {
+        let pool = TerminalPool()
+        let left = WindowID(), right = WindowID()
+        let a = store(), b = store()
+        pool.sync(window: left, with: a)
+        pool.sync(window: right, with: b)
+        pool.show(one, in: right)
+        a.toggleZen()
+        #expect(a.zen)
+        pool.zenChanged(true, in: left)
+        let handle = try #require(pool.handle(for: one))
+        #expect(!handle.hidesComposeKeys, "the terminal is on screen in the other window")
+
+        pool.show(one, in: left)
+        #expect(handle.hidesComposeKeys)
+        pool.show(one, in: right)
+        #expect(!handle.hidesComposeKeys)
+    }
+
     /// The chrome stays while it is pinned, such as while find is open, and hides three seconds
     /// after it is let go.
     @Test func pinnedChromeStaysRevealed() async {

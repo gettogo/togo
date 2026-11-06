@@ -19,10 +19,13 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public var options: [PushOption]
     public var receivedAt: Date
     public var answered: Answered?
+    /// The request takes a typed answer, as its push said. Absent in older records.
+    public var allowText: Bool?
 
     public init(
         requestId: String, hostId: String, sessionId: String?, bib: String?, agent: String?, host: String?,
-        title: String, subject: PushSubject?, options: [PushOption], receivedAt: Date, answered: Answered?
+        title: String, subject: PushSubject?, options: [PushOption], receivedAt: Date, answered: Answered?,
+        allowText: Bool? = nil
     ) {
         self.requestId = requestId
         self.hostId = hostId
@@ -35,11 +38,19 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
         self.options = options
         self.receivedAt = receivedAt
         self.answered = answered
+        self.allowText = allowText
     }
+}
+
+/// The newest "stopped answering" push shown for a machine, so a replay of it is refused.
+struct OfflineMark: Codable, Sendable, Equatable {
+    var hostId: String
+    var ts: Int64
 }
 
 public final class PendingStore: Sendable {
     private let blob: SharedBlob<PendingRequest>
+    private let offlineMarks: SharedBlob<OfflineMark>
     private let clock: @Sendable () -> Date
     private let onChange: (@Sendable () -> Void)?
 
@@ -48,6 +59,7 @@ public final class PendingStore: Sendable {
     /// the waiting widget can reload.
     public init(directory: URL, clock: @escaping @Sendable () -> Date, onChange: (@Sendable () -> Void)? = nil) {
         blob = SharedBlob(directory: directory, name: "pending")
+        offlineMarks = SharedBlob(directory: directory, name: "offline-seen")
         self.clock = clock
         self.onChange = onChange
     }
@@ -106,6 +118,29 @@ public final class PendingStore: Sendable {
             guard let index = values.firstIndex(where: { $0.requestId == requestId }) else { return }
             values[index].answered = answered
         }
+    }
+
+    /// Records an offline push (sealed at `ts`) as shown for `hostId`. False when this one or a
+    /// newer one was already shown: an offline push has no id, so its seal time is its identity,
+    /// and every refresh of the will carries a later one.
+    public func claimOffline(hostId: String, ts: Int64) -> Bool {
+        var fresh = false
+        offlineMarks.update { marks in
+            if let index = marks.firstIndex(where: { $0.hostId == hostId }) {
+                guard marks[index].ts < ts else { return }
+                marks[index].ts = ts
+            } else {
+                marks.append(OfflineMark(hostId: hostId, ts: ts))
+            }
+            fresh = true
+        }
+        return fresh
+    }
+
+    /// Forgets the offline push shown for `hostId`: the machine has been heard from since, so
+    /// the next time it goes quiet is a new outage even when the helper reuses the same seal.
+    public func clearOfflineMark(hostId: String) {
+        offlineMarks.update { $0.removeAll { $0.hostId == hostId } }
     }
 
     public func remove(_ requestId: String) {

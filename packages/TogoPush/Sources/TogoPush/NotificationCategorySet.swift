@@ -5,6 +5,18 @@ import UserNotifications
 public enum SharedSettings {
     /// When true, Approve works from the lock screen without unlocking. Off by default.
     public static let approveWithoutUnlock = "approveWithoutUnlock"
+    /// When true, a "done" arrives without a sound and without interrupting. Off by default.
+    public static let doneSilent = "doneSilent"
+
+    /// Whether "done" notifications are silent on this device.
+    public static func readDoneSilent(_ defaults: UserDefaults? = SharedSettings.defaults) -> Bool {
+        defaults?.bool(forKey: doneSilent) ?? false
+    }
+
+    /// Stores the choice where this process's notification extension reads it.
+    public static func writeDoneSilent(_ on: Bool, to defaults: UserDefaults?) {
+        defaults?.set(on, forKey: doneSilent)
+    }
 
     public static var defaults: UserDefaults? { UserDefaults(suiteName: SharedGroup.ios) }
 }
@@ -32,6 +44,24 @@ public enum NotificationCategorySet {
             title: String(localized: "notif.open", defaultValue: "Open"),
             options: .foreground
         )
+        // Running again starts the agent on the machine, so it needs the device unlocked and
+        // the app open to show what happens.
+        let runAgain = UNNotificationAction(
+            identifier: NotificationActionID.runAgain,
+            title: String(localized: "notif.runAgain", defaultValue: "Run again"),
+            options: [.foreground, .authenticationRequired],
+            icon: UNNotificationActionIcon(systemImageName: "arrow.clockwise")
+        )
+        // Reply types into the agent, so it needs the device unlocked, and opens the app to say
+        // whether the words went.
+        let reply = UNTextInputNotificationAction(
+            identifier: NotificationActionID.reply,
+            title: String(localized: "notif.reply", defaultValue: "Reply"),
+            options: [.foreground, .authenticationRequired],
+            icon: UNNotificationActionIcon(systemImageName: "arrowshape.turn.up.left"),
+            textInputButtonTitle: String(localized: "notif.reply.send", defaultValue: "Send"),
+            textInputPlaceholder: String(localized: "notif.reply.placeholder", defaultValue: "Message")
+        )
         return [
             UNNotificationCategory(
                 identifier: NotificationCategoryID.request, actions: [approve, deny, open], intentIdentifiers: []
@@ -40,6 +70,16 @@ public enum NotificationCategorySet {
                 identifier: NotificationCategoryID.requestDenyOnly, actions: [deny, open], intentIdentifiers: []
             ),
             UNNotificationCategory(identifier: NotificationCategoryID.info, actions: [], intentIdentifiers: []),
+            UNNotificationCategory(identifier: NotificationCategoryID.ended, actions: [runAgain], intentIdentifiers: []),
+            UNNotificationCategory(identifier: NotificationCategoryID.prompt, actions: [reply], intentIdentifiers: []),
+            // Open gives way to Reply beside the buttons; Reply opens the app anyway.
+            UNNotificationCategory(
+                identifier: NotificationCategoryID.requestReply, actions: [approve, deny, reply], intentIdentifiers: []
+            ),
+            UNNotificationCategory(
+                identifier: NotificationCategoryID.requestDenyOnlyReply, actions: [deny, reply], intentIdentifiers: []
+            ),
+            UNNotificationCategory(identifier: NotificationCategoryID.requestText, actions: [reply, open], intentIdentifiers: []),
         ]
     }
 

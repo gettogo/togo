@@ -50,14 +50,14 @@ struct IslandCompactTrailing: View {
 
     var body: some View {
         Group {
-            if state.waiting > 1 && LiveStatus(state.status, stale: isStale).showsCount {
+            if state.waiting > 1 && LiveStatus(state.status, stale: isStale).showsCompactCount {
                 Text(LiveCopy.waiting(state.waiting))
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.togoAccent)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
             } else {
-                LiveStatusText(status: LiveStatus(state.status, stale: isStale), font: .subheadline)
+                LiveStatusText(status: LiveStatus(state.status, stale: isStale), font: .subheadline, reason: state.reason)
             }
         }
         .lineLimit(1)
@@ -139,7 +139,7 @@ struct IslandExpandedCenter: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            LiveStatusText(status: LiveStatus(state.status, stale: isStale))
+            LiveStatusText(status: LiveStatus(state.status, stale: isStale), reason: state.reason)
             Text(verbatim: "· \(machine)")
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)

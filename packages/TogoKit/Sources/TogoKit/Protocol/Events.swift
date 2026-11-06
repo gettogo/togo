@@ -353,6 +353,8 @@ public enum HelperEvent: Hashable, Sendable {
     case approvalClosed(requestId: String, resolution: CloseResolution)
     case notify(title: String, body: String, level: NotifyLevel)
     case job(Job)
+    /// The machine's keep-awake state changed (awake.v1). Belongs to no session.
+    case awake(AwakeStatus)
     /// A kind this client does not know, from a newer helper. Its seq still counts.
     case unknown(kind: String)
 }
@@ -373,7 +375,7 @@ public struct EventEnvelope: Codable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case seq, ts, kind, sessionId
-        case session, approval, requestId, resolution, title, body, level, job
+        case session, approval, requestId, resolution, title, body, level, job, awake
     }
 
     public init(from decoder: any Decoder) throws {
@@ -402,6 +404,8 @@ public struct EventEnvelope: Codable, Hashable, Sendable {
             )
         case "job":
             event = .job(try container.decode(Job.self, forKey: .job))
+        case "awake":
+            event = .awake(try container.decode(AwakeStatus.self, forKey: .awake))
         default:
             event = .unknown(kind: kind)
         }
@@ -433,6 +437,9 @@ public struct EventEnvelope: Codable, Hashable, Sendable {
         case .job(let job):
             try container.encode("job", forKey: .kind)
             try container.encode(job, forKey: .job)
+        case .awake(let status):
+            try container.encode("awake", forKey: .kind)
+            try container.encode(status, forKey: .awake)
         case .unknown(let kind):
             // The kind's own fields were not decoded, so only the header survives.
             try container.encode(kind, forKey: .kind)

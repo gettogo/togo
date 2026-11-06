@@ -1,0 +1,30 @@
+# Each line animates outside the motion roles; scripts/check-motion.sh and
+# TogoTests/MotionPassTests.swift must flag every one.
+withAnimation(.easeOut) { shown = true }
+withAnimation { shown = true }
+.animation(.default, value: x)
+.animation(.spring(response: 0.3), value: x)
+UIView.animate(withDuration: 0.2) { view.alpha = 0 }
+UIView.transition(with: view, duration: 0.2, options: .transitionCrossDissolve) {}
+let animator = UIViewPropertyAnimator(duration: 0.3, curve: .easeOut)
+let animator = UIViewPropertyAnimator(duration: 0.8, timingParameters: Motion.timingParameters(.fade))
+UIViewPropertyAnimator.runningPropertyAnimator(withDuration: 0.3, delay: 0, options: []) { view.alpha = 0 }
+static let curve = UnitCurve.easeOut
+static let spring = Spring(response: 0.35, dampingRatio: 0.8)
+var transaction = Transaction(animation: .smooth)
+transaction.animation = .snappy
+t.animation=.default
+$0.animation  = .default
+transaction.animation = reduceMotion ? .default : Motion.animation(.fade, reduce: false)
+.phaseAnimator([0, 1]) { content, phase in content } animation: { _ in .default }
+.keyframeAnimator(initialValue: 0) { content, value in content } keyframes: { _ in }
+PhaseAnimator([0, 1]) { phase in Text("") }
+KeyframeAnimator(initialValue: 0, trigger: x) { value in Text("") } keyframes: { _ in }
+layer.add(CAKeyframeAnimation(keyPath: "opacity"), forKey: nil)
+let fade = CATransition()
+let group = CAAnimationGroup()
+let pulse = CABasicAnimation(keyPath: "opacity")
+.animation(Motion.animation(.fade, reduce: r) ?? .default, value: x)
+withAnimation(Motion.animation(.fade, reduce: r) ?? Animation.default) { shown = true }
+.animation(Motion.animation(.fade, reduce: r)?.speed(0.1), value: x)
+.animation(Motion.animation(.dropIn, reduce: r)?.repeatForever(), value: x)

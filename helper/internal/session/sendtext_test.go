@@ -253,7 +253,7 @@ func TestSendTextFixtures(t *testing.T) {
 			}
 			a := &api.API{Sessions: svc, Ext: map[string]api.Method{wire.MethodSessionSendText: api.SendText(svc, done)}}
 
-			raw, err := os.ReadFile(filepath.Join("..", "..", "..", "protocol", "v1", "fixtures", "pending", name+".json"))
+			raw, err := os.ReadFile(filepath.Join("..", "..", "..", "protocol", "v1", "fixtures", name+".json"))
 			if err != nil {
 				t.Fatal(err)
 			}

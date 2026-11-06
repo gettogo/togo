@@ -115,6 +115,20 @@ import TogoPush
         #expect(link.sent.last?[WatchLinkKey.context] != nil)
     }
 
+    @Test func doneSilentReachesTheWatch() throws {
+        let bridge = bridge()
+        bridge.sendDoneSilent(true)
+        #expect(link.sent.last?[WatchLinkKey.doneSilent] as? Bool == true)
+        // Kept beside later contexts, and not sent again while unchanged.
+        bridge.publish(sessions: [], requests: [])
+        #expect(link.sent.last?[WatchLinkKey.doneSilent] as? Bool == true)
+        let count = link.sent.count
+        bridge.sendDoneSilent(true)
+        #expect(link.sent.count == count)
+        bridge.sendDoneSilent(false)
+        #expect(link.sent.last?[WatchLinkKey.doneSilent] as? Bool == false)
+    }
+
     @Test func nothingSentUntilTheWatchAppCanHearIt() throws {
         link.canReachWatchApp = false
         let bridge = bridge()
@@ -156,7 +170,8 @@ import TogoPush
             helper: .present(version: "1", live: true), sessions: [row]
         )
         #expect(WatchSession.rows([machine]) == [WatchSession(
-            hostName: "Studio", bib: "04", agentName: "Claude", status: "needs_you", activity: "Running tests"
+            hostName: "Studio", bib: "04", agentName: "Claude", status: "needs_you", activity: "Running tests",
+            machineId: Samples.studio.uuidString, sessionId: "s_1"
         )])
     }
 

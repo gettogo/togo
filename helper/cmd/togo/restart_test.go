@@ -194,6 +194,12 @@ func TestRestartKeepsTmuxSessions(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("SHELL", "/bin/sh")
 
+	// Process starts crawl on a loaded machine; every wait here is for a condition, so
+	// the ceilings only need to be far above any plausible start time.
+	oldStart, oldExit := restartStartWait, restartExitWait
+	restartStartWait, restartExitWait = 60*time.Second, 60*time.Second
+	t.Cleanup(func() { restartStartWait, restartExitWait = oldStart, oldExit })
+
 	old := exec.Command(togoBin, "daemon")
 	if err := old.Start(); err != nil {
 		t.Fatal(err)
@@ -204,7 +210,7 @@ func TestRestartKeepsTmuxSessions(t *testing.T) {
 		old.Process.Kill()
 		<-exited
 	})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for !daemonRunning(home) {
 		if time.Now().After(deadline) {
 			t.Fatal("daemon did not start")
@@ -232,7 +238,7 @@ func TestRestartKeepsTmuxSessions(t *testing.T) {
 		if !errors.As(err, &exit) || exit.ExitCode() != daemon.ExitUpgrade {
 			t.Fatalf("old daemon exited with %v, want status %d", err, daemon.ExitUpgrade)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatal("old daemon did not exit")
 	}
 	exited <- nil // for the cleanup

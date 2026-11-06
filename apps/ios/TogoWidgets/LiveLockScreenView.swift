@@ -5,9 +5,10 @@ import TogoPush
 struct LiveStatusText: View {
     let status: LiveStatus
     var font: Font = .title3
+    var reason: String?
 
     var body: some View {
-        Text(status.word)
+        Text(status.word(reason: reason))
             .font(font)
             .fontWeight(status == .needsYou ? .semibold : .medium)
             .foregroundStyle(Self.color(status))
@@ -17,7 +18,7 @@ struct LiveStatusText: View {
     private static func color(_ status: LiveStatus) -> Color {
         switch status {
         case .needsYou: Color.togoAccentText
-        case .expired, .notUpdated: Color.togoMute
+        case .expired, .notUpdated, .offline: Color.togoMute
         default: Color.togoSnow
         }
     }
@@ -72,7 +73,7 @@ struct LiveLockScreenView: View {
 
     private var statusLine: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            LiveStatusText(status: status)
+            LiveStatusText(status: status, reason: state.reason)
                 .layoutPriority(2)
             Spacer(minLength: 12)
             if state.waiting > 1 && status.showsCount {

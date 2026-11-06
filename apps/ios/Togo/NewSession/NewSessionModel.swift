@@ -17,6 +17,8 @@ enum Load<T: Equatable>: Equatable {
         var unavailable: String?
         var helperMissing: Bool
         var sessionCount: Int
+        /// What the machine's helper offers, such as `launch.v1` for flags and presets.
+        var capabilities: Set<String> = []
     }
 
     /// The most sessions a machine holds: bibs run from 01 to 99.
@@ -35,6 +37,18 @@ enum Load<T: Equatable>: Equatable {
     var cwd: String?
     var agents: Load<[AgentInfo]> = .idle
     var agentID: String?
+    /// A saved preset chosen instead of a registry agent.
+    var presetID: UUID?
+    /// Flags for this start, split into arguments by `ArgsParser`.
+    var flags = ""
+    /// Whether starting saves the chosen preset as this folder's.
+    var rememberFolder = false
+    /// The preset this folder last started with on this machine.
+    var rememberedPreset: UUID?
+    /// A preset asked for from outside the sheet, such as a shortcut. It wins over the
+    /// folder's remembered one whenever the machine can start it, in any folder, until the
+    /// user picks another machine.
+    var requestedPresetID: UUID?
     var showHidden = false
     var name = ""
     var creating = false
@@ -45,13 +59,16 @@ enum Load<T: Equatable>: Equatable {
     private var browseToken = 0
     private var agentsToken = 0
     private let services: any AppServices
+    private let library: AgentLibrary
     private let open: (HostID, String) -> Void
 
     init(
         services: any AppServices, hostID: HostID?, machines: [MachineSection] = [],
+        library: AgentLibrary = .inMemory(),
         open: @escaping (HostID, String) -> Void = { _, _ in }
     ) {
         self.services = services
+        self.library = library
         self.open = open
         let choices = machines.isEmpty ? Self.choices(from: services.hosts) : machines.map(Self.choice(from:))
         self.machines = choices
@@ -90,9 +107,66 @@ enum Load<T: Equatable>: Equatable {
         offeredAgents.first { $0.id == agentID && $0.installed } ?? offeredAgents.first { $0.installed }
     }
 
+    var presets: [AgentPreset] { library.presets }
+
+    /// Flags and presets need a helper that takes a program and its arguments.
+    var flagsAvailable: Bool { machine?.capabilities.contains(Capability.launch) ?? false }
+
+    var flagsFooter: String? { flagsAvailable ? nil : NewSessionCopy.flagsNeedUpdate(machineName) }
+
+    func canUse(_ preset: AgentPreset) -> Bool {
+        guard flagsAvailable else { return false }
+        return preset.isCustom || offeredAgents.contains { $0.id == preset.agent && $0.installed }
+    }
+
+    var selectedPreset: AgentPreset? {
+        library.preset(presetID).flatMap { canUse($0) ? $0 : nil }
+    }
+
+    /// The registry agent that shows as chosen; nil while a preset is, or was until it went away.
+    var selectedRegistryID: String? { presetID == nil ? selectedAgent?.id : nil }
+
+    /// The chosen preset was deleted, perhaps on another device, while the sheet was open. Its
+    /// flags must not start some other agent, so nothing starts until the user chooses again.
+    var presetMissing: Bool { presetID != nil && selectedPreset == nil }
+
+    func isRemembered(_ preset: AgentPreset) -> Bool { preset.id == rememberedPreset }
+
+    /// A shell takes no arguments, so it has no flags field.
+    var showsFlags: Bool {
+        if selectedPreset != nil { return true }
+        guard let agent = selectedAgent else { return false }
+        return agent.id != "shell"
+    }
+
+    var flagsError: String? {
+        guard flagsAvailable, showsFlags else { return nil }
+        return FlagsField.problem(flags)
+    }
+
+    var startTitle: String {
+        NewSessionCopy.start(selectedPreset?.name ?? selectedAgent?.name ?? "")
+    }
+
     var canStart: Bool {
         guard !creating else { return false }
-        return helperMissing || selectedAgent != nil
+        if helperMissing { return true }
+        guard !presetMissing else { return false }
+        return (selectedPreset != nil || selectedAgent != nil) && flagsError == nil
+    }
+
+    func choose(agent id: String) {
+        agentID = id
+        presetID = nil
+        flags = ""
+        rememberFolder = false
+    }
+
+    /// Fills the flags with the preset's own; edits apply to this start only.
+    func choose(preset: AgentPreset) {
+        presetID = preset.id
+        flags = ArgsParser.join(preset.args)
+        rememberFolder = isRemembered(preset)
     }
 
     /// Loads what the first visible step needs. Safe to call again; it never replaces data
@@ -114,6 +188,8 @@ enum Load<T: Equatable>: Equatable {
             cwd = nil
             agents = .idle
             agentID = nil
+            clearPreset()
+            requestedPresetID = nil
         }
         createError = nil
         step = .folder
@@ -165,11 +241,33 @@ enum Load<T: Equatable>: Equatable {
     }
 
     func choose(folder: String) async {
+        if cwd != folder { clearPreset() }
         cwd = folder
         createError = nil
         leaveBrowsing()
         step = .agent
-        if agents == .idle { await loadAgents() }
+        if agents == .idle {
+            await loadAgents()
+        } else if case .loaded = agents {
+            await applyRemembered()
+        }
+    }
+
+    private func clearPreset() {
+        presetID = nil
+        flags = ""
+        rememberFolder = false
+        rememberedPreset = nil
+    }
+
+    /// Chooses the preset this folder last started with, unless the user already chose one.
+    private func applyRemembered() async {
+        guard let hostID, let cwd else { return }
+        let id = await library.rememberedPreset(host: hostID, cwd: cwd)
+        guard self.hostID == hostID, self.cwd == cwd else { return }
+        rememberedPreset = id
+        let wanted = [requestedPresetID, id].lazy.compactMap { self.library.preset($0) }.first { self.canUse($0) }
+        if presetID == nil, let preset = wanted { choose(preset: preset) }
     }
 
     func loadAgents() async {
@@ -182,6 +280,7 @@ enum Load<T: Equatable>: Equatable {
             guard agentsToken == token, self.hostID == hostID else { return }
             agents = .loaded(list)
             agentID = agentID ?? selectedAgent?.id
+            await applyRemembered()
         } catch {
             if agentsToken == token, self.hostID == hostID { agents = .failed(message(for: error)) }
         }
@@ -195,6 +294,7 @@ enum Load<T: Equatable>: Equatable {
         createError = nil
         do {
             let row = try await services.create(hostID: hostID, params: params())
+            await rememberChoice(hostID: hostID)
             open(row.hostID, row.id)
             // Stays set: the sheet is about to close and must not accept a second start.
             return row
@@ -205,11 +305,29 @@ enum Load<T: Equatable>: Equatable {
         }
     }
 
-    /// The name goes to the helper as typed, so quotes and shell syntax are plain characters.
+    private func rememberChoice(hostID: HostID) async {
+        guard let preset = selectedPreset, let cwd else { return }
+        if rememberFolder {
+            await library.remember(preset.id, host: hostID, cwd: cwd)
+        } else if rememberedPreset == preset.id {
+            await library.remember(nil, host: hostID, cwd: cwd)
+        }
+    }
+
+    /// The name goes to the helper as typed and each flag as its own argument, so quotes and
+    /// shell syntax are plain characters.
     private func params() -> CreateSessionParams {
         if helperMissing { return CreateSessionParams() }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return CreateSessionParams(agent: selectedAgent?.id, cwd: cwd, name: trimmed.isEmpty ? nil : trimmed)
+        let name = trimmed.isEmpty ? nil : trimmed
+        let parsed = flagsAvailable && showsFlags ? (try? ArgsParser.split(flags)) ?? [] : []
+        let args = parsed.isEmpty ? nil : parsed
+        if let preset = selectedPreset {
+            var params = preset.launch(cwd: cwd, name: name)
+            params.args = args
+            return params
+        }
+        return CreateSessionParams(agent: selectedAgent?.id, cwd: cwd, name: name, args: args)
     }
 
     private func message(for error: any Error) -> String {
@@ -227,7 +345,8 @@ enum Load<T: Equatable>: Equatable {
             id: section.id, name: section.name, symbol: section.symbol,
             unavailable: unavailableReason(section.reachability),
             helperMissing: section.helper == .missing,
-            sessionCount: section.sessions.filter(\.managed).count
+            sessionCount: section.sessions.filter(\.managed).count,
+            capabilities: section.capabilities
         )
     }
 

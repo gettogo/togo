@@ -4,6 +4,7 @@ import Synchronization
 import Testing
 import TogoKit
 import TogoPush
+import UserNotifications
 @testable import Togo
 
 private let hostID = "h_mmg42klgyqzwneiskrelxms3j7"
@@ -34,7 +35,9 @@ final class FakeRelay: AnswerSending {
     var shown: [DeliveredRequest] = []
     var removed: [Set<String>] = []
     var failures: [String] = []
+    var offlineRemoved: [String] = []
 
+    func removeOffline(hostId: String) async { offlineRemoved.append(hostId) }
     func delivered() async -> [DeliveredRequest] { shown }
     func removeDelivered(requestIds: Set<String>) async {
         removed.append(requestIds)
@@ -110,6 +113,55 @@ struct NotificationActionHandlerTests {
 
     var userInfo: [AnyHashable: Any] {
         ["togo": ["requestId": requestID, "hostId": hostID, "sessionId": "s_abcdefghij", "options": []]]
+    }
+
+    /// A stopped push sealed by the helper, opened by the notification service as on a device,
+    /// then the Run again action: the app opens the session and asks that machine to relaunch it.
+    @Test func runAgainActionOpensAndRelaunches() async throws {
+        let keys = InMemoryDeviceKeys()
+        pairings.put(Pairing(
+            hostId: hostID, hostKey: Base64URL.encode(hostKey.publicKey.rawRepresentation),
+            relayURL: URL(string: "https://relay.example")!, machineName: "studio", appHostID: Samples.studio,
+            pairedAt: start, tokenHash: "a1b2c3", liveActivityCommand: false
+        ))
+        let payload = PushPayload(
+            kind: .failed, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
+            title: "Claude Code stopped", body: "Exited with code 1", ts: Int64(start.timeIntervalSince1970 * 1000),
+            exit: PushExit(code: 1, reason: "exit", detail: nil)
+        )
+        let envelope = try Seal.seal(
+            to: keys.agreementKey().publicKey, JSONEncoder().encode(payload), label: Labels.push,
+            aad: Data("\(hostID)|\(try keys.deviceID())".utf8)
+        )
+        let delivered = UNMutableNotificationContent()
+        delivered.userInfo = ["aps": ["mutable-content": 1], "c": envelope]
+        let shown = NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { start })
+            .process(delivered).content
+        #expect(shown.categoryIdentifier == NotificationCategoryID.ended)
+
+        let store = AppStore(services: FakeAppServices())
+        let tools = FakeMachineTools()
+        tools.defaultCapabilities = [Capability.launch]
+        tools.answer("session.relaunch", """
+            {"id":"s_abcdefghij","bib":"01","name":"Claude Code","agent":"claude","cwd":"/Users/sam/src/app",\
+            "createdAt":"2026-11-03T12:00:00Z","status":"working","activity":null,"attachedClients":0,\
+            "managed":true,"muted":false,"meta":{"model":null,"contextPercent":null,"costUsd":null},\
+            "command":["claude"],"exit":null}
+            """)
+        var running: Task<Void, Never>?
+        let h = NotificationActionHandler(dependencies: .init(
+            pairings: pairings, pending: pending, relay: relay, live: nil, notifications: notifications,
+            runAgain: { host, session in running = Task { await store.runAgain(hostID: host, sessionID: session, tools: tools) } }
+        ))
+        let link = await h.handle(
+            actionIdentifier: NotificationActionID.runAgain, userInfo: shown.userInfo, target: shown.targetContentIdentifier
+        )
+        #expect(link == .session(bib: "01", host: "studio"))
+        await running?.value
+        #expect(tools.calledHosts == [Samples.studio])
+        #expect(tools.requests == [FakeMachineTools.Request(method: "session.relaunch", params: ["id": .string("s_abcdefghij")])])
+        #expect(relay.sent.withLock { $0 }.isEmpty)
+        #expect(store.notice == nil)
     }
 
     @Test func approveUsesSSHWhenLive() async {
@@ -254,6 +306,28 @@ struct NotificationActionHandlerTests {
         #expect(pending.request(requestID) == nil)
         #expect(widgetReloads == 1)
         #expect(watchCleared == [requestID])
+    }
+
+    @Test func laterPushFromTheMachineRemovesItsOfflineAlert() async throws {
+        let keys = InMemoryDeviceKeys()
+        let clear = ClearHandler(dependencies: .init(
+            core: NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { start }),
+            pending: pending, notifications: notifications, reloadWidgets: {}
+        ))
+        func envelope(_ payload: PushPayload) throws -> [AnyHashable: Any] {
+            ["aps": ["content-available": 1], "c": try Seal.seal(
+                to: keys.agreementKey().publicKey, JSONEncoder().encode(payload), label: Labels.push,
+                aad: Data("\(hostID)|\(try keys.deviceID())".utf8)
+            )]
+        }
+        _ = await clear.didReceiveRemoteNotification(try envelope(PushPayload(kind: .offline, title: "", body: "", ts: 1, active: 2)))
+        #expect(notifications.offlineRemoved.isEmpty, "the offline alert itself stays")
+        _ = await clear.didReceiveRemoteNotification(try envelope(PushPayload(kind: .done, title: "", body: "", ts: 1)))
+        #expect(notifications.offlineRemoved == [hostID])
+        #expect(pending.claimOffline(hostId: hostID, ts: 5) == true)
+        await clear.didEnterForeground(open: [], reported: [hostID])
+        #expect(notifications.offlineRemoved == [hostID, hostID])
+        #expect(pending.claimOffline(hostId: hostID, ts: 5) == true, "a reconnect forgets the shown offline push")
     }
 
     @Test func foregroundDropsWhatTheMachineNoLongerLists() async {

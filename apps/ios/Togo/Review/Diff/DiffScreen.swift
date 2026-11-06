@@ -11,7 +11,6 @@ struct DiffScreen: View {
     @AppStorage("review.diff.mode") private var storedMode: DiffMode = .split
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var width: CGFloat = 0
     @State private var draft: DiffModel.CommentDraft?
 
@@ -56,8 +55,9 @@ struct DiffScreen: View {
             .onAppear { model.mode = storedMode }
             .onChange(of: model.mode) { storedMode = model.mode }
             .onChange(of: showsSplit, initial: true) { model.showsSplit = showsSplit }
-            .animation(Motion.motion(Motion.fade, reduce: reduceMotion), value: model.message)
-            .haptic(.approve, trigger: model.completedWrites)
+            .motion(.fade, value: model.message)
+            .haptic(.done, trigger: model.successes)
+            .haptic(.discard, trigger: model.discards)
             .haptic(.error, trigger: model.message, when: { $0 != nil })
     }
 

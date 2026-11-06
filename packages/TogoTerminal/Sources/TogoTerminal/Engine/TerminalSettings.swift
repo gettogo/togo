@@ -16,6 +16,8 @@ public struct TerminalSettings: Codable, Equatable, Sendable {
     public var themeID: String
     /// OSC 52 reads hand the remote host the local clipboard, so they stay off unless the user opts in.
     public var allowClipboardRead: Bool
+    /// VoiceOver speaks new output once it settles.
+    public var readNewOutput: Bool
 
     public init(
         fontName: String? = nil,
@@ -25,7 +27,8 @@ public struct TerminalSettings: Codable, Equatable, Sendable {
         scrollback: Int = 10_000,
         optionAsMeta: Bool = true,
         themeID: String = "beacon-dark",
-        allowClipboardRead: Bool = false
+        allowClipboardRead: Bool = false,
+        readNewOutput: Bool = true
     ) {
         self.fontName = fontName
         self.fontSize = fontSize
@@ -35,10 +38,11 @@ public struct TerminalSettings: Codable, Equatable, Sendable {
         self.optionAsMeta = optionAsMeta
         self.themeID = themeID
         self.allowClipboardRead = allowClipboardRead
+        self.readNewOutput = readNewOutput
     }
 
     private enum CodingKeys: String, CodingKey {
-        case fontName, fontSize, cursor, cursorBlinks, scrollback, optionAsMeta, themeID, allowClipboardRead
+        case fontName, fontSize, cursor, cursorBlinks, scrollback, optionAsMeta, themeID, allowClipboardRead, readNewOutput
     }
 
     public init(from decoder: any Decoder) throws {
@@ -52,5 +56,6 @@ public struct TerminalSettings: Codable, Equatable, Sendable {
         optionAsMeta = try c.decodeIfPresent(Bool.self, forKey: .optionAsMeta) ?? d.optionAsMeta
         themeID = try c.decodeIfPresent(String.self, forKey: .themeID) ?? d.themeID
         allowClipboardRead = try c.decodeIfPresent(Bool.self, forKey: .allowClipboardRead) ?? d.allowClipboardRead
+        readNewOutput = try c.decodeIfPresent(Bool.self, forKey: .readNewOutput) ?? d.readNewOutput
     }
 }

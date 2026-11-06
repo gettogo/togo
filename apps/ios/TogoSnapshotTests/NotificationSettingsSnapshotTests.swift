@@ -60,3 +60,54 @@ struct NotificationSettingsSnapshotTests {
         assertScreen(named: "settings-notifications-relay-invalid") { screen(.authorized, relayDraft: "http://relay.example.com") }
     }
 }
+
+@MainActor
+struct MachineHelperSnapshotTests {
+    private func page(_ model: MachineNotifyModel, supported: Bool = true) -> some View {
+        NavigationStack {
+            List { MachineNotifySection(name: "Studio", supported: supported, model: model) }
+                .groupedList()
+                .navigationTitle("Studio")
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        .togoControls()
+    }
+
+    private func model(_ settings: NotifySettings?, supported: Bool = true) -> MachineNotifyModel {
+        MachineNotifyModel(
+            host: Samples.studio, name: "Studio", tools: NoMachineTools(), supported: supported, loaded: settings
+        )
+    }
+
+    @Test func machineNotifications() {
+        let loaded = model(NotifySettings(idleSeconds: 30, muted: false, remindMinutes: 10))
+        assertScreen(named: "settings-machine-notify") { page(loaded) }
+    }
+
+    @Test func machineMuted() {
+        let loaded = model(NotifySettings(idleSeconds: 6, muted: true, remindMinutes: 0))
+        assertScreen(named: "settings-machine-notify-muted") { page(loaded) }
+    }
+
+    @Test func machineNeedsUpdate() {
+        assertScreen(named: "settings-machine-notify-update") {
+            NavigationStack {
+                MachineHelperView(machine: Samples.studio, name: "Studio", supportsNotify: false)
+            }
+            .togoControls()
+        }
+    }
+
+    @Test func doneChoice() {
+        var settings = AppSettings()
+        settings.doneSilent = true
+        assertScreen(named: "settings-notifications-done-silent") {
+            NavigationStack {
+                NotificationSettingsView(
+                    settings: settings, notifications: .sample, update: { _ in }, turnOn: {}
+                )
+            }
+            .togoControls()
+        }
+    }
+}

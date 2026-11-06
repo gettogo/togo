@@ -50,6 +50,19 @@ struct SessionRow: Identifiable, Equatable, Sendable {
     var managed: Bool
     var meta: SessionMeta
     var statusSince: Date
+    /// How the agent stopped while `status` is `ended` or `failed`.
+    var exit: SessionExit? = nil
+}
+
+extension SessionStatus {
+    /// The agent is no longer running: it finished its turn and the session ended, or it
+    /// exited, crashed or stopped on a limit. These rows archive and count as done.
+    var isFinished: Bool {
+        switch self {
+        case .done, .exited, .ended, .failed: true
+        case .working, .needsYou, .idle, .unknown: false
+        }
+    }
 }
 
 struct RequestCard: Identifiable, Equatable, Sendable {
@@ -85,6 +98,13 @@ struct MachineSection: Identifiable, Equatable, Sendable {
     var lastSeen: Date?
     /// What the machine's helper offers, such as `upload.v1`. Empty without a helper.
     var capabilities: Set<String> = []
+    /// Sessions a restart of the machine ended, offered back under its live ones. Loaded once
+    /// per helper connection when the helper advertises `restore.v1`.
+    var restorable: [RestorableSession] = []
+    /// Whether the machine is being kept awake; nil without `awake.v1`.
+    var awake: AwakeStatus?
+    /// Where to send a wake packet for this machine, if it ever reported one.
+    var wake: WakeTarget?
 }
 
 enum SessionFilter: String, CaseIterable, Sendable {
@@ -95,7 +115,7 @@ enum SessionFilter: String, CaseIterable, Sendable {
         case .all: true
         case .needsYou: status == .needsYou
         case .working: status == .working
-        case .done: status == .done || status == .exited
+        case .done: status.isFinished
         }
     }
 }
@@ -158,6 +178,8 @@ enum AppRoute: Hashable, Sendable {
 
 enum AppSheet: Identifiable, Hashable, Sendable {
     case addMachine
+    /// The add-machine form, already filled in.
+    case addMachineFilled(MachineDraft)
     case editMachine(HostID)
     case newSession(HostID?)
     case signIn(HostID)
@@ -180,6 +202,8 @@ struct HostViewSnapshot: Equatable, Sendable {
     var requests: [RequestCard]
     var at: Date
     var capabilities: Set<String> = []
+    var awake: AwakeStatus?
+    var wake: WakeTarget?
     /// Requests the machine closed, with what their cards should say as they go.
     var closed: [String: RequestCard.Outcome] = [:]
 }

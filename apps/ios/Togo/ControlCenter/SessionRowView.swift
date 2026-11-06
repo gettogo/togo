@@ -78,12 +78,12 @@ struct SessionRowView: View {
     /// with the rest of the row.
     @ViewBuilder private var statusWord: some View {
         if stale {
-            Text(StatusWord.label(row.status))
+            Text(StatusWord.label(row.status, exit: row.exit))
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
                 .lineLimit(1)
         } else {
-            StatusWord(status: row.status)
+            StatusWord(status: row.status, exit: row.exit)
         }
     }
 

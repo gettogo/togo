@@ -46,6 +46,22 @@ enum NewSessionCopy {
     }
     static let starting = String(localized: "new.agent.starting", defaultValue: "Starting")
 
+    static let flags = String(localized: "new.agent.flags", defaultValue: "Flags")
+    static func flagsNeedUpdate(_ machine: String) -> String {
+        String(localized: "new.agent.flags.needsUpdate", defaultValue: "Update the helper on \(machine) to use flags.")
+    }
+    static let flagsUnbalanced = String(localized: "new.agent.flags.unbalanced", defaultValue: "A quote is not closed.")
+    static let flagsControl = String(localized: "new.agent.flags.control", defaultValue: "Flags can't contain control characters.")
+    static let flagsTooLong = String(localized: "new.agent.flags.tooLong", defaultValue: "These flags are too long.")
+    static let flagsEmpty = String(
+        localized: "new.agent.flags.empty", defaultValue: "Empty quotes make an empty flag. Remove them or put text inside."
+    )
+    static let flagsInvisible = String(
+        localized: "new.agent.flags.invisible", defaultValue: "Flags can't contain invisible characters."
+    )
+    static let rememberFolder = String(localized: "new.agent.remember", defaultValue: "Remember for this folder")
+    static let lastUsedHere = String(localized: "new.agent.lastUsed", defaultValue: "Last used here")
+
     static let badFolder = String(localized: "new.error.badFolder", defaultValue: "That folder no longer exists.")
     static func full(_ machine: String) -> String {
         String(localized: "new.error.full", defaultValue: "\(machine) has 99 sessions. Close one first.")

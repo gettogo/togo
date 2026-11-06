@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import TogoKit
+@testable import TogoKit
 
 struct FixtureTests {
     /// Tests/TogoKitTests/FixtureTests.swift sits four directories below the repo root.
@@ -12,13 +12,12 @@ struct FixtureTests {
 
     @Test func everyFixtureDecodes() throws {
         let files = try Self.fixtures(in: Self.fixturesDirectory)
-        #expect(files.count >= 16)
+        #expect(files.count >= 40)
         try checkFixtures(files)
     }
 
-    /// Pending exchanges the app already handles (methods no helper serves
-    /// yet) still round-trip through the app's types. The rest of pending/
-    /// is helper-side work the app does not model yet; its harness runs it.
+    /// Pending exchanges the app handles before any helper serves them still
+    /// round-trip through the app's types.
     static let appPendingFixtures: Set<String> = ["approval.list-subject.json", "push.pair-watch.json"]
 
     @Test func pendingFixturesValidate() throws {
@@ -182,6 +181,18 @@ struct FixtureTests {
         case .gitLog: (GitLogParams.self, GitLog.self)
         case .pushPair: (PushPairParams.self, PushPairResult.self)
         case .pushUnpair: (PushUnpairParams.self, EmptyResult.self)
+        case .agentsCheck: (AgentsCheckParams.self, AgentCheck.self)
+        case .sessionRelaunch: (SessionIDParams.self, Session.self)
+        case .sessionRestorable: (EmptyParams.self, RestorableList.self)
+        case .sessionRestore: (RestoreParams.self, Session.self)
+        case .sessionDismiss: (SessionIDParams.self, EmptyResult.self)
+        case .sessionSendText: (SendTextParams.self, EmptyResult.self)
+        case .notifyGet: (EmptyParams.self, NotifySettings.self)
+        case .notifySet: (NotifyPatch.self, NotifySettings.self)
+        case .authkeysRemove: (AuthkeysRemoveParams.self, AuthkeysRemoveResult.self)
+        case .hostInfo: (EmptyParams.self, HostInfo.self)
+        case .awakeStatus: (EmptyParams.self, AwakeStatus.self)
+        case .awakeSet: (AwakeSetParams.self, AwakeStatus.self)
         }
     }
 

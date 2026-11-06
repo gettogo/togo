@@ -35,6 +35,12 @@ struct RequestDetailView: View {
                 }
                 AnswerButtons(store: store, request: request, done: dismissSoon)
                     .padding(.top, 4)
+                if store.canReply(request.requestId) {
+                    ReplyLink(
+                        store: store, target: .answer(hostId: request.hostId, requestId: request.requestId),
+                        title: [request.bib, request.agent.map(AgentName.display)].compactMap { $0 }.joined(separator: " ")
+                    )
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -36,7 +36,7 @@ private struct ApproveStyle: ButtonStyle {
             .contentShape(.capsule)
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
-            .animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: configuration.isPressed)
+            .motion(.confirm, value: configuration.isPressed)
     }
 }
 

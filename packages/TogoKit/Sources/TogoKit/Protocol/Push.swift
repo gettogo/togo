@@ -27,11 +27,16 @@ public struct PushPairParams: Codable, Hashable, Sendable {
     public var liveActivityStartToken: String?
     /// The user's opt-in to command text in Live Activity pushes.
     public var liveActivityCommand: Bool
+    /// The public key this device signs in with over SSH, type and base64 blob only, so the
+    /// helper can take it off the machine when the device is revoked. Sent only to a helper
+    /// with `authkeys.v1`; an older one turns down a field it does not know.
+    public var sshKey: String?
 
     public init(
         deviceId: String, name: String, x25519: String, approvalKey: String, apnsToken: String,
         env: Environment, relayUrl: String, liveActivityToken: String? = nil,
-        platform: Platform = .ios, liveActivityStartToken: String? = nil, liveActivityCommand: Bool = false
+        platform: Platform = .ios, liveActivityStartToken: String? = nil, liveActivityCommand: Bool = false,
+        sshKey: String? = nil
     ) {
         self.deviceId = deviceId
         self.name = name
@@ -44,11 +49,12 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         self.platform = platform
         self.liveActivityStartToken = liveActivityStartToken
         self.liveActivityCommand = liveActivityCommand
+        self.sshKey = sshKey
     }
 
     private enum CodingKeys: String, CodingKey {
         case deviceId, name, x25519, approvalKey, apnsToken, env, relayUrl, liveActivityToken
-        case platform, liveActivityStartToken, liveActivityCommand
+        case platform, liveActivityStartToken, liveActivityCommand, sshKey
     }
 
     public init(from decoder: any Decoder) throws {
@@ -64,6 +70,7 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         platform = try container.decodeIfPresent(Platform.self, forKey: .platform) ?? .ios
         liveActivityStartToken = try container.decodeIfPresent(String.self, forKey: .liveActivityStartToken)
         liveActivityCommand = try container.decodeIfPresent(Bool.self, forKey: .liveActivityCommand) ?? false
+        sshKey = try container.decodeIfPresent(String.self, forKey: .sshKey)
     }
 
     // platform and liveActivityCommand are written only when they differ from the defaults,
@@ -81,6 +88,7 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         if platform != .ios { try container.encode(platform, forKey: .platform) }
         try container.encodeIfPresent(liveActivityStartToken, forKey: .liveActivityStartToken)
         if liveActivityCommand { try container.encode(true, forKey: .liveActivityCommand) }
+        try container.encodeIfPresent(sshKey, forKey: .sshKey)
     }
 }
 

@@ -90,7 +90,7 @@ struct NotificationTextTests {
             ts: 1
         )
         #expect(try #require(build(done)) == NotificationText(
-            title: "07 Codex", subtitle: "Done", body: "All tests pass", category: "togo.info",
+            title: "07 Codex", subtitle: "Done", body: "All tests pass", category: "togo.prompt",
             threadID: "s_abcdefghij", interruption: .active
         ))
         let job = PushPayload(kind: .job, title: "nightly build", body: "ok", ts: 1)
@@ -119,5 +119,84 @@ struct NotificationTextTests {
             let p = needsYou(subject: subject.isValid ? subject : nil, body: c.in)
             #expect(build(p)?.body == c.want, "\(c.name)")
         }
+    }
+
+    func stopped(_ kind: PushPayload.Kind, code: Int?, reason: String) -> PushPayload {
+        PushPayload(
+            kind: kind, sessionId: "s_abcdefghij", bib: "01", agent: "claude", host: "studio",
+            title: "Claude Code stopped", body: "Exited with code 1", ts: 1_793_707_200_000,
+            exit: PushExit(code: code, reason: reason, detail: nil)
+        )
+    }
+
+    @Test func failedNotificationBody() throws {
+        let text = try #require(build(stopped(.failed, code: 1, reason: "exit")))
+        #expect(text.title == "01 Claude Code")
+        #expect(text.subtitle == "")
+        #expect(text.body == "Stopped with an error · Exit code 1")
+        #expect(text.category == "togo.ended")
+        #expect(text.threadID == "s_abcdefghij")
+        #expect(text.interruption == .active)
+    }
+
+    @Test func statusWordsForEachExit() throws {
+        let cases: [(PushPayload.Kind, Int?, String, String)] = [
+            (.ended, 0, "exit", "Ended"),
+            (.ended, 130, "interrupted", "Ended"),
+            (.failed, 2, "exit", "Stopped with an error · Exit code 2"),
+            (.failed, nil, "error", "Stopped with an error"),
+            (.failed, nil, "usage_limit", "Hit a usage limit"),
+            (.ended, nil, "restart", "Ended by restart"),
+            (.failed, nil, "something_new", "Stopped with an error"),
+            (.ended, nil, "something_new", "Ended"),
+        ]
+        for (kind, code, reason, body) in cases {
+            #expect(try #require(build(stopped(kind, code: code, reason: reason))).body == body, "\(reason)")
+        }
+        var bare = stopped(.failed, code: nil, reason: "error")
+        bare.exit = nil
+        #expect(try #require(build(bare)).body == "Stopped with an error")
+    }
+
+    /// The agent is still alive after a usage limit, so the helper would refuse to run it again;
+    /// it waits for words instead.
+    @Test func usageLimitOffersNoRunAgain() throws {
+        #expect(try #require(build(stopped(.failed, code: nil, reason: "usage_limit"))).category == "togo.prompt")
+        #expect(try #require(build(stopped(.ended, code: 0, reason: "exit"))).category == "togo.ended")
+    }
+
+    @Test func endedCategoryRunsAgainInTheApp() throws {
+        let ended = try #require(NotificationCategorySet.make(approveWithoutUnlock: true).first { $0.identifier == "togo.ended" })
+        #expect(ended.actions.count == 1)
+        let action = try #require(ended.actions.first)
+        #expect(action.identifier == "togo.run-again")
+        #expect(action.title == "Run again")
+        #expect(action.options.contains(.foreground))
+        #expect(action.options.contains(.authenticationRequired))
+    }
+}
+
+struct LifecycleReasonTests {
+    @Test func knownReasonKeepsTheVocabularyOnly() {
+        for word in ["interrupted", "error", "usage_limit", "restart"] {
+            #expect(LifecycleWords.knownReason(word) == word)
+        }
+        for word in ["exit", "", "rm -rf /", "Usage_Limit", "brand_new"] {
+            #expect(LifecycleWords.knownReason(word) == nil)
+        }
+        #expect(LifecycleWords.knownReason(nil) == nil)
+    }
+
+    @Test func liveActivityWordsFromReason() {
+        func words(_ status: String, _ reason: String?) -> String? {
+            LifecycleWords.status(status: status, reason: LifecycleWords.knownReason(reason), code: nil)
+        }
+        #expect(words("failed", "usage_limit") == "Hit a usage limit")
+        #expect(words("ended", "restart") == "Ended by restart")
+        #expect(words("failed", "error") == "Stopped with an error")
+        #expect(words("failed", "brand_new") == "Stopped with an error")
+        #expect(words("ended", "brand_new") == "Ended")
+        #expect(words("ended", nil) == "Ended")
+        #expect(words("working", "usage_limit") == nil)
     }
 }

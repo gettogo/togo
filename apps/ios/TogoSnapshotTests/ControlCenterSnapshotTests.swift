@@ -99,6 +99,66 @@ struct ControlCenterSnapshotTests {
         assertScreen(screen(Self.loaded), named: "cc-loaded")
     }
 
+    /// Stopped agents say how they stopped, never "Done", and in the row's usual muted words.
+    @Test func stoppedSessions() {
+        func stopped(_ bib: String, _ name: String, _ status: SessionStatus, _ exit: SessionExit) -> SessionRow {
+            var row = Self.row(Self.macbook, bib, name, status, cwd: "/Users/sam/src/\(name)")
+            row.exit = exit
+            return row
+        }
+        let state = ControlCenterState(machines: [
+            Self.machine(Self.macbook, "MacBook", .laptop, sessions: [
+                stopped("01", "api", .failed, SessionExit(code: 1, reason: .exit)),
+                stopped("02", "site", .ended, SessionExit(code: 0, reason: .exit)),
+                stopped("03", "notes", .failed, SessionExit(code: nil, reason: .usageLimit, detail: "Usage limit reached")),
+                stopped("04", "app", .ended, SessionExit(code: nil, reason: .restart)),
+                Self.row(Self.macbook, "05", "docs", .done, "Wrote the summary", cwd: "/Users/sam/src/docs"),
+            ]),
+        ], loaded: true)
+        assertScreen(screen(state, hosts: Array(Self.hosts.prefix(1)), filter: .done), named: "cc-stopped")
+    }
+
+    /// Sessions a restart ended sit under the live ones, each with its way back.
+    @Test func restorableSessions() {
+        func ended(_ bib: String, _ name: String, resumable: Bool) -> RestorableSession {
+            RestorableSession(
+                id: "s_\(name)", bib: bib, name: name, agent: "claude", command: ["claude"],
+                cwd: "/Users/sam/src/\(name)", createdAt: Self.now, endedAt: Self.now, resumable: resumable
+            )
+        }
+        var section = Self.machine(Self.macbook, "MacBook", .laptop, sessions: [
+            Self.row(Self.macbook, "03", "api", .working, "Editing routes.ts", cwd: "/Users/sam/src/api"),
+        ])
+        section.restorable = [ended("01", "app", resumable: true), ended("02", "site", resumable: false)]
+        let state = ControlCenterState(machines: [section], loaded: true)
+        assertScreen(screen(state, hosts: Array(Self.hosts.prefix(1))), named: "cc-restorable")
+    }
+
+    /// With nothing live, the restorable rows are the first thing in the list at large text.
+    @Test func restorableSessionsOnly() {
+        var section = Self.machine(Self.macbook, "MacBook", .laptop, sessions: [])
+        section.restorable = [RestorableSession(
+            id: "s_app", bib: "01", name: "app", agent: "claude", command: ["claude"], cwd: "/Users/sam/src/app",
+            createdAt: Self.now, endedAt: Self.now, resumable: true
+        )]
+        let state = ControlCenterState(machines: [section], loaded: true)
+        assertScreen(screen(state, hosts: Array(Self.hosts.prefix(1))), named: "cc-restorable-only")
+    }
+
+    /// The row alone, so the stacked buttons at the largest text size are on record.
+    @Test func restorableRow() {
+        let session = RestorableSession(
+            id: "s_app", bib: "01", name: "app", agent: "claude", command: ["claude"], cwd: "/Users/sam/src/app",
+            createdAt: Self.now, endedAt: Self.now, resumable: true
+        )
+        assertScreen(
+            RestorableSessionRow(session: session) { _ in }
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading),
+            named: "restorable-row"
+        )
+    }
+
     @Test func emptyMachine() {
         let state = ControlCenterState(machines: [
             Self.machine(Self.macbook, "MacBook", .laptop, sessions: []),
@@ -214,5 +274,26 @@ struct ControlCenterSnapshotTests {
             .padding(16)
         }
         assertScreen(gallery, named: "cc-request-cards")
+    }
+
+    /// Where the approve and deny buttons settle once their answer lands, just before the card
+    /// collapses.
+    @Test func requestCardAnsweredEndStates() {
+        let outcomes: [RequestCard.Outcome] = [.approved, .denied]
+        let gallery = ScrollView {
+            VStack(spacing: 12) {
+                ForEach(outcomes.indices, id: \.self) { index in
+                    let card = {
+                        var card = Self.requests[0]
+                        card.id = "r-\(index)"
+                        card.phase = .done(outcomes[index])
+                        return card
+                    }()
+                    RequestCardView(card: card, machineName: "MacBook") { _ in }
+                }
+            }
+            .padding(16)
+        }
+        assertScreen(gallery, named: "cc-request-answered")
     }
 }

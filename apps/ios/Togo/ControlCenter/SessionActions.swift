@@ -4,6 +4,8 @@ import TogoKit
 /// What the user can do to one session row, in menu order.
 enum SessionAction: Hashable, CaseIterable, Sendable {
     case open, connectWith, rename, mute, copyPath, kill
+    /// Starts a stopped agent again in the same session.
+    case runAgain
     /// The review screens, opened on one of their tabs.
     case changes, files, ports
 
@@ -15,7 +17,7 @@ enum SessionAction: Hashable, CaseIterable, Sendable {
         case .changes: .changes
         case .files: .files
         case .ports: .ports
-        case .open, .connectWith, .rename, .mute, .copyPath, .kill: nil
+        case .open, .connectWith, .rename, .mute, .copyPath, .kill, .runAgain: nil
         }
     }
 
@@ -30,6 +32,7 @@ enum SessionAction: Hashable, CaseIterable, Sendable {
         case .mute: row.muted ? ControlCenterCopy.unmute : ControlCenterCopy.mute
         case .copyPath: ControlCenterCopy.copyPath
         case .kill: ControlCenterCopy.kill
+        case .runAgain: LifecycleCopy.runAgain
         case .changes: ReviewCopy.tabName(.changes)
         case .files: ReviewCopy.tabName(.files)
         case .ports: ReviewCopy.tabName(.ports)
@@ -44,6 +47,7 @@ enum SessionAction: Hashable, CaseIterable, Sendable {
         case .mute: row.muted ? "bell" : "bell.slash"
         case .copyPath: "doc.on.doc"
         case .kill: "xmark.circle"
+        case .runAgain: "arrow.clockwise"
         case .changes: "plus.forwardslash.minus"
         case .files: "folder"
         case .ports: "safari"
@@ -74,12 +78,16 @@ enum SessionCommand {
     case toggleMute(SessionRow)
     case copyPath(SessionRow)
     case kill(SessionRow)
+    case runAgain(SessionRow)
+    case restore(HostID, RestorableSession, resume: Bool)
+    case dismissRestorable(HostID, RestorableSession)
     case review(SessionRow, ReviewTab)
     case newSession(HostID)
     case retry(HostID)
     case signIn(HostID)
     case installHelper(HostID)
     case edit(HostID)
+    case wake(HostID)
 }
 
 enum SessionActions {
@@ -98,15 +106,22 @@ enum SessionActions {
         } else {
             []
         }
-        let available = SessionAction.allCases.filter { action in
-            !SessionAction.reviewActions.contains(action) && (!changesSession.contains(action) || changeable.contains(action))
+        var available = SessionAction.allCases.filter { action in
+            action != .runAgain && !SessionAction.reviewActions.contains(action)
+                && (!changesSession.contains(action) || changeable.contains(action))
+        }
+        let runsAgain = canRunAgain(row, on: machine, changeable: !changeable.isEmpty && !plain)
+        if runsAgain {
+            available.insert(.runAgain, at: 1)
         }
 
         var set = if changeable.isEmpty {
             // The helper refuses these with -32007 for sessions it did not start.
             SessionActionSet(available: available, disabled: [], note: ControlCenterCopy.startedOutside)
         } else if let machine, let reason = unreachableReason(machine) {
-            SessionActionSet(available: available, disabled: Set(changeable), note: reason)
+            SessionActionSet(
+                available: available, disabled: Set(changeable).union(runsAgain ? [.runAgain] : []), note: reason
+            )
         } else {
             SessionActionSet(available: available, disabled: [], note: nil)
         }
@@ -114,6 +129,13 @@ enum SessionActions {
             addReview(to: &set, machine: machine)
         }
         return set
+    }
+
+    /// Only a stopped agent in a session the helper started, on a helper that advertised
+    /// `launch.v1` in its hello. Never while the agent is still alive at its prompt.
+    private static func canRunAgain(_ row: SessionRow, on machine: MachineSection?, changeable: Bool) -> Bool {
+        guard changeable, let machine, machine.capabilities.contains(Capability.launch) else { return false }
+        return LifecycleCopy.canRunAgain(row.status, exit: row.exit)
     }
 
     /// Changes and Files need the helper's git methods, Ports its port list. Without a helper they

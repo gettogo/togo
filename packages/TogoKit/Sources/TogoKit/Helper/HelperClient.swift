@@ -176,8 +176,8 @@ public actor HelperClient {
         }
     }
 
-    private static func conflict(_ error: RPCErrorObject) -> HelperError {
-        if case .object(let data)? = error.data, case .string(let reason)? = data["reason"] {
+    static func conflict(_ error: RPCErrorObject) -> HelperError {
+        if let reason = error.reason, case .object(let data)? = error.data {
             switch GitConflict(rawValue: reason) {
             case .partial?:
                 guard case .array(let list)? = data["changed"] else { return .partialWrite(changed: []) }
@@ -258,7 +258,7 @@ public actor HelperClient {
         return try await gitWrite(method, params)
     }
 
-    private static func invalidParams(_ reason: String) -> HelperError {
+    static func invalidParams(_ reason: String) -> HelperError {
         .rpc(RPCErrorObject(
             code: RPCErrorCode.invalidParams, message: "invalid params", data: .object(["reason": .string(reason)])
         ))
@@ -306,7 +306,7 @@ public actor HelperClient {
         if capabilities == nil { throw HelperError.notReady }
     }
 
-    private func readyCall<P: Encodable & Sendable, R: Decodable>(
+    func readyCall<P: Encodable & Sendable, R: Decodable>(
         _ method: Method, _ params: P, needs capability: String? = nil
     ) async throws -> R {
         try requireReady()

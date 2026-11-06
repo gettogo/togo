@@ -1,4 +1,5 @@
 import SwiftUI
+import TogoKit
 import UniformTypeIdentifiers
 
 /// Name, address, sign-in and an optional jump host for one machine. Mistakes show under
@@ -65,6 +66,18 @@ struct MachineForm: View {
                 }
             }
             .groupedRows()
+
+            // The machine's helper keeps the address current, so there is nothing to edit here.
+            if WakeFeature.isEnabled, let wake = draft.wake {
+                Section {
+                    labelled(WakeCopy.formLabel) {
+                        Text(verbatim: wake.mac)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+                .groupedRows()
+            }
 
             Section {
                 DisclosureGroup(isExpanded: $jumpShown) {

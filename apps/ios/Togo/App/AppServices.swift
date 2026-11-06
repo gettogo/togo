@@ -52,12 +52,31 @@ import UIKit
     var pendingRemovals: [PendingRemoval] { get }
     /// Gives up on telling a removed machine, and forgets what was kept to reach it.
     func forgetRemoval(_ id: String)
+    /// Whether removing the machine takes this device's key off it.
+    func removesKey(_ id: HostID) -> Bool
 }
 
-/// A removed machine waiting to unpair, by the helper's host id.
+/// A removed machine waiting to unpair, by the helper's host id, or one that may still hold
+/// this device's key, by `keyID(_:)`.
 struct PendingRemoval: Identifiable, Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
+        case unpair
+        /// This device's key, whose `authorized_keys` line ends in `comment`, may still be on
+        /// the machine. `manual`: the helper cannot take it off, so the user does.
+        case key(comment: String, manual: Bool)
+    }
+
     var id: String
     var name: String
+    var kind: Kind = .unpair
+
+    private static let keyPrefix = "key:"
+
+    static func keyID(_ host: HostID) -> String { keyPrefix + host.uuidString }
+
+    static func hostID(fromKeyID id: String) -> HostID? {
+        id.hasPrefix(keyPrefix) ? HostID(uuidString: String(id.dropFirst(keyPrefix.count))) : nil
+    }
 }
 
 extension AppServices {
@@ -65,6 +84,8 @@ extension AppServices {
     func refresh() async {}
 
     func hostRecord(_ id: HostID) -> HostRecord? { nil }
+
+    func removesKey(_ id: HostID) -> Bool { false }
 
     var attachPrompts: AttachPrompts? { nil }
 
@@ -103,6 +124,11 @@ extension AppServices {
     var onCompose: () -> Void = {}
     /// The key bar's Dictate key.
     var onDictate: () -> Void = {}
+    /// Hides the key bar's Compose and Dictate keys while zen mode keeps the compose bar away.
+    var hidesComposeKeys = false {
+        didSet { if hidesComposeKeys != oldValue { onHidesComposeKeys(hidesComposeKeys) } }
+    }
+    var onHidesComposeKeys: (Bool) -> Void = { _ in }
     /// An image pasted into the terminal, as the pasteboard encoded it.
     var onPasteImage: (Data) -> Void = { _ in }
     /// Text into the session as a paste, and the Enter key, for the compose bar.

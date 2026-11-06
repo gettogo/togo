@@ -16,6 +16,10 @@ import TogoMosh
     /// Every window's terminals: a session has one connection however many windows list it.
     let terminals = TerminalPool()
     let tutorial: TutorialModel
+    /// How features reach a machine's helper.
+    let machineTools: any MachineTools
+    /// Saved agent presets and the preset each folder last started with.
+    let agentLibrary: AgentLibrary
     /// Nil under unit and UI tests and in a process without the app group.
     let push: AppPush?
     /// Where views keep `@AppStorage` settings: the UI tests' own suite under `-ui-fakes`, so
@@ -23,6 +27,8 @@ import TogoMosh
     @ObservationIgnored var appStorage: UserDefaults = .standard
     /// The store of the window that last became active. Links and notification taps open there.
     private(set) var activeStore: AppStore?
+    /// Links that arrived before any window had a store, such as an intent that launched the app.
+    @ObservationIgnored private var waitingLinks: [DeepLink] = []
     private let reviewServices: (any ReviewServices)?
     @ObservationIgnored private var windows: [(id: WindowID, store: AppStore, run: Task<Void, Never>)] = []
     @ObservationIgnored private var started = false
@@ -66,8 +72,24 @@ import TogoMosh
             prefix: "settings.", local: backend(), remote: remote(), deviceID: deviceID, clock: { Date() },
             syncEnabled: syncSwitch.isOn
         )
+        agentLibrary = AgentLibrary(
+            presets: SyncedRecordStore<AgentPreset>(
+                prefix: AgentPreset.storePrefix, local: backend(), remote: remote(), deviceID: deviceID,
+                clock: { Date() }, syncEnabled: syncSwitch.isOn
+            ),
+            launches: SyncedRecordStore<FolderLaunch>(
+                prefix: FolderLaunchMemory.storePrefix, local: backend(), remote: remote(), deviceID: deviceID,
+                clock: { Date() }, syncEnabled: syncSwitch.isOn
+            )
+        )
         let push = isolated ? nil : AppPush.make()
         self.push = push
+        // Only the public half of the key Togo made, read from the index without unlocking it.
+        push?.pairing.deviceKey = { record in
+            DeviceKeyLine.of(record, deviceKeyID: LiveOnboardingServices.storedDeviceKeyID) {
+                (try? keys.info(id: $0))?.publicKeyLine
+            }
+        }
         let services = LiveServices(
             hostRecords: hostRecords, settingsRecords: settingsRecords, syncSwitch: syncSwitch,
             device: DeviceSettings(backend: isolated ? MemoryBackend() : AppPush.deviceBackend()),
@@ -125,6 +147,11 @@ import TogoMosh
         )
         self.review = review
         reviewServices = review
+        let machineTools = LiveMachineTools(
+            channels: helpers, records: { [weak services] in services?.hostRecord($0) },
+            prompter: { [weak services] in services?.userPrompter($0) }
+        )
+        self.machineTools = machineTools
         services.beforeDroppingHelpers = { [weak review] in await review?.settle() }
         tutorial = TutorialModel()
         onboarding = LiveOnboardingServices(keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys)
@@ -137,16 +164,26 @@ import TogoMosh
             Task { await signedIn.discard(id) }
             self?.terminals.restartTabs(on: id)
         }
-        push?.connect(services: services) { [weak self] in self?.activeStore }
+        // Replies from the Watch: a saved password or key signs in, nothing asks.
+        let quietTools = LiveMachineTools(
+            channels: helpers, records: { [weak services] in services?.hostRecord($0) },
+            prompter: { _ in nil }
+        )
+        push?.connect(services: services, tools: machineTools, quietTools: quietTools) { [weak self] in self?.activeStore }
+        if !isolated {
+            ShortcutsFeed.connectIntents(library: agentLibrary) { [weak self] in self?.open($0) }
+        }
         services.showLocalHosts()
     }
 
     /// Fake services with nothing behind them, for tests and the UI tests' launch.
     init(
         services: any AppServices, reviewServices: (any ReviewServices)?, onboarding: any OnboardingServices,
-        tutorial: TutorialModel
+        tutorial: TutorialModel, machineTools: any MachineTools = NoMachineTools(), agentLibrary: AgentLibrary = .inMemory()
     ) {
         self.services = services
+        self.machineTools = machineTools
+        self.agentLibrary = agentLibrary
         self.reviewServices = reviewServices
         self.onboarding = onboarding
         self.tutorial = tutorial
@@ -162,7 +199,7 @@ import TogoMosh
         self.init(
             services: machines.services, reviewServices: ReviewFakes.uiTestServices(),
             onboarding: FakeOnboardingServices(outcomes: Array(repeating: .ready(OnboardingSamples.ready), count: 4)),
-            tutorial: TutorialModel(defaults: defaults)
+            tutorial: TutorialModel(defaults: defaults), machineTools: FakeMachineTools()
         )
         uiTestMachines = machines
         appStorage = defaults
@@ -183,7 +220,12 @@ import TogoMosh
         let run = Task { await store.run() }
         windows.append((window, store, run))
         terminals.sync(window: window, with: store)
-        if activeStore == nil { activeStore = store }
+        if activeStore == nil {
+            activeStore = store
+            let waiting = waitingLinks
+            waitingLinks = []
+            waiting.forEach(store.open)
+        }
         return store
     }
 
@@ -204,7 +246,7 @@ import TogoMosh
 
     /// A `togo://` link, from outside the app or a notification.
     func open(_ link: DeepLink) {
-        activeStore?.open(link)
+        if let activeStore { activeStore.open(link) } else { waitingLinks.append(link) }
     }
 
     /// A removed machine leaves every window at once, terminals included.
@@ -226,6 +268,19 @@ import TogoMosh
                 PerfSignposts.app.afterInteractive { Task { await live.start() } }
             } else {
                 Task { await live.start() }
+            }
+            let library = agentLibrary
+            PerfSignposts.app.afterInteractive {
+                Task {
+                    await library.start()
+                    // The presets follow the same iCloud switch as machines and settings.
+                    for await on in Observations({ live.settings.syncEnabled }) {
+                        await library.setSyncEnabled(on)
+                    }
+                }
+            }
+            if !Self.isRunningTests {
+                PerfSignposts.app.afterInteractive { ShortcutsFeed.start(services: live) }
             }
         }
         #if DEBUG

@@ -2,8 +2,11 @@ import SwiftUI
 
 /// One haptic per action, and nothing else in the app vibrates.
 enum Haptic: CaseIterable, Sendable {
-    case approve, deny, connect, error, tabSettle
-    /// A stage, unstage or commit went through.
+    case approve, deny, connect, error
+    /// A pane settled on a tab: after a swipe, a chip, a pick from the sidebar or a swap of the
+    /// two panes. One tick per settle.
+    case tabSettle
+    /// A stage, unstage or commit went through, or a command was copied.
     case done
     /// The user confirmed a discard.
     case discard
@@ -27,6 +30,11 @@ enum Haptic: CaseIterable, Sendable {
 extension View {
     func haptic(_ haptic: Haptic, trigger: some Equatable) -> some View {
         sensoryFeedback(haptic.feedback, trigger: trigger)
+    }
+
+    /// Plays when `condition` holds for the change from the old value to the new one.
+    func haptic<T: Equatable>(_ haptic: Haptic, trigger: T, change condition: @escaping (T, T) -> Bool) -> some View {
+        sensoryFeedback(haptic.feedback, trigger: trigger, condition: condition)
     }
 
     /// Plays when `condition` holds for the new value, such as a link phase turning live.

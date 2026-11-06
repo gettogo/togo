@@ -18,6 +18,7 @@ struct BoardServices {
 /// lines of its screen. With "Keep screen on" it stays up as a status display.
 struct BoardView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.machineTools) private var machineTools
     @Bindable var store: AppStore
     /// Nil uses the device's own, made once for this board.
     private let services: BoardServices?
@@ -149,7 +150,7 @@ struct BoardView: View {
 
     private func perform(_ command: SessionCommand) {
         store.run(
-            command, open: { row, transport in store.openFromBoard(row, transport: transport) },
+            command, tools: machineTools, open: { row, transport in store.openFromBoard(row, transport: transport) },
             kill: { killTarget = $0 }, rename: { renameTarget = $0 }
         )
     }

@@ -1,5 +1,5 @@
-.PHONY: lint test build check-trailers relay-test \
-	ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-launch-perf ios-scroll-perf ios-snapshots ios-snapshots-record \
+.PHONY: lint test build check-trailers relay-test lint-motion \
+	togokit-test ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-launch-perf ios-scroll-perf ios-snapshots ios-snapshots-record \
 	ios-release-check release-build release-test install-test tokens tokens-check togopush-test watch-test
 
 IOS_DIR := apps/ios
@@ -22,6 +22,10 @@ test:
 
 build:
 	cd helper && go build -o bin/togo -ldflags "-X github.com/gettogo/togo/helper/internal/version.Version=$$(git describe --always --dirty)" ./cmd/togo
+
+# TogoKit's integration test runs the real helper, so the binary must exist.
+togokit-test: build
+	swift test --package-path packages/TogoKit
 
 # Reproducible helper release assets in dist/. VERSION is required, e.g.
 # VERSION=v1.0.0. ALLOW_DIRTY=1 makes a development build: it is marked dirty
@@ -56,7 +60,11 @@ ios-gen:
 ios-build: ios-gen
 	$(XCODEBUILD) -configuration Debug -destination 'generic/platform=iOS Simulator' build
 
-ios-test: ios-gen
+# Every animation in the app goes through a motion role; the script checks its own rules first.
+lint-motion:
+	./scripts/check-motion.sh
+
+ios-test: ios-gen lint-motion
 	$(XCODEBUILD) -configuration Debug -destination '$(IOS_TEST_DEST)' -skip-testing:TogoSnapshotTests test
 
 # UI tests launch the app on fake services, on any iPhone or iPad simulator.

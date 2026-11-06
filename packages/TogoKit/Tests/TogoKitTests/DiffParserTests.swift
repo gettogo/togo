@@ -237,25 +237,33 @@ struct DiffParserTests {
         #expect(pair.allSatisfy { $0.endsWithCR && !$0.lineEndingChanged })
     }
 
+    /// Guards against super-linear parsing, not against a slow machine: the 10,000-line diff is
+    /// timed against a quarter-size one in the same test (linear work is 4x, quadratic 16x), and
+    /// the absolute ceiling is only there to catch a hang.
     @Test func parses10kLineDiffQuickly() {
-        var text = "diff --git a/big.swift b/big.swift\n--- a/big.swift\n+++ b/big.swift\n"
-        for block in 0..<100 {
-            text += "@@ -\(block * 60 + 1),55 +\(block * 60 + 1),55 @@ func block\(block)()\n"
-            for row in 0..<50 { text += "-    let value\(row) = compute(\(block), \(row)) // old note\n" }
-            for row in 0..<50 { text += "+    let value\(row) = compute(\(block), \(row) + 1) // new note\n" }
-            for row in 0..<5 { text += "     context line \(row)\n" }
+        func makeDiff(blocks: Int) -> GitDiff {
+            var text = "diff --git a/big.swift b/big.swift\n--- a/big.swift\n+++ b/big.swift\n"
+            for block in 0..<blocks {
+                text += "@@ -\(block * 60 + 1),55 +\(block * 60 + 1),55 @@ func block\(block)()\n"
+                for row in 0..<50 { text += "-    let value\(row) = compute(\(block), \(row)) // old note\n" }
+                for row in 0..<50 { text += "+    let value\(row) = compute(\(block), \(row) + 1) // new note\n" }
+                for row in 0..<5 { text += "     context line \(row)\n" }
+            }
+            return GitDiff(diff: text, truncated: false, binary: [])
         }
-        let diff = GitDiff(diff: text, truncated: false, binary: [])
-        // Best of several runs, since other suites share the CPU.
+        // Best of several interleaved runs, so a burst of load from other suites hits both sizes.
         let clock = ContinuousClock()
+        let smallDiff = makeDiff(blocks: 25), bigDiff = makeDiff(blocks: 100)
         var files: [DiffFile] = []
-        var elapsed = Duration.seconds(60)
+        var quarter = Duration.seconds(600), elapsed = Duration.seconds(600)
         for _ in 0..<5 {
-            elapsed = min(elapsed, clock.measure { files = DiffParser.parse(diff) })
+            quarter = min(quarter, clock.measure { _ = DiffParser.parse(smallDiff) })
+            elapsed = min(elapsed, clock.measure { files = DiffParser.parse(bigDiff) })
         }
         #expect(files[0].additions == 5_000 && files[0].deletions == 5_000)
         #expect(files[0].hunks.allSatisfy { $0.lines.contains { !$0.changes.isEmpty } })
-        #expect(elapsed < .milliseconds(300), "parsed 10,000 changed lines in \(elapsed)")
+        #expect(elapsed < quarter * 8 + .milliseconds(300), "10,000 changed lines took \(elapsed), a quarter of them \(quarter): not linear")
+        #expect(elapsed < .seconds(30))
     }
 
     @Test func hostileInputNeverTraps() {

@@ -17,6 +17,9 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
     /// prompt is gone or it expired; no keys reached the pane. Or a git write was refused
     /// and nothing changed (see `gitConflict`). Carries the helper's reason.
     case conflict(String)
+    /// The helper turned the request down for a reason it names (`-32008`), such as
+    /// `needs_admin_setup` for battery keep-awake. Nothing changed.
+    case refused(String)
     /// The payload has this many bytes, more than the method accepts. Nothing was sent.
     case tooLarge(Int)
     /// A git write failed after changing these paths; the rest are as they were.
@@ -42,9 +45,10 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .conflict(let reason):
-            if let conflict = GitConflict(rawValue: reason) { Self.describe(conflict) } else {
-                "That request was already answered, or it is no longer waiting."
-            }
+            if let conflict = GitConflict(rawValue: reason) { Self.describe(conflict) }
+            else if let text = Self.describeReason(reason) { text }
+            else { "That request was already answered, or it is no longer waiting." }
+        case .refused(let reason): Self.describeRefused(reason)
         case .rpc(let error): Self.describe(error)
         case .timeout: "The Togo helper on the host did not answer in time."
         case .closed: "The connection to the Togo helper on the host closed."
@@ -54,6 +58,26 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         case .tooLarge: "That file is too large to send. The limit is about 700 KB."
         case .partialWrite(let changed): Self.describePartial(changed)
         case .racedCommit(let hash): Self.describeRaced(hash)
+        }
+    }
+
+    private static func describeReason(_ reason: String) -> String? {
+        switch reason {
+        case "running": "The agent is still running."
+        case "shell": "This session is a plain shell, so nothing was typed."
+        case "ended": "The agent has stopped, so nothing was typed."
+        case "needs_you": "The agent is waiting on a request. Answer that first."
+        case "symlink": "That file is a link, so it was left alone."
+        case "missing": "The machine has no list of authorized keys to change, so nothing was removed."
+        case "not_regular": "That file is not a regular file, so it was left alone."
+        default: nil
+        }
+    }
+
+    private static func describeRefused(_ reason: String) -> String {
+        switch reason {
+        case "needs_admin_setup": "This needs a one-time setup on the machine first."
+        default: "The Togo helper on the host turned that down."
         }
     }
 
@@ -97,6 +121,7 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         case RPCErrorCode.invalidPath: "That folder does not exist on the host."
         case RPCErrorCode.unsupportedVersion: "The Togo helper on the host speaks a different protocol version. Update the app or the helper."
         case RPCErrorCode.conflict: "That request was already answered."
+        case RPCErrorCode.refused: describeRefused("")
         case RPCErrorCode.notManaged: "That session was not started from Togo, so it cannot be changed from here."
         case RPCErrorCode.invalidParams: "The Togo helper on the host turned that request down. Update the app or the helper."
         default: "The Togo helper on the host could not do that."

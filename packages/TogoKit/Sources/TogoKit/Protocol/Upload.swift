@@ -12,6 +12,14 @@ public enum Capability {
     public static let ports = "ports.v1"
     public static let push = "push.v1"
     public static let capture = "capture.v1"
+    public static let launch = "launch.v1"
+    public static let lifecycle = "lifecycle.v1"
+    public static let restore = "restore.v1"
+    public static let notify = "notify.v1"
+    public static let reply = "reply.v1"
+    public static let authkeys = "authkeys.v1"
+    public static let hostInfo = "hostinfo.v1"
+    public static let awake = "awake.v1"
 }
 
 /// `fs.upload`: writes `data` as a file named `name` for the session.

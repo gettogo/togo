@@ -123,6 +123,7 @@ struct ThemeTests {
         #expect(expected.scrollback == 10_000)
         #expect(expected.themeID == "beacon-dark")
         #expect(!expected.allowClipboardRead)
+        #expect(expected.readNewOutput)
     }
 
     @Test func fontInstallRejectsProportional() throws {

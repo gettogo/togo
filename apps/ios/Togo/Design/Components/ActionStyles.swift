@@ -25,7 +25,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .contentShape(.capsule)
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
-            .animation(Motion.motion(Motion.confirm, reduce: reduceMotion), value: configuration.isPressed)
+            .motion(.confirm, value: configuration.isPressed)
     }
 }
 

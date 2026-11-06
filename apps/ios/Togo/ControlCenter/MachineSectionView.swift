@@ -15,6 +15,11 @@ struct MachineSectionView: View {
     var cursor: TabID?
     /// Rows can be dragged into a pane, which only the sidebar sits beside.
     var draggable = false
+    var restoring: Set<TabID> = []
+    /// Whether a machine that is off can be woken from here; false until the build allows it.
+    var wakeEnabled = WakeFeature.isEnabled
+    /// What the last wake signal said.
+    var wakeNote: String?
     let perform: (SessionCommand) -> Void
 
     var body: some View {
@@ -24,6 +29,17 @@ struct MachineSectionView: View {
             }
             ForEach(machine.sessions) { row in
                 sessionRow(row)
+            }
+            if !narrowed, machine.reachability == .online {
+                ForEach(machine.restorable) { session in
+                    RestorableSessionRow(
+                        session: session, busy: restoring.contains(TabID(hostID: machine.id, sessionID: session.id))
+                    ) { action in
+                        perform(.restore(machine.id, session, resume: action == .restoreAndContinue))
+                    }
+                    .listRowBackground(Color.togoInk)
+                    .dismissesRestorable { perform(.dismissRestorable(machine.id, session)) }
+                }
             }
         } header: {
             Group {
@@ -38,9 +54,14 @@ struct MachineSectionView: View {
     }
 
     private var heading: some View {
-        MachineHeading(machine: machine, caption: Self.caption(
-            machine.reachability, helper: machine.helper, lastSeen: machine.lastSeen, now: now
-        ))
+        MachineHeading(
+            machine: machine,
+            caption: AwakeCopy.caption(
+                reach: Self.caption(machine.reachability, helper: machine.helper, lastSeen: machine.lastSeen, now: now),
+                awake: machine.awake
+            ),
+            onWake: WakeCopy.showsButton(for: machine, enabled: wakeEnabled) ? { perform(.wake(machine.id)) } : nil
+        )
     }
 
     /// The words after a machine's name unless it is online with the helper.
@@ -95,7 +116,13 @@ struct MachineSectionView: View {
                     .listRowBackground(Color.togoInk)
             }
         case .offline:
-            EmptyView()
+            if let wakeNote {
+                Text(wakeNote)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowBackground(Color.togoInk)
+            }
         case .online:
             switch machine.helper {
             case .missing:
@@ -107,7 +134,7 @@ struct MachineSectionView: View {
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     .listRowBackground(Color.togoInk)
             case .present, .outdated, .checking:
-                if machine.sessions.isEmpty {
+                if machine.sessions.isEmpty && machine.restorable.isEmpty {
                     MachineMessage(ControlCenterCopy.noSessions, action: ControlCenterCopy.newSession) {
                         perform(.newSession(machine.id))
                     }
@@ -144,6 +171,11 @@ struct MachineSectionView: View {
             }
         }
         .swipeActions(edge: .leading) {
+            if actions.allows(.runAgain) {
+                Button(SessionAction.runAgain.title(for: row), systemImage: SessionAction.runAgain.systemImage(for: row)) {
+                    perform(.runAgain(row))
+                }
+            }
             if actions.allows(.rename) {
                 Button(SessionAction.rename.title(for: row), systemImage: SessionAction.rename.systemImage(for: row)) {
                     perform(.rename(row))
@@ -172,19 +204,37 @@ struct MachineSectionView: View {
 /// machine name starts at the same place.
 struct MachineHeading: View {
     @ScaledMetric(relativeTo: .headline) private var symbolWidth: CGFloat = 28
+    @Environment(\.dynamicTypeSize) private var typeSize
     let machine: MachineSection
     var caption: String?
+    /// Set on an offline machine that can be woken.
+    var onWake: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: machine.symbol.systemImage)
-                .font(.headline)
-                .foregroundStyle(Color.togoMute)
-                .frame(width: symbolWidth)
-                .accessibilityHidden(true)
-            SectionHeading(machine.name, detail: caption)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: machine.symbol.systemImage)
+                    .font(.headline)
+                    .foregroundStyle(Color.togoMute)
+                    .frame(width: symbolWidth)
+                    .accessibilityHidden(true)
+                SectionHeading(machine.name, detail: caption)
+                if let onWake, !typeSize.isAccessibilitySize {
+                    wakeButton(onWake)
+                }
+            }
+            if let onWake, typeSize.isAccessibilitySize {
+                wakeButton(onWake)
+                    .padding(.leading, symbolWidth + 8)
+            }
         }
         .textCase(nil)
+    }
+
+    private func wakeButton(_ run: @escaping () -> Void) -> some View {
+        Button(WakeCopy.button, action: run)
+            .buttonStyle(.secondary(.fit))
+            .fixedSize()
     }
 }
 

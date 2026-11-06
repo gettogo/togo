@@ -69,7 +69,7 @@ struct WorkspaceHeader<Accessories: View, Actions: View>: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
-        .animation(Motion.stateText(reduce: reduceMotion), value: line)
+        .motion(.fade, value: line)
     }
 
     /// "Sessions" while there is room for it beside the title and the buttons, otherwise the
@@ -157,7 +157,7 @@ struct WorkspaceHeader<Accessories: View, Actions: View>: View {
             .foregroundStyle(Color.togoMute)
             .lineLimit(1)
             .contentTransition(reduceMotion ? .identity : .interpolate)
-            .animation(Motion.stateText(reduce: reduceMotion), value: link)
+            .motion(.fade, value: link)
         if fallback != nil {
             Button {
                 noteShown.toggle()
@@ -180,6 +180,28 @@ struct WorkspaceHeader<Accessories: View, Actions: View>: View {
         } else {
             word
         }
+    }
+}
+
+/// "Run again" beside the session's other buttons once its agent stopped, as an arrow so the
+/// title keeps the middle of the bar; the line under the bar says how the agent stopped, and
+/// VoiceOver reads the words. While the helper starts it the button waits, so a second tap
+/// does nothing.
+struct RunAgainButton: View {
+    var running = false
+    let run: () -> Void
+
+    var body: some View {
+        Button(action: run) {
+            Label(LifecycleCopy.runAgain, systemImage: "arrow.clockwise")
+                .labelStyle(.iconOnly)
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .font(.body.weight(.medium))
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .foregroundStyle(Color.togoSnow)
+        .disabled(running)
     }
 }
 

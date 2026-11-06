@@ -33,10 +33,14 @@ extension RelayRegisterSender: PushTokenRegistering {}
     var onPairingsChanged: @MainActor ([Pairing]) -> Void = { _ in }
     /// A machine's pairing was retired because the machine was removed, by its helper's host id.
     var onRetired: @MainActor (String) -> Void = { _ in }
+    /// This device's `authorized_keys` line on a machine, or nil when it signs in with a password.
+    var deviceKey: @MainActor (HostRecord) -> DeviceKeyLine? = { _ in nil }
 
     private let keys: any DeviceKeyStore
     private let store: PairingStore
     private let unpairs: PendingUnpairStore
+    /// Removed machines that may still hold this device's key.
+    let keyRemovals: PendingKeyRemovalStore
     private let registrar: PushRegistrar
     private let settings: @MainActor () -> AppSettings
     /// The Live Activity tokens for a machine, by its helper's host id (nil before the first
@@ -59,10 +63,13 @@ extension RelayRegisterSender: PushTokenRegistering {}
     /// pairing that lands afterwards goes straight to the pending unpair list.
     private var removedWhilePairing: [HostID: Removal] = [:]
     private var retrying = false
+    /// Removals and their retries, one after another, so a retry never races the removal it follows.
+    private var work: Task<Void, Never>?
 
     private struct Removal {
         var connection: Data?
         var unpair: ((String) async throws -> Void)?
+        var removeKey: ((String) async throws -> Int)?
     }
 
     init(
@@ -70,6 +77,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         settings: @escaping @MainActor () -> AppSettings,
         liveTokens: @escaping @MainActor (String?) -> (update: String?, start: String?),
         watch: @escaping @MainActor () -> [WatchDevice],
+        keyRemovals: PendingKeyRemovalStore = PendingKeyRemovalStore(file: nil),
         register: (any PushTokenRegistering)? = nil,
         hostedRelay: URL? = PushEnvironment.defaultRelay,
         sentChoices: UserDefaults = .standard,
@@ -79,6 +87,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         self.keys = keys
         self.store = store
         self.unpairs = unpairs
+        self.keyRemovals = keyRemovals
         self.registrar = registrar
         self.settings = settings
         self.liveTokens = liveTokens
@@ -120,9 +129,10 @@ extension RelayRegisterSender: PushTokenRegistering {}
 
     /// A machine's helper connected. The first helper that can send pushes while the user is
     /// looking at the app is the moment it asks for notification permission; a machine that
-    /// connects in the background never brings up the question.
+    /// connects in the background never brings up the question. `sshKey` is this device's
+    /// public key on the machine, which only a helper that can remove it is given.
     func machineOnline(
-        hostID: HostID, name: String, capabilities: Set<String>,
+        hostID: HostID, name: String, capabilities: Set<String>, sshKey: String? = nil,
         pair: (PushPairParams) async throws -> PushPairResult
     ) async {
         guard capabilities.contains(Capability.push), !pairing.contains(hostID) else { return }
@@ -142,14 +152,15 @@ extension RelayRegisterSender: PushTokenRegistering {}
         let stored = store.all().first { $0.appHostID == hostID }
         let live = settings.liveActivities ? liveTokens(stored?.hostId) : (update: nil, start: nil)
         let watches = watch()
-        let hash = Self.tokenHash(apns: apnsToken, live: live, watches: watches)
+        let sshKey = capabilities.contains(Capability.authkeys) ? sshKey : nil
+        let hash = Self.tokenHash(apns: apnsToken, live: live, watches: watches, sshKey: sshKey)
         // A choice sent through the mailbox is confirmed over SSH, even when it matches the old one.
         if let stored, stored.tokenHash == hash, stored.relayURL == relay, stored.liveActivityCommand == command,
            sentChoice[stored.hostId] == nil {
             return
         }
 
-        guard let phone = try? params(apnsToken: apnsToken, live: live, relay: relay, command: command),
+        guard let phone = try? params(apnsToken: apnsToken, live: live, relay: relay, command: command, sshKey: sshKey),
               let result = try? await pair(phone)
         else { return }
         var pairedWatches: [WatchDevice] = []
@@ -163,7 +174,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         }
         let fresh = Pairing(
             hostId: result.hostId, hostKey: result.hostKey, relayURL: relay, machineName: name, appHostID: hostID,
-            pairedAt: clock(), tokenHash: Self.tokenHash(apns: apnsToken, live: live, watches: pairedWatches),
+            pairedAt: clock(), tokenHash: Self.tokenHash(apns: apnsToken, live: live, watches: pairedWatches, sshKey: sshKey),
             liveActivityCommand: command
         )
         if let removal = removedWhilePairing.removeValue(forKey: hostID) {
@@ -173,7 +184,9 @@ extension RelayRegisterSender: PushTokenRegistering {}
             unpairs.put(entry)
             onRetired(entry.id)
             onChange()
-            if let unpair = removal.unpair { await attempt(entry, unpair) }
+            if let unpair = removal.unpair {
+                await attempt(entry, unpair, removeKey: removal.removeKey.map(Self.byKey))
+            }
             return
         }
         store.put(fresh)
@@ -189,12 +202,21 @@ extension RelayRegisterSender: PushTokenRegistering {}
     /// anything else, so its pushes stop opening at once. `unpair` is nil when the machine is
     /// not reachable now; the helper keeps pushing until it is told, so `retryUnpairs` asks
     /// again until it confirms. `connection` is the encoded host record the retry connects with.
-    func machineRemoved(hostID: HostID, connection: Data?, unpair: ((String) async throws -> Void)?) async {
+    /// `key` is this device's key on the machine: it goes once the helper forgot this device,
+    /// over the same channel, and waits for a retry while the unpair does.
+    func machineRemoved(
+        hostID: HostID, connection: Data?, key: KeyRemovalStep? = nil, unpair: ((String) async throws -> Void)?
+    ) async {
+        if let key { recordKey(key, hostID: hostID, connection: connection) }
         if pairing.contains(hostID) {
-            removedWhilePairing[hostID] = Removal(connection: connection, unpair: unpair)
+            removedWhilePairing[hostID] = Removal(connection: connection, unpair: unpair, removeKey: key?.removeKey)
         }
         let stored = store.all().filter { $0.appHostID == hostID }
-        guard !stored.isEmpty else { return }
+        guard !stored.isEmpty else {
+            // Nothing to unpair: the key can go now, unless a pairing is still landing.
+            if let removeKey = key?.removeKey, !pairing.contains(hostID) { await attemptKey(hostID, Self.byKey(removeKey)) }
+            return
+        }
         var deviceIDs = watch().map(\.deviceId)
         if let phone = try? keys.deviceID() { deviceIDs.insert(phone, at: 0) }
         let entries = stored.map { PendingUnpair(pairing: $0, deviceIds: deviceIDs, connection: connection) }
@@ -205,22 +227,49 @@ extension RelayRegisterSender: PushTokenRegistering {}
         onChange()
         onPairingsChanged(store.all())
         guard let unpair else { return }
-        for entry in entries { await attempt(entry, unpair) }
+        for entry in entries { await attempt(entry, unpair, removeKey: key?.removeKey.map(Self.byKey)) }
+    }
+
+    /// Runs `job` after every removal and retry queued before it.
+    func enqueue(_ job: @escaping @MainActor () async -> Void) {
+        let previous = work
+        work = Task { @MainActor in
+            await previous?.value
+            await job()
+        }
+    }
+
+    /// Returns once every queued removal and retry has finished.
+    func settled() async {
+        while let current = work {
+            await current.value
+            if work == current { return }
+        }
+    }
+
+    private static func byKey(_ removeKey: @escaping (String) async throws -> Int) -> (PendingKeyRemoval) async throws -> Int {
+        { try await removeKey($0.key.publicKey) }
     }
 
     /// Asks each removed machine's helper again to forget this device. Runs when the app comes
-    /// forward and when the network returns; never asks the user anything.
-    func retryUnpairs(_ unpair: (PendingUnpair, String) async throws -> Void) async {
+    /// forward and when the network returns; never asks the user anything. Each machine's key
+    /// goes after its unpair; keys of machines in Togo again under `current` stay.
+    func retryUnpairs(
+        current: [HostRecord] = [], removeKey: ((PendingKeyRemoval) async throws -> Int)? = nil,
+        _ unpair: (PendingUnpair, String) async throws -> Void
+    ) async {
         guard !retrying else { return }
         retrying = true
         defer { retrying = false }
+        dropReturnedKeys(current: current)
         for entry in unpairs.all() {
             if store.pairing(hostId: entry.pairing.hostId) != nil {
                 unpairs.remove(hostId: entry.id)
                 continue
             }
-            await attempt(entry) { try await unpair(entry, $0) }
+            await attempt(entry, { try await unpair(entry, $0) }, removeKey: removeKey)
         }
+        if let removeKey { await retryLoneKeys(removeKey) }
     }
 
     /// Machines still waiting for their helper to forget this device.
@@ -234,7 +283,12 @@ extension RelayRegisterSender: PushTokenRegistering {}
         onChange()
     }
 
-    private func attempt(_ entry: PendingUnpair, _ unpair: (String) async throws -> Void) async {
+    /// Unpairs every device id, then, once none is left, takes this device's key off the
+    /// machine before the local forget.
+    private func attempt(
+        _ entry: PendingUnpair, _ unpair: (String) async throws -> Void,
+        removeKey: ((PendingKeyRemoval) async throws -> Int)? = nil
+    ) async {
         var remaining: [String] = []
         for deviceID in entry.deviceIds {
             do {
@@ -247,6 +301,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         }
         if remaining.isEmpty {
             unpairs.remove(hostId: entry.id)
+            if let removeKey, let host = entry.pairing.appHostID { await attemptKey(host, removeKey) }
             onUnpaired(entry)
             onChange()
         } else {
@@ -309,7 +364,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
     // MARK: Building requests
 
     private func params(
-        apnsToken: String, live: (update: String?, start: String?), relay: URL, command: Bool
+        apnsToken: String, live: (update: String?, start: String?), relay: URL, command: Bool, sshKey: String?
     ) throws -> PushPairParams {
         PushPairParams(
             deviceId: try keys.deviceID(), name: deviceName,
@@ -317,7 +372,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
             approvalKey: Base64URL.encode(try keys.signingKey().publicKey.rawRepresentation),
             apnsToken: apnsToken, env: PushEnvironment.apns, relayUrl: relay.absoluteString,
             liveActivityToken: live.update, platform: .ios, liveActivityStartToken: live.start,
-            liveActivityCommand: command
+            liveActivityCommand: command, sshKey: sshKey
         )
     }
 
@@ -331,10 +386,14 @@ extension RelayRegisterSender: PushTokenRegistering {}
     }
 
     /// Six hex characters of SHA-256 over every token the machine was given, enough to tell
-    /// whether it is out of date without keeping the tokens.
-    static func tokenHash(apns: String, live: (update: String?, start: String?), watches: [WatchDevice]) -> String {
+    /// whether it is out of date without keeping the tokens. The SSH key counts only once it
+    /// is sent, so pairings from before it existed stay current until the helper can take it.
+    static func tokenHash(
+        apns: String, live: (update: String?, start: String?), watches: [WatchDevice], sshKey: String? = nil
+    ) -> String {
         var parts = [apns, live.update ?? "", live.start ?? ""]
         parts += watches.map { "\($0.deviceId):\($0.apnsToken)" }
+        if let sshKey { parts.append("ssh:" + sshKey) }
         let digest = SHA256.hash(data: Data(parts.joined(separator: "|").utf8))
         return digest.prefix(3).map { String(format: "%02x", $0) }.joined()
     }

@@ -16,7 +16,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
-const fixturesDir = "../../../protocol/v1/fixtures/pending"
+const fixturesDir = "../../../protocol/v1/fixtures"
 
 // fixtureLine is the line the authkeys fixtures describe.
 const fixtureLine = phoneKey + " togo@test-iphone\n"

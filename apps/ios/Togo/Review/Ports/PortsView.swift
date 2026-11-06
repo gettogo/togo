@@ -90,7 +90,7 @@ struct PortsView: View {
         }
         .groupedList()
         .refreshable { await model.refresh() }
-        .motion(Motion.fade, value: model.ports)
+        .motion(.fade, value: model.ports)
     }
 }
 

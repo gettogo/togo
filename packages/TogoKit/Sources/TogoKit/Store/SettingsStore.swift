@@ -36,6 +36,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var fontName: String = "SF Mono"
     public var fontSize: Double = 13
     public var cursor: String = "block"
+    /// VoiceOver speaks new terminal output once it settles.
+    public var readNewOutput = true
     /// Encoded key bar layout. TogoTerminal owns the type; this package only
     /// carries the bytes so it does not depend on the terminal.
     public var keyBar: Data?
@@ -56,6 +58,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// Lock-screen Approve works without unlocking the iPhone. Deny never asks to unlock.
     /// This device's choice: never encoded, so turning it on here cannot turn it on elsewhere.
     public var approveWithoutUnlock = false
+    /// A "done" notification arrives without a sound. This device's choice, like the one above.
+    public var doneSilent = false
     public var liveActivities = true
     /// The screen stays on while the workspace is open. This device's choice: never encoded.
     public var keepScreenOn = false
@@ -73,7 +77,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case themeID, fontName, fontSize, cursor, keyBar, importedThemes, gestures, resumeLock, transport
+        case themeID, fontName, fontSize, cursor, readNewOutput, keyBar, importedThemes, gestures, resumeLock, transport
         case relayURL, liveActivities
     }
 
@@ -84,6 +88,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? d.fontName
         fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? d.fontSize
         cursor = try c.decodeIfPresent(String.self, forKey: .cursor) ?? d.cursor
+        readNewOutput = try c.decodeIfPresent(Bool.self, forKey: .readNewOutput) ?? d.readNewOutput
         keyBar = try? c.decodeIfPresent(Data.self, forKey: .keyBar)
         importedThemes = try? c.decodeIfPresent(Data.self, forKey: .importedThemes)
         gestures = try c.decodeIfPresent(GestureBindings.self, forKey: .gestures) ?? d.gestures
@@ -124,6 +129,7 @@ public struct SyncSwitch: Sendable {
 /// from another device must never carry them here.
 public struct DeviceSettings: Sendable {
     private static let approveKey = "push.approveWithoutUnlock"
+    private static let doneSilentKey = "push.doneSilent"
     private static let commandsKey = "push.liveActivityCommandMachines"
     private static let keepScreenOnKey = "device.keepScreenOn"
     private static let dictationLocaleKey = "device.dictationLocale"
@@ -138,6 +144,7 @@ public struct DeviceSettings: Sendable {
     /// Copies this device's values into `settings`.
     public func apply(to settings: inout AppSettings) {
         settings.approveWithoutUnlock = backend.data(forKey: Self.approveKey) == Data([1])
+        settings.doneSilent = backend.data(forKey: Self.doneSilentKey) == Data([1])
         settings.liveActivityCommandMachines = backend.data(forKey: Self.commandsKey)
             .flatMap { try? JSONDecoder().decode(Set<UUID>.self, from: $0) } ?? []
         settings.keepScreenOn = backend.data(forKey: Self.keepScreenOnKey) == Data([1])
@@ -148,6 +155,7 @@ public struct DeviceSettings: Sendable {
 
     public func save(_ settings: AppSettings) {
         backend.set(Data([settings.approveWithoutUnlock ? 1 : 0]), forKey: Self.approveKey)
+        backend.set(Data([settings.doneSilent ? 1 : 0]), forKey: Self.doneSilentKey)
         backend.set(try? JSONEncoder().encode(settings.liveActivityCommandMachines.sorted { $0.uuidString < $1.uuidString }),
                     forKey: Self.commandsKey)
         backend.set(Data([settings.keepScreenOn ? 1 : 0]), forKey: Self.keepScreenOnKey)

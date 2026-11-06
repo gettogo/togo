@@ -27,6 +27,9 @@ private let cases: [(name: String, state: State)] = [
     )),
     ("working", state("working", waiting: 0, ago: 1_830)),
     ("done", state("done", waiting: 0, ago: 40)),
+    ("ended", state("ended", waiting: 0, ago: 40)),
+    ("failed", state("failed", waiting: 0, ago: 40)),
+    ("offline", state("offline", waiting: 2, ago: 400)),
     ("three-waiting", state("needs_you", waiting: 3)),
 ]
 

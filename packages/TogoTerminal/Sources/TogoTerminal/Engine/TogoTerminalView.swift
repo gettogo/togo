@@ -1,4 +1,5 @@
 internal import SwiftTerm
+import Synchronization
 import UIKit
 
 /// SwiftTerm's view with Togo's one-finger scroll routing.
@@ -28,6 +29,13 @@ final class TogoTerminalView: TerminalView {
     /// Asked per hardware press; kitty mode never gets here, SwiftTerm reports those keys.
     var extendedKeyMode: (() -> ExtendedKeyMode)?
     let chordRepeater: ChordRepeater
+    var onFocusChange: (() -> Void)?
+    /// The user typed or pressed a key here; the terminal's own replies do not count.
+    var onUserInput: (() -> Void)?
+    /// VoiceOver's value for the view: the cursor line, or nil.
+    var cursorLine: (() -> String?)?
+    /// Kept from the parser thread: an app hid the cursor (DECTCEM), so its row means nothing.
+    let cursorHidden = Atomic(false)
 
     private let wheelPan = UIPanGestureRecognizer()
     private var selectionThroughLineEnd = false
@@ -39,6 +47,39 @@ final class TogoTerminalView: TerminalView {
         wheelPan.maximumNumberOfTouches = 1
         wheelPan.addTarget(self, action: #selector(handleWheelPan(_:)))
         addGestureRecognizer(wheelPan)
+    }
+
+    /// VoiceOver focus decides when it is on a terminal, so a split has one focused pane.
+    var hasFocus: Bool {
+        let voiceOver = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+        if let terminal = voiceOver as? TogoTerminalView { return terminal === self }
+        return isFirstResponder
+    }
+
+    /// SwiftTerm reads the screen line by line; the value says where the cursor is.
+    override var accessibilityValue: String? {
+        get { cursorLine?() }
+        set {}
+    }
+
+    nonisolated override func hideCursor(source: Terminal) {
+        cursorHidden.store(true, ordering: .relaxed)
+        super.hideCursor(source: source)
+    }
+
+    nonisolated override func showCursor(source: Terminal) {
+        cursorHidden.store(false, ordering: .relaxed)
+        super.showCursor(source: source)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        defer { onFocusChange?() }
+        return super.becomeFirstResponder()
+    }
+
+    override func deleteBackward() {
+        onUserInput?()
+        super.deleteBackward()
     }
 
     required init?(coder: NSCoder) {
@@ -65,6 +106,7 @@ final class TogoTerminalView: TerminalView {
     /// More than one character at once is dictation or a text replacement, not a key, so it
     /// gets the paste filter. A single typed character, a control included, passes unchanged.
     override func insertText(_ text: String) {
+        onUserInput?()
         if markedTextRange == nil, let bytes = latchedInput?(text) {
             if !bytes.isEmpty { send(data: bytes[...]) }
             return
@@ -76,6 +118,7 @@ final class TogoTerminalView: TerminalView {
     /// key bar chords send the same bytes. With the kitty keyboard protocol on, or during
     /// composition, SwiftTerm keeps every press because it must report them its own way.
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        onUserInput?()
         // Any new key ends a held chord, as it does for SwiftTerm's own repeat.
         chordRepeater.stop()
         let kitty = !(terminalInputStateSnapshot()?.keyboardEnhancementFlags.isEmpty ?? true)
@@ -133,6 +176,7 @@ final class TogoTerminalView: TerminalView {
     /// A key released after focus moves never reaches this view, so the repeat ends here.
     override func resignFirstResponder() -> Bool {
         chordRepeater.stop()
+        defer { onFocusChange?() }
         return super.resignFirstResponder()
     }
 
