@@ -150,7 +150,7 @@ struct MachineSectionView: View {
                 }
             }
         }
-        .contextMenu { menu(for: row, actions) }
+        .contextMenu { SessionMenu(row: row, actions: actions, etAvailable: etAvailable, perform: perform) }
     }
 
     /// The visible tabs' rows are filled; the keyboard cursor draws a ring.
@@ -164,65 +164,6 @@ struct MachineSectionView: View {
             if cursor == id {
                 shape.strokeBorder(Color.togoSnow, lineWidth: 2).padding(.horizontal, 6)
             }
-        }
-    }
-
-    @ViewBuilder private func menu(for row: SessionRow, _ actions: SessionActionSet) -> some View {
-        ForEach(actions.available, id: \.self) { action in
-            switch action {
-            case .connectWith:
-                ConnectWithMenu(etAvailable: etAvailable) { perform(.open(row, $0)) }
-            case .kill:
-                reviewItems(for: row, actions)
-                Divider()
-                menuButton(action, row, role: .destructive) { perform(.kill(row)) }
-                    .disabled(actions.disabled.contains(action))
-            case .open, .rename, .mute, .copyPath:
-                menuButton(action, row) { perform(command(action, row)) }
-                    .disabled(actions.disabled.contains(action))
-            case .changes, .files, .ports:
-                EmptyView()
-            }
-        }
-        if !actions.available.contains(.kill) {
-            reviewItems(for: row, actions)
-        }
-        if let note = actions.note {
-            Divider()
-            Text(note)
-        }
-    }
-
-    /// Changes, Files and Ports, after the row's own actions and before Kill when there is one.
-    @ViewBuilder private func reviewItems(for row: SessionRow, _ actions: SessionActionSet) -> some View {
-        if !actions.review.isEmpty {
-            Divider()
-            ForEach(actions.review, id: \.self) { action in
-                menuButton(action, row) { perform(command(action, row)) }
-                    .disabled(actions.disabled.contains(action))
-            }
-            if let note = actions.reviewNote {
-                Text(note)
-            }
-        }
-    }
-
-    private func menuButton(
-        _ action: SessionAction, _ row: SessionRow, role: ButtonRole? = nil, run: @escaping () -> Void
-    ) -> some View {
-        Button(action.title(for: row), systemImage: action.systemImage(for: row), role: role, action: run)
-    }
-
-    private func command(_ action: SessionAction, _ row: SessionRow) -> SessionCommand {
-        switch action {
-        case .open, .connectWith: .open(row, nil)
-        case .rename: .rename(row)
-        case .mute: .toggleMute(row)
-        case .copyPath: .copyPath(row)
-        case .kill: .kill(row)
-        case .changes: .review(row, .changes)
-        case .files: .review(row, .files)
-        case .ports: .review(row, .ports)
         }
     }
 }

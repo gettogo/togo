@@ -17,6 +17,8 @@ struct PastedImage: Equatable {
 extension AppStore {
     /// The Compose key opens the bar for its tab, or closes it when it is already open.
     func toggleCompose(_ id: TabID) {
+        // Zen mode hides the compose bar; the Compose key waits until zen ends.
+        guard !zen || composing == id else { return }
         composing = composing == id ? nil : id
         TutorialTip.workspace.done()
     }

@@ -51,6 +51,8 @@ struct WorkspacePanes<Overlay: View>: View {
                 // Folds, Split View and Stage Manager move the panes; under Reduce Motion the new
                 // arrangement lands in place and fades up instead.
                 .transaction(value: report.geometry) { transaction in
+                    // A change that asks for none, such as zen mode, resizes the terminal once.
+                    guard !transaction.disablesAnimations else { return }
                     transaction.animation = reduceMotion ? nil : Motion.animation(.paneFlow, reduce: false)
                 }
                 .opacity(settling ? 0.5 : 1)

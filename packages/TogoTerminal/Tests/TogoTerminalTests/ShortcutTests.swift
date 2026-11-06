@@ -40,7 +40,7 @@ import UIKit
         let expected: [(String, ShortcutAction)] = (1...9).map { ("\($0)", .session($0)) } + [
             ("t", .newSession), ("k", .controlCenter), ("w", .detach), ("v", .paste),
         ]
-        #expect(commands.count == expected.count + 6)
+        #expect(commands.count == expected.count + 8)
         for (input, action) in expected {
             let command = commands.first { $0.input == input }
             #expect(command != nil, "missing ⌘\(input)")
@@ -62,6 +62,8 @@ import UIKit
             (UIKeyCommand.inputRightArrow, [.command, .alternate], .focusRight),
             ("[", [.command, .shift], .previousTab),
             ("]", [.command, .shift], .nextTab),
+            ("b", [.command, .control], .toggleBoard),
+            ("f", [.command, .control], .toggleZen),
         ]
         let h = EngineHarness()
         var received: [ShortcutAction] = []

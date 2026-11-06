@@ -147,6 +147,9 @@ struct SessionSidebar: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         // Symbol and title on every item: vertical bars show the symbol, overflow the title.
         ToolbarItem(placement: .topBarTrailing) {
+            BoardChoiceMenu(store: store)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
             Button(ControlCenterCopy.settings, systemImage: "gearshape") { store.path = [.settings] }
                 .foregroundStyle(Color.togoSnow)
         }
@@ -191,6 +194,7 @@ struct SessionSidebar: View {
         if let row = rows.first(where: { $0.hostID == id.hostID && $0.id == id.sessionID }) {
             show(row)
         } else {
+            store.boardShown = false
             store.open(hostID: id.hostID, sessionID: id.sessionID)
         }
     }
@@ -222,6 +226,7 @@ extension AppStore {
     /// A row picked in the sidebar fills the focused pane. With one pane on screen that is the
     /// primary, so the workspace shows one large terminal unless the user opened a second.
     func showFromSidebar(_ row: SessionRow, transport: TransportPreference? = nil) {
+        boardShown = false
         let id = TabID(hostID: row.hostID, sessionID: row.id)
         guard panesVisible, workspace.secondary != nil, workspace.focused == .secondary else {
             open(hostID: row.hostID, sessionID: row.id, transport: transport)

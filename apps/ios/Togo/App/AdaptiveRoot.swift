@@ -5,21 +5,23 @@ import TogoKit
 enum ShellLayout: Equatable, Sendable {
     /// Compact: the sessions list in a stack, the workspace as a cover over it.
     case stack(coverShown: Bool)
-    /// Regular: the session sidebar beside the workspace, or beside the empty detail.
+    /// Regular: the session sidebar beside the workspace, the board or the empty detail.
     case split(detail: Detail)
 
     enum Detail: Equatable, Sendable {
-        case workspace, empty
+        case workspace, board, empty
     }
 
     /// Reads window size and size class only. The window's state is the same either way, so a
-    /// Stage Manager resize, Split View or fold only changes where it is shown.
+    /// Stage Manager resize, Split View or fold only changes where it is shown. In a compact
+    /// window the board takes the list's place under the cover.
     static func resolve(
-        size: CGSize, sizeClass: UserInterfaceSizeClass?, workspaceOpen: Bool, hasTabs: Bool
+        size: CGSize, sizeClass: UserInterfaceSizeClass?, workspaceOpen: Bool, hasTabs: Bool, boardShown: Bool = false
     ) -> ShellLayout {
         guard PaneLayout.showsSidebar(size: size, sizeClass: sizeClass) else {
             return .stack(coverShown: workspaceOpen)
         }
+        if boardShown { return .split(detail: .board) }
         return .split(detail: workspaceOpen && hasTabs ? .workspace : .empty)
     }
 
@@ -74,6 +76,8 @@ struct AdaptiveRoot<Destination: View>: View {
     var zoom: Namespace.ID?
     /// A fixed clock for snapshots; nil follows the time of day.
     var now: Date?
+    /// What the board runs on; nil for the device's own.
+    var board: BoardServices?
     @ViewBuilder let destination: (AppRoute) -> Destination
     /// The last tab on screen, so closing the cover shrinks into its row instead of nowhere.
     @State private var zoomSource: TabID?
@@ -85,7 +89,7 @@ struct AdaptiveRoot<Destination: View>: View {
         GeometryReader { proxy in
             let layout = ShellLayout.resolve(
                 size: proxy.size, sizeClass: sizeClass, workspaceOpen: store.workspaceOpen,
-                hasTabs: !store.workspace.tabs.isEmpty
+                hasTabs: !store.workspace.tabs.isEmpty, boardShown: store.boardShown
             )
             Group {
                 switch layout {
@@ -120,7 +124,7 @@ struct AdaptiveRoot<Destination: View>: View {
 
     private var stack: some View {
         NavigationStack(path: $store.path) {
-            ControlCenterView(store: store, zoom: zoom, now: now)
+            ControlCenterView(store: store, zoom: zoom, now: now, board: board)
                 .navigationDestination(for: AppRoute.self, destination: destination)
                 .modifier(DebugTools(shown: debugShown))
         }
@@ -152,10 +156,11 @@ struct AdaptiveRoot<Destination: View>: View {
     @ViewBuilder private func detailRoot(_ detail: ShellLayout.Detail) -> some View {
         switch detail {
         case .workspace:
-            // The workspace has its own header. The bar comes back with the sidebar hidden, to
-            // carry the button that shows it again.
+            // The workspace has its own header, which carries the button that shows the sidebar.
             WorkspaceView(store: store, terminals: terminals)
-                .toolbar(store.sidebar.isHidden ? .visible : .hidden, for: .navigationBar)
+                .toolbar(.hidden, for: .navigationBar)
+        case .board:
+            BoardView(store: store, services: board)
         case .empty:
             EmptyDetail(newSession: store.services.hosts.isEmpty ? nil : { store.startNewSession() })
         }

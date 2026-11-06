@@ -24,11 +24,15 @@ struct WorkspaceView: View {
     @State private var renameText = ""
     @State private var killTarget: WorkspaceTab?
     @State private var panes = PanesState()
+    @State private var zen: ZenChrome
+    /// `store.zen` as the layout follows it, changed with animations off.
+    @State private var zenLayout = false
 
-    init(store: AppStore, terminals: TerminalPool, noteShown: Bool = false) {
+    init(store: AppStore, terminals: TerminalPool, noteShown: Bool = false, zen: ZenChrome? = nil) {
         self.store = store
         self.terminals = terminals
         _noteShown = State(initialValue: noteShown)
+        _zen = State(initialValue: zen ?? ZenChrome())
     }
 
     var body: some View {
@@ -39,10 +43,36 @@ struct WorkspaceView: View {
                 MainActor.assumeIsolated { if panes.report != report { panes.report = report } }
             }
             // The tip anchors behind the chrome so its popover never changes the chrome's layout.
+            // In zen mode the chrome leaves the inset, with animations off so the terminal is
+            // resized once, and comes back over the terminal for a moment from the strip along the
+            // top edge. The chrome is only ever in one of the two places.
             .safeAreaInset(edge: .top, spacing: 0) {
-                chrome.background { Color.clear.tutorialTip(.workspace) }
-                    .modifier(LeadingPageOnly())
+                if chromeLayout.inset {
+                    chrome.background { Color.clear.tutorialTip(.workspace) }
+                        .modifier(LeadingPageOnly())
+                }
             }
+            .overlay(alignment: .top) {
+                ZStack(alignment: .top) {
+                    if chromeLayout.overlay {
+                        // Using the chrome keeps it up for another three seconds.
+                        chrome.modifier(LeadingPageOnly())
+                            .simultaneousGesture(TapGesture().onEnded { zen.reveal() })
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    } else if chromeLayout.revealStrip {
+                        ZenRevealStrip { zen.reveal() }
+                    }
+                }
+                .motion(.chrome, value: chromeLayout.overlay)
+            }
+            .onChange(of: store.zen, initial: true) { _, on in
+                if !on { zen.hide() }
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { zenLayout = on }
+            }
+            // In zen the chrome stays while find is open, so the field taking the keyboard is on screen.
+            .onChange(of: finding) { _, open in zen.pin(open && zenLayout) }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
                     .modifier(PaneColumns(state: panes) { [store] in $0.geometry.composeFrame(focused: store.workspace.focused) })
@@ -63,6 +93,7 @@ struct WorkspaceView: View {
             .haptic(.tabSettle, trigger: store.workspace.selected)
             .onChange(of: store.findRequests) {
                 guard let tab = store.focusedTab, terminals.handle(for: tab.id)?.search != nil else { return }
+                if zenLayout { zen.reveal() }
                 finding = true
                 findFocused = true
             }
@@ -118,6 +149,10 @@ struct WorkspaceView: View {
 
     // MARK: Chrome
 
+    private var chromeLayout: WorkspaceChrome {
+        WorkspaceChrome(zen: zenLayout, revealed: zen.revealed)
+    }
+
     private var chrome: some View {
         VStack(spacing: 0) {
             if let tab = store.focusedTab {
@@ -145,7 +180,7 @@ struct WorkspaceView: View {
         let name = row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? tab.title
         return WorkspaceHeader(
             bib: row?.bib ?? tab.bib, title: name, link: tab.link, status: status ?? store.workspace.ended, noteShown: $noteShown,
-            onBack: { store.workspaceOpen = false },
+            onBack: leadingAction, leading: leading,
             accessories: {
                 if let row {
                     ReviewHeaderButtons(store: store, row: row)
@@ -154,6 +189,21 @@ struct WorkspaceView: View {
             }
         ) {
             actions(for: tab, row: row)
+        }
+    }
+
+    /// Back to the sessions list over a compact window. Beside the sidebar there is no list to go
+    /// back to; with the sidebar hidden, the button shows it again.
+    private var leading: WorkspaceHeaderLeading {
+        guard store.workspaceInline else { return .back }
+        return store.sidebar.isHidden ? .showSidebar : .none
+    }
+
+    private func leadingAction() {
+        if store.workspaceInline {
+            store.sidebar.hidden = false
+        } else {
+            store.workspaceOpen = false
         }
     }
 
@@ -176,6 +226,9 @@ struct WorkspaceView: View {
             store.open(hostID: tab.hostID, sessionID: tab.sessionID, transport: transport)
         }
         OpenInWindowButton(tab: tab.id)
+        Toggle(isOn: Binding(get: { store.zen }, set: { _ in store.toggleZen() })) {
+            Label(ZenCopy.zenMode, systemImage: "arrow.up.left.and.arrow.down.right")
+        }
         Button(WorkspaceCopy.copyLines, systemImage: "doc.on.doc") {
             Task { status = await store.copyLastLines(of: tab) }
         }

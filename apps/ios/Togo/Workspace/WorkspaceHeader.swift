@@ -1,5 +1,15 @@
 import SwiftUI
 
+/// The button at the start of the workspace header.
+enum WorkspaceHeaderLeading: Equatable {
+    /// "Sessions", back to the list the workspace covers.
+    case back
+    /// Shows the sidebar the workspace sits beside.
+    case showSidebar
+    /// Nothing: the sidebar is on screen beside the workspace.
+    case none
+}
+
 /// The bar above the tab strip: back to the sessions list, which session this is and how it
 /// is connected, and the session's actions, with buttons such as "3 changes" before them. At
 /// accessibility sizes the title takes its own line under the buttons, so neither is cut short.
@@ -14,6 +24,7 @@ struct WorkspaceHeader<Accessories: View, Actions: View>: View {
     let status: String?
     @Binding var noteShown: Bool
     let onBack: () -> Void
+    var leading: WorkspaceHeaderLeading = .back
     @ViewBuilder let accessories: () -> Accessories
     @ViewBuilder let actions: () -> Actions
 
@@ -63,10 +74,25 @@ struct WorkspaceHeader<Accessories: View, Actions: View>: View {
 
     /// "Sessions" while there is room for it beside the title and the buttons, otherwise the
     /// chevron alone, which VoiceOver still reads as "Sessions".
-    private var backButton: some View {
-        ViewThatFits(in: .horizontal) {
-            backButton(iconOnly: false)
-            backButton(iconOnly: true)
+    @ViewBuilder private var backButton: some View {
+        switch leading {
+        case .back:
+            ViewThatFits(in: .horizontal) {
+                backButton(iconOnly: false)
+                backButton(iconOnly: true)
+            }
+        case .showSidebar:
+            Button(action: onBack) {
+                Label(AppCommandCopy.showSidebar, systemImage: "sidebar.leading")
+                    .labelStyle(.iconOnly)
+                    .font(.body.weight(.medium))
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .foregroundStyle(Color.togoSnow)
+        case .none:
+            Color.clear.frame(width: 0, height: 44)
         }
     }
 

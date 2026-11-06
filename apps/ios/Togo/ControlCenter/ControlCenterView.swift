@@ -11,30 +11,43 @@ struct ControlCenterView: View {
     var zoom: Namespace.ID?
     /// A fixed clock for previews and snapshots; nil follows the time of day.
     var now: Date?
+    /// What the board runs on; nil for the device's own.
+    var board: BoardServices?
 
     @State private var killTarget: SessionRow?
     @State private var renameTarget: SessionRow?
 
     static let newSessionSourceID = "newSession"
 
-    init(store: AppStore, zoom: Namespace.ID? = nil, now: Date? = nil) {
+    init(store: AppStore, zoom: Namespace.ID? = nil, now: Date? = nil, board: BoardServices? = nil) {
         self.store = store
         self.zoom = zoom
         self.now = now
+        self.board = board
     }
 
     var body: some View {
         content
             .background(Color.togoInk)
-            .navigationTitle(ControlCenterCopy.title)
+            .navigationTitle(showsBoard ? BoardCopy.title : ControlCenterCopy.title)
             .navigationBarTitleDisplayMode(.large)
             .toolbar { toolbar }
             .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
     }
 
+    private var showsBoard: Bool {
+        store.boardShown && !hasNoMachines
+    }
+
+    private var hasNoMachines: Bool {
+        store.services.hosts.isEmpty && store.controlCenter.machines.isEmpty
+    }
+
     @ViewBuilder private var content: some View {
-        if store.services.hosts.isEmpty && store.controlCenter.machines.isEmpty {
+        if hasNoMachines {
             firstRun
+        } else if store.boardShown {
+            BoardView(store: store, services: board)
         } else {
             TimelineView(.everyMinute) { context in
                 list(now: now ?? context.date)
@@ -43,6 +56,11 @@ struct ControlCenterView: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if !hasNoMachines {
+            ToolbarItem(placement: .topBarLeading) {
+                BoardChoiceMenu(store: store)
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Button(ControlCenterCopy.settings, systemImage: "gearshape") { store.path.append(.settings) }
                 .foregroundStyle(Color.togoSnow)
