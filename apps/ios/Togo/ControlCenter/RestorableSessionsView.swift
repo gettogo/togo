@@ -18,7 +18,6 @@ struct RestorableSessionRow: View {
                 Text(verbatim: session.name)
                     .font(.body)
                     .foregroundStyle(Color.togoSnow)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
             }
             Text(RestoreCopy.endedByRestart)
                 .font(.subheadline)
@@ -53,8 +52,11 @@ struct RestorableSessionRow: View {
 extension View {
     /// Dismiss on the trailing swipe and in the context menu of a restorable row.
     func dismissesRestorable(_ dismiss: @escaping () -> Void) -> some View {
+        // No destructive role on the swipe: the row leaves once the helper has dropped it, and
+        // a list that already let it go would count one row short when it does.
         swipeActions(edge: .trailing) {
-            Button(RestoreCopy.dismiss, systemImage: "xmark", role: .destructive, action: dismiss)
+            Button(RestoreCopy.dismiss, systemImage: "xmark", action: dismiss)
+                .tint(.red)
         }
         .contextMenu {
             Button(RestoreCopy.dismiss, systemImage: "xmark", role: .destructive, action: dismiss)

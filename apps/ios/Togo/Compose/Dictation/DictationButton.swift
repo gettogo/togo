@@ -107,6 +107,7 @@ struct DictationLine: View {
         Text(partial)
             .font(.subheadline)
             .foregroundStyle(Color.togoSnow)
+            // trunc-ok: a live partial while listening; the whole text lands in the field when dictation ends
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? 4 : 2)
             .truncationMode(.head)
             .frame(maxWidth: .infinity, alignment: .leading)

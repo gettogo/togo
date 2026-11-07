@@ -111,6 +111,30 @@ type UserBody struct {
 	Withdrawn bool `json:"withdrawn,omitempty"`
 	// Source is phone, desk or unknown.
 	Source string `json:"source"`
+	// Images are pictures the prompt carried, such as a pasted screenshot.
+	Images []ImageRef `json:"images,omitempty"`
+}
+
+// MaxInlineImage is the largest image carried inside an item, decoded. A
+// larger picture is described (type and size) and, when it has a path,
+// fetched on demand with fs.image, so items stay small.
+const MaxInlineImage = 48 << 10
+
+// MaxImagesPerItem bounds the pictures one item lists.
+const MaxImagesPerItem = 8
+
+// ImageRef is a picture in the conversation: inline when small, else by
+// path, or only described when the source holds neither.
+type ImageRef struct {
+	// Path is where the file is on this machine, absolute.
+	Path string `json:"path,omitempty"`
+	// MediaType is image/png, image/jpeg, image/gif or image/webp.
+	MediaType string `json:"mediaType,omitempty"`
+	// Bytes is the decoded size when known.
+	Bytes int `json:"bytes,omitempty"`
+	// Data is the picture itself, base64url without padding, at most
+	// MaxInlineImage bytes decoded.
+	Data string `json:"data,omitempty"`
 }
 
 // TextBody is assistant or thinking text, as markdown.
@@ -135,6 +159,8 @@ type ToolBody struct {
 	Output   string       `json:"output,omitempty"`
 	ExitCode *int         `json:"exitCode,omitempty"`
 	Files    []FileChange `json:"files,omitempty"`
+	// Images are pictures the tool read or produced.
+	Images []ImageRef `json:"images,omitempty"`
 }
 
 // FileChange is a file a tool or turn changed.
@@ -231,6 +257,10 @@ const (
 	NoticeResumed     = "resumed"
 	NoticeInterrupted = "interrupted"
 	NoticeFallback    = "fallback"
+	// NoticeContinued opens a turn the agent started on its own, such as
+	// after a background task or subagent it launched finished. Its text
+	// names the trigger.
+	NoticeContinued = "continued"
 )
 
 // NoticeBody is a quiet system line.

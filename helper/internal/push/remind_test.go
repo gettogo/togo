@@ -91,8 +91,8 @@ func TestNoReminderWhenAnswered(t *testing.T) {
 	}
 	r.fire()
 	// Closed by something that sent no clear: the pending check still holds.
-	r.handle(approvalOpen("r_abcdefghij"))
-	r.pending["r_abcdefghij"] = false
+	r.handle(approvalOpen("r_bbbbbbbbbb"))
+	r.pending["r_bbbbbbbbbb"] = false
 	r.fire()
 	if n := len(r.relay.received()); n != 3 {
 		t.Fatalf("%d pushes, want needs_you, clear, needs_you", n)
@@ -216,17 +216,18 @@ func TestDuplicateNeedsYouAfterReminderArmsNothing(t *testing.T) {
 	r.handle(approvalOpen("r_abcdefghij"))
 	r.fire()
 	got := r.relay.received()
-	if len(got) != 3 {
-		t.Fatalf("%d pushes, want needs_you, reminder, needs_you", len(got))
+	// The repeated open is the same request: it neither rings nor re-arms.
+	if len(got) != 2 {
+		t.Fatalf("%d pushes, want needs_you, reminder", len(got))
 	}
-	if r.open(t, got[2].Ciphertext, r.phones[0].id).Reminder {
-		t.Fatal("third push is a reminder")
+	if !r.open(t, got[1].Ciphertext, r.phones[0].id).Reminder {
+		t.Fatal("second push is not the reminder")
 	}
-	// Closing forgets the request, so a reused id could be reminded again.
+	// A closed request never rings or arms again.
 	r.handle(approvalClosed("r_abcdefghij"))
 	r.handle(approvalOpen("r_abcdefghij"))
-	if live := liveTimers(r); live != 1 {
-		t.Fatalf("%d live timers after close and reopen, want 1", live)
+	if live := liveTimers(r); live != 0 {
+		t.Fatalf("%d live timers after close and reopen, want 0", live)
 	}
 }
 
@@ -255,7 +256,7 @@ func TestChangedDelayReevaluatesArmedReminders(t *testing.T) {
 	}
 	// A delay already passed fires at once; off cancels.
 	r.handle(approvalClosed("r_abcdefghij"))
-	r.handle(approvalOpen("r_abcdefghij"))
+	r.handle(approvalOpen("r_bbbbbbbbbb"))
 	r.clock = r.clock.Add(20 * time.Minute)
 	r.delay = 5 * time.Minute
 	r.rem.Reschedule()

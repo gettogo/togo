@@ -37,13 +37,14 @@ func (t SessionTypist) Type(ctx context.Context, id, text string, submit, _ bool
 	return t.Sessions.SendText(ctx, id, text, submit, status, nil)
 }
 
-// Keys sends named keys from the allow list.
+// Keys sends named keys from the allow list, or the stop chords an
+// until-idle interrupt sends (the engine checks which keys a route may send).
 func (t SessionTypist) Keys(ctx context.Context, id string, keys ...string) error {
 	if _, err := session.ValidateID(id); err != nil {
 		return err
 	}
 	for _, k := range keys {
-		if !spec.AllowedKeys[k] {
+		if !spec.AllowedKeys[k] && !spec.StopKeys[k] {
 			return errors.New("harness: key not allowed")
 		}
 	}

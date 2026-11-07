@@ -10,6 +10,7 @@ harness: { version: [claude, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode, model,
   effort, needs.approvals, needs.questions, agents, background, plan, changes, ports, status,
   status.usage, status.context, resume, compact]
+images: { insert: per_path }   # a paste of several paths takes only the first: one paste per path
 feeds:
   hooks:            # forwarded by `togo hook claude <event>`, redacted, with the raw payload
     hook:
@@ -48,11 +49,6 @@ sources:
     select: '[.[] | {id: .name, title: (([.tail[] | select(.type=="ai-title") | .aiTitle] | last) // ([.tail[] | select(.type=="last-prompt") | .lastPrompt] | last) // .name), updated: .mtime, branch: ([.tail[] | .gitBranch | select(.)] | last)}]'
     cache: 30s
     stability: internal
-  running:
-    cli: { argv: [claude, agents, --json] }
-    cache: 5s
-    timeout: 5s
-    stability: documented
 screens:
   model:
     primitive: picker
@@ -127,8 +123,11 @@ actions:
   answer:
     builtin: approval_answer   # questions and approvals answer through approvals.v1
     stability: documented
+  # Stop ends the whole turn: Escape until idle (at an approval the first
+  # press denies it), then Ctrl-X Ctrl-K twice for background agents, which
+  # keep the session busy at an idle prompt where Escape does nothing.
   interrupt:
-    keys: { keys: [Escape] }
+    keys: { keys: [Escape], until: idle, max: 2, then: [C-x, C-k, C-x, C-k] }
     stability: documented
   stop:
     label: Stop
@@ -151,5 +150,5 @@ commands:
     - { name: resume, hint: '[session]', detail: Resume a conversation, screen: resume }
     - { name: clear, detail: Start a new conversation }
     - { name: review, detail: Review a pull request }
-mission:
-  background: { source: running, refresh: 10s }
+# No mission source: `claude agents --json` lists every Claude Code session on the machine,
+# not this session's jobs, so background rows come only from this session's transcript.

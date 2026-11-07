@@ -14,6 +14,7 @@ private struct IslandBib: View {
             .fontWeight(.medium)
             .monospacedDigit()
             .foregroundStyle(Color.togoSnow)
+            // trunc-ok: a bib is two or three digits
             .lineLimit(1)
             .fixedSize()
     }
@@ -60,6 +61,7 @@ struct IslandCompactTrailing: View {
                 LiveStatusText(status: LiveStatus(state.status, stale: isStale), font: .subheadline, reason: state.reason)
             }
         }
+        // trunc-ok: the compact island holds a status word or a count
         .lineLimit(1)
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...LiveCopy.largestType)
@@ -104,6 +106,7 @@ struct IslandExpandedLeading: View {
             Text(verbatim: state.agent)
                 .font(.subheadline)
                 .foregroundStyle(Color.togoSnow)
+                // trunc-ok: the Dynamic Island has a fixed width; the agent name is on the lock screen and in the app
                 .lineLimit(1)
         }
         .padding(.leading, 4)
@@ -143,12 +146,14 @@ struct IslandExpandedCenter: View {
             Text(verbatim: "· \(machine)")
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
+                // trunc-ok: the Dynamic Island has a fixed width; the machine name is on the lock screen and in the app
                 .lineLimit(1)
             Spacer(minLength: 8)
             if state.waiting > 1 && LiveStatus(state.status, stale: isStale).showsCount {
                 Text(LiveCopy.waiting(state.waiting))
                     .font(.subheadline)
                     .foregroundStyle(Color.togoSnow)
+                    // trunc-ok: "3 waiting"
                     .lineLimit(1)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
             }
@@ -171,6 +176,7 @@ struct IslandExpandedBottom: View {
                 Text(verbatim: command)
                     .font(.system(.footnote, design: .monospaced))
                     .foregroundStyle(Color.togoSnow)
+                    // trunc-ok: the Live Activity has a fixed height: two lines of the command, middle-cut so its start and end show; tapping opens the request with the whole command
                     .lineLimit(2)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)

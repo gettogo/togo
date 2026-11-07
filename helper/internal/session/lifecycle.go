@@ -126,10 +126,24 @@ func (s *Service) relaunchCommand(ctx context.Context, sess Session) (Launch, er
 	if err != nil {
 		return Launch{}, err
 	}
-	if launch.Program != argv[0] && !(filepath.IsAbs(argv[0]) && sess.Agent != wire.AgentCustom && filepath.Base(argv[0]) == filepath.Base(launch.Program)) {
+	if !storedProgramMatches(sess.Agent, argv[0], launch.Program) {
 		return Launch{}, &InvalidParamsError{Reason: wire.ReasonProgram, Msg: "the stored program does not match the session's agent"}
 	}
 	return launch, nil
+}
+
+// storedProgramMatches reports whether a session's recorded program is the
+// one the agent resolves to now. A known agent may be recorded by bare name
+// ("claude") and resolve to a full path when the login shell's PATH was not
+// available and a common install folder supplied it, or the other way round.
+func storedProgramMatches(agent, stored, resolved string) bool {
+	if stored == resolved {
+		return true
+	}
+	if agent == wire.AgentCustom {
+		return false
+	}
+	return filepath.Base(stored) == filepath.Base(resolved)
 }
 
 // setRunEnv puts a run's extra environment (an endpoint's server password)

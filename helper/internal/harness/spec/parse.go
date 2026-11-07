@@ -63,6 +63,9 @@ func (a *Adapter) Validate() error {
 	if len(a.Match.Agents) == 0 && len(a.Match.Commands) == 0 {
 		bad("match: needs agents or commands")
 	}
+	if im := a.Images; im != nil && im.Insert != "per_path" && im.Insert != "together" {
+		bad("images.insert: %q is not per_path or together", im.Insert)
+	}
 	if ep := a.Endpoint; ep != nil && ep.PasswordEnv != "" {
 		if ep.Kind != EndpointHTTP || !passwordEnvRE.MatchString(ep.PasswordEnv) {
 			bad("endpoint.password_env: %q is not an http endpoint's NAME_PASSWORD", ep.PasswordEnv)
@@ -189,6 +192,33 @@ func checkRoutes(bad func(string, ...any), where string, r *Routes) {
 		}
 		if !k.Cycle && slices.Contains(k.Keys, "BTab") {
 			bad("%s.keys: BTab only cycles, with max and verify", where)
+		}
+		checkUntil(bad, where, k)
+	}
+}
+
+// checkUntil checks an until-idle interrupt: Escape or Ctrl-C pressed at
+// most 4 times, and Then only from StopKeys.
+func checkUntil(bad func(string, ...any), where string, k *Keys) {
+	switch {
+	case k.Until == "" && len(k.Then) > 0:
+		bad("%s.keys: then needs until: idle", where)
+	case k.Until == "":
+	case k.Until != UntilIdle:
+		bad("%s.keys: until must be idle", where)
+	case k.Cycle:
+		bad("%s.keys: until and cycle do not mix", where)
+	case k.Max < 1 || k.Max > 4:
+		bad("%s.keys: until needs max 1-4", where)
+	}
+	for _, key := range k.Keys {
+		if k.Until != "" && key != "Escape" && key != "C-c" {
+			bad("%s.keys: until presses only Escape or C-c", where)
+		}
+	}
+	for _, key := range k.Then {
+		if !StopKeys[key] {
+			bad("%s.keys.then: %q is not allowed", where, key)
 		}
 	}
 }

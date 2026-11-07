@@ -26,6 +26,7 @@ struct SessionRowView: View {
                 Text(activity)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
+                    // trunc-ok: the agent's latest action, updated live; the row opens the session where the full line is
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             }
             PathText(row.cwd)
@@ -47,7 +48,6 @@ struct SessionRowView: View {
             Text(verbatim: displayName)
                 .font(.body)
                 .foregroundStyle(stale ? Color.togoMute : Color.togoSnow)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
         }
     }
 
@@ -81,6 +81,7 @@ struct SessionRowView: View {
             Text(StatusWord.label(row.status, exit: row.exit))
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
+                // trunc-ok: a status word from a fixed short set
                 .lineLimit(1)
         } else {
             StatusWord(status: row.status, exit: row.exit)
@@ -91,6 +92,7 @@ struct SessionRowView: View {
         Text(ControlCenterCopy.muted)
             .font(.subheadline)
             .foregroundStyle(Color.togoMute)
+            // trunc-ok: a fixed one-word label
             .lineLimit(1)
     }
 

@@ -30,7 +30,7 @@ var hookNames = map[string]string{
 	local.EventPrompt: "UserPromptSubmit", local.EventTool: "PreToolUse", local.EventToolDone: "PostToolUse",
 	local.EventPermission: "PermissionRequest", local.EventStop: "Stop", local.EventStart: "SessionStart",
 	local.EventEnd: "SessionEnd", local.EventFailure: "StopFailure", local.EventUsageLimit: "StopFailure",
-	local.EventAttention: "Notification", local.EventNotify: "Notification",
+	local.EventAttention: "Notification", local.EventNotify: "Notification", local.EventIdle: "Notification",
 }
 
 // Synthesize rebuilds a minimal Claude Code payload from a hook forwarded

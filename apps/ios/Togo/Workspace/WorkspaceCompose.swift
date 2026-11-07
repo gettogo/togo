@@ -134,6 +134,9 @@ struct WorkspaceComposeBar: View {
             if let tab = store.composeTab, store.layer(for: tab.id) == .chat,
                let model = store.harnessTabs.composer(for: tab.id) {
                 SmartCommandLine(model: model)
+                    .modifier(ComposerMargins())
+                    // A little air above the keyboard, and above the home indicator.
+                    .padding(.bottom, ComposerMargins.bottom)
                     .id(tab.id)
             } else if let tab = store.composeTab, store.composing == tab.id, terminals.shows(tab.id, in: window),
                let handle = terminals.handle(for: tab.id) {
@@ -206,5 +209,28 @@ struct WorkspaceComposeBar: View {
         )
         models[tab.id] = model
         return model
+    }
+}
+
+/// The same breathing room on both sides of the composer. An edge that meets a safe-area inset
+/// (a vertical bar on an iPhone Duo, a sensor housing in landscape) already has its gap there;
+/// an open edge (the screen edge, the roster column's divider) gets `margin`. Each edge is read
+/// on its own, as the insets are not symmetric.
+struct ComposerMargins: ViewModifier {
+    static let margin: CGFloat = 12
+    /// The gap between the composer and the keyboard or the bottom safe area.
+    static let bottom: CGFloat = 8
+    @State private var insets = EdgeInsets()
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.leading, insets.leading > 0 ? 0 : Self.margin)
+            .padding(.trailing, insets.trailing > 0 ? 0 : Self.margin)
+            .background {
+                Color.clear
+                    .ignoresSafeArea(.container, edges: .horizontal)
+                    .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets = $0 }
+                    .accessibilityHidden(true)
+            }
     }
 }

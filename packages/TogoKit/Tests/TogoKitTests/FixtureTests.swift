@@ -171,6 +171,7 @@ struct FixtureTests {
         case .fsListDir: (ListDirParams.self, ListDirResult.self)
         case .fsRead: (FsReadParams.self, FsReadResult.self)
         case .fsUpload: (UploadParams.self, UploadResult.self)
+        case .fsImage: (FsImageParams.self, FsImageResult.self)
         case .eventsSubscribe: (EventsSubscribeParams.self, EventSnapshot.self)
         case .eventsKeepalive: (EmptyParams.self, EmptyResult.self)
         case .approvalList: (ApprovalListParams.self, ApprovalList.self)

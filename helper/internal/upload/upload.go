@@ -1,6 +1,7 @@
 // Package upload serves fs.upload: files the phone sends for an agent to
 // read, such as screenshots, written under $TOGO_HOME/uploads and removed
-// after a week.
+// after a week. It also serves fs.image, which reads a picture the chat
+// shows back to the phone.
 package upload
 
 import (
@@ -55,7 +56,7 @@ type Service struct {
 
 // Methods returns fs.upload for API.Ext.
 func (s *Service) Methods() map[string]api.Method {
-	return map[string]api.Method{wire.MethodFsUpload: s.upload}
+	return map[string]api.Method{wire.MethodFsUpload: s.upload, wire.MethodFsImage: s.image}
 }
 
 func (s *Service) now() time.Time {

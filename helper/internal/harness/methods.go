@@ -136,8 +136,14 @@ func Methods(e Engine) map[string]api.Method {
 			if err := decodeSession(raw, &p, &p.Session); err != nil {
 				return nil, err
 			}
-			if err := session.ValidateSendText(p.Text); err != nil {
-				return nil, err
+			if err := ValidateImagePaths(p.Images); err != nil {
+				return nil, invalid(err.Error())
+			}
+			// A prompt of pictures alone has no text.
+			if p.Text != "" || len(p.Images) == 0 {
+				if err := session.ValidateSendText(p.Text); err != nil {
+					return nil, err
+				}
 			}
 			if p.Mode == "" {
 				p.Mode = SendQueue

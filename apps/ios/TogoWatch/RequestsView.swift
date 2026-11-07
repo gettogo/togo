@@ -80,16 +80,18 @@ struct RosterLine: View {
             Text(line.bib)
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(.secondary)
+                // trunc-ok: a bib is two or three digits
                 .lineLimit(1)
                 .truncationMode(.middle)
             Text(line.name)
                 .font(.footnote)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
             Spacer(minLength: 4)
             Text(line.status)
                 .font(.footnote)
                 .foregroundStyle(line.needsYou ? Color.togoAccent : Color.secondary)
+                // trunc-ok: a status word from a fixed short set
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)

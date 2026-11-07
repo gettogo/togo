@@ -84,6 +84,7 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         CADisableMinimumFrameDurationOnPhone: true
+        NSCameraUsageDescription: "Take a photo to send to an agent in a session. Location is removed before it leaves the phone."
         NSFaceIDUsageDescription: Unlock Togo and your saved keys and passwords.
         NSLocalNetworkUsageDescription: Find and connect to the machines on your network.
         NSMicrophoneUsageDescription: "Togo uses the microphone only while you dictate into a session, and turns speech into text on this device."

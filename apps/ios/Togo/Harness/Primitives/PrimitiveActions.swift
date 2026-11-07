@@ -173,7 +173,6 @@ private struct FeedbackToast: View {
                 Text(verbatim: detail)
                     .font(.mono(.caption2))
                     .foregroundStyle(Color.togoInk.opacity(0.6))
-                    .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
         }

@@ -32,6 +32,14 @@ type Adapter struct {
 	Modes        *Modes             `yaml:"modes"`
 	Commands     *Commands          `yaml:"commands"`
 	Mission      map[string]Mission `yaml:"mission"`
+	// Images says how the harness takes pictures in a prompt.
+	Images *Images `yaml:"images"`
+}
+
+// Images is how a harness takes image paths typed into its input: insert
+// per_path pastes each path on its own, together pastes them at once.
+type Images struct {
+	Insert string `yaml:"insert"`
 }
 
 // Match picks the sessions an adapter serves.
@@ -279,12 +287,23 @@ type Type struct {
 // mode only when Keys.Cycle verifies each press.
 var AllowedKeys = map[string]bool{"Escape": true, "Enter": true, "C-c": true, "BTab": true}
 
+// StopKeys may be sent only as an until-idle interrupt's Then: chords that
+// stop work Escape does not reach, such as Claude Code's background agents.
+var StopKeys = map[string]bool{"C-x": true, "C-k": true}
+
+// UntilIdle is the Until that presses an interrupt until the session is idle.
+const UntilIdle = "idle"
+
 // Keys sends named keys. Cycle repeats Keys until the verify source shows
-// the wanted value, at most Max presses.
+// the wanted value, at most Max presses. Until "idle" repeats Keys, at most
+// Max presses, until no turn runs and no approval waits; Then is sent once,
+// after the first press.
 type Keys struct {
 	Keys  []string `yaml:"keys"`
 	Cycle bool     `yaml:"cycle"`
 	Max   int      `yaml:"max"`
+	Until string   `yaml:"until"`
+	Then  []string `yaml:"then"`
 }
 
 // Relaunch restarts the harness in place with a new argv (templates).

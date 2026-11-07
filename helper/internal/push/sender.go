@@ -101,6 +101,7 @@ type Sender struct {
 	lastPush    map[string]time.Time // session id -> last rate-limited push
 	pausedUntil map[string]time.Time // device token -> relay 429 deadline
 	exits       map[string]string    // session id -> the exit last announced
+	requests    requestSeen          // needs_you pushed or closed, per request id
 
 	liveMu  sync.Mutex
 	liveDev map[string]*deviceLive // device id -> its activity
@@ -222,6 +223,9 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 	switch pl := deref(ev.Payload).(type) {
 	case wire.ApprovalOpenEvent:
 		a := pl.Approval
+		if s.requests.blocks(a.RequestID) {
+			return Message{}, false
+		}
 		p.Kind = wire.PushNeedsYou
 		if a.Bib != nil {
 			p.Bib = a.Bib
@@ -242,6 +246,7 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 		p.AllowText = a.AllowText
 		m.CollapseID = a.RequestID
 	case wire.ApprovalClosedEvent:
+		s.requests.mark(pl.RequestID, seenClosed)
 		p.Kind = wire.PushClear
 		p.RequestID = pl.RequestID
 		m.Kind = relayBackground
@@ -295,6 +300,9 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 	}
 	if p.Kind != wire.PushNeedsYou && p.Kind != wire.PushClear && !s.admit(sid, now) {
 		return Message{}, false
+	}
+	if p.Kind == wire.PushNeedsYou {
+		s.requests.mark(p.RequestID, seenPushed)
 	}
 	p.Title = truncate(p.Title, wire.MaxTitle)
 	p.Body = truncate(p.Body, wire.MaxBody)

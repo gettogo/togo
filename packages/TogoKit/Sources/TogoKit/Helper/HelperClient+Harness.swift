@@ -53,10 +53,18 @@ extension HelperClient {
 
     /// Sends a prompt. With `.queue` (the default) it waits for the turn to end; `.now` throws
     /// conflict reason busy while the agent works.
-    public func harnessSend(id: String, text: String, mode: HarnessSendParams.Mode = .queue) async throws -> HarnessItem {
+    public func harnessSend(
+        id: String, text: String, mode: HarnessSendParams.Mode = .queue, images: [String] = []
+    ) async throws -> HarnessItem {
         let result: HarnessSendResult = try await readyCall(
-            .harnessSend, HarnessSendParams(id: id, text: text, mode: mode), needs: Capability.harness)
+            .harnessSend, HarnessSendParams(id: id, text: text, mode: mode, images: images), needs: Capability.harness)
         return result.item
+    }
+
+    /// Reads a picture the chat shows, from the session's uploads or its folder. Larger
+    /// pictures arrive shrunk to fit.
+    public func image(_ params: FsImageParams) async throws -> FsImageResult {
+        try await readyCall(.fsImage, params, needs: Capability.image)
     }
 
     public func harnessInterrupt(id: String) async throws -> HarnessActionResult {

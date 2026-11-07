@@ -36,19 +36,19 @@ func init() {
 // AdapterFile returns the embedded adapter file.
 func AdapterFile() []byte { return adapterFile }
 
-// transcriptFor finds the newest chat log of the session folder written
-// since the session started, for when no hook named it.
+// transcriptFor finds the chat log of the session folder written since the
+// session started, for when no hook named it. Other Qwen Code sessions in
+// the folder write there too, so it guesses only when one log is that
+// recent.
 func transcriptFor(env harness.Env) string {
 	key := env.Vars["cwd_key"]
-	if key == "" {
+	created, _ := time.Parse(time.RFC3339, env.Vars["created"])
+	if key == "" || created.IsZero() {
 		return ""
 	}
 	dir := filepath.Join(source.Expand("~", env.Vars[source.VarHome]), ".qwen", "projects", key, "chats")
-	p, mtime, err := source.Newest(filepath.Join(dir, "*.jsonl"), env)
+	p, err := source.Sole(filepath.Join(dir, "*.jsonl"), created.Add(-time.Minute), env)
 	if err != nil {
-		return ""
-	}
-	if created, _ := time.Parse(time.RFC3339, env.Vars["created"]); !created.IsZero() && mtime.Before(created.Add(-time.Minute)) {
 		return ""
 	}
 	return p

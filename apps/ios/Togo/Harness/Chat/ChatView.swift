@@ -20,10 +20,24 @@ struct ChatView: View {
                 if showsEarlier {
                     earlier
                 }
+                let gaps = ChatGaps.gaps(rows)
                 ForEach(rows) { row in
-                    rowView(row)
+                    gapped(row, gap: gaps[row.id])
                         .id(row.id)
                         .accessibilityRotorEntry(id: row.id, in: rotorSpace)
+                }
+                // While the agent works and its turn has no work line yet, the live line stands
+                // alone below the newest words. Stop lives in the composer.
+                if let live, liveSpot == .foot {
+                    WorkLine(
+                        summary: WorkingLogic.footSummary(live), steps: [], expanded: false,
+                        onToggle: {}, onStep: { _ in },
+                        spoken: WorkingCopy.spoken(live, now: .now), step: live.step,
+                        waiting: live.waiting
+                    )
+                    .id("chat.working")
+                    .accessibilityIdentifier("chat.working")
+                    .transition(.opacity)
                 }
                 // Prompts the phone still holds, after the conversation: the one place they show.
                 ForEach(store.queue.prompts) { prompt in
@@ -34,6 +48,7 @@ struct ChatView: View {
                     )
                 }
             }
+            .motion(.fade, value: liveSpot)
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
             .frame(maxWidth: 720)
@@ -43,16 +58,21 @@ struct ChatView: View {
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollDismissesKeyboard(.interactively)
         .overlay { placeholder }
-        .safeAreaInset(edge: .top, spacing: 0) {
+        // A bar, not a plain inset: the chat starts below the pill, and anything scrolled up
+        // under it fades behind the system's scroll edge effect instead of sitting cut in half.
+        .safeAreaBar(edge: .top, spacing: 0) {
             if store.hasMission {
                 MissionPill(summary: store.mission.summary) { store.showsMission = true }
             }
         }
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .background(Color.togoInk)
+        .environment(\.chatImageFetch, imageFetch)
         .accessibilityRotor(ChatCopy.rotorPrompts) { rotor(where: \.isPrompt) }
         .accessibilityRotor(ChatCopy.rotorNeeds) { rotor(where: \.isNeeds) }
         .accessibilityRotor(ChatCopy.rotorReplies) { rotor(where: \.isReply) }
         .onChange(of: rows, initial: true) { _, rows in announcer.update(rows) }
+        .modifier(WorkingAnnouncements(active: store.liveWork != nil))
         .sheet(item: $detail) { step in
             StepDetail(step: step, canShowInTerminal: canShow(step)) {
                 Task { await store.showInTerminal(step) }
@@ -60,26 +80,73 @@ struct ChatView: View {
         }
     }
 
+    /// Pictures by path come through the helper where it serves `fs.image`.
+    private var imageFetch: ChatImageFetch? {
+        guard store.subject.capabilities.contains(Capability.image) else { return nil }
+        let store = self.store
+        return ChatImageFetch { path in try await store.services.image(store.subject, path: path) }
+    }
+
+    /// The tools' pictures in a work row, each once.
+    static func pictures(_ steps: [HarnessItem]) -> [HarnessImage] {
+        var seen: Set<String> = []
+        var out: [HarnessImage] = []
+        for step in steps {
+            guard case .tool(let tool) = step.body else { continue }
+            for image in tool.images ?? [] {
+                let key = ChatImageLoader.key(image) ?? UUID().uuidString
+                if seen.insert(key).inserted { out.append(image) }
+            }
+        }
+        return Array(out.prefix(6))
+    }
+
+    private var live: WorkingState? { store.liveWork }
+
+    /// Where the one live indicator sits: on the running turn's work line, or at the foot.
+    private var liveSpot: LivePlacement? { WorkingLogic.placement(rows: rows, live: live) }
+
     /// The main conversation, with the subagents' waiting approvals and questions folded in
     /// where they arrived. A subagent's own conversation is `SubagentChatView`.
     private var rows: [ChatRow] { store.rows }
 
     // MARK: Rows
 
-    @ViewBuilder private func rowView(_ row: ChatRow) -> some View {
+    /// A row after a pause of over a minute gets its time above it; the marker of a turn the
+    /// agent started on its own says how long after instead.
+    @ViewBuilder private func gapped(_ row: ChatRow, gap: TimeInterval?) -> some View {
+        if gap != nil, !row.isContinued, let start = ChatGaps.start(of: row) {
+            VStack(alignment: .leading, spacing: 12) {
+                ChatTimestamp(date: start)
+                rowView(row, gap: gap)
+            }
+        } else {
+            rowView(row, gap: gap)
+        }
+    }
+
+    @ViewBuilder private func rowView(_ row: ChatRow, gap: TimeInterval?) -> some View {
         switch row {
         case .prompt(let item):
             if case .user(let user) = item.body {
-                VStack(alignment: .trailing, spacing: 2) {
-                    PromptBubble(text: user.text, note: promptNote(user), dimmed: user.queued)
-                    // Queued prompts show only here, so their Take back is on the row itself.
-                    if user.queued {
-                        Button(ComposerCopy.cancelQueued) { Task { await store.cancelQueued(item: item) } }
-                            .buttonStyle(PlainAnswerStyle())
-                            .font(.footnote)
+                VStack(alignment: .trailing, spacing: 6) {
+                    // The pictures stay their own elements, so each opens full screen.
+                    if !user.images.isEmpty {
+                        ChatImageGrid(images: user.images, alignment: .trailing)
+                            .padding(.leading, 48)
+                            .opacity(user.queued ? 0.6 : 1)
                     }
+                    VStack(alignment: .trailing, spacing: 2) {
+                        PromptBubble(text: user.text, note: promptNote(user), dimmed: user.queued)
+                        // Queued prompts show only here, so their Take back is on the row itself.
+                        if user.queued {
+                            Button(ComposerCopy.cancelQueued) { Task { await store.cancelQueued(item: item) } }
+                                .buttonStyle(PlainAnswerStyle())
+                                .font(.footnote)
+                        }
+                    }
+                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self))
                 }
-                .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self))
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
@@ -87,23 +154,39 @@ struct ChatView: View {
                     .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(text.text), host: self))
             }
         case .work(let id, let summary, let steps):
+            let liveStep = liveSpot == .row(id) ? live?.step : nil
+            let liveWaiting = liveSpot == .row(id) && live?.waiting == true
+            VStack(alignment: .leading, spacing: 6) {
             WorkLine(
                 summary: summary, steps: steps, expanded: expanded.contains(id),
                 onToggle: { toggle(id) }, onStep: open,
-                spoken: ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)),
+                spoken: liveWaiting ? WorkingCopy.waiting
+                    : [ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)), liveStep]
+                        .compactMap(\.self).joined(separator: ", "),
                 showInTerminal: steps.first.flatMap { first in
                     canShow(first) ? { Task { await store.showInTerminal(first) } } : nil
-                }
+                },
+                step: liveStep,
+                waiting: liveWaiting
             )
             .contextMenu {
                 if let first = steps.first, canShow(first) {
                     Button(ChatCopy.showInTerminal, systemImage: "terminal") { Task { await store.showInTerminal(first) } }
                 }
             }
+                // Pictures the turn's tools read or made show without opening the steps.
+                let pictures = Self.pictures(steps)
+                if !pictures.isEmpty {
+                    ChatImageGrid(images: pictures)
+                        .padding(.leading, 22)
+                }
+            }
         case .needs(let item):
             needsView(item)
         case .notice(let item):
-            if case .notice(let notice) = item.body {
+            if case .notice(let notice) = item.body, row.isContinued {
+                TurnMarkerRow(notice: notice, gap: gap)
+            } else if case .notice(let notice) = item.body {
                 ChatNoticeRow(notice: notice)
                     .modifier(RowActions(item: item, spoken: notice.text, host: self))
             }
@@ -173,7 +256,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder private var placeholder: some View {
-        if rows.isEmpty, store.queue.isEmpty {
+        if rows.isEmpty, store.queue.isEmpty, store.liveWork == nil {
             switch store.phase {
             case .describing, .opening:
                 ProgressView(ChatCopy.reading)
@@ -242,7 +325,7 @@ private struct RowActions: ViewModifier {
         for row in rows {
             switch row {
             case .needs(let item) where !seen.contains(item.id):
-                announce(ChatCopy.spokenNeeds(item.chatText ?? ""), high: true)
+                NeedsAnnouncement.post(ChatCopy.spokenNeeds(item.chatText ?? ""))
             case .reply(let item):
                 if case .assistant(let text) = item.body, !text.partial, !finished.contains(item.id) {
                     announce(ChatCopy.spokenReply(text.text), high: false)

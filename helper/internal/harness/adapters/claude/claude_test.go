@@ -134,6 +134,9 @@ func TestTranscriptCases(t *testing.T) {
 	if bg.Kind != harness.KindBackground || bg.Background.State != harness.StateFailed || bg.Background.Command != "npm run dev" {
 		t.Fatalf("background = %+v", bg.Background)
 	}
+	if bg.Background.Title != "Start the dev server" {
+		t.Fatalf("background title = %q, want the call's description", bg.Background.Title)
+	}
 	if turn := r.final["u2.turn"]; turn.Turn.State != harness.StateInterrupted || turn.Turn.Steps != 2 {
 		t.Fatalf("interrupted turn = %+v", turn.Turn)
 	}

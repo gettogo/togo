@@ -3,6 +3,7 @@ import SwiftUI
 /// A path on a machine, in monospace, shortened in the middle so both the root and the
 /// folder name stay readable.
 struct PathText: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let path: String
     var style: Font.TextStyle = .footnote
 
@@ -15,8 +16,12 @@ struct PathText: View {
         Text(verbatim: Self.abbreviate(path))
             .font(.system(style, design: .monospaced))
             .foregroundStyle(Color.togoMute)
-            .lineLimit(1)
+            // trunc-ok: cut in the middle so the root and the folder both show, with room for
+            // three lines at accessibility sizes; the full path is in .help and the label.
+            .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
             .truncationMode(.middle)
+            .help(path)
+            .accessibilityLabel(Self.abbreviate(path))
     }
 
     /// Replaces the home folder of the machine the path came from with `~`. The phone does not

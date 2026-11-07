@@ -69,15 +69,18 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         public var source: String
         /// True once the user took the queued prompt back before it was typed: not shown.
         public var withdrawn: Bool
+        /// Pictures the prompt carried.
+        public var images: [HarnessImage]
 
-        public init(text: String, queued: Bool, source: String, withdrawn: Bool = false) {
+        public init(text: String, queued: Bool, source: String, withdrawn: Bool = false, images: [HarnessImage] = []) {
             self.text = text
             self.queued = queued
             self.source = source
             self.withdrawn = withdrawn
+            self.images = images
         }
 
-        private enum CodingKeys: String, CodingKey { case text, queued, source, withdrawn }
+        private enum CodingKeys: String, CodingKey { case text, queued, source, withdrawn, images }
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -85,6 +88,7 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
             queued = try c.decode(Bool.self, forKey: .queued)
             source = try c.decode(String.self, forKey: .source)
             withdrawn = try c.decodeIfPresent(Bool.self, forKey: .withdrawn) ?? false
+            images = try c.decodeIfPresent([HarnessImage].self, forKey: .images) ?? []
         }
 
         public func encode(to encoder: any Encoder) throws {
@@ -93,6 +97,7 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
             try c.encode(queued, forKey: .queued)
             try c.encode(source, forKey: .source)
             if withdrawn { try c.encode(true, forKey: .withdrawn) }
+            if !images.isEmpty { try c.encode(images, forKey: .images) }
         }
     }
 
@@ -134,10 +139,13 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         public var output: String?
         public var exitCode: Int?
         public var files: [HarnessFileChange]?
+        /// Pictures the tool read or produced.
+        public var images: [HarnessImage]?
 
         public init(callId: String, name: String, title: String, category: ToolCategory, subject: Subject? = nil,
                     state: HarnessState, startedAt: WireDate, endedAt: WireDate? = nil, output: String? = nil,
-                    exitCode: Int? = nil, files: [HarnessFileChange]? = nil) {
+                    exitCode: Int? = nil, files: [HarnessFileChange]? = nil, images: [HarnessImage]? = nil) {
+            self.images = images
             self.callId = callId
             self.name = name
             self.title = title
@@ -152,7 +160,7 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case callId, name, title, category, subject, state, startedAt, endedAt, output, exitCode, files
+            case callId, name, title, category, subject, state, startedAt, endedAt, output, exitCode, files, images
         }
 
         public func encode(to encoder: any Encoder) throws {
@@ -168,6 +176,7 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
             try c.encodeIfPresent(output, forKey: .output)
             try c.encodeIfPresent(exitCode, forKey: .exitCode)
             try c.encodeIfPresent(files, forKey: .files)
+            try c.encodeIfPresent(images, forKey: .images)
         }
     }
 
@@ -308,8 +317,12 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// A quiet system line. `level` is info, warning or error; `code` is compacted, model, mode,
-    /// rate_limit, error, resumed, interrupted or fallback.
+    /// rate_limit, error, resumed, interrupted, fallback or continued.
     public struct Notice: Codable, Hashable, Sendable {
+        /// Opens a turn the agent started on its own, such as after a background task or
+        /// subagent finished; the text names the trigger.
+        public static let continued = "continued"
+
         public var level: String
         public var code: String
         public var text: String
@@ -412,5 +425,42 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         case .shell(let v): try c.encode(v, forKey: .shell)
         case .unknown: break
         }
+    }
+}
+
+/// A picture in the conversation: inline when small, else by path (fetched with `fs.image`),
+/// or only described when the source kept neither.
+public struct HarnessImage: Codable, Hashable, Sendable {
+    /// Absolute path on the machine.
+    public var path: String?
+    public var mediaType: String?
+    /// The decoded size, when known.
+    public var bytes: Int?
+    /// The picture itself, at most 48 KiB.
+    public var data: Data?
+
+    public init(path: String? = nil, mediaType: String? = nil, bytes: Int? = nil, data: Data? = nil) {
+        self.path = path
+        self.mediaType = mediaType
+        self.bytes = bytes
+        self.data = data
+    }
+
+    private enum CodingKeys: String, CodingKey { case path, mediaType, bytes, data }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        path = try c.decodeIfPresent(String.self, forKey: .path)
+        mediaType = try c.decodeIfPresent(String.self, forKey: .mediaType)
+        bytes = try c.decodeIfPresent(Int.self, forKey: .bytes)
+        data = try c.decodeIfPresent(String.self, forKey: .data).flatMap(Base64URL.decode)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(path, forKey: .path)
+        try c.encodeIfPresent(mediaType, forKey: .mediaType)
+        try c.encodeIfPresent(bytes, forKey: .bytes)
+        try c.encodeIfPresent(data.map(Base64URL.encode), forKey: .data)
     }
 }

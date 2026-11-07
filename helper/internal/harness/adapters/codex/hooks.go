@@ -41,8 +41,15 @@ func (h *Hooks) Name() string { return MapperHooks }
 func (h *Hooks) State() map[string]string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	live := isLive(h.env.SessionID)
 	out := make(map[string]string, len(h.state))
 	for k, v := range h.state {
+		// While the app-server feed is live it owns the turn: its
+		// turn/completed ends an interrupted turn, after which no Stop
+		// hook comes, and turn/interrupt needs its turn id.
+		if live && (k == "working" || k == "idle" || k == "turn") {
+			continue
+		}
 		out[k] = v
 	}
 	return out

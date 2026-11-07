@@ -39,10 +39,13 @@ struct RosterView: View {
         content
             .background(Color.togoInk)
             .toolbar { toolbar }
-            // Pulled down, or ⌘K: a search over session names, agents, machines and folders.
+            // Pulled down, or ⌘K: a search over session names, agents, machines and folders. As
+            // a sidebar column the field sits in the column's bar row, the menu trailing it, so
+            // the menu never floats alone above the field; on a phone it pulls down as before.
             .searchable(
                 text: $store.query, isPresented: $searching,
-                placement: .navigationBarDrawer(displayMode: .automatic), prompt: RosterCopy.searchPrompt
+                placement: wide ? .toolbarPrincipal : .navigationBarDrawer(displayMode: .automatic),
+                prompt: RosterCopy.searchPrompt
             )
             .onChange(of: store.sidebar.searchRequests) { searching = true }
             .navigationBarTitleDisplayMode(.inline)
@@ -268,6 +271,7 @@ struct RosterHeadline: View {
                         .font(.headline)
                         .monospacedDigit()
                         .foregroundStyle(Color.togoSnow)
+                        // trunc-ok: the headline is a count and two words
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -277,8 +281,7 @@ struct RosterHeadline: View {
                     .font(.system(.footnote, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(Color.togoMute)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .background(alignment: .leading) {

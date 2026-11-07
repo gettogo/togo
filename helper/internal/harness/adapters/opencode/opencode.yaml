@@ -11,6 +11,7 @@ endpoint: { kind: http, launch_args: [--port, '{{.port}}'], health: /path, passw
 capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
   files, mode, model, needs.approvals, needs.questions, agents, plan, changes, ports, status,
   status.context, resume, compact, mcp, settings]
+images: { insert: together }   # how image paths are pasted into the input
 feeds:
   events:
     sse: { path: /event }

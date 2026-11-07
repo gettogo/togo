@@ -18,6 +18,7 @@ import TogoKit
         private(set) var completes: [(HarnessCompleteParams.Kind, String)] = []
         private(set) var sends: [(String, HarnessSendParams.Mode)] = []
         private(set) var runs: [(String, String?, [String: JSONValue]?)] = []
+        var interruptResult = HarnessActionResult(result: .applied)
         private(set) var interrupts = 0
 
         func routes() -> CommandLineModel.Routes {
@@ -39,7 +40,10 @@ import TogoKit
                     return HarnessItem(id: "q\(self.sends.count)", seq: 1, at: HarnessSamples.at,
                                        body: .user(.init(text: text, queued: mode == .queue, source: "phone")))
                 },
-                interrupt: { self.interrupts += 1 },
+                interrupt: {
+                    self.interrupts += 1
+                    return self.interruptResult
+                },
                 run: { action, target, args in
                     self.runs.append((action, target, args))
                     return self.runResult
@@ -311,6 +315,33 @@ import TogoKit
         #expect(model.canInterrupt)
         await model.interrupt()
         #expect(session.interrupts == 1)
+        #expect(model.notice == nil)
+    }
+
+    /// A stop the helper could not finish says why, so Stop never looks dead.
+    @Test func interruptThatDidNotStopSaysSo() async {
+        let session = Session()
+        session.working = true
+        session.interruptResult = HarnessActionResult(result: .failed, message: "Still working after 2 presses; stopped")
+        let model = make(session)
+        await model.interrupt()
+        #expect(model.notice == "Still working after 2 presses; stopped")
+        session.interruptResult = HarnessActionResult(result: .fallback)
+        await model.interrupt()
+        #expect(model.notice == ComposerCopy.notInterrupted)
+    }
+
+    /// The Stop chip's action reaches the helper: the composer's store routes call the session
+    /// store, which calls harness.interrupt for this session.
+    @Test func stopReachesHarnessInterrupt() async {
+        let services = PreviewHarnessServices()
+        let store = HarnessSessionStore.preview(services)
+        let defaults = UserDefaults(suiteName: "composer-tests-\(UUID().uuidString)")!
+        let model = CommandLineModel(store: store, memory: CommandMemory(defaults: defaults), routes: .store(store))
+        model.routes.has = { _ in true }
+        await model.interrupt()
+        #expect(services.interrupts == 1)
+        #expect(model.notice == nil)
     }
 
     @Test func cancellingAQueuedPromptStopsIt() async throws {

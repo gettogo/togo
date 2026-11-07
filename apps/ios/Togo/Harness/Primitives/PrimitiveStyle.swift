@@ -80,7 +80,7 @@ struct PrimitiveChip: View {
             }
             Text(verbatim: text)
                 .font(mono ? .system(.caption2, design: .monospaced) : .caption)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(foreground)
         .padding(.horizontal, 8)
@@ -140,7 +140,7 @@ struct PrimitiveCapsuleStyle: ButtonStyle {
         configuration.label
             .font((large ? Font.body : .subheadline).weight(.semibold))
             .foregroundStyle(foreground)
-            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
             .multilineTextAlignment(.center)
             .padding(.horizontal, large ? 20 : 16)
             .frame(minWidth: 44, maxWidth: large ? .infinity : nil, minHeight: large ? 50 : 44)

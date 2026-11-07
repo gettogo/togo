@@ -33,8 +33,7 @@ struct StatusPrimitive: View {
                             Text(verbatim: cell.value)
                                 .font(.mono(.subheadline, weight: .medium))
                                 .foregroundStyle(Color.togoSnow)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)

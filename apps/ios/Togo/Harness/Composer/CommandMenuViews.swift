@@ -82,7 +82,6 @@ struct CommandRow: View {
                         Text(verbatim: detail)
                             .font(file ? .mono(.caption) : .footnote)
                             .foregroundStyle(Color.togoMute)
-                            .lineLimit(2)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

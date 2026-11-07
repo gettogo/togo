@@ -100,8 +100,6 @@ private struct AgentPresetRow: View {
             Text(verbatim: AgentPresetText.commandLine(preset))
                 .font(.system(.subheadline, design: .monospaced))
                 .foregroundStyle(Color.togoMute)
-                .lineLimit(2)
-                .truncationMode(.middle)
         }
         .padding(.vertical, 4)
         .frame(minHeight: 44, alignment: .leading)

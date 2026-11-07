@@ -5,6 +5,7 @@ enum ComposerCopy {
     static let send = String(localized: "composer.send", defaultValue: "Send")
     static let queue = String(localized: "composer.queue", defaultValue: "Queue")
     static let interrupt = String(localized: "composer.interrupt", defaultValue: "Interrupt")
+    static let stop = String(localized: "composer.stop", defaultValue: "Stop")
     static let commands = String(localized: "composer.commands", defaultValue: "Commands")
     static let mention = String(localized: "composer.mention", defaultValue: "Mention a file")
     static let mode = String(localized: "composer.mode", defaultValue: "Mode")
@@ -54,5 +55,31 @@ enum ComposerCopy {
     /// "Mode: Ask", for VoiceOver.
     static func modeValue(_ label: String) -> String {
         String(localized: "composer.modeValue", defaultValue: "Mode: \(label)")
+    }
+
+    // MARK: Pictures
+
+    static let attach = String(localized: "composer.attach", defaultValue: "Add Image")
+    static let photos = String(localized: "composer.attach.photos", defaultValue: "Photo Library")
+    static let camera = String(localized: "composer.attach.camera", defaultValue: "Take Photo")
+    static let pasteImage = String(localized: "composer.attach.paste", defaultValue: "Paste Image")
+    static let removeImage = String(localized: "composer.attach.remove", defaultValue: "Remove")
+    static let previewImage = String(localized: "composer.attach.preview", defaultValue: "Preview")
+    static let retryImage = String(localized: "composer.attach.retry", defaultValue: "Try Again")
+    static let uploading = String(localized: "composer.attach.uploading", defaultValue: "Uploading")
+    static let uploadFailed = String(localized: "composer.attach.failed", defaultValue: "Not uploaded")
+    static let attachUnreadable = String(localized: "composer.attach.unreadable", defaultValue: "That image could not be read.")
+    static let attachUnavailable = String(localized: "composer.attach.unavailable",
+                                          defaultValue: "This Mac's Togo cannot take images yet. Update Togo on the Mac.")
+
+    /// "Up to 10 images per message."
+    static func attachLimit(_ n: Int) -> String {
+        String(localized: "composer.attach.limit", defaultValue: "Up to \(n) images per message.")
+    }
+
+    /// "Image 2 of 3, uploading", for VoiceOver.
+    static func attachment(_ index: Int, of count: Int, state: String?) -> String {
+        let base = String(localized: "composer.attach.item", defaultValue: "Image \(index) of \(count)")
+        return state.map { "\(base), \($0)" } ?? base
     }
 }

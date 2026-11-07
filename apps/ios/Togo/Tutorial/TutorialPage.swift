@@ -264,6 +264,7 @@ struct ConnectionDiagram: View {
             Text(String(localized: "tutorial.welcome.diagram.link", defaultValue: "SSH or Mosh"))
                 .font(.caption)
                 .foregroundStyle(Color.togoMute)
+                // trunc-ok: the fixed words "SSH or Mosh" under the link, sized to fit
                 .lineLimit(1)
                 .fixedSize()
         }
@@ -276,7 +277,7 @@ struct ConnectionDiagram: View {
             Text(String(localized: "tutorial.welcome.diagram.machine", defaultValue: "Mac or Linux"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: "tmux")
                     .font(.caption2.monospaced())
@@ -285,6 +286,7 @@ struct ConnectionDiagram: View {
                     Text(verbatim: agent)
                         .font(.caption2.monospaced())
                         .foregroundStyle(Color.togoSnow)
+                        // trunc-ok: fixed words (claude, codex, shell) in the diagram
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 6)

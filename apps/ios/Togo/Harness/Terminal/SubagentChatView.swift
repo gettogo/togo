@@ -24,8 +24,9 @@ struct SubagentChatView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 header(thread)
+                let waiting = WorkingLogic.hasOpenNeeds(rows: thread.rows)
                 ForEach(thread.rows) { row in
-                    rowView(row)
+                    rowView(row, waiting: waiting)
                         .id(row.id)
                 }
             }
@@ -94,7 +95,7 @@ struct SubagentChatView: View {
 
     // MARK: Rows
 
-    @ViewBuilder private func rowView(_ row: ChatRow) -> some View {
+    @ViewBuilder private func rowView(_ row: ChatRow, waiting: Bool) -> some View {
         switch row {
         case .prompt(let item):
             if case .user(let user) = item.body {
@@ -114,7 +115,8 @@ struct SubagentChatView: View {
             WorkLine(
                 summary: summary, steps: steps, expanded: expanded.contains(id),
                 onToggle: { toggle(id) }, onStep: open,
-                spoken: ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id))
+                spoken: ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)),
+                waiting: waiting
             )
         case .needs(let item):
             needsView(item)

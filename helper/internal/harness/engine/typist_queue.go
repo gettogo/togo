@@ -77,7 +77,7 @@ func (e *Engine) typeNext(s *sess) bool {
 	s.markSentLocked(next.item.ID)
 	s.mu.Unlock()
 	u := next.item.User
-	if err := e.cfg.Typist.Type(s.ctx, s.id, u.Text, true, false); err != nil {
+	if err := e.typePrompt(s.ctx, s, u.Text, harness.ImagePaths(u.Images)); err != nil {
 		e.cfg.Logf("harness: typing a queued prompt failed: %v", err)
 		s.mu.Lock()
 		delete(s.sent, next.item.ID)
@@ -91,7 +91,7 @@ func (e *Engine) typeNext(s *sess) bool {
 	body := *u
 	body.Queued = false
 	it.User = &body
-	s.notePhoneLocked(it.ID, u.Text)
+	s.notePhoneLocked(it.ID, u.Text, u.Images)
 	s.publishLocked([]harness.Item{it}, nil)
 	return true
 }

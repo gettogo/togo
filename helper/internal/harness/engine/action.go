@@ -199,7 +199,7 @@ func (e *Engine) runType(ctx context.Context, s *sess, act spec.Action, t *spec.
 		return harness.ActionResult{Result: harness.ResultFallback}, nil
 	}
 	s.mu.Lock()
-	s.notePhoneLocked(e.newID(), text)
+	s.notePhoneLocked(e.newID(), text, nil)
 	s.mu.Unlock()
 	if err := e.typeCommand(ctx, s, text, t.Submit, t.WhenIdle); err != nil {
 		if errors.Is(err, harness.ErrBusy) || ctx.Err() != nil {
@@ -221,6 +221,9 @@ func (e *Engine) runKeys(ctx context.Context, s *sess, act spec.Action, k *spec.
 	}
 	if e.cfg.Typist == nil {
 		return harness.ActionResult{Result: harness.ResultFallback}, nil
+	}
+	if k.Until == spec.UntilIdle {
+		return e.stopUntilIdle(ctx, s, k)
 	}
 	if k.Cycle {
 		return e.cycle(ctx, s, act, k, data)

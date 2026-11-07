@@ -183,13 +183,19 @@ struct RosterSection: View {
         .id(SessionRotors.Target.row(id))
         .swipeActions(edge: .trailing) {
             if actions.allows(.kill) {
-                Button(SessionAction.kill.title(for: row), systemImage: SessionAction.kill.systemImage(for: row),
-                       role: .destructive) { perform(.kill(row)) }
+                // No destructive role: on a swipe action that role makes the list drop the
+                // row at once, as a delete, while this one only asks first. The row stays
+                // until the session ends, and the list must not have let it go already.
+                Button(SessionAction.kill.title(for: row), systemImage: SessionAction.kill.systemImage(for: row)) {
+                    perform(.kill(row))
+                }
+                .tint(SwipeTint.destructive)
             }
             if actions.allows(.mute) {
                 Button(SessionAction.mute.title(for: row), systemImage: SessionAction.mute.systemImage(for: row)) {
                     perform(.toggleMute(row))
                 }
+                .tint(SwipeTint.neutral)
             }
         }
         .swipeActions(edge: .leading) {
@@ -197,11 +203,13 @@ struct RosterSection: View {
                 Button(SessionAction.runAgain.title(for: row), systemImage: SessionAction.runAgain.systemImage(for: row)) {
                     perform(.runAgain(row))
                 }
+                .tint(SwipeTint.neutral)
             }
             if actions.allows(.rename) {
                 Button(SessionAction.rename.title(for: row), systemImage: SessionAction.rename.systemImage(for: row)) {
                     perform(.rename(row))
                 }
+                .tint(SwipeTint.neutral)
             }
         }
         .contextMenu {
@@ -253,7 +261,7 @@ struct RosterMachineHeading: View {
                     Text(caption)
                         .font(.footnote)
                         .foregroundStyle(Color.togoMute)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 if let onWake, !typeSize.isAccessibilitySize {
@@ -376,4 +384,11 @@ struct ZoomSource: ViewModifier {
             content
         }
     }
+}
+
+/// Swipe action fills, set on each button so the window's snow tint never paints them white
+/// under white labels: system red for a removal, the system's neutral grey for the rest.
+private enum SwipeTint {
+    static let destructive = Color(uiColor: .systemRed)
+    static let neutral = Color(uiColor: .systemGray)
 }

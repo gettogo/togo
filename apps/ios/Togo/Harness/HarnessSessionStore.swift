@@ -64,8 +64,17 @@ struct TerminalJump: Hashable, Sendable {
     var showsMission = false
     /// Why the native layers are not showing, when they fell back to the terminal.
     private(set) var fallback: String?
+    /// When this phone last sent a prompt the helper has not reported work for yet.
+    private(set) var awaitingSince: Date?
+    /// When the phone first saw the current stretch of work, for adapters without turn items.
+    private(set) var localWorkSince: Date?
+    /// The last mode the session reported, kept while later updates leave it out.
+    private(set) var rememberedMode: String?
 
     @ObservationIgnored private var layerChosen = false
+    /// The helper said "working" since the last send.
+    @ObservationIgnored private var sawWorking = false
+    @ObservationIgnored private var graceTask: Task<Void, Never>?
     @ObservationIgnored private var runTask: Task<Void, Never>?
     /// Delivers held prompts after a change; cancelled with the feed.
     @ObservationIgnored private var pumpTask: Task<Void, Never>?
@@ -94,6 +103,45 @@ struct TerminalJump: Hashable, Sendable {
 
     /// A turn is running, so a prompt waits and Interrupt shows.
     var working: Bool { feed.mission.summary.working }
+
+    /// The live working row's state: shown from a send until the turn ends, nil while idle.
+    var liveWork: WorkingState? {
+        WorkingLogic.state(
+            items: feed.timeline.conversation(), working: working, awaitingSince: awaitingSince,
+            localSince: localWorkSince, now: .now, needsYou: feed.mission.summary.needsYou
+        )
+    }
+
+    /// A prompt just went: the working row shows at once, before the helper reports the turn.
+    func markSent(at now: Date = .now) {
+        awaitingSince = now
+        sawWorking = working
+        if localWorkSince == nil { localWorkSince = now }
+        graceTask?.cancel()
+        graceTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(WorkingLogic.sendGrace + 0.5))
+            guard !Task.isCancelled else { return }
+            self?.refreshWorking()
+        }
+    }
+
+    /// Clears the sent prompt's hold once the turn it started is over, and tracks since when
+    /// the agent works.
+    func refreshWorking(now: Date = .now) {
+        if working { sawWorking = true }
+        if let since = awaitingSince, WorkingLogic.awaitingEnded(
+            awaitingSince: since, wasWorking: sawWorking, working: working,
+            items: feed.timeline.conversation(), now: now
+        ) {
+            awaitingSince = nil
+            graceTask?.cancel()
+        }
+        if working || awaitingSince != nil {
+            if localWorkSince == nil { localWorkSince = now }
+        } else {
+            localWorkSince = nil
+        }
+    }
 
     /// The chat layer can show: an adapter serves the session with a conversation.
     var chatAvailable: Bool { hasAdapter && has(HarnessCapability.chat) && phase != .terminalOnly }
@@ -170,6 +218,7 @@ struct TerminalJump: Hashable, Sendable {
         runTask = nil
         pumpTask?.cancel()
         pumpTask = nil
+        graceTask?.cancel()
     }
 
     private enum FollowEnd {
@@ -219,8 +268,19 @@ struct TerminalJump: Hashable, Sendable {
         return !Task.isCancelled
     }
 
+    /// The session's current mode id for the mode chip; empty only while truly unknown.
+    var currentMode: String {
+        ModeMemory.current(status: ModeMemory.status(mission.mission), remembered: rememberedMode, described: descriptor?.mode)
+    }
+
+    private func rememberMode() {
+        let mode = currentMode
+        if !mode.isEmpty, mode != rememberedMode { rememberedMode = mode }
+    }
+
     private func adopt(_ descriptor: HarnessDescriptor) {
         self.descriptor = descriptor
+        if !descriptor.mode.isEmpty { rememberedMode = descriptor.mode }
         // Chat is the default where it can show, until the user picks a layer.
         if descriptor.adapter != nil, descriptor.has(HarnessCapability.chat), !layerChosen {
             chosenLayer = .chat
@@ -235,6 +295,8 @@ struct TerminalJump: Hashable, Sendable {
 
     private func changed() {
         rows = SubagentThread.mainRows(feed.timeline)
+        rememberMode()
+        refreshWorking()
         pump()
     }
 
@@ -257,22 +319,25 @@ struct TerminalJump: Hashable, Sendable {
     /// Sends a prompt. `.queue` (the default) holds it on the phone while the agent works on a
     /// harness that cannot queue, and sends it when the turn ends; `.now` goes at once and
     /// throws when the helper refuses it.
-    func send(_ text: String, mode: HarnessSendParams.Mode = .queue) async throws {
+    func send(_ text: String, mode: HarnessSendParams.Mode = .queue, images: [String] = []) async throws {
         if mode == .now {
-            let item = try await services.send(subject, text: text, mode: .now)
+            let item = try await services.send(subject, text: text, mode: .now, images: images)
             feed.insertSent(item)
+            markSent()
             changed()
             return
         }
-        guard queue.add(text) != nil else {
+        guard queue.add(text, images: images) != nil else {
             if queue.isFull { throw QueueFull() }
             return
         }
         await deliverNext()
     }
 
-    func interrupt() async throws {
-        _ = try await services.interrupt(subject)
+    /// Stops the whole turn; the helper presses until the session is idle and says whether it got there.
+    @discardableResult
+    func interrupt() async throws -> HarnessActionResult {
+        try await services.interrupt(subject)
     }
 
     func cancelQueued(_ id: UUID) {
@@ -313,9 +378,10 @@ struct TerminalJump: Hashable, Sendable {
     private func deliverNext() async {
         guard let prompt = queue.next(canSend: canSendNow) else { return }
         do {
-            let item = try await services.send(subject, text: prompt.text, mode: .queue)
+            let item = try await services.send(subject, text: prompt.text, mode: .queue, images: prompt.images)
             queue.sent(prompt.id)
             feed.insertSent(item)
+            markSent()
             rows = SubagentThread.mainRows(feed.timeline)
         } catch HelperError.conflict(let reason) where reason == "busy" {
             // The turn is still going; the next change of the mission tries again.

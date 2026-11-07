@@ -57,11 +57,10 @@ struct CommentSheet: View {
                 Text(verbatim: draft.location)
                     .font(.system(.footnote, design: .monospaced))
                     .foregroundStyle(Color.togoMute)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
                 Text(verbatim: DisplayText.clean(draft.quote.trimmingCharacters(in: .whitespaces)))
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(Color.togoSnow)
+                    // trunc-ok: the quoted lines; the whole range stays visible in the diff under the sheet
                     .lineLimit(4)
             }
         }

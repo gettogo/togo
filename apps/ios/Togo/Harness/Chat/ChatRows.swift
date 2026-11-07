@@ -10,14 +10,17 @@ struct PromptBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            Text(text)
-                .font(.body)
-                .foregroundStyle(Color.togoSnow)
-                .textSelection(.enabled)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.togoRaised, in: .rect(cornerRadius: 14, style: .continuous))
-                .opacity(dimmed ? 0.6 : 1)
+            // A prompt of pictures alone has no words to set in a bubble.
+            if !text.isEmpty {
+                Text(text)
+                    .font(.body)
+                    .foregroundStyle(Color.togoSnow)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.togoRaised, in: .rect(cornerRadius: 14, style: .continuous))
+                    .opacity(dimmed ? 0.6 : 1)
+            }
             if let note {
                 Text(note)
                     .font(.caption)
@@ -38,6 +41,12 @@ struct PendingPromptRow: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
+            if !prompt.images.isEmpty {
+                ChatImageGrid(images: prompt.images.map { HarnessImage(path: $0) }, alignment: .trailing)
+                    .padding(.leading, 48)
+                    .padding(.bottom, 4)
+                    .opacity(0.6)
+            }
             PromptBubble(text: prompt.text, note: note, dimmed: true)
             HStack(spacing: 4) {
                 if case .failed = prompt.state {

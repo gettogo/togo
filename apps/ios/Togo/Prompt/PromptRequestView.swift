@@ -12,6 +12,7 @@ struct PromptRequestView: View {
     let replying: Bool
     @FocusState private var replyFocused: Bool
     @State private var showingAll = false
+    @State private var showingMore = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: model.compact ? 6 : 10) {
@@ -19,7 +20,7 @@ struct PromptRequestView: View {
             Text(request.question)
                 .font(.headline)
                 .foregroundStyle(Color.togoSnow)
-                // At accessibility sizes the question keeps to three lines; the rest is in the sheet.
+                // trunc-ok: at accessibility sizes the question keeps to three lines; Show all opens the rest in a sheet.
                 // Over a terminal that has the keyboard it keeps to two, so the terminal keeps the height.
                 .lineLimit(model.compact ? 2 : large ? 3 : nil)
                 .fixedSize(horizontal: false, vertical: true)
@@ -50,6 +51,13 @@ struct PromptRequestView: View {
         .sheet(isPresented: $showingAll) {
             PromptCommandSheet(question: request.question, command: request.command ?? "")
                 .togoSheet(.form)
+        }
+        // Extra answers in a list with their full words; a menu would clip them.
+        .sheet(isPresented: $showingMore) {
+            AnswerOptionsSheet(
+                question: request.question,
+                options: request.more.map { AnswerOption(id: $0.id, label: $0.label) }
+            ) { model.answer(.option($0.id), to: request.id) }
         }
         .haptic(.approve, trigger: request.state) { _, new in new == .done(.approved) }
         .haptic(.deny, trigger: request.state) { _, new in new == .done(.denied) }
@@ -98,7 +106,9 @@ struct PromptRequestView: View {
             Text(PromptCopy.context(name: request.sessionName, agent: request.agentName, machine: request.machineName))
                 .font(.footnote)
                 .foregroundStyle(Color.togoMute)
-                .lineLimit(1)
+                // trunc-ok: one line only over a terminal that has the keyboard; tapping opens the
+                // session and VoiceOver reads the context whole. Elsewhere it wraps.
+                .lineLimit(model.compact ? 1 : nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let queue {
                 Text(queue)
@@ -139,15 +149,9 @@ struct PromptRequestView: View {
                 .accessibilityHint(hint)
         }
         if !request.more.isEmpty {
-            Menu {
-                ForEach(request.more) { option in
-                    Button(option.label) { model.answer(.option(option.id), to: request.id) }
-                }
-            } label: {
-                Text(PromptCopy.more)
-            }
-            .buttonStyle(.promptCapsule(.plain))
-            .accessibilityLabel(PromptCopy.moreOptions)
+            Button(PromptCopy.more) { showingMore = true }
+                .buttonStyle(.promptCapsule(.plain))
+                .accessibilityLabel(PromptCopy.moreOptions)
         }
         if request.allowsReply {
             Button(PromptCopy.reply) { model.beginReply() }

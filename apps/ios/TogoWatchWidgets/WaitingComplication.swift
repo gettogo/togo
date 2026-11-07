@@ -113,9 +113,12 @@ struct WaitingComplicationView: View {
                 } else {
                     // "04  Run npm test?"
                     HStack(spacing: 6) {
-                        if let bib = entry.oldestBib {
+                            if let bib = entry.oldestBib {
+                            // trunc-ok: a bib is two or three digits
                             Text(bib).font(.system(.headline, design: .monospaced)).lineLimit(1)
                         }
+                        // trunc-ok: a complication has a fixed size: the bib and two lines of the
+                        // oldest request; tapping opens the app with the whole request.
                         Text(entry.oldestTitle ?? entry.oldestAgent ?? Self.inline(entry.count))
                             .font(.headline).lineLimit(2).layoutPriority(1)
                     }

@@ -98,8 +98,18 @@ import TogoKit
         return try await call(s) { try await $0.harnessAction(params) }
     }
 
-    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode) async throws -> HarnessItem {
-        try await call(s) { try await $0.harnessSend(id: s.sessionID, text: text, mode: mode) }
+    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode, images: [String]) async throws -> HarnessItem {
+        try await call(s) { try await $0.harnessSend(id: s.sessionID, text: text, mode: mode, images: images) }
+    }
+
+    func upload(_ s: HarnessSubject, name: String, data: Data) async throws -> String {
+        let params = UploadParams(sessionId: s.sessionID, name: name, data: data)
+        return try await call(s) { try await $0.upload(params).path }
+    }
+
+    func image(_ s: HarnessSubject, path: String) async throws -> Data {
+        let params = FsImageParams(sessionId: s.sessionID, path: path)
+        return try await call(s) { try await $0.image(params).data }
     }
 
     func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult {

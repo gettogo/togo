@@ -173,8 +173,6 @@ private struct ImportRowView: View {
                     Text(row.address)
                         .font(.subheadline.monospaced())
                         .foregroundStyle(Color.togoMute)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                        .truncationMode(.middle)
                     if let jump = row.jumpText {
                         Text(settingsText("import.hosts.via", "via \(jump)"))
                             .font(.subheadline.monospaced())

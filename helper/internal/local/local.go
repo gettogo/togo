@@ -27,12 +27,15 @@ const (
 	EventToolDone   = "tool_done"  // a tool finished: any prompt for it was answered at the desk
 	EventPermission = "permission" // the agent asks for permission: open an approval
 	EventAttention  = "attention"  // the agent waits for the user without a permission prompt
-	EventNotify     = "notify"     // an informational agent notification
-	EventStop       = "stop"       // the turn ended: idle and done
-	EventStart      = "start"      // a session started; carries the model when known
-	EventMeta       = "meta"       // model, context and cost from the status line
-	EventEnd        = "end"        // the agent is quitting: ended
-	EventFailure    = "failure"    // the turn stopped on an error: failed
+	// EventIdle is the agent sitting at its input with nothing asked (Claude
+	// Code's idle_prompt). It is not a request: it never rings as needs_you.
+	EventIdle    = "idle"
+	EventNotify  = "notify"  // an informational agent notification
+	EventStop    = "stop"    // the turn ended: idle and done
+	EventStart   = "start"   // a session started; carries the model when known
+	EventMeta    = "meta"    // model, context and cost from the status line
+	EventEnd     = "end"     // the agent is quitting: ended
+	EventFailure = "failure" // the turn stopped on an error: failed
 	// EventUsageLimit is EventFailure on a rate or usage limit. The hook
 	// params have no field for the reason, so it travels as its own name.
 	EventUsageLimit = "usage_limit"
@@ -91,6 +94,9 @@ type Handlers struct {
 	mu   sync.Mutex
 	meta map[string]wire.SessionMeta
 	jobs map[string]wire.Job
+	// turns marks sessions with a turn under way that has not yet been
+	// reported done (by Stop, or by an idle prompt standing in for it).
+	turns map[string]bool
 }
 
 // Methods returns the four local methods.
@@ -149,7 +155,7 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		return nil, err
 	}
 	switch ev.Event {
-	case EventPrompt, EventTool, EventToolDone, EventPermission, EventAttention,
+	case EventPrompt, EventTool, EventToolDone, EventPermission, EventAttention, EventIdle,
 		EventNotify, EventStop, EventStart, EventMeta, EventEnd, EventFailure, EventUsageLimit, EventHarness:
 	default:
 		return nil, invalid("unknown hook event")
@@ -180,7 +186,13 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		h.Hub.ClearExit(id)
 	}
 	switch ev.Event {
+	case EventPrompt, EventTool, EventToolDone, EventPermission:
+		h.setTurn(id, true)
+	}
+	switch ev.Event {
 	case EventPrompt:
+		// A new turn makes any prompt left from the last one moot.
+		h.closeAgentPrompts(id)
 		h.Hub.SetStatus(id, statusWorking, nil)
 	case EventTool:
 		var act *string
@@ -199,8 +211,18 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		h.publishNotify(id, wire.LevelInfo, clip(firstNonEmpty(ev.Data.Message, "Notification"), wire.MaxTitle), "")
 	case EventStop:
 		h.closeAgentPrompts(id)
+		h.setTurn(id, false)
 		h.Hub.SetStatus(id, statusIdle, nil)
 		h.publishNotify(id, wire.LevelDone, agentTitle(ev.Agent)+" finished", ev.Data.Message)
+	case EventIdle:
+		// Idle at its input, the agent is asking nothing: a pending prompt
+		// was answered, withdrawn or interrupted. A turn whose Stop never
+		// came is reported done once; otherwise this says nothing.
+		h.closeAgentPrompts(id)
+		h.Hub.SetStatus(id, statusIdle, nil)
+		if h.setTurn(id, false) {
+			h.publishNotify(id, wire.LevelDone, agentTitle(ev.Agent)+" finished", "")
+		}
 	case EventStart, EventMeta:
 		h.mergeMeta(id, ev.Data)
 	case EventEnd, EventFailure, EventUsageLimit:
@@ -217,6 +239,7 @@ func (h *Handlers) hookExit(id, event, rawMessage string) {
 		return
 	}
 	h.closeAgentPrompts(id)
+	h.setTurn(id, false)
 	switch event {
 	case EventEnd:
 		// The wrapper reports the real code once the process is gone.
@@ -237,7 +260,7 @@ func (h *Handlers) hookExit(id, event, rawMessage string) {
 // reports an idle prompt while it sits stopped on a usage limit.
 func clearsExit(event string) bool {
 	switch event {
-	case EventMeta, EventNotify, EventAttention, EventEnd, EventFailure, EventUsageLimit:
+	case EventMeta, EventNotify, EventAttention, EventIdle, EventEnd, EventFailure, EventUsageLimit:
 		return false
 	}
 	return true
@@ -256,17 +279,6 @@ func ExitDetail(s string) *string {
 		return nil
 	}
 	return &line
-}
-
-// closeAgentPrompts closes the session's pending prompt approvals as
-// answered at the desk: the agent moved on, so the user answered there.
-// Asks are left alone; they belong to scripts, not the agent.
-func (h *Handlers) closeAgentPrompts(id string) {
-	for _, a := range h.Approvals.Pending(id) {
-		if a.Source != wire.SourceAsk {
-			h.Approvals.CloseDesk(a.RequestID)
-		}
-	}
 }
 
 // mergeMeta keeps what earlier hooks reported: SessionStart knows only the

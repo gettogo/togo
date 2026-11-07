@@ -89,6 +89,7 @@ struct PromptCapsuleStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(foreground)
+            // trunc-ok: the bar's answer capsules carry fixed one-word labels (Yes, No, More, Reply, Send)
             .lineLimit(1)
             .padding(.horizontal, 18)
             .frame(minWidth: 44, minHeight: 44)

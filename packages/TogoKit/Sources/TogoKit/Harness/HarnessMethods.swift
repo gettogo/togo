@@ -72,20 +72,33 @@ public struct HarnessDescriptor: Codable, Hashable, Sendable {
     /// The current mode id, or empty when unknown.
     public var mode: String
     public var degraded: [String]
+    /// How the harness takes image paths in a prompt; nil means together.
+    public var images: ImagePolicy?
+
+    /// `per_path` pastes each image path on its own, then the text; `together` pastes them at once.
+    public struct ImagePolicy: Codable, Hashable, Sendable {
+        public var insert: String
+
+        public init(insert: String) { self.insert = insert }
+
+        public static let perPath = "per_path"
+        public static let together = "together"
+    }
 
     public init(adapter: Adapter? = nil, capabilities: [String] = [], screens: [ScreenRef] = [],
-                modes: [HarnessChoice] = [], mode: String = "", degraded: [String] = []) {
+                modes: [HarnessChoice] = [], mode: String = "", degraded: [String] = [], images: ImagePolicy? = nil) {
         self.adapter = adapter
         self.capabilities = capabilities
         self.screens = screens
         self.modes = modes
         self.mode = mode
         self.degraded = degraded
+        self.images = images
     }
 
     public func has(_ capability: String) -> Bool { capabilities.contains(capability) }
 
-    private enum CodingKeys: String, CodingKey { case adapter, capabilities, screens, modes, mode, degraded }
+    private enum CodingKeys: String, CodingKey { case adapter, capabilities, screens, modes, mode, degraded, images }
 
     // adapter is a required key that may be null.
     public func encode(to encoder: any Encoder) throws {
@@ -96,6 +109,7 @@ public struct HarnessDescriptor: Codable, Hashable, Sendable {
         try c.encode(modes, forKey: .modes)
         try c.encode(mode, forKey: .mode)
         try c.encode(degraded, forKey: .degraded)
+        try c.encodeIfPresent(images, forKey: .images)
     }
 }
 
@@ -219,11 +233,14 @@ public struct HarnessSendParams: Codable, Hashable, Sendable {
     public var id: String
     public var text: String
     public var mode: Mode?
+    /// Absolute image paths sent in the same prompt, usually files `fs.upload` wrote.
+    public var images: [String]?
 
-    public init(id: String, text: String, mode: Mode? = nil) {
+    public init(id: String, text: String, mode: Mode? = nil, images: [String]? = nil) {
         self.id = id
         self.text = text
         self.mode = mode
+        self.images = images?.isEmpty == true ? nil : images
     }
 }
 

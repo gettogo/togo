@@ -56,9 +56,10 @@ struct CommandBlockView: View {
         Button { toggle(block) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 statusGlyph(block)
+                // trunc-ok: a collapsed block keeps three lines of its command; opening it shows all
                 Text(verbatim: block.title)
                     .foregroundStyle(Color.togoSnow)
-                    .lineLimit(3)
+                    .lineLimit(collapsed ? 3 : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !block.badge.isEmpty {
                     Text(verbatim: block.badge)
@@ -104,7 +105,6 @@ struct CommandBlockView: View {
             if let failure {
                 Text(failure)
                     .foregroundStyle(Color.togoMute)
-                    .lineLimit(2)
             }
             Spacer(minLength: 0)
         }

@@ -38,8 +38,7 @@ struct SessionsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Text(PromptText.clean(machine.name, maxLines: 1))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -64,6 +63,7 @@ private struct SessionRow: View {
                 Text(PromptText.clean(activity, maxLines: 1))
                     .font(.system(.footnote, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    // trunc-ok: the agent's live last action, one line on the wrist; the phone shows it in full
                     .lineLimit(1)
             }
         }

@@ -376,6 +376,16 @@ final class Flag: @unchecked Sendable {
 }
 
 @MainActor final class FakeHarnessServices: HarnessServices {
+    var sentImages: [[String]] = []
+    var uploads: [String] = []
+
+    func upload(_ s: HarnessSubject, name: String, data: Data) async throws -> String {
+        uploads.append(name)
+        return "/u/\(name)"
+    }
+
+    func image(_ s: HarnessSubject, path: String) async throws -> Data { Data() }
+
     struct FeedScript {
         enum End { case hold, fail, refuse }
         var stream: AsyncThrowingStream<HarnessFeed, any Error>
@@ -428,12 +438,13 @@ final class Flag: @unchecked Sendable {
         HarnessActionResult(result: .applied)
     }
 
-    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode) async throws -> HarnessItem {
+    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode, images: [String]) async throws -> HarnessItem {
         if sendFailures > 0 {
             sendFailures -= 1
             throw HelperError.closed
         }
         sent.append((text, mode))
+        sentImages.append(images)
         let id = "sent-\(sent.count)"
         return HarnessItem(id: id, seq: 100 + sent.count, turnId: id, at: WireDate(.now),
                            body: .user(.init(text: text, queued: false, source: "phone")))

@@ -4,6 +4,9 @@ import TogoKit
 /// A turn's work folded into one quiet line in SF Mono: "Worked 1m 12s  6 steps  2 files
 /// changed". Tapping it opens the steps underneath, each a compact row with its files; tapping
 /// a step opens its details. Shell output and subagent conversations stay in mission control.
+///
+/// While its turn runs it is the chat's one live indicator: the spinner turns, the clock ticks
+/// and, when known, `step` says what the agent does now ("Reading src/auth/sign-in.ts").
 struct WorkLine: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let summary: WorkSummary
@@ -17,17 +20,32 @@ struct WorkLine: View {
     var spoken: String?
     /// "Show in terminal" as an accessibility action on the line, when its first step can.
     var showInTerminal: (() -> Void)?
+    /// What the agent does now, under the line while the turn runs.
+    var step: String?
+    /// The running turn waits on the user: the line says "Waiting for you" in the beacon and
+    /// the spinner stops.
+    var waiting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button(action: onToggle) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    WorkGlyph(summary: summary)
-                    WorkLabel(summary: summary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .rotationEffect(.degrees(expanded && !reduceMotion ? 90 : 0))
-                        .opacity(steps.isEmpty ? 0 : 1)
+                    WorkGlyph(summary: summary, waiting: isWaiting)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            WorkLabel(summary: summary, waiting: isWaiting)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .rotationEffect(.degrees(expanded && !reduceMotion ? 90 : 0))
+                                .opacity(steps.isEmpty ? 0 : 1)
+                        }
+                        if summary.running, !isWaiting, let step {
+                            Text(verbatim: step)
+                                .font(.footnote)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .transition(.opacity)
+                        }
+                    }
                 }
                 .foregroundStyle(Color.togoMute)
                 .frame(minHeight: 44, alignment: .leading)
@@ -47,15 +65,25 @@ struct WorkLine: View {
             }
         }
         .motion(.rowGrow, value: expanded)
+        .motion(.fade, value: step)
+        .motion(.fade, value: isWaiting)
     }
+
+    private var isWaiting: Bool { summary.running && waiting }
 }
 
 /// The line's words; ticks once a second while the turn runs.
 private struct WorkLabel: View {
     let summary: WorkSummary
+    var waiting = false
 
     var body: some View {
-        if summary.running {
+        if waiting {
+            Text(verbatim: WorkingCopy.waiting)
+                .font(.system(.footnote, design: .monospaced).weight(.semibold))
+                .foregroundStyle(Color.togoAccentText)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if summary.running {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 text(at: context.date)
             }
@@ -72,22 +100,67 @@ private struct WorkLabel: View {
     }
 }
 
-/// Running: the system's small spinner. Finished: a quiet check, or a stop mark.
+/// Running: the terminal's braille spinner, drawn as text so it sits on the words' first
+/// baseline. Waiting on the user: the still beacon. Finished: a quiet check, or a stop mark.
 private struct WorkGlyph: View {
+    @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
+    @ScaledMetric(relativeTo: .footnote) private var beacon: CGFloat = 7
     let summary: WorkSummary
+    var waiting = false
 
     var body: some View {
         Group {
-            if summary.running {
-                ProgressView()
-                    .controlSize(.mini)
+            if waiting {
+                Circle()
+                    .fill(Color.togoAccent)
+                    .frame(width: beacon, height: beacon)
+                    .padding(3)
+                    .background(Circle().fill(Color.togoAccent.opacity(0.18)))
+            } else if summary.running {
+                LiveSpinner()
             } else {
                 Image(systemName: summary.failed ? "stop.circle" : "checkmark.circle")
                     .font(.footnote)
             }
         }
-        .frame(width: 16)
+        .frame(width: side)
         .accessibilityHidden(true)
+    }
+}
+
+/// The braille spinner in the footnote's mono. Still under Reduce Motion, Low Power Mode, in a
+/// paused snapshot, and while the app is not in front.
+private struct LiveSpinner: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.loopsPaused) private var loopsPaused
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    var body: some View {
+        Group {
+            if spins {
+                TimelineView(.periodic(from: .now, by: RosterStatus.spinnerLoop / Double(RosterStatus.spinnerFrames.count))) { context in
+                    glyph(RosterStatus.glyph(for: .working, animated: true, at: context.date.timeIntervalSinceReferenceDate))
+                }
+            } else {
+                glyph(RosterStatus.glyph(for: .working, animated: false))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
+    }
+
+    private var spins: Bool {
+        !reduceMotion && !loopsPaused && !lowPower && scenePhase == .active
+    }
+
+    /// The braille cells are small in any face, so the glyph is drawn a size up and heavy, in
+    /// full snow, to read as a spinner rather than a faint dot.
+    private func glyph(_ text: String?) -> some View {
+        Text(verbatim: text ?? "")
+            .font(.system(.body, design: .monospaced).weight(.heavy))
+            .foregroundStyle(Color.togoSnow)
     }
 }
 
@@ -131,6 +204,7 @@ struct StepRow: View {
                 Text(verbatim: info.title)
                     .font(.system(.footnote, design: .monospaced))
                     .foregroundStyle(Color.togoSnow)
+                    // trunc-ok: a step's title; tapping the step opens its details with the full text
                     .lineLimit(2)
                 ForEach(info.files, id: \.path) { file in
                     HStack(spacing: 8) {

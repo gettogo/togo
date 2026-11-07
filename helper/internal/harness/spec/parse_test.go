@@ -45,6 +45,12 @@ func TestParseRejects(t *testing.T) {
 		"no stability":      {"stability: documented-command", "stability: maybe", "stability"},
 		"bad primitive":     {"primitive: picker", "primitive: wheel", "unknown primitive"},
 		"cycle without max": {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [BTab], cycle: true }", "cycle needs max"},
+		"until without max": {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [Escape], until: idle }", "until needs max"},
+		"until other":       {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [Escape], until: done, max: 2 }", "until must be idle"},
+		"until enter":       {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [Enter], until: idle, max: 2 }", "only Escape or C-c"},
+		"then menu key":     {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [Escape], until: idle, max: 2, then: [Enter] }", `"Enter" is not allowed`},
+		"then alone":        {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [Escape], then: [C-x, C-k] }", "then needs until"},
+		"stop chord alone":  {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [C-x, C-k] }", `"C-x" is not allowed`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if !strings.Contains(base, c.from) {
@@ -55,6 +61,20 @@ func TestParseRejects(t *testing.T) {
 				t.Fatalf("err %v, want %q", err, c.want)
 			}
 		})
+	}
+}
+
+// An until-idle interrupt with a stop chord parses.
+func TestParseUntilIdle(t *testing.T) {
+	b := strings.Replace(string(sample(t)), "type: { text: '/model {{.id}}', submit: true, when_idle: true }",
+		"keys: { keys: [Escape], until: idle, max: 2, then: [C-x, C-k, C-x, C-k] }", 1)
+	a, err := Parse([]byte(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := a.Actions["switch_model"].Keys
+	if k == nil || k.Until != UntilIdle || k.Max != 2 || strings.Join(k.Then, " ") != "C-x C-k C-x C-k" {
+		t.Fatalf("keys %+v", k)
 	}
 }
 

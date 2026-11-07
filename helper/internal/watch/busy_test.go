@@ -129,3 +129,69 @@ func TestPlainOutputNeedsSustainedOutputAfterStartup(t *testing.T) {
 		t.Fatalf("statuses = %v, want working", h.statuses)
 	}
 }
+
+// readBack is a status sink that can be read back, as the hub can; it
+// starts with the status hooks set.
+type readBack struct {
+	*harness
+	status string
+}
+
+func (r *readBack) SetStatus(id, status string, a *string) {
+	r.status = status
+	r.harness.SetStatus(id, status, a)
+}
+
+func (r *readBack) Status(string) string { return r.status }
+
+const claudePermissionScreen = "Bash command\n  npm test\nDo you want to proceed?\n❯ 1. Yes\n  2. No, and tell Claude what to do differently (esc)\n"
+
+// The owner interrupts Claude at a permission prompt. The prompt had
+// already settled the turn without changing the status hooks set to
+// working, and no Stop hook follows an interrupt. Once the prompt is gone
+// and no working indicator shows, the session is idle, with no done
+// notification: an interrupt is not a finished turn.
+func TestClaudeInterruptAtPromptEndsWorking(t *testing.T) {
+	h := newAgentHarness(t, "claude")
+	sink := &readBack{harness: h}
+	h.w.cfg.Status = sink
+	h.setScreen(claudeBusyScreen)
+	h.outputFor(t, 4*time.Second)
+	h.setScreen(claudePermissionScreen)
+	h.outputFor(t, 6*time.Second)
+	h.advance(10 * time.Second)
+	h.w.Tick(context.Background())
+	if len(h.seen) != 1 {
+		t.Fatalf("prompts seen %d, want the permission prompt", len(h.seen))
+	}
+	if sink.status != statusWorking {
+		t.Fatalf("status = %q; a pending prompt leaves the hooks' working alone", sink.status)
+	}
+	h.events = nil
+
+	h.setScreen(claudeIdleScreen) // Esc: the prompt closes, the turn is over
+	h.outputFor(t, time.Second)
+	h.advance(10 * time.Second)
+	h.w.Tick(context.Background())
+	if sink.status != statusIdle {
+		t.Fatalf("status = %q after the interrupt, want idle (statuses %v)", sink.status, h.statuses)
+	}
+	if len(h.events) != 0 {
+		t.Fatalf("events = %+v, want no done notification", h.events)
+	}
+}
+
+// Typing at Claude's idle input box, with the status already idle, sets
+// nothing.
+func TestClaudeIdleOutputKeepsStatus(t *testing.T) {
+	h := newAgentHarness(t, "claude")
+	sink := &readBack{harness: h, status: statusIdle}
+	h.w.cfg.Status = sink
+	h.setScreen(claudeIdleScreen)
+	h.outputFor(t, 3*time.Second)
+	h.advance(10 * time.Second)
+	h.w.Tick(context.Background())
+	if len(h.statuses) != 0 {
+		t.Fatalf("statuses = %v, want none", h.statuses)
+	}
+}

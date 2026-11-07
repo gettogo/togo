@@ -44,8 +44,6 @@ struct PrimitiveDiff: View {
                 Text(verbatim: file.path.isEmpty ? PrimitiveCopy.changes : file.path)
                     .font(.mono(.caption))
                     .foregroundStyle(Color.togoSnow)
-                    .lineLimit(1)
-                    .truncationMode(.head)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(verbatim: "+\(file.added)").font(.mono(.caption)).foregroundStyle(PrimitiveTint.ok)
                 Text(verbatim: "-\(file.removed)").font(.mono(.caption)).foregroundStyle(PrimitiveTint.fail)

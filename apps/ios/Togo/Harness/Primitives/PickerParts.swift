@@ -29,7 +29,6 @@ struct PickerRow: View {
                         Text(verbatim: subtitle)
                             .font(.mono(.caption))
                             .foregroundStyle(Color.togoMute)
-                            .lineLimit(2)
                     }
                     if let badge = item.badge, !badge.isEmpty {
                         PrimitiveChip(text: badge, mono: true)
@@ -43,7 +42,6 @@ struct PickerRow: View {
                     Text(verbatim: held.count == 1 ? held[0] : PrimitiveCopy.holds(held.count))
                         .font(.footnote)
                         .foregroundStyle(Color.togoMute)
-                        .lineLimit(1)
                 }
             }
             .frame(minHeight: 44)
@@ -84,7 +82,6 @@ struct PickerRoleChip: View {
                 Text(verbatim: holder ?? PrimitiveCopy.notSet)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(holder == nil ? Color.togoMute : Color.togoSnow)
-                    .lineLimit(1)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -130,7 +127,6 @@ struct PickerSidebar: View {
                 Text(verbatim: title)
                     .font(value == nil ? .body.weight(.semibold) : .mono(.subheadline))
                     .foregroundStyle(Color.togoSnow)
-                    .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(verbatim: "\(count)")
                     .font(.mono(.caption))
@@ -250,7 +246,7 @@ struct PickerItemCard: View {
                             if !holds { run(ref.id, ref: ref) }
                         } label: {
                             HStack {
-                                Text(verbatim: ref.label).lineLimit(1)
+                                Text(verbatim: ref.label).fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 4)
                                 if actions.isRunning(ref.id, target: item.id) {
                                     ProgressView().controlSize(.mini)

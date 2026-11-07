@@ -64,8 +64,6 @@ struct MachineRoutesSection: View {
                 Text(verbatim: route.host)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(Color.togoSnow)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
                     .textSelection(.enabled)
                 Text(Self.caption(route))
                     .font(.subheadline)

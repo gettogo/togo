@@ -94,7 +94,7 @@ struct MissionControlView: View {
         case .needs:
             MissionNeedsRow(row: row, store: store, actions: actions, onShowChat: showChat)
         case .background:
-            Button { open(row, kind: kind) } label: { MissionTailRow(row: row) }
+            Button { open(row, kind: kind) } label: { MissionBackgroundRow(row: row) }
                 .buttonStyle(.plain)
                 .contextMenu { menu(row, kind: kind) }
         default:

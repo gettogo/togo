@@ -57,7 +57,7 @@ actions:
     builtin: approval_answer
     stability: experimental
   interrupt:
-    keys: { keys: [Escape] }
+    keys: { keys: [Escape], until: idle, max: 2 }
     stability: documented
 commands:
   static:

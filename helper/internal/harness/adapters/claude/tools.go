@@ -3,6 +3,7 @@ package claude
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -33,6 +34,9 @@ func (t *transcript) toolUse(e entry, b block, at time.Time, turn, parent string
 	if subj != nil {
 		it.Tool.Subject = detect.NewSubject(subj[0], subj[1])
 	}
+	if r, ok := toolImage(b.Name, in, t.cwd); ok {
+		it.Tool.Images = []harness.ImageRef{r}
+	}
 	t.tools[b.ID] = &it
 	if parent == "" && t.turn != nil && !t.turn.ended {
 		t.turn.steps++
@@ -42,6 +46,11 @@ func (t *transcript) toolUse(e entry, b block, at time.Time, turn, parent string
 			t.prompts[strings.TrimSpace(p)] = b.ID
 		}
 		t.roles[b.ID] = str(in, "subagent_type")
+	}
+	if b.Name == "Bash" {
+		if d := strings.TrimSpace(str(in, "description")); d != "" {
+			t.shellAbout[b.ID] = d
+		}
 	}
 	return []harness.Item{it}, nil
 }
@@ -133,11 +142,43 @@ func (t *transcript) toolResult(e entry, b block, at time.Time) ([]harness.Item,
 			out = ""
 		}
 	}
+	if len(body.Images) == 0 {
+		body.Images = resultImages(b.Content)
+	}
 	body.Output = strings.TrimSpace(plain(out))
 	next := *it
 	next.Tool = &body
 	t.tools[b.ToolUseID] = &next
 	return append([]harness.Item{next}, items...), ops
+}
+
+// toolImage is the picture a Read or Write names by path, made absolute
+// against the session folder.
+func toolImage(name string, in map[string]any, cwd string) (harness.ImageRef, bool) {
+	if name != "Read" && name != "Write" {
+		return harness.ImageRef{}, false
+	}
+	p := str(in, "file_path")
+	if p != "" && !filepath.IsAbs(p) && cwd != "" {
+		p = filepath.Join(cwd, p)
+	}
+	return harness.ImageAtPath(p)
+}
+
+// resultImages are the image blocks of a tool result, such as a
+// screenshot an MCP tool returned.
+func resultImages(raw json.RawMessage) []harness.ImageRef {
+	var blocks []block
+	if json.Unmarshal(raw, &blocks) != nil {
+		return nil
+	}
+	var out []harness.ImageRef
+	for _, b := range blocks {
+		if r, ok := imageRef(b); ok && len(out) < harness.MaxImagesPerItem {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func resultText(raw json.RawMessage) string {

@@ -13,8 +13,9 @@ struct ChatActions {
     @MainActor static let inert = ChatActions(card: { _ in nil }, answer: { _, _ in }, quote: { _ in })
 }
 
-/// An approval inline in the chat: the one place it uses the beacon, with the same approve
-/// button as the prompt bar. Never folded; once answered it settles into a quiet line.
+/// An approval inline in the chat: the one place it uses the beacon, a card on its faint
+/// moving light, with the same approve button as the prompt bar. Never folded; once answered
+/// it settles into a quiet line.
 struct ApprovalRow: View {
     let item: HarnessItem
     let approval: HarnessItem.Approval
@@ -23,6 +24,7 @@ struct ApprovalRow: View {
 
     @State private var approvals = 0
     @State private var denials = 0
+    @State private var showingMore = false
 
     var body: some View {
         content
@@ -51,12 +53,16 @@ struct ApprovalRow: View {
                         .foregroundStyle(Color.togoMute)
                 }
             }
+            .modifier(NeedsCard())
             .accessibilityElement(children: .combine)
             .accessibilityLabel(ChatCopy.spokenNeeds(card?.title ?? ChatCopy.waitingInTerminal))
             .accessibilityActions {
                 if let card, card.phase == .open {
                     Button(approveLabel(card)) { approve(card) }
                     Button(ChatCopy.deny) { deny(card) }
+                    ForEach(extraOptions(card)) { option in
+                        Button(option.title) { answer(.option(option.id)) }
+                    }
                 }
             }
         }
@@ -75,25 +81,40 @@ struct ApprovalRow: View {
         return approval.resolved.map(ChatCopy.resolved)
     }
 
+    /// Yes and No in a row, stacked when the labels are too long for one. Extra answers open
+    /// as a list under them, each with its full words, never a menu that clips them.
     private func answers(_ card: RequestCard) -> some View {
         let sending = card.phase != .open
-        let extra = card.options.filter { $0.role != .approve && $0.role != .deny }
-        return HStack(spacing: 8) {
-            ApproveButton(approveLabel(card)) { approve(card) }
-            Button(ChatCopy.deny) { deny(card) }
-                .buttonStyle(PlainAnswerStyle())
-            if !extra.isEmpty {
-                Menu {
-                    ForEach(extra, id: \.n) { option in
-                        Button(option.label) { answer(.option(option.n)) }
-                    }
-                } label: {
-                    Text(ChatCopy.more)
-                }
-                .buttonStyle(PlainAnswerStyle())
+        let extra = extraOptions(card)
+        return VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
+                VStack(alignment: .leading, spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
+            }
+            if showingMore, !extra.isEmpty {
+                AnswerOptionList(options: extra) { answer(.option($0.id)) }
+                    .transition(.opacity)
             }
         }
+        .motion(.rowGrow, value: showingMore)
         .disabled(sending)
+    }
+
+    @ViewBuilder private func answerButtons(_ card: RequestCard, hasExtra: Bool) -> some View {
+        ApproveButton(approveLabel(card)) { approve(card) }
+        Button(ChatCopy.deny) { deny(card) }
+            .buttonStyle(PlainAnswerStyle())
+        if hasExtra {
+            Button(showingMore ? AnswerOptionsCopy.hide : ChatCopy.more) { showingMore.toggle() }
+                .buttonStyle(PlainAnswerStyle())
+                .accessibilityValue(showingMore ? Text(AnswerOptionsCopy.hide) : Text(ChatCopy.more))
+        }
+    }
+
+    private func extraOptions(_ card: RequestCard) -> [AnswerOption] {
+        card.options
+            .filter { $0.role != .approve && $0.role != .deny }
+            .map { AnswerOption(id: $0.n, label: $0.label) }
     }
 
     private func approve(_ card: RequestCard) {
@@ -106,8 +127,9 @@ struct ApprovalRow: View {
         answer(denyDecision(card))
     }
 
+    /// The approve option's own words; any " · " explanation is left to the hint.
     private func approveLabel(_ card: RequestCard) -> String {
-        card.options.first { $0.role == .approve }?.label ?? ChatCopy.approve
+        card.options.first { $0.role == .approve }.map { AnswerOptionText.split($0.label).title } ?? ChatCopy.approve
     }
 
     private func approveDecision(_ card: RequestCard) -> Decision {
@@ -154,6 +176,7 @@ struct QuestionRow: View {
                 }
             }
             .disabled(sending || sent)
+            .modifier(NeedsCard())
             .accessibilityElement(children: .contain)
             .accessibilityLabel(ChatCopy.spokenNeeds(question.questions.first?.prompt ?? ""))
             .onChange(of: item.seq) { sent = false }
@@ -188,11 +211,12 @@ struct QuestionRow: View {
                             .foregroundStyle(Color.togoMute)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(option.label).foregroundStyle(Color.togoSnow)
-                            if let detail = option.detail {
-                                Text(detail).font(.footnote).foregroundStyle(Color.togoMute)
+                            Text(verbatim: option.shownTitle).foregroundStyle(Color.togoSnow)
+                            if let detail = option.shownDetail {
+                                Text(verbatim: detail).font(.footnote).foregroundStyle(Color.togoMute)
                             }
                         }
+                        .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
                     .frame(minHeight: 44)

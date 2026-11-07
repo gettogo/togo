@@ -82,6 +82,7 @@ struct RosterStatus: View {
                 .foregroundStyle(wordColor)
                 .contentTransition(reduceMotion ? .identity : .interpolate)
                 .motion(.fade, value: word)
+                // trunc-ok: a status word from a fixed short set
                 .lineLimit(1)
         }
         .accessibilityElement(children: .ignore)

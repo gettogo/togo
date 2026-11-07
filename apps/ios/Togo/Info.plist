@@ -42,6 +42,8 @@
 	<array>
 		<string>_ssh._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo to send to an agent in a session. Location is removed before it leaves the phone.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock Togo and your saved keys and passwords.</string>
 	<key>NSLocalNetworkUsageDescription</key>

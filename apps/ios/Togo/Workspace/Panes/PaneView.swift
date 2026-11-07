@@ -223,7 +223,7 @@ private struct PagePlaceholder: View {
             Text(verbatim: label.name)
                 .font(.body)
         }
-        .lineLimit(1)
+        .multilineTextAlignment(.center)
         .foregroundStyle(Color.togoMute)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.togoInk)

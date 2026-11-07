@@ -17,6 +17,8 @@ struct PendingPrompt: Identifiable, Equatable, Sendable {
     let id: UUID
     var text: String
     var state: State
+    /// Image paths on the machine, sent in the same prompt.
+    var images: [String] = []
 }
 
 /// The phone's own prompt queue, first in first out. One prompt is on its way at a time; the
@@ -33,12 +35,12 @@ struct PromptQueue: Equatable, Sendable {
 
     var isFull: Bool { prompts.count >= Self.limit }
 
-    /// Adds a prompt at the end; nil when the text is blank or the queue is full.
+    /// Adds a prompt at the end; nil when it has neither text nor images, or the queue is full.
     @discardableResult
-    mutating func add(_ text: String, id: UUID = UUID()) -> UUID? {
+    mutating func add(_ text: String, images: [String] = [], id: UUID = UUID()) -> UUID? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isFull else { return nil }
-        prompts.append(PendingPrompt(id: id, text: trimmed, state: .waiting))
+        guard !trimmed.isEmpty || !images.isEmpty, !isFull else { return nil }
+        prompts.append(PendingPrompt(id: id, text: trimmed, state: .waiting, images: images))
         return id
     }
 

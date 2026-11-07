@@ -119,7 +119,8 @@
         }
       ],
       "mode": "default",
-      "degraded": []
+      "degraded": [],
+      "images": { "insert": "per_path" }
     }
   }
 }

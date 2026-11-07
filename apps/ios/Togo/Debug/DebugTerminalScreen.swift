@@ -145,6 +145,7 @@ struct DebugTerminalScreen: View {
         VStack(spacing: 0) {
             Text(message ?? model.header)
                 .font(.caption.monospaced())
+                // trunc-ok: debug-only header, never shown in release builds
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)

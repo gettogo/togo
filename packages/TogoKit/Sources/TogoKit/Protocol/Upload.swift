@@ -6,6 +6,8 @@ public enum Capability {
     public static let approvals = "approvals.v1"
     public static let mute = "mute.v1"
     public static let upload = "upload.v1"
+    /// `fs.image`.
+    public static let image = "image.v1"
     public static let git = "git.v1"
     /// `git.stage`, `git.unstage`, `git.discard`, `git.commit` and `git.diff` with a commit.
     public static let gitWrite = "gitwrite.v1"
@@ -72,6 +74,54 @@ public struct UploadResult: Codable, Hashable, Sendable {
 
     public init(path: String) {
         self.path = path
+    }
+}
+
+/// `fs.image`: a picture the chat shows, from the session's uploads or its folder.
+public struct FsImageParams: Codable, Hashable, Sendable {
+    public var sessionId: String
+    public var path: String
+
+    public init(sessionId: String, path: String) {
+        self.sessionId = sessionId
+        self.path = path
+    }
+}
+
+public struct FsImageResult: Codable, Hashable, Sendable {
+    public var mediaType: String
+    public var data: Data
+    /// The file's size on disk.
+    public var bytes: Int
+    /// The picture was shrunk to fit.
+    public var scaled: Bool
+
+    public init(mediaType: String, data: Data, bytes: Int, scaled: Bool) {
+        self.mediaType = mediaType
+        self.data = data
+        self.bytes = bytes
+        self.scaled = scaled
+    }
+
+    private enum CodingKeys: String, CodingKey { case mediaType, data, bytes, scaled }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mediaType = try c.decode(String.self, forKey: .mediaType)
+        guard let data = Base64URL.decode(try c.decode(String.self, forKey: .data)) else {
+            throw DecodingError.dataCorruptedError(forKey: .data, in: c, debugDescription: "not base64url")
+        }
+        self.data = data
+        bytes = try c.decode(Int.self, forKey: .bytes)
+        scaled = try c.decode(Bool.self, forKey: .scaled)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(mediaType, forKey: .mediaType)
+        try c.encode(Base64URL.encode(data), forKey: .data)
+        try c.encode(bytes, forKey: .bytes)
+        try c.encode(scaled, forKey: .scaled)
     }
 }
 

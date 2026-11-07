@@ -381,9 +381,7 @@ func (w *Watcher) Tick(ctx context.Context) {
 			w.settle(ctx, id, e)
 		case e.promptCheck && !e.awaitingIdle && now.Sub(e.lastOutput) >= idle:
 			e.promptCheck = false
-			if p, ok, err := w.inspect(ctx, id); err == nil && ok {
-				w.promptSeen(ctx, id, e, p)
-			}
+			w.checkPrompt(ctx, id, e)
 		// Output since the attach leaves the screen to the idle check.
 		case e.screenCheck && !e.awaitingIdle:
 			e.screenCheck = false

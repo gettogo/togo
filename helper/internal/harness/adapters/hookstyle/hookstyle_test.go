@@ -273,3 +273,23 @@ func TestDecisions(t *testing.T) {
 }
 
 func itoa(v int64) string { b, _ := json.Marshal(v); return string(b) }
+
+// Every Claude-shaped harness forwards its idle notification as idle, not
+// as a needs-you request; a real permission prompt still opens one.
+func TestIdleNotificationIsNotNeedsYou(t *testing.T) {
+	env := map[string]string{"TOGO_SESSION": "s_aaaaaaaaaa"}
+	for _, agent := range Agents() {
+		d, _ := For(agent)
+		f, err := Reduce(d, "Notification", []byte(`{"session_id":"x","message":"Waiting for your input","notification_type":"idle_prompt"}`), env)
+		if err != nil {
+			t.Fatalf("%s: %v", agent, err)
+		}
+		if f.Event != local.EventIdle {
+			t.Fatalf("%s idle notification reduced to %q", agent, f.Event)
+		}
+		f, err = Reduce(d, "Notification", []byte(`{"session_id":"x","message":"Needs permission","notification_type":"permission_prompt"}`), env)
+		if err != nil || f.Event != local.EventPermission {
+			t.Fatalf("%s permission notification %q err %v", agent, f.Event, err)
+		}
+	}
+}

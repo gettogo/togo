@@ -21,6 +21,9 @@ import TogoKit
     /// What an action answers, in place of the default (applied, or typed for `/` routes).
     var answer: ((Act) -> HarnessActionResult)?
     private(set) var acts: [Act] = []
+    /// What Stop answers, and how many times it was asked.
+    var interruptResult = HarnessActionResult(result: .applied)
+    private(set) var interrupts = 0
     private(set) var sends: [(text: String, mode: HarnessSendParams.Mode)] = []
     private(set) var completes: [(kind: HarnessCompleteParams.Kind, query: String)] = []
     private var tick = 0
@@ -48,14 +51,22 @@ import TogoKit
         return HarnessActionResult(result: .applied, screen: apply(act))
     }
 
-    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode) async throws -> HarnessItem {
+    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode, images: [String]) async throws -> HarnessItem {
         sends.append((text, mode))
         let at = WireDate(Date(timeIntervalSince1970: 1_793_000_000))
         return HarnessItem(id: "q\(sends.count)", seq: 100 + sends.count, at: at,
-                           body: .user(.init(text: text, queued: mode == .queue, source: "phone")))
+                           body: .user(.init(text: text, queued: mode == .queue, source: "phone",
+                                             images: images.map { HarnessImage(path: $0) })))
     }
 
-    func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult { HarnessActionResult(result: .applied) }
+    func upload(_ s: HarnessSubject, name: String, data: Data) async throws -> String { "/tmp/uploads/\(name)" }
+
+    func image(_ s: HarnessSubject, path: String) async throws -> Data { throw HarnessUnavailable() }
+
+    func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult {
+        interrupts += 1
+        return interruptResult
+    }
 
     func complete(_ s: HarnessSubject, kind: HarnessCompleteParams.Kind, query: String) async throws -> [HarnessCompletion] {
         completes.append((kind, query))
@@ -129,7 +140,7 @@ extension CommandLineModel.Routes {
             scope: { "preview" },
             complete: { try await services.complete(subject, kind: $0, query: $1) },
             send: { try await services.send(subject, text: $0, mode: $1) },
-            interrupt: { _ = try await services.interrupt(subject) },
+            interrupt: { try await services.interrupt(subject) },
             run: { try await services.act(subject, action: $0, target: $1, args: $2) }
         )
     }

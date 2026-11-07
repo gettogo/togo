@@ -76,6 +76,7 @@ struct PromptStartView: View {
                             Text(verbatim: suggestion.folder)
                                 .font(.system(.caption, design: .monospaced))
                                 .foregroundStyle(Color.togoMute)
+                                // trunc-ok: a folder path, middle-cut so root and folder show; picking it opens the new session sheet with the whole path
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }

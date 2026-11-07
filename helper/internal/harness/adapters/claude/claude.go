@@ -122,21 +122,20 @@ var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
 // plain strips terminal escapes from command output.
 func plain(s string) string { return ansi.ReplaceAllString(s, "") }
 
-// transcriptFor finds the newest transcript of the session folder written
-// since the session started, for when no SessionStart hook arrived.
+// transcriptFor finds the transcript of the session folder written since
+// the session started, for when no SessionStart hook arrived. Every Claude
+// Code session in the folder writes there, Togo's or not, so it guesses
+// only when exactly one transcript is that recent: never a neighbour's.
 func transcriptFor(env harness.Env) string {
 	key := env.Vars["cwd_key"]
-	if key == "" {
+	created, _ := time.Parse(time.RFC3339, env.Vars["created"])
+	if key == "" || created.IsZero() {
 		return ""
 	}
 	h := env.Vars[source.VarHome]
 	dir := filepath.Join(source.Expand("~", h), ".claude", "projects", key)
-	created, _ := time.Parse(time.RFC3339, env.Vars["created"])
-	p, mtime, err := source.Newest(filepath.Join(dir, "*.jsonl"), env)
+	p, err := source.Sole(filepath.Join(dir, "*.jsonl"), created.Add(-time.Minute), env)
 	if err != nil {
-		return ""
-	}
-	if !created.IsZero() && mtime.Before(created.Add(-time.Minute)) {
 		return ""
 	}
 	return p

@@ -23,6 +23,7 @@ struct RosterLine: View {
                 .font(.system(.footnote, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(Color.togoMute)
+                // trunc-ok: a bib is two or three digits
                 .lineLimit(1)
                 .frame(width: bibWidth, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
@@ -54,14 +55,14 @@ struct RosterLine: View {
             .font(.body.weight(.medium))
             .foregroundStyle(stale ? Color.togoMute : Color.togoSnow)
         guard showsAgent else {
-            return name.lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+            return name.fixedSize(horizontal: false, vertical: true)
         }
         // The agent's mark leads its name, in the same mute as the name.
         let agent = Text("  \(AgentGlyph.text(row.agent)) \(row.agentName)")
             .font(.subheadline)
             .foregroundStyle(Color.togoMute)
         return Text("\(name)\(agent)")
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// A stale "Needs you" is a last-known state, not a live call, so it never lights.
@@ -70,6 +71,7 @@ struct RosterLine: View {
             Text(StatusWord.label(row.status, exit: row.exit))
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
+                // trunc-ok: a status word from a fixed short set
                 .lineLimit(1)
                 .fixedSize()
         } else if connecting && !line.needsYou {
@@ -87,8 +89,10 @@ struct RosterLine: View {
             Text(verbatim: row.activity.flatMap { $0.isEmpty ? nil : $0 } ?? PathText.abbreviate(row.cwd))
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(Color.togoMute)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                .truncationMode(.tail)
+                // trunc-ok: the agent's live last action (or its folder, middle-cut), replaced
+                // every few seconds; VoiceOver reads it as the row's value and the row opens the session.
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+                .truncationMode(row.activity?.isEmpty == false ? .tail : .middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ActivityBars(samples: row.activityHistory, live: row.status == .working && !stale)
                 .accessibilityHidden(true)

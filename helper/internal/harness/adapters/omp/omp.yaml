@@ -9,6 +9,7 @@ match: { agents: [omp], commands: [omp] }
 harness: { version: [omp, --version], pattern: 'omp/(\S+)', range: ">=18.10 <19" }
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
   agents, background, plan, changes, ports, status, compact, settings]
+images: { insert: together }   # how image paths are pasted into the input
 feeds:
   session:          # newest session file for this folder; header {type: session, version: 3}
     jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true }
@@ -154,7 +155,7 @@ actions:
     relaunch: { argv: [omp, --resume, '{{.id}}'] }
     stability: documented
   interrupt:
-    keys: { keys: [Escape] }
+    keys: { keys: [Escape], until: idle, max: 2 }
     stability: documented
   stop:
     role: destructive

@@ -68,9 +68,26 @@ struct SmartCommandLine: View {
                         model.clearNotice()
                     }
             }
+            if let notice = model.attachments.notice {
+                Text(notice)
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .task(id: notice) {
+                        guard !loopsPaused else { return }
+                        try? await Task.sleep(for: .seconds(5))
+                        model.attachments.clearNotice()
+                    }
+            }
+            if !model.attachments.isEmpty {
+                AttachmentStrip(attachments: model.attachments)
+                    .transition(.opacity)
+            }
             field
             accessories
         }
+        .motion(.rowGrow, value: model.attachments.isEmpty)
         .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
         .glassEffect(glass, in: .rect(cornerRadius: Self.radius, style: .continuous))
     }
@@ -87,8 +104,9 @@ struct SmartCommandLine: View {
             .font(.mono(.body))
             .foregroundStyle(Color.togoSnow)
             .lineLimit(1...6)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
+            // A prompt is natural language; a "/" command or an "@" file is typed exactly.
+            .textInputAutocapitalization(assists ? .sentences : .never)
+            .autocorrectionDisabled(!assists)
             .focused($focused)
             .padding(.vertical, 12)
             .onKeyPress(phases: .down, action: key)
@@ -119,34 +137,46 @@ struct SmartCommandLine: View {
         .motion(.fade, value: model.canSend)
     }
 
+    /// The chips in one row, or the mode chip on a row of its own above the others when the
+    /// mode's name and the text size leave no room, so the mode is never cut short.
     private var accessories: some View {
-        HStack(spacing: 6) {
-            if model.showsModeChip { modeChip }
-            if model.routes.has(HarnessCapability.commands) {
-                Button(ComposerCopy.commands, systemImage: "slash.circle") { model.paletteOpen = true }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(ComposerChipStyle())
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                if model.showsModeChip { modeChip }
+                tools
             }
-            if model.routes.has(HarnessCapability.files) {
-                Button(ComposerCopy.mention, systemImage: "at") {
-                    model.draft += model.draft.isEmpty || model.draft.last?.isWhitespace == true ? "@" : " @"
-                    focused = true
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(ComposerChipStyle())
-            }
-            Spacer(minLength: 0)
-            if model.canInterrupt {
-                Button(ComposerCopy.interrupt, systemImage: "stop.fill") {
-                    Task { await model.interrupt() }
-                }
-                .buttonStyle(ComposerChipStyle(prominent: true))
-                .transition(.opacity)
+            VStack(alignment: .leading, spacing: 0) {
+                if model.showsModeChip { modeChip }
+                HStack(spacing: 6) { tools }
             }
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 8)
         .motion(.fade, value: model.canInterrupt)
+    }
+
+    @ViewBuilder private var tools: some View {
+        if model.routes.has(HarnessCapability.commands) {
+            Button(ComposerCopy.commands, systemImage: "slash.circle") { model.paletteOpen = true }
+                .labelStyle(.iconOnly)
+                .buttonStyle(ComposerChipStyle())
+        }
+        if model.attachments.available {
+            AttachMenu(attachments: model.attachments)
+        }
+        if model.routes.has(HarnessCapability.files) {
+            Button(ComposerCopy.mention, systemImage: "at") {
+                model.draft += model.draft.isEmpty || model.draft.last?.isWhitespace == true ? "@" : " @"
+                focused = true
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(ComposerChipStyle())
+        }
+        Spacer(minLength: 0)
+        if model.canInterrupt {
+            StopChip { Task { await model.interrupt() } }
+                .transition(.opacity)
+        }
     }
 
     private var modeChip: some View {
@@ -162,12 +192,19 @@ struct SmartCommandLine: View {
         } label: {
             Label(model.modeLabel ?? ComposerCopy.mode, systemImage: "dial.medium")
                 .labelStyle(.titleAndIcon)
+                // trunc-ok: two lines in a full-width row of its own. A long mode name wraps inside its chip rather than losing its end.
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
         }
         .menuStyle(.button)
         .buttonStyle(ComposerChipStyle())
         .accessibilityLabel(ComposerCopy.mode)
         .accessibilityValue(model.modeLabel ?? "")
+        .help(model.modeLabel.map(ComposerCopy.modeValue) ?? ComposerCopy.mode)
     }
+
+    /// The keyboard helps with natural language only.
+    private var assists: Bool { CommandLineLogic.keyboardAssists(model.draft) }
 
     private var placeholder: String {
         ComposerCopy.message(model.store.descriptor?.adapter?.name ?? "")
@@ -232,7 +269,31 @@ struct ScreenRequest: Identifiable {
     var id: String
 }
 
-/// The small capsules under the field: the mode chip, commands, @ and Interrupt.
+/// Stop for the running turn: the stop mark and "Stop", or the mark alone when the row is too
+/// narrow for both, so the word never truncates. VoiceOver says "Interrupt" either way.
+private struct StopChip: View {
+    let action: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            button(.titleAndIcon)
+            button(.iconOnly)
+        }
+        .layoutPriority(1)
+    }
+
+    private func button(_ style: some LabelStyle) -> some View {
+        Button(action: action) {
+            Label(ComposerCopy.stop, systemImage: "stop.fill")
+                .labelStyle(style)
+                .fixedSize()
+        }
+        .buttonStyle(ComposerChipStyle(prominent: true))
+        .accessibilityLabel(ComposerCopy.interrupt)
+    }
+}
+
+/// The small capsules under the field: the mode chip, commands, @ and Stop.
 struct ComposerChipStyle: ButtonStyle {
     @Environment(\.displayScale) private var displayScale
     var prominent = false
@@ -240,6 +301,7 @@ struct ComposerChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
+            // trunc-ok: chips are icons, Stop (which drops to its icon via ViewThatFits) or the mode chip, which overrides this and wraps
             .foregroundStyle(prominent ? Color.togoInk : Color.togoSnow)
             .lineLimit(1)
             .padding(.horizontal, 12)

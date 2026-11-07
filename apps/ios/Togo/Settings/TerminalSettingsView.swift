@@ -294,6 +294,7 @@ private struct ThemePreview: View {
             }
         }
         .font(terminalFont(size))
+        // trunc-ok: a fixed sample of terminal output that previews the theme; a terminal does not wrap
         .lineLimit(1)
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

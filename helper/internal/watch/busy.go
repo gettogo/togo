@@ -163,3 +163,37 @@ func (w *Watcher) busy(ctx context.Context, id string, e *entry) bool {
 	}
 	return detect.Busy(e.agent, screen)
 }
+
+// StatusReader reads back the status a StatusSink holds. A sink that
+// implements it lets the watcher correct a stale "working".
+type StatusReader interface {
+	Status(id string) string
+}
+
+// checkPrompt looks for a prompt once output that did not mark the session
+// working fell silent; without one it checks the status is not stale.
+func (w *Watcher) checkPrompt(ctx context.Context, id string, e *entry) {
+	p, ok, err := w.inspect(ctx, id)
+	switch {
+	case err != nil:
+	case ok:
+		w.promptSeen(ctx, id, e, p)
+	default:
+		w.staleWorking(ctx, id, e)
+	}
+}
+
+// staleWorking ends a "working" status that the screen no longer bears
+// out: an agent with a working indicator shows neither it nor a prompt.
+// It happens when a turn is interrupted at a permission prompt: the
+// prompt already settled the session without changing its status, the
+// hooks that set "working" send no Stop after an interrupt, and the
+// output the interrupt draws is no work. An interrupt is no finished
+// turn, so no done notification goes out.
+func (w *Watcher) staleWorking(ctx context.Context, id string, e *entry) {
+	r, ok := w.cfg.Status.(StatusReader)
+	if !ok || r.Status(id) != statusWorking || !detect.KnowsBusy(e.agent) || w.busy(ctx, id, e) {
+		return
+	}
+	w.setStatus(id, statusIdle)
+}

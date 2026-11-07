@@ -79,6 +79,10 @@ type SendRequest struct {
 	Session string `json:"id"`
 	Text    string `json:"text"`
 	Mode    string `json:"mode"`
+	// Images are absolute paths of pictures sent with the prompt, usually
+	// files fs.upload wrote. They go in the same prompt, inserted the way
+	// the adapter's images.insert says.
+	Images []string `json:"images,omitempty"`
 }
 
 // SendResult is harness.send's result.

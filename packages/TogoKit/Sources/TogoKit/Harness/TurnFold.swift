@@ -113,6 +113,8 @@ public enum TurnFold {
     }
 
     private struct Turn {
+        /// The marker of a turn the agent started on its own, drawn before everything else.
+        var lead: [ChatRow] = []
         var prompts: [HarnessItem] = []
         var steps: [HarnessItem] = []
         var rest: [ChatRow] = []
@@ -122,6 +124,8 @@ public enum TurnFold {
             switch item.body {
             case .user: prompts.append(item)
             case .turn(let value): turn = value
+            case .notice(let notice) where notice.code == HarnessItem.Notice.continued:
+                lead.append(.notice(item))
             default:
                 if TurnFold.isStep(item) {
                     steps.append(item)
@@ -132,7 +136,7 @@ public enum TurnFold {
         }
 
         func rows(id: String) -> [ChatRow] {
-            var rows = prompts.map(ChatRow.prompt)
+            var rows = lead + prompts.map(ChatRow.prompt)
             let summary = turn.map(TurnFold.summary) ?? TurnFold.computed(steps)
             if !steps.isEmpty || summary.running || summary.steps > 0 {
                 rows.append(.work(id: "work.\(id)", summary: summary, steps: steps))

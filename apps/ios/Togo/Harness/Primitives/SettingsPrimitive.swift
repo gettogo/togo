@@ -138,9 +138,9 @@ private struct ChoiceList: View {
                             .opacity(option.id == value ? 1 : 0)
                             .frame(width: checkWidth)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(option.label).font(.body)
-                            if let detail = option.detail {
-                                Text(detail).font(.footnote).foregroundStyle(Color.togoMute)
+                            Text(verbatim: option.shownTitle).font(.body)
+                            if let detail = option.shownDetail {
+                                Text(verbatim: detail).font(.footnote).foregroundStyle(Color.togoMute)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

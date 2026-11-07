@@ -52,6 +52,7 @@
         { "if": { "properties": { "method": { "const": "git.commit" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitCommitParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "fs.read" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsReadParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "fs.upload" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsUploadParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "fs.image" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsImageParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "ports.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "awake.status" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
         { "if": { "properties": { "method": { "const": "awake.set" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/AwakeSetParams" } }, "required": ["params"] } },
@@ -338,7 +339,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"image.v1\" (fs.image), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -1790,6 +1791,25 @@
       ],
       "additionalProperties": false
     },
+    "FsImageParams": {
+      "description": "fs.image (image.v1). Reads a picture the chat shows. path must be absolute and clean with an image extension, and after symlinks inside $TOGO_HOME/uploads/<sessionId>/ or the session's working folder; anything else, or a file whose bytes are not PNG, JPEG, GIF, WebP or HEIC, is -32602. sessionId must be a managed session id.",
+      "type": "object",
+      "properties": { "sessionId": { "$ref": "#/$defs/SessionIdParam" }, "path": { "type": "string" } },
+      "required": ["sessionId", "path"],
+      "additionalProperties": false
+    },
+    "FsImageResult": {
+      "description": "data is the picture as base64url without padding, at most 700000 bytes. A larger PNG, JPEG or GIF is shrunk to a JPEG that fits (scaled true); any other larger picture, or one over 40 MiB, is -32602. bytes is the file's size on disk.",
+      "type": "object",
+      "properties": {
+        "mediaType": { "type": "string" },
+        "data": { "$ref": "#/$defs/Base64Url" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "scaled": { "type": "boolean" }
+      },
+      "required": ["mediaType", "data", "bytes", "scaled"],
+      "additionalProperties": false
+    },
     "AwakeStatus": {
       "description": "awake.status and awake.set result, and the awake event payload (awake.v1): whether the helper is keeping the machine awake. mode: off never holds; plugged (default) holds a sleep assertion while any managed session is working or needs_you and for 2 minutes after, which keeps a closed laptop awake on AC power only; battery also disables sleep so a closed lid stays awake on battery. held: a sleep block is in place now. reason: unsupported (platformSupported false), off, idle (no session working or waiting), active, grace (held for 2 minutes after the last active session), on_battery (plugged mode held on battery: a closed lid still sleeps), needs_admin_setup (battery mode before its one-time setup on the machine; behaves like plugged), battery_floor (battery mode paused at or below batteryFloor until 5 points above it or charging), thermal (battery mode paused by a thermal warning on battery), failed (detail says why). power and batteryPercent describe the power source; batteryPercent is absent without a battery or when unknown. needsAdmin: battery mode needs `togo awake battery` run on the machine first.",
       "type": "object",
@@ -2293,9 +2313,20 @@
       "required": ["text", "partial"],
       "additionalProperties": false
     },
+    "HarnessImage": {
+      "description": "A picture in the conversation: inline (base64url, at most 48 KiB decoded) when small, else by absolute path for fs.image, or only described.",
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "data": { "type": "string", "maxLength": 65536 }
+      },
+      "additionalProperties": false
+    },
     "HarnessItemUser": {
       "type": "object",
-      "properties": { "text": { "type": "string" }, "queued": { "type": "boolean" }, "withdrawn": { "type": "boolean" }, "source": { "enum": ["phone", "desk", "unknown"] } },
+      "properties": { "text": { "type": "string" }, "queued": { "type": "boolean" }, "withdrawn": { "type": "boolean" }, "source": { "enum": ["phone", "desk", "unknown"] }, "images": { "type": "array", "maxItems": 10, "items": { "$ref": "#/$defs/HarnessImage" } } },
       "required": ["text", "queued", "source"],
       "additionalProperties": false
     },
@@ -2312,7 +2343,8 @@
         "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] },
         "output": { "description": "Tail of the tool's output, at most 4096 bytes, secrets removed.", "type": "string" },
         "exitCode": { "type": ["integer", "null"] },
-        "files": { "type": "array", "items": { "$ref": "#/$defs/HarnessFileChange" } }
+        "files": { "type": "array", "items": { "$ref": "#/$defs/HarnessFileChange" } },
+        "images": { "type": "array", "maxItems": 10, "items": { "$ref": "#/$defs/HarnessImage" } }
       },
       "required": ["callId", "name", "title", "category", "state", "startedAt", "endedAt"],
       "additionalProperties": false
@@ -2382,7 +2414,7 @@
       "type": "object",
       "properties": {
         "level": { "enum": ["info", "warning", "error"] },
-        "code": { "enum": ["compacted", "model", "mode", "rate_limit", "error", "resumed", "interrupted", "fallback"] },
+        "code": { "enum": ["compacted", "model", "mode", "rate_limit", "error", "resumed", "interrupted", "fallback", "continued"] },
         "text": { "type": "string" }
       },
       "required": ["level", "code", "text"],
@@ -2787,6 +2819,13 @@
           "description": "Capabilities the adapter declares whose sources failed or whose version gate refused this harness version.",
           "type": "array",
           "items": { "type": "string" }
+        },
+        "images": {
+          "description": "How the harness takes image paths in a prompt. per_path pastes each path on its own, then the text; together pastes them at once. Absent: together.",
+          "type": "object",
+          "properties": { "insert": { "enum": ["per_path", "together"] } },
+          "required": ["insert"],
+          "additionalProperties": false
         }
       },
       "required": ["adapter", "capabilities", "screens", "modes", "mode", "degraded"],
@@ -2870,8 +2909,12 @@
       "type": "object",
       "properties": {
         "id": { "$ref": "#/$defs/ManagedSessionId" },
-        "text": { "description": "Same rules as session.sendText text.", "type": "string", "minLength": 1 },
-        "mode": { "enum": ["now", "queue"] }
+        "text": { "description": "Same rules as session.sendText text; may be empty only when images are given.", "type": "string" },
+        "mode": { "enum": ["now", "queue"] },
+        "images": {
+          "description": "Absolute, clean image paths (png, jpg, jpeg, gif, webp, heic) sent in the same prompt, usually files fs.upload wrote. Typed into the input as the adapter's images.insert says, then the text, then Enter once; through a harness API all go in the one request.",
+          "type": "array", "maxItems": 10, "items": { "type": "string", "minLength": 2, "maxLength": 1024 }
+        }
       },
       "required": ["id", "text"],
       "additionalProperties": false
@@ -3412,6 +3455,7 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.commit" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "type": "object", "properties": { "hash": { "type": "string" }, "short": { "type": "string" } }, "required": ["hash", "short"], "additionalProperties": false } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.read" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsReadResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.upload" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsUploadResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.image" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsImageResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "ports.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/PortsListResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "awake.status" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AwakeStatus" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "awake.set" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AwakeStatus" } } } } } },

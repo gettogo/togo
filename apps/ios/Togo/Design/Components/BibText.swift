@@ -15,6 +15,7 @@ struct BibText: View {
             .font(.system(style, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(Color.togoMute)
+            // trunc-ok: a bib is two or three digits
             .lineLimit(1)
             .fixedSize()
     }

@@ -129,8 +129,6 @@ struct AgentStep: View {
             } else {
                 Text(verbatim: AgentPresetText.commandLine(preset))
                     .font(.system(.subheadline, design: .monospaced))
-                    .lineLimit(2)
-                    .truncationMode(.middle)
             }
         }
     }

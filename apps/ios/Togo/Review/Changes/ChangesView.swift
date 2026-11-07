@@ -166,8 +166,6 @@ private struct ChangesHeader: View {
                     Text(verbatim: branch)
                         .font(.system(.body, design: .monospaced).weight(.semibold))
                         .foregroundStyle(Color.togoSnow)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
                 } icon: {
                     Image(systemName: "arrow.triangle.branch")
                         .foregroundStyle(Color.togoMute)
@@ -276,6 +274,7 @@ struct ChangeRowView: View {
                     Text(verbatim: row.displayName)
                         .font(.body)
                         .foregroundStyle(Color.togoSnow)
+                        // trunc-ok: a file name, middle-cut keeping its extension, three lines at accessibility sizes; tapping opens the diff titled with the full path
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
                         .truncationMode(.middle)
                     if !row.folder.isEmpty {

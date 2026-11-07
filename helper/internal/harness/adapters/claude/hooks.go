@@ -74,16 +74,16 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if m := str(p, "model"); m != "" {
 			h.state["model"] = Alias(m)
 		}
-		h.state["working"] = "false"
+		h.setWorking(false, at)
 		if str(p, "source") == "resume" {
 			return h.notice(at, harness.NoticeResumed, "info", "Resumed an earlier conversation"), nil
 		}
 	case "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "SubagentStart", "PreCompact":
-		h.state["working"] = "true"
+		h.setWorking(true, at)
 	case "Stop", "SessionEnd":
-		h.state["working"] = "false"
+		h.setWorking(false, at)
 	case "StopFailure":
-		h.state["working"] = "false"
+		h.setWorking(false, at)
 		code, text := harness.NoticeError, "The turn stopped on an error"
 		if str(p, "error") == "rate_limit" {
 			code, text = harness.NoticeRateLimit, "Usage limit reached"
@@ -93,6 +93,14 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return nil, taskOps(p)
 	}
 	return nil, nil
+}
+
+// setWorking records whether a turn runs as of the hook's time. No Stop
+// hook follows an interrupted turn, so the stamp lets the transcript's
+// later interrupt end the turn (harness.MergeWorking).
+func (h *hooks) setWorking(w bool, at time.Time) {
+	h.state["working"] = fmt.Sprint(w)
+	h.state[harness.StateWorkingAt] = harness.StampWorking(at)
 }
 
 func (h *hooks) notice(at time.Time, code, level, text string) []harness.Item {

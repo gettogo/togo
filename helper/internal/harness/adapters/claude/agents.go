@@ -2,6 +2,7 @@ package claude
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -84,8 +85,10 @@ func (t *transcript) background(taskID string, call *harness.Item, at time.Time)
 	if call.Tool.Subject != nil {
 		cmd = call.Tool.Subject.Text
 	}
+	// The call's own description names the job; the command stays the subtitle.
+	title := firstNonEmpty(t.shellAbout[call.ID], call.Tool.Title)
 	it := harness.Item{ID: "bg-" + taskID, TurnID: call.TurnID, Kind: harness.KindBackground, At: at,
-		Background: &harness.BackgroundBody{JobID: taskID, Kind: harness.BackgroundShell, Title: call.Tool.Title, Command: cmd,
+		Background: &harness.BackgroundBody{JobID: taskID, Kind: harness.BackgroundShell, Title: title, Command: cmd,
 			State: harness.StateRunning, Started: at}}
 	t.tools["bg-"+taskID] = &it
 	return []harness.Item{it}, []harness.Op{bgRow(it)}
@@ -103,6 +106,72 @@ var (
 	statusTag  = regexp.MustCompile(`<status>([^<]+)</status>`)
 	summaryTag = regexp.MustCompile(`(?s)<summary>(.*?)</summary>`)
 )
+
+// isTaskNotification reports whether a main-chain user message is a task
+// notification Claude Code sent itself rather than a person's prompt.
+func isTaskNotification(e entry, text string) bool {
+	var origin struct {
+		Kind string `json:"kind"`
+	}
+	if json.Unmarshal(e.Origin, &origin) == nil && origin.Kind == "task-notification" {
+		return true
+	}
+	return strings.HasPrefix(strings.TrimSpace(text), "<task-notification>")
+}
+
+// continued starts the turn Claude Code takes on its own after a task
+// notification, opened by a quiet marker naming the trigger. One that
+// arrives while a turn still runs belongs to that turn and draws nothing.
+func (t *transcript) continued(e entry, at time.Time, content string) []harness.Item {
+	if t.turn != nil && !t.turn.ended {
+		return nil
+	}
+	id := e.UUID
+	if id == "" {
+		t.notices++
+		id = fmt.Sprintf("continued-%d-%d", at.UnixMilli(), t.notices)
+	}
+	t.turn = &turnState{id: id, started: at, files: map[string]bool{}, state: harness.StateRunning}
+	t.workingAt = at
+	return []harness.Item{{ID: id, TurnID: id, Kind: harness.KindNotice, At: at,
+		Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeContinued, Text: t.trigger(content)}}}
+}
+
+var exitCodeTag = regexp.MustCompile(`\(exit code (-?\d+)\)`)
+
+// trigger names what a task notification reports: a subagent or a
+// background shell that finished, failed or was stopped.
+func (t *transcript) trigger(content string) string {
+	var id, status, summary string
+	if m := taskIDTag.FindStringSubmatch(content); m != nil {
+		id = strings.TrimSpace(m[1])
+	}
+	if m := statusTag.FindStringSubmatch(content); m != nil {
+		status = strings.TrimSpace(m[1])
+	}
+	if m := summaryTag.FindStringSubmatch(content); m != nil {
+		summary = strings.TrimSpace(m[1])
+	}
+	what := "Task"
+	_, agent := t.agents[id]
+	_, shell := t.tools["bg-"+id]
+	switch {
+	case agent || strings.HasPrefix(summary, "Agent "):
+		what = "Subagent"
+	case shell || strings.HasPrefix(summary, "Background command"):
+		what = "Background task"
+	}
+	if m := exitCodeTag.FindStringSubmatch(summary); m != nil && m[1] != "0" && status == "completed" {
+		status = "failed"
+	}
+	switch status {
+	case "failed", "error":
+		return what + " failed"
+	case "killed", "stopped", "cancelled":
+		return what + " stopped"
+	}
+	return what + " finished"
+}
 
 // queued reads task notifications Claude Code queues for itself when a
 // background shell or agent finishes.

@@ -197,11 +197,12 @@ private struct ConfirmQuestionView: View {
                     .foregroundStyle(on ? Color.togoInk : Color.togoMute)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(option.label).font(.body.weight(.semibold))
-                    if let detail = option.detail, !detail.isEmpty {
-                        Text(detail).font(.footnote).opacity(0.75)
+                    Text(verbatim: option.shownTitle).font(.body.weight(.semibold))
+                    if let detail = option.shownDetail {
+                        Text(verbatim: detail).font(.footnote).opacity(0.75)
                     }
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .foregroundStyle(on ? Color.togoInk : Color.togoSnow)
@@ -213,8 +214,19 @@ private struct ConfirmQuestionView: View {
         }
         .buttonStyle(.plain)
         .motion(.confirm, value: on)
-        .accessibilityLabel(option.label)
-        .accessibilityHint(option.detail ?? "")
+        .accessibilityLabel(option.shownTitle)
+        .accessibilityHint(option.shownDetail ?? "")
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+extension HarnessChoice {
+    /// The label's own words; an explanation after " · " moves under it.
+    var shownTitle: String { AnswerOptionText.split(label).title }
+
+    /// The choice's detail, else the explanation its label carried after " · ".
+    var shownDetail: String? {
+        if let detail, !detail.isEmpty { return detail }
+        return AnswerOptionText.split(label).explanation
     }
 }

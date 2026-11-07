@@ -40,8 +40,6 @@ struct OpenAskSheet: View {
                     Text(verbatim: url.absoluteString)
                         .font(.system(.footnote, design: .monospaced))
                         .foregroundStyle(Color.togoMute)
-                        .lineLimit(3)
-                        .truncationMode(.middle)
                         .textSelection(.enabled)
                 }
                 if let note {
@@ -128,10 +126,10 @@ struct LinksSheet: View {
                 Text(verbatim: url.host(percentEncoded: false) ?? "")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.togoSnow)
-                    .lineLimit(1)
                 Text(verbatim: url.absoluteString)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(Color.togoMute)
+                    // trunc-ok: a link in a list, middle-cut so host and end show; choosing it opens a sheet with the whole address
                     .lineLimit(2)
                     .truncationMode(.middle)
             }

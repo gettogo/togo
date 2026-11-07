@@ -40,7 +40,7 @@ import (
 // Capabilities are what a daemon built by Compose serves.
 var Capabilities = []string{
 	"session.v1", "agents.v1", "fs.v1", "capture.v1",
-	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1",
+	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1", "image.v1",
 	"gitwrite.v1",
 	awake.Capability,
 	browser.Capability,

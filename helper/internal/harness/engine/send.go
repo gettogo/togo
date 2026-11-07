@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
@@ -21,16 +22,19 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 	if err != nil {
 		return harness.SendResult{}, err
 	}
+	images := harness.ImageRefs(req.Images)
 	if act, ok := s.ad.Actions["send"]; ok {
-		raw, _ := json.Marshal(req.Text)
-		res, err := e.run(ctx, s, "send", act, map[string]any{"text": req.Text, "value": json.RawMessage(raw)})
+		// Through the harness API every path and the text go in the one request.
+		text := harness.Together(req.Text, req.Images)
+		raw, _ := json.Marshal(text)
+		res, err := e.run(ctx, s, "send", act, map[string]any{"text": text, "value": json.RawMessage(raw), "images": req.Images})
 		if err != nil {
 			return harness.SendResult{}, err
 		}
 		if res.Result == harness.ResultFailed || res.Result == harness.ResultFallback {
 			return harness.SendResult{}, &harness.FallbackError{Reason: "source", Detail: res.Message}
 		}
-		return e.userItem(s, req.Text, false), nil
+		return e.userItem(s, req.Text, images, false), nil
 	}
 	if e.cfg.Typist == nil {
 		return harness.SendResult{}, &harness.FallbackError{Reason: "source", Detail: "no typist"}
@@ -48,7 +52,7 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 			s.mu.Unlock()
 			return harness.SendResult{}, harness.ErrBusy
 		}
-		it := s.newUserItemLocked(req.Text, true)
+		it := s.newUserItemLocked(req.Text, images, true)
 		s.queue = append(s.queue, queued{item: it})
 		s.publishLocked([]harness.Item{it}, nil)
 		stored, _ := e.log.Get(s.id, it.ID)
@@ -57,27 +61,54 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		return harness.SendResult{Item: stored}, nil
 	}
 	s.mu.Unlock()
-	if err := e.cfg.Typist.Type(ctx, s.id, req.Text, true, false); err != nil {
+	if err := e.typePrompt(ctx, s, req.Text, req.Images); err != nil {
 		return harness.SendResult{}, err
 	}
-	return e.userItem(s, req.Text, false), nil
+	return e.userItem(s, req.Text, images, false), nil
 }
+
+// typePrompt pastes a prompt and its image paths in the order the
+// adapter's images.insert asks for, pressing Enter once at the end.
+func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []string) error {
+	insert := harness.InsertTogether
+	if im := s.ad.Images; im != nil {
+		insert = im.Insert
+	}
+	steps := harness.Insertions(text, images, insert)
+	for i, step := range steps {
+		if i > 0 {
+			// Let the input take one path before the next arrives.
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(insertGap):
+			}
+		}
+		if err := e.cfg.Typist.Type(ctx, s.id, step.Text, step.Submit, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// insertGap is the pause between two pastes of one prompt.
+var insertGap = 150 * time.Millisecond
 
 // userItem publishes a sent prompt and remembers it, so the agent's own
 // record of it takes this item's place.
-func (e *Engine) userItem(s *sess, text string, queuedNow bool) harness.SendResult {
+func (e *Engine) userItem(s *sess, text string, images []harness.ImageRef, queuedNow bool) harness.SendResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	it := s.newUserItemLocked(text, queuedNow)
-	s.notePhoneLocked(it.ID, text)
+	it := s.newUserItemLocked(text, images, queuedNow)
+	s.notePhoneLocked(it.ID, text, images)
 	s.publishLocked([]harness.Item{it}, nil)
 	stored, _ := e.log.Get(s.id, it.ID)
 	return harness.SendResult{Item: stored}
 }
 
-func (s *sess) newUserItemLocked(text string, queued bool) harness.Item {
+func (s *sess) newUserItemLocked(text string, images []harness.ImageRef, queued bool) harness.Item {
 	return harness.Item{ID: s.e.newID(), Kind: harness.KindUser, At: s.e.cfg.Now(),
-		User: &harness.UserBody{Text: text, Queued: queued, Source: "phone"}}
+		User: &harness.UserBody{Text: text, Queued: queued, Source: "phone", Images: images}}
 }
 
 // drainLocked starts typing the next queued prompt (see drainQueue).

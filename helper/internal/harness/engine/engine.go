@@ -259,6 +259,9 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 	if d.Capabilities == nil {
 		d.Capabilities = []string{}
 	}
+	if im := a.Images; im != nil && im.Insert != "" {
+		d.Images = &harness.ImagePolicy{Insert: im.Insert}
+	}
 	for _, name := range a.screenOrder {
 		if !s.gateOK {
 			break

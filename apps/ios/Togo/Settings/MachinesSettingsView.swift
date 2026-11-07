@@ -124,10 +124,13 @@ struct MachinesSettingsView: View {
                     } label: {
                         MachineRow(machine: machine)
                     }
+                    // No destructive role: it would take the row away before the question is
+                    // answered, and the list would count one row short from then on.
                     .swipeActions {
-                        Button(settingsText("settings.machines.remove", "Remove"), role: .destructive) {
+                        Button(settingsText("settings.machines.remove", "Remove")) {
                             removal.request(machine)
                         }
+                        .tint(.red)
                     }
                     .contextMenu {
                         if case .outdated = machine.helper {
@@ -284,8 +287,6 @@ private struct MachineRow: View {
                 Text(machine.address)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
                 Text(machine.helper.settingsDescription)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)

@@ -12,6 +12,7 @@ struct LiveStatusText: View {
             .font(font)
             .fontWeight(status == .needsYou ? .semibold : .medium)
             .foregroundStyle(Self.color(status))
+            // trunc-ok: a status word from a fixed short set
             .lineLimit(1)
     }
 
@@ -60,6 +61,7 @@ struct LiveLockScreenView: View {
             Text(verbatim: LiveCopy.agentOnMachine(agent: state.agent, machine: machine))
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
+                // trunc-ok: the Live Activity has a fixed height; tapping it opens the session with its agent and machine
                 .lineLimit(1)
             Spacer(minLength: 12)
             if status.showsElapsed {
@@ -80,6 +82,7 @@ struct LiveLockScreenView: View {
                 Text(LiveCopy.waiting(state.waiting))
                     .font(.subheadline)
                     .foregroundStyle(Color.togoSnow)
+                    // trunc-ok: "3 waiting"
                     .lineLimit(1)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
             }
@@ -90,6 +93,7 @@ struct LiveLockScreenView: View {
         Text(verbatim: command)
             .font(.system(.footnote, design: .monospaced))
             .foregroundStyle(Color.togoSnow)
+            // trunc-ok: the Live Activity has a fixed height: two lines of the command, middle-cut so its start and end show; tapping opens the request with the whole command
             .lineLimit(2)
             .truncationMode(.middle)
             .frame(maxWidth: .infinity, alignment: .leading)

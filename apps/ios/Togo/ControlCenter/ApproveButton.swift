@@ -27,13 +27,16 @@ private struct ApproveStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.semibold))
             .foregroundStyle(colorScheme == .dark ? Color.togoInk : Color.white)
-            .lineLimit(2)
+            // Agents word their approve option at length ("Yes, and don't ask again for this
+            // command"); it wraps and never loses its end. The shape is a capsule on one line and
+            // a rounded box once the words wrap, so no corner clips them.
             .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 18)
             .padding(.vertical, 11)
             .frame(minWidth: 44, minHeight: 44)
-            .background(colorScheme == .dark ? Color.togoAccent : Color.togoAccentText, in: .capsule)
-            .contentShape(.capsule)
+            .background(colorScheme == .dark ? Color.togoAccent : Color.togoAccentText, in: .rect(cornerRadius: 22, style: .continuous))
+            .contentShape(.rect(cornerRadius: 22, style: .continuous))
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
             .motion(.confirm, value: configuration.isPressed)
@@ -48,7 +51,8 @@ struct PlainAnswerStyle: ButtonStyle {
         configuration.label
             .font(.body)
             .foregroundStyle(Color.togoSnow)
-            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12)
             .padding(.vertical, 11)
             .frame(minWidth: 44, minHeight: 44)

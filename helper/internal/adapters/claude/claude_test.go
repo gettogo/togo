@@ -35,7 +35,7 @@ func TestMapFixtures(t *testing.T) {
 		{"post_tool_use.json", "PostToolUse", wire.HookData{Tool: "Write"}, local.EventToolDone, ""},
 		{"permission_request.json", "PermissionRequest", wire.HookData{Tool: "Bash", Command: "rm -rf node_modules", Subject: &wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf node_modules"}}, local.EventPermission, ""},
 		{"notification_permission.json", "Notification", wire.HookData{Message: "Claude needs your permission to use Bash"}, local.EventPermission, ""},
-		{"notification_idle.json", "Notification", wire.HookData{Message: "Claude is waiting for your input"}, local.EventAttention, ""},
+		{"notification_idle.json", "Notification", wire.HookData{Message: "Claude is waiting for your input"}, local.EventIdle, ""},
 		{"stop.json", "Stop", wire.HookData{Message: "Done. All tests pass."}, local.EventStop, ""},
 		{"session_start.json", "SessionStart", wire.HookData{Model: "claude-opus-5"}, local.EventStart, ""},
 		{"statusline.json", Statusline, wire.HookData{Model: "Opus", ContextPercent: &pct, CostUSD: &cost}, local.EventMeta, "Opus 8%"},

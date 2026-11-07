@@ -123,11 +123,13 @@ private struct OldestLine: View {
                 Text(verbatim: bib)
                     .font(.system(font, design: .monospaced))
                     .monospacedDigit()
+                    // trunc-ok: a bib is two or three digits
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             Text(verbatim: oldest.agent)
                 .font(.system(font))
+                // trunc-ok: a widget has a fixed size; tapping opens the waiting request with its agent
                 .lineLimit(1)
                 .layoutPriority(1)
         }
@@ -175,6 +177,7 @@ struct WaitingRectangularView: View {
             Text(summary.count == 0 ? LiveCopy.nothingWaiting : LiveCopy.waiting(summary.count))
                 .font(.headline)
                 .widgetAccentable()
+                // trunc-ok: "3 waiting" or "Nothing waiting"
                 .lineLimit(1)
             if summary.count > 0, let oldest = summary.oldest {
                 OldestLine(oldest: oldest, font: .subheadline)

@@ -157,8 +157,6 @@ private struct KeyBarItemRow: View {
                     Text(detail)
                         .font(isSequence ? .subheadline.monospaced() : .subheadline)
                         .foregroundStyle(Color.togoMute)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
             }
         }

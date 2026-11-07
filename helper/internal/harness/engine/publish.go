@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -177,8 +178,16 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 				u.Source = "unknown"
 			}
 			if !u.Queued {
-				if id, ok := s.matchPhoneLocked(it.ID, u.Text); ok {
-					it.ID, u.Source = id, "phone"
+				if p, ok := s.matchPhoneLocked(it.ID, u.Text); ok {
+					it.ID, u.Source = p.id, "phone"
+					// The phone's paths can be fetched; the agent's copy of a
+					// picture may be only described.
+					if len(p.images) > 0 {
+						u.Images = p.images
+					}
+					if len(u.Images) > 0 {
+						u.Text = p.text
+					}
 				}
 			}
 		}
@@ -277,7 +286,7 @@ func (s *sess) batchMark() func() (harness.Anchor, bool) {
 }
 
 // notePhoneLocked remembers a prompt the helper typed.
-func (s *sess) notePhoneLocked(id, text string) {
+func (s *sess) notePhoneLocked(id, text string, images []harness.ImageRef) {
 	now := s.e.cfg.Now()
 	keep := s.phone[:0]
 	for _, p := range s.phone {
@@ -285,21 +294,38 @@ func (s *sess) notePhoneLocked(id, text string) {
 			keep = append(keep, p)
 		}
 	}
-	s.phone = append(keep, phoneText{id: id, text: strings.TrimSpace(text), at: now})
+	s.phone = append(keep, phoneText{id: id, text: strings.TrimSpace(text), images: images, at: now})
 }
 
-func (s *sess) matchPhoneLocked(self, text string) (string, bool) {
+// imagePlaceholder is how an agent writes a pasted picture into the prompt text.
+var imagePlaceholder = regexp.MustCompile(`\[Image #\d+\]`)
+
+// matchPhoneLocked finds the phone prompt the agent's record of text is.
+// A prompt sent with pictures matches once the pasted paths and the
+// agent's [Image #n] placeholders are taken out.
+func (s *sess) matchPhoneLocked(self, text string) (phoneText, bool) {
 	text = strings.TrimSpace(text)
 	for i, p := range s.phone {
 		if p.id == self {
-			return "", false
+			return phoneText{}, false
 		}
-		if p.text == text {
+		if p.text == text || (len(p.images) > 0 && strings.Join(strings.Fields(p.text), " ") == withoutImages(text, p.images)) {
 			s.phone = append(s.phone[:i], s.phone[i+1:]...)
-			return p.id, true
+			return p, true
 		}
 	}
-	return "", false
+	return phoneText{}, false
+}
+
+func withoutImages(text string, images []harness.ImageRef) string {
+	for _, r := range images {
+		if r.Path != "" {
+			text = strings.ReplaceAll(text, harness.QuotePath(r.Path), "")
+			text = strings.ReplaceAll(text, r.Path, "")
+		}
+	}
+	text = imagePlaceholder.ReplaceAllString(text, "")
+	return strings.Join(strings.Fields(text), " ")
 }
 
 // currentModeLocked is the mode id from the modes source, else state.

@@ -140,6 +140,7 @@ struct LiveElapsed: View {
             }
         }
         .monospacedDigit()
+        // trunc-ok: a running timer
         .lineLimit(1)
     }
 

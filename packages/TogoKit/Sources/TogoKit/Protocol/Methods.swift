@@ -12,6 +12,7 @@ public enum Method: String, Sendable {
     case fsListDir = "fs.listDir"
     case fsRead = "fs.read"
     case fsUpload = "fs.upload"
+    case fsImage = "fs.image"
     case eventsSubscribe = "events.subscribe"
     case eventsKeepalive = "events.keepalive"
     case approvalList = "approval.list"

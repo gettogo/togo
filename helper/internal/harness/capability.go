@@ -57,6 +57,9 @@ type Descriptor struct {
 	// Degraded names capabilities the adapter declares but whose sources
 	// failed or whose version gate refused this harness version.
 	Degraded []string `json:"degraded"`
+	// Images is how the harness takes pictures in a prompt; nil means the
+	// client sends one image path per prompt.
+	Images *ImagePolicy `json:"images,omitempty"`
 }
 
 // AdapterInfo names the adapter and the harness version it saw.

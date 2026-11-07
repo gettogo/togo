@@ -407,18 +407,32 @@ func watchWhole(ctx context.Context, name string, fs spec.File, format string, e
 	})
 }
 
-// Newest returns the newest confined file matching pattern and its
-// modification time, without reading it.
-func Newest(pattern string, env harness.Env) (string, time.Time, error) {
+// Sole returns the one file matching pattern written at or after since.
+// When several were, it cannot tell which belongs to the caller and
+// returns ErrAmbiguous: another session in the same folder writes there
+// too, and guessing would show it its neighbour's conversation.
+func Sole(pattern string, since time.Time, env harness.Env) (string, error) {
 	ms, err := globConfined(pattern, env)
 	if err != nil {
-		return "", time.Time{}, err
+		return "", err
 	}
-	if len(ms) == 0 {
-		return "", time.Time{}, os.ErrNotExist
+	var fresh []match
+	for _, m := range ms {
+		if !m.mtime.Before(since) {
+			fresh = append(fresh, m)
+		}
 	}
-	return ms[0].path, ms[0].mtime, nil
+	switch len(fresh) {
+	case 0:
+		return "", os.ErrNotExist
+	case 1:
+		return fresh[0].path, nil
+	}
+	return "", ErrAmbiguous
 }
+
+// ErrAmbiguous is Sole's answer when more than one file qualifies.
+var ErrAmbiguous = errors.New("source: more than one file matches")
 
 // errNotRegular refuses a source path that is not a regular file: a FIFO
 // or device would block a read past the source's timeout.

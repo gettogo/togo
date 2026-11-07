@@ -111,3 +111,27 @@ func TestAnswerShapes(t *testing.T) {
 		t.Fatal("unknown decision accepted")
 	}
 }
+
+// While the app-server is live it owns the turn. An interrupted turn ends
+// with its turn/completed and no Stop hook, so the hooks' working, left
+// set by the last PreToolUse, must not keep the session working; and
+// turn/interrupt must name the app-server's turn, not the hooks' guess.
+func TestHooksLeaveTurnToLiveAppServer(t *testing.T) {
+	env := harness.Env{SessionID: "s_interrupt"}
+	app := NewAppServer(env)
+	run(app, records(t, "appserver-turn.jsonl")[:1])
+	hooks := NewHooks(env)
+	run(hooks, hookRecs(`{"session_id":"thr-9","hook_event_name":"UserPromptSubmit","prompt":"go"}`,
+		`{"session_id":"thr-9","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"sleep 60"}}`))
+	st := hooks.State()
+	if _, ok := st["working"]; ok {
+		t.Fatalf("hooks report working while the app-server is live: %v", st)
+	}
+	if _, ok := st["turn"]; ok {
+		t.Fatalf("hooks report a turn while the app-server is live: %v", st)
+	}
+	app.Map(harness.Record{Data: json.RawMessage(`{"method":"` + rpc.MethodClosed + `"}`)})
+	if hooks.State()["working"] != "true" {
+		t.Fatal("hooks own working again once the app-server feed closed")
+	}
+}

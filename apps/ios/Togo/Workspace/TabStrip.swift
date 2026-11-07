@@ -79,6 +79,7 @@ struct TabStrip: View {
                 Text(verbatim: chip.name)
                     .font(.subheadline.weight(isSelected ? .semibold : .regular))
             }
+            // trunc-ok: tab chips sit in a horizontal scroll view, so each takes its full width and never truncates
             .lineLimit(1)
             .foregroundStyle(isSelected ? Color.togoSnow : Color.togoMute)
             .padding(.horizontal, 12)

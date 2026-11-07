@@ -31,7 +31,11 @@ enum HarnessFeed: Sendable {
     func history(_ s: HarnessSubject, before: Int) async throws -> HarnessPage
     func screen(_ s: HarnessSubject, id: String, query: [String: String]?) async throws -> HarnessScreen
     func act(_ s: HarnessSubject, action: String, target: String?, args: [String: JSONValue]?) async throws -> HarnessActionResult
-    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode) async throws -> HarnessItem
+    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode, images: [String]) async throws -> HarnessItem
+    /// Writes a picture for the session through `fs.upload`; the path on the machine.
+    func upload(_ s: HarnessSubject, name: String, data: Data) async throws -> String
+    /// A picture the chat shows, through `fs.image`.
+    func image(_ s: HarnessSubject, path: String) async throws -> Data
     func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult
     func complete(_ s: HarnessSubject, kind: HarnessCompleteParams.Kind, query: String) async throws -> [HarnessCompletion]
     func locate(_ s: HarnessSubject, anchor: HarnessAnchor) async throws -> HarnessLocation
@@ -52,12 +56,21 @@ struct HarnessUnavailable: Error {}
     func act(_ s: HarnessSubject, action: String, target: String?, args: [String: JSONValue]?) async throws -> HarnessActionResult {
         throw HarnessUnavailable()
     }
-    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode) async throws -> HarnessItem {
+    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode, images: [String]) async throws -> HarnessItem {
         throw HarnessUnavailable()
     }
+    func upload(_ s: HarnessSubject, name: String, data: Data) async throws -> String { throw HarnessUnavailable() }
+    func image(_ s: HarnessSubject, path: String) async throws -> Data { throw HarnessUnavailable() }
     func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult { throw HarnessUnavailable() }
     func complete(_ s: HarnessSubject, kind: HarnessCompleteParams.Kind, query: String) async throws -> [HarnessCompletion] {
         []
     }
     func locate(_ s: HarnessSubject, anchor: HarnessAnchor) async throws -> HarnessLocation { throw HarnessUnavailable() }
+}
+
+extension HarnessServices {
+    /// A prompt without pictures.
+    func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode) async throws -> HarnessItem {
+        try await send(s, text: text, mode: mode, images: [])
+    }
 }

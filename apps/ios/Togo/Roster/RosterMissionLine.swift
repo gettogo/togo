@@ -58,8 +58,7 @@ struct RosterMissionLine: View {
                     .font(.system(.caption, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(stale ? Color.togoMuteDim : Color.togoMute)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.numericText())
             }
             .motion(.fade, value: text)

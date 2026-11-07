@@ -99,6 +99,7 @@ private struct ChecklistProgress: View {
                         .font(.mono(.caption, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.togoSnow)
+                        // trunc-ok: done/total inside the ring scales to fit; the headline beside it says the same in words
                         .minimumScaleFactor(0.6)
                 }
                 .frame(width: ring, height: ring)
@@ -111,6 +112,7 @@ private struct ChecklistProgress: View {
                         Text(verbatim: current.text)
                             .font(.mono(.footnote))
                             .foregroundStyle(Color.togoMute)
+                            // trunc-ok: the current item, also listed in full below
                             .lineLimit(2)
                     }
                 }

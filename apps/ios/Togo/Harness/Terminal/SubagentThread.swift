@@ -37,11 +37,11 @@ struct SubagentThread: Equatable {
     /// Folds a subagent's items as the main chat folds its own. TurnFold leaves out items that
     /// have a parent, so here they are lifted to the top level first.
     static func rows(_ items: [HarnessItem]) -> [ChatRow] {
-        TurnFold.rows(items.map { item in
+        ChatRowDedupe.apply(TurnFold.rows(items.map { item in
             var top = item
             top.parent = nil
             return top
-        })
+        }))
     }
 
     /// The agents from the main conversation down to `id`, outermost first, `id` last. Stops at
@@ -75,7 +75,7 @@ struct SubagentThread: Equatable {
     /// The main chat's rows with the subagents' waiting needs added where they arrived, so an
     /// approval a subagent asks for is answerable from the main chat.
     static func mainRows(_ timeline: HarnessTimeline) -> [ChatRow] {
-        let main = TurnFold.rows(timeline.conversation())
+        let main = ChatRowDedupe.apply(TurnFold.rows(timeline.conversation()))
         let waiting = waitingNeeds(in: timeline)
         guard !waiting.isEmpty else { return main }
         var out: [ChatRow] = []

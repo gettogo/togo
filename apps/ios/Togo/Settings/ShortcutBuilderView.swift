@@ -259,6 +259,7 @@ private struct KeyCap: View {
                     Text(key.title)
                 }
             }
+            // trunc-ok: key caps carry fixed short names (Esc, Ctrl, Tab) and scale down in a narrow grid; VoiceOver reads the spoken title
             .font(.body.weight(.medium))
             .lineLimit(1)
             .minimumScaleFactor(0.5)

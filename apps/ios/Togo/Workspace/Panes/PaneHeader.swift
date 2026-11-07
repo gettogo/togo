@@ -22,7 +22,10 @@ struct PaneHeader: View {
                 Text(verbatim: label.name)
                     .font(.subheadline.weight(focused ? .semibold : .regular))
             }
+            // trunc-ok: a split pane's one-line header; the name is in .help, the combined accessibility label and the roster line it came from
             .lineLimit(1)
+            .truncationMode(.middle)
+            .help(label.name)
             .foregroundStyle(focused ? Color.togoSnow : Color.togoMute)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)

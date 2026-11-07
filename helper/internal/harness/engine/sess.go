@@ -45,9 +45,11 @@ type sess struct {
 	sent     map[string]bool // queued prompts already typed, by item id
 	phone    []phoneText
 	working  bool
-	turn     string
-	summaryT *time.Timer
-	srcRows  map[string]map[string]bool // mission rows each section's source listed
+	// stoppedAt is when a stop last ended the turn (see stopHold).
+	stoppedAt time.Time
+	turn      string
+	summaryT  *time.Timer
+	srcRows   map[string]map[string]bool // mission rows each section's source listed
 	// sum mirrors the mission summary for readers that must not take mu
 	// (the hub decorates sessions while holding its own lock).
 	sum      atomic.Pointer[harness.Summary]
@@ -62,9 +64,10 @@ type queued struct {
 // phoneText is a prompt typed from the phone, waiting for the agent's own
 // record of it.
 type phoneText struct {
-	id   string
-	text string
-	at   time.Time
+	id     string
+	text   string
+	images []harness.ImageRef
+	at     time.Time
 }
 
 type feedRun struct {
@@ -223,10 +226,38 @@ func (s *sess) dropSub(sub harness.Subscriber) {
 }
 
 // stateLocked merges the mappers' state in feed order: later non-empty
-// values win, except working, which is true when any mapper says so.
+// values win, except working, which harness.MergeWorking decides, ORed
+// with the hub's status.
 func (s *sess) stateLocked() map[string]string {
+	out, states := s.mapperStateLocked()
+	working := harness.MergeWorking(states...)
+	if st := s.e.cfg.Status; st != nil && st(s.id) == "working" && !s.holdingStopLocked(states) {
+		working = true
+	}
+	out["working"] = fmt.Sprint(working)
+	out["idle"] = fmt.Sprint(!working)
+	return out
+}
+
+// turnLocked reports whether the mappers see a turn running, and whether
+// any of them reports one at all. Unlike stateLocked it leaves out the
+// hub's status, which follows the pane and settles seconds after a turn
+// ends.
+func (s *sess) turnLocked() (working, known bool) {
+	_, states := s.mapperStateLocked()
+	for _, st := range states {
+		if _, ok := st["working"]; ok {
+			known = true
+		}
+	}
+	return harness.MergeWorking(states...), known
+}
+
+// mapperStateLocked merges the mappers' state but working, and returns
+// each mapper's state for harness.MergeWorking.
+func (s *sess) mapperStateLocked() (map[string]string, []map[string]string) {
 	out := map[string]string{}
-	working := false
+	var states []map[string]string
 	seen := map[string]bool{}
 	for _, name := range s.ad.feedOrder {
 		mname := s.ad.Feeds[name].Mapper
@@ -238,9 +269,10 @@ func (s *sess) stateLocked() map[string]string {
 		if m == nil {
 			continue
 		}
-		for k, v := range m.State() {
-			if k == "working" {
-				working = working || v == "true"
+		st := m.State()
+		states = append(states, st)
+		for k, v := range st {
+			if k == "working" || k == harness.StateWorkingAt {
 				continue
 			}
 			if v != "" {
@@ -248,12 +280,7 @@ func (s *sess) stateLocked() map[string]string {
 			}
 		}
 	}
-	if st := s.e.cfg.Status; st != nil && st(s.id) == "working" {
-		working = true
-	}
-	out["working"] = fmt.Sprint(working)
-	out["idle"] = fmt.Sprint(!working)
-	return out
+	return out, states
 }
 
 // templateData is what adapter templates see.

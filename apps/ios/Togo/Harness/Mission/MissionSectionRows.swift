@@ -73,6 +73,7 @@ struct MissionEmptyLine: View {
 /// An agent, a change or a port: its state, title and subtitle, how long it has run, its
 /// progress when known, and a chevron when it opens somewhere.
 struct MissionRowView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let row: HarnessRow
     var opens = false
     /// What VoiceOver says the row opens.
@@ -83,17 +84,22 @@ struct MissionRowView: View {
             PrimitiveStateGlyph(state: row.state, font: .body)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                // The timer moves under the title at accessibility sizes so the title keeps the width.
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
+                layout {
                     Text(verbatim: row.title)
                         .font(.body)
                         .foregroundStyle(Color.togoSnow)
-                        .lineLimit(2)
-                    Spacer(minLength: 4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if let start = row.startedAt?.date, row.state.isLive {
                         Text(start, style: .timer)
                             .font(.mono(.caption))
                             .monospacedDigit()
                             .foregroundStyle(Color.togoMute)
+                            // trunc-ok: a timer, at most 8 characters
                             .lineLimit(1)
                             .fixedSize()
                     }
@@ -102,7 +108,7 @@ struct MissionRowView: View {
                     Text(verbatim: subtitle)
                         .font(.mono(.caption))
                         .foregroundStyle(Color.togoMute)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if let progress = row.progress {
                     ProgressView(value: min(max(progress, 0), 1))
@@ -134,40 +140,76 @@ struct MissionRowView: View {
     }
 }
 
-/// A background job with its last lines of output in a mono well, newest last.
-struct MissionTailRow: View {
+/// A background job: a short name for it, then the last line it printed and how long it has
+/// run, ticking while it runs. The full command is in its accessibility label and one tap away
+/// in the live terminal.
+struct MissionBackgroundRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let row: HarnessRow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MissionRowView(row: row, opens: true, openLabel: MissionCopy.openTerminal)
-                .padding(.bottom, tail.isEmpty ? 0 : -8)
-            if !tail.isEmpty {
-                VStack(alignment: .leading, spacing: 1) {
-                    ForEach(Array(tail.enumerated()), id: \.offset) { index, line in
-                        Text(verbatim: line.isEmpty ? " " : line)
-                            .font(.mono(.caption2))
-                            .foregroundStyle(index == tail.count - 1 ? Color.togoSnow : Color.togoMute)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            PrimitiveStateGlyph(state: row.state, font: .body)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: BackgroundLabel.title(row))
+                    .font(.body)
+                    .foregroundStyle(Color.togoSnow)
+                    .fixedSize(horizontal: false, vertical: true)
+                if row.state.isLive {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in subtitle(at: context.date) }
+                } else {
+                    subtitle(at: .now)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(Color.togoDeepest, in: .rect(cornerRadius: 10, style: .continuous))
-                .padding(.leading, 46)
-                .padding(.trailing, 14)
-                .padding(.bottom, 12)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(tail.joined(separator: "\n"))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.togoMuteDim)
+                .accessibilityHidden(true)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(.rect)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken)
+        .accessibilityHint(MissionCopy.openTerminal)
+        .help(row.subtitle ?? row.title)
     }
 
-    /// At most four lines, as the helper promises.
-    private var tail: [String] { Array((row.tail ?? []).suffix(4)) }
+    /// The last output line, middle-cut, with the time beside it or under it at large sizes,
+    /// so the clock is never the part that gets cut.
+    @ViewBuilder private func subtitle(at now: Date) -> some View {
+        let last = BackgroundLabel.lastLine(row)
+        let clock = BackgroundLabel.clock(row, now: now)
+        if last != nil || clock != nil {
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 6))
+            layout {
+                if let last {
+                    Text(verbatim: last)
+                        // trunc-ok: live output, middle-cut so its start and end show; the row
+                        // opens the live terminal and the label reads it in full.
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                if let clock { Text(verbatim: clock).fixedSize() }
+            }
+            .font(.mono(.caption))
+            .monospacedDigit()
+            .foregroundStyle(Color.togoMute)
+        }
+    }
+
+    private var spoken: String {
+        let last = (row.tail ?? []).last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        return [BackgroundLabel.title(row), PrimitiveStateLook(row.state).label, row.subtitle, last]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
 }
 
 /// Something that needs the user, answered right here: the chat's own approval or question
@@ -209,7 +251,7 @@ struct MissionNeedsRow: View {
                     Text(verbatim: row.title)
                         .font(.body.weight(.medium))
                         .foregroundStyle(Color.togoSnow)
-                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(row.subtitle ?? MissionCopy.answerInChat)
                         .font(.footnote)
                         .foregroundStyle(Color.togoMute)

@@ -351,6 +351,7 @@ struct WorkspaceView: View {
                 Text(WorkspaceCopy.noMatches)
                     .font(.footnote)
                     .foregroundStyle(Color.togoMute)
+                    // trunc-ok: the fixed words "No matches"
                     .lineLimit(1)
             }
             Button(WorkspaceCopy.findPrevious, systemImage: "chevron.up") { find(backwards: true) }

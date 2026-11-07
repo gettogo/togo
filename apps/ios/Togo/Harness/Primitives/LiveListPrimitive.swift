@@ -130,7 +130,6 @@ private struct LiveRow: View {
                         Text(verbatim: subtitle)
                             .font(.mono(.caption))
                             .foregroundStyle(Color.togoMute)
-                            .lineLimit(2)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -154,7 +153,6 @@ private struct LiveRow: View {
                 Text(verbatim: tail.joined(separator: "\n"))
                     .font(.mono(.caption2))
                     .foregroundStyle(Color.togoSnow.opacity(0.8))
-                    .lineLimit(4)
                     .primitiveWell(radius: 10)
                     .padding(.leading, tile + 10)
             }

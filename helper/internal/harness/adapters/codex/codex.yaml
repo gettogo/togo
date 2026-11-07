@@ -18,6 +18,7 @@ endpoint:
 capabilities: [chat, chat.stream, chat.anchors, chat.history, send.queue, interrupt, commands, files,
   mode, model, effort, needs.approvals, needs.questions, agents, plan, changes, ports, status,
   status.usage, status.context, resume, compact]
+images: { insert: together }   # how image paths are pasted into the input
 feeds:
   appserver:
     rpc:

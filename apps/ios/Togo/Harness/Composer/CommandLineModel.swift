@@ -33,7 +33,7 @@ import TogoKit
         var complete: @MainActor (HarnessCompleteParams.Kind, String) async throws -> [HarnessCompletion]
         /// Sends a prompt; the user item when the route returns one.
         var send: @MainActor (String, HarnessSendParams.Mode) async throws -> HarnessItem?
-        var interrupt: @MainActor () async throws -> Void
+        var interrupt: @MainActor () async throws -> HarnessActionResult
         var run: @MainActor (String, String?, [String: JSONValue]?) async throws -> HarnessActionResult
         /// A prompt sent now reaches the session: the agent is idle, or the harness queues.
         var canSendNow: @MainActor () -> Bool = { true }
@@ -41,12 +41,24 @@ import TogoKit
         var pending: @MainActor () -> [PendingPrompt] = { [] }
         var cancelPending: @MainActor (UUID) -> Void = { _ in }
         var retryPending: @MainActor (UUID) -> Void = { _ in }
+        /// Sends a prompt with image paths in it, as one message.
+        var sendImages: (@MainActor (String, HarnessSendParams.Mode, [String]) async throws -> HarnessItem?)?
+        /// Writes a picture to the session's folder on the machine; nil where it cannot take one.
+        var upload: ComposerAttachments.Upload?
+
+        /// Pictures go through `fs.upload` where the machine's helper serves it.
+        @MainActor static func uploadRoute(_ store: HarnessSessionStore) -> ComposerAttachments.Upload? {
+            guard store.subject.capabilities.contains(Capability.upload) else { return nil }
+            let services = store.services
+            let subject = store.subject
+            return { name, data in try await services.upload(subject, name: name, data: data) }
+        }
 
         @MainActor static func store(_ store: HarnessSessionStore) -> Routes {
             Routes(
                 has: { store.has($0) },
                 working: { store.working },
-                mode: { store.descriptor?.mode ?? "" },
+                mode: { store.currentMode },
                 modes: { store.descriptor?.modes ?? [] },
                 queued: {
                     store.timeline.conversation().filter { item in
@@ -64,7 +76,12 @@ import TogoKit
                 canSendNow: { store.canSendNow },
                 pending: { store.queue.prompts },
                 cancelPending: { store.cancelQueued($0) },
-                retryPending: { store.retryQueued($0) }
+                retryPending: { store.retryQueued($0) },
+                sendImages: { text, mode, images in
+                    try await store.send(text, mode: mode, images: images)
+                    return nil
+                },
+                upload: uploadRoute(store)
             )
         }
     }
@@ -98,11 +115,18 @@ import TogoKit
     @ObservationIgnored let store: HarnessSessionStore
     @ObservationIgnored let memory: CommandMemory
     @ObservationIgnored var routes: Routes
+    /// Pictures waiting to go with the next prompt.
+    let attachments: ComposerAttachments
 
-    init(store: HarnessSessionStore, memory: CommandMemory = .shared, routes: Routes? = nil) {
+    init(
+        store: HarnessSessionStore, memory: CommandMemory = .shared, routes: Routes? = nil,
+        attachments: ComposerAttachments? = nil
+    ) {
         self.store = store
         self.memory = memory
-        self.routes = routes ?? .store(store)
+        let routes = routes ?? .store(store)
+        self.routes = routes
+        self.attachments = attachments ?? ComposerAttachments(upload: routes.upload)
     }
 
     // MARK: Session state
@@ -114,10 +138,7 @@ import TogoKit
         return modeOverride.id
     }
     var modes: [HarnessChoice] { routes.modes() }
-    var modeLabel: String? {
-        let id = mode
-        return modes.first { $0.id == id }?.label ?? (id.isEmpty ? nil : id)
-    }
+    var modeLabel: String? { ModeMemory.label(for: mode, in: modes) }
     /// The agent is working, so a send queues and Interrupt shows.
     var working: Bool { routes.working() }
     var showsModeChip: Bool { routes.has(HarnessCapability.mode) && !modes.isEmpty }
@@ -131,7 +152,12 @@ import TogoKit
         return shown + pendingQueued.filter { !ids.contains($0.id) }
     }
 
-    var canSend: Bool { CommandLineLogic.outgoing(draft) != nil && !sending }
+    /// Something to send, and every picture already on the machine.
+    var canSend: Bool {
+        guard !sending, !attachments.isUploading else { return false }
+        if attachments.isEmpty { return CommandLineLogic.outgoing(draft) != nil }
+        return attachments.isReady
+    }
 
     /// A prompt sent now reaches the session; otherwise Send holds it on the phone.
     var canSendNow: Bool { routes.canSendNow() }
@@ -281,21 +307,27 @@ import TogoKit
 
     /// Sends the draft: now while the agent is idle, queued while it works. A refusal for
     /// being busy queues instead; any other failure puts the words back.
+    /// With pictures attached, the prompt carries them all, in one message.
     func submit() async {
-        guard !sending, let text = CommandLineLogic.outgoing(draft) else { return }
+        guard canSend else { return }
+        let text = CommandLineLogic.outgoing(draft) ?? ""
+        let images = attachments.paths
+        guard !text.isEmpty || !images.isEmpty else { return }
         sending = true
         defer { sending = false }
         draft = ""
         closeMenu()
         historyIndex = nil
         notice = nil
-        memory.record(text, scope: scope)
+        if !text.isEmpty { memory.record(text, scope: scope) }
         let mode = CommandLineLogic.sendMode(working: working || !canSendNow)
         do {
-            try await send(text, mode: mode)
+            try await send(text, mode: mode, images: images)
+            attachments.clear()
         } catch HelperError.conflict("busy") where mode == .now {
             do {
-                try await send(text, mode: .queue)
+                try await send(text, mode: .queue, images: images)
+                attachments.clear()
             } catch {
                 restore(text, error)
             }
@@ -310,20 +342,34 @@ import TogoKit
         await submit()
     }
 
-    private func send(_ text: String, mode: HarnessSendParams.Mode) async throws {
-        guard let item = try await routes.send(text, mode) else { return }
+    private func send(_ text: String, mode: HarnessSendParams.Mode, images: [String] = []) async throws {
+        let sent: HarnessItem?
+        if images.isEmpty {
+            sent = try await routes.send(text, mode)
+        } else {
+            guard let sendImages = routes.sendImages else { throw HarnessUnavailable() }
+            sent = try await sendImages(text, mode, images)
+        }
+        guard let item = sent else { return }
         if case let .user(user) = item.body, user.queued { pendingQueued.append(item) }
     }
 
+    /// The words go back in the field; the pictures stay attached.
     private func restore(_ text: String, _ error: any Error) {
         if draft.isEmpty { draft = text }
         notice = ComposerCopy.notSent
     }
 
+    /// Stop: a stop the helper could not finish says so, rather than leaving Stop looking dead.
     func interrupt() async {
         guard routes.has(HarnessCapability.interrupt) else { return }
         do {
-            try await routes.interrupt()
+            let result = try await routes.interrupt()
+            switch result.result {
+            case .failed: notice = result.message ?? ComposerCopy.notInterrupted
+            case .fallback: notice = ComposerCopy.notInterrupted
+            default: break
+            }
         } catch {
             notice = ComposerCopy.notInterrupted
         }

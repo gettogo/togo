@@ -71,6 +71,7 @@ struct FolderRow: View {
             HStack(spacing: 8) {
                 label
                     .font(.system(.subheadline, design: .monospaced))
+                    // trunc-ok: a path, middle-cut so root and folder show, whole at accessibility sizes; tapping opens it and the next screen shows it in full
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,8 +138,6 @@ private struct BrowseList: View {
             Text(verbatim: PathText.abbreviate(listing.path))
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(Color.togoMute)
-                .lineLimit(2)
-                .truncationMode(.middle)
             Button(NewSessionCopy.useFolder) { Task { await onChoose(listing.path) } }
                 .buttonStyle(.primary)
             Toggle(NewSessionCopy.showHidden, isOn: Bindable(model).showHidden)

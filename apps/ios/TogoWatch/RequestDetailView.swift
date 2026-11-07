@@ -30,6 +30,7 @@ struct RequestDetailView: View {
                         Text(counter)
                             .font(.system(.footnote, design: .monospaced))
                             .foregroundStyle(.secondary)
+                            // trunc-ok: "1 of 3"
                             .lineLimit(1)
                     }
                 }
@@ -197,12 +198,13 @@ struct RequestHeader: View {
             if let bib = request.bib, !bib.isEmpty {
                 Text(PromptText.clean(bib, maxLines: 1))
                     .font(.system(.footnote, design: .monospaced))
+                    // trunc-ok: a bib is two or three digits
                     .lineLimit(1)
             }
             if let agent = request.agent, !agent.isEmpty {
                 Text(AgentName.display(agent))
                     .font(.footnote)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .foregroundStyle(.secondary)

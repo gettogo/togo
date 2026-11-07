@@ -25,6 +25,7 @@ revision: 1
 match: { agents: [fake] }
 harness: { version: [fakeharness, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.0 <2" }
 capabilities: [chat, chat.history, send.queue, interrupt, commands, mode, model, plan, status, needs.approvals]
+images: { insert: per_path }
 feeds:
   events:
     hook: { events: [Event] }

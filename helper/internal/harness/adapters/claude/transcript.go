@@ -19,18 +19,22 @@ type transcript struct {
 	env harness.Env
 	cwd string
 
-	mu      sync.Mutex
-	state   map[string]string
-	turn    *turnState
-	tools   map[string]*harness.Item // tool calls by id
-	texts   map[string]string        // assistant text by message id
-	agents  map[string]*harness.Item // agent items by agent id
-	prompts map[string]string        // Agent call id by prompt, until its agent id is known
-	bgTasks map[string]string        // background task id to its tool call id
-	roles   map[string]string        // subagent type by Agent call id
-	plan    []harness.Row
-	changes map[string]*harness.FileChange
-	notices int
+	mu         sync.Mutex
+	state      map[string]string
+	turn       *turnState
+	tools      map[string]*harness.Item // tool calls by id
+	texts      map[string]string        // assistant text by message id
+	agents     map[string]*harness.Item // agent items by agent id
+	prompts    map[string]string        // Agent call id by prompt, until its agent id is known
+	bgTasks    map[string]string        // background task id to its tool call id
+	roles      map[string]string        // subagent type by Agent call id
+	shellAbout map[string]string        // a Bash call's own description, by call id
+	plan       []harness.Row
+	changes    map[string]*harness.FileChange
+	notices    int
+	// workingAt is when the main chain last started or ended a turn,
+	// the stamp of the working state (harness.MergeWorking).
+	workingAt time.Time
 }
 
 type turnState struct {
@@ -46,7 +50,7 @@ func newTranscript(env harness.Env) *transcript {
 	return &transcript{
 		env: env, cwd: env.Cwd, state: map[string]string{},
 		tools: map[string]*harness.Item{}, texts: map[string]string{}, agents: map[string]*harness.Item{},
-		prompts: map[string]string{}, roles: map[string]string{}, bgTasks: map[string]string{}, changes: map[string]*harness.FileChange{},
+		prompts: map[string]string{}, roles: map[string]string{}, shellAbout: map[string]string{}, bgTasks: map[string]string{}, changes: map[string]*harness.FileChange{},
 	}
 }
 
@@ -62,6 +66,7 @@ func (t *transcript) State() map[string]string {
 	if t.turn != nil {
 		out["turn"] = t.turn.id
 		out["working"] = fmt.Sprint(!t.turn.ended)
+		out[harness.StateWorkingAt] = harness.StampWorking(t.workingAt)
 	}
 	return out
 }
@@ -86,6 +91,7 @@ type entry struct {
 	Content          json.RawMessage `json:"content"`
 	DurationMs       float64         `json:"durationMs"`
 	CompactMetadata  json.RawMessage `json:"compactMetadata"`
+	Origin           json.RawMessage `json:"origin"`
 }
 
 type message struct {
@@ -105,7 +111,26 @@ type block struct {
 	ToolUseID string          `json:"tool_use_id"`
 	IsError   bool            `json:"is_error"`
 	Content   json.RawMessage `json:"content"`
+	Source    *imageSource    `json:"source"`
 }
+
+// imageSource is an image block's picture, base64 in the transcript.
+type imageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+// imageRef reads an image block: inline when small, else described.
+func imageRef(b block) (harness.ImageRef, bool) {
+	if b.Type != "image" || b.Source == nil || b.Source.Type != "base64" {
+		return harness.ImageRef{}, false
+	}
+	return harness.InlineImage(b.Source.MediaType, b.Source.Data)
+}
+
+// imagePlaceholder is how Claude Code writes a pasted picture into the prompt.
+var imagePlaceholder = regexp.MustCompile(`\[Image #\d+\]\s*`)
 
 // Map reads one transcript line. Lines it does not know are skipped.
 func (t *transcript) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
@@ -162,7 +187,7 @@ func (t *transcript) user(e entry) ([]harness.Item, []harness.Op) {
 	at := stamp(e.Timestamp)
 	var text string
 	if json.Unmarshal(m.Content, &text) == nil {
-		return t.prompt(e, at, text)
+		return t.prompt(e, at, text, nil)
 	}
 	var blocks []block
 	if json.Unmarshal(m.Content, &blocks) != nil {
@@ -171,6 +196,7 @@ func (t *transcript) user(e entry) ([]harness.Item, []harness.Op) {
 	var items []harness.Item
 	var ops []harness.Op
 	var texts []string
+	var images []harness.ImageRef
 	for _, b := range blocks {
 		switch b.Type {
 		case "tool_result":
@@ -178,10 +204,18 @@ func (t *transcript) user(e entry) ([]harness.Item, []harness.Op) {
 			items, ops = append(items, it...), append(ops, o...)
 		case "text":
 			texts = append(texts, b.Text)
+		case "image":
+			if r, ok := imageRef(b); ok && len(images) < harness.MaxImagesPerItem {
+				images = append(images, r)
+			}
 		}
 	}
-	if len(texts) > 0 {
-		it, o := t.prompt(e, at, strings.Join(texts, "\n"))
+	if len(texts) > 0 || len(images) > 0 {
+		text := strings.Join(texts, "\n")
+		if len(images) > 0 {
+			text = strings.TrimSpace(imagePlaceholder.ReplaceAllString(text, ""))
+		}
+		it, o := t.prompt(e, at, text, images)
 		items, ops = append(items, it...), append(ops, o...)
 	}
 	return items, ops
@@ -197,10 +231,15 @@ var (
 // prompt maps a user message: a typed prompt starts a turn; command
 // wrappers become the command as typed; local command output and
 // interruptions become notices; other tagged text is skipped.
-func (t *transcript) prompt(e entry, at time.Time, text string) ([]harness.Item, []harness.Op) {
+func (t *transcript) prompt(e entry, at time.Time, text string, images []harness.ImageRef) ([]harness.Item, []harness.Op) {
 	parent := t.parentOf(e)
 	if strings.HasPrefix(strings.TrimSpace(text), "[Request interrupted by user") {
 		var items []harness.Item
+		if parent == "" {
+			// Ends the main chain's work even when the turn is already
+			// over, such as one a task notification started.
+			t.workingAt = at
+		}
 		if t.turn != nil && !t.turn.ended {
 			t.turn.state = harness.StateInterrupted
 			items = append(items, t.endTurn(at)...)
@@ -219,24 +258,27 @@ func (t *transcript) prompt(e entry, at time.Time, text string) ([]harness.Item,
 			return nil, nil
 		}
 		return t.notice(e, at, noticeCode(out), "info", firstLine(out)), nil
+	} else if parent == "" && isTaskNotification(e, text) {
+		return t.continued(e, at, text), nil
 	} else if anyTag.MatchString(text) {
 		return nil, nil
 	}
-	if strings.TrimSpace(text) == "" {
+	if strings.TrimSpace(text) == "" && len(images) == 0 {
 		return nil, nil
 	}
 	if parent != "" {
 		items, ops := t.linkAgent(e.AgentID, text, at)
 		return append(items, harness.Item{ID: e.UUID, Parent: parent, Kind: harness.KindUser, At: at,
-			User: &harness.UserBody{Text: text, Source: "unknown"}}), ops
+			User: &harness.UserBody{Text: text, Source: "unknown", Images: images}}), ops
 	}
 	var items []harness.Item
 	if t.turn != nil && !t.turn.ended {
 		items = append(items, t.endTurn(at)...)
 	}
 	t.turn = &turnState{id: e.UUID, started: at, files: map[string]bool{}, state: harness.StateRunning}
+	t.workingAt = at
 	items = append(items, harness.Item{ID: e.UUID, TurnID: e.UUID, Kind: harness.KindUser, At: at,
-		User: &harness.UserBody{Text: text}})
+		User: &harness.UserBody{Text: text, Images: images}})
 	return items, nil
 }
 
@@ -325,6 +367,9 @@ func (t *transcript) system(e entry) ([]harness.Item, []harness.Op) {
 	at := stamp(e.Timestamp)
 	switch e.Subtype {
 	case "turn_duration":
+		if !e.IsSidechain {
+			t.workingAt = at
+		}
 		if t.turn != nil && !t.turn.ended && !e.IsSidechain {
 			if t.turn.state == harness.StateRunning {
 				t.turn.state = harness.StateOK

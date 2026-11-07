@@ -43,7 +43,6 @@ struct BackgroundJobCard: View {
                             Text(verbatim: command)
                                 .font(.mono(.caption))
                                 .foregroundStyle(Color.togoMute)
-                                .lineLimit(2)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

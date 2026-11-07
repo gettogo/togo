@@ -245,7 +245,7 @@ private struct RecentDictationRow: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
         layout {
             Text(text)
-                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let insert {
                 Button(DictationCopy.insert, action: insert)

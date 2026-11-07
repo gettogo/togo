@@ -103,7 +103,11 @@ func Map(event string, stdin []byte, env map[string]string) (wire.HookEvent, Out
 		switch p.NotificationType {
 		case "permission_prompt":
 			ev.Event = local.EventPermission
-		case "idle_prompt", "elicitation_dialog", "elicitation_url_dialog", "agent_needs_input":
+		case "idle_prompt":
+			// "Claude is waiting for your input" after about a minute at
+			// the prompt: idle, not a request.
+			ev.Event = local.EventIdle
+		case "elicitation_dialog", "elicitation_url_dialog", "agent_needs_input":
 			ev.Event = local.EventAttention
 		default:
 			ev.Event = local.EventNotify

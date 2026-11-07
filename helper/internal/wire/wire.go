@@ -53,6 +53,7 @@ const (
 	MethodGitCommit       = "git.commit"
 	MethodFsRead          = "fs.read"
 	MethodFsUpload        = "fs.upload"
+	MethodFsImage         = "fs.image"
 	MethodPortsList       = "ports.list"
 )
 

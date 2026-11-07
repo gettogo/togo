@@ -86,6 +86,15 @@ enum CommandLineLogic {
         return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
     }
 
+    /// Whether the keyboard helps with the draft: autocorrection, spell check, smart punctuation
+    /// and capitals. A prompt is natural language, so it does; a "/" command and an "@" file
+    /// being typed are exact words, so it stays out of the way.
+    static func keyboardAssists(_ draft: String) -> Bool {
+        if draft.hasPrefix("/") { return false }
+        if case .file = trigger(in: draft) { return false }
+        return true
+    }
+
     /// A prompt typed while the agent works waits its turn; otherwise it goes now.
     static func sendMode(working: Bool) -> HarnessSendParams.Mode {
         working ? .queue : .now

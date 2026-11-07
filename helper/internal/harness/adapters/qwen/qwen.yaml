@@ -80,7 +80,7 @@ actions:
     builtin: approval_answer
     stability: documented
   interrupt:
-    keys: { keys: [Escape] }
+    keys: { keys: [Escape], until: idle, max: 2 }
     stability: documented
 modes:
   choices:

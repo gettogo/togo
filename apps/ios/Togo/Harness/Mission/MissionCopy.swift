@@ -22,6 +22,12 @@ enum MissionCopy {
     static let openDiff = String(localized: "mission.openDiff", defaultValue: "Review changes")
     static let openPreview = String(localized: "mission.openPreview", defaultValue: "Open preview")
     static let more = String(localized: "mission.more", defaultValue: "More")
+    static let noOutputYet = String(localized: "mission.background.noOutput", defaultValue: "No output yet")
+
+    /// A background loop named by what it runs: "Loop: echo, sleep".
+    static func loop(_ names: String) -> String {
+        String(localized: "mission.background.loop", defaultValue: "Loop: \(names)")
+    }
 
     // MARK: Sections
 
