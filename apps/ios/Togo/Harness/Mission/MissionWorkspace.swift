@@ -92,7 +92,8 @@ struct MissionWorkspace: ViewModifier {
             // Resume, MCP servers, Providers, Settings: each by its class, from the descriptor.
             .harnessPresent(
                 item: $model.screen,
-                as: AdaptivePresentation.content(forScreen: model.screen?.id ?? "", in: model.screen?.store.descriptor)
+                as: AdaptivePresentation.content(forScreen: model.screen?.id ?? "", in: model.screen?.store.descriptor),
+                name: "mission.screen"
             ) { screen in
                 HarnessScreenSheet(store: screen.store, screenID: screen.id) { [app] target in
                     app.followMissionTarget(target, from: screen.tab)

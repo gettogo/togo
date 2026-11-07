@@ -217,13 +217,14 @@ import TogoMosh
     /// Fake services with nothing behind them, for tests and the UI tests' launch.
     init(
         services: any AppServices, reviewServices: (any ReviewServices)?, onboarding: any OnboardingServices,
-        tutorial: TutorialModel, machineTools: any MachineTools = NoMachineTools(), agentLibrary: AgentLibrary = .inMemory()
+        tutorial: TutorialModel, machineTools: any MachineTools = NoMachineTools(), agentLibrary: AgentLibrary = .inMemory(),
+        harnessServices: (any HarnessServices)? = nil
     ) {
         self.services = services
         self.machineTools = machineTools
         self.agentLibrary = agentLibrary
         self.reviewServices = reviewServices
-        harnessServices = nil
+        self.harnessServices = harnessServices
         self.onboarding = onboarding
         self.tutorial = tutorial
         live = nil
@@ -233,12 +234,16 @@ import TogoMosh
 
     #if DEBUG
     convenience init(uiTest launch: UITestLaunch) {
-        let machines = UITestMachines(firstRun: launch.firstRun, oneMachine: launch.oneMachine, oldHelper: launch.oldHelper)
+        let replay = launch.replay.flatMap(ReplayScript.load).map(ReplayHarnessServices.init)
+        let machines = UITestMachines(
+            firstRun: launch.firstRun, oneMachine: launch.oneMachine, oldHelper: launch.oldHelper,
+            authNeeded: launch.authNeeded, replay: replay
+        )
         let defaults = launch.defaults()
         self.init(
             services: machines.services, reviewServices: ReviewFakes.uiTestServices(),
             onboarding: FakeOnboardingServices(outcomes: Array(repeating: .ready(OnboardingSamples.ready), count: 4)),
-            tutorial: TutorialModel(defaults: defaults), machineTools: FakeMachineTools()
+            tutorial: TutorialModel(defaults: defaults), machineTools: FakeMachineTools(), harnessServices: replay
         )
         uiTestMachines = machines
         appStorage = defaults

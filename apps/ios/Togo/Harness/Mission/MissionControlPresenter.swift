@@ -66,7 +66,8 @@ private struct MissionControlPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: shown(.sheet), onDismiss: flushPending) {
+            // A side context: it steps aside for a sheet asked for from the chat behind it.
+            .presentSheet("mission.sheet", isPresented: shown(.sheet), yields: true, onDismiss: flushPending) {
                 if let store {
                     stack(store, inSheet: true)
                         // The side context's medium sheet (`AdaptivePresentation`), with the
@@ -77,10 +78,12 @@ private struct MissionControlPresenter: ViewModifier {
                         .presentationDragIndicator(.visible)
                 }
             }
-            .inspector(isPresented: shown(.inspector)) {
-                if let store {
-                    stack(store, inSheet: false)
-                        .inspectorColumnWidth(min: 280, ideal: MissionPlacement.inspectorIdeal, max: 440)
+            .coordinated("mission.inspector", .inspector, isPresented: shown(.inspector)) { view, shown in
+                view.inspector(isPresented: shown) {
+                    if let store {
+                        stack(store, inSheet: false)
+                            .inspectorColumnWidth(min: 280, ideal: MissionPlacement.inspectorIdeal, max: 440)
+                    }
                 }
             }
             .onGeometryChange(for: CGFloat.self) { proxy in

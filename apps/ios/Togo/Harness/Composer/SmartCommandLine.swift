@@ -80,7 +80,8 @@ struct SmartCommandLine: View {
                 get: { model.presentedScreen.map(ScreenRequest.init) },
                 set: { model.presentedScreen = $0?.id }
             ),
-            as: AdaptivePresentation.content(forScreen: model.presentedScreen ?? "", in: model.store.descriptor)
+            as: AdaptivePresentation.content(forScreen: model.presentedScreen ?? "", in: model.store.descriptor),
+            name: "composer.screen"
         ) { request in
             HarnessScreenSheet(store: model.store, screenID: request.id, onOpen: onOpen)
         }
@@ -197,6 +198,7 @@ struct SmartCommandLine: View {
             .textInputAutocapitalization(assists ? .sentences : .never)
             .autocorrectionDisabled(!assists)
             .focused($focused)
+            .accessibilityIdentifier("composer.field")
             .padding(.vertical, 12)
             .onKeyPress(phases: .down, action: key)
             sendButton
@@ -260,7 +262,7 @@ struct SmartCommandLine: View {
                 .labelStyle(.iconOnly)
                 .buttonStyle(ComposerChipStyle())
                 // Every command is a large list to search: a sheet sized by the window's room.
-                .harnessPresent(isPresented: $model.paletteOpen, as: .browse, anchored: true, onDismiss: model.paletteClosed) {
+                .harnessPresent(isPresented: $model.paletteOpen, as: .browse, anchored: true, name: "composer.palette", onDismiss: model.paletteClosed) {
                     CommandPaletteView(model: model, screenTitle: screenTitle)
                 }
         }

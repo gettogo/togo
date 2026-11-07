@@ -153,11 +153,13 @@ extension View {
     /// Shows the attach question on screen while `active`. The control center and the
     /// workspace cover each carry it, active only when they are the one on top. Continue and
     /// Cancel act on the question this sheet shows, by its id.
-    func attachPrompts(_ prompts: AttachPrompts?, active: Bool) -> some View {
-        sheet(item: Binding(
+    ///
+    /// `nests`: the host is itself a sheet (new session) that stays up under the question.
+    func attachPrompts(_ prompts: AttachPrompts?, active: Bool, nests: Bool = false) -> some View {
+        presentSheet("attach.prompt", item: Binding(
             get: { active ? prompts?.current : nil },
             set: { _ in }
-        )) { question in
+        ), nests: nests) { question in
             NavigationStack {
                 SignInPromptView(request: question.request) { prompts?.answer(question.id, $0) }
                     .navigationTitle(question.request.machine)

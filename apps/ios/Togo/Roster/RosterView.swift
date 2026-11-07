@@ -53,7 +53,7 @@ struct RosterView: View {
             .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
             .environment(\.openSessionMission, OpenSessionMission { missionTarget = RosterMissionTarget(tab: $0) })
             // Mission control beside nothing here: the side context's sheet on every width.
-            .harnessPresent(item: $missionTarget, as: .sideContext, onDismiss: leaveMission) { target in
+            .harnessPresent(item: $missionTarget, as: .sideContext, name: "roster.mission", onDismiss: leaveMission) { target in
                 RosterMissionSheet(app: store, tab: target.tab) { exit in
                     missionExit = exit.map { (target.tab, $0) }
                     missionTarget = nil

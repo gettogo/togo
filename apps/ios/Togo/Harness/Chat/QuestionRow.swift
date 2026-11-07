@@ -152,6 +152,7 @@ struct QuestionRow: View {
         .modifier(NeedsCard())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ChatCopy.spokenNeeds(question.questions.first?.prompt ?? ""))
+        .accessibilityIdentifier("chat.needs.question")
     }
 
     /// Why the last answer did not land, at the Send button, instantly: errors never fly, and

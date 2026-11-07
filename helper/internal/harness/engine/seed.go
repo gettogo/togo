@@ -84,6 +84,25 @@ func (s *sess) seedFromScreen(wait time.Duration) bool {
 	return true
 }
 
+// seedRead keeps state a verify read from the pane, as seedFromScreen
+// does: it stands until a mapper reports a different value for the key.
+func (s *sess) seedRead(read map[string]string) {
+	if len(read) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	under, _ := s.mapperStateRawLocked()
+	if s.seed.state == nil {
+		s.seed.state, s.seed.under = map[string]string{}, map[string]string{}
+	}
+	for k, v := range read {
+		s.seed.state[k] = v
+		s.seed.under[k] = under[k]
+	}
+	s.refreshStatusLocked()
+}
+
 // mapperStateRawLocked is the mappers' merged state without the seed.
 func (s *sess) mapperStateRawLocked() (map[string]string, []map[string]string) {
 	seed := s.seed

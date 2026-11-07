@@ -52,11 +52,21 @@ type inputPane struct {
 	// whether Enter with no popup submits; cuClears whether C-u works.
 	popupOnType, enterSubmits, cuClears bool
 	idle, holding, popup                string
+	// completion is what Enter on the open popup puts in the line, as
+	// omp 18.16 does; escapeStuck keeps the popup open on Escape.
+	completion  string
+	escapeStuck bool
+	submitted   []string
 }
 
 func (p *inputPane) enter() {
 	p.enters++
+	if p.state == "popup" && p.completion != "" {
+		p.text, p.state = p.completion, "text"
+		return
+	}
 	if p.state == "text" && p.enterSubmits {
+		p.submitted = append(p.submitted, p.text)
 		p.state, p.text = "idle", ""
 	}
 }
@@ -83,7 +93,7 @@ func (p *inputPane) Keys(_ context.Context, _ string, keys ...string) error {
 		p.keys = append(p.keys, k)
 		switch k {
 		case "Escape":
-			if p.state == "popup" {
+			if p.state == "popup" && !p.escapeStuck {
 				p.state = "text"
 			}
 		case "Enter":
@@ -161,8 +171,43 @@ func TestTypedCommandPopupTookEnter(t *testing.T) {
 	if err != nil || res.Result == harness.ResultFailed {
 		t.Fatalf("login = %+v, %v", res, err)
 	}
-	if p.state != "idle" || p.enters != 2 || !strings.Contains(strings.Join(p.keys, " "), "Escape Enter") {
-		t.Fatalf("state %s, enters %d, keys %v; want the popup dismissed and Enter again", p.state, p.enters, p.keys)
+	if p.state != "idle" || p.enters != 1 || !strings.Contains(strings.Join(p.keys, " "), "Escape Enter") {
+		t.Fatalf("state %s, enters %d, keys %v; want the popup dismissed, then one Enter", p.state, p.enters, p.keys)
+	}
+	if len(p.submitted) != 1 || p.submitted[0] != "/login anthropic" {
+		t.Fatalf("submitted %q", p.submitted)
+	}
+}
+
+// Seen live on omp 18.16: Enter on the open completion popup applies the
+// highlighted entry and keeps it in the line. The popup is closed before
+// Enter, so the command typed is the one that runs.
+func TestTypedCommandNeverEntersOnPopup(t *testing.T) {
+	const id = "s_fakeinput5"
+	p := &inputPane{popupOnType: true, enterSubmits: true, completion: "/login amazon-bedrock"}
+	e := newInputEngine(t, id, p)
+	res, err := login(e, id)
+	if err != nil || res.Result == harness.ResultFailed {
+		t.Fatalf("login = %+v, %v", res, err)
+	}
+	if len(p.submitted) != 1 || p.submitted[0] != "/login anthropic" {
+		t.Fatalf("submitted %q; want the typed command, not the completion", p.submitted)
+	}
+}
+
+// When Enter still lands on the popup and leaves another command in the
+// line, the send fails and the line is cleared: never "sent", and never a
+// second Enter that would run the completion.
+func TestCompletionInLineIsNotCalledSent(t *testing.T) {
+	const id = "s_fakeinput6"
+	p := &inputPane{popupOnType: true, enterSubmits: true, cuClears: true, escapeStuck: true, completion: "/login amazon-bedrock"}
+	e := newInputEngine(t, id, p)
+	res, err := login(e, id)
+	if err != nil || res.Result != harness.ResultFailed || !strings.Contains(res.Message, "changed the command") {
+		t.Fatalf("login = %+v, %v; want a failure naming the changed command", res, err)
+	}
+	if len(p.submitted) != 0 || p.text != "" {
+		t.Fatalf("submitted %q, line %q; want nothing run and the line cleared", p.submitted, p.text)
 	}
 }
 

@@ -59,6 +59,9 @@ type sess struct {
 	seed     screenSeed
 	// dialog is the title of the dialog the typing guard last reported.
 	dialog string
+	// settingUpUntil is the end of a sign-in started here: until then the
+	// sources it changes are read again on each screen (see fetch).
+	settingUpUntil time.Time
 }
 
 type queued struct {

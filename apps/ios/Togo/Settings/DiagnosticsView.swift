@@ -137,12 +137,14 @@ struct DiagnosticsPage: View {
         .groupedList()
         .navigationTitle(settingsText("settings.diagnostics.title", "Diagnostics"))
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog(
-            settingsText("diagnostics.clear.title", "Clear recorded events?"), isPresented: $confirmingClear, titleVisibility: .visible
-        ) {
-            Button(settingsText("diagnostics.clear", "Clear"), role: .destructive, action: clear)
+        .coordinated("settings.clearDiagnostics", .dialog, isPresented: $confirmingClear) { view, shown in
+            view.confirmationDialog(
+                settingsText("diagnostics.clear.title", "Clear recorded events?"), isPresented: shown, titleVisibility: .visible
+            ) {
+                Button(settingsText("diagnostics.clear", "Clear"), role: .destructive, action: clear)
+            }
         }
-        .sheet(isPresented: $previewing) {
+        .presentSheet("settings.diagnosticsPreview", isPresented: $previewing) {
             DiagnosticsPreview(text: summary?.text ?? "")
         }
     }

@@ -391,6 +391,10 @@ type Verify struct {
 	Select string        `yaml:"select"`
 	Equals string        `yaml:"equals"`
 	Within time.Duration `yaml:"within"`
+	// Required makes a typed command that is not confirmed in the window
+	// a failure that says what the harness shows instead, never "sent":
+	// for changes the user relies on at once (the model of the next turn).
+	Required bool `yaml:"required"`
 }
 
 // Modes declares the mode chip.

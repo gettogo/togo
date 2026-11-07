@@ -104,6 +104,8 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var onSelect: String
         /// Asked (or applied with Undo) before `onSelect` runs, when set.
         public var onSelectConfirm: HarnessSelectConfirm?
+        /// `onSelect`'s own words for an item's button ("Use for this session"), when it has them.
+        public var onSelectLabel: String?
         public var itemActions: [HarnessActionRef]?
         /// What is not set up yet, such as providers not signed in, listed after the items.
         public var setup: [Item]?
@@ -153,8 +155,10 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
 
         public init(items: [Item], selected: String? = nil, searchable: Bool, filters: [Filter]? = nil,
                     onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil,
-                    setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil) {
+                    setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil,
+                    onSelectLabel: String? = nil) {
             self.items = items
+            self.onSelectLabel = onSelectLabel
             self.setup = setup
             self.setupAction = setupAction
             self.setupInput = setupInput

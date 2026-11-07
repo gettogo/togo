@@ -104,12 +104,12 @@ struct ChatView: View {
         }
         .modifier(WorkingAnnouncements(active: store.liveWork != nil))
         // A step's details: a small panel, sized by the window's room (`AdaptivePresentation`).
-        .harnessPresent(item: $detail, as: .smallForm) { step in
+        .harnessPresent(item: $detail, as: .smallForm, name: "chat.stepDetail") { step in
             StepDetail(step: step, canShowInTerminal: canShow(step)) {
                 Task { await store.showInTerminal(step) }
             }
         }
-        .sheet(item: $selecting) { selected in
+        .presentSheet("chat.selectText", item: $selecting) { selected in
             SelectTextSheet(text: selected.text)
         }
         // After the sheets, so the step details' links go through the same router.

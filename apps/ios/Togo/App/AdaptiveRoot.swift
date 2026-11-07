@@ -191,7 +191,7 @@ struct AdaptiveRoot<Destination: View>: View {
             compactRoot
                 .navigationDestination(for: AppRoute.self, destination: destination)
         }
-        .fullScreenCover(isPresented: $store.workspaceOpen) {
+        .presentCover("root.workspace", isPresented: $store.workspaceOpen) {
             // A stack of its own, so the workspace's items are in a system bar that an iPhone
             // Duo stands on its side beside the status bar.
             NavigationStack {

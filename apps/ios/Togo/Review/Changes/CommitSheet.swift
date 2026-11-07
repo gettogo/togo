@@ -31,11 +31,13 @@ struct CommitSheet: View {
                     Button(ChangesCopy.cancel, systemImage: "xmark", role: .cancel) { model.isCommitSheetOpen = false }
                 }
             }
-            .confirmationDialog(ChangesCopy.amendQuestion, isPresented: $confirmingAmend, titleVisibility: .visible) {
-                Button(ChangesCopy.amendButton, role: .destructive) { submit() }
-                Button(ChangesCopy.cancel, role: .cancel) {}
-            } message: {
-                Text([model.amendReplaces, model.amendWarning].compactMap(\.self).joined(separator: " "))
+            .coordinated("review.amend", .dialog, isPresented: $confirmingAmend) { view, shown in
+                view.confirmationDialog(ChangesCopy.amendQuestion, isPresented: shown, titleVisibility: .visible) {
+                    Button(ChangesCopy.amendButton, role: .destructive) { submit() }
+                    Button(ChangesCopy.cancel, role: .cancel) {}
+                } message: {
+                    Text([model.amendReplaces, model.amendWarning].compactMap(\.self).joined(separator: " "))
+                }
             }
         }
         .togoControls()

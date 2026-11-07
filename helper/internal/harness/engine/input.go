@@ -125,6 +125,13 @@ func (e *Engine) confirmSubmit(ctx context.Context, s *sess, text string) error 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if cur, ok := e.inputNow(ctx, s); ok && cur != "" && !holds(cur, text) {
+			// Something else is in the line now (a completion the popup
+			// applied): pressing Enter again would run that instead.
+			_ = e.clearInput(ctx, s)
+			return &harness.FallbackError{Reason: "source",
+				Detail: s.ad.Name + " changed the command in its input line to “" + clipText(cur) + "”. Nothing was run."}
+		}
 		if try >= submitRetries {
 			return &harness.FallbackError{Reason: "source",
 				Detail: s.ad.Name + " did not take Enter: “" + clipText(text) + "” is still in its input line. Check the terminal."}
@@ -145,12 +152,16 @@ func (e *Engine) confirmSubmit(ctx context.Context, s *sess, text string) error 
 
 // waitSubmitted polls until the input line no longer holds text, or
 // submitWait passes. A line that is gone (the harness opened a picker or a
-// login box) counts as submitted.
+// login box) counts as submitted; for a command, a line holding anything
+// does not.
 func (e *Engine) waitSubmitted(ctx context.Context, s *sess, text string) bool {
 	deadline := time.Now().Add(e.scaled(submitWait))
+	command := isCommand(text)
 	for {
 		cur, ok := e.inputNow(ctx, s)
-		if !ok || !holds(cur, text) {
+		// A command was submitted only when the line is empty (or gone):
+		// a line holding other text is a completion that took the Enter.
+		if !ok || cur == "" || !command && !holds(cur, text) {
 			return true
 		}
 		if time.Now().After(deadline) || !e.pause(ctx) {
@@ -200,10 +211,28 @@ func (e *Engine) pause(ctx context.Context) bool {
 }
 
 // typeChecked types text into an empty input line and, with submit,
-// confirms Enter took it.
+// confirms Enter took it. A slash command goes in without Enter first when
+// the adapter names keys that close a completion popup: seen live on omp
+// 18.16, Enter on the popup applies the highlighted completion and keeps
+// it in the line, so "/switch anthropic/claude-opus-5-5" could become
+// another model's id, sit unsent, and be wiped by the next prompt. The
+// popup is closed, the line must still read exactly what was typed, and
+// only then is Enter pressed.
 func (e *Engine) typeChecked(ctx context.Context, s *sess, text string, submit bool) error {
 	if err := e.clearInput(ctx, s); err != nil {
 		return err
+	}
+	if submit && e.dismissFirst(s, text) {
+		if err := e.cfg.Typist.Type(ctx, s.id, text, false, false); err != nil {
+			return err
+		}
+		if err := e.closePopup(ctx, s, text); err != nil {
+			return err
+		}
+		if err := e.cfg.Typist.Keys(ctx, s.id, "Enter"); err != nil {
+			return err
+		}
+		return e.confirmSubmit(ctx, s, text)
 	}
 	if err := e.cfg.Typist.Type(ctx, s.id, text, submit, false); err != nil {
 		return err
@@ -212,4 +241,48 @@ func (e *Engine) typeChecked(ctx context.Context, s *sess, text string, submit b
 		return nil
 	}
 	return e.confirmSubmit(ctx, s, text)
+}
+
+// isCommand reports a typed slash command.
+func isCommand(text string) bool { return strings.HasPrefix(strings.TrimSpace(text), "/") }
+
+// dismissFirst reports whether text is a command typed into a line whose
+// completion popup the adapter can close.
+func (e *Engine) dismissFirst(s *sess, text string) bool {
+	in := s.ad.Input
+	return in != nil && len(in.Dismiss) > 0 && e.cfg.Screen != nil && isCommand(text)
+}
+
+// closePopup waits for the typed command to show in the input line, sends
+// the dismiss keys, and checks the line still reads the command. A line
+// that reads something else is cleared and nothing is submitted.
+func (e *Engine) closePopup(ctx context.Context, s *sess, text string) error {
+	deadline := time.Now().Add(e.scaled(submitWait))
+	for {
+		cur, ok := e.inputNow(ctx, s)
+		if ok && holds(cur, text) {
+			break
+		}
+		if time.Now().After(deadline) {
+			// A line that wraps or is not drawn yet: go on, the read after
+			// the dismiss keys decides.
+			break
+		}
+		if !e.pause(ctx) {
+			return ctx.Err()
+		}
+	}
+	if err := e.cfg.Typist.Keys(ctx, s.id, s.ad.Input.Dismiss...); err != nil {
+		return err
+	}
+	if !e.pause(ctx) {
+		return ctx.Err()
+	}
+	cur, ok := e.inputNow(ctx, s)
+	if !ok || holds(cur, text) {
+		return nil
+	}
+	_ = e.clearInput(ctx, s)
+	return &harness.FallbackError{Reason: "source",
+		Detail: s.ad.Name + " changed the command in its input line to “" + clipText(cur) + "”. Nothing was run."}
 }

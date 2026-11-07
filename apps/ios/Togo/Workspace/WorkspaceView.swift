@@ -118,23 +118,27 @@ struct WorkspaceView: View {
                 // motion: preventing a jump — the strip's row opens and the terminal lands once.
                 withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { stripFollowed = shows }
             }
-            .alert(
-                renameTarget.map { ControlCenterCopy.renameTitle(SessionActions.label($0)) } ?? "",
-                isPresented: presented($renameTarget), presenting: renameTarget
-            ) { row in
-                TextField(ControlCenterCopy.name, text: $renameText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button(ControlCenterCopy.rename) { Task { await store.rename(row, to: renameText) } }
-                Button(ControlCenterCopy.cancel, role: .cancel) {}
+            .coordinated("workspace.rename", .alert, isPresented: presented($renameTarget)) { view, shown in
+                view.alert(
+                    renameTarget.map { ControlCenterCopy.renameTitle(SessionActions.label($0)) } ?? "",
+                    isPresented: shown, presenting: renameTarget
+                ) { row in
+                    TextField(ControlCenterCopy.name, text: $renameText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button(ControlCenterCopy.rename) { Task { await store.rename(row, to: renameText) } }
+                    Button(ControlCenterCopy.cancel, role: .cancel) {}
+                }
             }
-            .confirmationDialog(
-                killTarget.map(killTitle) ?? "", isPresented: presented($killTarget), titleVisibility: .visible,
-                presenting: killTarget
-            ) { tab in
-                Button(ControlCenterCopy.kill, role: .destructive) { Task { status = await store.end(tab) } }
-            } message: { _ in
-                Text(ControlCenterCopy.killMessage)
+            .coordinated("workspace.kill", .dialog, isPresented: presented($killTarget)) { view, shown in
+                view.confirmationDialog(
+                    killTarget.map(killTitle) ?? "", isPresented: shown, titleVisibility: .visible,
+                    presenting: killTarget
+                ) { tab in
+                    Button(ControlCenterCopy.kill, role: .destructive) { Task { status = await store.end(tab) } }
+                } message: { _ in
+                    Text(ControlCenterCopy.killMessage)
+                }
             }
             .coordinateSpace(.named(PaneGeometry.space))
             .readsFold()

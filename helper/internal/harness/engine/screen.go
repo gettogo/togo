@@ -53,6 +53,7 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 		}
 		p.ItemActions = s.actionRefsLocked(sc.Actions)
 		p.OnSelectConfirm = s.selectConfirmLocked(p.OnSelect)
+		p.OnSelectLabel = s.ad.Actions[p.OnSelect].Label
 		if p.Setup = buildSetup(sc.Setup, setup, p, state); len(p.Setup) > 0 {
 			if refs := s.actionRefsLocked([]string{sc.Setup.Action}); len(refs) == 1 {
 				p.SetupAction = &refs[0]

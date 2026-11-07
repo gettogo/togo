@@ -50,7 +50,7 @@ struct RootView: View {
         }
         // motion: state change — loading, first run and the app swap as whole layers
         .motion(.fade, value: RootStage(loaded: store.services.hostsLoaded, empty: hasNoMachines))
-        .sheet(item: formSheet) { sheet in
+        .presentSheet("root.form", item: formSheet) { sheet in
             RootSheet(
                 sheet: sheet, store: store, onboarding: onboarding, zoom: zoom, tutorial: tutorial,
                 settings: { AnyView(settingsSheet) }

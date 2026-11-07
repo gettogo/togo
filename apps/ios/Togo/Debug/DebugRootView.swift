@@ -45,10 +45,10 @@ struct DebugRootView: View {
                 }
             }
             .navigationDestination(for: HostProfile.self) { DebugSessionsView(profile: $0) }
-            .sheet(isPresented: $adding) {
+            .presentSheet("debug.add", isPresented: $adding) {
                 NavigationStack { DebugHostForm(existing: nil) { hosts.save($0) } }
             }
-            .sheet(item: $editing) { profile in
+            .presentSheet("debug.edit", item: $editing) { profile in
                 NavigationStack { DebugHostForm(existing: profile) { hosts.save($0) } }
             }
         }

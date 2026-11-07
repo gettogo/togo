@@ -72,7 +72,8 @@
         ],
         "selected": "opus",
         "searchable": false,
-        "onSelect": "set_model"
+        "onSelect": "set_model",
+        "onSelectLabel": "Use model"
       },
       "actions": []
     }

@@ -30,7 +30,7 @@ struct AttachmentStrip: View {
             .padding(.bottom, 2)
         }
         .scrollIndicators(.hidden)
-        .fullScreenCover(item: $previewing) { request in
+        .presentCover("composer.attachmentPreview", item: $previewing) { request in
             let items = attachments.items
             ChatImageViewer(
                 images: items.map { HarnessImage(path: $0.path) },
@@ -162,7 +162,7 @@ struct AttachMenu: View {
                 await attachments.add(datas)
             }
         }
-        .fullScreenCover(isPresented: $camera) {
+        .presentCover("composer.camera", isPresented: $camera) {
             CameraPicker { image in
                 guard let data = image.jpegData(compressionQuality: 0.9) else { return }
                 Task { await attachments.add([data]) }

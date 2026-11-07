@@ -63,16 +63,18 @@ struct HostKeyCheckView: View {
                 .keyboardShortcut(.defaultAction)
             Button(String(localized: "onboard.hostKey.forget", defaultValue: "Forget the old key")) { confirmingForget = true }
                 .buttonStyle(.secondary)
-                .confirmationDialog(
-                    String(localized: "onboard.hostKey.forget.confirm", defaultValue: "Forget the old key for \(machine)?"),
-                    isPresented: $confirmingForget, titleVisibility: .visible
-                ) {
-                    Button(String(localized: "onboard.hostKey.forget", defaultValue: "Forget the old key"), role: .destructive, action: onForget)
-                } message: {
-                    Text(String(
-                        localized: "onboard.hostKey.forget.detail",
-                        defaultValue: "Do this only if you know why the key changed. Togo then shows the new key for you to check."
-                    ))
+                .coordinated("onboarding.hostKey", .dialog, isPresented: $confirmingForget) { view, shown in
+                    view.confirmationDialog(
+                        String(localized: "onboard.hostKey.forget.confirm", defaultValue: "Forget the old key for \(machine)?"),
+                        isPresented: shown, titleVisibility: .visible
+                    ) {
+                        Button(String(localized: "onboard.hostKey.forget", defaultValue: "Forget the old key"), role: .destructive, action: onForget)
+                    } message: {
+                        Text(String(
+                            localized: "onboard.hostKey.forget.detail",
+                            defaultValue: "Do this only if you know why the key changed. Togo then shows the new key for you to check."
+                        ))
+                    }
                 }
         }
     }

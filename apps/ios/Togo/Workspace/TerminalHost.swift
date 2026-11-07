@@ -325,7 +325,7 @@ struct TerminalSlot: View {
                 .transaction { $0.animation = nil }
                 // Under the chat the terminal is out of reach: VoiceOver passes it by.
                 .accessibilityHidden(covered)
-                .sheet(item: $capture) { request in
+                .presentSheet("terminal.capture", item: $capture) { request in
                     if let services = store?.services {
                         CaptureSheet(request: request, services: services)
                     }

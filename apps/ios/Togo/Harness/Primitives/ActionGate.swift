@@ -92,22 +92,27 @@ extension View {
     /// Asks `request`'s question in a system `confirmationDialog`: an action sheet on compact
     /// widths, a popover from the control on regular ones. Clears the request as it closes.
     func actionConfirmation(_ request: Binding<ActionGateRequest?>) -> some View {
-        confirmationDialog(
-            request.wrappedValue?.dialog.title ?? "",
-            isPresented: Binding(get: { request.wrappedValue != nil }, set: { if !$0 { request.wrappedValue = nil } }),
-            titleVisibility: .visible,
-            presenting: request.wrappedValue
-        ) { pending in
-            Button(pending.dialog.confirmLabel, role: pending.dialog.destructive ? .destructive : nil) {
-                Task { await pending.run() }
+        coordinated(
+            "action.confirm", .dialog,
+            isPresented: Binding(get: { request.wrappedValue != nil }, set: { if !$0 { request.wrappedValue = nil } })
+        ) { view, shown in
+            view.confirmationDialog(
+                request.wrappedValue?.dialog.title ?? "",
+                isPresented: shown,
+                titleVisibility: .visible,
+                presenting: request.wrappedValue
+            ) { pending in
+                Button(pending.dialog.confirmLabel, role: pending.dialog.destructive ? .destructive : nil) {
+                    Task { await pending.run() }
+                }
+                if pending.dialog.offersAfterReply, let afterReply = pending.afterReply {
+                    Button(PrimitiveCopy.afterThisReply) { afterReply() }
+                }
+                if let line = pending.dialog.instructions, let instructions = pending.instructions {
+                    Button(PrimitiveCopy.withInstructions) { instructions(line) }
+                }
+                Button(PrimitiveCopy.cancel, role: .cancel) { pending.cancel?() }
             }
-            if pending.dialog.offersAfterReply, let afterReply = pending.afterReply {
-                Button(PrimitiveCopy.afterThisReply) { afterReply() }
-            }
-            if let line = pending.dialog.instructions, let instructions = pending.instructions {
-                Button(PrimitiveCopy.withInstructions) { instructions(line) }
-            }
-            Button(PrimitiveCopy.cancel, role: .cancel) { pending.cancel?() }
         }
     }
 }

@@ -17,3 +17,4 @@ apps/ios/Config/Relay.xcconfig
 relay/node_modules/
 packages/TogoTerminal/.dd/
 dist/
+.replay-scratch/

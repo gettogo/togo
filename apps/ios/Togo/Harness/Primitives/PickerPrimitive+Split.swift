@@ -27,13 +27,18 @@ extension PickerPrimitive {
     /// while it is idle. Landing closes the host; failing keeps the list with the reason.
     func select(_ item: PickerModel.Item) {
         failure = nil
+        failedItem = nil
         let change = PickerModel.change(selecting: item, in: picker, setting: title)
         Task {
             await actions.change(change, context: context) { result in
                 if PickerModel.closes(result) {
                     context.settled?()
                 } else if let result, result.result == .failed {
+                    // The agent did not take it (omp's model switch is read back): say so here,
+                    // with Try again, and never as if it had.
                     failure = result.message ?? PrimitiveCopy.failed
+                    failedItem = item
+                    Task { await context.reload?() }
                 }
             }
         }
@@ -61,6 +66,12 @@ extension PickerPrimitive {
                 send: { await actions.perform(ref.id, target: item.id, args: args, place: .none, context: context) },
                 read: context.readScreen, refresh: context.reload
             )
+            // Back on the list, the provider just set up shows its models, group open.
+            page.onSetUp = {
+                failure = nil
+                failedItem = nil
+                model.reveal(setUp: item)
+            }
             page.start()
             push(page)
             return

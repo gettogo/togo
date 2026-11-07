@@ -43,7 +43,7 @@ struct TutorialFlow: View {
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
         }
-        .fullScreenCover(item: demoItem) { item in
+        .presentCover("tutorial.demo", item: demoItem) { item in
             DemoControlCenter(store: item.store, now: now) { demo = nil }
         }
         .togoControls()
@@ -208,7 +208,7 @@ private struct TutorialCover: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .fullScreenCover(isPresented: $isPresented) {
+            .presentCover("tutorial.cover", isPresented: $isPresented) {
                 if exit == .addMachine { onAddMachine() }
                 exit = .closed
             } content: {

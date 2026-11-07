@@ -68,6 +68,16 @@ struct PickerModel: Equatable {
         isSearching || filterValues.contains { _, value in value != Self.allOption && value != "false" && !value.isEmpty }
     }
 
+    /// A provider from "Not set up" was just set up: its group opens (the group is named by
+    /// the provider's id or its title), with the search and filters out of its way.
+    mutating func reveal(setUp item: Item) {
+        expanded.insert(item.id)
+        expanded.insert(item.title)
+        query = ""
+        filterValues = filterValues.filter { $0.value == Self.allOption }
+        if let sidebarGroup, sidebarGroup != item.id, sidebarGroup != item.title { self.sidebarGroup = nil }
+    }
+
     mutating func reset() {
         query = ""
         filterValues = [:]

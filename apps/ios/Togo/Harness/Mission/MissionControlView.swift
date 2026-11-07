@@ -10,6 +10,8 @@ enum MissionRoute: Hashable {
     case job(HarnessRow)
     /// A native screen, such as omp's Compaction settings from the status section.
     case screen(String)
+    /// A provider's sign-in, started from a screen's "Not set up" entry.
+    case signIn(SignInPageModel)
 }
 
 /// Mission control: the session's sections in their fixed order (needs you, agents,
@@ -268,6 +270,8 @@ struct MissionControlStack: View {
                 destination(route)
             }
         }
+        // A screen's sign-in pushes here, never a sheet over this one.
+        .environment(\.pushSignIn, PushSignIn { path.append(.signIn($0)) })
         // Links in rows, cards and screens go through the chat's router, as in the chat.
         .environment(\.openURL, OpenURLAction { actions.open($0) })
     }
@@ -296,6 +300,8 @@ struct MissionControlStack: View {
                 store: store, screenID: id, openScreen: { path.append(.screen($0)) },
                 open: { context.open($0) }, showTerminal: { context.showTerminal() }
             )
+        case .signIn(let page):
+            SignInPage(model: page)
         }
     }
 

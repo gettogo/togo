@@ -171,6 +171,7 @@ struct ApprovalRow: View {
         .modifier(NeedsCard())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(ChatCopy.spokenNeeds(shownCard?.title ?? ChatCopy.waitingInTerminal))
+        .accessibilityIdentifier("chat.needs.approval")
         .accessibilityActions {
             if let card, card.phase == .open {
                 Button(approveLabel(card)) { approve(card) }

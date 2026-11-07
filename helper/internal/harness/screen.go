@@ -53,6 +53,9 @@ type Picker struct {
 	// OnSelectConfirm is OnSelect's confirm line and effect, when it has
 	// one.
 	OnSelectConfirm *SelectConfirm `json:"onSelectConfirm,omitempty"`
+	// OnSelectLabel is OnSelect's own words for the item's button, when
+	// it has them ("Use for this session").
+	OnSelectLabel string `json:"onSelectLabel,omitempty"`
 	// ItemActions are offered on each item (swipe and context menu), run
 	// with args {"id": item id}.
 	ItemActions []ActionRef `json:"itemActions,omitempty"`

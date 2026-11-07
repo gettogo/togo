@@ -33,18 +33,20 @@ struct AgentsSettingsView: View {
         .navigationTitle(settingsText("settings.agents.title", "Agents"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $adding) { editor(nil) }
-        .confirmationDialog(
-            settingsText("settings.agents.delete.title", "Delete \(deleting?.name ?? "")?"),
-            isPresented: Binding { deleting != nil } set: { if !$0 { deleting = nil } },
-            titleVisibility: .visible,
-            presenting: deleting
-        ) { preset in
-            Button(settingsText("settings.agents.delete.confirm", "Delete \(preset.name)"), role: .destructive) {
-                deleting = nil
-                Task { await library.delete(preset.id) }
+        .coordinated("settings.deleteAgent", .dialog, isPresented: Binding { deleting != nil } set: { if !$0 { deleting = nil } }) { view, shown in
+            view.confirmationDialog(
+                settingsText("settings.agents.delete.title", "Delete \(deleting?.name ?? "")?"),
+                isPresented: shown,
+                titleVisibility: .visible,
+                presenting: deleting
+            ) { preset in
+                Button(settingsText("settings.agents.delete.confirm", "Delete \(preset.name)"), role: .destructive) {
+                    deleting = nil
+                    Task { await library.delete(preset.id) }
+                }
+            } message: { _ in
+                Text(settingsText("settings.agents.delete.message", "Sessions already started with it keep running."))
             }
-        } message: { _ in
-            Text(settingsText("settings.agents.delete.message", "Sessions already started with it keep running."))
         }
     }
 

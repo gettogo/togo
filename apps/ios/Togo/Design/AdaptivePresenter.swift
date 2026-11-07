@@ -9,25 +9,25 @@ extension View {
     /// `hostsInspector`: an inspector may share the window with this view.
     func harnessPresent<Item: Identifiable, Shown: View>(
         item: Binding<Item?>, as content: PresentationContent, anchored: Bool = false, hostsInspector: Bool = false,
-        onDismiss: (() -> Void)? = nil, @ViewBuilder body: @escaping (Item) -> Shown
+        name: String? = nil, onDismiss: (() -> Void)? = nil, @ViewBuilder body: @escaping (Item) -> Shown
     ) -> some View {
         modifier(AdaptivePresenter(
             item: item, content: content, anchored: anchored, hostsInspector: hostsInspector,
-            onDismiss: onDismiss, make: body
+            onDismiss: onDismiss, name: name ?? "harness.\(content.rawValue)", make: body
         ))
     }
 
     /// `harnessPresent(item:)` for content without a value.
     func harnessPresent<Shown: View>(
         isPresented: Binding<Bool>, as content: PresentationContent, anchored: Bool = false, hostsInspector: Bool = false,
-        onDismiss: (() -> Void)? = nil, @ViewBuilder body: @escaping () -> Shown
+        name: String? = nil, onDismiss: (() -> Void)? = nil, @ViewBuilder body: @escaping () -> Shown
     ) -> some View {
         let item = Binding<PresentedFlag?>(
             get: { isPresented.wrappedValue ? PresentedFlag() : nil },
             set: { isPresented.wrappedValue = $0 != nil }
         )
         return harnessPresent(
-            item: item, as: content, anchored: anchored, hostsInspector: hostsInspector, onDismiss: onDismiss
+            item: item, as: content, anchored: anchored, hostsInspector: hostsInspector, name: name, onDismiss: onDismiss
         ) { _ in body() }
     }
 
@@ -51,6 +51,7 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
     let anchored: Bool
     let hostsInspector: Bool
     let onDismiss: (() -> Void)?
+    let name: String
     let make: (Item) -> Presented
 
     /// The style now. A detail with no stack to push into (it is the root of what opens) is
@@ -67,23 +68,36 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
     }
 
     func body(content view: Content) -> some View {
+        let style = self.style
+        // The coordinator owns when it shows; the policy says as what.
+        CoordinatedSlot(
+            view, name: name, kind: PresentationCoordinator.kind(of: style), yields: content == .sideContext,
+            wanted: item != nil, release: { if item != nil { item = nil } }
+        ) { view, shown, closed, inside in
+            presentations(view, style: style, shown: shown, closed: closed, inside: inside)
+        }
+    }
+
+    @ViewBuilder private func presentations(
+        _ view: some View, style: PresentationStyle, shown: Bool, closed: @escaping () -> Void, inside: PresentedContent
+    ) -> some View {
         let presented = view
-            .popover(item: gated { $0 == .popover }, arrowEdge: .bottom) { item in
-                make(item)
+            .popover(item: gated(style, shown: shown, closed: closed) { $0 == .popover }, arrowEdge: .bottom) { item in
+                inside(make(item)
                     .frame(minWidth: 360, idealWidth: 420, minHeight: 420, idealHeight: 560)
                     // A compact width the popover lands in after all (a fold) gets a sheet.
-                    .presentationCompactAdaptation(.sheet)
+                    .presentationCompactAdaptation(.sheet))
             }
-            .sheet(item: gated(\.isSheet), onDismiss: onDismiss) { item in
-                make(item).presentationChrome(style)
+            .sheet(item: gated(style, shown: shown, closed: closed, \.isSheet), onDismiss: onDismiss) { item in
+                inside(make(item).presentationChrome(style))
             }
         // Only a host beside main content gets the inspector column at all.
         if hostsInspector {
             presented.inspector(isPresented: Binding(
-                get: { style == .inspector && item != nil },
-                set: { shown in if !shown, style == .inspector { item = nil } }
+                get: { style == .inspector && shown },
+                set: { isShown in if !isShown, style == .inspector { closed() } }
             )) {
-                if let item { make(item) }
+                if let item { inside(make(item)) }
             }
         } else {
             presented
@@ -92,12 +106,15 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
 
     /// The item, for the presentation `matches` picks. A size change hands the open item over
     /// to the other presentation, so only a close from the current one clears it.
-    private func gated(_ matches: @escaping (PresentationStyle) -> Bool) -> Binding<Item?> {
+    private func gated(
+        _ style: PresentationStyle, shown: Bool, closed: @escaping () -> Void,
+        _ matches: @escaping (PresentationStyle) -> Bool
+    ) -> Binding<Item?> {
         Binding(
-            get: { matches(style) ? item : nil },
+            get: { matches(style) && shown ? item : nil },
             set: { value in
-                guard matches(style) else { return }
-                item = value
+                guard matches(style), value == nil else { return }
+                closed()
             }
         )
     }

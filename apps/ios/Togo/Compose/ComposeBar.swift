@@ -250,7 +250,7 @@ struct ComposeBar: View {
             photo = nil
             Task { await model.images.load { try await item.loadTransferable(type: Data.self) } }
         }
-        .fullScreenCover(item: annotating) { pending in
+        .presentCover("compose.annotate", item: annotating) { pending in
             AnnotateView(image: pending.preview, onCancel: model.images.dismiss) { annotated in
                 Task { await model.images.send(annotated: annotated) }
             }

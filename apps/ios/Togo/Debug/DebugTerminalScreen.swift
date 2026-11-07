@@ -156,14 +156,16 @@ struct DebugTerminalScreen: View {
         .navigationTitle(model.session.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .primaryAction) { actions } }
-        .alert("Find", isPresented: $finding) {
-            TextField("Text", text: $findText)
-            Button("Find") {
-                if !model.engine.find(findText, caseSensitive: false, regex: false, backwards: false) {
-                    message = "No match for \(findText)"
+        .coordinated("debug.find", .alert, isPresented: $finding) { view, shown in
+            view.alert("Find", isPresented: shown) {
+                TextField("Text", text: $findText)
+                Button("Find") {
+                    if !model.engine.find(findText, caseSensitive: false, regex: false, backwards: false) {
+                        message = "No match for \(findText)"
+                    }
                 }
+                Button("Cancel", role: .cancel) { model.engine.clearFind() }
             }
-            Button("Cancel", role: .cancel) { model.engine.clearFind() }
         }
         .onAppear { model.start() }
         .onDisappear { model.stop() }

@@ -69,7 +69,7 @@ struct AboutView: View {
         }
         .groupedList()
         #if DEBUG
-        .fullScreenCover(isPresented: $developerShown) { DebugEntry.root() }
+        .presentCover("settings.developer", isPresented: $developerShown) { DebugEntry.root() }
         #endif
         .navigationTitle(settingsText("settings.about.title", "About"))
         .navigationBarTitleDisplayMode(.inline)

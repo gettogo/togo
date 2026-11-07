@@ -87,17 +87,19 @@ struct KeyboardSettingsView: View {
         .navigationTitle(settingsText("settings.keyboard.title", "Key bar"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { editItem }
-        .confirmationDialog(
-            settingsText("settings.keyboard.replace.title", "Replace your keys?"),
-            isPresented: Binding { replacing != nil } set: { if !$0 { replacing = nil } },
-            titleVisibility: .visible,
-            presenting: replacing
-        ) { preset in
-            Button(settingsText("settings.keyboard.replace.confirm", "Use \(preset.title)"), role: .destructive) {
-                edit { $0.apply(preset) }
+        .coordinated("settings.replaceKeys", .dialog, isPresented: Binding { replacing != nil } set: { if !$0 { replacing = nil } }) { view, shown in
+            view.confirmationDialog(
+                settingsText("settings.keyboard.replace.title", "Replace your keys?"),
+                isPresented: shown,
+                titleVisibility: .visible,
+                presenting: replacing
+            ) { preset in
+                Button(settingsText("settings.keyboard.replace.confirm", "Use \(preset.title)"), role: .destructive) {
+                    edit { $0.apply(preset) }
+                }
+            } message: { _ in
+                Text(settingsText("settings.keyboard.replace.message", "Your changes to the bar will be lost."))
             }
-        } message: { _ in
-            Text(settingsText("settings.keyboard.replace.message", "Your changes to the bar will be lost."))
         }
     }
 

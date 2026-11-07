@@ -12,23 +12,27 @@ struct SessionDialogs: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog(
-                kill.map { SessionActions.killConfirmation(for: $0).title } ?? "",
-                isPresented: presented($kill), titleVisibility: .visible, presenting: kill
-            ) { row in
-                Button(ControlCenterCopy.kill, role: .destructive) { Task { await store.kill(row) } }
-            } message: { row in
-                Text(SessionActions.killConfirmation(for: row).message)
+            .coordinated("session.kill", .dialog, isPresented: presented($kill)) { view, shown in
+                view.confirmationDialog(
+                    kill.map { SessionActions.killConfirmation(for: $0).title } ?? "",
+                    isPresented: shown, titleVisibility: .visible, presenting: kill
+                ) { row in
+                    Button(ControlCenterCopy.kill, role: .destructive) { Task { await store.kill(row) } }
+                } message: { row in
+                    Text(SessionActions.killConfirmation(for: row).message)
+                }
             }
-            .alert(
-                rename.map { ControlCenterCopy.renameTitle(SessionActions.label($0)) } ?? "",
-                isPresented: presented($rename), presenting: rename
-            ) { row in
-                TextField(ControlCenterCopy.name, text: $name)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button(ControlCenterCopy.rename) { Task { await store.rename(row, to: name) } }
-                Button(ControlCenterCopy.cancel, role: .cancel) {}
+            .coordinated("session.rename", .alert, isPresented: presented($rename)) { view, shown in
+                view.alert(
+                    rename.map { ControlCenterCopy.renameTitle(SessionActions.label($0)) } ?? "",
+                    isPresented: shown, presenting: rename
+                ) { row in
+                    TextField(ControlCenterCopy.name, text: $name)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button(ControlCenterCopy.rename) { Task { await store.rename(row, to: name) } }
+                    Button(ControlCenterCopy.cancel, role: .cancel) {}
+                }
             }
             .onChange(of: rename) { _, row in
                 if let row { name = row.name }

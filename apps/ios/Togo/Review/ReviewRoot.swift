@@ -316,11 +316,11 @@ private struct ReviewPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .fullScreenCover(item: request(regular: false)) { request in
+            .presentCover("review.cover", item: request(regular: false)) { request in
                 root(request, regular: false)
                     .modifier(ReviewEntrance())
             }
-            .sheet(item: request(regular: true)) { request in
+            .presentSheet("review.sheet", item: request(regular: true)) { request in
                 // Page-sized, so the sheet keeps a regular width and shows the split view: a
                 // form sheet would be compact inside and fall back to the phone's stack.
                 root(request, regular: true)

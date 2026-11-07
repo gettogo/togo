@@ -114,7 +114,7 @@ struct PrimitiveMarkdown: View {
             Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = source }
             Button(ChatCopy.selectText, systemImage: "selection.pin.in.out") { selecting = true }
         }
-        .sheet(isPresented: $selecting) { SelectTextSheet(text: source) }
+        .presentSheet("primitive.markdownSelect", isPresented: $selecting) { SelectTextSheet(text: source) }
     }
 
     @ViewBuilder private func view(_ block: PrimitiveMarkdownBlock) -> some View {

@@ -172,6 +172,30 @@ import TogoKit
         #expect(progress.phase == .signedIn)
     }
 
+    /// Once the agent lists the provider as set up, the screen under the page is read again
+    /// and told, so the picker shows the provider's models with its group open.
+    @Test func setUpProviderRefreshesThePickerUnderThePage() async {
+        let listed = HarnessScreen(
+            id: "model", primitive: .picker, title: "Model", fetchedAt: HarnessSamples.at,
+            picker: .init(items: [.init(id: "anthropic/claude-haiku-4-5", title: "Claude Haiku 4.5", group: "anthropic")],
+                          searchable: true, onSelect: "switch_model", setup: [])
+        )
+        var refreshed = 0
+        var revealed = 0
+        let model = SignInPageModel(
+            provider: "Anthropic", itemID: "anthropic", agent: "OMP", hostID: host, sessionID: "s_signin_refresh",
+            send: { HarnessActionResult(result: .typed, screen: listed) },
+            read: nil, refresh: { refreshed += 1 }
+        )
+        model.onSetUp = { revealed += 1 }
+        model.start()
+        for _ in 0..<50 where revealed == 0 { try? await Task.sleep(for: .milliseconds(20)) }
+        model.leave()
+        #expect(model.progress.phase == .signedIn)
+        #expect(refreshed == 1)
+        #expect(revealed == 1)
+    }
+
     // MARK: Redirect port
 
     @Test func callbackPortComesFromTheRedirect() {

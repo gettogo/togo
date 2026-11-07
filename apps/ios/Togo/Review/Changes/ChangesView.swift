@@ -17,18 +17,20 @@ struct ChangesView: View {
         content
             .background(Color.togoInk)
             .task { await model.refresh() }
-            .confirmationDialog(
-                model.pendingConfirmation?.title ?? "", isPresented: confirming, titleVisibility: .visible,
-                presenting: model.pendingConfirmation
-            ) { confirmation in
-                Button(confirmation.button, role: .destructive) {
-                    Task { await model.confirm(confirmation) }
+            .coordinated("review.discard", .dialog, isPresented: confirming) { view, shown in
+                view.confirmationDialog(
+                    model.pendingConfirmation?.title ?? "", isPresented: shown, titleVisibility: .visible,
+                    presenting: model.pendingConfirmation
+                ) { confirmation in
+                    Button(confirmation.button, role: .destructive) {
+                        Task { await model.confirm(confirmation) }
+                    }
+                    Button(ChangesCopy.cancel, role: .cancel) {}
+                } message: { confirmation in
+                    Text(verbatim: confirmation.message)
                 }
-                Button(ChangesCopy.cancel, role: .cancel) {}
-            } message: { confirmation in
-                Text(verbatim: confirmation.message)
             }
-            .sheet(isPresented: $model.isCommitSheetOpen) {
+            .presentSheet("review.commit", isPresented: $model.isCommitSheetOpen) {
                 CommitSheet(model: model)
                     .togoSheet(.form)
             }

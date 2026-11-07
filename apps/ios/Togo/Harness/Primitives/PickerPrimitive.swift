@@ -25,6 +25,8 @@ struct PickerPrimitive: View {
     @State var focused: PickerModel.Item?
     /// Why the last selection failed, shown at the top of the list at once.
     @State var failure: String?
+    /// The item whose selection failed, for Try again.
+    @State var failedItem: PickerModel.Item?
 
     init(picker: HarnessScreen.Picker, title: String = "", context: PrimitiveContext, chrome: ScreenChrome?) {
         self.picker = picker
@@ -85,10 +87,18 @@ struct PickerPrimitive: View {
         return List(selection: split ? listSelection : nil) {
             if let failure {
                 // Errors land at once, at the list that failed (motion principles v2 §2).
-                Label(failure, systemImage: "exclamationmark.circle.fill")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(PrimitiveTint.fail)
-                    .listRowBackground(Color.clear)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(failure, systemImage: "exclamationmark.circle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(PrimitiveTint.fail)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let failedItem {
+                        Button(PrimitiveCopy.tryAgain) { select(failedItem) }
+                            .buttonStyle(.secondary)
+                            .disabled(actions.isBusy)
+                    }
+                }
+                .listRowBackground(Color.clear)
             }
             if !itemActions.isEmpty, !model.isSearching {
                 PickerRolesSection(refs: itemActions, items: picker.items, picking: model.picking) { id in

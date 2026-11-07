@@ -9,6 +9,8 @@ struct WindowRoot: View {
     @SceneStorage("window") private var saved: Data?
     @State private var window = WindowID()
     @State private var store: AppStore?
+    /// The one owner of this window's sheets, covers, popovers and questions.
+    @State private var presentations = PresentationCoordinator()
     private let composition: AppComposition
     /// The tab this window was opened for, if any.
     private let opening: TabID?
@@ -26,6 +28,8 @@ struct WindowRoot: View {
                 Color.togoInk.ignoresSafeArea()
             }
         }
+        .presentationProbe()
+        .environment(\.presentationCoordinator, presentations)
         .environment(\.windowID, window)
         .onAppear(perform: makeStore)
         .onChange(of: scenePhase, initial: true) { _, phase in

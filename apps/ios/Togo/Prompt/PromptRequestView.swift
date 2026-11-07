@@ -74,12 +74,12 @@ struct PromptRequestView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, model.compact ? 10 : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .sheet(isPresented: $showingAll) {
+        .presentSheet("prompt.all", isPresented: $showingAll) {
             PromptCommandSheet(question: request.question, command: request.command ?? "")
                 .togoSheet(.form)
         }
         // Extra answers in a list with their full words; a menu would clip them.
-        .sheet(isPresented: $showingMore) {
+        .presentSheet("prompt.more", isPresented: $showingMore) {
             AnswerOptionsSheet(
                 question: request.question,
                 options: request.more.map { AnswerOption(id: $0.id, label: $0.label) }

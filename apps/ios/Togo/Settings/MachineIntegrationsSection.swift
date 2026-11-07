@@ -99,18 +99,20 @@ struct IntegrationsRows: View {
             }
         }
         .groupedRows()
-        .confirmationDialog(
-            IntegrationsCopy.removeTitle(removing?.name ?? ""),
-            isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } },
-            titleVisibility: .visible,
-            presenting: removing
-        ) { report in
-            Button(IntegrationsCopy.remove, role: .destructive) {
-                removing = nil
-                Task { await model.uninstall(report.id) }
+        .coordinated("settings.removeIntegration", .dialog, isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } }) { view, shown in
+            view.confirmationDialog(
+                IntegrationsCopy.removeTitle(removing?.name ?? ""),
+                isPresented: shown,
+                titleVisibility: .visible,
+                presenting: removing
+            ) { report in
+                Button(IntegrationsCopy.remove, role: .destructive) {
+                    removing = nil
+                    Task { await model.uninstall(report.id) }
+                }
+            } message: { _ in
+                Text(IntegrationsCopy.removeMessage)
             }
-        } message: { _ in
-            Text(IntegrationsCopy.removeMessage)
         }
         // Loading → rows, a row's failure line and Set up all arrive on `resize`.
         .resizesOnRows([

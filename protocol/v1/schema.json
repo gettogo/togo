@@ -2753,6 +2753,7 @@
         "filters": { "type": "array", "items": { "$ref": "#/$defs/HarnessFilter" } },
         "onSelect": { "type": "string" },
         "onSelectConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
+        "onSelectLabel": { "description": "onSelect's own words for an item's button (omp: Use for this session).", "type": "string" },
         "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } },
         "setup": { "description": "What is not set up yet (a provider not signed in), shown after the items.", "type": "array", "items": { "$ref": "#/$defs/HarnessPickerItem" } },
         "setupAction": { "description": "Sets up one setup entry, run with args {id} (and {value} when setupInput is set).", "$ref": "#/$defs/HarnessActionRef" },

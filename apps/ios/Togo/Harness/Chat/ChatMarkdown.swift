@@ -130,6 +130,6 @@ struct CodeWell: View {
             Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
             Button(ChatCopy.selectText, systemImage: "selection.pin.in.out") { selecting = true }
         }
-        .sheet(isPresented: $selecting) { SelectTextSheet(text: text) }
+        .presentSheet("chat.markdownSelect", isPresented: $selecting) { SelectTextSheet(text: text) }
     }
 }

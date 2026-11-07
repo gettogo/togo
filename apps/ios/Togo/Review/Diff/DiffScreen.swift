@@ -41,19 +41,21 @@ struct DiffScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .modifier(FileMenu(model: model))
             .toolbar { toolbar }
-            .confirmationDialog(
-                model.pendingDiscard?.title ?? "",
-                isPresented: Binding { model.pendingDiscard != nil } set: { if !$0 { model.cancelDiscard() } },
-                titleVisibility: .visible,
-                presenting: model.pendingDiscard
-            ) { confirmation in
-                Button(confirmation.button, role: .destructive) {
-                    Task { await model.confirm(confirmation) }
+            .coordinated("review.diffDiscard", .dialog, isPresented: Binding { model.pendingDiscard != nil } set: { if !$0 { model.cancelDiscard() } }) { view, shown in
+                view.confirmationDialog(
+                    model.pendingDiscard?.title ?? "",
+                    isPresented: shown,
+                    titleVisibility: .visible,
+                    presenting: model.pendingDiscard
+                ) { confirmation in
+                    Button(confirmation.button, role: .destructive) {
+                        Task { await model.confirm(confirmation) }
+                    }
+                } message: { confirmation in
+                    Text(confirmation.message)
                 }
-            } message: { confirmation in
-                Text(confirmation.message)
             }
-            .sheet(item: $draft) { draft in
+            .presentSheet("review.diffDraft", item: $draft) { draft in
                 CommentSheet(draft: draft, actionTitle: model.commentActionTitle, canSend: model.canSendComments) {
                     model.comment(draft, text: $0)
                 }

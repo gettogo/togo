@@ -3,6 +3,7 @@ package detect
 import (
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // A modal dialog is anything on screen that takes the keys typed next
@@ -62,7 +63,7 @@ func Dialog(screen string) (DialogInfo, bool) {
 		}
 		end := min(len(lines), i+dialogSpan+1)
 		for j := i; j < end; j++ {
-			if dialogHint.MatchString(lines[j]) || buttonRow(lines[j]) {
+			if dialogHint.MatchString(lines[j]) || buttonRow(lines[j]) && !wrappedTail(lines, j) {
 				return DialogInfo{Title: truncate(cleanTitle(l), 120)}, true
 			}
 		}
@@ -94,6 +95,23 @@ func buttonRow(line string) bool {
 		n++
 	}
 	return n > 0
+}
+
+// wrappedTail reports a one-word "button row" that is the end of the line
+// above wrapped at the pane's width. Seen on omp 18.16 at a phone's 47
+// columns: its update banner's "Run: omp update" left "update" alone on a
+// line, and every typed command was refused as if a dialog were up.
+func wrappedTail(lines []string, j int) bool {
+	if j == 0 || len(buttonSplit.Split(strings.TrimSpace(lines[j]), -1)) != 1 {
+		return false
+	}
+	prev := lines[j-1]
+	if prev == "" || buttonRow(prev) {
+		return false
+	}
+	r := []rune(prev)
+	last := r[len(r)-1]
+	return unicode.IsLetter(last) || unicode.IsDigit(last)
 }
 
 // cleanTitle drops border runs and symbols around a title line.

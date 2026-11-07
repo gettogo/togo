@@ -42,7 +42,7 @@ struct PickerItemDetail: View {
                 Section {
                     Button(action: onSelect) {
                         HStack {
-                            Label(PrimitiveCopy.select, systemImage: "checkmark.circle")
+                            Label(picker.onSelectLabel ?? PrimitiveCopy.select, systemImage: "checkmark.circle")
                             Spacer(minLength: 8)
                             if actions.isRunning(picker.onSelect, target: item.id) {
                                 ProgressView().controlSize(.small)

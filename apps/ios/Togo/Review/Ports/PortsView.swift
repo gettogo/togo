@@ -27,7 +27,7 @@ struct PortsView: View {
             }
             // Dismissing clears `preview`, which stops the forward. A forward reopened on another
             // local port is a new item, so the sheet comes back with the page at the new address.
-            .sheet(item: $model.preview) { preview in
+            .presentSheet("review.portPreview", item: $model.preview) { preview in
                 PreviewSheet(
                     url: preview.url, title: PortsCopy.previewTitle(preview.remote),
                     activity: { model.touch() }

@@ -47,6 +47,17 @@ func TestDialog(t *testing.T) {
   ┃  Build · Qwen3.8-27B
   /tmp/work     shift+tab agents  ctrl+p commands
 `, "", false},
+		// omp's startup banner at a phone's 47 columns (recorded live).
+		{"omp banner wrapped at 47 columns", `
+───────────────────────────────────────────────
+ Update Available
+ New version 18.18.0 is available. Run: omp
+ update
+───────────────────────────────────────────────
+
+ π > ◑ Opus 5.5 > 🗑 …pad/omp3 > (sub) ▶─2%─┃1M─
+╰─                 ⇧⇥ to change thinking effort
+`, "", false},
 		{"update hint line only", `
                 /update to install v2.2.6
   ┃  Ask anything…

@@ -19,6 +19,9 @@ import UIKit
     private(set) var runner: SignInRunner?
     /// The Paste code field, once there is somewhere to send a code.
     private(set) var paste: PasteCodeModel?
+    /// Runs once the agent lists the provider as set up and the screen under this page was
+    /// read again: the picker opens the provider's group.
+    @ObservationIgnored var onSetUp: (@MainActor () -> Void)?
 
     @ObservationIgnored private let itemID: String
     @ObservationIgnored private let send: @MainActor () async -> HarnessActionResult?
@@ -172,7 +175,13 @@ import UIKit
         for open in LinkCenter.shared.requests.pending where open.hostID == hostID && open.sessionID == sessionID {
             LinkCenter.shared.requests.resolve(open.id)
         }
-        Task { await refresh?() }
+        // The screen under this page reads the agent's list again now, so the provider's
+        // models are there when the user goes back (the helper skips its cache while a
+        // sign-in runs).
+        Task {
+            await refresh?()
+            onSetUp?()
+        }
     }
 
     /// The page shows again, as after the authentication browser covered it.

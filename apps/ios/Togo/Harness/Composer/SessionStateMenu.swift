@@ -126,6 +126,7 @@ struct SessionStateChip: View {
         .buttonStyle(ComposerChipStyle())
         .accessibilityLabel(ComposerCopy.sessionState)
         .accessibilityValue(title ?? "")
+        .accessibilityIdentifier("composer.state")
         .task { await model.loadCommandsOnce() }
     }
 

@@ -87,4 +87,27 @@ import TogoKit
         #expect(p.setupAction?.label == "Add key")
         #expect(p.setupInput == "secret")
     }
+
+    /// Signed in from "Not set up": back on the list, the provider's models show in its group,
+    /// open, whatever search or filter hid them before.
+    @Test func aProviderJustSetUpOpensItsGroup() {
+        var model = PickerModel(picker)
+        model.query = "anthr"
+        model.filterValues["provider"] = "moonshot"
+        var after = picker
+        after.items.append(item("anthropic/claude-haiku-4-5", "anthropic"))
+        after.setup = [.init(id: "openai-codex", title: "ChatGPT Plus/Pro")]
+        model.reveal(setUp: .init(id: "anthropic", title: "Anthropic (Claude Pro/Max)"))
+        let anthropic = model.groups(after).first { $0.name == "anthropic" }
+        #expect(anthropic.map { model.isExpanded($0) } == true)
+        #expect(anthropic?.items.map(\.id) == ["anthropic/claude-haiku-4-5"])
+        #expect(model.query.isEmpty)
+    }
+
+    /// omp's switch says it is for this session only; the item's button uses those words.
+    @Test func selectLabelDecodesFromTheHelper() throws {
+        let json = #"{"items":[],"searchable":true,"onSelect":"switch_model","onSelectLabel":"Use for this session"}"#
+        let p = try JSONDecoder().decode(HarnessScreen.Picker.self, from: Data(json.utf8))
+        #expect(p.onSelectLabel == "Use for this session")
+    }
 }

@@ -75,7 +75,7 @@ struct MachinesSettingsView: View {
                 }
             }
         }
-        .sheet(item: $importModel, onDismiss: {
+        .presentSheet("settings.importHosts", item: $importModel, onDismiss: {
             if let draft = draftToOpen {
                 draftToOpen = nil
                 machineImport?.openInForm(draft)
@@ -94,30 +94,32 @@ struct MachinesSettingsView: View {
             .togoControls()
             .togoSheet(.form)
         }
-        .confirmationDialog(
-            settingsText("settings.machines.remove.title", "Remove \(removal.pending?.name ?? "")?"),
-            isPresented: Binding { removal.pending != nil } set: { if !$0 { removal.cancel() } },
-            titleVisibility: .visible,
-            presenting: removal.pending
-        ) { machine in
-            Button(settingsText("settings.machines.remove.confirm", "Remove \(machine.name)"), role: .destructive) {
-                removal.confirm(remove)
-            }
-        } message: { machine in
-            Text(machine.removesKey
-                ? (isPad
-                    ? settingsText(
-                        "settings.machines.remove.key.message.ipad",
-                        "Togo removes this iPad's key from \(machine.name) so it can no longer sign in, then forgets the machine."
-                    )
+        .coordinated("settings.removeMachine", .dialog, isPresented: Binding { removal.pending != nil } set: { if !$0 { removal.cancel() } }) { view, shown in
+            view.confirmationDialog(
+                settingsText("settings.machines.remove.title", "Remove \(removal.pending?.name ?? "")?"),
+                isPresented: shown,
+                titleVisibility: .visible,
+                presenting: removal.pending
+            ) { machine in
+                Button(settingsText("settings.machines.remove.confirm", "Remove \(machine.name)"), role: .destructive) {
+                    removal.confirm(remove)
+                }
+            } message: { machine in
+                Text(machine.removesKey
+                    ? (isPad
+                        ? settingsText(
+                            "settings.machines.remove.key.message.ipad",
+                            "Togo removes this iPad's key from \(machine.name) so it can no longer sign in, then forgets the machine."
+                        )
+                        : settingsText(
+                            "settings.machines.remove.key.message.iphone",
+                            "Togo removes this iPhone's key from \(machine.name) so it can no longer sign in, then forgets the machine."
+                        ))
                     : settingsText(
-                        "settings.machines.remove.key.message.iphone",
-                        "Togo removes this iPhone's key from \(machine.name) so it can no longer sign in, then forgets the machine."
+                        "settings.machines.remove.message",
+                        "Its sessions keep running on the machine. You can add it again at any time."
                     ))
-                : settingsText(
-                    "settings.machines.remove.message",
-                    "Its sessions keep running on the machine. You can add it again at any time."
-                ))
+            }
         }
     }
 

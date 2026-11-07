@@ -204,7 +204,7 @@ struct MachineAwakeRows: View {
                 .foregroundStyle(Color.togoSnow)
                 .textCase(nil)
                 .task { await model.load() }
-                .sheet(isPresented: Binding(get: { model.showsBatterySheet }, set: { model.showsBatterySheet = $0 })) {
+                .presentSheet("settings.awakeBattery", isPresented: Binding(get: { model.showsBatterySheet }, set: { model.showsBatterySheet = $0 })) {
                     AwakeBatterySheet(name: name)
                 }
         } footer: {

@@ -16,7 +16,7 @@ struct RootSheet: View {
         presented
             // New session asks for agents and folders; if that needs a password or code, the
             // question shows over this sheet.
-            .attachPrompts(store.services.attachPrompts, active: true)
+            .attachPrompts(store.services.attachPrompts, active: true, nests: true)
             // Settings starts agent sign-ins in this window's store.
             .environment(\.signInStore, store)
     }

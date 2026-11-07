@@ -136,7 +136,7 @@ struct DemoControlCenter: View {
                     unavailable
                 }
         }
-        .sheet(item: $store.sheet) { _ in
+        .presentSheet("tutorial.demoSheet", item: $store.sheet) { _ in
             NavigationStack {
                 unavailable
                     .toolbar {
@@ -147,7 +147,7 @@ struct DemoControlCenter: View {
             }
             .presentationDetents([.medium])
         }
-        .fullScreenCover(isPresented: $store.workspaceOpen) {
+        .presentCover("tutorial.demoWorkspace", isPresented: $store.workspaceOpen) {
             NavigationStack {
                 unavailable
                     .toolbar {

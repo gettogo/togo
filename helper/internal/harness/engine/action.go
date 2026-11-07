@@ -136,8 +136,14 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 	}
 	if err == nil && setsUp(s.ad.Screens, req.Action) && (res.Result == harness.ResultApplied || res.Result == harness.ResultTyped) {
 		// A provider signed in or connected: its models and its place in
-		// "Not set up" change, so the next picker reads them afresh.
+		// "Not set up" change, so the next picker reads them afresh. A
+		// sign-in finishes minutes later, in the browser: until it can
+		// have, screens read their sources again rather than from the
+		// cache, so the picker shows the provider set up as soon as it is.
 		e.cache.forget(s.id)
+		s.mu.Lock()
+		s.settingUpUntil = e.cfg.Now().Add(settingUpWindow)
+		s.mu.Unlock()
 	}
 	if err != nil || res.Result != harness.ResultApplied {
 		return res, err
@@ -253,6 +259,9 @@ func (e *Engine) runType(ctx context.Context, s *sess, act spec.Action, t *spec.
 	}
 	if e.verify(ctx, s, act.Verify, data) {
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
+	}
+	if act.Verify != nil && act.Verify.Required {
+		return harness.ActionResult{Result: harness.ResultFailed, Message: e.notConfirmed(ctx, s, act.Verify)}, nil
 	}
 	return harness.ActionResult{Result: harness.ResultTyped, Message: "Sent " + text}, nil
 }
@@ -408,6 +417,7 @@ func (e *Engine) readValue(ctx context.Context, s *sess, v *spec.Verify, screen 
 		if !found {
 			return "", false
 		}
+		input = stateAny(state)
 	} else if !isFeed && v.Source != "" {
 		data, _, err := e.fetch(ctx, s, v.Source, nil, true)
 		if err != nil {
@@ -442,9 +452,11 @@ func (e *Engine) verify(ctx context.Context, s *sess, v *spec.Verify, data map[s
 			return true
 		}
 		// A typed mode command may write no record: the pane shows the
-		// new mode first. Keep what it shows, so the mode chip follows too.
-		if got, ok := e.readValue(ctx, s, v, true); ok && got == want {
+		// new mode first (omp writes no session file before the first
+		// turn). Keep what it shows, so the chips follow too.
+		if got, ok, read := e.readScreenValue(ctx, s, v); ok && got == want {
 			s.seedFromScreen(0)
+			s.seedRead(read)
 			return true
 		}
 		if time.Now().After(deadline) {

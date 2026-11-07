@@ -11,7 +11,7 @@ struct CommandPaletteView: View {
     let model: CommandLineModel
     let screenTitle: (String) -> String
     @State private var query = ""
-    @State private var path: [String] = []
+    @State private var path = NavigationPath()
     @State private var width: CGFloat = 0
 
     var body: some View {
@@ -39,7 +39,13 @@ struct CommandPaletteView: View {
                     )
                     .navigationBarTitleDisplayMode(.inline)
                 }
+                // A picker's "Not set up" sign-in pushes here: the agent's page and the
+                // outcome stay inside the palette, never a sheet stacked within it.
+                .navigationDestination(for: SignInPageModel.self) { page in
+                    SignInPage(model: page)
+                }
         }
+        .environment(\.pushSignIn, PushSignIn { path.append($0) })
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .onAppear {
             // A choice command typed in full and sent opens here, already found.

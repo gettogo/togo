@@ -75,7 +75,7 @@ struct ChatImageGrid: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
-        .fullScreenCover(item: $opened) { request in
+        .presentCover("chat.image", item: $opened) { request in
             ChatImageViewer(images: images, index: request.index)
         }
     }

@@ -105,7 +105,7 @@ func (e *Engine) fetch(ctx context.Context, s *sess, name string, query map[stri
 		return nil, false, err
 	}
 	key := s.id + "\x00" + name + "\x00" + string(rendered)
-	if c, ok := e.cache.get(key); ok && !fresh && src.Cache > 0 && e.cfg.Now().Sub(c.at) < src.Cache {
+	if c, ok := e.cache.get(key); ok && !fresh && src.Cache > 0 && e.cfg.Now().Sub(c.at) < s.cacheFor(src.Cache, e.cfg.Now()) {
 		return c.data, false, nil
 	}
 	v, err := e.read(ctx, s, name, src, rendered, state)
@@ -129,6 +129,25 @@ func (e *Engine) fetch(ctx context.Context, s *sess, name string, query map[stri
 	}
 	e.cache.put(key, cacheEntry{session: s.id, at: e.cfg.Now(), data: v})
 	return v, false, nil
+}
+
+// settingUpWindow is how long after a sign-in starts its screens read
+// their sources again; settingUpCache is the cache they keep meanwhile,
+// short enough that the sign-in page's checks (every 3 s) read afresh.
+const (
+	settingUpWindow = 10 * time.Minute
+	settingUpCache  = 2 * time.Second
+)
+
+// cacheFor is how long a source's cached copy serves now.
+func (s *sess) cacheFor(ttl time.Duration, now time.Time) time.Duration {
+	s.mu.Lock()
+	until := s.settingUpUntil
+	s.mu.Unlock()
+	if now.Before(until) {
+		return min(ttl, settingUpCache)
+	}
+	return ttl
 }
 
 // notYet reports whether a source's templates need the harness's session

@@ -139,20 +139,22 @@ struct NotificationSettingsView: View {
         .groupedList()
         .navigationTitle(settingsText("settings.notifications.title", "Notifications"))
         .navigationBarTitleDisplayMode(.inline)
-        .alert(
-            settingsText("settings.notifications.commands.alert", "Show commands in Live Activities?"),
-            isPresented: Binding { commandsFor != nil } set: { if !$0 { commandsFor = nil } },
-            presenting: commandsFor
-        ) { machine in
-            Button(settingsText("settings.notifications.commands.confirm", "Show commands")) {
-                setCommands(true, for: machine.id)
+        .coordinated("settings.liveCommands", .alert, isPresented: Binding { commandsFor != nil } set: { if !$0 { commandsFor = nil } }) { view, shown in
+            view.alert(
+                settingsText("settings.notifications.commands.alert", "Show commands in Live Activities?"),
+                isPresented: shown,
+                presenting: commandsFor
+            ) { machine in
+                Button(settingsText("settings.notifications.commands.confirm", "Show commands")) {
+                    setCommands(true, for: machine.id)
+                }
+                Button(settingsText("settings.notifications.commands.cancel", "Cancel"), role: .cancel) {}
+            } message: { _ in
+                Text(settingsText(
+                    "settings.notifications.commands.message",
+                    "Live Activities can't be encrypted, so command text would pass through Togo's relay in plain text. Use this only with a relay you run yourself."
+                ))
             }
-            Button(settingsText("settings.notifications.commands.cancel", "Cancel"), role: .cancel) {}
-        } message: { _ in
-            Text(settingsText(
-                "settings.notifications.commands.message",
-                "Live Activities can't be encrypted, so command text would pass through Togo's relay in plain text. Use this only with a relay you run yourself."
-            ))
         }
     }
 

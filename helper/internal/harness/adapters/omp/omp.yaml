@@ -120,10 +120,15 @@ screens:
     source: jobs
     map: { item.id: .rowId, item.title: .name, item.subtitle: '.command // .state // empty', item.state: '.state // empty' }
 actions:
+  # /switch is omp's session-only model change (roles stay as they are;
+  # "Default" below sets the role new sessions start with). omp writes no
+  # session file before the first turn, so the switch is confirmed from
+  # the pane's "Session-only model: <id>." line too; a switch that does
+  # not show fails, so the app never says a model is in use when it isn't.
   switch_model:
-    label: Use model
+    label: Use for this session
     type: { text: '/switch {{.id}}', submit: true, when_idle: true }
-    verify: { source: session, select: .model, equals: '{{.id}}', within: 5s }
+    verify: { source: session, select: .model, equals: '{{.id}}', within: 6s, required: true }
     stability: documented-command
   # omp's own sign-in: it opens the provider's page through BROWSER, which
   # reaches the phone as browser.open and its sign-in sheet.
