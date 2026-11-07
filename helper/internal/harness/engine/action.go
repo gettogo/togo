@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -103,6 +104,11 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 		return harness.ActionResult{}, err
 	}
 	args["target"] = req.Target
+	if _, ok := args["id"]; !ok && req.Target != "" {
+		// Templates name the chosen item .id; a caller that sends only the
+		// target means that item.
+		args["id"] = req.Target
+	}
 	res, err := e.run(ctx, s, req.Action, act, args)
 	if err != nil || res.Result != harness.ResultApplied {
 		return res, err
@@ -115,18 +121,22 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 	return res, nil
 }
 
-// screenFor names the settings screen an action came from, which is read
+// screenFor names the settings or picker screen an action came from, which is read
 // again after it applies.
 func (e *Engine) screenFor(s *sess, action string) string {
 	for _, name := range s.ad.screenOrder {
 		sc := s.ad.Screens[name]
-		if sc.Primitive != harness.PrimSettings || sc.Source == "" {
-			continue
-		}
-		for _, f := range sc.Fields {
-			if f.Action == action {
-				return name
+		if sc.Primitive == harness.PrimSettings && sc.Source != "" {
+			for _, f := range sc.Fields {
+				if f.Action == action {
+					return name
+				}
 			}
+		}
+		// A picker's choice or item action changes what it shows: which
+		// model is selected, which model holds a role.
+		if sc.Primitive == harness.PrimPicker && (sc.OnSelect == action || slices.Contains(sc.Actions, action)) {
+			return name
 		}
 	}
 	return ""

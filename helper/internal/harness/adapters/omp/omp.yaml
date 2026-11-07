@@ -161,6 +161,10 @@ actions:
     cli: { argv: [omp, ps, stop, '{{.target}}'] }
     stability: documented
 commands:
+  # The native pickers for omp's own commands; the rest come from omp.
+  static:
+    - { name: model, hint: '[model]', detail: Choose the model, screen: model }
+    - { name: effort, hint: '[level]', detail: Set reasoning effort, screen: effort }
   source: commands
   select: '[.commands[] | {name: .name, detail: .description, hint: .input.hint}]'
 mission:

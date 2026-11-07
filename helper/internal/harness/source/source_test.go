@@ -211,6 +211,53 @@ func TestJSONLGlobTailsNewestThenNewFiles(t *testing.T) {
 	}
 }
 
+// A session started after the newest file was last written belongs to a new
+// conversation: an earlier session's file in the same folder is not replayed
+// into it, only joined once it changes (a resume that writes to it).
+func TestJSONLGlobSkipsFilesOlderThanTheSession(t *testing.T) {
+	PollEvery, globEvery = 20*time.Millisecond, 20*time.Millisecond
+	env, h := testEnv(t)
+	prev := filepath.Join(h, "prev.jsonl")
+	_ = os.WriteFile(prev, []byte(`{"f":"previous session"}`+"\n"), 0o600)
+	_ = os.Chtimes(prev, time.Now().Add(-time.Minute), time.Now().Add(-time.Minute))
+	env.Vars["created"] = time.Now().UTC().Format(time.RFC3339)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() {
+		_ = File{kind: "jsonl"}.Watch(ctx, sspec("t", map[string]any{"glob": "~/*.jsonl", "follow": true}), env, c.emit)
+	}()
+	time.Sleep(150 * time.Millisecond)
+	c.mu.Lock()
+	early := append([]string(nil), c.recs...)
+	c.mu.Unlock()
+	if len(early) != 0 {
+		t.Fatalf("replayed an earlier session's file: %v", early)
+	}
+	_ = os.WriteFile(filepath.Join(h, "mine.jsonl"), []byte(`{"f":"mine"}`+"\n"), 0o600)
+	if got := c.wait(t, 1); got[0] != `{"f":"mine"}` {
+		t.Fatalf("first = %v", got)
+	}
+}
+
+// After a helper restart the running session's own file, written since the
+// session began, is replayed at once.
+func TestJSONLGlobReplaysTheSessionsOwnFile(t *testing.T) {
+	PollEvery, globEvery = 20*time.Millisecond, 20*time.Millisecond
+	env, h := testEnv(t)
+	env.Vars["created"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	_ = os.WriteFile(filepath.Join(h, "own.jsonl"), []byte(`{"f":"own"}`+"\n"), 0o600)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() {
+		_ = File{kind: "jsonl"}.Watch(ctx, sspec("t", map[string]any{"glob": "~/*.jsonl", "follow": true}), env, c.emit)
+	}()
+	if got := c.wait(t, 1); got[0] != `{"f":"own"}` {
+		t.Fatalf("first = %v", got)
+	}
+}
+
 func TestHookBusBacklogFilterAndProjection(t *testing.T) {
 	env, _ := testEnv(t)
 	bus := NewBus()

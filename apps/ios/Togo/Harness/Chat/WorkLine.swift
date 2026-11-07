@@ -11,6 +11,12 @@ struct WorkLine: View {
     let expanded: Bool
     let onToggle: () -> Void
     let onStep: (HarnessItem) -> Void
+    /// How VoiceOver reads the line ("Worked 1 minute 12 seconds, 6 steps, collapsed"). The
+    /// line is one element; once open, each step after it is its own, so its details are
+    /// reachable too.
+    var spoken: String?
+    /// "Show in terminal" as an accessibility action on the line, when its first step can.
+    var showInTerminal: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -29,6 +35,12 @@ struct WorkLine: View {
             }
             .buttonStyle(.plain)
             .disabled(steps.isEmpty)
+            .accessibilityLabel(spoken.map { Text(verbatim: $0) } ?? Text(verbatim: ChatCopy.workLine(summary, now: .now)))
+            .accessibilityActions {
+                if let showInTerminal {
+                    Button(ChatCopy.showInTerminal, action: showInTerminal)
+                }
+            }
             if expanded, !steps.isEmpty {
                 StepList(steps: steps, onStep: onStep)
                     .transition(.opacity)

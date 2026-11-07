@@ -8,8 +8,9 @@ enum PromptFeed {
     /// The requests as the bar shows them, oldest first. The store keeps cards in the order
     /// they arrived, across machines. An answered one stays, with its outcome, until the store
     /// lets it go a moment later.
-    @MainActor static func requests(in store: AppStore) -> [PromptRequest] {
-        store.controlCenter.requests.map { card in
+    /// `inlineIn` is a tab whose chat shows its own requests inline; the bar leaves those out.
+    @MainActor static func requests(in store: AppStore, inlineIn chat: TabID? = nil) -> [PromptRequest] {
+        store.controlCenter.requests.filter { card in chat == nil || card.tabID != chat }.map { card in
             let row = card.tabID.flatMap { id in
                 store.controlCenter.machines.first { $0.id == id.hostID }?.sessions.first { $0.id == id.sessionID }
             }
@@ -46,9 +47,11 @@ enum PromptFeed {
     /// the field away mid-sentence; if its request goes, or is answered elsewhere, the reply
     /// stays with its words until the user puts it away. While the terminal itself takes the
     /// typing the input line steps aside, so the terminal has the height and one place to type.
+    /// While the focused tab shows its chat, the chat's composer is the one place to type, so
+    /// the bar keeps only requests (from other sessions: the chat answers its own inline).
     static func mode(
         requests: [PromptRequest], current: PromptBarModel.Mode, focused: TabID?, composing: Bool, hasMachines: Bool,
-        terminalTyping: Bool = false, focusedConnected: Bool = true
+        terminalTyping: Bool = false, focusedConnected: Bool = true, chatShown: Bool = false
     ) -> PromptBarModel.Mode {
         guard hasMachines else { return .hidden }
         if case .replying(let writing) = current {
@@ -61,7 +64,7 @@ enum PromptFeed {
             return .request(first, position: 1, count: requests.count)
         }
         // The compose bar is the terminal's input while it is open.
-        if composing { return .hidden }
+        if composing || chatShown { return .hidden }
         // Nothing typed reaches a terminal that is not connected, so the bar does not offer to.
         if let focused { return terminalTyping || !focusedConnected ? .hidden : .input(focused) }
         return .start

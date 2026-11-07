@@ -278,3 +278,27 @@ func TestOldSubagentFileIsDropped(t *testing.T) {
 		t.Fatalf("items from an earlier session's subagent: %d", len(out.Items))
 	}
 }
+
+// /model and /effort open the native picker and effort screens, as the other
+// adapters' do; the screens exist only behind these commands.
+func TestModelAndEffortCommandsOpenTheirScreens(t *testing.T) {
+	a, err := spec.Parse(AdapterFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"model": "model", "effort": "effort"}
+	for _, c := range a.Commands.Static {
+		if screen, ok := want[c.Name]; ok {
+			if c.Screen != screen {
+				t.Fatalf("/%s opens %q", c.Name, c.Screen)
+			}
+			if _, ok := a.Screens[screen]; !ok {
+				t.Fatalf("no %s screen", screen)
+			}
+			delete(want, c.Name)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing commands %v", want)
+	}
+}

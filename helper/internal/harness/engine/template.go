@@ -73,7 +73,13 @@ func Render(src string, data map[string]any) (string, error) {
 	if err := t.Execute(&b, data); err != nil {
 		return "", fmt.Errorf("template: %w", err)
 	}
-	return strings.ReplaceAll(b.String(), noValue, ""), nil
+	out := strings.ReplaceAll(b.String(), noValue, "")
+	if strings.Contains(out, "%!") {
+		// printf met a missing or mistyped value ("%!s(<nil>)"): never let
+		// that reach a config file, argv or a request.
+		return "", fmt.Errorf("template: a value is missing")
+	}
+	return out, nil
 }
 
 // RenderJSON renders every string inside a JSON value.

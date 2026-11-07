@@ -68,7 +68,10 @@ import TogoKit
         await actions.trigger(ref, target: "dev", context: context)
         #expect(runs.isEmpty)
         #expect(actions.asking?.ref == ref)
-        await actions.confirmPending(context: context)
+        // The dialog clears what it presented as it closes, before the button's task runs.
+        let pending = actions.asking!
+        actions.asking = nil
+        await actions.confirm(pending, context: context)
         #expect(runs.map(\.0) == ["stop"])
         #expect(runs.first?.1 == ["force": .bool(false)])
         #expect(actions.asking == nil)

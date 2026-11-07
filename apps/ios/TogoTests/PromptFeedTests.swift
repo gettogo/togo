@@ -86,6 +86,31 @@ import TogoKit
         #expect(mode([request("a")]) == .request(request("a"), position: 1, count: 1))
     }
 
+    // MARK: Chat
+
+    /// Over a chat the chat's composer is the one place to type: no terminal line, no start line.
+    @Test func aChatHasNoTerminalLineUnderIt() {
+        let over = PromptFeed.mode(requests: [], current: .start, focused: four, composing: false, hasMachines: true, chatShown: true)
+        #expect(over == .hidden)
+        // Another session's request still rises.
+        let other = PromptFeed.mode(
+            requests: [request("a")], current: .start, focused: four, composing: false, hasMachines: true, chatShown: true
+        )
+        #expect(other == .request(request("a"), position: 1, count: 1))
+    }
+
+    /// The chat answers its own session's requests inline, so the bar leaves them out.
+    @Test func aChatKeepsItsOwnRequests() {
+        var state = Samples.controlCenter
+        state.requests = [
+            Samples.request(id: "mine", bib: "04", title: "Run npm test?"),
+            Samples.request(id: "other", bib: "01", title: "Edit routes.ts?"),
+        ]
+        let store = AppStore(services: services, controlCenter: state)
+        #expect(PromptFeed.requests(in: store, inlineIn: four).map(\.id) == ["other"])
+        #expect(PromptFeed.requests(in: store).map(\.id) == ["mine", "other"])
+    }
+
     // MARK: Mode switching
 
     @Test func aReplyStaysWhileItsRequestWaits() {

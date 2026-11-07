@@ -106,6 +106,9 @@ type UserBody struct {
 	// Queued is true while the prompt waits for the agent to finish its
 	// turn. The item is sent again with Queued false once it is typed.
 	Queued bool `json:"queued"`
+	// Withdrawn is true once the user took a queued prompt back before it
+	// was typed. The item stays (same id, new seq) so every client drops it.
+	Withdrawn bool `json:"withdrawn,omitempty"`
 	// Source is phone, desk or unknown.
 	Source string `json:"source"`
 }

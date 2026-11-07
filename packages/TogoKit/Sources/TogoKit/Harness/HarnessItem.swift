@@ -67,11 +67,32 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         public var queued: Bool
         /// phone, desk or unknown.
         public var source: String
+        /// True once the user took the queued prompt back before it was typed: not shown.
+        public var withdrawn: Bool
 
-        public init(text: String, queued: Bool, source: String) {
+        public init(text: String, queued: Bool, source: String, withdrawn: Bool = false) {
             self.text = text
             self.queued = queued
             self.source = source
+            self.withdrawn = withdrawn
+        }
+
+        private enum CodingKeys: String, CodingKey { case text, queued, source, withdrawn }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            text = try c.decode(String.self, forKey: .text)
+            queued = try c.decode(Bool.self, forKey: .queued)
+            source = try c.decode(String.self, forKey: .source)
+            withdrawn = try c.decodeIfPresent(Bool.self, forKey: .withdrawn) ?? false
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(text, forKey: .text)
+            try c.encode(queued, forKey: .queued)
+            try c.encode(source, forKey: .source)
+            if withdrawn { try c.encode(true, forKey: .withdrawn) }
         }
     }
 

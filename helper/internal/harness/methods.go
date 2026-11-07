@@ -126,7 +126,7 @@ func Methods(e Engine) map[string]api.Method {
 				return nil, invalid("target is too long")
 			}
 			if p.Target != "" && !targetRE.MatchString(p.Target) {
-				// Targets reach argv and request bodies: ids only.
+				// Targets reach argv, typed commands and request bodies: ids only.
 				return nil, invalid("target is not an id")
 			}
 			return wrap(e.Act(ctx, p))
@@ -222,9 +222,12 @@ func checkQuery(q map[string]string) error {
 	return nil
 }
 
-// targetRE is what an action target may hold: item, row and request ids.
-// A leading "-" is refused so a target never reads as a flag.
-var targetRE = regexp.MustCompile(`^[A-Za-z0-9_.:][A-Za-z0-9_.:-]*$`)
+// targetRE is what an action target may hold: item, row and request ids,
+// which harnesses make themselves (omp model selectors hold "/" and ":",
+// OpenCode's are compact JSON). No whitespace or control characters, and no
+// leading "-" so a target never reads as a flag; argv templates also refuse
+// a rendered flag, and request bodies take ids through json or object.
+var targetRE = regexp.MustCompile(`^[^-\s\p{Cc}][^\s\p{Cc}]*$`)
 
 func clampLimit(n int) int {
 	switch {

@@ -71,6 +71,7 @@ public enum TurnFold {
 
         for item in items where item.parent == nil {
             if case .unknown = item.body { continue }
+            if case .user(let user) = item.body, user.withdrawn { continue }
             guard let turnID = item.turnId else {
                 if isStep(item) {
                     loose.append(item)

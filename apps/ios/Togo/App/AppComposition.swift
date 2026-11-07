@@ -43,8 +43,14 @@ import TogoMosh
     /// Under unit tests the app host must not reach the keychain's machines or iCloud, so
     /// `isolated` keeps every record in memory.
     init(isolated: Bool) {
+        #if DEBUG
+        // The native end-to-end tests sign in on a simulator with no passcode or face.
+        let secrets: any SecretStore = E2EHost.enabled ? E2EHost.PlainSecrets() : KeychainSecretStore()
+        let biometrics = E2EHost.enabled ? BiometricSession(evaluator: E2EHost.Evaluator()) : BiometricSession.app
+        #else
         let secrets = KeychainSecretStore()
         let biometrics = BiometricSession.app
+        #endif
         let keys = KeychainKeyStore(secrets: secrets, biometrics: biometrics)
         let support = URL.applicationSupportDirectory
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
@@ -193,6 +199,9 @@ import TogoMosh
             ShortcutsFeed.connectIntents(library: agentLibrary) { [weak self] in self?.open($0) }
         }
         services.showLocalHosts()
+        #if DEBUG
+        if E2EHost.enabled { Task { await E2EHost.seed(services: services, keys: keys, hostKeys: hostKeys) } }
+        #endif
     }
 
     /// Fake services with nothing behind them, for tests and the UI tests' launch.

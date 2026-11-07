@@ -249,9 +249,16 @@ func pollLoop(ctx context.Context, step func() error) error {
 }
 
 // watchGlob tails the newest match from its start, then any match that
-// changes after the watch began, from its start when it is new.
+// changes after the watch began, from its start when it is new. When the
+// session's creation time is known, the newest match is taken at once only
+// if it was written since then: an older file is an earlier session's in the
+// same folder, joined only if it changes (a resume writing to it).
 func watchGlob(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
 	started := time.Now()
+	created, err := time.Parse(time.RFC3339, env.Vars["created"])
+	if err != nil {
+		created = time.Time{}
+	}
 	tails := map[string]*tail{}
 	var lastGlob time.Time
 	return pollLoop(ctx, func() error {
@@ -265,7 +272,7 @@ func watchGlob(ctx context.Context, name, pattern string, env harness.Env, emit 
 				if _, ok := tails[m.path]; ok {
 					continue
 				}
-				if (i == 0 && len(tails) == 0) || m.mtime.After(started) {
+				if (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started) {
 					tails[m.path] = &tail{path: m.path, name: name, replay: true}
 				}
 			}

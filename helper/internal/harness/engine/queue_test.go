@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // blockPane holds every Type until release is closed.
@@ -130,4 +132,49 @@ func TestInterruptSkipsTheTypingLock(t *testing.T) {
 		t.Fatal("interrupt waited for the typing lock")
 	}
 	wg.Wait()
+}
+
+// The working flag follows the hub: a turn's last record can arrive while the
+// hub still says working, and the hub's later idle must clear the flag (the
+// pill, Interrupt and Queue read it) without another record.
+func TestWorkingClearsWhenTheHubGoesIdle(t *testing.T) {
+	const id = "s_queuewrk01"
+	var status atomic.Value
+	status.Store("working")
+	e := statusEngine(t, id, &seqPane{mode: "a"}, &status)
+	s, _ := e.served(context.Background(), id)
+	s.mu.Lock()
+	s.afterRecordLocked()
+	s.mu.Unlock()
+	if !s.sum.Load().Working {
+		t.Fatal("working while the hub says so")
+	}
+	status.Store("idle")
+	sid := id
+	e.Observe(wire.Event{Kind: wire.EventSession, SessionID: &sid, Payload: wire.SessionEvent{
+		Session: session.Session{ID: id, Agent: "fake", Managed: true, Status: "idle"},
+	}})
+	waitFor(t, func() bool { return !s.sum.Load().Working })
+}
+
+// A prompt taken back is resent withdrawn, so open chats drop it and a
+// reopened chat never shows it as still queued.
+func TestTakenBackPromptIsWithdrawn(t *testing.T) {
+	const id = "s_queuewdr01"
+	var status atomic.Value
+	status.Store("working")
+	e := statusEngine(t, id, &seqPane{mode: "a"}, &status)
+	keep := queue(t, e, id, "keep")
+	drop := queue(t, e, id, "drop")
+	res, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: harness.ActionStop, Target: drop})
+	if err != nil || res.Result != harness.ResultApplied {
+		t.Fatalf("stop = %+v %v", res, err)
+	}
+	got, _ := e.log.Get(id, drop)
+	if got.User == nil || !got.User.Withdrawn || got.User.Queued {
+		t.Fatalf("taken back item = %+v", got.User)
+	}
+	if kept, _ := e.log.Get(id, keep); kept.User == nil || kept.User.Withdrawn || !kept.User.Queued {
+		t.Fatalf("other queued item = %+v", kept.User)
+	}
 }

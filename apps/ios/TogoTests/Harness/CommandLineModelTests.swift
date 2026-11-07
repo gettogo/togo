@@ -222,6 +222,21 @@ import TogoKit
         #expect(model.notice == ComposerCopy.notSent)
     }
 
+    /// A palette whose list failed to load says so and loads again on Try again, instead of
+    /// spinning for ever.
+    @Test func aFailedPaletteCanTryAgain() async {
+        let session = Session()
+        session.completeError = Offline()
+        let model = make(session)
+        await model.loadPalette()
+        #expect(model.paletteFailed)
+        #expect(model.palette.isEmpty)
+        session.completeError = nil
+        await model.loadPalette()
+        #expect(!model.paletteFailed)
+        #expect(!model.palette.isEmpty)
+    }
+
     @Test func blankDraftSendsNothing() async {
         let session = Session()
         let model = make(session)

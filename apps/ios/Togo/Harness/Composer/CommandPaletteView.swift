@@ -68,6 +68,10 @@ struct CommandPaletteView: View {
         .overlay {
             if all.isEmpty, !model.palette.isEmpty {
                 StateView(kind: .empty, title: ComposerCopy.noCommands, message: ComposerCopy.returnSends)
+            } else if model.palette.isEmpty, model.paletteFailed {
+                StateView(kind: .error, title: ComposerCopy.commandsFailed, message: ComposerCopy.returnSends, action: .init(ComposerCopy.tryAgain) {
+                    Task { await model.loadPalette() }
+                })
             } else if model.palette.isEmpty {
                 ProgressView()
             }

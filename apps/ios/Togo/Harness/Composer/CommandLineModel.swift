@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Observation
 import TogoKit
 
@@ -78,6 +79,9 @@ import TogoKit
     var presentedScreen: String?
     /// The full command list is open.
     var paletteOpen = false
+    private static let log = Logger(subsystem: "app.togo", category: "composer")
+    /// The command list could not be read; the palette offers to try again.
+    private(set) var paletteFailed = false
     /// Every command, for the palette; loaded when it opens.
     private(set) var palette: [HarnessCompletion] = []
     private(set) var sending = false
@@ -263,7 +267,14 @@ import TogoKit
     /// Loads every command for the palette.
     func loadPalette() async {
         guard routes.has(HarnessCapability.commands) else { return }
-        if let items = try? await routes.complete(.command, "") { palette = items }
+        paletteFailed = false
+        do {
+            palette = try await routes.complete(.command, "")
+        } catch {
+            Self.log.error("command list failed: \(String(describing: error), privacy: .public)")
+            // A spinner that never ends reads as a hang: say so and offer to try again.
+            paletteFailed = palette.isEmpty
+        }
     }
 
     // MARK: Sending

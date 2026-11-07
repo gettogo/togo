@@ -89,18 +89,12 @@ struct ChatView: View {
         case .work(let id, let summary, let steps):
             WorkLine(
                 summary: summary, steps: steps, expanded: expanded.contains(id),
-                onToggle: { toggle(id) }, onStep: open
-            )
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { toggle(id) }
-            .accessibilityAction(named: expanded.contains(id) ? ChatCopy.collapse : ChatCopy.expand) { toggle(id) }
-            .accessibilityActions {
-                if let first = steps.first, canShow(first) {
-                    Button(ChatCopy.showInTerminal) { Task { await store.showInTerminal(first) } }
+                onToggle: { toggle(id) }, onStep: open,
+                spoken: ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)),
+                showInTerminal: steps.first.flatMap { first in
+                    canShow(first) ? { Task { await store.showInTerminal(first) } } : nil
                 }
-            }
+            )
             .contextMenu {
                 if let first = steps.first, canShow(first) {
                     Button(ChatCopy.showInTerminal, systemImage: "terminal") { Task { await store.showInTerminal(first) } }

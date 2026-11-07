@@ -62,6 +62,7 @@ func TestBoundaryValidation(t *testing.T) {
 		"params not object": {MethodDescribe, `[1]`},
 		"target as flag":    {MethodAction, `{"id":"` + sid + `","action":"stop","target":"--force"}`},
 		"target with space": {MethodAction, `{"id":"` + sid + `","action":"stop","target":"a b"}`},
+		"target with break": {MethodAction, `{"id":"` + sid + `","action":"stop","target":"a\nb"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := call(t, Nop{}, c[0], c[1])
@@ -70,6 +71,21 @@ func TestBoundaryValidation(t *testing.T) {
 				t.Fatalf("err %v, want invalid params", err)
 			}
 		})
+	}
+}
+
+// Picker items are ids the harness made: omp model selectors hold "/" and
+// ":", OpenCode's are compact JSON. They must reach the action.
+func TestModelIDsAreTargets(t *testing.T) {
+	for _, target := range []string{"apple/on-device", "llama.cpp/qwen3.8-27b:low", `{"id":"gpt-5","providerID":"openai"}`} {
+		raw, _ := json.Marshal(map[string]string{"id": sid, "action": "set_model", "target": target})
+		var got ActionRequest
+		if _, err := call(t, actSpy{fn: func(r ActionRequest) { got = r }}, MethodAction, string(raw)); err != nil {
+			t.Fatalf("%s: %v", target, err)
+		}
+		if got.Target != target {
+			t.Fatalf("target %q, want %q", got.Target, target)
+		}
 	}
 }
 
@@ -125,6 +141,16 @@ type sendSpy struct {
 func (s sendSpy) Send(_ context.Context, r SendRequest) (SendResult, error) {
 	s.fn(r)
 	return SendResult{}, nil
+}
+
+type actSpy struct {
+	Nop
+	fn func(ActionRequest)
+}
+
+func (s actSpy) Act(_ context.Context, r ActionRequest) (ActionResult, error) {
+	s.fn(r)
+	return ActionResult{Result: ResultApplied}, nil
 }
 
 // Every method served here is declared in the protocol schema, as is the

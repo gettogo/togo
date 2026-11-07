@@ -430,6 +430,24 @@ func (s *sess) afterRecordLocked() {
 	s.refreshStatusLocked()
 }
 
+// statusChanged re-reads whether a turn runs once the hub's status moved.
+// Working ORs in the hub, so a turn's last record can arrive while the hub
+// still says working; without this the flag would stay set until the next
+// record, showing Working, Interrupt and Queue on an idle session.
+func (s *sess) statusChanged() {
+	select {
+	case <-s.ready:
+	default:
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.gateOK {
+		return
+	}
+	s.setWorkingLocked(s.stateLocked()["working"] == "true")
+}
+
 func (s *sess) setWorkingLocked(w bool) {
 	was := s.working
 	s.working = w

@@ -75,6 +75,36 @@ func setMode(e *Engine, id, mode string) (harness.ActionResult, error) {
 		Args: map[string]json.RawMessage{"id": json.RawMessage(`"` + mode + `"`)}})
 }
 
+// A caller that names the chosen item only as the target still fills .id.
+func TestTargetStandsInForID(t *testing.T) {
+	const id = "s_typetgt01"
+	pane := &seqPane{mode: "a"}
+	e := newSeq(t, id, pane, nil)
+	deliver(id, map[string]any{"state": map[string]string{"working": "false", "model": "x"}})
+	waitFor(t, func() bool { s, _ := e.served(context.Background(), id); return e.idleNow(s) })
+	res, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: "set_model", Target: "z"})
+	if err != nil || res.Message != "Sent /model z" {
+		t.Fatalf("target only = %+v %v", res, err)
+	}
+}
+
+// A picker's choice comes back with the picker read again, so the phone
+// shows the new selection or role holder without reopening it.
+func TestPickerActionsReturnThePicker(t *testing.T) {
+	const id = "s_typescr01"
+	e := newSeq(t, id, &seqPane{mode: "a"}, nil)
+	s, err := e.served(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := e.screenFor(s, "set_model"); got != "model" {
+		t.Fatalf("set_model rereads %q", got)
+	}
+	if got := e.screenFor(s, "interrupt"); got != "" {
+		t.Fatalf("interrupt rereads %q", got)
+	}
+}
+
 func TestCycleStopsOnUnknownMode(t *testing.T) {
 	const id = "s_cycleunkn1"
 	pane := &seqPane{mode: "a", next: map[string]string{"a": "z"}}

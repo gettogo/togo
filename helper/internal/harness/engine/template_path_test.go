@@ -22,3 +22,14 @@ func TestFolderFilters(t *testing.T) {
 		t.Fatalf("missing value rendered %q", got)
 	}
 }
+
+// A value printf could not format ("%!s(<nil>)") fails the render, so it
+// never lands in a config file: an omp role once read "%!s(<nil>):low".
+func TestRenderRefusesFormattingErrors(t *testing.T) {
+	if _, err := Render(`{{printf "%s%s" .id ":low" | json}}`, map[string]any{}); err == nil {
+		t.Fatal("rendered a missing id")
+	}
+	if got, err := Render(`{{printf "%s%s" .id ":low" | json}}`, map[string]any{"id": "apple/on-device"}); err != nil || got != `"apple/on-device:low"` {
+		t.Fatalf("got %q %v", got, err)
+	}
+}

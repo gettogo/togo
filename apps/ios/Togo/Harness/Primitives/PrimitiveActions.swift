@@ -75,10 +75,10 @@ struct PrimitiveFeedback: Equatable, Identifiable {
         await perform(ref.id, target: target, args: Self.merged(fixed: ref.args, user: args), context: context)
     }
 
-    /// The user said yes to the pending action.
-    func confirmPending(context: PrimitiveContext) async {
-        guard let pending = asking else { return }
-        asking = nil
+    /// The user said yes to `pending`. It is passed in rather than read from `asking`: the
+    /// dialog clears `asking` as it closes, before a task started by its button runs.
+    func confirm(_ pending: Pending, context: PrimitiveContext) async {
+        if asking?.id == pending.id { asking = nil }
         await perform(pending.ref.id, target: pending.target, args: Self.merged(fixed: pending.ref.args, user: pending.args), context: context)
     }
 
@@ -143,7 +143,7 @@ private struct PrimitiveActionsModifier: ViewModifier {
                 presenting: actions.asking
             ) { pending in
                 Button(pending.ref.label, role: pending.ref.role == .destructive ? .destructive : nil) {
-                    Task { await actions.confirmPending(context: context) }
+                    Task { await actions.confirm(pending, context: context) }
                 }
                 Button(PrimitiveCopy.cancel, role: .cancel) { actions.asking = nil }
             }

@@ -2295,7 +2295,7 @@
     },
     "HarnessItemUser": {
       "type": "object",
-      "properties": { "text": { "type": "string" }, "queued": { "type": "boolean" }, "source": { "enum": ["phone", "desk", "unknown"] } },
+      "properties": { "text": { "type": "string" }, "queued": { "type": "boolean" }, "withdrawn": { "type": "boolean" }, "source": { "enum": ["phone", "desk", "unknown"] } },
       "required": ["text", "queued", "source"],
       "additionalProperties": false
     },

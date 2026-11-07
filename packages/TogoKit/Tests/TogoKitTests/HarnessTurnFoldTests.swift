@@ -23,6 +23,19 @@ struct HarnessTurnFoldTests {
         #expect(!summary.running)
     }
 
+    /// A prompt taken back before it was typed leaves the chat; the wire flag is optional.
+    @Test func withdrawnPromptsAreNotShown() throws {
+        var gone = S.user("u2", seq: 3, text: "drop", queued: false)
+        gone.body = .user(.init(text: "drop", queued: false, source: "phone", withdrawn: true))
+        let rows = TurnFold.rows([S.user("u1", seq: 1), S.reply("m1", seq: 2, turn: "u1"), gone])
+        #expect(rows.map(\.id) == ["u1", "m1"])
+        let wire = #"{"text":"x","queued":false,"source":"phone"}"#
+        let old = try JSONDecoder().decode(HarnessItem.User.self, from: Data(wire.utf8))
+        #expect(!old.withdrawn)
+        let back = try JSONDecoder().decode(HarnessItem.User.self, from: JSONEncoder().encode(HarnessItem.User(text: "drop", queued: false, source: "phone", withdrawn: true)))
+        #expect(back.withdrawn)
+    }
+
     @Test func turnItemNumbersArePreferred() {
         let rows = TurnFold.rows([
             S.user("u1", seq: 1),

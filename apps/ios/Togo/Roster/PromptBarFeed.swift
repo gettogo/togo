@@ -30,6 +30,8 @@ private struct PromptBarFeed: ViewModifier {
         /// Something else holds the keyboard or covers the bar: a sheet, a pushed screen such as
         /// Settings, a dialog, the compose bar or the terminal.
         var keyboardElsewhere: Bool
+        /// The focused tab shows its chat, which has its own composer and inline requests.
+        var chatShown: Bool
     }
 
     private var suggestions: [StartSuggestion] {
@@ -40,13 +42,15 @@ private struct PromptBarFeed: ViewModifier {
     }
 
     private var inputs: Inputs {
-        Inputs(
-            requests: PromptFeed.requests(in: store), focused: focused, composing: store.composing != nil,
+        let chat = focused.flatMap { store.layer(for: $0) == .chat ? $0 : nil }
+        return Inputs(
+            requests: PromptFeed.requests(in: store, inlineIn: chat), focused: focused, composing: store.composing != nil,
             hasMachines: !store.services.hosts.isEmpty,
             terminalTyping: focused != nil && KeyboardWatch.shared.terminalTyping && !model.barTextFocused,
             focusedConnected: focused.map(isConnected) ?? true,
             keyboardElsewhere: focused != nil || store.composing != nil || store.sheet != nil || !store.path.isEmpty
-                || store.dialogOpen || store.reviewing != nil
+                || store.dialogOpen || store.reviewing != nil,
+            chatShown: chat != nil
         )
     }
 
@@ -86,7 +90,7 @@ private struct PromptBarFeed: ViewModifier {
         let next = PromptFeed.mode(
             requests: inputs.requests, current: current, focused: inputs.focused,
             composing: inputs.composing, hasMachines: inputs.hasMachines, terminalTyping: inputs.terminalTyping,
-            focusedConnected: inputs.focusedConnected
+            focusedConnected: inputs.focusedConnected, chatShown: inputs.chatShown
         )
         if next != model.mode { model.mode = next }
         // A request shown over a terminal that has the keyboard keeps to its smallest form.

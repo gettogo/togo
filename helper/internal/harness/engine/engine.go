@@ -216,7 +216,7 @@ func (e *Engine) Observe(ev wire.Event) {
 	case wire.EventSession:
 		if p, ok := ev.Payload.(wire.SessionEvent); ok {
 			if info, ok := p.Session.(session.Session); ok && info.Managed {
-				go e.track(info)
+				go e.track(info).statusChanged()
 			}
 		}
 	case wire.EventSessionRemoved:

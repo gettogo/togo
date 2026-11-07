@@ -123,6 +123,14 @@ func (e *Engine) dropQueued(s *sess, id string) (queued, sent bool) {
 			continue
 		}
 		s.queue = append(s.queue[:i:i], s.queue[i+1:]...)
+		// Resent withdrawn, so open chats drop it and a reopen never shows it.
+		it := q.item
+		if it.User != nil {
+			u := *it.User
+			u.Queued, u.Withdrawn = false, true
+			it.User = &u
+			s.publishLocked([]harness.Item{it}, nil)
+		}
 		return true, false
 	}
 	return false, s.sent[id]

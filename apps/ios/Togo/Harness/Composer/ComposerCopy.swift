@@ -29,6 +29,8 @@ enum ComposerCopy {
     static let takesInput = String(localized: "composer.takesInput", defaultValue: "Takes input")
     static let notSent = String(localized: "composer.notSent", defaultValue: "Not sent. Your words are back in the field.")
     static let notInterrupted = String(localized: "composer.notInterrupted", defaultValue: "Couldn't interrupt. The terminal has Esc.")
+    static let commandsFailed = String(localized: "composer.commandsFailed", defaultValue: "Couldn't read the commands")
+    static let tryAgain = String(localized: "composer.tryAgain", defaultValue: "Try again")
     static let notCancelled = String(localized: "composer.notCancelled", defaultValue: "Couldn't take it back")
     static let modeNotChanged = String(localized: "composer.modeNotChanged", defaultValue: "The mode didn't change")
     static let focusField = String(localized: "composer.focusField", defaultValue: "Focus the message field")

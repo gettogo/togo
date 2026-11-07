@@ -113,12 +113,9 @@ struct SubagentChatView: View {
         case .work(let id, let summary, let steps):
             WorkLine(
                 summary: summary, steps: steps, expanded: expanded.contains(id),
-                onToggle: { toggle(id) }, onStep: open
+                onToggle: { toggle(id) }, onStep: open,
+                spoken: ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id))
             )
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { toggle(id) }
         case .needs(let item):
             needsView(item)
         case .notice(let item):
