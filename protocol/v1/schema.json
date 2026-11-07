@@ -34,6 +34,7 @@
         { "if": { "properties": { "method": { "const": "session.attachCommand" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionAttachCommandParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "agents.list" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
         { "if": { "properties": { "method": { "const": "fs.recentDirs" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "fs.forgetRecentDir" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsForgetRecentDirParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "fs.listDir" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/FsListDirParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "events.subscribe" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EventsSubscribeParams" } } } },
         { "if": { "properties": { "method": { "const": "events.keepalive" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EventsKeepaliveParams" } } } },
@@ -343,7 +344,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"image.v1\" (fs.image), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission), \"integrations.v1\" (integrations.status, integrations.install, integrations.uninstall). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"image.v1\" (fs.image), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission), \"integrations.v1\" (integrations.status, integrations.install, integrations.uninstall), \"recent.v1\" (fs.forgetRecentDir). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -382,7 +383,8 @@
         "cols": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 20, "maximum": 500 }] },
         "rows": { "anyOf": [{ "const": 0 }, { "type": "integer", "minimum": 5, "maximum": 300 }] },
         "program": { "description": "launch.v1. Only with agent \"custom\", and then required; with any other agent -32602 reason program. Either a bare name matching ^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$ found on the login-shell PATH, or an absolute path of at most 1024 bytes equal to its filepath.Clean form; either way it must name a regular executable file. Anything else is -32602 reason program; a well-formed name or path that is not found is -32602 reason not_installed. A managed agent that is not installed is also -32602 reason not_installed. name defaults to the program's base name.", "type": "string" },
-        "args": { "description": "launch.v1. Extra arguments for the agent's program, each delivered as one argv entry exactly as sent and never read by a shell or by tmux. 0-64 entries, each 1-4096 bytes of valid UTF-8 with no control characters (Unicode Cc, which includes NUL), at most 16,384 bytes in total; not allowed with agent \"shell\" (or with agent absent). Anything else is -32602 reason args.", "type": "array", "items": { "type": "string" } }
+        "args": { "description": "launch.v1. Extra arguments for the agent's program, each delivered as one argv entry exactly as sent and never read by a shell or by tmux. 0-64 entries, each 1-4096 bytes of valid UTF-8 with no control characters (Unicode Cc, which includes NUL), at most 16,384 bytes in total; not allowed with agent \"shell\" (or with agent absent). Anything else is -32602 reason args.", "type": "array", "items": { "type": "string" } },
+        "muted": { "description": "Optional: start the session muted, so nothing it asks or does reaches a push or the Live Activity, even before a later session.mute. Absent means false.", "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -467,7 +469,7 @@
       "additionalProperties": false
     },
     "IntegrationsChangeParams": {
-      "description": "integrations.install and integrations.uninstall (integrations.v1) -> IntegrationsChangeResult. agents: registry ids of harnesses that take hooks (claude, codex, gemini, auggie, qwen, droid, copilot), each at most once; anything else is -32602 (reason unknown_agent) and nothing changes. install with no agents sets up every harness installed on the machine; uninstall needs at least one. block also hooks the harness's approval event so the phone can answer (claude, codex, qwen, copilot). The helper runs its own installer as the user: it backs each file up once (<file>.togo-backup) before Togo's first change, writes nothing when nothing changes, chains Claude Code's own status line, refuses a Togo entry the user changed by hand, and uninstall restores each file byte for byte when nothing else changed since.",
+      "description": "integrations.install and integrations.uninstall (integrations.v1) -> IntegrationsChangeResult. agents: registry ids of harnesses that take hooks (claude, codex, gemini, auggie, droid, copilot), each at most once; anything else is -32602 (reason unknown_agent) and nothing changes. install with no agents sets up every harness installed on the machine; uninstall needs at least one. block also hooks the harness's approval event so the phone can answer (claude, codex, copilot). The helper runs its own installer as the user: it backs each file up once (<file>.togo-backup) before Togo's first change, writes nothing when nothing changes, chains Claude Code's own status line, refuses a Togo entry the user changed by hand, and uninstall restores each file byte for byte when nothing else changed since.",
       "type": "object",
       "properties": {
         "agents": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" }, "maxItems": 32 },
@@ -671,7 +673,7 @@
       "additionalProperties": false
     },
     "AgentsListResult": {
-      "description": "agents.list. Order in v1: claude (Claude Code), omp (OMP), codex (Codex), opencode (OpenCode), gemini (Gemini CLI), copilot (Copilot CLI), cursor (Cursor CLI), qwen (Qwen Code), aider (Aider), amp (Amp), auggie (Auggie), cline (Cline), crush (Crush), droid (Droid), goose (Goose), kilo (Kilo Code), kimi (Kimi Code), kiro (Kiro CLI), openhands (OpenHands), pi (Pi), vibe (Mistral Vibe), shell (Shell). Clients show ids they do not know by name, so the list may grow within v1.",
+      "description": "agents.list. Order in v1: claude (Claude Code), omp (OMP), codex (Codex), opencode (OpenCode), gemini (Gemini CLI), copilot (Copilot CLI), cursor (Cursor CLI), aider (Aider), amp (Amp), auggie (Auggie), cline (Cline), crush (Crush), droid (Droid), goose (Goose), kilo (Kilo Code), kimi (Kimi Code), kiro (Kiro CLI), openhands (OpenHands), pi (Pi), vibe (Mistral Vibe), shell (Shell). Clients show ids they do not know by name, so the list may grow within v1.",
       "type": "object",
       "properties": {
         "agents": { "type": "array", "items": { "$ref": "#/$defs/Agent" } }
@@ -680,12 +682,21 @@
       "additionalProperties": false
     },
     "FsRecentDirsResult": {
-      "description": "fs.recentDirs. Absolute paths of folders used for session.create, newest first, deduplicated. When none are recorded: [home directory].",
+      "description": "fs.recentDirs. Absolute paths of folders used for session.create, newest first, deduplicated, at most 5. Temporary folders (under /tmp, /private/tmp, /var/folders or $TMPDIR outside home, or inside a folder named scratchpad) are never recorded, and folders that no longer exist are left out. When none are listed: [home directory].",
       "type": "object",
       "properties": {
         "dirs": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20 }
       },
       "required": ["dirs"],
+      "additionalProperties": false
+    },
+    "FsForgetRecentDirParams": {
+      "description": "fs.forgetRecentDir (recent.v1) -> {}. Takes path off fs.recentDirs, compared as listed after a leading ~ is expanded to the home directory. A path that is not listed is no error.",
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "minLength": 1 }
+      },
+      "required": ["path"],
       "additionalProperties": false
     },
     "FsListDirParams": {
@@ -913,6 +924,16 @@
         },
         "allowText": {
           "type": "boolean"
+        },
+        "signIn": {
+          "description": "Optional: the prompt is a sign-in step read off the screen. url is the http or https page to open (at most 4096 bytes), code a device code to enter or confirm there (at most 16 characters), secret true when the agent waits for a pasted API key or authorization code; allowText is then true and a text answer is pasted into the pane as one bracketed paste followed by Enter, never typed key by key and never logged. Absent for every other prompt.",
+          "type": "object",
+          "properties": {
+            "url": { "type": "string", "pattern": "^https?://", "maxLength": 4096 },
+            "code": { "type": "string", "minLength": 1, "maxLength": 16 },
+            "secret": { "type": "boolean" }
+          },
+          "additionalProperties": false
         },
         "answerable": {
           "description": "False while the helper cannot deliver an answer from the phone (a hook request with no options and no screen fingerprint yet); the app then shows it as waiting in the terminal. Absent means true.",
@@ -1998,7 +2019,6 @@
           "enum": [
             "claude",
             "codex",
-            "qwen",
             "droid",
             "vibe",
             "copilot",
@@ -2733,7 +2753,10 @@
         "filters": { "type": "array", "items": { "$ref": "#/$defs/HarnessFilter" } },
         "onSelect": { "type": "string" },
         "onSelectConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
-        "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } }
+        "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } },
+        "setup": { "description": "What is not set up yet (a provider not signed in), shown after the items.", "type": "array", "items": { "$ref": "#/$defs/HarnessPickerItem" } },
+        "setupAction": { "description": "Sets up one setup entry, run with args {id} (and {value} when setupInput is set).", "$ref": "#/$defs/HarnessActionRef" },
+        "setupInput": { "description": "secret: the setup action asks for a value first, such as an API key.", "enum": ["secret"] }
       },
       "required": ["items", "searchable", "onSelect"],
       "additionalProperties": false
@@ -3178,6 +3201,12 @@
         "allowText": {
           "description": "Optional, needs_you only: true when the approval takes a typed answer as well as its options. Absent means false.",
           "type": "boolean"
+        },
+        "sessionName": {
+          "description": "Optional: the session's name, the title of its notifications.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
         }
       },
       "required": [
@@ -3543,6 +3572,7 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "session.attachCommand" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/SessionAttachCommandResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "agents.list" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AgentsListResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.recentDirs" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsRecentDirsResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.forgetRecentDir" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "fs.listDir" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/FsListDirResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "events.subscribe" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EventsSubscribeResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "events.keepalive" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },

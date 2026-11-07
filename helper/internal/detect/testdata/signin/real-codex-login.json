@@ -1,0 +1,10 @@
+{
+  "source": "real",
+  "agentVersion": null,
+  "match": true,
+  "kind": "signin",
+  "title": "Sign in at auth.openai.com",
+  "options": null,
+  "keys": {},
+  "subject": null
+}

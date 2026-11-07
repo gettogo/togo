@@ -160,7 +160,8 @@ func (w *Wire) setModel(model, effort string) []harness.Op {
 
 func (w *Wire) modeChanged(at time.Time) ([]harness.Item, []harness.Op) {
 	mode := w.permMode
-	if mode == "" {
+	if mode == "" || mode == "manual" {
+		// Kimi Code 2.5 names the default (ask) mode "manual" (seen live).
 		mode = "default"
 	}
 	if w.planMode {

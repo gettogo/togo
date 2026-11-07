@@ -1,0 +1,13 @@
+{
+  "source": "real",
+  "agentVersion": "0.86.2",
+  "match": true,
+  "kind": "confirm",
+  "title": "No git repo found, create one to track aider's changes (recommended)?",
+  "subject": null,
+  "options": [
+    {"n": 1, "label": "Yes", "role": "approve"},
+    {"n": 2, "label": "No", "role": "deny"}
+  ],
+  "keys": {"1": ["y", "Enter"], "2": ["n", "Enter"]}
+}

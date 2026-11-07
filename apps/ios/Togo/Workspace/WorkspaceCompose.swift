@@ -131,12 +131,11 @@ struct WorkspaceComposeBar: View {
     var body: some View {
         Group {
             // A tab showing its chat has the smart command line instead, always at its foot.
-            // While the chat is still expected (ink) it shows disabled, so the composer is
-            // already in its place and the chat's clearance does not jump when it opens.
-            if let tab = store.composeTab, store.layer(for: tab.id) != .terminal,
+            // While the chat is still expected (the loader) nothing shows: no composer that
+            // cannot type, no terminal bar that is about to go (S4).
+            if let tab = store.composeTab, SessionInput(store.layer(for: tab.id)) == .composer,
                let model = store.harnessTabs.composer(for: tab.id) {
                 SmartCommandLine(model: model)
-                    .disabled(store.layer(for: tab.id) == .pending)
                     .modifier(ComposerMargins())
                     // A little air above the keyboard, and above the home indicator.
                     .padding(.bottom, ComposerMargins.bottom)
@@ -146,7 +145,8 @@ struct WorkspaceComposeBar: View {
                         harness.composerClearance = height
                     }
                     .id(tab.id)
-            } else if let tab = store.composeTab, store.composing == tab.id, terminals.shows(tab.id, in: window),
+            } else if let tab = store.composeTab, SessionInput(store.layer(for: tab.id)) == .terminal,
+               store.composing == tab.id, terminals.shows(tab.id, in: window),
                let handle = terminals.handle(for: tab.id) {
                 // With two panes on screen the bar says which one it writes to.
                 ComposeBar(model: model(for: tab, handle: handle), focusOnAppear: true, target: store.composeTarget)

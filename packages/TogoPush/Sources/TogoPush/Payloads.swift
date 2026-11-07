@@ -37,12 +37,14 @@ public struct PushPayload: Codable, Sendable, Equatable {
     /// True when a request takes a typed answer as well as its options. Absent from older
     /// helpers, which reads as false.
     public var allowText: Bool?
+    /// The session's name, the title of its notifications. Absent from older helpers.
+    public var sessionName: String?
 
     public init(
         v: Int = 1, kind: Kind, sessionId: String? = nil, bib: String? = nil, agent: String? = nil,
         host: String? = nil, title: String, body: String, requestId: String? = nil, options: [PushOption]? = nil,
         subject: PushSubject? = nil, ts: Int64, exit: PushExit? = nil, active: Int? = nil, reminder: Bool? = nil,
-        allowText: Bool? = nil
+        allowText: Bool? = nil, sessionName: String? = nil
     ) {
         self.v = v
         self.kind = kind
@@ -60,6 +62,7 @@ public struct PushPayload: Codable, Sendable, Equatable {
         self.active = active
         self.reminder = reminder
         self.allowText = allowText
+        self.sessionName = sessionName
     }
 }
 

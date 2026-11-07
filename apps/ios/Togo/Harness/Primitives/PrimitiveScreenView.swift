@@ -13,34 +13,20 @@ struct PrimitiveScreenView: View {
     @State private var latest: HarnessScreen?
     @State private var actions = PrimitiveActions()
 
+    @Environment(\.browseLayout) private var layout
+
     var body: some View {
         let shown = PrimitiveScreenLogic.newest(screen, latest)
-        primitive(shown)
-            .navigationTitle(shown.title)
-            // A background state: instant, in the bar, not a band over the content.
-            .navigationSubtitle(PrimitiveScreenLogic.subtitle(shown) ?? "")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(PrimitiveCopy.terminal, systemImage: "terminal") { context.showTerminal() }
-                }
-                if !shown.actions.isEmpty {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        ForEach(shown.actions) { ref in
-                            Button(role: ref.role == .destructive ? .destructive : nil) {
-                                Task { await actions.trigger(ref, place: .label, context: local) }
-                            } label: {
-                                Label {
-                                    OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id))
-                                } icon: {
-                                    Image(systemName: PrimitiveActionSymbol.of(ref))
-                                }
-                            }
-                            .disabled(actions.isRunning(ref.id))
-                        }
-                    }
-                }
+        let chrome = ScreenChrome(screen: shown, actions: actions, context: local)
+        Group {
+            if layout == .split, case .picker(let picker) = PrimitiveScreenLogic.payload(shown) {
+                // A split view draws its own bars: the chrome goes on its list column.
+                PickerPrimitive(picker: picker, title: shown.title, context: local, chrome: chrome)
+            } else {
+                primitive(shown).modifier(chrome)
             }
-            .primitiveActions(actions, context: local)
+        }
+        .primitiveActions(actions, context: local)
     }
 
     /// The host's context, with each result's screen kept so the primitive redraws from it.
@@ -59,7 +45,7 @@ struct PrimitiveScreenView: View {
     @ViewBuilder private func primitive(_ screen: HarnessScreen) -> some View {
         switch PrimitiveScreenLogic.payload(screen) {
         case .picker(let picker):
-            PickerPrimitive(picker: picker, title: screen.title, context: local)
+            PickerPrimitive(picker: picker, title: screen.title, context: local, chrome: nil)
         case .settings(let settings):
             SettingsPrimitive(settings: settings, context: local)
         case .checklist(let checklist):
@@ -77,6 +63,42 @@ struct PrimitiveScreenView: View {
         case .unknown:
             TerminalHandOff(context: context)
         }
+    }
+}
+
+/// A screen's bars: its title, the stale-copy subtitle, Terminal, and the screen's actions in
+/// the bottom bar.
+struct ScreenChrome: ViewModifier {
+    let screen: HarnessScreen
+    let actions: PrimitiveActions
+    let context: PrimitiveContext
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle(screen.title)
+            // A background state: instant, in the bar, not a band over the content.
+            .navigationSubtitle(PrimitiveScreenLogic.subtitle(screen) ?? "")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(PrimitiveCopy.terminal, systemImage: "terminal") { context.showTerminal() }
+                }
+                if !screen.actions.isEmpty {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        ForEach(screen.actions) { ref in
+                            Button(role: ref.role == .destructive ? .destructive : nil) {
+                                Task { await actions.trigger(ref, place: .label, context: context) }
+                            } label: {
+                                Label {
+                                    OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id))
+                                } icon: {
+                                    Image(systemName: PrimitiveActionSymbol.of(ref))
+                                }
+                            }
+                            .disabled(actions.isRunning(ref.id))
+                        }
+                    }
+                }
+            }
     }
 }
 

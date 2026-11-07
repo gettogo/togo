@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -291,6 +292,31 @@ match: { agents: [fakeapi] }
 endpoint: { kind: http, launch_args: [--port, '{{.port}}'] }
 capabilities: [chat]
 `))
+}
+
+func init() {
+	harness.RegisterAdapterFile("fakeapiv", []byte(`
+adapter: fakeapiv
+name: Fake versioned API
+revision: 1
+match: { agents: [fakeapiv] }
+harness: { version: [fakeharness, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.0 <2" }
+endpoint: { kind: http, launch_args: [--port, '{{.port}}'] }
+capabilities: [chat]
+`))
+}
+
+// Seen live: OpenCode updated itself from 1.18 to 2.2, which has no
+// --port, and every session it started exited at once. Outside the
+// adapter's range the harness starts with no launch flags.
+func TestEndpointArgsOutsideRange(t *testing.T) {
+	for v, want := range map[string]bool{"1.18.20": true, "2.2.5": false} {
+		bin := fakeBin(t, v)
+		e := New(Config{TogoHome: t.TempDir(), LoginPath: func(context.Context) string { return bin + ":/bin:/usr/bin" }})
+		if got := e.EndpointArgs("fakeapiv", "s_abcdefghij") != nil; got != want {
+			t.Errorf("version %s: launch flags %v, want %v", v, got, want)
+		}
+	}
 }
 
 func TestEndpointArgs(t *testing.T) {

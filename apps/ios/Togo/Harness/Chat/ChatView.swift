@@ -66,6 +66,14 @@ struct ChatView: View {
                     // motion: cause → effect — the sent prompt lands in the send's own transaction as the draft clears; it only fades, nothing flies.
                     .transition(Motion.arrive(reduce: reduceMotion))
                 }
+                // Pages the agent asked to open and the user has not used: here until used,
+                // dismissed or expired, however the sheet that asked went.
+                ForEach(LinkCenter.shared.requests.pending(for: TabID(hostID: store.subject.hostID, sessionID: store.subject.sessionID))) { open in
+                    PendingOpenBanner(open: open)
+                        .id("chat.open." + open.id.uuidString)
+                        // motion: state change — the banner fades in at the foot and fades out once used; nothing moves.
+                        .transition(Motion.arrive(reduce: reduceMotion))
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
@@ -95,7 +103,8 @@ struct ChatView: View {
             withTransaction(Transaction(animation: nil)) { showsEarlierButton = shows }
         }
         .modifier(WorkingAnnouncements(active: store.liveWork != nil))
-        .sheet(item: $detail) { step in
+        // A step's details: a small panel, sized by the window's room (`AdaptivePresentation`).
+        .harnessPresent(item: $detail, as: .smallForm) { step in
             StepDetail(step: step, canShowInTerminal: canShow(step)) {
                 Task { await store.showInTerminal(step) }
             }
@@ -196,7 +205,10 @@ struct ChatView: View {
                             .opacity(user.queued ? 0.6 : 1)
                     }
                     VStack(alignment: .trailing, spacing: 2) {
-                        PromptBubble(text: user.text, note: promptNote(user), dimmed: user.queued)
+                        PromptBubble(
+                            text: user.text, note: promptNote(user), dimmed: user.queued,
+                            command: user.images.isEmpty && CommandEcho.isCommand(user.text, known: store.commandList)
+                        )
                         // Queued prompts show only here, so their Take back is on the row itself.
                         if user.queued {
                             Button(ComposerCopy.cancelQueued) { Task { await store.cancelQueued(item: item) } }

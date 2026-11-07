@@ -1,0 +1,29 @@
+{
+  "source": "real",
+  "agentVersion": null,
+  "match": true,
+  "kind": "question",
+  "title": "Select authentication method:",
+  "options": [
+    {
+      "n": 1,
+      "label": "Use a subscription",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Use an API key",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "subject": null
+}

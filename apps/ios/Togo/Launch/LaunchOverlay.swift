@@ -63,6 +63,17 @@ enum LaunchTimeline {
     }
 }
 
+/// When the launch may hand over: the machines are read and the session on screen knows
+/// whether it shows its chat or its terminal. A session still deciding hands over to its
+/// loader's paws (`SessionLoader`) once `readyCap` passes, so the walk carries on rather than
+/// stopping on ink; `ceiling` bounds it all.
+enum LaunchReadiness {
+    /// `onScreen` is the layer of the session on screen, nil when none is.
+    static func ready(hostsLoaded: Bool, onScreen: SessionLayer?) -> Bool {
+        hostsLoaded && onScreen != .pending
+    }
+}
+
 /// The launch at one moment. A pure function of launch time, so snapshots can stop it on any frame.
 struct LaunchFrame: Equatable {
     /// Each print's scale; 1 at rest.

@@ -41,6 +41,13 @@ func (w *Watcher) output(ctx context.Context, id string, e *entry) {
 	}
 	now := w.now()
 	if w.selfRedraw(ctx, id, e, now) {
+		if e.prompt == "" {
+			// A dialog the old size cut off (Copilot's folder trust
+			// question in a short pane) can be whole after the resize:
+			// read the screen once the redraw is drawn, without counting
+			// the redraw as work.
+			e.promptCheck = true
+		}
 		return
 	}
 	if w.cfg.Activity != nil {

@@ -170,7 +170,9 @@ import TogoMosh
             prompter: { [weak services] in services?.userPrompter($0) }
         )
         self.machineTools = machineTools
-        LinkCenter.shared.forwarding = ReviewLinkForwarding(review: review)
+        LinkCenter.shared.tunnel = LiveCallbackTunnel(
+            helpers: helpers, records: { [weak services] in services?.hostRecord($0) }, review: review
+        )
         LinkCenter.shared.openOnMac = { [weak machineTools] hostID, url in
             let link = url.absoluteString
             try await machineTools?.call(hostID) { try await $0.openOnMac(url: link) }
@@ -178,6 +180,14 @@ import TogoMosh
         services.beforeDroppingHelpers = { [weak review] in await review?.settle() }
         tutorial = TutorialModel()
         onboarding = LiveOnboardingServices(keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys)
+        LinkCenter.shared.codeSender = LiveSignInCodeSender(
+            tools: machineTools,
+            answer: { [weak services] host, request, decision in
+                try await services?.answer(hostID: host, requestID: request, decision: decision)
+            },
+            pendingSecret: { [weak self] host, session in self?.pendingSecretRequest(host, session) }
+        )
+        LinkCenter.shared.awaitsCode = { [weak self] host, session in self?.pendingSecretRequest(host, session) != nil }
         services.onMachineRemoved = { [weak self] id in
             self?.forgetMachine(id)
             Task { await signedIn.discard(id) }
@@ -370,4 +380,13 @@ extension BiometricSession {
     /// The one session for the app. The resume lock and every key signature share it, so
     /// a device lock or a long background clears the context signing uses too.
     static let app = BiometricSession()
+}
+
+extension AppComposition {
+    /// The open request in a session whose agent waits for a pasted code or key.
+    func pendingSecretRequest(_ host: HostID, _ session: String) -> String? {
+        activeStore?.controlCenter.requests.first {
+            $0.hostID == host && $0.sessionID == session && $0.phase == .open && $0.signIn?.secret == true
+        }?.id
+    }
 }

@@ -4,18 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
+	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/detect"
-	"github.com/gettogo/togo/helper/internal/seal"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
@@ -48,6 +45,9 @@ type SessionInfo struct {
 	Bib   *string
 	Agent *string
 	Muted bool
+	// Name is the session's name, shown as the title of its pushes and
+	// Live Activity; empty when unknown.
+	Name string
 }
 
 // Message is one push before it is sealed for each device.
@@ -219,6 +219,9 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 	m := Message{Kind: relayAlert}
 	p := &m.Plaintext
 	*p = wire.PushPlaintext{V: 1, SessionID: ev.SessionID, Bib: info.Bib, Agent: info.Agent, TS: now.UnixMilli(), Host: s.host}
+	if name := sessionTitle(info.Name); name != "" {
+		p.SessionName = &name
+	}
 
 	switch pl := deref(ev.Payload).(type) {
 	case wire.ApprovalOpenEvent:
@@ -230,20 +233,31 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 		if a.Bib != nil {
 			p.Bib = a.Bib
 		}
-		if a.Agent != "" {
-			p.Agent = &a.Agent
+		if agent := requestAgent(a.Agent, info); agent != "" {
+			p.Agent = &agent
 		}
 		p.Title = a.Title
 		// With no subject the app shows the body, which may be screen
 		// text: clean it here too, before the length cap below.
 		if a.Detail != nil {
-			p.Body = detect.CleanLine(*a.Detail)
+			p.Body = detect.CleanLine(detect.DropKeyHints(*a.Detail))
 		}
 		p.RequestID = a.RequestID
 		p.Options = a.Options
 		p.Subject = a.Subject
+		if s := a.Subject; s != nil && s.Kind == wire.SubjectFile && s.Validate() == nil {
+			// A path reads from its end: home as ~, temporary folders by their last names.
+			v := shortSubject(*s, maxPushPath)
+			p.Subject = &v
+		}
 		// Carried into the reminder too, which copies this plaintext.
 		p.AllowText = a.AllowText
+		if a.Answerable != nil && !*a.Answerable {
+			// Nothing sent from a notification can answer it yet (a
+			// tabbed question, or a prompt not on screen yet): no buttons,
+			// so the phone says to open the app.
+			p.Options, p.AllowText = nil, false
+		}
 		m.CollapseID = a.RequestID
 	case wire.ApprovalClosedEvent:
 		s.requests.mark(pl.RequestID, seenClosed)
@@ -268,9 +282,12 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 		}
 		p.Kind = sess.Status
 		p.Bib = sess.Bib
-		agent := sess.Agent
+		agent := agents.Resolve(sess.Agent, sess.Command)
 		p.Agent = &agent
 		p.Title = sess.Name
+		if name := sessionTitle(sess.Name); name != "" {
+			p.SessionName = &name
+		}
 		exit := *sess.Exit
 		p.Exit = &exit
 	case wire.SessionRemovedEvent:
@@ -307,6 +324,16 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 	p.Title = truncate(p.Title, wire.MaxTitle)
 	p.Body = truncate(p.Body, wire.MaxBody)
 	return m, true
+}
+
+// requestAgent is the agent an approval names, unless it names none or
+// only "custom", where the session's own agent (resolved from its
+// program) says more.
+func requestAgent(agent string, info SessionInfo) string {
+	if (agent == "" || agent == wire.AgentCustom) && info.Agent != nil && *info.Agent != "" {
+		return *info.Agent
+	}
+	return agent
 }
 
 // deref accepts payloads published as values or pointers.
@@ -398,58 +425,6 @@ func (s *Sender) deliverOne(ctx context.Context, hostID string, d Device, m Mess
 		body.Kind = relayBackground
 	}
 	return s.post(ctx, d, body)
-}
-
-// sealFitting seals p, shrinking it until the envelope fits the relay's
-// ciphertext limit: options go first, then the body, then the subject is
-// shortened, then the title goes. The question stays longest because it is
-// what the user answers. If nothing else fits, it sends the generic push
-// (kind, request id and time only), so the user still hears about it. The
-// phone can fetch the full approval over SSH.
-func sealFitting(pub [32]byte, p wire.PushPlaintext, aad []byte) (string, error) {
-	generic := false
-	for {
-		raw, err := json.Marshal(p)
-		if err != nil {
-			return "", err
-		}
-		ct, err := seal.Seal(pub, raw, seal.LabelPush, aad)
-		if err != nil {
-			return "", fmt.Errorf("seal: %w", err)
-		}
-		switch {
-		case len(ct) <= maxCiphertext:
-			return ct, nil
-		case len(p.Options) > 0:
-			p.Options = p.Options[:len(p.Options)-1]
-		case p.Body != "":
-			p.Body = ""
-		case p.Subject != nil && utf8.RuneCountInString(p.Subject.Text) > minSubject:
-			p.Subject = shorten(*p.Subject)
-		case p.Title != "":
-			p.Title = ""
-		case !generic:
-			generic = true
-			p = wire.PushPlaintext{V: p.V, Kind: p.Kind, RequestID: p.RequestID, TS: p.TS}
-		default:
-			return "", errors.New("push too large")
-		}
-	}
-}
-
-// minSubject is the shortest a subject is cut to before the title goes.
-const minSubject = 16
-
-// shorten halves the subject text on a scalar boundary and ends it with an
-// ellipsis. The result still passes Subject.Validate.
-func shorten(s wire.Subject) *wire.Subject {
-	keep := utf8.RuneCountInString(s.Text) / 2
-	text := strings.TrimRight(truncate(s.Text, keep), " \n")
-	if text == "" {
-		text = truncate(s.Text, keep)
-	}
-	s.Text = text + "…"
-	return &s
 }
 
 // watchWants reports whether d should get a push of kind. The Watch list and

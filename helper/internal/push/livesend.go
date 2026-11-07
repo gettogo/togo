@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -20,23 +21,31 @@ type deviceLive struct {
 	pending  *LiveState // an update held back by liveCoalesce
 }
 
-// observe feeds the tracker. Muted sessions are left out, so they never
-// start or hold the activity.
+// observe feeds the tracker. Muted sessions, and every session while the
+// machine is muted, are left out, so they never start, update or hold the
+// activity; a session muted while it waits takes its requests with it.
 func (s *Sender) observe(ev wire.Event, sid string, info SessionInfo, now time.Time) {
+	machineMuted := s.Muted != nil && s.Muted()
 	switch pl := deref(ev.Payload).(type) {
 	case wire.ApprovalOpenEvent:
-		if info.Muted {
+		if info.Muted || machineMuted {
+			if info.Muted && sid != "" {
+				s.Live.Remove(sid, now)
+			}
 			return
 		}
 		a := pl.Approval
-		bib, agent := a.Bib, a.Agent
+		bib, agent := a.Bib, requestAgent(a.Agent, info)
 		if bib == nil {
 			bib = info.Bib
 		}
-		if agent == "" && info.Agent != nil {
-			agent = *info.Agent
+		owner := sid
+		if a.SessionID != nil {
+			owner = *a.SessionID
 		}
-		s.Live.Open(a.RequestID, a.CreatedAt, bib, agent, a.Subject, now)
+		c := requestContext(a)
+		c.Title = sessionTitle(info.Name)
+		s.Live.OpenRequest(a.RequestID, a.CreatedAt, bib, agent, a.Subject, owner, c, now)
 	case wire.ApprovalClosedEvent:
 		s.Live.Close(pl.RequestID, now)
 	case wire.SessionEvent:
@@ -44,15 +53,16 @@ func (s *Sender) observe(ev wire.Event, sid string, info SessionInfo, now time.T
 		if !ok {
 			return
 		}
-		if sess.Muted {
+		if sess.Muted || machineMuted {
 			s.Live.Remove(sess.ID, now)
 			return
 		}
+		s.Live.Describe(sess.ID, sessionTitle(sess.Name), stepText(sess.Activity))
 		reason := ""
 		if sess.Exit != nil {
 			reason = liveReason(sess.Exit.Reason)
 		}
-		s.Live.Session(sess.ID, sess.Status, sess.Bib, sess.Agent, reason, now)
+		s.Live.Session(sess.ID, sess.Status, sess.Bib, agents.Resolve(sess.Agent, sess.Command), reason, now)
 	case wire.SessionRemovedEvent:
 		if sid != "" {
 			s.Live.Remove(sid, now)
@@ -115,7 +125,7 @@ func (s *Sender) pumpLive(ctx context.Context) {
 				s.queueUpdate(ctx, d, dl, cur, now)
 			}
 		}
-		if dl.pending != nil && dl.token != "" && now.Sub(dl.lastAt) >= liveCoalesce {
+		if dl.pending != nil && dl.token != "" && now.Sub(dl.lastAt) >= holdFor(dl.last, *dl.pending) {
 			s.sendLive(ctx, d, dl, liveUpdate, *dl.pending, nil, now)
 		}
 	}
@@ -165,23 +175,35 @@ func (s *Sender) liveEvent(ctx context.Context, d Device, dl *deviceLive, st Liv
 // The pending state is kept unmasked; sendLive masks it for the device as
 // it is when the update goes out.
 func (s *Sender) queueUpdate(ctx context.Context, d Device, dl *deviceLive, st LiveState, now time.Time) {
-	if dl.lastAt.IsZero() || now.Sub(dl.lastAt) >= liveCoalesce ||
-		st.Status == wire.LevelNeedsYou || dl.last.Status == wire.LevelNeedsYou {
+	if dl.lastAt.IsZero() || now.Sub(dl.lastAt) >= holdFor(dl.last, st) ||
+		(st.Status == wire.LevelNeedsYou || dl.last.Status == wire.LevelNeedsYou) && !onlyStep(dl.last, st) {
 		s.sendLive(ctx, d, dl, liveUpdate, st, nil, now)
 		return
 	}
 	dl.pending = &st
 }
 
+// holdFor is how long after the last update next waits: longer when only
+// the step changed, so a busy agent does not spend the push budget.
+func holdFor(last, next LiveState) time.Duration {
+	if last.Status == next.Status && onlyStep(last, next) {
+		return liveStepCoalesce
+	}
+	return liveCoalesce
+}
+
 // sendLive posts one Live Activity push, masking st for d's current
-// command setting. A 410 on the update token makes a start due.
+// command setting and sealing its context for d. A 410 on the update
+// token makes a start due.
 func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev string, st LiveState, attrs *liveAttributes, now time.Time) error {
 	token := dl.token
 	if ev == liveStart {
 		token = d.LiveActivityStartToken
 	}
 	stale := now.Unix() + liveStale
-	la := &liveActivity{Event: ev, ContentState: mask(st, d), Attributes: attrs, StaleDate: &stale}
+	cs := mask(st, d)
+	cs.Ctx = s.sealContext(d, st.context)
+	la := &liveActivity{Event: ev, ContentState: cs, Attributes: attrs, StaleDate: &stale}
 	if ev == liveEnd {
 		dismiss := now.Unix() + liveDismiss
 		la.DismissalDate = &dismiss
@@ -198,6 +220,27 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 		dl.token, dl.startDue, dl.started = "", true, false
 	}
 	return err
+}
+
+// sealContext seals c for d, or nil when there is nothing to show or it
+// cannot be sealed: the activity then shows its plain fields.
+func (s *Sender) sealContext(d Device, c LiveContext) *string {
+	if c.empty() {
+		return nil
+	}
+	var pub [32]byte
+	if !decode32(d.X25519, &pub) {
+		return nil
+	}
+	keys, err := s.Keys()
+	if err != nil {
+		return nil
+	}
+	ct := sealLiveContext(pub, c, []byte(keys.HostID+"|"+d.DeviceID))
+	if ct == "" {
+		return nil
+	}
+	return &ct
 }
 
 func (s *Sender) anyPendingLocked() bool {

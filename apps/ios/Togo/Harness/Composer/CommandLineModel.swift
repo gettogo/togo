@@ -30,11 +30,16 @@ import TogoKit
     var presentedScreen: String?
     /// The full command list is open.
     var paletteOpen = false
+    /// A screen the palette handed over to: it opens in its own sheet once the palette has
+    /// gone, so only one sheet is ever up (`AdaptivePresentation.opening`).
+    var handedOverScreen: String?
     private static let log = Logger(subsystem: "app.togo", category: "composer")
     /// The command list could not be read; the palette offers to try again.
     private(set) var paletteFailed = false
     /// Every command, for the palette; loaded when it opens.
     private(set) var palette: [HarnessCompletion] = []
+    /// What the palette's search starts with when it opens: a choice command typed in full.
+    var paletteSeed: String?
     private(set) var sending = false
     /// One quiet line about the last thing that did not work, or what an action said.
     var notice: String?
@@ -292,9 +297,12 @@ import TogoKit
 
     /// Sends the draft: now while the agent is idle, queued while it works. A refusal for
     /// being busy queues instead; any other failure puts the words back.
-    /// With pictures attached, the prompt carries them all, in one message.
-    func submit() async {
+    /// With pictures attached, the prompt carries them all, in one message. A draft that is a
+    /// command does what picking it in the palette does (`routeTyped`); `asText` sends it as
+    /// typed, for "Send as text" and for lines a command already resolved.
+    func submit(asText: Bool = false) async {
         guard canSend else { return }
+        if !asText, await routeTyped() { return }
         let text = CommandLineLogic.outgoing(draft) ?? ""
         let images = attachments.paths
         guard !text.isEmpty || !images.isEmpty else { return }
@@ -327,7 +335,7 @@ import TogoKit
     /// Sends a whole line from the palette, such as "/compact focus on tests".
     func send(line: String) async {
         draft = line
-        await submit()
+        await submit(asText: true)
     }
 
     private func send(_ text: String, mode: HarnessSendParams.Mode, images: [String] = []) async throws {

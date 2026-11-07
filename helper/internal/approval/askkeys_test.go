@@ -92,6 +92,8 @@ func (a *askSim) CapturePane(context.Context, string) (string, error) {
 	return b.String(), nil
 }
 
+func (a *askSim) PasteText(context.Context, string, string) error { return nil }
+
 func (a *askSim) SendKeys(_ context.Context, _ string, literal bool, keys ...string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()

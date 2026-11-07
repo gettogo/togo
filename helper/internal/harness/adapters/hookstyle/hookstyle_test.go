@@ -83,52 +83,6 @@ func tools(r result) []*harness.ToolBody {
 	return out
 }
 
-func TestQwenHooks(t *testing.T) {
-	r, m := replay(t, "qwen", "qwen.jsonl", "s_qwen00001")
-	st := m.State()
-	if st["harness_session"] != "qw-0001" || st["mode"] != "auto_edit" || st["model"] != "qwen3.7-plus" ||
-		!strings.HasSuffix(st["transcript_path"], "qw-0001.jsonl") || st["working"] != "false" {
-		t.Fatalf("state %v", st)
-	}
-	turn := "turn-" + itoa(t0.Add(time.Second).UnixMilli())
-	if u := r.last[turn+":user"]; u.User == nil || u.User.Text != "run the tests" {
-		t.Fatalf("user %+v", u)
-	}
-	shell := r.last["call_a1"].Tool
-	if shell == nil || shell.Title != "go test ./..." || shell.Category != harness.ToolShell || shell.State != harness.StateOK || shell.Output != "ok  pkg 0.2s" {
-		t.Fatalf("shell %+v", shell)
-	}
-	waited := false
-	for _, x := range r.items {
-		if x.ID == "call_a1" && x.Tool.State == harness.StateWaiting {
-			waited = true
-		}
-	}
-	if !waited {
-		t.Fatal("the permission request did not mark the call waiting")
-	}
-	edit := r.last["call_a2"].Tool
-	if edit.Category != harness.ToolEdit || edit.State != harness.StateFailed || edit.Title != "Edit /HOME/proj/main.go" {
-		t.Fatalf("edit %+v", edit)
-	}
-	if reply := r.last[turn+":reply"]; reply.Assistant == nil || reply.Assistant.Text != "Tests pass." {
-		t.Fatalf("reply %+v", reply)
-	}
-	if tb := r.last[turn].Turn; tb == nil || tb.State != harness.StateOK || tb.Steps != 2 || tb.Ended == nil {
-		t.Fatalf("turn %+v", tb)
-	}
-	rows := map[string]harness.Row{}
-	for _, op := range r.ops {
-		rows[op.Section+"/"+op.Row.ID] = *op.Row
-	}
-	if p := rows["plan/1"]; p.State != harness.RowDone || p.Title != "Run go test" {
-		t.Fatalf("plan rows %+v", rows)
-	}
-	if a := rows["agents/sub-1"]; a.State != harness.RowDone || a.Title != "reviewer" {
-		t.Fatalf("agent rows %+v", rows)
-	}
-}
-
 func TestCopilotCamelCaseHooks(t *testing.T) {
 	r, m := replay(t, "copilot", "copilot.jsonl", "s_copilot001")
 	ts := tools(r)
@@ -193,13 +147,16 @@ func TestDroidAndVibeHooks(t *testing.T) {
 func TestLiveTranscriptSilencesHookChat(t *testing.T) {
 	MarkLive("s_live00001")
 	defer UnmarkLive("s_live00001")
-	r, m := replay(t, "qwen", "qwen.jsonl", "s_live00001")
+	r, m := replay(t, "droid", "droid.jsonl", "s_live00001")
 	for _, x := range r.items {
 		if x.Kind == harness.KindUser || x.Kind == harness.KindTool || x.Kind == harness.KindAssistant || x.Kind == harness.KindTurn {
 			t.Fatalf("drew %s while the transcript is live", x.Kind)
 		}
 	}
-	if m.State()["harness_session"] != "qw-0001" || len(r.ops) == 0 {
+	d, _ := For("droid")
+	_, norm, _ := Normalize(d, SubagentStart, []byte(`{"session_id":"dr-0001","agent_id":"a1","agent_type":"explore"}`))
+	items, ops := m.Map(harness.Record{Source: "hooks", At: t0, Data: norm})
+	if m.State()["harness_session"] != "dr-0001" || len(items) != 0 || len(ops) == 0 {
 		t.Fatal("state and mission rows must still update")
 	}
 }
@@ -234,11 +191,6 @@ func TestReduce(t *testing.T) {
 	if strings.Contains(string(f.Payload), "ghp_") {
 		t.Fatal("a token reached the forwarded payload")
 	}
-	q, _ := For("qwen")
-	f, err = Reduce(q, "TodoCreated", []byte(`{"session_id":"qw","todo_id":"1"}`), env)
-	if err != nil || f.Event != local.EventHarness || f.Agent != "qwen" || f.Data.AgentSessionID != "qw" {
-		t.Fatalf("todo forward %+v err %v", f, err)
-	}
 	f, err = Reduce(d, "errorOccurred", []byte(`{"error":{"message":"boom"}}`), env)
 	if err != nil || f.Event != local.EventHarness {
 		t.Fatalf("an error the session survives must not fail it: %+v err %v", f, err)
@@ -249,7 +201,9 @@ func TestReduce(t *testing.T) {
 }
 
 func TestDecisions(t *testing.T) {
-	q, _ := For("qwen")
+	// No shipped dialect answers in Claude Code's PermissionRequest shape
+	// now; the shape stays for the next harness that does.
+	q := Dialect{Agent: "claude-shaped", Answer: AnswerPermissionRequest}
 	c, _ := For("copilot")
 	dr, _ := For("droid")
 	if !Blocks(q, PermissionRequest) || Blocks(q, PreToolUse) || Blocks(dr, PermissionRequest) {
@@ -261,7 +215,7 @@ func TestDecisions(t *testing.T) {
 		} `json:"hookSpecificOutput"`
 	}
 	if json.Unmarshal(Decision(q, "Allow"), &qa) != nil || qa.HookSpecificOutput.Decision.Behavior != "allow" {
-		t.Fatal("qwen allow")
+		t.Fatal("claude-shaped allow")
 	}
 	var ca map[string]string
 	if json.Unmarshal(Decision(c, wire.DecisionDeny), &ca) != nil || ca["permissionDecision"] != "deny" {

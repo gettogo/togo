@@ -219,10 +219,22 @@ enum Load<T: Equatable>: Equatable {
         recent = .loading
         do {
             let dirs = try await services.recentDirs(hostID: hostID)
-            if recentToken == token, self.hostID == hostID { recent = .loaded(dirs) }
+            if recentToken == token, self.hostID == hostID { recent = .loaded(RecentFolders.shown(dirs)) }
         } catch {
             if recentToken == token, self.hostID == hostID { recent = .failed(message(for: error)) }
         }
+    }
+
+    /// Takes `dir` off the recent folders: off this list at once (`removeRecent`), then off the
+    /// machine's record. A helper that cannot forget one lists it again next time.
+    func removeRecent(_ dir: String) {
+        guard case .loaded(let dirs) = recent else { return }
+        recent = .loaded(dirs.filter { $0 != dir })
+    }
+
+    func forgetRecent(_ dir: String) async {
+        guard let hostID else { return }
+        try? await services.forgetRecentDir(hostID: hostID, path: dir)
     }
 
     func browse(_ path: String) async {

@@ -80,6 +80,8 @@ struct RequestCard: Identifiable, Equatable, Sendable {
     var options: [ApprovalOption]
     var allowText: Bool
     var phase: Phase
+    /// The sign-in step the request is, when it is one.
+    var signIn: SignInStep?
 
     enum Phase: Equatable, Sendable {
         case open

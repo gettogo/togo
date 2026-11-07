@@ -1,5 +1,137 @@
 {
   "source": "real",
   "agentVersion": "omp/18.16.0",
-  "match": false
+  "match": true,
+  "kind": "question",
+  "title": "Select provider to login",
+  "options": [
+    {
+      "n": 1,
+      "label": "ChatGPT Plus/Pro (Codex Subscription)",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Anthropic (Claude Pro/Max)",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Z.AI (GLM Coding Plan)",
+      "role": "other"
+    },
+    {
+      "n": 4,
+      "label": "Z.AI (GLM Coding Plan · Sign in)",
+      "role": "other"
+    },
+    {
+      "n": 5,
+      "label": "Kimi Code",
+      "role": "other"
+    },
+    {
+      "n": 6,
+      "label": "OpenRouter",
+      "role": "other"
+    },
+    {
+      "n": 7,
+      "label": "GitHub Copilot",
+      "role": "other"
+    },
+    {
+      "n": 8,
+      "label": "Devin",
+      "role": "other"
+    },
+    {
+      "n": 9,
+      "label": "Google Antigravity (Gemini, Claude, GPT-OSS)",
+      "role": "other"
+    },
+    {
+      "n": 10,
+      "label": "Google Cloud Code Assist (Gemini CLI)",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "4": [
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "5": [
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "6": [
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "7": [
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "8": [
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "9": [
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "10": [
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  },
+  "subject": null
 }

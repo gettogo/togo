@@ -22,6 +22,9 @@ import (
 const (
 	LabelPush   = "push"
 	LabelAnswer = "answer"
+	// LabelLive seals the context a Live Activity shows, which rides in its
+	// content state.
+	LabelLive = "live"
 )
 
 // Version is the first byte of every envelope.

@@ -58,6 +58,10 @@ func CleanLine(s string) string {
 // so the result always passes wire.Subject.Validate. It returns nil when
 // nothing readable is left or kind is unknown.
 func NewSubject(kind, text string) *wire.Subject {
+	if kind != wire.SubjectCommand {
+		// A key-hint footer read off the screen is never what is asked about.
+		text = DropKeyHints(text)
+	}
 	s := wire.Subject{Kind: kind, Text: truncate(CleanLine(text), wire.MaxSubjectText)}
 	if s.Text == "" || s.Validate() != nil {
 		return nil
@@ -70,10 +74,12 @@ func NewSubject(kind, text string) *wire.Subject {
 // anything else is shown as text.
 func SubjectKindForTool(tool string) string {
 	switch strings.ToLower(tool) {
-	case "bash", "shell", "exec", "exec_command", "local_shell", "run", "run_command", "unified_exec":
+	case "bash", "shell", "exec", "exec_command", "local_shell", "run", "run_command", "unified_exec",
+		"run_shell_command", "shell_command", "execute", "powershell":
 		return wire.SubjectCommand
-	case "edit", "multiedit", "write", "notebookedit", "apply_patch", "patch",
-		"edit_file", "write_file", "create_file", "delete_file":
+	case "edit", "multiedit", "multi_edit", "write", "notebookedit", "apply_patch", "applypatch", "patch",
+		"edit_file", "write_file", "create_file", "delete_file", "create", "replace", "search_replace",
+		"str_replace", "str_replace_editor":
 		return wire.SubjectFile
 	case "webfetch", "web_fetch", "fetch":
 		return wire.SubjectURL
@@ -126,7 +132,51 @@ func subjectOf(lines []string, boxed []bool, header, start int) *wire.Subject {
 		}
 		lo = i
 	}
+	if s := fenced(lines[lo:header]); s != nil {
+		return s
+	}
 	return scan(cleaned(lines[lo:header]), true)
+}
+
+// fenced reads Claude Code 2.1.3xx's dialog: a heading ("Bash command"),
+// a tip and a description, then the command between two dashed rules. The
+// line after the heading is not the subject there.
+func fenced(lines []string) *wire.Subject {
+	kind := ""
+	for i, l := range lines {
+		if k, ok := labelKinds[strings.ToLower(strings.TrimSuffix(CleanLine(l), ":"))]; ok {
+			kind = k
+			continue
+		}
+		if kind == "" || !isDashed(l) {
+			continue
+		}
+		for _, n := range lines[i+1:] {
+			if isDashed(n) {
+				break
+			}
+			if c := CleanLine(n); c != "" {
+				return NewSubject(kind, c)
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
+// isDashed reports whether l is a dashed rule (╌╌╌), which Claude draws
+// around the command in a permission dialog.
+func isDashed(l string) bool {
+	t := strings.TrimSpace(l)
+	if t == "" {
+		return false
+	}
+	for _, r := range t {
+		if !strings.ContainsRune("╌╍┄┅┈┉", r) {
+			return false
+		}
+	}
+	return true
 }
 
 // cleaned runs every line through CleanLine on its own, so nested box

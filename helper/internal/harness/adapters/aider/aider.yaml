@@ -53,6 +53,14 @@ modes:
     - { id: ask, label: Ask }
     - { id: help, label: Help }
   set: set_mode
+  # Aider's prompt names the chat mode when it is not the model's own edit format
+  # ("ask> ", "architect> ", "help> ", "ask multi> "; io.get_input in 0.86): the last
+  # prompt on screen is the current one, and a bare "> " is code.
+  screen:
+    - { line: '^architect( multi)?>( |$)', id: architect }
+    - { line: '^ask( multi)?>( |$)', id: ask }
+    - { line: '^help( multi)?>( |$)', id: help }
+    - { line: '^([a-z-]+)?( multi)?>( |$)', id: code }
 commands:
   static:
     - { name: add, hint: '<file>', detail: Add files to the chat }

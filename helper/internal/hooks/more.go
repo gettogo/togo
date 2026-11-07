@@ -8,20 +8,13 @@ import (
 	"slices"
 )
 
-// Harnesses whose hooks follow Claude Code's shape (qwen, droid) or Copilot
+// Harnesses whose hooks follow Claude Code's shape (droid) or Copilot
 // CLI's own format. Their hooks are their native chat feed, so setup
 // installs them whenever the harness is installed.
 const (
-	Qwen    = "qwen"
 	Droid   = "droid"
 	Copilot = "copilot"
 )
-
-// qwenEvents are Qwen Code's hooks the qwen adapter reads; they share
-// Claude Code's names and shape.
-var qwenEvents = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure",
-	"Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop", "PreCompact", "PostCompact",
-	"TodoCreated", "TodoCompleted", "SessionEnd"}
 
 // droidEvents are Droid's hooks (Claude Code's names and shape).
 var droidEvents = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification",
@@ -33,11 +26,6 @@ var copilotEvents = []string{"sessionStart", "userPromptSubmitted", "preToolUse"
 	"notification", "sessionEnd"}
 
 const copilotPermission = "permissionRequest"
-
-// qwenEdits edits ~/.qwen/settings.json, a Claude-style settings document.
-func qwenEdits(o Options, add bool) ([]edit, string, error) {
-	return claudeShapeEdits(o.Binary, o.QwenDir, "settings.json", Qwen, qwenEvents, permissionRequest, o.Block, add)
-}
 
 // droidEdits edits ~/.factory/hooks.json. Droid never waits for an answer
 // from a hook, so --block adds nothing.

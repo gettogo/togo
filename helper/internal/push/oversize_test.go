@@ -29,7 +29,8 @@ func TestLongCJKSubjectShortenedNotDropped(t *testing.T) {
 		t.Fatalf("shortened subject invalid: %v", err)
 	}
 	n := utf8.RuneCountInString(p.Subject.Text)
-	if n >= wire.MaxSubjectText || !strings.HasSuffix(p.Subject.Text, "…") || p.Subject.Kind != wire.SubjectFile {
+	// A file subject loses its middle, so its name still shows.
+	if n >= wire.MaxSubjectText || !strings.Contains(p.Subject.Text, "…") || p.Subject.Kind != wire.SubjectFile {
 		t.Fatalf("subject kind %s, %d runes, ends %q", p.Subject.Kind, n, p.Subject.Text[len(p.Subject.Text)-3:])
 	}
 	if p.Title == "" {

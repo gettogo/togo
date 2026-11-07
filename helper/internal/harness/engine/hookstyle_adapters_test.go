@@ -14,7 +14,6 @@ import (
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/goose"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/kiro"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/openhands"
-	_ "github.com/gettogo/togo/helper/internal/harness/adapters/qwen"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/vibe"
 )
 
@@ -22,7 +21,7 @@ import (
 // map expressions parse, the version range reads.
 func TestMoreAdapterFilesCompile(t *testing.T) {
 	files := harness.AdapterFiles()
-	for _, id := range []string{"qwen", "droid", "vibe", "copilot", "goose", "aider", "cline", "amp", "cursor", "kiro", "openhands"} {
+	for _, id := range []string{"droid", "vibe", "copilot", "goose", "aider", "cline", "amp", "cursor", "kiro", "openhands"} {
 		b, ok := files[id]
 		if !ok {
 			t.Errorf("%s: not registered", id)

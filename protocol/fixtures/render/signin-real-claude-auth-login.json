@@ -1,0 +1,23 @@
+{
+  "name": "signin/real-claude-auth-login",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "signin",
+    "title": "Paste code here if prompted",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "allowText": true,
+    "options": []
+  },
+  "expect": {
+    "title": "03 Signin",
+    "subtitle": "Paste code here if prompted",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

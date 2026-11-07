@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/authkeys"
@@ -48,6 +49,7 @@ var Capabilities = []string{
 	notify.Capability,
 	hostinfo.Capability,
 	wire.CapAuthkeys,
+	api.RecentCapability,
 	wire.CapReply,
 	wire.CapLaunch,
 	wire.CapLifecycle,
@@ -306,8 +308,8 @@ func (c *Components) sessionInfo(id string) (push.SessionInfo, bool) {
 	if err != nil {
 		return push.SessionInfo{}, false
 	}
-	agent := sess.Agent
-	return push.SessionInfo{Bib: sess.Bib, Agent: &agent, Muted: c.Hub.Muted(id)}, true
+	agent := agents.Resolve(sess.Agent, sess.Command)
+	return push.SessionInfo{Bib: sess.Bib, Agent: &agent, Muted: c.Hub.Muted(id), Name: sess.Name}, true
 }
 
 // reach reports whether a notification can reach the user: an app in the

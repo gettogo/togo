@@ -168,6 +168,7 @@ struct FixtureTests {
         case .sessionSetMute: (SetMuteParams.self, Session.self)
         case .agentsList: (EmptyParams.self, AgentList.self)
         case .fsRecentDirs: (EmptyParams.self, RecentDirs.self)
+        case .fsForgetRecentDir: (ForgetRecentDirParams.self, EmptyResult.self)
         case .fsListDir: (ListDirParams.self, ListDirResult.self)
         case .fsRead: (FsReadParams.self, FsReadResult.self)
         case .fsUpload: (UploadParams.self, UploadResult.self)

@@ -43,9 +43,11 @@ enum PromptFeed {
             question: card.title, command: card.detail.flatMap { $0.isEmpty ? nil : $0 },
             allowsReply: card.allowText,
             // A question with no options that takes words is answered in words alone.
-            asksYesOrNo: !(card.options.isEmpty && card.allowText),
+            // A sign-in step with nothing to choose is answered on its page or in its field.
+            asksYesOrNo: !(card.options.isEmpty && (card.allowText || card.signIn != nil)),
             more: choices.more.map { PromptOption(id: $0.n, label: $0.label) },
-            state: state(of: card, failure: failure)
+            state: state(of: card, failure: failure),
+            signIn: card.signIn, hostID: card.hostID
         )
     }
 

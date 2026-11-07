@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +36,7 @@ var funcs = template.FuncMap{
 	"sha256":   sha256Hex,
 	"object":   objectFilter,
 	"slots":    slotsFilter,
+	"form":     formFilter,
 	"part":     part,
 }
 
@@ -91,6 +93,71 @@ func slotsFilter(v any) (string, error) {
 	b, err := json.Marshal(out)
 	return string(b), err
 }
+
+// formFilter turns answers keyed by form field into OpenCode 2.x's form
+// reply object. A key's mark says the value's type: "key[]" a list of
+// strings, "key!" a boolean, "key#" a number, a bare key one string. Keys
+// are plain names; at most MaxSlots are taken.
+func formFilter(v any) (string, error) {
+	m, ok := v.(map[string]any)
+	if !ok || len(m) > MaxSlots {
+		return "", fmt.Errorf("form: answers are not an object")
+	}
+	out := map[string]any{}
+	for k, raw := range m {
+		var vals []string
+		switch x := raw.(type) {
+		case string:
+			vals = []string{x}
+		case []any:
+			for _, e := range x {
+				str, ok := e.(string)
+				if !ok {
+					return "", fmt.Errorf("form: an answer is not text")
+				}
+				vals = append(vals, str)
+			}
+		case []string:
+			vals = x
+		case nil:
+		default:
+			return "", fmt.Errorf("form: an answer is not text")
+		}
+		key, mark := k, ""
+		for _, suf := range []string{"[]", "!", "#"} {
+			if base, ok := strings.CutSuffix(k, suf); ok {
+				key, mark = base, suf
+				break
+			}
+		}
+		if !formKey.MatchString(key) {
+			return "", fmt.Errorf("form: %q is not a field key", k)
+		}
+		switch {
+		case mark == "[]":
+			if vals == nil {
+				vals = []string{}
+			}
+			out[key] = vals
+		case len(vals) == 0:
+			// left unanswered: the field is not sent
+		case mark == "!":
+			out[key] = vals[0] == "true"
+		case mark == "#":
+			f, err := strconv.ParseFloat(strings.TrimSpace(vals[0]), 64)
+			if err != nil {
+				return "", fmt.Errorf("form: %q is not a number", vals[0])
+			}
+			out[key] = f
+		default:
+			out[key] = vals[0]
+		}
+	}
+	b, err := json.Marshal(out)
+	return string(b), err
+}
+
+var formKey = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
 
 // objectFilter re-encodes s, which must be a JSON object of string
 // values (a model reference picked from a list), so text from the phone

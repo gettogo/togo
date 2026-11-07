@@ -11,6 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/fsx"
@@ -86,6 +89,8 @@ func (a *API) Handle(ctx context.Context, method string, params json.RawMessage)
 		result = a.agentsList(ctx)
 	case "fs.recentDirs":
 		result, err = a.recentDirs()
+	case MethodForgetRecentDir:
+		result, err = a.forgetRecentDir(params)
 	case "fs.listDir":
 		result, err = a.listDir(params)
 	default:
@@ -115,7 +120,7 @@ func (a *API) sessionCreate(ctx context.Context, raw json.RawMessage) (any, erro
 	}
 	return a.Sessions.Create(ctx, session.CreateOpts{
 		Agent: p.Agent, Cwd: p.Cwd, Name: p.Name, Cols: p.Cols, Rows: p.Rows,
-		Program: p.Program, Args: p.Args,
+		Program: p.Program, Args: p.Args, Muted: p.Muted,
 	})
 }
 
@@ -239,6 +244,36 @@ func (a *API) recentDirs() (any, error) {
 		dirs = []string{a.Home}
 	}
 	return map[string]any{"dirs": dirs}, nil
+}
+
+// RecentCapability advertises fs.forgetRecentDir.
+const RecentCapability = "recent.v1"
+
+// MethodForgetRecentDir takes a folder off fs.recentDirs.
+const MethodForgetRecentDir = "fs.forgetRecentDir"
+
+func (a *API) forgetRecentDir(raw json.RawMessage) (any, error) {
+	var p struct {
+		Path *string `json:"path"`
+	}
+	if err := decode(raw, &p); err != nil {
+		return nil, err
+	}
+	if p.Path == nil || *p.Path == "" || strings.ContainsRune(*p.Path, 0) {
+		return nil, &session.InvalidParamsError{Msg: "path is required"}
+	}
+	path := *p.Path
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		path = filepath.Join(home, strings.TrimPrefix(path, "~"))
+	}
+	if err := a.Recent.Forget(path); err != nil {
+		return nil, err
+	}
+	return map[string]any{}, nil
 }
 
 func (a *API) listDir(raw json.RawMessage) (any, error) {

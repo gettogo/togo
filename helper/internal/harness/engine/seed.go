@@ -32,13 +32,13 @@ func (sd *screenSeed) overlay(out map[string]string) {
 // can read state from it, so the mode is known without a hook payload or
 // status line, and again whenever the agent goes idle (a Shift+Tab at the
 // desk changes it without any record).
-func (s *sess) seedFromScreen(wait time.Duration) {
+func (s *sess) seedFromScreen(wait time.Duration) bool {
 	if s.e.cfg.Screen == nil || s.ad == nil || s.ad.Modes == nil {
-		return
+		return true
 	}
 	select {
 	case <-s.ctx.Done():
-		return
+		return false
 	case <-time.After(wait):
 	}
 	s.mu.Lock()
@@ -49,14 +49,17 @@ func (s *sess) seedFromScreen(wait time.Duration) {
 		}
 	}
 	s.mu.Unlock()
+	if ms := newModeScreen(s.ad.Modes); ms != nil {
+		readers = append(readers, ms)
+	}
 	if len(readers) == 0 {
-		return
+		return true // nothing on this adapter reads the screen
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Second)
 	text, err := s.e.cfg.Screen(ctx, s.id)
 	cancel()
 	if err != nil {
-		return
+		return false
 	}
 	read := map[string]string{}
 	for _, r := range readers {
@@ -65,12 +68,12 @@ func (s *sess) seedFromScreen(wait time.Duration) {
 		}
 	}
 	if len(read) == 0 {
-		return
+		return false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ctx.Err() != nil {
-		return
+		return false
 	}
 	under, _ := s.mapperStateRawLocked()
 	s.seed.state, s.seed.under = read, map[string]string{}
@@ -78,6 +81,7 @@ func (s *sess) seedFromScreen(wait time.Duration) {
 		s.seed.under[k] = under[k]
 	}
 	s.refreshStatusLocked()
+	return true
 }
 
 // mapperStateRawLocked is the mappers' merged state without the seed.
@@ -113,3 +117,25 @@ func (s *sess) mergeStatusLocked(st *harness.StatusBlock) {
 		st.Facts = cur.Facts
 	}
 }
+
+// seedAtStart reads the pane when the session is first served, and again
+// every seedRetry while nothing could be read: the agent may still be
+// starting, or a dialog (Claude's folder trust) covers the prompt box, so
+// without retries the mode stayed unknown until the first turn ended.
+func (s *sess) seedAtStart() {
+	for i := 0; i < seedTries; i++ {
+		wait := time.Duration(0)
+		if i > 0 {
+			wait = seedRetry
+		}
+		if s.seedFromScreen(wait) || s.ctx.Err() != nil {
+			return
+		}
+	}
+}
+
+// seedTries and seedRetry bound the start-up reads to about half a minute.
+var (
+	seedTries = 15
+	seedRetry = 2 * time.Second
+)

@@ -74,16 +74,11 @@ func TestClaudeHookInsideCopilotSessionDoesNothing(t *testing.T) {
 	}
 }
 
-func TestQwenAndCopilotBlockingAnswers(t *testing.T) {
+func TestCopilotBlockingAnswer(t *testing.T) {
 	home, sock := tapHome(t)
 	d := okDaemon(t, sock, "Allow")
 	env := map[string]string{"TOGO_HOME": home, "TOGO_SESSION": "s_aaaaaaaaaa"}
-	req := `{"session_id":"qw","hook_event_name":"PermissionRequest","tool_name":"run_shell_command","tool_input":{"command":"make"}}`
-	_, out, _ := runWith(t, env, []byte(req), "hook", "qwen", "PermissionRequest", "--block")
-	if !strings.Contains(out, `"behavior":"allow"`) || !strings.Contains(out, `"hookEventName":"PermissionRequest"`) {
-		t.Fatalf("qwen out %q", out)
-	}
-	_, out, _ = runWith(t, env, []byte(`{"toolName":"bash","toolArgs":"{\"command\":\"make\"}"}`), "hook", "copilot", "permissionRequest", "--block")
+	_, out, _ := runWith(t, env, []byte(`{"toolName":"bash","toolArgs":"{\"command\":\"make\"}"}`), "hook", "copilot", "permissionRequest", "--block")
 	if strings.TrimSpace(out) != `{"permissionDecision":"allow"}` {
 		t.Fatalf("copilot out %q", out)
 	}
@@ -101,7 +96,7 @@ func TestQwenAndCopilotBlockingAnswers(t *testing.T) {
 			}
 		}
 	}
-	if asks != 2 {
-		t.Fatalf("%d asks, want 2", asks)
+	if asks != 1 {
+		t.Fatalf("%d asks, want 1", asks)
 	}
 }

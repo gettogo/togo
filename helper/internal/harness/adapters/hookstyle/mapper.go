@@ -110,9 +110,6 @@ type payload struct {
 	TaskID       string          `json:"task_id"`
 	TaskSubject  string          `json:"task_subject"`
 	TaskDesc     string          `json:"task_description"`
-	TodoID       string          `json:"todo_id"`
-	TodoContent  string          `json:"todo_content"`
-	TodoStatus   string          `json:"todo_status"`
 }
 
 // Map reads one payload.
@@ -132,7 +129,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	draw := !IsLive(m.env.SessionID)
 	switch p.Event {
 	case SessionStart:
-		m.idle()
+		m.idle(at)
 		if p.Source == "resume" {
 			return m.notice(at, harness.NoticeResumed, "info", "Resumed an earlier conversation"), nil
 		}
@@ -141,6 +138,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if !draw {
 			return nil, nil
 		}
+		noteDrawn(m.env.SessionID, m.turn, m.started)
 		u := harness.Item{ID: m.turn + ":user", TurnID: m.turn, Kind: harness.KindUser, At: at,
 			User: &harness.UserBody{Text: Clip(p.Prompt), Source: "unknown"}}
 		return []harness.Item{u, m.turnItem(harness.StateRunning, nil)}, nil
@@ -148,7 +146,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if m.turn == "" {
 			m.begin(at)
 		}
-		m.state["working"], m.state["idle"] = "true", "false"
+		m.working(at)
 		x := m.toolStart(p, at)
 		if !draw {
 			return nil, nil
@@ -161,7 +159,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		return []harness.Item{x}, nil
 	case PermissionRequest:
-		m.state["working"], m.state["idle"] = "true", "false"
+		m.working(at)
 		id := m.callID(p, false)
 		x, ok := m.tools[id]
 		if !ok || !draw {
@@ -180,6 +178,11 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			code, text = harness.NoticeRateLimit, "Usage limit reached"
 		}
 		items := m.end(p, at, draw, harness.StateFailed)
+		if !draw && code == harness.NoticeError {
+			// The transcript draws the error itself, in the harness's
+			// own words.
+			return items, nil
+		}
 		return append(items, m.notice(at, code, "error", text)...), nil
 	case ErrorOccurred:
 		return m.notice(at, harness.NoticeError, "warning", firstOf(Truncate(p.ErrorDetails, harness.MaxTitle), "The harness reported an error")), nil
@@ -187,7 +190,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return m.notice(at, harness.NoticeCompacted, "info", "Conversation compacted"), nil
 	case SubagentStart, SubagentStop:
 		return nil, agentOps(p, at)
-	case TaskCreated, TaskCompleted, TodoCreated, TodoCompleted:
+	case TaskCreated, TaskCompleted:
 		return nil, planOps(p)
 	}
 	return nil, nil
@@ -213,8 +216,17 @@ func (m *Mapper) learn(p payload) {
 	}
 }
 
-func (m *Mapper) idle() {
+// idle and working record whether a turn runs, stamped with when the
+// hook said so: a transcript feed's older "working" then loses to a later
+// Stop or StopFailure hook (harness.MergeWorking).
+func (m *Mapper) idle(at time.Time) {
 	m.state["working"], m.state["idle"] = "false", "true"
+	m.state[harness.StateWorkingAt] = harness.StampWorking(at)
+}
+
+func (m *Mapper) working(at time.Time) {
+	m.state["working"], m.state["idle"] = "true", "false"
+	m.state[harness.StateWorkingAt] = harness.StampWorking(at)
 }
 
 func (m *Mapper) begin(at time.Time) {
@@ -223,12 +235,13 @@ func (m *Mapper) begin(at time.Time) {
 	m.running = map[string][]string{}
 	m.tools = map[string]harness.Item{}
 	m.state["turn"] = m.turn
-	m.state["working"], m.state["idle"] = "true", "false"
+	m.working(at)
 }
 
 // end closes the turn, with the final reply when the payload carries it.
 func (m *Mapper) end(p payload, at time.Time, draw bool, state string) []harness.Item {
-	m.idle()
+	m.idle(at)
+	clearDrawn(m.env.SessionID, m.turn)
 	if !draw || m.turn == "" {
 		return nil
 	}
@@ -326,19 +339,16 @@ func agentOps(p payload, at time.Time) []harness.Op {
 	return []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}}
 }
 
-// planOps turns a task or todo hook into a plan row.
+// planOps turns a task hook into a plan row.
 func planOps(p payload) []harness.Op {
-	id := firstOf(p.TaskID, p.TodoID)
+	id := p.TaskID
 	if id == "" {
 		return nil
 	}
-	title := Truncate(firstOf(p.TaskSubject, p.TodoContent, p.TaskDesc, "Task "+id), harness.MaxTitle)
+	title := Truncate(firstOf(p.TaskSubject, p.TaskDesc, "Task "+id), harness.MaxTitle)
 	state := harness.RowPending
-	switch {
-	case p.Event == TaskCompleted || p.Event == TodoCompleted || p.TodoStatus == "completed":
+	if p.Event == TaskCompleted {
 		state = harness.RowDone
-	case p.TodoStatus == "in_progress":
-		state = harness.RowActive
 	}
 	return []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionPlan, Row: &harness.Row{ID: id, Title: title, State: state}}}
 }

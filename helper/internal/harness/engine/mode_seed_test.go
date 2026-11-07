@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
@@ -70,4 +71,20 @@ func TestFailedCycleReturnsToTheOriginalMode(t *testing.T) {
 	if res.Result != harness.ResultFailed || mode != "a" || !strings.Contains(res.Message, "back in A") {
 		t.Fatalf("res %+v mode %q", res, mode)
 	}
+}
+
+// Seen live: the first read came before Claude drew its prompt box (or
+// while its folder trust dialog covered it), so the mode stayed unknown
+// until the first turn ended. The start-up read is retried.
+func TestModeSeedRetriedAtStart(t *testing.T) {
+	old := seedRetry
+	seedRetry = 20 * time.Millisecond
+	t.Cleanup(func() { seedRetry = old })
+	const id = "s_modeseed09"
+	pane := &seqPane{}
+	e := newSeq(t, id, pane, nil)
+	pane.mu.Lock()
+	pane.mode = "b"
+	pane.mu.Unlock()
+	waitFor(t, func() bool { st := statusOf(e, id); return st != nil && st.Mode == "b" })
 }

@@ -1,0 +1,22 @@
+{
+  "name": "signin/real-crush-hyper-code",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "signin",
+    "title": "Enter code D2QN-PKMZ at hyper.charm.land",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Signin",
+    "subtitle": "Enter code D2QN-PKMZ at hyper.charm.land",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

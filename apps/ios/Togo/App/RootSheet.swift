@@ -17,6 +17,8 @@ struct RootSheet: View {
             // New session asks for agents and folders; if that needs a password or code, the
             // question shows over this sheet.
             .attachPrompts(store.services.attachPrompts, active: true)
+            // Settings starts agent sign-ins in this window's store.
+            .environment(\.signInStore, store)
     }
 
     /// New session sets its own heights, since browsing folders takes it to full height.

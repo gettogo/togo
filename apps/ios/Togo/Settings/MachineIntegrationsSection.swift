@@ -14,13 +14,16 @@ struct MachineIntegrationsSection: View {
 
     private struct Loaded: View {
         @State private var model: IntegrationsModel
+        let machine: HostID
 
         init(machine: HostID, tools: any MachineTools) {
+            self.machine = machine
             _model = State(initialValue: IntegrationsModel(host: machine, tools: tools))
         }
 
         var body: some View {
             IntegrationsRows(model: model)
+            AgentSignInSection(machine: machine)
         }
     }
 }

@@ -1,11 +1,16 @@
 // Live Activity request parsing and APNs payload. Live Activity pushes carry
-// metadata only; the ciphertext stays off this path.
+// metadata, plus ctx: the activity's context sealed on the host for the one
+// device, which the relay passes through unread.
 
 export const LIVE_EVENTS = ["update", "start", "end"] as const;
 export type LiveEvent = (typeof LIVE_EVENTS)[number];
 
 const MAX_STATE_STRING = 64;
 const MAX_COMMAND = 160;
+// The sealed context, base64url without padding. APNs takes 4 KB for the
+// whole payload; the helper keeps the envelope to 2048 characters.
+const MAX_CTX = 2400;
+const CTX_RE = /^[A-Za-z0-9_-]+$/;
 // staleDate and dismissalDate must fall within [now - 60 s, now + 8 h].
 const DATE_PAST_SLACK = 60;
 const DATE_MAX_AHEAD = 8 * 3600;
@@ -30,6 +35,7 @@ export interface ContentState {
   requestId?: string | null;
   command?: string | null;
   reason?: (typeof EXIT_REASONS)[number];
+  ctx?: string;
 }
 
 export interface LiveActivity {
@@ -76,6 +82,13 @@ export function parseLiveActivity(raw: unknown): LiveActivity {
       throw new FieldError("liveActivity.contentState.reason");
     }
     state.reason = cs.reason as (typeof EXIT_REASONS)[number];
+  }
+
+  if (cs.ctx !== undefined) {
+    if (!(typeof cs.ctx === "string" && cs.ctx.length >= 1 && cs.ctx.length <= MAX_CTX && CTX_RE.test(cs.ctx))) {
+      throw new FieldError("liveActivity.contentState.ctx");
+    }
+    state.ctx = cs.ctx;
   }
 
   const la: LiveActivity = { event: event as LiveEvent, contentState: state };

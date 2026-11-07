@@ -1,130 +1,130 @@
+import AppIntents
 import SwiftUI
 import TogoPush
 
 // The Dynamic Island is always black, so every region resolves the palette in dark.
 
-/// The bib on the island: brighter than in a list, since it stands alone on black.
-private struct IslandBib: View {
-    let bib: String
-    var style: Font.TextStyle = .subheadline
+/// The beacon: the one mark that says a session needs the user.
+private struct IslandBeacon: View {
+    var size: CGFloat = 8
 
     var body: some View {
-        Text(verbatim: bib)
-            .font(.system(style, design: .monospaced))
-            .fontWeight(.medium)
-            .monospacedDigit()
-            .foregroundStyle(Color.togoSnow)
-            // trunc-ok: a bib is two or three digits
-            .lineLimit(1)
-            .fixedSize()
-    }
-}
-
-/// Shown where a bib would be when the session has none.
-private struct IslandMark: View {
-    var body: some View {
-        Image(systemName: "apple.terminal")
-            .font(.subheadline)
-            .foregroundStyle(Color.togoMute)
+        Circle()
+            .fill(Color.togoAccent)
+            .frame(width: size, height: size)
             .accessibilityHidden(true)
     }
 }
 
+/// Compact leading: the agent's mark, hugging the camera.
 struct IslandCompactLeading: View {
-    let state: TogoActivityAttributes.ContentState
-    var isStale = false
+    let card: LiveCard
 
     var body: some View {
-        Group {
-            if let bib = state.bib { IslandBib(bib: bib) } else { IslandMark() }
-        }
-        .environment(\.colorScheme, .dark)
-        .dynamicTypeSize(...LiveCopy.largestType)
+        LiveMark(agent: card.agentID)
+            .font(.subheadline)
+            .foregroundStyle(Color.togoSnow)
+            .environment(\.colorScheme, .dark)
+            .dynamicTypeSize(...LiveCopy.largestType)
     }
 }
 
-/// One word for the state, or how many requests wait when there is more than one.
+/// Compact trailing: the state in the fewest marks. The beacon (with the count when more than
+/// one waits) while something needs the user, the working clock at a fixed width, else a
+/// symbol for how it ended.
 struct IslandCompactTrailing: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let state: TogoActivityAttributes.ContentState
+    let card: LiveCard
     var isStale = false
+
+    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
 
     var body: some View {
         Group {
-            if state.waiting > 1 && LiveStatus(state.status, stale: isStale).showsCompactCount {
-                Text(LiveCopy.waiting(state.waiting))
+            switch status {
+            case .needsYou:
+                HStack(spacing: 4) {
+                    IslandBeacon()
+                    if state.waiting > 1 {
+                        Text(verbatim: "\(state.waiting)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .monospacedDigit()
+                            .foregroundStyle(Color.togoAccent)
+                            .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    }
+                }
+            case .working, .other:
+                LiveClock(since: state.since)
                     .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.togoAccent)
-                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
-            } else {
-                LiveStatusText(status: LiveStatus(state.status, stale: isStale), font: .subheadline, reason: state.reason)
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
+                    .foregroundStyle(Color.togoMute)
+            default:
+                Image(systemName: Self.symbol(status))
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
             }
         }
-        // trunc-ok: the compact island holds a status word or a count
-        .lineLimit(1)
+        // motion: state change — the system crossfades between entries in place; nothing moves.
+        .transition(.opacity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(state.waiting > 1 && status == .needsYou ? LiveCopy.waiting(state.waiting) : status.word(reason: state.reason))
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...LiveCopy.largestType)
     }
+
+    static func symbol(_ status: LiveStatus) -> String {
+        switch status {
+        case .done: "checkmark"
+        case .ended: "stop.fill"
+        case .failed: "exclamationmark.triangle"
+        case .offline: "wifi.slash"
+        default: "clock"
+        }
+    }
 }
 
-/// The smallest form, shared with another app's activity: the count when something waits,
-/// otherwise the bib.
+/// Minimal, shared with another app's activity: the beacon while something needs the user,
+/// otherwise the agent's mark.
 struct IslandMinimal: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let state: TogoActivityAttributes.ContentState
+    let card: LiveCard
     var isStale = false
 
     var body: some View {
         Group {
-            if state.waiting > 0 && LiveStatus(state.status, stale: isStale) == .needsYou {
-                Text(verbatim: "\(state.waiting)")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.togoAccent)
-                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
-                    .accessibilityLabel(LiveCopy.waiting(state.waiting))
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
-            } else if let bib = state.bib {
-                IslandBib(bib: bib, style: .caption)
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
+            if LiveStatus(state.status, stale: isStale) == .needsYou {
+                IslandBeacon(size: 10)
+                    .accessibilityHidden(false)
+                    .accessibilityLabel(LiveCopy.waiting(max(1, state.waiting)))
             } else {
-                IslandMark()
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
+                LiveMark(agent: card.agentID)
+                    .font(.caption)
+                    .foregroundStyle(Color.togoSnow)
             }
         }
+        // motion: state change — the system crossfades between entries in place; nothing moves.
+        .transition(.opacity)
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...LiveCopy.largestType)
     }
 }
 
+/// Expanded leading: the agent's mark, where the compact one sits.
 struct IslandExpandedLeading: View {
-    let state: TogoActivityAttributes.ContentState
-    var isStale = false
+    let card: LiveCard
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            if let bib = state.bib { IslandBib(bib: bib) }
-            Text(verbatim: state.agent)
-                .font(.subheadline)
-                .foregroundStyle(Color.togoSnow)
-                // trunc-ok: the Dynamic Island has a fixed width; the agent name is on the lock screen and in the app
-                .lineLimit(1)
-        }
-        .padding(.leading, 4)
-        .environment(\.colorScheme, .dark)
-        .dynamicTypeSize(...LiveCopy.largestType)
+        LiveMark(agent: card.agentID)
+            .font(.title3)
+            .foregroundStyle(Color.togoSnow)
+            .padding(.leading, 4)
+            .environment(\.colorScheme, .dark)
+            .dynamicTypeSize(...LiveCopy.largestType)
     }
 }
 
+/// Expanded trailing: the clock, where the compact one sits, at a fixed width.
 struct IslandExpandedTrailing: View {
     let state: TogoActivityAttributes.ContentState
     var isStale = false
@@ -132,7 +132,7 @@ struct IslandExpandedTrailing: View {
     var body: some View {
         Group {
             if LiveStatus(state.status, stale: isStale).showsElapsed {
-                LiveElapsed(since: state.since)
+                LiveClock(since: state.since)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
                     // motion: state change — the system crossfades between entries in place; nothing moves.
@@ -145,64 +145,119 @@ struct IslandExpandedTrailing: View {
     }
 }
 
-/// "Needs you · Studio", with the count when more than one request waits.
+/// Expanded center: the session's title over its state, "Needs you · Studio   +2 more".
 struct IslandExpandedCenter: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let state: TogoActivityAttributes.ContentState
+    let card: LiveCard
     var isStale = false
-    let machine: String
+
+    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            LiveStatusText(status: LiveStatus(state.status, stale: isStale), reason: state.reason)
-            Text(verbatim: "· \(machine)")
-                .font(.subheadline)
-                .foregroundStyle(Color.togoMute)
-                // trunc-ok: the Dynamic Island has a fixed width; the machine name is on the lock screen and in the app
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: card.title)
+                .font(.headline)
+                .foregroundStyle(Color.togoSnow)
+                // trunc-ok: the Dynamic Island has a fixed width; the helper caps a session title at 64 characters and a tap opens the session
                 .lineLimit(1)
-            Spacer(minLength: 8)
-            if state.waiting > 1 && LiveStatus(state.status, stale: isStale).showsCount {
-                Text(LiveCopy.waiting(state.waiting))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.togoSnow)
-                    // trunc-ok: "3 waiting"
-                    .lineLimit(1)
-                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
+                .privacySensitive()
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                LiveStatusText(status: status, font: .subheadline, reason: state.reason)
+                    .layoutPriority(2)
+                if let step = card.step {
+                    Text(verbatim: step)
+                        .font(.system(.footnote, design: .monospaced))
+                        .foregroundStyle(Color.togoMute)
+                        // trunc-ok: a tool or step name, capped at 48 characters by the helper
+                        .lineLimit(1)
+                        .privacySensitive()
+                }
+                if let machine = card.machine {
+                    Text(verbatim: "· \(machine)")
+                        .font(.footnote)
+                        .foregroundStyle(Color.togoMute)
+                        // trunc-ok: the machine's name; it shows in full in the app
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                if let more = card.moreText, status.showsCount {
+                    Text(verbatim: more)
+                        .font(.footnote)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.togoAccentText)
+                        // trunc-ok: "+3 more"
+                        .lineLimit(1)
+                }
             }
         }
-        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...LiveCopy.largestType)
     }
 }
 
-/// The command, for machines that opted in to sending it; empty otherwise.
+/// Expanded bottom: the whole request, then Deny and Approve where a one-tap answer is
+/// allowed (the relay mailbox path), else Open.
 struct IslandExpandedBottom: View {
     let state: TogoActivityAttributes.ContentState
+    let card: LiveCard
+    let hostId: String
+    let link: URL?
     var isStale = false
 
     var body: some View {
-        Group {
-            if let command = LiveCopy.command(state.command) {
-                Text(verbatim: command)
-                    .font(.system(.footnote, design: .monospaced))
-                    .foregroundStyle(Color.togoSnow)
-                    // trunc-ok: the Live Activity has a fixed height: two lines of the command, middle-cut so its start and end show; tapping opens the request with the whole command
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color.togoRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
+        VStack(alignment: .leading, spacing: 8) {
+            if card.phase == .needsYou {
+                if let ask = card.ask {
+                    LiveAskText(ask: ask, alone: card.detail == nil)
+                }
+                if let detail = card.detail {
+                    LiveDetailBlock(detail: detail, cornerRadius: 14)
+                }
+                buttons
             }
         }
         .padding(.top, 4)
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...LiveCopy.largestType)
+    }
+
+    @ViewBuilder private var buttons: some View {
+        HStack(spacing: 8) {
+            if let requestId = state.requestId, let answer = card.answer {
+                Button(intent: DenyRequestIntent(hostId: hostId, requestId: requestId)) {
+                    Text(LiveCopy.deny).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(Color.togoSnow)
+                if answer == .approveDeny {
+                    approve(requestId)
+                }
+            } else if let link {
+                Link(destination: link) {
+                    Text(LiveCopy.open).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(Color.togoSnow)
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        // trunc-ok: one-word button labels
+        .lineLimit(1)
+    }
+
+    /// Approve needs the device unlocked unless the user turned that off, as on notifications.
+    @ViewBuilder private func approve(_ requestId: String) -> some View {
+        let label = Text(LiveCopy.approve).frame(maxWidth: .infinity)
+        Group {
+            if SharedSettings.defaults?.bool(forKey: SharedSettings.approveWithoutUnlock) == true {
+                Button(intent: ApproveUnlockedRequestIntent(hostId: hostId, requestId: requestId)) { label }
+            } else {
+                Button(intent: ApproveRequestIntent(hostId: hostId, requestId: requestId)) { label }
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Color.togoAccent)
+        .foregroundStyle(Color.togoInk)
     }
 }

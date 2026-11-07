@@ -293,8 +293,11 @@ extension AppStore {
     /// on a machine that serves harness.v1 shows ink, never the terminal.
     func layer(for id: TabID) -> SessionLayer {
         if let store = harness(for: id) { return store.shownLayer }
-        let serves = machine(for: id.hostID)?.capabilities.contains(Capability.harness) ?? false
-        return serves && expectsChat(id) ? .pending : .terminal
+        let machine = machine(for: id.hostID)
+        return SessionLayer.beforeStore(
+            hostsLoaded: services.hostsLoaded, listed: machine != nil,
+            serves: machine?.capabilities.contains(Capability.harness) ?? false, expectsChat: expectsChat(id)
+        )
     }
 
     /// The session should have a chat: it had one before, the hub reports a mission for it, or
@@ -327,7 +330,7 @@ extension AppStore {
 enum HarnessAdapters {
     static let known: Set<String> = [
         "aider", "amp", "auggie", "claude", "cline", "codex", "copilot", "crush", "cursor", "droid", "gemini",
-        "goose", "kilo", "kimi", "kiro", "omp", "opencode", "openhands", "pi", "qwen", "vibe",
+        "goose", "kilo", "kimi", "kiro", "omp", "opencode", "openhands", "pi", "vibe",
     ]
 
     static func expected(agent: String) -> Bool {

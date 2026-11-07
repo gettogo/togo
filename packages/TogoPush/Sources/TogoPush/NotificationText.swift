@@ -40,6 +40,11 @@ public enum NotificationCategoryID {
     public static let requestDenyOnlyReply = "togo.request.deny.reply"
     /// A request that takes a typed answer and offers no option a button can pick: Reply and Open.
     public static let requestText = "togo.request.text"
+    /// A single question's own options, one button each. Registered per request, as
+    /// `choicePrefix` + request id, since the buttons carry the option labels.
+    public static let choicePrefix = "togo.choice."
+
+    public static func choice(_ requestId: String) -> String { choicePrefix + requestId }
 }
 
 public enum NotificationActionID {
@@ -50,6 +55,18 @@ public enum NotificationActionID {
     public static let runAgain = "togo.run-again"
     /// Types the user's words into the agent, over the machine's own connection only.
     public static let reply = "togo.reply"
+    /// Picks option n of a question: `optionPrefix` + n.
+    public static let optionPrefix = "togo.option."
+
+    public static func option(_ n: Int) -> String { optionPrefix + String(n) }
+
+    /// The option number an action picks; nil for any other action.
+    public static func optionNumber(_ identifier: String) -> Int? {
+        guard identifier.hasPrefix(optionPrefix), let n = Int(identifier.dropFirst(optionPrefix.count)), n > 0,
+              identifier == option(n)
+        else { return nil }
+        return n
+    }
 }
 
 /// How an agent's name reads in a notification.
@@ -57,14 +74,16 @@ public enum AgentName {
     /// The helper registry's names (TogoKit `AgentCatalog` holds the same list).
     private static let names = [
         "claude": "Claude Code", "omp": "OMP", "codex": "Codex", "opencode": "OpenCode",
-        "gemini": "Gemini CLI", "copilot": "Copilot CLI", "cursor": "Cursor CLI", "qwen": "Qwen Code",
+        "gemini": "Gemini CLI", "copilot": "Copilot CLI", "cursor": "Cursor CLI",
         "aider": "Aider", "amp": "Amp", "auggie": "Auggie", "cline": "Cline", "crush": "Crush",
         "droid": "Droid", "goose": "Goose", "kilo": "Kilo Code", "kimi": "Kimi Code", "kiro": "Kiro CLI",
         "openhands": "OpenHands", "pi": "Pi", "vibe": "Mistral Vibe",
     ]
 
+    /// A custom program has no agent name: "" so the session's own name stands for it.
     public static func display(_ agent: String) -> String {
         if let known = names[agent.lowercased()] { return known }
+        if agent.lowercased() == "custom" { return "" }
         let cleaned = PromptText.clean(agent, maxLines: 1)
         return cleaned.prefix(1).uppercased() + cleaned.dropFirst()
     }
@@ -87,20 +106,26 @@ public enum NotificationTextBuilder {
         case .clear:
             return nil
         case .needsYou:
-            var title = header(p)
+            var title = titled(p)
             if multipleHosts, let host = (p.host ?? hostName).map({ PromptText.clean($0, maxLines: 1) }),
                !host.isEmpty {
                 let header = title
                 title = String(localized: "notif.onHost", defaultValue: "\(header) on \(host)")
             }
+            let category = category(p.options ?? [], allowText: p.allowText == true, requestId: p.requestId)
+            var body = subjectText(p)
+            if category == NotificationCategoryID.info, body.isEmpty {
+                // No button can answer it (a question with several tabs, or a prompt not on
+                // screen yet): say where it is answered instead of offering buttons that fail.
+                body = openToAnswer
+            }
             return NotificationText(
-                title: title, subtitle: PromptText.clean(p.title, maxLines: 1), body: subjectText(p),
-                category: category(p.options ?? [], allowText: p.allowText == true), threadID: thread,
-                interruption: .timeSensitive
+                title: title, subtitle: PromptText.clean(p.title, maxLines: 1), body: body,
+                category: category, threadID: thread, interruption: .timeSensitive
             )
         case .done:
             return NotificationText(
-                title: header(p), subtitle: String(localized: "notif.done", defaultValue: "Done"), body: PromptText.clean(p.body),
+                title: titled(p), subtitle: String(localized: "notif.done", defaultValue: "Done"), body: PromptText.clean(p.body),
                 category: replyCategory(p), threadID: thread, interruption: .active
             )
         case .ended, .failed:
@@ -108,7 +133,7 @@ public enum NotificationTextBuilder {
                 ?? LifecycleWords.ended
             let detail = p.exit.flatMap { LifecycleWords.detail(reason: $0.reason, code: $0.code) }
             return NotificationText(
-                title: header(p), subtitle: "", body: [status, detail].compactMap { $0 }.joined(separator: " · "),
+                title: titled(p), subtitle: "", body: [status, detail].compactMap { $0 }.joined(separator: " · "),
                 category: stoppedCategory(p),
                 threadID: thread, interruption: .active
             )
@@ -146,6 +171,18 @@ public enum NotificationTextBuilder {
         }
     }
 
+    /// The body of a request no notification button can answer.
+    public static let openToAnswer = String(localized: "notif.openToAnswer", defaultValue: "Open to answer")
+
+    /// `"<bib> <agent> · <session>"`: the header with the session's name when the push has one
+    /// that says more than the agent's name.
+    private static func titled(_ p: PushPayload) -> String {
+        let head = header(p)
+        let name = p.sessionName.map { PromptText.clean($0, maxLines: 1) } ?? ""
+        guard !name.isEmpty, name != p.agent.map(AgentName.display) else { return head }
+        return "\(head) · \(name)"
+    }
+
     /// `"<bib> <agent>"`, either part when the other is missing, else "Togo".
     private static func header(_ p: PushPayload) -> String {
         let parts = [
@@ -171,16 +208,20 @@ public enum NotificationTextBuilder {
     }
 
     /// Lock-screen buttons only when the options let the helper pick the answer by role; Reply
-    /// beside them when the request takes a typed answer.
-    private static func category(_ options: [PushOption], allowText: Bool) -> String {
+    /// beside them when the request takes a typed answer. A question's own options get one
+    /// button each (see `NotificationCategorySet.choices`).
+    private static func category(_ options: [PushOption], allowText: Bool, requestId: String?) -> String {
         let roles = Set(options.map(\.role))
         switch (roles.contains("approve"), roles.contains("deny"), allowText) {
         case (true, true, false): return NotificationCategoryID.request
         case (true, true, true): return NotificationCategoryID.requestReply
         case (false, true, false): return NotificationCategoryID.requestDenyOnly
         case (false, true, true): return NotificationCategoryID.requestDenyOnlyReply
-        case (_, _, true): return NotificationCategoryID.requestText
-        default: return NotificationCategoryID.info
+        default:
+            if let requestId, NotificationCategorySet.offersChoices(options) {
+                return NotificationCategoryID.choice(requestId)
+            }
+            return allowText ? NotificationCategoryID.requestText : NotificationCategoryID.info
         }
     }
 

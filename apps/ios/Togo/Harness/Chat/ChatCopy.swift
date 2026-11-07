@@ -41,6 +41,18 @@ enum ChatCopy {
     static let tryAgain = String(localized: "chat.prompt.retry", defaultValue: "Try again")
     static let fromDesk = String(localized: "chat.prompt.desk", defaultValue: "Typed at the desk")
 
+    /// "Opening OMP": a session on its way to its chat or terminal.
+    static func opening(_ agent: String) -> String {
+        agent.isEmpty
+            ? String(localized: "chat.opening", defaultValue: "Opening")
+            : String(localized: "chat.opening.agent", defaultValue: "Opening \(agent)")
+    }
+
+    /// "Ran /compact": a command sent from the composer.
+    static func ran(_ line: String) -> String {
+        String(localized: "chat.prompt.ran", defaultValue: "Ran \(line)")
+    }
+
     static func spokenPrompt(_ text: String) -> String {
         String(localized: "chat.prompt.spoken", defaultValue: "You: \(text)")
     }

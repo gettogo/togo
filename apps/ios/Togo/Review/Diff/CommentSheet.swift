@@ -20,7 +20,8 @@ struct CommentSheet: View {
                     quote
                     TextField(DiffCopy.commentField, text: $text, axis: .vertical)
                         .lineLimit(3...8)
-                        .focused($focused)
+                        // The sheet opens to type: its field takes the keyboard once it is up.
+                        .focusOnReveal($focused, revealed: canSend)
                         .padding(12)
                         .background(Color.togoRaised, in: .rect(cornerRadius: 12))
                         .disabled(!canSend)
@@ -44,7 +45,6 @@ struct CommentSheet: View {
         }
         .tint(.primary)
         .togoSheet(.prompt)
-        .onAppear { focused = canSend }
     }
 
     /// The line commented on, as it reads in the diff, with where it is.

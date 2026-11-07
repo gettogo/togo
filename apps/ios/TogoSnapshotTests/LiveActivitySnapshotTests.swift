@@ -19,6 +19,19 @@ private func state(
     )
 }
 
+/// The context the helper seals for the request and session these states show.
+private func card(_ state: State, isStale: Bool = false) -> LiveCard {
+    let context = LiveContext(
+        title: "Fix the login redirect", step: state.status == "working" ? "Bash" : nil,
+        ask: state.status == "needs_you" ? "Run this command?" : nil,
+        subject: state.command.map { PushSubject(kind: "command", text: $0) }, answer: .approveDeny
+    )
+    return LiveCard(
+        agent: "claude", status: state.status, waiting: state.waiting, requestId: state.requestId, command: nil,
+        context: context, machine: "Studio", stale: isStale
+    )
+}
+
 private let cases: [(name: String, state: State)] = [
     ("needs-you", state("needs_you")),
     ("needs-you-command", state(
@@ -40,7 +53,7 @@ private struct LockScreenFrame: View {
     var isStale = false
 
     var body: some View {
-        LiveLockScreenView(state: state, machine: "Studio", isStale: isStale)
+        LiveLockScreenView(state: state, card: card(state, isStale: isStale), isStale: isStale)
             .background(Color.togoInk)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .padding(.horizontal, 16)
@@ -59,26 +72,29 @@ private struct IslandGallery: View {
     var body: some View {
         VStack(spacing: 28) {
             HStack(spacing: 0) {
-                IslandCompactLeading(state: state, isStale: isStale).padding(.leading, 18)
+                IslandCompactLeading(card: card(state, isStale: isStale)).padding(.leading, 18)
                 Spacer(minLength: 130)
-                IslandCompactTrailing(state: state, isStale: isStale).padding(.trailing, 18)
+                IslandCompactTrailing(state: state, card: card(state, isStale: isStale), isStale: isStale)
+                    .padding(.trailing, 18)
             }
             .frame(height: 37)
             .fixedSize()
             .background(.black, in: Capsule())
 
-            IslandMinimal(state: state, isStale: isStale)
+            IslandMinimal(state: state, card: card(state, isStale: isStale), isStale: isStale)
                 .frame(width: 37, height: 37)
                 .background(.black, in: Circle())
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top) {
-                    IslandExpandedLeading(state: state, isStale: isStale)
+                    IslandExpandedLeading(card: card(state, isStale: isStale))
                     Spacer(minLength: 16)
                     IslandExpandedTrailing(state: state, isStale: isStale)
                 }
-                IslandExpandedCenter(state: state, isStale: isStale, machine: "Studio")
-                IslandExpandedBottom(state: state, isStale: isStale)
+                IslandExpandedCenter(state: state, card: card(state, isStale: isStale), isStale: isStale)
+                IslandExpandedBottom(
+                    state: state, card: card(state, isStale: isStale), hostId: "h_x", link: nil, isStale: isStale
+                )
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 18)

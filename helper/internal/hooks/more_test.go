@@ -13,8 +13,8 @@ func optionalEnv(t *testing.T) env {
 	t.Helper()
 	e := newEnv(t)
 	root := filepath.Dir(e.o.ClaudeDir)
-	e.o.QwenDir, e.o.FactoryDir, e.o.CopilotDir = filepath.Join(root, "qwen"), filepath.Join(root, "factory"), filepath.Join(root, "copilot")
-	for _, d := range []string{e.o.QwenDir, e.o.FactoryDir, e.o.CopilotDir} {
+	e.o.FactoryDir, e.o.CopilotDir = filepath.Join(root, "factory"), filepath.Join(root, "copilot")
+	for _, d := range []string{e.o.FactoryDir, e.o.CopilotDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -22,50 +22,49 @@ func optionalEnv(t *testing.T) env {
 	return e
 }
 
-// Qwen, Droid and Copilot are part of the default set whenever they are
+// Droid and Copilot are part of the default set whenever they are
 // installed.
 func TestDefaultSetIncludesInstalledHookHarnesses(t *testing.T) {
 	e := optionalEnv(t)
-	for _, a := range []string{Qwen, Droid, Copilot} {
+	for _, a := range []string{Droid, Copilot} {
 		if !Known(a) {
 			t.Fatalf("%s unknown", a)
 		}
 	}
 	got := Default(e.o)
-	for _, a := range []string{Claude, Codex, Qwen, Droid, Copilot} {
+	for _, a := range []string{Claude, Codex, Droid, Copilot} {
 		if !slices.Contains(got, a) {
 			t.Fatalf("default %v lacks %s", got, a)
 		}
 	}
 	mustOK(t, Install(e.o, Default(e.o)))
-	for _, p := range []string{filepath.Join(e.o.QwenDir, "settings.json"), filepath.Join(e.o.FactoryDir, "hooks.json"), filepath.Join(e.o.CopilotDir, "hooks", "togo.json")} {
+	for _, p := range []string{filepath.Join(e.o.FactoryDir, "hooks.json"), filepath.Join(e.o.CopilotDir, "hooks", "togo.json")} {
 		if _, err := os.Stat(p); err != nil {
 			t.Fatalf("default install did not write %s", p)
 		}
 	}
 }
 
-func TestQwenInstallKeepsSettingsAndUninstallRestores(t *testing.T) {
+func TestDroidInstallKeepsHooksAndUninstallRestores(t *testing.T) {
 	e := optionalEnv(t)
-	path := filepath.Join(e.o.QwenDir, "settings.json")
-	orig := "{\n  \"model\": {\n    \"name\": \"qwen3.7-plus\"\n  },\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"say done\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+	path := filepath.Join(e.o.FactoryDir, "hooks.json")
+	orig := "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"say done\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
 	write(t, path, []byte(orig))
-	e.o.Block = true
-	mustOK(t, Install(e.o, []string{Qwen}))
+	mustOK(t, Install(e.o, []string{Droid}))
 	got := read(t, path)
-	for _, want := range []string{`"qwen3.7-plus"`, `say done`, `hook qwen TodoCreated`, `hook qwen PermissionRequest`} {
+	for _, want := range []string{`say done`, `hook droid SubagentStop`, `hook droid SessionEnd`} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %s in %s", want, got)
 		}
 	}
-	if st := Status(e.o)[Qwen]; st != StatusInstalled {
+	if st := Status(e.o)[Droid]; st != StatusInstalled {
 		t.Fatalf("status %s", st)
 	}
-	mustOK(t, Install(e.o, []string{Qwen}))
+	mustOK(t, Install(e.o, []string{Droid}))
 	if read(t, path) != got {
 		t.Fatal("a second install changed the file")
 	}
-	mustOK(t, Uninstall(e.o, []string{Qwen}))
+	mustOK(t, Uninstall(e.o, []string{Droid}))
 	if read(t, path) != orig {
 		t.Fatalf("uninstall left %s", read(t, path))
 	}
@@ -109,8 +108,8 @@ func TestDroidAndCopilotInstall(t *testing.T) {
 
 func TestOptionalAgentMissingIsSkipped(t *testing.T) {
 	e := newEnv(t)
-	e.o.QwenDir = filepath.Join(t.TempDir(), "absent")
-	rs := Install(e.o, []string{Qwen, Copilot})
+	e.o.FactoryDir = filepath.Join(t.TempDir(), "absent")
+	rs := Install(e.o, []string{Droid, Copilot})
 	for _, r := range rs {
 		if r.State != "skipped" || r.Err != nil {
 			t.Fatalf("%+v", r)

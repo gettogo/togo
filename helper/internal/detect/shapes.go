@@ -24,7 +24,7 @@ const (
 const cursorRunes = "❯›>▶➤→"
 
 // numberedCursorRunes also mark the chosen line of a numbered menu. Gemini
-// CLI and Qwen Code draw a radio dot ("● 1. Allow once"); the dot is not a
+// CLI draws a radio dot ("● 1. Allow once"); the dot is not a
 // cursor elsewhere, since agents also use it as a bullet for their output.
 const numberedCursorRunes = cursorRunes + "●"
 
@@ -32,15 +32,16 @@ var (
 	ynToken = regexp.MustCompile(`(?i)[\[(]\s*(y|yes)\s*/\s*(n|no)\s*[\])]\s*[:?]?\s*$`)
 	// aiderYN is Aider's line-mode question: "(Y)es/(N)o [Yes]:", with
 	// "/(A)ll/(S)kip all" or "/(D)on't ask again" before the default.
-	aiderYN    = regexp.MustCompile(`\(Y\)es/\(N\)o(/\([A-Z]\)[^/\[]*)*\s*\[(Yes|No)\]:\s*$`)
-	numbered   = regexp.MustCompile(`^\s*([` + numberedCursorRunes + `]\s*)?(\d{1,2})[.)]\s+(\S.*)$`)
-	cursorLine = regexp.MustCompile(`^(\s*)[` + cursorRunes + `]\s+(\S.*)$`)
-	shortcut   = regexp.MustCompile(`(?i)\s+\((esc|[a-z0-9])\)$`)
-	headerRe   = regexp.MustCompile(`(?i)^(do you want|would you like|allow|approve|run|permission|proceed|confirm|apply)\b`)
-	permRe     = regexp.MustCompile(`(?i)\b(allow|approve|permission|run|execute|proceed|edit|write|create|delete|apply|command|make this|make the following|edits?|changes?|patch)\b`)
-	denyRe     = regexp.MustCompile(`(?i)^(no|reject|deny|decline|cancel|abort|skip)\b`)
-	approveRe  = regexp.MustCompile(`(?i)^(yes|allow|always|approve|accept|run|proceed|continue|ok|okay|apply|confirm|trust|remember)\b`)
-	alwaysRe   = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|auto-accept|all edits|remember|permanent|in this project|for this project|globally|trust)`)
+	aiderDefault = regexp.MustCompile(`^\s*\[(Yes|No)\]:\s*$`)
+	aiderYN      = regexp.MustCompile(`\(Y\)es/\(N\)o(/\([A-Z]\)[^/\[]*)*\s*\[(Yes|No)\]:\s*$`)
+	numbered     = regexp.MustCompile(`^\s*([` + numberedCursorRunes + `]\s*)?(\d{1,2})[.)]\s+(\S.*)$`)
+	cursorLine   = regexp.MustCompile(`^(\s*)[` + cursorRunes + `]\s+(\S.*)$`)
+	shortcut     = regexp.MustCompile(`(?i)\s+\((esc|[a-z0-9])\)$`)
+	headerRe     = regexp.MustCompile(`(?i)^(do you want|would you like|allow|approve|run|permission|proceed|confirm|apply)\b`)
+	permRe       = regexp.MustCompile(`(?i)\b(allow|approve|permission|run|execute|proceed|edit|write|create|delete|apply|command|make this|make the following|edits?|changes?|patch)\b`)
+	denyRe       = regexp.MustCompile(`(?i)^(no|reject|deny|decline|cancel|abort|skip)\b`)
+	approveRe    = regexp.MustCompile(`(?i)^(yes|allow|always|approve|accept|run|proceed|continue|ok|okay|apply|confirm|trust|remember)\b`)
+	alwaysRe     = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|auto-accept|all edits|remember|permanent|in this project|for this project|globally|trust)`)
 )
 
 // matchConfirm recognises a line-mode y/n question on the last line, where
@@ -50,9 +51,24 @@ var (
 // confirmation or as an empty line, which does not change the answer.
 func matchConfirm(lines []string) (Prompt, bool) {
 	last := lines[len(lines)-1]
+	if len(lines) >= 2 && aiderDefault.MatchString(last) {
+		// An 80-column pane wraps Aider's "[Yes]:" onto its own line (seen
+		// live on 0.86.2): read the two lines as one.
+		lines = append(lines[:len(lines)-2:len(lines)-2], strings.TrimRight(lines[len(lines)-2], " ")+" "+strings.TrimSpace(last))
+		last = lines[len(lines)-1]
+	}
 	loc := ynToken.FindStringIndex(last)
 	if loc == nil {
 		loc = aiderYN.FindStringIndex(last)
+	}
+	if loc == nil && len(lines) >= 2 && utf8.RuneCountInString(strings.TrimSpace(last)) <= 8 {
+		// A full-width line wraps the token itself: Gemini CLI's "Do you
+		// want to continue? [Y" then "/n]: " at 100 columns (seen live).
+		joined := strings.TrimRight(lines[len(lines)-2], " ") + strings.TrimSpace(last)
+		if l := ynToken.FindStringIndex(joined); l != nil {
+			lines = append(lines[:len(lines)-2:len(lines)-2], joined)
+			last, loc = joined, l
+		}
 	}
 	if loc == nil {
 		return Prompt{}, false
@@ -84,24 +100,47 @@ type menu struct {
 }
 
 func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
+	if p, ok := matchRadioPair(lines); ok {
+		return p, true
+	}
 	m, ok := findNumbered(lines)
 	if !ok {
 		m, ok = findArrow(lines)
 	}
-	if !ok || footerLines(lines, m.end) > maxFooter {
+	if !ok {
+		m, ok = findRadio(lines)
+	}
+	if !ok {
 		return Prompt{}, false
 	}
 	h, ok := findHeader(lines, m.start)
 	if !ok {
 		return Prompt{}, false
 	}
-	p := Prompt{Title: strings.TrimSpace(lines[h]), Keys: map[int][]string{}}
-	p.Detail = detail(lines, boxed, h, m.start)
-	p.Subject = subjectOf(lines, boxed, h, m.start)
+	title := strings.TrimSpace(lines[h])
+	signIn := signInQuestion(title)
+	if footerLines(lines, m.end) > maxFooter && !(signIn && footerLines(lines, m.end) <= maxFooter+maxSignInOptions) {
+		return Prompt{}, false
+	}
+	if len(m.labels) > maxOptions && !signIn {
+		return Prompt{}, false
+	}
+	p := Prompt{Title: title, Keys: map[int][]string{}}
+	if signIn {
+		// The lines between a login menu's question and its options are a
+		// search field and group names, not what the question is about.
+		p.Title = menuTitle(title)
+	} else {
+		p.Detail = detail(lines, boxed, h, m.start)
+		p.Subject = subjectOf(lines, boxed, h, m.start)
+		if p.Subject == nil {
+			p.Subject = pathSubject(p.Detail)
+		}
+	}
 	hasRole := false
 	for i, l := range m.labels {
 		n := i + 1
-		label, key := splitShortcut(l)
+		label, key := splitShortcut(cleanLabel(l))
 		role := roleOf(label)
 		if role != wire.RoleOther {
 			hasRole = true
@@ -110,8 +149,9 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 		p.Keys[n] = keysFor(m, i, key)
 	}
 	// An unnumbered list with a cursor is also how pickers and file
-	// browsers look; only treat it as a prompt when it offers an answer.
-	if !m.numbered && !hasRole {
+	// browsers look; only treat it as a prompt when it offers an answer,
+	// or asks how to sign in.
+	if !m.numbered && !hasRole && !signIn {
 		return Prompt{}, false
 	}
 	p.Kind = KindQuestion
@@ -136,12 +176,12 @@ func findNumbered(lines []string) (menu, bool) {
 	}
 	m := menu{end: b, cursor: -1, numbered: true}
 	want := 0
-	wrapped := ""
+	var wrapped []string
 	for i := b; i >= 0; i-- {
 		g := numbered.FindStringSubmatch(lines[i])
 		if g == nil {
-			if wrapped == "" && i > 0 && continues(lines[i-1], lines[i]) {
-				wrapped = strings.TrimSpace(lines[i])
+			if len(wrapped) < maxWrap && wrapsOption(lines, i) {
+				wrapped = append([]string{strings.TrimSpace(lines[i])}, wrapped...)
 				continue
 			}
 			break
@@ -158,9 +198,9 @@ func findNumbered(lines []string) (menu, bool) {
 			m.cursor = n - 1
 		}
 		label := strings.TrimSpace(g[3])
-		if wrapped != "" {
-			label += " " + wrapped
-			wrapped = ""
+		if len(wrapped) > 0 {
+			label += " " + strings.Join(wrapped, " ")
+			wrapped = nil
 		}
 		m.labels = append([]string{label}, m.labels...)
 		m.start = i
@@ -168,7 +208,7 @@ func findNumbered(lines []string) (menu, bool) {
 			break
 		}
 	}
-	if wrapped != "" {
+	if len(wrapped) > 0 {
 		return menu{}, false
 	}
 	if want != 1 || m.cursor < 0 || len(m.labels) < 2 || len(m.labels) > maxOptions {
@@ -176,6 +216,27 @@ func findNumbered(lines []string) (menu, bool) {
 	}
 	return m, true
 }
+
+// maxWrap bounds how many wrapped lines one option label may span below
+// its numbered line: a long path in Claude's "always allow access to …"
+// option wraps over three lines on a narrow pane.
+const maxWrap = 4
+
+// wrapsOption reports whether line i continues a numbered option above it:
+// it and every line between sit at the label column of that option.
+func wrapsOption(lines []string, i int) bool {
+	for j := i - 1; j >= 0 && j >= i-maxWrap; j-- {
+		if numbered.MatchString(lines[j]) {
+			return continues(lines[j], lines[i])
+		}
+		if indentOf(lines[j]) != indentOf(lines[i]) || isFiller(lines[j]) {
+			return false
+		}
+	}
+	return false
+}
+
+func indentOf(l string) int { return len(l) - len(strings.TrimLeft(l, " ")) }
 
 // continues reports whether next is a wrapped second line of the numbered
 // option on line prev: indented to exactly where prev's label starts.
@@ -219,7 +280,7 @@ func findArrow(lines []string) (menu, bool) {
 		end++
 	}
 	n := end - start + 1
-	if n < 2 || n > maxOptions {
+	if n < 2 || n > maxSignInOptions {
 		return menu{}, false
 	}
 	m := menu{start: start, end: end, cursor: c - start}
@@ -251,7 +312,7 @@ func findHeader(lines []string, start int) (int, bool) {
 			continue
 		}
 		t := strings.TrimSpace(lines[i])
-		if strings.HasSuffix(t, "?") || headerRe.MatchString(t) {
+		if strings.HasSuffix(t, "?") || headerRe.MatchString(t) || signInQuestion(t) {
 			return i, true
 		}
 		gap++
@@ -266,7 +327,7 @@ func findHeader(lines []string, start int) (int, bool) {
 func detail(lines []string, boxed []bool, header, start int) *string {
 	var d []string
 	for i := header + 1; i < start; i++ {
-		if !isFiller(lines[i]) {
+		if !isFiller(lines[i]) && !IsKeyHint(CleanLine(lines[i])) {
 			d = append(d, strings.TrimSpace(lines[i]))
 		}
 	}

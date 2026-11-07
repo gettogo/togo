@@ -1,0 +1,47 @@
+{
+  "name": "claude/real-bash-wrapped-path",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "claude",
+    "title": "Do you want to proceed?",
+    "body": "touch a.txt",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "touch a.txt"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, and always allow access to /private/tmp/workdir-01/-Users-owner-Dev-D elta-",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Yes, and switch to auto mode · auto mode handles these prompts for you",
+        "role": "other"
+      },
+      {
+        "n": 4,
+        "label": "No",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Claude Code",
+    "subtitle": "Do you want to proceed?",
+    "body": "touch a.txt",
+    "category": "togo.request"
+  }
+}

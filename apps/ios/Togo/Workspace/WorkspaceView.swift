@@ -16,6 +16,7 @@ struct WorkspaceView: View {
     @Environment(\.windowID) private var window
     @Environment(\.machineTools) private var machineTools
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.windowWidth) private var windowWidth
     @Bindable var store: AppStore
     let terminals: TerminalPool
 
@@ -241,7 +242,7 @@ struct WorkspaceView: View {
     private var liveBar: WorkspaceBarItems {
         WorkspaceBarItems(
             runAgain: store.focusedTab.flatMap(runAgain), layer: store.layerItem,
-            mission: mission.item(for: store, presentation: MissionPresentation.choose(sizeClass)) { line in
+            mission: mission.item(for: store, presentation: MissionPresentation.choose(sizeClass, windowWidth: windowWidth)) { line in
                 if let line { status = line }
             }
         )

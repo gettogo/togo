@@ -43,6 +43,8 @@ private struct PromptBarFeed: ViewModifier {
 
     private var inputs: Inputs {
         let chat = focused.flatMap { store.layer(for: $0) == .chat ? $0 : nil }
+        // A session still deciding between chat and terminal takes no bar either (S4).
+        let typesElsewhere = focused.map { SessionInput(store.layer(for: $0)).hidesPromptBar } ?? false
         return Inputs(
             requests: PromptFeed.requests(in: store, inlineIn: chat), focused: focused, composing: store.composing != nil,
             hasMachines: !store.services.hosts.isEmpty,
@@ -50,7 +52,7 @@ private struct PromptBarFeed: ViewModifier {
             focusedConnected: focused.map(isConnected) ?? true,
             keyboardElsewhere: focused != nil || store.composing != nil || store.sheet != nil || !store.path.isEmpty
                 || store.dialogOpen || store.reviewing != nil,
-            chatShown: chat != nil
+            chatShown: typesElsewhere
         )
     }
 

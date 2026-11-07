@@ -20,8 +20,9 @@ struct QuestionRow: View {
     let send: ([String: JSONValue]) async -> HarnessActionResult?
 
     @State private var model: ConfirmModel
-    /// Questions whose "Other answer" field is open.
-    @State private var others: Set<String> = []
+    /// Questions whose "Other answer" field is open, and the one holding the keyboard.
+    @State private var others = RevealedFields<String>()
+    @FocusState private var typing: String?
     @State private var shown: Mirrored<Bool>
     @Namespace private var answerSpace
     /// What the person tapped to answer: `sendSource`, or the choice that answered on its tap.
@@ -92,6 +93,7 @@ struct QuestionRow: View {
         .onChange(of: question) { _, new in model.update(Self.confirm(new)) }
         // The helper took the answer but the item changed without closing: it can go again.
         .onChange(of: item.seq) { model.reopen() }
+        .onChange(of: typing) { _, now in others.focusMoved(to: now) }
     }
 
     /// The person's own answer becomes the line in one transaction; any other conceals the
@@ -215,16 +217,22 @@ struct QuestionRow: View {
             // A card that cannot be answered here lists the options only.
             .allowsHitTesting(answerable && model.armed && !locked)
             if answerable, q.allowText {
-                if q.options.isEmpty || others.contains(q.id) {
+                if q.options.isEmpty || others.isOpen(q.id) {
                     TextField(ChatCopy.answerPlaceholder, text: binding(for: q), axis: .vertical)
                         .textFieldStyle(.plain)
+                        // Opened by "Other answer": the keyboard comes up with it, and the card
+                        // rises above the composer, so one tap is enough to type.
+                        .focusOnReveal($typing, equals: q.id, revealed: others.focus == q.id, row: item.id)
                         .padding(12)
                         .background(Color.togoRaised, in: .rect(cornerRadius: 12, style: .continuous))
                         .disabled(locked)
                 } else {
                     // The typed answer is one more choice, behind its own row, so a card of
                     // several questions is not a column of empty fields.
-                    Button(ChatCopy.otherAnswer, systemImage: "character.cursor.ibeam") { others.insert(q.id) }
+                    Button(ChatCopy.otherAnswer, systemImage: "character.cursor.ibeam") {
+                        // motion: cause → effect — the field opens where the row was tapped.
+                        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { others.reveal(q.id) }
+                    }
                         .buttonStyle(PlainAnswerStyle())
                         .font(.subheadline)
                         .disabled(locked)

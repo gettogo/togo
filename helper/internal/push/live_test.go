@@ -81,6 +81,19 @@ func TestLiveStartOnFirstNeedsYou(t *testing.T) {
 	}
 }
 
+// A muted session's request never starts the Live Activity (a tester's
+// muted sessions must stay off the owner's Dynamic Island).
+func TestLiveSkipsMutedSession(t *testing.T) {
+	e := newEnv(t, 0)
+	e.pairWith(t, "dev_a", func(p *wire.PairParams) { p.LiveActivityStartToken = startToken })
+	e.muted["s_abcdefghij"] = true
+	e.handle(approvalOpen("r_abcdefghij"))
+	e.handle(sessionEv("s_abcdefghij", "01", wire.LevelNeedsYou))
+	if la, _ := e.livePushes(); len(la) != 0 {
+		t.Fatalf("got %d live activity pushes for a muted session", len(la))
+	}
+}
+
 func TestLiveUpdatesUseUpdateTokenAfterRegister(t *testing.T) {
 	e := newEnv(t, 0)
 	e.pairWith(t, "dev_a", func(p *wire.PairParams) { p.LiveActivityStartToken = startToken })

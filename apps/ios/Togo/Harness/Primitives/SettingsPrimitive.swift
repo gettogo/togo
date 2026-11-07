@@ -300,7 +300,6 @@ private struct SecretField: View {
                     Button(field.isSet == true ? PrimitiveCopy.replace : PrimitiveCopy.set) {
                         // motion: cause → effect — Set opens the editor under it, uncovered by its growing edge.
                         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { editing = true }
-                        focused = true
                     }
                     // motion: state change — Set gives way at once to the editor it opened.
                     .transition(.identity)
@@ -316,7 +315,8 @@ private struct SecretField: View {
                     SecureField(PrimitiveCopy.newValue, text: $entry, prompt: Text(field.placeholder ?? PrimitiveCopy.newValue))
                         .font(.mono(.body))
                         .textContentType(.password)
-                        .focused($focused)
+                        // Set opened the editor: its field takes the keyboard as it appears.
+                        .focusOnReveal($focused, revealed: editing)
                         .submitLabel(.done)
                         .onSubmit(save)
                     Button(PrimitiveCopy.cancel) { close() }

@@ -73,6 +73,9 @@ struct NotificationSettingsView: View {
     @Environment(\.liveActivitiesAvailable) private var liveActivitiesAvailable
     @State private var ownRelay: Bool
     @State private var relayText: String
+    /// "Your own relay" was just chosen: the address field takes the keyboard as it appears.
+    @State private var relayRevealed = false
+    @FocusState private var relayFocused: Bool
     @State private var commandsFor: NotificationMachine?
 
     /// `relayDraft` starts the address field with text the user has not saved yet.
@@ -194,6 +197,7 @@ struct NotificationSettingsView: View {
             .pickerStyle(.inline)
             .labelsHidden()
             .onChange(of: ownRelay) { _, own in
+                relayRevealed = own
                 if own { saveRelay() } else { setRelay(nil) }
             }
             if ownRelay {
@@ -207,6 +211,7 @@ struct NotificationSettingsView: View {
                 .autocorrectionDisabled()
                 .submitLabel(.done)
                 .onSubmit(saveRelay)
+                .focusOnReveal($relayFocused, revealed: relayRevealed)
                 .frame(minHeight: 44)
             }
         } header: {

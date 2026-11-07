@@ -45,10 +45,12 @@ struct RosterModel: Equatable {
     /// `missions` holds the sessions' mission summaries; one with something that needs the user
     /// marks its line as needing you, so the headline counts it.
     static func make(
-        machines: [MachineSection], requests: [RequestCard], missions: [TabID: MissionSummary] = [:]
+        machines: [MachineSection], requests: [RequestCard], missions: [TabID: MissionSummary] = [:],
+        opening: Set<TabID> = [], openingUnlisted: Int = 0
     ) -> RosterModel {
         let pending = requests.filter(\.isPending)
-        let asking = Set(pending.compactMap(\.tabID))
+        // A page an agent asked to open, not yet used, needs the user like a request does.
+        let asking = Set(pending.compactMap(\.tabID)).union(opening)
         var tally = Tally()
         var needing = Set<TabID>()
         let groups = machines.map { machine in
@@ -69,7 +71,7 @@ struct RosterModel: Equatable {
             })
         }
         let unlisted = Set(pending.filter { card in card.tabID.map { !needing.contains($0) } ?? true }.map(\.id))
-        return RosterModel(groups: groups, waiting: needing.count + unlisted.count, tally: tally)
+        return RosterModel(groups: groups, waiting: needing.count + unlisted.count + openingUnlisted, tally: tally)
     }
 
     var lines: [Line] { groups.flatMap(\.lines) }
@@ -114,7 +116,11 @@ extension RequestCard {
 extension AppStore {
     /// The roster as this window shows it.
     var roster: RosterModel {
-        RosterModel.make(machines: listMachines, requests: controlCenter.requests, missions: missions)
+        let opens = LinkCenter.shared.requests
+        return RosterModel.make(
+            machines: listMachines, requests: controlCenter.requests, missions: missions,
+            opening: opens.waitingTabs, openingUnlisted: opens.unlisted
+        )
     }
 
     /// Mission summaries of the sessions this window has open, read live from their stores.

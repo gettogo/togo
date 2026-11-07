@@ -72,7 +72,7 @@ struct SubagentChatView: View {
         .navigationDestination(item: $nested) { id in
             SubagentChatView(store: store, agentID: id, actions: actions)
         }
-        .sheet(item: $detail) { step in
+        .harnessPresent(item: $detail, as: .smallForm) { step in
             StepDetail(step: step, canShowInTerminal: canShow(step)) {
                 store.focusedAgent = nil
                 Task { await store.showInTerminal(step) }
@@ -227,12 +227,11 @@ private struct SubagentChatPresenter: ViewModifier {
             get: { store.focusedAgent.map(Route.init) },
             set: { store.focusedAgent = $0?.id }
         )
-        content.sheet(item: route) { route in
+        // A helper's thread is context kept beside the chat: the side context's sheet.
+        content.harnessPresent(item: route, as: .sideContext) { route in
             NavigationStack {
                 SubagentChatView(store: store, agentID: route.id, actions: actions, showsBack: true)
             }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
     }
 }

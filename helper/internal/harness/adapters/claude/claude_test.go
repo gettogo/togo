@@ -252,6 +252,13 @@ func TestAliasAndReadMode(t *testing.T) {
 	if ReadMode("Do you want to proceed?\n❯ 1. Yes\n  2. No") != nil {
 		t.Error("a dialog is not the prompt box")
 	}
+	// Claude 2.1.319's folder trust dialog marks its choice with an
+	// unnumbered ❯, the prompt glyph; it is not the prompt box (seen live).
+	trust := " Quick safety check: Is this a project you created or one you trust?\n" +
+		" ❯ No, exit\n   Yes, I trust this folder\n Enter to confirm · Esc to cancel\n"
+	if got := ReadMode(trust); got != nil {
+		t.Errorf("ReadMode(trust dialog) = %v, want nil", got)
+	}
 	if ReadMode("Compiling...\n") != nil {
 		t.Error("a screen without the prompt box has no mode")
 	}

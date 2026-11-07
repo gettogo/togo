@@ -178,3 +178,46 @@ func TestMalformedRecordsSkipped(t *testing.T) {
 		m.Map(harness.Record{Data: json.RawMessage(l)})
 	}
 }
+
+// Kimi Code 2.5.2 writes the ask mode as "manual" (seen live); the mode
+// chip's choices call it default.
+func TestManualModeIsDefault(t *testing.T) {
+	m := NewWire(harness.Env{})
+	m.Map(harness.Record{Data: json.RawMessage(`{"type":"permission.set_mode","agentId":"main","mode":"yolo","time":1794079438000}`)})
+	m.Map(harness.Record{Data: json.RawMessage(`{"type":"permission.set_mode","agentId":"main","mode":"manual","time":1794079438353}`)})
+	if got := m.State()["mode"]; got != "default" {
+		t.Fatalf("mode = %q, want default", got)
+	}
+}
+
+// Leaving plan mode types /plan: a relaunch with --continue keeps plan mode
+// (seen live on Kimi 2.5.2), and entering it needs no restart.
+func TestPlanModeTogglesInPlace(t *testing.T) {
+	a, err := spec.Parse(AdapterFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	act := a.Actions["set_mode"]
+	pick := func(id, mode string) spec.Routes {
+		for _, br := range act.Branch {
+			out, err := engine.Render(br.When, map[string]any{"id": id, "state": map[string]string{"mode": mode}})
+			if br.When == "" || (err == nil && engine.Truthy(out)) {
+				return br.Routes
+			}
+		}
+		t.Fatalf("no branch for %s from %s", id, mode)
+		return spec.Routes{}
+	}
+	if r := pick("default", "plan"); r.Type == nil || r.Type.Text != "/plan" {
+		t.Errorf("plan -> default = %+v", r)
+	}
+	if r := pick("plan", "default"); r.Type == nil || r.Type.Text != "/plan" {
+		t.Errorf("default -> plan = %+v", r)
+	}
+	if r := pick("yolo", "default"); r.Relaunch == nil {
+		t.Errorf("default -> yolo = %+v", r)
+	}
+	if r := pick("default", "yolo"); r.Relaunch == nil {
+		t.Errorf("yolo -> default = %+v", r)
+	}
+}

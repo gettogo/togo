@@ -51,7 +51,9 @@ struct PromptStartView: View {
                 }
                 .font(.body)
                 .foregroundStyle(Color.togoSnow)
-                .focused($focused)
+                // Start opened this line: the keyboard comes up with it (a still snapshot keeps
+                // the field unfocused, so no caret blinks in it).
+                .focusOnReveal($focused, revealed: !loopsPaused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.go)
@@ -100,8 +102,6 @@ struct PromptStartView: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
-        // A still snapshot leaves the field unfocused, so no caret blinks in it.
-        .onAppear { focused = !loopsPaused }
         .onChange(of: focused, initial: true) { _, focused in model.barTextFocused = focused }
         .onDisappear { model.barTextFocused = false }
     }

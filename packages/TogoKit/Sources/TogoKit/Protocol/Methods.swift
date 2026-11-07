@@ -9,6 +9,7 @@ public enum Method: String, Sendable {
     case sessionSetMute = "session.setMute"
     case agentsList = "agents.list"
     case fsRecentDirs = "fs.recentDirs"
+    case fsForgetRecentDir = "fs.forgetRecentDir"
     case fsListDir = "fs.listDir"
     case fsRead = "fs.read"
     case fsUpload = "fs.upload"

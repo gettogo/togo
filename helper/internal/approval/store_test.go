@@ -48,6 +48,13 @@ func (f *fakeTmux) SendKeys(_ context.Context, _ string, _ bool, keys ...string)
 	return nil
 }
 
+func (f *fakeTmux) PasteText(_ context.Context, _ string, text string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, []string{"paste", text})
+	return nil
+}
+
 const menu = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n"
 
 func TestExpiryClosesApproval(t *testing.T) {

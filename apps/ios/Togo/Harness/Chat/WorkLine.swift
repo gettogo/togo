@@ -411,7 +411,6 @@ struct StepDetail: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
     }
 
     private func facts(_ info: StepInfo) -> some View {

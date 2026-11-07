@@ -41,15 +41,15 @@ func TestCopilotAliases(t *testing.T) {
 	}
 }
 
-// Qwen Code's hooks say auto-edit; the mode id is auto_edit. Other
-// dialects keep their values.
-func TestQwenModeIDs(t *testing.T) {
-	q, _ := For("qwen")
+// A dialect's Modes rename the harness's permission_mode values to the
+// adapter's mode ids. Dialects without them keep their values.
+func TestModeIDs(t *testing.T) {
+	q := Dialect{Agent: "renamed", Modes: map[string]string{"auto-edit": "auto_edit"}}
 	_, out, _ := Normalize(q, "UserPromptSubmit", []byte(`{"permission_mode":"auto-edit"}`))
 	var m map[string]any
 	json.Unmarshal(out, &m)
 	if m["permission_mode"] != "auto_edit" {
-		t.Errorf("qwen %v", m)
+		t.Errorf("renamed %v", m)
 	}
 	dr, _ := For("droid")
 	_, out, _ = Normalize(dr, "UserPromptSubmit", []byte(`{"permission_mode":"auto-edit"}`))

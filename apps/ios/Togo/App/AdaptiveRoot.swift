@@ -112,6 +112,8 @@ struct AdaptiveRoot<Destination: View>: View {
                 case .split(let detail): split(detail)
                 }
             }
+            // Presenters below decide by the room the window has (`AdaptivePresentation`).
+            .environment(\.windowWidth, proxy.size.width)
             .onChange(of: layout.isSplit, initial: true) { _, split in
                 store.setWorkspaceInline(split)
                 // A fold or size class change moves the terminal; ask again who has the keyboard.

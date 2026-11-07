@@ -156,6 +156,7 @@ var categories = map[string]string{
 	"read": harness.ToolRead, "edit": harness.ToolEdit, "multiedit": harness.ToolEdit, "patch": harness.ToolEdit,
 	"apply_patch": harness.ToolEdit, "write": harness.ToolWrite, "glob": harness.ToolSearch, "grep": harness.ToolSearch,
 	"list": harness.ToolSearch, "ls": harness.ToolSearch, "codesearch": harness.ToolSearch, "bash": harness.ToolShell,
+	"shell": harness.ToolShell, "subagent": harness.ToolAgent,
 	"webfetch": harness.ToolWeb, "websearch": harness.ToolWeb, "task": harness.ToolAgent,
 	"todowrite": harness.ToolOther, "todoread": harness.ToolOther, "question": harness.ToolOther, "skill": harness.ToolOther,
 }
@@ -179,6 +180,11 @@ type toolMeta struct {
 }
 
 func (e *Events) toolItem(callID, partID, name string, s toolState, turnID, parent string, at time.Time) harness.Item {
+	return toolItemIn(e.env.Cwd, callID, partID, name, s, turnID, parent, at)
+}
+
+// toolItemIn builds a tool item; cwd makes file paths relative.
+func toolItemIn(cwd, callID, partID, name string, s toolState, turnID, parent string, at time.Time) harness.Item {
 	id := callID
 	if id == "" {
 		id = partID
@@ -228,7 +234,7 @@ func (e *Events) toolItem(callID, partID, name string, s toolState, turnID, pare
 			b.Title = in.Command
 		}
 	case file != "":
-		r := rel(e.env.Cwd, file)
+		r := rel(cwd, file)
 		b.Subject = &wire.Subject{Kind: wire.SubjectFile, Text: truncate(r, wire.MaxSubjectText)}
 		if cat == harness.ToolEdit || cat == harness.ToolWrite {
 			fc := harness.FileChange{Path: r}

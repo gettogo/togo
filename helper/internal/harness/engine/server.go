@@ -57,6 +57,13 @@ func (e *Engine) startServer(a *adapter, sessionID string, ep endpoint, data map
 		cmd.Dir = home
 	}
 	cmd.Env = append(os.Environ(), "PATH="+path)
+	if e.cfg.LoginEnv != nil {
+		cmd.Env = append(append(os.Environ(), e.cfg.LoginEnv(ctx)...), "PATH="+path)
+	}
+	if ep.envName != "" {
+		// The server checks the password the harness and the helper send.
+		cmd.Env = append(cmd.Env, ep.envName+"="+ep.password)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		return err
@@ -132,6 +139,9 @@ func checkHealth(ctx context.Context, ep endpoint, health string) error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+strconv.Itoa(ep.port)+health, nil)
 		if err != nil {
 			return err
+		}
+		if a := ep.auth(); a != "" {
+			req.Header.Set("Authorization", a)
 		}
 		res, err := (&http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}}).Do(req)
 		if err != nil {

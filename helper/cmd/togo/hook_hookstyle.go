@@ -15,7 +15,7 @@ type forwardAdapter struct {
 }
 
 // forwardAdapters holds the agents whose hooks follow Claude Code's shape
-// (qwen, droid, vibe, copilot).
+// (droid, vibe, copilot).
 var forwardAdapters = map[string]forwardAdapter{}
 
 func init() {

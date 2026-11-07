@@ -1,0 +1,28 @@
+{
+  "source": "real",
+  "agentVersion": null,
+  "match": true,
+  "kind": "question",
+  "title": "To authenticate we're going to open the browser. Ready?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Continue",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Cancel",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "C-c"
+    ]
+  },
+  "subject": null
+}

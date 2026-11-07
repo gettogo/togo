@@ -251,6 +251,10 @@ import UIKit
         return try await call(record, prompter: userPrompter(record)) { try await $0.recentDirs() }
     }
 
+    func forgetRecentDir(hostID: HostID, path: String) async throws {
+        try await call(try helperRecord(hostID), prompter: nil) { try await $0.forgetRecentDir(path) }
+    }
+
     func listDir(hostID: HostID, path: String) async throws -> ListDirResult {
         let record = try helperRecord(hostID)
         return try await call(record, prompter: userPrompter(record)) { try await $0.listDir(path: path, showHidden: false) }

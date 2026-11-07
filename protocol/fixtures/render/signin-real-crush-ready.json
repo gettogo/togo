@@ -1,0 +1,33 @@
+{
+  "name": "signin/real-crush-ready",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "signin",
+    "title": "To authenticate we're going to open the browser. Ready?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Continue",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Cancel",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Signin",
+    "subtitle": "To authenticate we're going to open the browser. Ready?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

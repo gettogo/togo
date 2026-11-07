@@ -18,6 +18,9 @@ struct AgentEditor: View {
     @State private var draft: AgentPreset
     @State private var flags: String
     @State private var checks: [HostID: AgentCheckState]
+    /// "Other program" was just chosen: its field takes the keyboard as it appears.
+    @State private var programRevealed = false
+    @FocusState private var programFocused: Bool
     private let isNew: Bool
     let machines: [SettingsMachine]
     let save: (AgentPreset) -> Void
@@ -63,11 +66,13 @@ struct AgentEditor: View {
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()
+                .onChange(of: draft.isCustom) { _, custom in programRevealed = custom }
                 if draft.isCustom {
                     TextField(settingsText("settings.agents.program", "Program"), text: programText)
                         .font(.system(.body, design: .monospaced))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .focusOnReveal($programFocused, revealed: programRevealed)
                         .frame(minHeight: 44)
                 }
             } header: {

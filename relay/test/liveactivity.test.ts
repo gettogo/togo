@@ -184,3 +184,23 @@ describe("end, stale and content state", () => {
     );
   });
 });
+
+describe("live activity sealed context", () => {
+  const ctx = "AQ" + "a-_Z9".repeat(400);
+
+  it("passes ctx through unread", async () => {
+    const { calls } = mockApns();
+    const res = await push(live({ event: "update", contentState: { ...state, ctx } }));
+    expect(res.status).toBe(202);
+    const aps = (calls[0].body as { aps: Record<string, unknown> }).aps;
+    expect((aps["content-state"] as Record<string, unknown>).ctx).toBe(ctx);
+    expect(JSON.stringify(calls[0].body).length).toBeLessThan(4096);
+  });
+
+  it("rejects ctx that is not base64url or too long", async () => {
+    mockApns();
+    for (const bad of ["", "has space", "a+b/c=", "a".repeat(2401), 5, null]) {
+      await expectField(live({ event: "update", contentState: { ...state, ctx: bad } }), "liveActivity.contentState.ctx");
+    }
+  });
+});

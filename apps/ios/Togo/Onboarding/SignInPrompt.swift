@@ -128,7 +128,6 @@ struct SignInPromptView: View {
         }
         .resizesOnRows(error != nil)
         .haptic(.error, trigger: error) { _, new in new != nil }
-        .onAppear { focused = 0 }
     }
 
     private func field(_ index: Int) -> some View {
@@ -155,7 +154,7 @@ struct SignInPromptView: View {
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.togoLine))
-            .focused($focused, equals: index)
+            .focusOnReveal($focused, equals: index, revealed: index == 0)
             .submitLabel(index == request.fields.count - 1 ? .continue : .next)
             .onSubmit {
                 if index + 1 < request.fields.count { focused = index + 1 } else { submit() }

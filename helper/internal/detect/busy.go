@@ -14,8 +14,6 @@ const busyLines = 12
 //   - Codex: "• Working (5s • Esc to interrupt)"
 //   - Gemini CLI: "⠏ Thinking… (esc to cancel, 12s)"; its dialogs say
 //     "Esc to cancel" too, but never followed by a comma
-//   - Qwen Code: "⠏ Thinking… (12s · esc to cancel)"; its dialogs end the
-//     hint without the parenthesis
 //   - Auggie: "Working (5s • esc to interrupt)"
 //   - Pi: "Working... (escape to interrupt)"; its key hints say "to
 //     interrupt" without the parenthesis
@@ -25,7 +23,6 @@ var busyMarkers = map[string][]string{
 	"claude": {"esc to interrupt"},
 	"codex":  {"esc to interrupt"},
 	"gemini": {"(esc to cancel,"},
-	"qwen":   {"esc to cancel)"},
 	"auggie": {"esc to interrupt"},
 	"pi":     {"to interrupt)"},
 }

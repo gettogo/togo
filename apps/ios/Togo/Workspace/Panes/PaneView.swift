@@ -1,11 +1,9 @@
 import SwiftUI
 import TogoKit
 
-/// One pane of the workspace: a tab's terminal that pages through the open tabs with a
-/// horizontal swipe, under its own header while two panes are on screen. A tap anywhere in it
-/// gives it focus, and a tab chip dropped on it opens there.
+/// One pane of the workspace: a tab's terminal, under its own header while two panes are on
+/// screen. A tap anywhere in it gives it focus, and a tab chip dropped on it opens there.
 struct PaneView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let tab: WorkspaceTab?
     let pane: Pane
     let store: AppStore
@@ -85,48 +83,25 @@ struct PaneView: View {
 
     // MARK: Pager
 
-    /// The tabs this pane pages through; the other pane's tab is not among them.
-    private var pages: [WorkspaceTab] {
-        store.pages(for: pane)
-    }
-
-    /// The terminal sizes itself to the keyboard and the home indicator, so the pager ignores
-    /// both and the grid is resized once, by the terminal.
-    @ViewBuilder private var pager: some View {
-        Group {
-            if reduceMotion {
-                fadingPager
-            } else {
-                TabView(selection: selection) {
-                    ForEach(pages) { tab in
-                        page(tab)
-                            .tag(Optional(tab.id))
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-            }
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
-        .ignoresSafeArea(.keyboard)
-    }
-
-    /// Under Reduce Motion a horizontal swipe changes tabs without sliding: the tab on screen
-    /// cross-fades into the next one.
-    private var fadingPager: some View {
+    /// The pane shows one tab at a time. A one-finger drag on the terminal is the terminal's
+    /// (scrolling, selection, mouse drags), so the pane has no sliding pager that could stop
+    /// between two sessions mid-swipe; tabs change from the tab strip, the sidebar, or the
+    /// terminal's two-finger swipe, each a whole step that lands at once. The terminal sizes
+    /// itself to the keyboard and the home indicator, so the pane ignores both and the grid is
+    /// resized once, by the terminal.
+    private var pager: some View {
         ZStack {
             if let tab {
                 page(tab)
                     .id(tab.id)
+                    // motion: continuity — a session switch is a cut: the next tab's terminal
+                    // lands at once at its final size, so no grid is ever resized mid-transition.
+                    // The tab strip's chip and the tick mark the change.
+                    .transition(.identity)
             }
         }
-        .animation(Motion.animation(.tabSettle, reduce: true), value: tab?.id)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24).onEnded { drag in
-                let width = drag.translation.width
-                guard abs(width) > 60, abs(width) > abs(drag.translation.height) * 2 else { return }
-                step(width < 0 ? 1 : -1)
-            }
-        )
+        .ignoresSafeArea(.container, edges: .bottom)
+        .ignoresSafeArea(.keyboard)
     }
 
     private func page(_ tab: WorkspaceTab) -> some View {
@@ -134,55 +109,19 @@ struct PaneView: View {
             link: tab.link, machine: store.machine(for: tab.hostID), name: store.machineName(for: tab.hostID),
             listed: !store.services.hostsLoaded || store.services.hosts.contains { $0.id == tab.hostID }
         )
-        let isShown = tab.id == self.tab?.id
         let reconnecting = tab.link.isReconnecting
         return ZStack {
             Color.togoInk
-            if header && !isShown {
-                // Beside another pane, a page waiting off screen draws its name only. Its
-                // terminal may be on screen in the other pane's pager, and a terminal has one
-                // place at a time.
-                PagePlaceholder(label: store.chipLabel(for: tab))
-            } else {
-                // A terminal has one place at a time, so it never lingers in a fade on its way to
-                // the other pane; the placeholder fades over it instead.
-                TerminalSlot(tab: tab.id, terminals: terminals)
-                    .id(tab.id)
-                    .opacity(Self.terminalOpacity(for: tab.link))
-                    // motion: continuity — a terminal has one place at a time, so it lands at once and never fades.
-                    .transition(.identity)
-            }
+            TerminalSlot(tab: tab.id, terminals: terminals)
+                .id(tab.id)
+                .opacity(Self.terminalOpacity(for: tab.link))
+                // motion: continuity — a terminal has one place at a time, so it lands at once and never fades.
+                .transition(.identity)
             ConnectingOverlayHost(kind: overlay, addMachine: { store.showSheet(.addMachine) }) { retry(tab) }
         }
         // motion: state change — the pane dims while its link reconnects.
         .motion(Self.dimRole, value: reconnecting)
-        .haptic(.connect, trigger: tab.link.isLive) { $0 && isShown }
-    }
-
-    private var selection: Binding<TabID?> {
-        Binding {
-            tab?.id
-        } set: { id in
-            // The pager also writes back when its pages change under it, as on a fold or a swap;
-            // only a move to another of this pane's pages is the user paging.
-            guard let id, id != tab?.id, pages.contains(where: { $0.id == id }) else { return }
-            show(id)
-        }
-    }
-
-    private func show(_ id: TabID) {
-        store.workspace.ended = nil
-        if pane == .primary {
-            store.select(id)
-        } else {
-            store.place(id, in: .secondary)
-        }
-    }
-
-    /// Moves along this pane's tabs and stops at either end, as the sliding pager does.
-    private func step(_ offset: Int) {
-        guard let id = tab?.id else { return }
-        store.step(offset, from: id)
+        .haptic(.connect, trigger: tab.link.isLive) { $0 }
     }
 
     private func retry(_ tab: WorkspaceTab) {
@@ -211,27 +150,6 @@ struct PaneTabs: Equatable {
     static func settles(from old: PaneTabs, to new: PaneTabs) -> Bool {
         guard old != new else { return false }
         return !(new.secondary == nil && new.primary == old.primary)
-    }
-}
-
-/// A page beside the one on screen, while its terminal may be showing in the other pane.
-private struct PagePlaceholder: View {
-    let label: (bib: String?, name: String)
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if let bib = label.bib {
-                Text(verbatim: bib)
-                    .font(.system(.body, design: .monospaced))
-                    .monospacedDigit()
-            }
-            Text(verbatim: label.name)
-                .font(.body)
-        }
-        .multilineTextAlignment(.center)
-        .foregroundStyle(Color.togoMute)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.togoInk)
     }
 }
 

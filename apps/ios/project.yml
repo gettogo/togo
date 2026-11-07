@@ -45,6 +45,8 @@ targets:
       - path: TogoWidgets/LiveCopy.swift
       - path: TogoWidgets/LiveLockScreenView.swift
       - path: TogoWidgets/IslandViews.swift
+      - path: TogoWidgets/LiveParts.swift
+      - path: TogoWidgets/LiveAnswerIntents.swift
       - path: TogoWidgets/WaitingWidget.swift
     dependencies:
       - package: TogoKit
@@ -254,6 +256,8 @@ targets:
       - path: Togo/Design/Palette.swift
       - path: Togo/Design/Components/BibText.swift
       - path: Togo/Resources/Colors.xcassets
+      # The agents' marks, for the Live Activity.
+      - path: Togo/Resources/Images.xcassets
     dependencies:
       - package: TogoPush
     settings:

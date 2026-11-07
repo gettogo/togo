@@ -27,86 +27,82 @@ struct LiveStatusText: View {
     }
 }
 
-/// The Live Activity on the lock screen and in the notification list. Metadata by default; the
-/// command shows only for machines that opted in to sending it. The whole card is one tap
-/// target that opens the session in the app.
+/// The Live Activity on the lock screen and in the notification list. At a glance: which
+/// session (the agent's mark and the session's title), the state, how long, how many wait,
+/// and what the focused request is about, as a question and its command, file or URL. While
+/// the agent works it shows the step it is on. The whole card opens the session.
 struct LiveLockScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let state: TogoActivityAttributes.ContentState
-    let machine: String
+    let card: LiveCard
     var isStale = false
 
     private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                identityLine
-                statusLine
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                LiveTitle(card: card)
+                Spacer(minLength: 0)
+                if status.showsElapsed {
+                    LiveClock(since: state.since)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.togoMute)
+                        // motion: state change — the system crossfades between entries in place; nothing moves.
+                        .transition(.opacity)
+                }
             }
-            if let command = LiveCopy.command(state.command) {
-                commandBlock(command)
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
+            statusLine
+            if card.phase == .needsYou {
+                if let ask = card.ask {
+                    LiveAskText(ask: ask, alone: card.detail == nil)
+                }
+                if let detail = card.detail {
+                    LiveDetailBlock(detail: detail)
+                        // motion: state change — the system crossfades between entries in place; nothing moves.
+                        .transition(.opacity)
+                }
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .dynamicTypeSize(...LiveCopy.largestType)
-        .accessibilityElement(children: .combine)
     }
 
-    private var identityLine: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            if let bib = state.bib {
-                BibText(bib)
-            }
-            Text(verbatim: LiveCopy.agentOnMachine(agent: state.agent, machine: machine))
-                .font(.subheadline)
-                .foregroundStyle(Color.togoMute)
-                // trunc-ok: the Live Activity has a fixed height; tapping it opens the session with its agent and machine
-                .lineLimit(1)
-            Spacer(minLength: 12)
-            if status.showsElapsed {
-                LiveElapsed(since: state.since)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.togoMute)
-                    .layoutPriority(1)
-                    // motion: state change — the system crossfades between entries in place; nothing moves.
-                    .transition(.opacity)
-            }
-        }
-    }
-
+    /// "Needs you · Studio      +2 more", or "Working  Bash".
     private var statusLine: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            LiveStatusText(status: status, reason: state.reason)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            LiveStatusText(status: status, font: .subheadline, reason: state.reason)
                 .layoutPriority(2)
-            Spacer(minLength: 12)
-            if state.waiting > 1 && status.showsCount {
-                Text(LiveCopy.waiting(state.waiting))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.togoSnow)
-                    // trunc-ok: "3 waiting"
+            if let step = card.step {
+                Text(verbatim: step)
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(Color.togoMute)
+                    // trunc-ok: a tool or step name, capped at 48 characters by the helper
                     .lineLimit(1)
-                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    .privacySensitive()
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
+                    .transition(.opacity)
+            }
+            if let machine = card.machine {
+                Text(verbatim: "· \(machine)")
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
+                    // trunc-ok: the machine's name; it shows in full in the app
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if let more = card.moreText, status.showsCount {
+                Text(verbatim: more)
+                    .font(.footnote)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.togoAccentText)
+                    // trunc-ok: "+3 more"
+                    .lineLimit(1)
+                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(card.more)))
                     // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
-    }
-
-    private func commandBlock(_ command: String) -> some View {
-        Text(verbatim: command)
-            .font(.system(.footnote, design: .monospaced))
-            .foregroundStyle(Color.togoSnow)
-            // trunc-ok: the Live Activity has a fixed height: two lines of the command, middle-cut so its start and end show; tapping opens the request with the whole command
-            .lineLimit(2)
-            .truncationMode(.middle)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color.togoRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

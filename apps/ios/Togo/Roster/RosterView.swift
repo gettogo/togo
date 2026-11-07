@@ -52,7 +52,8 @@ struct RosterView: View {
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
             .environment(\.openSessionMission, OpenSessionMission { missionTarget = RosterMissionTarget(tab: $0) })
-            .sheet(item: $missionTarget, onDismiss: leaveMission) { target in
+            // Mission control beside nothing here: the side context's sheet on every width.
+            .harnessPresent(item: $missionTarget, as: .sideContext, onDismiss: leaveMission) { target in
                 RosterMissionSheet(app: store, tab: target.tab) { exit in
                     missionExit = exit.map { (target.tab, $0) }
                     missionTarget = nil

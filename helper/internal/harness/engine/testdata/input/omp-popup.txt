@@ -1,0 +1,23 @@
+                         Tip: `/shake` rips heavy tool results out of context to reclaim tokens
+                              without a full /compact — `/shake images` drops just images
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.18.0 is available. Run: omp update
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Login cancelled
+
+ π > ◑ Qwen3.8 27B (5090) > 🗑 tmp/scratch ▶──────────15%────────────────────────────╎───────┃───────────────66K─
+╰─ /log
+❯ ⤵  login           Login: choose provider                                                                            █
+  ⤴  logout          Logout from OAuth provider                                                                        █
+  📰 changelog       Show changelog entries                                                                            █
+  ↻  reload-plugins  Reload all plugins (skills, commands, hooks, tools, agents, MCP)                                  █
+  ✏  local           Open a session local:// file in $EDITOR (picker when no name given)                               │
+  🗺  plan            Plan: off                                                                                         │
+  ∿  vibe            Vibe: off                                                                                         │
+  ↻  loop            Loop: off                                                                                         │
+  ⚡ fast            Fast: off                                                                                         │
+  ⚡ slow            Slow mode: off                                                                                    │

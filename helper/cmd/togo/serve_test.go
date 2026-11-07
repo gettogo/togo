@@ -132,7 +132,13 @@ func TestServeReturnsWhenContextEndsWhileReadIsBlocked(t *testing.T) {
 
 func TestServeSharesRecent(t *testing.T) {
 	useTestHost(t)
-	dir := t.TempDir()
+	// A folder in home: temporary folders outside it are never recorded.
+	home := realPath(t, t.TempDir())
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, "proj")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	create := `{"jsonrpc":"2.0","id":2,"method":"session.create","params":{"agent":"shell","cwd":` + strconv.Quote(dir) + `}}`
 	recent := `{"jsonrpc":"2.0","id":3,"method":"fs.recentDirs"}`
 	var out, errOut bytes.Buffer

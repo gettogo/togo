@@ -55,6 +55,9 @@ type Prompt struct {
 	// moves, redraws and unrelated output do not make the same prompt look
 	// new, while the same question about a different command does.
 	Fingerprint string
+	// SignIn is set for KindSignIn: the page, the device code, and whether
+	// a secret is awaited (answered as text, pasted).
+	SignIn *wire.SignIn
 	// ReadOnly marks a prompt one key cannot answer (Claude's tabbed or
 	// multi-select question dialog); its question item answers it.
 	ReadOnly bool
@@ -83,6 +86,12 @@ func Detect(screen string) (Prompt, bool) {
 	}
 	if !ok {
 		p, ok = matchMenu(lines, boxed)
+	}
+	if !ok {
+		p, ok = matchHintConfirm(lines)
+	}
+	if !ok {
+		p, ok = matchSignIn(raw, lines)
 	}
 	if !ok {
 		return Prompt{}, false
@@ -214,6 +223,13 @@ func fingerprint(p Prompt) string {
 	for _, o := range p.Options {
 		h.Write([]byte{0})
 		h.Write([]byte(normalise(o.Label)))
+	}
+	if s := p.SignIn; s != nil {
+		h.Write([]byte{0})
+		h.Write([]byte(s.URL + "\x00" + s.Code))
+		if s.Secret {
+			h.Write([]byte{1})
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

@@ -70,19 +70,28 @@ struct ComposerNoticeLine: View {
     private var words: some View {
         Text(text)
             .font(.footnote.weight(.semibold))
-            .foregroundStyle(PrimitiveTint.fail)
+            // A hint about the words in the field is not a failure.
+            .foregroundStyle(action == .sendAsText ? Color.togoMute : PrimitiveTint.fail)
             .accessibilityAddTraits(.updatesFrequently)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private var button: some View {
         if let action {
-            Button(action == .openTerminal ? ComposerCopy.openTerminal : ComposerCopy.tryAgain) { perform(action) }
+            Button(label(action)) { perform(action) }
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
                 .fixedSize()
                 .frame(minHeight: 44)
         }
+    }
+}
+
+private func label(_ action: NoticeAction) -> String {
+    switch action {
+    case .openTerminal: ComposerCopy.openTerminal
+    case .retry: ComposerCopy.tryAgain
+    case .sendAsText: ComposerCopy.sendAsText
     }
 }
 

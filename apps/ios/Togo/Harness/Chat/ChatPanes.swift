@@ -38,16 +38,19 @@ struct ChatPanes: View {
             let shown = layer == .chat
             ZStack {
                 if layer == .pending {
-                    // The chat is expected but not described yet: plain ink over the terminal,
-                    // never the terminal itself. Pending to chat or terminal is a cut.
-                    Color.togoInk
-                        .accessibilityHidden(true)
+                    // Not decided yet: the paws over the terminal, never the terminal itself.
+                    SessionLoader(agent: agentName(id))
+                        // motion: state change — the loader gives way to the chat or terminal in place.
+                        .transition(.opacity)
                 } else if let harness, harness.chatAvailable {
                     // Kept alive under the terminal layer, only hidden, so its scroll position and
                     // folds are where they were when the chat comes back. Its loops hold still
                     // while it is away. Only the user's toggle fades it (its own transaction);
                     // the chat becoming available is a cut.
+                    // One chat per tab: its scroll position, folds and live line belong to
+                    // that session and never carry into another tab's conversation.
                     ChatView(store: harness, actions: store.chatActions(for: id))
+                        .id(id)
                         .padding(.bottom, bottom)
                         .padding(.leading, max(0, page.minX - rect.minX))
                         .padding(.trailing, max(0, rect.maxX - page.maxX))
@@ -59,6 +62,8 @@ struct ChatPanes: View {
                         .simultaneousGesture(TapGesture().onEnded { store.focus(pane) })
                 }
             }
+            // motion: state change — loader to session is one crossfade, never a flash of either.
+            .motion(.fade, value: layer == .pending)
             // A subagent's own conversation, from a work step or a mission row.
             .modifier(OptionalSubagentChat(harness: harness, actions: store.chatActions(for: id)))
             // Links in the chat and the sheets it opens go through the chat's router.
@@ -66,6 +71,14 @@ struct ChatPanes: View {
             .frame(width: rect.width, height: max(0, rect.height - top))
             .offset(x: rect.minX, y: rect.minY + top)
         }
+    }
+}
+
+extension ChatPanes {
+    /// The tab's agent as the app names it, for the loader's words.
+    fileprivate func agentName(_ id: TabID) -> String {
+        if let name = store.harness(for: id)?.agentName, !name.isEmpty { return name }
+        return store.workspace.tabs.first { $0.id == id }.flatMap { store.session(for: $0) }?.agentName ?? ""
     }
 }
 

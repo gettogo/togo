@@ -44,7 +44,7 @@ enum StateChip {
         return out
     }
 
-    /// The command whose choices are the session's modes (aider /chat-mode, qwen /approval-mode).
+    /// The command whose choices are the session's modes (aider /chat-mode).
     static func modeCommand(_ commands: [HarnessCompletion], modes: [HarnessChoice]) -> HarnessCompletion? {
         let ids = Set(modes.map(\.id))
         return commands.first { command in

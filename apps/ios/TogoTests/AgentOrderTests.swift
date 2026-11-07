@@ -8,17 +8,17 @@ import TogoKit
         AgentInfo(id: "codex", name: "Codex", installed: true),
         AgentInfo(id: "aider", name: "Aider", installed: true),
         AgentInfo(id: "claude", name: "Claude Code", installed: true),
-        AgentInfo(id: "qwen", name: "Qwen Code", installed: true),
+        AgentInfo(id: "kimi", name: "Kimi Code", installed: true),
         AgentInfo(id: "pi", name: "Pi", installed: true),
     ]
 
     @Test func favoritesThenRecentThenByName() {
-        let sorted = AgentOrder.sorted(agents, favorites: ["qwen", "codex"], recent: ["pi", "qwen"])
-        #expect(sorted.map(\.id) == ["qwen", "codex", "pi", "aider", "claude"])
+        let sorted = AgentOrder.sorted(agents, favorites: ["kimi", "codex"], recent: ["pi", "kimi"])
+        #expect(sorted.map(\.id) == ["kimi", "codex", "pi", "aider", "claude"])
     }
 
     @Test func noPicksIsAlphabetical() {
-        #expect(AgentOrder.sorted(agents, favorites: [], recent: []).map(\.id) == ["aider", "claude", "codex", "pi", "qwen"])
+        #expect(AgentOrder.sorted(agents, favorites: [], recent: []).map(\.id) == ["aider", "claude", "codex", "kimi", "pi"])
     }
 
     @Test func usedMovesToFrontAndCaps() {

@@ -231,7 +231,7 @@ func TestConcurrentCreateUniqueBibs(t *testing.T) {
 	a := newService(t)
 	b := &session.Service{
 		Tmux:     &tmux.Client{Bin: a.Tmux.Bin, Socket: a.Tmux.Socket},
-		Recent:   &state.Recent{File: a.Recent.File},
+		Recent:   &state.Recent{File: a.Recent.File, Keeps: a.Recent.Keeps},
 		LockFile: a.LockFile,
 		Shell:    a.Shell,
 	}
@@ -626,5 +626,16 @@ func TestKeepServerAppliesExitEmptyToARunningServer(t *testing.T) {
 	}
 	if got := exitEmpty(); got != "off" {
 		t.Fatalf("exit-empty after KeepServer = %q, want off", got)
+	}
+}
+
+func TestCreateMutedFromTheStart(t *testing.T) {
+	s := newService(t)
+	got := mustCreate(t, s, session.CreateOpts{Agent: "shell", Cwd: t.TempDir(), Muted: true})
+	if !got.Muted {
+		t.Fatalf("Create(Muted) = %+v, want muted", got)
+	}
+	if other := mustCreate(t, s, session.CreateOpts{Agent: "shell", Cwd: t.TempDir()}); other.Muted {
+		t.Fatal("a session created without Muted is muted")
 	}
 }

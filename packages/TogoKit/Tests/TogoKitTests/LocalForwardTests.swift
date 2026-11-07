@@ -404,4 +404,41 @@ struct LocalForwardTests {
         #expect(socket.readsEOF())
         #expect(LoopbackSocket.connect(port: port) == nil)
     }
+
+    // MARK: Sign-in callbacks
+
+    @Test func exactPortBindsThatPort() async throws {
+        let wanted = LoopbackSocket.freePort(in: 20_000...29_999)
+        let forward = LocalForward(
+            opener: FakeOpener(.open(.hold)), target: Self.target, preferredLocalPort: wanted, exactLocalPort: true
+        )
+        #expect(try await forward.start() == wanted)
+        await forward.stop()
+    }
+
+    @Test func exactPortFailsWhenTaken() async throws {
+        let first = LocalForward(opener: FakeOpener(.open(.hold)), target: Self.target, preferredLocalPort: nil)
+        let taken = try await first.start()
+        let second = LocalForward(
+            opener: FakeOpener(.open(.hold)), target: Self.target, preferredLocalPort: taken, exactLocalPort: true
+        )
+        await #expect(throws: (any Error).self) { try await second.start() }
+        await first.stop()
+        await second.stop()
+    }
+
+    @Test func acceptedConnectionsAreReported() async throws {
+        let count = Mutex(0)
+        let opener = FakeOpener(.open(.http("signed in")))
+        let forward = LocalForward(
+            opener: opener, target: Self.target, preferredLocalPort: nil, onAccept: { count.withLock { $0 += 1 } }
+        )
+        let port = try await forward.start()
+        let url = try #require(URL(string: "http://127.0.0.1:\(port)/callback?code=abc"))
+        _ = try await URLSession(configuration: .ephemeral).data(from: url)
+        #expect(count.withLock { $0 } >= 1)
+        // The callback goes down the SSH channel to the machine's own loopback port.
+        #expect(opener.targets == ["127.0.0.1:3000"])
+        await forward.stop()
+    }
 }

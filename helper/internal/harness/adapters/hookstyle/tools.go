@@ -198,3 +198,63 @@ func IsLive(session string) bool {
 	_, ok := live.at[session]
 	return ok
 }
+
+// drawn records, per session, the turn the hook mapper drew while no
+// transcript feed drew the chat. A session's transcript file appears only
+// with its first prompt, so that prompt's hook usually comes first and is
+// drawn; the transcript mapper then claims the turn (ClaimTurn) and goes
+// on under the same id instead of drawing the prompt a second time.
+var drawn = struct {
+	sync.Mutex
+	turn map[string]drawnTurn
+}{turn: map[string]drawnTurn{}}
+
+type drawnTurn struct {
+	id      string
+	started time.Time
+}
+
+func noteDrawn(session, id string, started time.Time) {
+	if session == "" || id == "" {
+		return
+	}
+	drawn.Lock()
+	defer drawn.Unlock()
+	if _, ok := drawn.turn[session]; !ok && len(drawn.turn) >= maxLive {
+		for k := range drawn.turn {
+			delete(drawn.turn, k)
+			break
+		}
+	}
+	drawn.turn[session] = drawnTurn{id: id, started: started}
+}
+
+func clearDrawn(session, id string) {
+	drawn.Lock()
+	defer drawn.Unlock()
+	if d, ok := drawn.turn[session]; ok && d.id == id {
+		delete(drawn.turn, session)
+	}
+}
+
+// claimWindow is how far apart a hook's prompt and the transcript's record
+// of it may be and still be the same prompt.
+const claimWindow = 30 * time.Second
+
+// ClaimTurn hands a transcript mapper the open turn the hook mapper drew
+// for the prompt the transcript now records at at. The hook mapper drew
+// that prompt already, so the transcript draws only what follows, under
+// the returned turn id.
+func ClaimTurn(session string, at time.Time) (id string, started time.Time, ok bool) {
+	drawn.Lock()
+	defer drawn.Unlock()
+	d, found := drawn.turn[session]
+	if !found {
+		return "", time.Time{}, false
+	}
+	delete(drawn.turn, session)
+	if gap := at.Sub(d.started); gap > claimWindow || gap < -claimWindow {
+		return "", time.Time{}, false
+	}
+	return d.id, d.started, true
+}

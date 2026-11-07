@@ -247,12 +247,23 @@ func target(raw json.RawMessage) string {
 	var in struct {
 		Command  string `json:"command"`
 		FilePath string `json:"file_path"`
+		Notebook string `json:"notebook_path"`
 		URL      string `json:"url"`
+		Path     string `json:"path"`
+		Pattern  string `json:"pattern"`
+		Query    string `json:"query"`
 	}
 	if json.Unmarshal(raw, &in) != nil {
 		return ""
 	}
-	return firstNonEmpty(in.Command, firstNonEmpty(in.FilePath, in.URL))
+	// The thing the tool acts on, so the phone can say what is asked:
+	// a command, a file, a URL, then what a search looks for.
+	for _, s := range []string{in.Command, in.FilePath, in.Notebook, in.URL, in.Pattern, in.Query, in.Path} {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // model reads either the SessionStart string or the status line object.

@@ -194,9 +194,9 @@ import TogoKit
             Samples.row(bib: "09", name: "api2", status: .idle, cwd: "/Users/sam/src/api", since: Samples.now.addingTimeInterval(60))
         )
         var older = Samples.row(bib: "10", name: "old", status: .idle, cwd: "/Users/sam/src/old", since: Samples.now.addingTimeInterval(-6000))
-        older.agent = "qwen"
+        older.agent = "kimi"
         state.machines[0].sessions.append(older)
-        let found = PromptFeed.suggestions(machines: state.machines, archived: state.archived, favorites: ["qwen"])
+        let found = PromptFeed.suggestions(machines: state.machines, archived: state.archived, favorites: ["kimi"])
         #expect(found.first?.folder == "/Users/sam/src/old")
         #expect(found.dropFirst().first?.folder == "/Users/sam/src/api")
     }

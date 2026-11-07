@@ -24,6 +24,8 @@ public enum Capability {
     public static let awake = "awake.v1"
     /// The `browser.open` event and `browser.openOnMac`.
     public static let browser = "browser.v1"
+    /// `fs.forgetRecentDir`.
+    public static let recent = "recent.v1"
     /// The harness.* methods, the `harness` notification and `Session.mission`.
     public static let harness = "harness.v1"
 }

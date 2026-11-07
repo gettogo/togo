@@ -314,6 +314,8 @@ type Approval struct {
 	Snippet   string   `json:"snippet"`
 	Options   []Option `json:"options"`
 	AllowText bool     `json:"allowText"`
+	// SignIn is set when the prompt is a sign-in step (signin.v1).
+	SignIn *SignIn `json:"signIn,omitempty"`
 	// Answerable is false while no answer from the phone can be delivered
 	// (no options and no fingerprint yet). Nil means true.
 	Answerable *bool      `json:"answerable,omitempty"`

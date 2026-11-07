@@ -50,6 +50,10 @@ struct PromptRequestView: View {
                 }
                 replyLine
             } else {
+                if let offer = SignInOffer(request.signIn) {
+                    PromptSignInPanel(offer: offer, hostID: request.hostID, sessionID: request.sessionID)
+                        .disabled(!request.answerable)
+                }
                 if let command = request.command, !command.isEmpty {
                     PromptCommandWell(
                         command: command, types: model.introPending(.command, for: request.id),
@@ -205,7 +209,7 @@ struct PromptRequestView: View {
                 .accessibilityLabel(PromptCopy.moreOptions)
         }
         if request.allowsReply {
-            Button(PromptCopy.reply) { model.beginReply() }
+            Button(SignInOffer(request.signIn)?.secret == true ? SignInCopy.pasteKey : PromptCopy.reply) { model.beginReply() }
                 .buttonStyle(.promptCapsule(.plain))
                 .accessibilityHint(PromptCopy.replyHint)
         }
@@ -216,17 +220,28 @@ struct PromptRequestView: View {
         model.answer(answer, to: request.id)
     }
 
+    /// A sign-in secret goes in a masked field; any other reply in a plain one.
+    @ViewBuilder private func replyField(placeholder: String) -> some View {
+        if SignInOffer(request.signIn)?.secret == true {
+            PromptSecretField(text: $model.replyDraft, placeholder: SignInCopy.secretPlaceholder)
+        } else {
+            TextField(text: $model.replyDraft, prompt: Text(placeholder).foregroundStyle(Color.togoMute)) {
+                Text(placeholder)
+            }
+        }
+    }
+
     private var replyLine: some View {
         let empty = model.replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let placeholder = PromptCopy.replyTo(request.sessionName)
         return HStack(spacing: 10) {
             PromptChevron()
-            TextField(text: $model.replyDraft, prompt: Text(placeholder).foregroundStyle(Color.togoMute)) {
-                Text(placeholder)
-            }
+            replyField(placeholder: placeholder)
             .font(.body)
             .foregroundStyle(Color.togoSnow)
-            .focused($replyFocused)
+            // Reply opened this line: the keyboard comes up with it (a still snapshot keeps the
+            // field unfocused, so no caret blinks in it).
+            .focusOnReveal($replyFocused, revealed: !loopsPaused)
             .submitLabel(.send)
             .onSubmit { model.sendReply() }
             .disabled(request.state == .withdrawn && empty)
@@ -243,8 +258,6 @@ struct PromptRequestView: View {
                     .disabled(empty)
             }
         }
-        // A still snapshot leaves the field unfocused, so no caret blinks in it.
-        .onAppear { replyFocused = !loopsPaused }
         .onChange(of: replyFocused, initial: true) { _, focused in model.barTextFocused = focused }
         .onDisappear { model.barTextFocused = false }
     }

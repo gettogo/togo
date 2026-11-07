@@ -136,7 +136,7 @@ struct MissionControlView: View {
                     // motion: state change — the block takes the waiting line's slot, in place.
                     .transition(Motion.swap(reduce: reduceMotion))
             } else {
-                MissionEmptyLine(text: MissionCopy.statusPending(store.descriptor?.adapter?.name))
+                MissionEmptyLine(text: MissionCopy.statusPending(store.agentName))
                     // motion: state change — the waiting line gives its slot to the block, in place.
                     .transition(Motion.swap(reduce: reduceMotion))
             }

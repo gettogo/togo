@@ -5,6 +5,8 @@ import Foundation
 public enum Labels {
     public static let push = "push"
     public static let answer = "answer"
+    /// The context a Live Activity shows, sealed into its content state.
+    public static let live = "live"
 }
 
 public enum SealError: Error, Equatable, Sendable {

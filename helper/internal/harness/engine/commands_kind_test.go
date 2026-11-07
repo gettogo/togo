@@ -110,14 +110,6 @@ var commandTable = map[string]map[string]cmdWant{
 		"session": {kind: spec.CommandRun, opens: spec.OpensStatus},
 		"tree":    {kind: spec.CommandTerminal}, "fork": {kind: spec.CommandTerminal}, "settings": {kind: spec.CommandTerminal},
 	},
-	"qwen": {
-		"approval-mode": {kind: spec.CommandChoice, action: "set_mode"},
-		"compress":      {kind: spec.CommandRun, action: "compact"},
-		"resume":        {kind: spec.CommandPicker},
-		"stats":         {kind: spec.CommandTerminal},
-		"memory":        {kind: spec.CommandTerminal},
-		"agents":        {kind: spec.CommandTerminal},
-	},
 	"vibe": {
 		"compact": {kind: spec.CommandRun, action: "compact"},
 		"config":  {kind: spec.CommandTerminal},

@@ -43,6 +43,9 @@ type PushPlaintext struct {
 	TS        int64    `json:"ts"`
 	Subject   *Subject `json:"subject,omitempty"`
 	Host      *string  `json:"host,omitempty"`
+	// SessionName is the session's name, the title of its notifications;
+	// left out when unknown.
+	SessionName *string `json:"sessionName,omitempty"`
 
 	Exit      *SessionExit `json:"exit,omitempty"`
 	Active    *int         `json:"active,omitempty"`

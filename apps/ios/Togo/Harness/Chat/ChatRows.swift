@@ -4,14 +4,27 @@ import TogoKit
 /// The user's prompt: plain text on a raised bubble at the trailing edge. A queued one is
 /// dimmed and says so.
 struct PromptBubble: View {
+    @Environment(\.displayScale) private var displayScale
     let text: String
     var note: String?
     var dimmed = false
+    /// The prompt is a command line ("/compact"): it reads as what ran, not as words to the agent.
+    var command = false
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            // A prompt of pictures alone has no words to set in a bubble.
-            if !text.isEmpty {
+            if command {
+                Label(ChatCopy.ran(text), systemImage: "command")
+                    .font(.subheadline.monospaced())
+                    .foregroundStyle(Color.togoMute)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .overlay { Capsule().strokeBorder(Color.togoLine, lineWidth: 1 / displayScale) }
+                    .opacity(dimmed ? 0.6 : 1)
+                    // motion: state change — a queued command brightens in place when it is sent.
+                    .motion(.respond, value: dimmed)
+            } else if !text.isEmpty {
+                // A prompt of pictures alone has no words to set in a bubble.
                 // `@path` mentions open the file; Select text is in the row's menu.
                 Text(ChatLinks.prompt(text))
                     .font(.body)
@@ -175,5 +188,17 @@ struct ChatWorkRow<Menu: View>: View {
             // motion: preventing a jump — the rows below glide down as the turn's pictures take their room.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { showsPictures = !empty }
         }
+    }
+}
+
+/// Whether a prompt in the chat is a command line, so it shows as "Ran /compact".
+enum CommandEcho {
+    /// A single line that is one of the agent's commands. Before the list is read, any line
+    /// shaped like a command counts; "/xyz" the list does not have stays a prompt.
+    static func isCommand(_ text: String, known: [HarnessCompletion]) -> Bool {
+        guard !text.contains(where: \.isNewline) else { return false }
+        if known.isEmpty { return CommandLineLogic.commandWord(text) != nil }
+        if case .command = CommandLineLogic.typed(text, commands: known) { return true }
+        return false
     }
 }

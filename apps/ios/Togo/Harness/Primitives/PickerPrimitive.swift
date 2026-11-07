@@ -3,73 +3,86 @@ import TogoKit
 
 /// A searchable, grouped list with one selection, such as a model or a session to resume.
 ///
-/// Compact width: role chips, filter chips and the groups as sections that fold. Regular
-/// width: the groups move into a sidebar beside the list. Tapping an item selects it (or hands
-/// it to the role chip waiting for one); item actions are in swipe, the context menu and
-/// VoiceOver actions, with the card one more step away. A selection goes through `ActionGate`
-/// and closes the host when it lands; a failure stays here with its reason.
+/// Laid out by `AdaptivePresentation.browseLayout`: in a stack (compact widths, or pushed into
+/// another stack) the groups are sections, filters are a menu, search is in the navigation
+/// bar and an item's detail is pushed. As the root of a wide sheet it is a split view: the
+/// groups in a sidebar, the list, and the chosen item's detail beside it. The roles summary
+/// heads the list in both. A selection goes through `ActionGate` and closes the host when it
+/// lands; a failure stays here with its reason.
 struct PickerPrimitive: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.browseLayout) var layout
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     let picker: HarnessScreen.Picker
     /// The screen's title, for the chat's line: "Model Sonnet".
     var title = ""
     let context: PrimitiveContext
-    @State private var model: PickerModel
-    @State private var actions = PrimitiveActions()
-    @State private var card: PickerModel.Item?
+    /// The screen's bars, which a split view puts on its list column. nil in a stack, where
+    /// the screen view puts them on this whole view.
+    let chrome: ScreenChrome?
+    @State var model: PickerModel
+    @State var actions = PrimitiveActions()
+    /// The item whose detail is shown: pushed in a stack, the detail column in a split view.
+    @State var focused: PickerModel.Item?
     /// Why the last selection failed, shown at the top of the list at once.
-    @State private var failure: String?
+    @State var failure: String?
 
-    init(picker: HarnessScreen.Picker, title: String = "", context: PrimitiveContext) {
+    init(picker: HarnessScreen.Picker, title: String = "", context: PrimitiveContext, chrome: ScreenChrome?) {
         self.picker = picker
         self.title = title
         self.context = context
+        self.chrome = chrome
         _model = State(initialValue: PickerModel(picker))
     }
 
-    private var itemActions: [HarnessActionRef] { picker.itemActions ?? [] }
-    private var groupNames: [(name: String, count: Int)] { PickerModel.groupNames(picker) }
-    private var usesSidebar: Bool { sizeClass == .regular && groupNames.count > 1 }
+    var itemActions: [HarnessActionRef] { picker.itemActions ?? [] }
+    var splits: Bool { layout == .split && chrome != nil && PickerModel.groupNames(picker).count > 1 }
 
     var body: some View {
-        content
-            .modifier(PickerSearch(enabled: picker.searchable, query: $model.query, count: picker.items.count))
-            .toolbar {
-                if !(picker.filters ?? []).isEmpty {
-                    ToolbarItem(placement: .primaryAction) { filterMenu }
-                }
+        Group {
+            if splits {
+                split
+            } else if let chrome {
+                // Chosen as a split view, but the groups went: a stack of its own.
+                NavigationStack { stack.modifier(chrome) }
+            } else {
+                stack
             }
-            .primitiveActions(actions, context: context)
-            .sheet(item: $card) { item in
-                PickerItemCard(item: item, picker: picker, parent: actions, context: context) { select(item) }
-            }
+        }
+        .primitiveActions(actions, context: context)
     }
 
-    /// Picking mode and group folds change the List in a `resize` transaction at the tap, never
-    /// through an implicit animation on the List.
-    private func setPicking(_ id: String?) {
-        // motion: preventing a jump — the banner's room opens and the list moves down with it.
+    private var stack: some View {
+        list(split: false)
+            .modifier(PickerSearch(enabled: picker.searchable, query: $model.query, count: picker.items.count))
+            .toolbar {
+                if !PickerModel.menuFilters(picker, sidebar: false).isEmpty {
+                    ToolbarItem(placement: .primaryAction) { filterMenu(sidebar: false) }
+                }
+            }
+            // An item's detail pushes on this stack: never a sheet over the sheet.
+            .navigationDestination(item: $focused) { item in detail(item) }
+    }
+
+    func detail(_ item: PickerModel.Item) -> some View {
+        PickerItemDetail(
+            item: item, picker: picker, actions: actions, context: context,
+            onSelect: { select(item) }, onAssign: { assign($0, item) }
+        )
+    }
+
+    /// Waiting for an item to give a role changes the list's footer in a `resize` transaction
+    /// at the tap, never through an implicit animation on the List.
+    func setPicking(_ id: String?) {
+        // motion: preventing a jump — the roles footer's words change and the rows below move with it.
         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { model.picking = id }
     }
 
-    @ViewBuilder private var content: some View {
-        if usesSidebar {
-            HStack(spacing: 0) {
-                PickerSidebar(names: groupNames, total: picker.items.count, selection: $model.sidebarGroup)
-                    .frame(width: 260)
-                Rectangle().fill(Color.togoLine).frame(width: 1).accessibilityHidden(true)
-                list
-            }
-            .background(Color.togoInk)
-        } else {
-            list
-        }
-    }
+    // MARK: List
 
-    private var list: some View {
+    func list(split: Bool) -> some View {
         let groups = model.groups(picker)
-        return List {
+        let setup = model.setupItems(picker)
+        return List(selection: split ? listSelection : nil) {
             if let failure {
                 // Errors land at once, at the list that failed (motion principles v2 §2).
                 Label(failure, systemImage: "exclamationmark.circle.fill")
@@ -77,54 +90,78 @@ struct PickerPrimitive: View {
                     .foregroundStyle(PrimitiveTint.fail)
                     .listRowBackground(Color.clear)
             }
-            if !itemActions.isEmpty || hasChips {
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if !itemActions.isEmpty { roleChips }
-                        if let picking = model.picking, let ref = itemActions.first(where: { $0.id == picking }) {
-                            pickBanner(ref)
-                                // motion: cause → effect — the chip's tap opens the banner in place, uncovered by its growing edge.
-                                .transition(Motion.unfold(reduce: reduceMotion))
-                        }
-                        if hasChips { filterChips }
-                    }
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                    .listRowBackground(Color.clear)
+            if !itemActions.isEmpty, !model.isSearching {
+                PickerRolesSection(refs: itemActions, items: picker.items, picking: model.picking) { id in
+                    setPicking(model.picking == id ? nil : id)
                 }
             }
             ForEach(groups) { group in
                 Section {
-                    if model.isExpanded(group) || usesSidebar {
-                        ForEach(group.items) { item in row(item) }
+                    if split || model.isExpanded(group, alone: groups.count == 1) {
+                        ForEach(group.items) { item in row(item, split: split) }
                     }
                 } header: {
                     if groups.count > 1 || group.name != nil {
-                        groupHeader(group)
+                        groupHeader(group, alone: groups.count == 1, foldable: !split)
                     }
                 }
+            }
+            if let action = picker.setupAction, !setup.isEmpty {
+                PickerSetupSection(
+                    items: setup, total: picker.setup?.count ?? setup.count, action: action,
+                    asksSecret: picker.setupInput == "secret", expanded: model.isSetupExpanded,
+                    searching: model.isSearching, actions: actions,
+                    toggle: { model.toggle(id: PickerModel.setupID) },
+                    run: { item, value in setUp(item, with: action, value: value) }
+                )
             }
         }
         .groupedList()
         .overlay {
             // motion: state change — the list and its empty state swap in place, nothing shifts.
             Group {
-                if groups.isEmpty { empty.transition(Motion.swap(reduce: reduceMotion)) }
+                if groups.isEmpty, setup.isEmpty { empty.transition(Motion.swap(reduce: reduceMotion)) }
             }
             // motion: state change — the swap is keyed on emptiness alone.
-            .motion(.fade, value: groups.isEmpty)
+            .motion(.fade, value: groups.isEmpty && setup.isEmpty)
         }
     }
 
-    // MARK: Rows
+    /// The split view's list selection is the item in the detail column; choosing a row while
+    /// a role waits gives it the role instead.
+    private var listSelection: Binding<String?> {
+        Binding(
+            get: { focused?.id ?? picker.selected },
+            set: { id in
+                guard let id, let item = picker.items.first(where: { $0.id == id }) else { return }
+                if case .assign(let action) = model.tap(item, in: picker),
+                   let ref = itemActions.first(where: { $0.id == action }) {
+                    assign(ref, item)
+                } else {
+                    focused = item
+                }
+            }
+        )
+    }
 
-    private func row(_ item: PickerModel.Item) -> some View {
-        PickerRow(
-            item: item, selected: item.id == picker.selected,
+    @ViewBuilder private func row(_ item: PickerModel.Item, split: Bool) -> some View {
+        let label = PickerRowLabel(
+            item: item, picker: picker, selected: item.id == picker.selected,
             held: PickerModel.held(by: item, actions: itemActions),
             running: actions.isRunning(picker.onSelect, target: item.id)
-                || itemActions.contains { actions.isRunning($0.id, target: item.id) },
-            picking: model.picking != nil
-        ) { tap(item) }
+                || itemActions.contains { actions.isRunning($0.id, target: item.id) }
+        )
+        Group {
+            if split {
+                // The list's selection drives the detail column; the row is not a button.
+                label.tag(item.id)
+            } else {
+                Button { tap(item) } label: { label }
+                    .buttonStyle(.plain)
+                    .disabled(item.disabled == true)
+                    .accessibilityHint(model.picking != nil ? PrimitiveCopy.select : "")
+            }
+        }
         .groupedRows()
         .contextMenu { menu(for: item) }
         .swipeActions(edge: .trailing) {
@@ -139,7 +176,7 @@ struct PickerPrimitive: View {
             ForEach(itemActions) { ref in
                 Button("\(PrimitiveCopy.useAs) \(ref.label)") { assign(ref, item) }
             }
-            if !itemActions.isEmpty { Button(PrimitiveCopy.details) { card = item } }
+            Button(PrimitiveCopy.details) { focused = item }
         }
     }
 
@@ -155,162 +192,21 @@ struct PickerPrimitive: View {
                     }
                 }
             }
-            Button(PrimitiveCopy.details, systemImage: "info.circle") { card = item }
         }
+        Button(PrimitiveCopy.details, systemImage: "info.circle") { focused = item }
         Button(PrimitiveCopy.copyID, systemImage: "doc.on.doc") { copy(item.id) }
         Button(PrimitiveCopy.openTerminal, systemImage: "terminal") { context.showTerminal() }
     }
 
-    private func tap(_ item: PickerModel.Item) {
-        switch model.tap(item, in: picker) {
-        case .assign(let id):
-            if let ref = itemActions.first(where: { $0.id == id }) { assign(ref, item) }
-        case .select:
-            select(item)
-        case .none:
-            break
-        }
-    }
-
-    /// Selects through `ActionGate`: a restart asks while the agent works, and runs with Undo
-    /// while it is idle. Landing closes the host; failing keeps the list with the reason.
-    private func select(_ item: PickerModel.Item) {
-        failure = nil
-        let change = PickerModel.change(selecting: item, in: picker, setting: title)
-        Task {
-            await actions.change(change, context: context) { result in
-                if PickerModel.closes(result) {
-                    context.settled?()
-                } else if let result, result.result == .failed {
-                    failure = result.message ?? PrimitiveCopy.failed
-                }
-            }
-        }
-    }
-
-    private func assign(_ ref: HarnessActionRef, _ item: PickerModel.Item) {
-        setPicking(nil)
-        Task { await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), place: .toast, context: context) }
-    }
-
-    private func copy(_ text: String) {
-        UIPasteboard.general.string = text
-        actions.show(PrimitiveFeedback(kind: .done, title: PrimitiveCopy.copied, detail: text))
-    }
-
-    // MARK: Chips and headers
-
-    private var roleChips: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(itemActions) { ref in
-                    PickerRoleChip(
-                        label: ref.label,
-                        holder: PickerModel.holders(of: ref.id, in: picker.items).first?.title,
-                        on: model.picking == ref.id
-                    ) {
-                        setPicking(model.picking == ref.id ? nil : ref.id)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    private func pickBanner(_ ref: HarnessActionRef) -> some View {
-        HStack(spacing: 10) {
-            Text(PrimitiveCopy.choosing(ref.label))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.togoSnow)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(PrimitiveCopy.cancel) { setPicking(nil) }
-                .buttonStyle(PrimitiveCapsuleStyle(role: .normal))
-        }
-        .padding(.leading, 14)
-        .padding(.trailing, 6)
-        .padding(.vertical, 4)
-        .background(Color.togoSnow.opacity(0.08), in: .rect(cornerRadius: 14, style: .continuous))
-        .padding(.horizontal, 16)
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(.updatesFrequently)
-    }
-
-    private var chipFilters: [HarnessScreen.Picker.Filter] {
-        let filters = picker.filters ?? []
-        let choice = filters.first { $0.kind != "toggle" && ($0.options?.count ?? 0) <= 8 }
-        return (choice.map { [$0] } ?? []) + filters.filter { $0.kind == "toggle" }
-    }
-
-    private var hasChips: Bool { !chipFilters.isEmpty }
-
-    private var filterChips: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
-                ForEach(chipFilters) { filter in
-                    if filter.kind == "toggle" {
-                        let on = model.value(of: filter) == "true"
-                        Button { model.filterValues[filter.id] = on ? "false" : "true" } label: {
-                            Text(filter.label)
-                        }
-                        .buttonStyle(PrimitiveToggleChipStyle(on: on))
-                        .accessibilityAddTraits(on ? .isSelected : [])
-                    } else {
-                        ForEach(PickerModel.options(filter)) { option in
-                            let on = model.value(of: filter) == option.id
-                            Button { model.filterValues[filter.id] = option.id } label: {
-                                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                    Text(option.label)
-                                    Text(verbatim: "\(model.count(option.id, of: filter, in: picker))")
-                                        .font(.mono(.caption2))
-                                        .opacity(0.6)
-                                }
-                            }
-                            .buttonStyle(PrimitiveToggleChipStyle(on: on))
-                            .accessibilityAddTraits(on ? .isSelected : [])
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .scrollIndicators(.hidden)
-        // motion: state change — the tapped filter chip fills in place.
-        .motion(.respond, value: model.filterValues)
-    }
-
-    private var filterMenu: some View {
-        Menu {
-            ForEach(picker.filters ?? []) { filter in
-                if filter.kind == "toggle" {
-                    Toggle(filter.label, isOn: Binding(
-                        get: { model.value(of: filter) == "true" },
-                        set: { model.filterValues[filter.id] = $0 ? "true" : "false" }
-                    ))
-                } else {
-                    Picker(filter.label, selection: Binding(
-                        get: { model.value(of: filter) },
-                        set: { model.filterValues[filter.id] = $0 }
-                    )) {
-                        ForEach(PickerModel.options(filter)) { Text($0.label).tag($0.id) }
-                    }
-                    .pickerStyle(.inline)
-                }
-            }
-        } label: {
-            Label(PrimitiveCopy.filters, systemImage: "line.3.horizontal.decrease")
-        }
-        .badge(model.hasNarrowing && !model.isSearching ? 1 : 0)
-    }
-
-    private func groupHeader(_ group: PickerModel.Group) -> some View {
+    private func groupHeader(_ group: PickerModel.Group, alone: Bool, foldable: Bool) -> some View {
         let count = model.hasNarrowing ? group.items.count : group.total
+        let folds = foldable && !model.isSearching && !alone
         return Button {
-            guard !usesSidebar, !model.isSearching else { return }
+            guard folds else { return }
             // motion: cause → effect — the group folds where it was tapped; rows below glide.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { model.toggle(group) }
         } label: {
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(verbatim: group.name ?? PrimitiveCopy.other)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.togoSnow)
@@ -318,11 +214,10 @@ struct PickerPrimitive: View {
                     .font(.mono(.caption))
                     .foregroundStyle(Color.togoMute)
                 Spacer(minLength: 8)
-                if !usesSidebar, !model.isSearching {
-                    Image(systemName: "chevron.right")
+                if folds {
+                    Image(systemName: model.isExpanded(group) ? "chevron.down" : "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.togoMute)
-                        .rotationEffect(.degrees(model.isExpanded(group) && !reduceMotion ? 90 : 0))
                 }
             }
             .frame(minHeight: 32)
@@ -331,7 +226,7 @@ struct PickerPrimitive: View {
         .buttonStyle(.plain)
         .textCase(nil)
         .accessibilityAddTraits(.isHeader)
-        .accessibilityValue(usesSidebar || model.isSearching ? "" : model.isExpanded(group)
+        .accessibilityValue(!folds ? "" : model.isExpanded(group)
             ? String(localized: "primitive.expanded", defaultValue: "Expanded")
             : String(localized: "primitive.collapsed", defaultValue: "Collapsed"))
     }
@@ -343,10 +238,39 @@ struct PickerPrimitive: View {
             action: model.hasNarrowing ? StateView.Action(PrimitiveCopy.showAll) { model.reset() } : nil
         )
     }
+
+    /// The filters as a system menu in the bar: on a compact width every filter, beside a
+    /// sidebar only those it does not already show.
+    func filterMenu(sidebar: Bool) -> some View {
+        Menu {
+            ForEach(PickerModel.menuFilters(picker, sidebar: sidebar)) { filter in
+                if filter.kind == "toggle" {
+                    Toggle(filter.label, isOn: Binding(
+                        get: { model.value(of: filter) == "true" },
+                        set: { model.filterValues[filter.id] = $0 ? "true" : "false" }
+                    ))
+                } else {
+                    Picker(filter.label, selection: Binding(
+                        get: { model.value(of: filter) },
+                        set: { model.filterValues[filter.id] = $0 }
+                    )) {
+                        ForEach(PickerModel.options(filter)) { option in
+                            Text(verbatim: "\(option.label)  \(model.count(option.id, of: filter, in: picker))").tag(option.id)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                }
+            }
+        } label: {
+            Label(PrimitiveCopy.filters, systemImage: "line.3.horizontal.decrease")
+        }
+        .badge(model.hasNarrowing && !model.isSearching ? 1 : 0)
+    }
 }
 
-/// `.searchable` when the picker asks for it.
-private struct PickerSearch: ViewModifier {
+/// `.searchable` in the navigation bar when the picker asks for it: never a field floating
+/// over the rows.
+struct PickerSearch: ViewModifier {
     let enabled: Bool
     @Binding var query: String
     let count: Int

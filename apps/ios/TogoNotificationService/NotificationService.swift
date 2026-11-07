@@ -20,7 +20,6 @@ final class NotificationService: UNNotificationServiceExtension {
             gate.expire()
             return
         }
-        NotificationCategorySet.register()
         let core = NotificationServiceCore(
             // No explicit group: the only Keychain group in this extension's and the app's
             // entitlements is app.togo.shared, so both read and write the same keys.
@@ -30,6 +29,9 @@ final class NotificationService: UNNotificationServiceExtension {
             clock: { Date() }
         )
         let result = core.process(request.content)
+        // After the request is stored, so a question's own option buttons are registered
+        // before the system shows it.
+        NotificationCategorySet.register()
         if result.pendingChanged {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
         }

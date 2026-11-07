@@ -69,7 +69,6 @@ var (
 	codexDir   = func(o Options) string { return o.CodexDir }
 	geminiDir  = func(o Options) string { return o.GeminiDir }
 	augmentDir = func(o Options) string { return o.AugmentDir }
-	qwenDir    = func(o Options) string { return o.QwenDir }
 	factoryDir = func(o Options) string { return o.FactoryDir }
 	copilotDir = func(o Options) string { return o.CopilotDir }
 	vibeDir    = func(o Options) string { return o.VibeDir }
@@ -86,8 +85,6 @@ var Registry = []Harness{
 		root: geminiDir, config: in(geminiDir, "settings.json"), events: geminiEvents},
 	{ID: Auggie, Name: "Auggie", Command: "auggie", Setup: SetupHooks,
 		root: augmentDir, config: in(augmentDir, "settings.json"), events: auggieEvents},
-	{ID: Qwen, Name: "Qwen Code", Command: "qwen", Setup: SetupHooks,
-		root: qwenDir, config: in(qwenDir, "settings.json"), events: qwenEvents},
 	{ID: Droid, Name: "Droid", Command: "droid", Setup: SetupHooks,
 		root: factoryDir, config: in(factoryDir, "hooks.json"), events: droidEvents},
 	{ID: Copilot, Name: "Copilot CLI", Command: "copilot", Setup: SetupHooks,
@@ -188,7 +185,6 @@ func DefaultOptions(getenv func(string) string, home, togoHome, binary string) O
 		CodexDir:   pick("CODEX_HOME", ".codex"),
 		GeminiDir:  gemini,
 		AugmentDir: filepath.Join(home, ".augment"),
-		QwenDir:    filepath.Join(home, ".qwen"),
 		FactoryDir: filepath.Join(home, ".factory"),
 		CopilotDir: pick("COPILOT_HOME", ".copilot"),
 		VibeDir:    pick("VIBE_HOME", ".vibe"),

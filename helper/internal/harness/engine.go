@@ -83,6 +83,10 @@ type Env struct {
 	// takes a password, else "".
 	Auth string
 	Vars map[string]string
+	// Environ is the user's login shell environment, which programs the
+	// helper runs for the session get on top of its own: the agent reads
+	// its API keys from there. Nil keeps the helper's environment.
+	Environ []string
 }
 
 // SourceSpec is the part of an adapter's source declaration a runner

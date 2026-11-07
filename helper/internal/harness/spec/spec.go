@@ -36,7 +36,29 @@ type Adapter struct {
 	Images *Images `yaml:"images"`
 	// Status declares what the mission Status block offers.
 	Status *Status `yaml:"status"`
+	// Input says how to read the harness's input line off the screen, so
+	// typed text lands in an empty line and its Enter is seen to submit.
+	Input *Input `yaml:"input"`
 }
+
+// Input describes the input line of a harness's TUI.
+type Input struct {
+	// Line is a regexp whose first group is the text in the input line;
+	// the last row on screen that matches is the input line.
+	Line string `yaml:"line"`
+	// Empty are regexps for what the line shows when nothing is typed (a
+	// placeholder, a key hint).
+	Empty []string `yaml:"empty"`
+	// Clear are the keys that empty the line (C-u). When they leave text,
+	// one BSpace per character is sent.
+	Clear []string `yaml:"clear"`
+	// Dismiss are the keys that close a completion popup that took Enter
+	// without submitting; Enter follows them.
+	Dismiss []string `yaml:"dismiss"`
+}
+
+// InputKeys are the keys an Input block may name.
+var InputKeys = map[string]bool{"Escape": true, "C-u": true, "C-a": true, "C-k": true, "End": true, "BSpace": true, "Tab": true}
 
 // Status declares the Status block's inline actions, such as compact on
 // the context meter. They replace a confirm-only screen.
@@ -241,6 +263,21 @@ type Screen struct {
 	Actions  []string `yaml:"actions"`
 	// Fields lists settings fields for a settings screen.
 	Fields []SettingField `yaml:"fields"`
+	// Setup lists, after a picker's items, what is not set up yet (a
+	// provider not signed in), each with an action that sets it up.
+	Setup *PickerSetup `yaml:"setup"`
+}
+
+// PickerSetup is a picker's "Not set up" section: Source's items mapped
+// with Map (item.id, item.title, item.subtitle), offered with Action run
+// with args {"id": item id}. An entry whose id names a group the picker
+// already has is set up, and left out. Input "secret" asks for a value
+// first (an API key), sent as args.value.
+type PickerSetup struct {
+	Source string            `yaml:"source"`
+	Map    map[string]string `yaml:"map"`
+	Action string            `yaml:"action"`
+	Input  string            `yaml:"input"`
 }
 
 // Filter is a picker filter.
@@ -362,6 +399,17 @@ type Modes struct {
 	Current string       `yaml:"current"` // a source name
 	Select  string       `yaml:"select"`
 	Set     string       `yaml:"set"` // an action name
+	// Screen reads the mode off the pane for harnesses that report it
+	// nowhere else: the last line that matches a rule names the mode;
+	// with none, ScreenDefault (when set).
+	Screen        []ScreenMode `yaml:"screen"`
+	ScreenDefault string       `yaml:"screen_default"`
+}
+
+// ScreenMode is one screen rule: a line regexp and the mode it means.
+type ScreenMode struct {
+	Line string `yaml:"line"`
+	ID   string `yaml:"id"`
 }
 
 // ModeChoice is one mode.

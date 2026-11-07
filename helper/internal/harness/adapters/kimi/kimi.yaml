@@ -55,8 +55,12 @@ actions:
     stability: documented
   set_mode:
     label: Mode
-    confirm: Restart Kimi in this mode? The conversation continues.
+    confirm: Change Kimi's mode? Some modes restart Kimi; the conversation continues.
+    # /plan toggles plan mode in place (Kimi 2.5). A relaunch cannot leave plan
+    # mode: `kimi --continue` restores it with the session (seen live).
     branch:
+      - { when: '{{and (eq .id "plan") (ne .state.mode "plan")}}', type: { text: /plan, submit: true, when_idle: true } }
+      - { when: '{{and (eq .id "default") (eq .state.mode "plan")}}', type: { text: /plan, submit: true, when_idle: true } }
       - { when: '{{eq .id "plan"}}', relaunch: { argv: [kimi, --plan, --continue] } }
       - { when: '{{eq .id "yolo"}}', relaunch: { argv: [kimi, --yolo, --continue] } }
       - { when: '{{eq .id "auto"}}', relaunch: { argv: [kimi, --auto, --continue] } }

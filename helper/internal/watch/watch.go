@@ -379,6 +379,7 @@ func (w *Watcher) Tick(ctx context.Context) {
 			e.awaitingIdle = false
 			e.screenCheck = false
 			w.settle(ctx, id, e)
+		case w.signInCheck(ctx, id, e, now):
 		case e.promptCheck && !e.awaitingIdle && now.Sub(e.lastOutput) >= idle:
 			e.promptCheck = false
 			w.checkPrompt(ctx, id, e)

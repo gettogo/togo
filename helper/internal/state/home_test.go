@@ -105,16 +105,36 @@ func writeShell(t *testing.T, script string) string {
 }
 
 func resetLoginPath(t *testing.T) {
-	loginPathMu.Lock()
-	loginPathCached = ""
-	loginPathFailedAt = time.Time{}
-	loginPathMu.Unlock()
+	reset := func() {
+		login.mu.Lock()
+		login.env, login.at, login.fresh = nil, time.Time{}, false
+		login.cache, login.loaded = "", false
+		login.failedAt, login.failures = time.Time{}, 0
+		login.mu.Unlock()
+	}
+	reset()
+	old := retryLater
+	retryLater = func(time.Duration, func()) {}
 	t.Cleanup(func() {
-		loginPathMu.Lock()
-		loginPathCached = ""
-		loginPathFailedAt = time.Time{}
-		loginPathMu.Unlock()
+		waitLoginRead(t)
+		reset()
+		retryLater = old
 	})
+}
+
+// waitLoginRead waits for a background read to end.
+func waitLoginRead(t *testing.T) {
+	t.Helper()
+	login.mu.Lock()
+	ch := login.running
+	login.mu.Unlock()
+	if ch != nil {
+		select {
+		case <-ch:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the login shell read never ended")
+		}
+	}
 }
 
 // The agent launch command runs under "$SHELL -lic", and PATH additions

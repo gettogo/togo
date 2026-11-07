@@ -5,20 +5,120 @@ them apart at a glance. The marks identify the agents only. Togo is not affiliat
 sponsored by or endorsed by any of the companies or projects named below, and each name and
 mark remains the trademark of its owner.
 
+Every mark is the owner's own vector artwork. Togo only scales it to its symbol size and
+draws it in its own text colours; its shape is unchanged. Where a mark has more than one
+colour, its parts are drawn in one colour, and details drawn in the background colour are
+left open.
+
 Marks from Simple Icons
 
-The marks for Claude Code, Cline, Cursor CLI, Mistral Vibe, OpenCode and Qwen Code are the
-SVG paths published by Simple Icons (https://simpleicons.org), version 16.36.0, which
+The marks for Claude Code, Cline, Cursor CLI, Kimi Code, Mistral Vibe, OpenCode and Pi are
+the SVG paths published by Simple Icons (https://simpleicons.org), version 16.36.0, which
 dedicates its icon files to the public domain under CC0 1.0 Universal
-(https://creativecommons.org/publicdomain/zero/1.0/). Togo only scales them to its symbol
-size and draws them in its own text colours; their shapes are unchanged.
+(https://creativecommons.org/publicdomain/zero/1.0/).
 
   Claude Code    Claude, a trademark of Anthropic, PBC
   Cline          Cline, a trademark of Cline Bot Inc.
   Cursor CLI     Cursor, a trademark of Anysphere, Inc.
+  Kimi Code      Kimi, a trademark of Moonshot AI (Kimi logo from its Branding Guide)
   Mistral Vibe   Mistral AI, a trademark of Mistral AI
   OpenCode       OpenCode, a trademark of its owners
-  Qwen Code      Qwen, a trademark of Alibaba Cloud
+  Pi             Pi, a trademark of its owners (pi.dev)
+
+Amp
+
+The Amp wordmark is the one Amp publishes in its press kit (https://ampcode.com/press-kit).
+Amp is a trademark of its owner.
+
+Goose
+
+The Goose mark is from the goose project (https://github.com/aaif-goose/goose), used under
+the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0); the full
+license text is in the swift-nio acknowledgment. Goose is a trademark of its owners.
+
+Kilo Code
+
+The Kilo Code mark is from the Kilo Code repository (https://github.com/Kilo-Org/kilocode).
+Kilo Code is a trademark of its owner. The mark is used under the MIT License:
+
+MIT License
+
+Copyright (c) 2026 Kilo Code
+Copyright (c) 2025 opencode
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+OMP
+
+The OMP mark is the icon of oh-my-pi (https://github.com/can1357/oh-my-pi), used under the
+MIT License:
+
+MIT License
+
+Copyright (c) 2025 Mario Zechner
+Copyright (c) 2025-2026 Can Bölük
+Copyright (c) 2026 Stencil Labs, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+OpenHands
+
+The OpenHands mark is from the OpenHands repository (https://github.com/OpenHands/OpenHands).
+OpenHands is a trademark of its owners. The mark is used under the MIT License:
+
+MIT License
+
+Copyright (c) 2025 OpenHands contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 GitHub Copilot
 
@@ -50,7 +150,7 @@ SOFTWARE.
 
 Other agents
 
-Every other agent is shown by one or two letters of its name in SF Mono, not by its logo:
-Aider, Amp, Auggie, Codex, Crush, Droid, Gemini CLI, Goose, Kilo Code, Kimi Code, Kiro CLI,
-OMP, OpenHands and Pi. Codex, Gemini CLI, Kimi Code, Amp, Auggie, Droid, Goose, Kilo Code,
-Kiro CLI and OpenHands are trademarks of their respective owners.
+Codex, Gemini CLI, Kiro CLI, Droid, Auggie, Crush and Aider are shown by one or two letters
+of their names in SF Mono, not by their logos: their owners either ask that their logos be
+used only with permission, or publish no mark Togo can use. Codex, Gemini CLI, Kiro CLI,
+Droid, Auggie, Crush and Aider are trademarks of their respective owners.

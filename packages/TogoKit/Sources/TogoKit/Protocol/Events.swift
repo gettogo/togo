@@ -117,6 +117,8 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
     public var snippet: String
     public var options: [ApprovalOption]
     public var allowText: Bool
+    /// Set when the prompt is a sign-in step: a page, a device code, or a pasted secret.
+    public var signIn: SignInStep?
     /// False while the helper cannot deliver an answer from the phone (a hook request with no
     /// options and no screen fingerprint yet): show it as waiting in the terminal. Absent means true.
     public var answerable: Bool
@@ -126,8 +128,10 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
     public init(
         requestId: String, sessionId: String?, bib: String?, agent: String, source: Source,
         title: String, detail: String?, snippet: String, options: [ApprovalOption],
-        allowText: Bool, createdAt: Date, expiresAt: Date?, subject: Subject? = nil, answerable: Bool = true
+        allowText: Bool, createdAt: Date, expiresAt: Date?, subject: Subject? = nil, answerable: Bool = true,
+        signIn: SignInStep? = nil
     ) {
+        self.signIn = signIn
         self.requestId = requestId
         self.sessionId = sessionId
         self.bib = bib
@@ -145,7 +149,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case requestId, sessionId, bib, agent, source, title, detail, subject, snippet, options, allowText
+        case requestId, sessionId, bib, agent, source, title, detail, subject, snippet, options, allowText, signIn
         case answerable, createdAt, expiresAt, state
     }
 
@@ -163,6 +167,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         snippet = try container.decode(String.self, forKey: .snippet)
         options = try container.decode([ApprovalOption].self, forKey: .options)
         allowText = try container.decode(Bool.self, forKey: .allowText)
+        signIn = (try? container.decodeIfPresent(SignInStep.self, forKey: .signIn)) ?? nil
         answerable = try container.decodeIfPresent(Bool.self, forKey: .answerable) ?? true
         createdAt = try container.decodeTimestamp(forKey: .createdAt)
         expiresAt = try container.decodeTimestampIfPresent(forKey: .expiresAt)
@@ -182,6 +187,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         try container.encode(snippet, forKey: .snippet)
         try container.encode(options, forKey: .options)
         try container.encode(allowText, forKey: .allowText)
+        try container.encodeIfPresent(signIn, forKey: .signIn)
         if !answerable { try container.encode(false, forKey: .answerable) }
         try container.encodeTimestamp(createdAt, forKey: .createdAt)
         try container.encodeTimestamp(expiresAt, forKey: .expiresAt)

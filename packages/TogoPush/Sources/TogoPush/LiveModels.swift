@@ -39,10 +39,13 @@ public struct TogoActivityAttributes: ActivityAttributes {
         /// Exit reason word (`exit`, `interrupted`, `error` or `usage_limit`); only set when
         /// `status` is `ended` or `failed`.
         public var reason: String?
+        /// The session, step and request context, sealed for this device (see `LiveContext`).
+        /// Absent from older helpers and relays.
+        public var ctx: String?
 
         public init(
             bib: String?, agent: String, status: String, waiting: Int, since: Int, requestId: String?,
-            command: String?, reason: String? = nil
+            command: String?, reason: String? = nil, ctx: String? = nil
         ) {
             self.bib = bib
             self.agent = agent
@@ -52,6 +55,7 @@ public struct TogoActivityAttributes: ActivityAttributes {
             self.requestId = requestId
             self.command = command
             self.reason = reason
+            self.ctx = ctx
         }
 
         /// A field a pushed state leaves out takes a default instead of failing the decode:
@@ -67,6 +71,7 @@ public struct TogoActivityAttributes: ActivityAttributes {
             requestId = try? c.decodeIfPresent(String.self, forKey: .requestId)
             command = try? c.decodeIfPresent(String.self, forKey: .command)
             reason = try? c.decodeIfPresent(String.self, forKey: .reason)
+            ctx = try? c.decodeIfPresent(String.self, forKey: .ctx)
         }
     }
 

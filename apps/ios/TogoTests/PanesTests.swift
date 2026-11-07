@@ -239,6 +239,41 @@ import UIKit
         #expect(store.workspace.focused == .primary)
         #expect(store.workspace.secondary == two)
     }
+
+    // MARK: No paging on the terminal
+
+    /// A one-finger horizontal drag on the terminal belongs to the terminal (scrolling,
+    /// selection, mouse drags), never to a pager that could stop between two sessions.
+    @Test func terminalSitsInNoPagingScroller() throws {
+        let store = store([one, four])
+        let pool = TerminalPool()
+        let host = PanesHost(store: store, terminals: pool, size: CGSize(width: 466, height: 678), sizeClass: .compact)
+        defer { host.close() }
+        host.settle(for: 0.5)
+        let view = try #require(pool.handle(for: one)?.engineView.viewIfLoaded)
+        #expect(view.window === host.window)
+        var ancestor = view.superview
+        while let current = ancestor {
+            #expect(!((current as? UIScrollView)?.isPagingEnabled ?? false), "\(type(of: current)) pages")
+            ancestor = current.superview
+        }
+    }
+
+    /// A session switch lands at once: only the new tab's terminal is in the pane, at full size.
+    @Test func switchingTabsLandsOneTerminal() throws {
+        let store = store([one, four])
+        let pool = TerminalPool()
+        let size = CGSize(width: 466, height: 678)
+        let host = PanesHost(store: store, terminals: pool, size: size, sizeClass: .compact)
+        defer { host.close() }
+        host.settle(for: 0.5)
+        store.step(1, from: one)
+        host.settle(for: 0.3)
+        #expect(store.workspace.selected == four)
+        let frame = try #require(host.visibleFrame(of: four))
+        #expect(frame.width == size.width)
+        #expect(host.visibleFrame(of: one) == nil)
+    }
 }
 
 /// WorkspacePanes in a real window on the app's scene, so terminals attach as they do on screen.

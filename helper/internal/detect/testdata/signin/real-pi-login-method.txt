@@ -1,0 +1,40 @@
+
+ pi v0.73.1
+ escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more
+ Press ctrl+o to show full startup help and loaded resources.
+
+ Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.
+
+[Skills]
+  brandkit, ckm-banner-design, ckm-brand, ckm-design, ckm-design-system, ckm-slides, ckm-ui-styling,
+design-taste-frontend, design-taste-frontend-v1, find-skills, full-output-enforcement, gpt-taste,
+high-end-visual-design, image-to-code, imagegen-frontend-mobile, imagegen-frontend-web, impeccable,
+industrial-brutalist-ui, minimalist-ui, redesign-existing-projects, remotion-best-practices,
+stitch-design-taste, ui-ux-pro-max
+
+
+ Warning: tmux extended-keys-format is xterm. Pi works best with csi-u. Add `set -g
+ extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Select authentication method:
+
+ → Use a subscription
+   Use an API key
+
+ ↑↓ navigate  enter select  escape/ctrl+c cancel
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+/private/var/folders/mg/4p1m6m8s2y7gx6__y29kcqd80000gn/T/drycwduo5r6nks
+0.0%/262k (auto)                                                     (moonshotai) kimi-k2.6 • medium
+
+
+
+
+
+
+
+
+
+

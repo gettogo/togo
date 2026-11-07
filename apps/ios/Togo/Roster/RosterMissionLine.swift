@@ -140,10 +140,6 @@ struct RosterMissionSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .presentationDetents([.medium, .large])
-        .presentationContentInteraction(.scrolls)
-        .presentationDragIndicator(.visible)
-        .presentationBackground(Color.togoInk)
         .task { start() }
         .onDisappear {
             own?.stop()

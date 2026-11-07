@@ -47,6 +47,9 @@ type sessionState struct {
 	// working indicator; busyMisses counts reads in a row without it.
 	lastBusyCheck time.Time
 	busyMisses    int
+	// lastSignInCheck is when the screen of a program whose output never
+	// stops was last read for a sign-in step (see signin.go).
+	lastSignInCheck time.Time
 }
 
 // outputSeen records an output burst and reports whether the session just

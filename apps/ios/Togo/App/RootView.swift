@@ -68,7 +68,10 @@ struct RootView: View {
         .togoControls()
         .readsFold()
         // Every cold launch; it hands over once the first screen is ready.
-        .launchOverlay(shown: $launchShown, ready: store.services.hostsLoaded)
+        .launchOverlay(shown: $launchShown, ready: LaunchReadiness.ready(
+            hostsLoaded: store.services.hostsLoaded,
+            onScreen: store.workspaceOnScreen ? store.focusedTab.map { store.layer(for: $0.id) } : nil
+        ))
     }
 
     private struct RootStage: Equatable {

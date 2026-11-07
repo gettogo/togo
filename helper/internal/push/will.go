@@ -209,7 +209,8 @@ func (w *WillKeeper) observe(ev wire.Event) {
 		if !ok {
 			return
 		}
-		active = s.Managed && (s.Status == "working" || s.Status == wire.LevelNeedsYou)
+		// A muted session sends nothing, so it never arms the will either.
+		active = s.Managed && !s.Muted && (s.Status == "working" || s.Status == wire.LevelNeedsYou)
 		cur = willSession{bib: s.Bib, agent: s.Agent, needs: s.Status == wire.LevelNeedsYou}
 	case wire.EventSessionRemoved:
 	default:

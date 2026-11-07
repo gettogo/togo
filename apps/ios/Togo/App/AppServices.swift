@@ -19,6 +19,8 @@ import UIKit
     func create(hostID: HostID, params: CreateSessionParams) async throws -> SessionRow
     func agents(hostID: HostID) async throws -> [AgentInfo]
     func recentDirs(hostID: HostID) async throws -> [String]
+    /// Takes a folder off the machine's recent folders.
+    func forgetRecentDir(hostID: HostID, path: String) async throws
     func listDir(hostID: HostID, path: String) async throws -> ListDirResult
     /// `userStarted` is true when the user opened the tab or tapped Try again. Only such an
     /// attach may ask a sign-in question; automatic ones fail as signed out instead.
@@ -104,6 +106,9 @@ extension AppServices {
     var pendingRemovals: [PendingRemoval] { [] }
 
     func forgetRemoval(_ id: String) {}
+
+    /// Services with no machine to ask keep no recent folders to forget.
+    func forgetRecentDir(hostID: HostID, path: String) async throws {}
 }
 
 /// A running terminal for one tab: the engine's view and the link phases that drive its chrome.

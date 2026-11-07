@@ -10,6 +10,14 @@ harness: { version: [omp, --version], pattern: 'omp/(\S+)', range: ">=18.10 <19"
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
   agents, background, plan, changes, ports, status, compact, settings]
 images: { insert: together }   # how image paths are pasted into the input
+# The input line is the row under the status bar: "╰─ text", with the
+# effort hint at its right end when it is empty. C-u empties it; a slash
+# command's completion popup closes with Escape and keeps the text (seen on
+# 18.16.0, where the popup once took the Enter of a typed /login).
+input:
+  line: '^╰─(?: (.*?))?(?:\s{2,}⇧⇥ to change thinking effort)?\s*$'
+  clear: [C-u]
+  dismiss: [Escape]
 feeds:
   session:          # newest session file for this folder; header {type: session, version: 3}
     jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true }
@@ -24,10 +32,14 @@ feeds:
     mapper: omp.config
     stability: documented
 sources:
+  # Chat models of every provider omp can use. omp reads API keys from the
+  # login environment (MOONSHOT_API_KEY in .zshrc), which the helper gives
+  # the command; the other kinds (local stt/tts/tiny, web search) are not
+  # models /switch takes.
   models:
     cli: { argv: [omp, models, ls, --json] }
     select: '[.models[] | select(.kind == "chat")]'
-    cache: 10m
+    cache: 1m
     timeout: 10s
     stability: documented
   commands:
@@ -35,6 +47,14 @@ sources:
     cache: 1h
     timeout: 12s
     stability: documented
+  # Providers /login can sign in to, for the picker's "Not set up" section.
+  # Ones already signed in, or with models listed, are left out.
+  providers:
+    rpc: { method: get_login_providers, child: [omp, --mode, rpc, --no-session, --no-extensions], framing: typed }
+    select: '[.providers[] | select(.available != false and (.authenticated | not))]'
+    cache: 1m
+    timeout: 12s
+    stability: internal
   settings:
     cli: { argv: [omp, config, list, --json] }
     cache: 1m
@@ -74,6 +94,7 @@ screens:
       - { id: set_role_plan, label: Plan, kind: toggle, field: 'selector == $state.role_model_plan' }
     on_select: switch_model
     actions: [set_role_default, set_role_smol, set_role_slow, set_role_plan]
+    setup: { source: providers, map: { item.id: .id, item.title: .name }, action: login }
   effort:
     primitive: settings
     title: Effort
@@ -103,6 +124,12 @@ actions:
     label: Use model
     type: { text: '/switch {{.id}}', submit: true, when_idle: true }
     verify: { source: session, select: .model, equals: '{{.id}}', within: 5s }
+    stability: documented-command
+  # omp's own sign-in: it opens the provider's page through BROWSER, which
+  # reaches the phone as browser.open and its sign-in sheet.
+  login:
+    label: Sign in
+    type: { text: '/login {{.id}}', submit: true, when_idle: true }
     stability: documented-command
   set_role_default:
     label: Default

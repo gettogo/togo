@@ -1,0 +1,40 @@
+
+┌  Add credential
+│
+◆  Select provider
+
+│  Search: _
+│  ● Kilo Gateway (recommended)
+│  ○ Anthropic
+│  ○ GitHub Copilot
+│  ○ OpenAI
+│  ○ Google
+│  ○ OpenRouter
+│  ○ Vercel AI Gateway
+│  ...
+│  ↑/↓ to select • Enter: confirm • Type: to search
+└
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

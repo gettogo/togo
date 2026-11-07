@@ -36,6 +36,7 @@ struct FocusedMissionControl: ViewModifier {
 
 private struct MissionControlPresenter: ViewModifier {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.windowWidth) private var windowWidth
     let store: HarnessSessionStore?
     let actions: ChatActions
     let openExternal: (HarnessOpen) -> Void
@@ -46,7 +47,7 @@ private struct MissionControlPresenter: ViewModifier {
     /// The workspace's width with the inspector's column and the bars included.
     @State private var width: CGFloat = 0
 
-    private var presentation: MissionPresentation { MissionPresentation.choose(sizeClass) }
+    private var presentation: MissionPresentation { MissionPresentation.choose(sizeClass, windowWidth: windowWidth) }
 
     /// What decides whether the inspector opens by itself.
     private struct DefaultKey: Equatable {
@@ -68,11 +69,12 @@ private struct MissionControlPresenter: ViewModifier {
             .sheet(isPresented: shown(.sheet), onDismiss: flushPending) {
                 if let store {
                     stack(store, inSheet: true)
+                        // The side context's medium sheet (`AdaptivePresentation`), with the
+                        // chat still usable behind it at the medium height.
                         .presentationDetents([.medium, .large], selection: $detent)
                         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                         .presentationContentInteraction(.scrolls)
                         .presentationDragIndicator(.visible)
-                        .presentationBackground(Color.togoInk)
                 }
             }
             .inspector(isPresented: shown(.inspector)) {

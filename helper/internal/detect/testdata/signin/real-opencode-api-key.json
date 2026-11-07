@@ -1,0 +1,10 @@
+{
+  "source": "real",
+  "agentVersion": null,
+  "match": true,
+  "kind": "signin",
+  "title": "Enter your Anthropic API key",
+  "options": null,
+  "keys": {},
+  "subject": null
+}

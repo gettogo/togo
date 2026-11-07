@@ -1,0 +1,47 @@
+{
+  "source": "real",
+  "agentVersion": "2.1.319 (Claude Code)",
+  "match": true,
+  "kind": "permission",
+  "title": "Do you want to proceed?",
+  "subject": {
+    "kind": "command",
+    "text": "touch a.txt"
+  },
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, and always allow access to /private/tmp/workdir-01/-Users-owner-Dev-D elta-",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Yes, and switch to auto mode · auto mode handles these prompts for you",
+      "role": "other"
+    },
+    {
+      "n": 4,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ]
+  }
+}

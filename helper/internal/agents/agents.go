@@ -29,7 +29,6 @@ var Registry = []Agent{
 	{ID: "gemini", Name: "Gemini CLI", Command: "gemini", Resume: []string{"--resume", "latest"}},
 	{ID: "copilot", Name: "Copilot CLI", Command: "copilot", Resume: []string{"--continue"}},
 	{ID: "cursor", Name: "Cursor CLI", Command: "cursor-agent", Resume: []string{"--resume"}},
-	{ID: "qwen", Name: "Qwen Code", Command: "qwen", Resume: []string{"--continue"}},
 	{ID: "aider", Name: "Aider", Command: "aider", Resume: []string{"--restore-chat-history"}},
 	{ID: "amp", Name: "Amp", Command: "amp"},
 	{ID: "auggie", Name: "Auggie", Command: "auggie", Resume: []string{"--continue"}},
@@ -66,6 +65,7 @@ func FallbackDirs(home string) []string {
 		for _, d := range []string{
 			".local/bin", "bin", ".claude/local", ".bun/bin", ".npm-global/bin",
 			".volta/bin", ".cargo/bin", "go/bin", ".opencode/bin", ".amp/bin",
+			".kimi-code/bin", // Kimi Code's installer (seen live: kimi was "not installed" without it)
 		} {
 			dirs = append(dirs, filepath.Join(home, d))
 		}
@@ -124,4 +124,21 @@ func findIn(name string, dirs []string) (string, bool) {
 func Executable(p string) bool {
 	info, err := os.Stat(p)
 	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
+}
+
+// Resolve is the registry id for a session's agent: id itself, except that
+// a custom program (wire's "custom") whose argv names a known agent's
+// program, by path or by name, is that agent. Notifications then name
+// Kimi Code rather than "Custom".
+func Resolve(id string, argv []string) string {
+	if id != "custom" || len(argv) == 0 {
+		return id
+	}
+	base := filepath.Base(argv[0])
+	for _, a := range Registry {
+		if a.Command != "" && a.Command == base {
+			return a.ID
+		}
+	}
+	return id
 }

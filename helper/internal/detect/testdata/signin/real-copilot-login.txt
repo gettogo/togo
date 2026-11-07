@@ -1,0 +1,40 @@
+Opening your browser to authenticate...
+If it doesn't open automatically, visit:
+https://github.com/login/oauth/authorize?client_id=Ov23ctDVkRmgkPke0Mmm&redirect_uri=http%3A%2F%2F12
+7.0.0.1%3A50229%2Fcallback&scope=read%3Auser+read%3Aorg+repo+gist+codespace+write%3Aplugin_gateway_c
+onnections&state=rRNxAgg9GLVmrhYDcfzavA&code_challenge=vyd59HrOdNaPFsnDDs2-OU_K6eoGeBmFG0x7PNZTxak&c
+ode_challenge_method=S256
+Waiting for authorization...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

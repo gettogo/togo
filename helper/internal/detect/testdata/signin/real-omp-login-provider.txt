@@ -1,0 +1,40 @@
+
+                                  ████████████
+                                     ██  ██       ▄▀▀▄ █▀▄▀▄ █▀▀▄
+                                     ██  ██       ▀▄▄▀ █ █ █ █▄▄▀
+                                     ▒▒  ██                  █
+                                         ██       v18.16.0
+
+              Tip: Type `#` anywhere in your prompt for quick actions — copy the line
+                             or the whole prompt, undo, jump the cursor
+
+ Connecting to MCP servers: chrome-devtools:chrome-devtools…
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.18.0 is available. Run: omp update
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Connected to MCP server: chrome-devtools:chrome-devtools.
+
+╭─ Select provider to login ───────────────────────────────────────────────────────────────────────╮
+│ ❯ ChatGPT Plus/Pro (Codex Subscription)                                                        █ │
+│   Anthropic (Claude Pro/Max)                                                                   │ │
+│   Z.AI (GLM Coding Plan)                                                                       │ │
+│   Z.AI (GLM Coding Plan · Sign in)                                                             │ │
+│   Kimi Code                                                                                    │ │
+│   OpenRouter                                                                                   │ │
+│   GitHub Copilot                                                                               │ │
+│   Devin                                                                                        │ │
+│   Google Antigravity (Gemini, Claude, GPT-OSS)                                                 │ │
+│   Google Cloud Code Assist (Gemini CLI)                                                        │ │
+│ Type to search                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+

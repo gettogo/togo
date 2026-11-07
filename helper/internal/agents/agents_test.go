@@ -49,7 +49,7 @@ func TestRegistryOrderAndLookup(t *testing.T) {
 		ids = append(ids, a.ID)
 	}
 	want := []string{
-		"claude", "omp", "codex", "opencode", "gemini", "copilot", "cursor", "qwen", "aider",
+		"claude", "omp", "codex", "opencode", "gemini", "copilot", "cursor", "aider",
 		"amp", "auggie", "cline", "crush", "droid", "goose", "kilo", "kimi", "kiro", "openhands",
 		"pi", "vibe", "shell",
 	}
@@ -131,10 +131,28 @@ func TestFindUsesFallbackDirs(t *testing.T) {
 	if _, _, ok := Find("nosuchagent", "/usr/bin:/bin", FallbackDirs(home)); ok {
 		t.Fatal("Find found a program that is not installed")
 	}
-	for _, d := range []string{"~/bin", ".bun/bin", ".npm-global/bin", ".cargo/bin", "go/bin", "/opt/homebrew/bin", "/usr/local/bin"} {
+	for _, d := range []string{"~/bin", ".bun/bin", ".npm-global/bin", ".cargo/bin", "go/bin", ".kimi-code/bin", "/opt/homebrew/bin", "/usr/local/bin"} {
 		d = strings.Replace(d, "~/", "", 1)
 		if !slices.Contains(FallbackDirs(home), d) && !slices.Contains(FallbackDirs(home), filepath.Join(home, d)) {
 			t.Errorf("FallbackDirs lacks %s", d)
+		}
+	}
+}
+
+func TestResolveCustomProgram(t *testing.T) {
+	for _, c := range []struct {
+		id   string
+		argv []string
+		want string
+	}{
+		{"custom", []string{"/Users/u/.local/bin/kimi", "--yolo"}, "kimi"},
+		{"custom", []string{"cursor-agent"}, "cursor"},
+		{"custom", []string{"/usr/bin/htop"}, "custom"},
+		{"custom", nil, "custom"},
+		{"claude", []string{"/x/kimi"}, "claude"},
+	} {
+		if got := Resolve(c.id, c.argv); got != c.want {
+			t.Errorf("Resolve(%q, %v) = %q, want %q", c.id, c.argv, got, c.want)
 		}
 	}
 }

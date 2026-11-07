@@ -62,11 +62,6 @@
           "installed": false
         },
         {
-          "id": "qwen",
-          "name": "Qwen Code",
-          "installed": false
-        },
-        {
           "id": "aider",
           "name": "Aider",
           "installed": false

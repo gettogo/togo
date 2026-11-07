@@ -9,7 +9,9 @@ name: Kilo Code
 revision: 1
 match: { agents: [kilo], commands: [kilo, kilocode] }
 harness: { version: [kilo, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=7.8 <8" }
-endpoint: { kind: http, launch_args: [--port, '{{.port}}'], health: /path }
+# Kilo 7.8 guards the TUI's server with Basic auth even on loopback (401 without
+# it, seen live); the password comes from KILO_SERVER_PASSWORD, user "kilo".
+endpoint: { kind: http, launch_args: [--port, '{{.port}}'], health: /path, password_env: KILO_SERVER_PASSWORD, username: kilo }
 capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
   files, mode, model, needs.approvals, needs.questions, agents, plan, changes, ports, status,
   status.context, resume, compact, mcp, settings]
@@ -39,6 +41,14 @@ sources:
     http: { path: /config/providers }
     redact: ['.providers[].key', '.providers[].options.apiKey', '.providers[].options.headers']
     select: '[.providers[] | {id: .id, name: .name, keySet: ((((._set // []) | index("key")) != null) or (((.options._set // []) | index("apiKey")) != null))}]'
+    cache: 5m
+    stability: documented
+  # Every provider the harness knows, less the connected ones: the model
+  # picker's "Not set up" section, where an API key connects one.
+  unconnected:
+    http: { path: /provider }
+    redact: ['.all[].key', '.all[].options.apiKey', '.all[].options.headers']
+    select: '.connected as $c | [.all[] | select(.id as $id | $c | index($id) | not) | {id: .id, name: .name}] | sort_by(.name | ascii_downcase)'
     cache: 5m
     stability: documented
   agents:
@@ -75,6 +85,7 @@ screens:
     map: { item.id: .id, item.title: .name, item.group: .providerName, selected: $state.model_ref }
     filters: [{ id: provider, label: Provider, kind: choice, field: provider }]
     on_select: set_model
+    setup: { source: unconnected, map: { item.id: .id, item.title: .name }, action: add_provider_key, input: secret }
   providers:
     primitive: settings
     title: Providers
@@ -101,13 +112,21 @@ screens:
     source: mcp
 actions:
   # These switch the live session (checked: no config file is written). The
-  # TUI keeps its own choice for prompts typed at the desk.
+  # TUI keeps its own choice for prompts typed at the desk, and its footer
+  # shows that choice: the API changes the server session's agent, which the
+  # TUI reads only after a turn (seen live). The TUI's only agent control is
+  # its cycle key, which cannot name an agent, so the footer is not driven;
+  # Togo's mode chip shows the pick at once. OpenCode 2.x's footer follows.
   set_model:
     http: { method: POST, path: '/api/session/{{.state.harness_session}}/model', body: '{"model": {{.id | object}}}' }
     stability: experimental
   set_mode:
     http: { method: POST, path: '/api/session/{{.state.harness_session}}/agent', body: '{"agent": {{.id | json}}}' }
     stability: experimental
+  add_provider_key:
+    label: Add key
+    http: { method: PUT, path: '/auth/{{.id}}', body: '{"type": "api", "key": {{.value | json}}}' }
+    stability: documented
   set_provider_key:
     http: { method: PUT, path: '/auth/{{.target}}', body: '{"type": "api", "key": {{.value | json}}}' }
     stability: documented

@@ -10,6 +10,13 @@ harness: { version: [claude, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode, model,
   effort, needs.approvals, needs.questions, agents, background, plan, changes, ports, status,
   status.usage, status.context, resume, compact]
+# The prompt row is "❯ text" between two rules (older builds box it as
+# "│ ❯ text │"); an empty one shows a dim "Try ..." suggestion. C-u empties
+# it. No dismiss keys: Escape twice opens the rewind menu.
+input:
+  line: '^(?:│ )?❯(?: (.*?))?\s*│?$'
+  empty: ['^Try ".*"$']
+  clear: [C-u]
 images: { insert: per_path }   # a paste of several paths takes only the first: one paste per path
 feeds:
   hooks:            # forwarded by `togo hook claude <event>`, redacted, with the raw payload
@@ -86,11 +93,19 @@ actions:
     type: { text: '/model {{.id}}', submit: true, when_idle: true }
     verify: { source: transcript, select: $state.model, equals: '{{.id}}', within: 5s }
     stability: documented-command
+  # `/effort X` saves X in ~/.claude/settings.json (modelSettings.<model>.effortLevel,
+  # by design in 2.1.319; only a failed save leaves it to the session), so typing it
+  # would change every session. `--effort` is "for the current session": Togo restarts
+  # Claude on the same conversation with it, and never writes settings.json.
   set_effort:
     label: Set effort
-    type: { text: '/effort {{.value}}', submit: true, when_idle: true }
-    verify: { source: transcript, select: $state.effort, equals: '{{.value}}', within: 5s }
-    stability: documented-command
+    confirm: Restart Claude with this effort? The conversation continues; the effort applies to this session only.
+    branch:   # keep the session's permission mode across the restart
+      - when: '{{if and .state.harness_session .state.mode}}true{{end}}'
+        relaunch: { argv: [claude, --resume, '{{.state.harness_session}}', --effort, '{{.value}}', --permission-mode, '{{.state.mode}}'] }
+      - when: '{{if .state.harness_session}}true{{end}}'
+        relaunch: { argv: [claude, --resume, '{{.state.harness_session}}', --effort, '{{.value}}'] }
+    stability: documented
   set_mode:         # Shift+Tab is the documented mode cycle; each press is read back from the screen
     label: Mode
     keys: { keys: [BTab], cycle: true, max: 6 }

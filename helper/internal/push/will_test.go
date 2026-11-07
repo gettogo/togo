@@ -225,6 +225,23 @@ func TestWillMutedDisarms(t *testing.T) {
 	}
 }
 
+// A muted session working or waiting does not arm the will: its pushes
+// are off, so a dead helper must not announce it either.
+func TestWillSkipsMutedSession(t *testing.T) {
+	w := newWillEnv(t, 1)
+	ev := managedEv("s_aaaaaaaaaa", "needs_you")
+	pl := ev.Payload.(wire.SessionEvent)
+	sess := pl.Session.(session.Session)
+	sess.Muted = true
+	pl.Session = sess
+	ev.Payload = pl
+	w.hub.publish(ev)
+	w.advance(willDebounce)
+	if _, raw := w.frame(t); raw != nil && string(raw) != string(disarmFrame) {
+		t.Fatalf("muted session armed the will: %s", raw)
+	}
+}
+
 func TestWillDisarmsWhenDevicesGo(t *testing.T) {
 	w := newWillEnv(t, 1)
 	w.hub.publish(managedEv("s_aaaaaaaaaa", "working"))

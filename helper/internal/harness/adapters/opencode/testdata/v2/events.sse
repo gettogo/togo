@@ -1,0 +1,248 @@
+data: {"id": "evt_1b795eb93001IQef0lzmi72sZi", "created": 1794081418131, "type": "session.created", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "slug": "glowing-otter", "version": "2.2.5", "projectID": "880458662a2704d04d06217b4779181a15e0277e", "location": {"directory": "/tmp/work"}, "subpath": "", "title": "togo-probe2", "permissions": [{"action": "shell", "resource": "*", "effect": "ask"}]}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 0, "version": 1}}
+
+data: {"id": "evt_1b795ebb80010k9pJ2dUVW77v3", "created": 1794081418168, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b795ebb7001s6w6OWTldQYFJJ", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "item": {"type": "user", "payload": {"text": "Use the shell tool to run exactly: echo hi > a.txt . Do nothing else."}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 1, "version": 1}}
+
+data: {"id": "evt_1b795ebb9001c2Q3Bpez6Ivdel", "created": 1794081418169, "type": "session.execution.started", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 2, "version": 1}}
+
+data: {"id": "evt_1b795ebbc001RZre0lXIrFEkiM", "created": 1794081418172, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "inboxID": "msg_1b795ebb7001s6w6OWTldQYFJJ"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 4, "version": 1}}
+
+data: {"id": "evt_1b795f6c8001YBHXSrWxpeKU8H", "created": 1794081421000, "type": "session.step.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "agent": "build", "model": {"id": "qwen3.8-27b", "providerID": "local"}, "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "started": 1794081418177}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 5, "version": 1}}
+
+data: {"id": "evt_1b795f6cc001oxpQ15q10n9KEm", "created": 1794081421004, "type": "session.reasoning.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "ordinal": 0, "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 6, "version": 1}}
+
+data: {"id": "evt_1b795f734001mA1NmOWdsxpMUm", "created": 1794081421108, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "ordinal": 0, "delta": "The user wants me to run exactly `echo hi > a.txt` using"}}
+
+data: {"id": "evt_1b795f7ad001kRzTDZ3Gg4vUw8", "created": 1794081421229, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "ordinal": 0, "delta": " the shell tool. Do nothing else."}}
+
+data: {"id": "evt_1b795f7b8001En9Ru6Yp7OFPBc", "created": 1794081421240, "type": "session.tool.input.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "id": "7C4NfP4bD3rgmwKGOjO35KqdloGPUsVV", "name": "shell"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 7, "version": 1}}
+
+data: {"id": "evt_1b795f842001eSMwMWgm5b9hao", "created": 1794081421379, "type": "session.reasoning.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "ordinal": 0, "text": "The user wants me to run exactly `echo hi > a.txt` using the shell tool. Do nothing else.", "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 8, "version": 1}}
+
+data: {"id": "evt_1b795f846001APKDynDaOEaNI0", "created": 1794081421382, "type": "session.tool.input.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "id": "7C4NfP4bD3rgmwKGOjO35KqdloGPUsVV", "text": "{\"command\":\"echo hi > a.txt\"}"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 9, "version": 1}}
+
+data: {"id": "evt_1b795f848001P6qAxEtrvFhCJY", "created": 1794081421384, "type": "session.tool.called", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "id": "7C4NfP4bD3rgmwKGOjO35KqdloGPUsVV", "input": {"command": "echo hi > a.txt"}, "executed": false}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 10, "version": 1}}
+
+data: {"id": "evt_1b795f84d001P765iCh2npl5Vf", "created": 1794081421389, "type": "session.step.streamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 11, "version": 1}}
+
+data: {"id": "evt_1b795f851002516I27n2rQ3kDj", "created": 1794081421393, "type": "permission.asked", "location": {"directory": "/tmp/work"}, "data": {"id": "per_1b795f8510011Fzg5ty26Nuu2X", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "action": "shell", "resources": ["echo hi > a.txt"], "save": ["echo *"], "source": {"type": "tool", "messageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "id": "7C4NfP4bD3rgmwKGOjO35KqdloGPUsVV"}}}
+
+data: {"id": "evt_1b79682bc001JSJGbL6NY3a7ec", "created": 1794081456828, "type": "permission.replied", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "requestID": "per_1b795f8510011Fzg5ty26Nuu2X", "reply": "once"}}
+
+data: {"id": "evt_1b79682c2002xkNxcu3rkfyoMO", "created": 1794081456834, "type": "session.tool.progress", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "id": "7C4NfP4bD3rgmwKGOjO35KqdloGPUsVV", "metadata": {"shellID": "sh_1b79682bd001zpZ1kge2UWHSYO"}}}
+
+data: {"id": "evt_1b79682c5001OVT85SddTqOse4", "created": 1794081456837, "type": "session.tool.success", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "id": "7C4NfP4bD3rgmwKGOjO35KqdloGPUsVV", "content": [{"type": "text", "text": "(no output)"}], "metadata": {"status": "completed", "truncated": false, "exit": 0}, "executed": false}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 12, "version": 2}}
+
+data: {"id": "evt_1b79682c7001Uiy9sG0gWS7UMC", "created": 1794081456839, "type": "session.step.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b795ebbf001KwjrQ6K4epdvJI", "finish": "tool-calls", "rawFinish": "tool_calls", "tokens": {"input": 9073, "output": 56, "reasoning": 0, "cache": {"read": 0, "write": 0}}, "cost": 0}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 13, "version": 1}}
+
+data: {"id": "evt_1b79682c80018vNr5DOabGFfNF", "created": 1794081456840, "type": "session.usage.updated", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "cost": 0, "tokens": {"input": 9073, "output": 56, "reasoning": 0, "cache": {"read": 0, "write": 0}}}}
+
+data: {"id": "evt_1b7968438001P3MueZs3N52qr6", "created": 1794081457208, "type": "session.step.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "agent": "build", "model": {"id": "qwen3.8-27b", "providerID": "local"}, "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "started": 1794081456848}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 14, "version": 1}}
+
+data: {"id": "evt_1b796843b001XosBxGx9724Zn3", "created": 1794081457211, "type": "session.reasoning.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0, "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 15, "version": 1}}
+
+data: {"id": "evt_1b79684a0001vU6ckfw1kXtViA", "created": 1794081457312, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0, "delta": "The command executed successfully, and the file `a.txt` was"}}
+
+data: {"id": "evt_1b7968518001Z0xJL1LSa7U9b3", "created": 1794081457433, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0, "delta": " created with the content \"hi\". As per the instruction to"}}
+
+data: {"id": "evt_1b796858d001ZYZc6zndSPjn5p", "created": 1794081457549, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0, "delta": " \"do nothing else,\" I won't do anything more."}}
+
+data: {"id": "evt_1b79685970019C7IviXGsWO0vK", "created": 1794081457559, "type": "session.text.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 16, "version": 1}}
+
+data: {"id": "evt_1b79685e3001svuAu5BiZFvpZp", "created": 1794081457635, "type": "session.reasoning.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0, "text": "The command executed successfully, and the file `a.txt` was created with the content \"hi\". As per the instruction to \"do nothing else,\" I won't do anything more.", "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 17, "version": 1}}
+
+data: {"id": "evt_1b79685e4001mX3Hjguted5xMU", "created": 1794081457636, "type": "session.text.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0, "delta": "Done. `a.txt` created with `hi`."}}
+
+data: {"id": "evt_1b79685e40020Ij2Cmf5loZa4L", "created": 1794081457636, "type": "session.text.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "ordinal": 0, "text": "Done. `a.txt` created with `hi`."}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 18, "version": 1}}
+
+data: {"id": "evt_1b79685e5001Ucv90znny6rLSh", "created": 1794081457637, "type": "session.step.streamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 19, "version": 1}}
+
+data: {"id": "evt_1b79685e50027djWr7PeLKq4Nx", "created": 1794081457637, "type": "session.step.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b79682ce001tUS1UIkYUjo92C", "finish": "stop", "rawFinish": "stop", "tokens": {"input": 19, "output": 52, "reasoning": 0, "cache": {"read": 9128, "write": 0}}, "cost": 0}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 20, "version": 1}}
+
+data: {"id": "evt_1b79685e6001BfHWZ7DszPbqZe", "created": 1794081457638, "type": "session.usage.updated", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "cost": 0, "tokens": {"input": 9092, "output": 108, "reasoning": 0, "cache": {"read": 9128, "write": 0}}}}
+
+data: {"id": "evt_1b79685e6002MfAY9p7L3TIplf", "created": 1794081457638, "type": "session.execution.succeeded", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 21, "version": 1}}
+
+data: {"id": "evt_1b796e7e90026Cc0kcysjc7jcV", "created": 1794081482729, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b796e7e90018e2dzTTHuCTH79", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "item": {"type": "user", "payload": {"text": "Use the question tool to ask me one question: do I prefer red or blue? Offer those two options."}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 22, "version": 1}}
+
+data: {"id": "evt_1b796e7ea001ZHEI3pnp4N4PFN", "created": 1794081482730, "type": "session.execution.started", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 23, "version": 1}}
+
+data: {"id": "evt_1b796e7ec001Oh8TkmrMv8o5Cn", "created": 1794081482732, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "inboxID": "msg_1b796e7e90018e2dzTTHuCTH79"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 24, "version": 1}}
+
+data: {"id": "evt_1b796ea1e001O4ftV8Uo0CTiQc", "created": 1794081483294, "type": "session.step.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "agent": "build", "model": {"id": "qwen3.8-27b", "providerID": "local"}, "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "started": 1794081482735}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 25, "version": 1}}
+
+data: {"id": "evt_1b796ea1f001Pd1ruX27PdBLcq", "created": 1794081483295, "type": "session.reasoning.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "ordinal": 0, "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 26, "version": 1}}
+
+data: {"id": "evt_1b796ea86001HSoHgppikOOmN9", "created": 1794081483398, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "ordinal": 0, "delta": "The user wants me to ask one question using the"}}
+
+data: {"id": "evt_1b796eaea001g5nvSTXAmbWCBO", "created": 1794081483498, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "ordinal": 0, "delta": " question tool: do they prefer red or blue? Present these two options."}}
+
+data: {"id": "evt_1b796eb32001kyTMjqSIqhT07r", "created": 1794081483570, "type": "session.tool.input.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "id": "t8z7y7Uy11ci0mpqWs0eqcfdrEn6w8Gg", "name": "question"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 27, "version": 1}}
+
+data: {"id": "evt_1b796eceb001DCmebDZ9YCR2Tk", "created": 1794081484011, "type": "session.reasoning.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "ordinal": 0, "text": "The user wants me to ask one question using the question tool: do they prefer red or blue? Present these two options.", "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 28, "version": 1}}
+
+data: {"id": "evt_1b796ecec001xNQi3SjdLaLmAx", "created": 1794081484012, "type": "session.tool.input.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "id": "t8z7y7Uy11ci0mpqWs0eqcfdrEn6w8Gg", "text": "{\"questions\":[{\"question\": \"Do you prefer red or blue?\", \"header\": \"Color preference\", \"options\": [{\"label\": \"Red\", \"description\": \"I prefer red\"}, {\"label\": \"Blue\", \"description\": \"I prefer blue\"}]}]}"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 29, "version": 1}}
+
+data: {"id": "evt_1b796ecec002BVSaTEYVCD0o0z", "created": 1794081484012, "type": "session.tool.called", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "id": "t8z7y7Uy11ci0mpqWs0eqcfdrEn6w8Gg", "input": {"questions": [{"question": "Do you prefer red or blue?", "header": "Color preference", "options": [{"label": "Red", "description": "I prefer red"}, {"label": "Blue", "description": "I prefer blue"}]}]}, "executed": false}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 30, "version": 1}}
+
+data: {"id": "evt_1b796eced001MZCJkf2j6C7UPU", "created": 1794081484013, "type": "session.step.streamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 31, "version": 1}}
+
+data: {"id": "evt_1b796ecee0029kT05L7ZFoDwD5", "created": 1794081484014, "type": "form.created", "location": {"directory": "/tmp/work"}, "data": {"form": {"id": "frm_1b796ecee00128y1cvfI6jEono", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "title": "Questions", "metadata": {"kind": "question", "tool": {"messageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "id": "t8z7y7Uy11ci0mpqWs0eqcfdrEn6w8Gg"}}, "fields": [{"key": "q0", "title": "Color preference", "description": "Do you prefer red or blue?", "type": "string", "options": [{"value": "Red", "label": "Red", "description": "I prefer red"}, {"value": "Blue", "label": "Blue", "description": "I prefer blue"}], "custom": true}]}}}
+
+data: {"id": "evt_1b7976f860019p3h27cMUT4qw5", "created": 1794081517446, "type": "form.replied", "location": {"directory": "/tmp/work"}, "data": {"id": "frm_1b796ecee00128y1cvfI6jEono", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "answer": {"q0": "Blue"}}}
+
+data: {"id": "evt_1b7976f86002wfpT0L8pub6kg3", "created": 1794081517446, "type": "session.tool.success", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "id": "t8z7y7Uy11ci0mpqWs0eqcfdrEn6w8Gg", "content": [{"type": "text", "text": "User has answered your questions: \"Do you prefer red or blue?\"=\"Blue\". You can now continue with the user's answers in mind."}], "metadata": {"answers": [["Blue"]], "truncated": false}, "executed": false}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 32, "version": 2}}
+
+data: {"id": "evt_1b7976f8c001d7MEhQI6oNXyFw", "created": 1794081517452, "type": "session.step.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b796e7ee001QYrnsrl6V83lFY", "finish": "tool-calls", "rawFinish": "tool_calls", "tokens": {"input": 34, "output": 105, "reasoning": 0, "cache": {"read": 9198, "write": 0}}, "cost": 0}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 33, "version": 1}}
+
+data: {"id": "evt_1b7976f92001n3DuIMIGars7A6", "created": 1794081517460, "type": "session.usage.updated", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "cost": 0, "tokens": {"input": 9126, "output": 213, "reasoning": 0, "cache": {"read": 18326, "write": 0}}}}
+
+data: {"id": "evt_1b797716e001dl3tz038MN5uH1", "created": 1794081517934, "type": "session.step.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "agent": "build", "model": {"id": "qwen3.8-27b", "providerID": "local"}, "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "started": 1794081517504}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 34, "version": 1}}
+
+data: {"id": "evt_1b797717800164l4TJ83ZG5zOb", "created": 1794081517944, "type": "session.reasoning.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "ordinal": 0, "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 35, "version": 1}}
+
+data: {"id": "evt_1b79771e20018NvOfnOwcBAsX1", "created": 1794081518050, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "ordinal": 0, "delta": "The user answered \"blue\". I should communicate the answer back"}}
+
+data: {"id": "evt_1b797721c001ZhdOdfRer2OY3i", "created": 1794081518108, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "ordinal": 0, "delta": " in a concise way."}}
+
+data: {"id": "evt_1b797721c002ItQLoNIrTEnMp4", "created": 1794081518108, "type": "session.text.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "ordinal": 0}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 36, "version": 1}}
+
+data: {"id": "evt_1b79772420018Vjyi5MWFZPO5v", "created": 1794081518147, "type": "session.reasoning.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "ordinal": 0, "text": "The user answered \"blue\". I should communicate the answer back in a concise way.", "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 37, "version": 1}}
+
+data: {"id": "evt_1b79772460019qUtmNoU0xzEx3", "created": 1794081518150, "type": "session.text.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "ordinal": 0, "delta": "Answer: blue."}}
+
+data: {"id": "evt_1b7977249001xWOaD0U4f6Ffc0", "created": 1794081518153, "type": "session.text.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "ordinal": 0, "text": "Answer: blue."}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 38, "version": 1}}
+
+data: {"id": "evt_1b7977260001pt4Lilr0zWAa8i", "created": 1794081518176, "type": "session.step.streamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 39, "version": 1}}
+
+data: {"id": "evt_1b797726b001QKfIFqbzTQJmdt", "created": 1794081518188, "type": "session.step.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b7976fb9001BJU5TRR0lDxIe6", "finish": "stop", "rawFinish": "stop", "tokens": {"input": 45, "output": 25, "reasoning": 0, "cache": {"read": 9336, "write": 0}}, "cost": 0}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 40, "version": 1}}
+
+data: {"id": "evt_1b79772760016nCX116tvmSOKF", "created": 1794081518198, "type": "session.usage.updated", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "cost": 0, "tokens": {"input": 9171, "output": 238, "reasoning": 0, "cache": {"read": 27662, "write": 0}}}}
+
+data: {"id": "evt_1b7977278001RJYIuDxWqxRj4f", "created": 1794081518200, "type": "session.execution.succeeded", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 41, "version": 1}}
+
+data: {"id": "evt_1b797c3ce001be8KPM5oRAVIF3", "created": 1794081539022, "type": "session.agent.selected", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "agent": "plan"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 42, "version": 1}}
+
+data: {"id": "evt_1b797c3d300130G0ZyADlr4o2U", "created": 1794081539027, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b797c3d2001xMWaEIQPAKo5Ql", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "item": {"type": "synthetic", "payload": {"text": "<system-reminder>\nYou are in Plan mode. Discuss the plan with the user directly in the conversation. Do not create or update plan files unless the user explicitly asks you to; when they do, write them only in:\n/Users/u/.opencode/plan\n\nDo not modify any other files or ask a subagent to do so.\n\nYou remain in Plan mode until the user switches agents. If the user asks you to implement changes, do not do so. Tell them they need to switch agents.\n</system-reminder>"}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 43, "version": 1}}
+
+data: {"id": "evt_1b797c3eb001EHsfmVugmCyF8E", "created": 1794081539051, "type": "session.model.selected", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "model": {"id": "coder-fast", "providerID": "local"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 44, "version": 1}}
+
+data: {"id": "evt_1b797c407001izjnxCX0nDVwVL", "created": 1794081539079, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b797c405001FfwLH2wnisfj7B", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "item": {"type": "user", "payload": {"text": "Count slowly from 1 to 300, one number per line."}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 45, "version": 1}}
+
+data: {"id": "evt_1b797c409001vjQWCQ3OUVpy4P", "created": 1794081539081, "type": "session.execution.started", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 46, "version": 1}}
+
+data: {"id": "evt_1b797c410001vyGME4ssS0nCX2", "created": 1794081539088, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "inboxID": "msg_1b797c3d2001xMWaEIQPAKo5Ql"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 47, "version": 1}}
+
+data: {"id": "evt_1b797c411001plBWrtq2Tou7Ke", "created": 1794081539089, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "inboxID": "msg_1b797c405001FfwLH2wnisfj7B"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 48, "version": 1}}
+
+data: {"id": "evt_1b797d72f001wXggqTi8Ty2Utp", "created": 1794081543983, "type": "session.step.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "agent": "plan", "model": {"id": "coder-fast", "providerID": "local", "variant": "default"}, "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "started": 1794081539099}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 49, "version": 1}}
+
+data: {"id": "evt_1b797d731001iWhpLqQpCCV6F8", "created": 1794081543985, "type": "session.reasoning.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 50, "version": 1}}
+
+data: {"id": "evt_1b797d799001pv84zYC5nduozy", "created": 1794081544089, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": "The user is asking me to slowly count from 1 to "}}
+
+data: {"id": "evt_1b797d7ff00170ekoj3KiRms9Z", "created": 1794081544191, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": "300, with one number per line. This is a simple output"}}
+
+data: {"id": "evt_1b797d86d0013UXoDPJsF6OTcY", "created": 1794081544301, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": " task. Plan mode is active, but this isn't a plan"}}
+
+data: {"id": "evt_1b797d8d3001Owy2UTYPtMcStE", "created": 1794081544403, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": " discussion or file modification, just a direct"}}
+
+data: {"id": "evt_1b797d985001FcIiBibbrO0Rsw", "created": 1794081544581, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": " response. Let me count from 1 to 300, one per line.\n\nIt's a long"}}
+
+data: {"id": "evt_1b797d9ee001yWF36rm2uO3yuB", "created": 1794081544686, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": " output but simple. I just need to write it out."}}
+
+data: {"id": "evt_1b797da440017Vi7PUvZ0kApBf", "created": 1794081544772, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": " Let's be careful."}}
+
+data: {"id": "evt_1b797da44002qqeLqBeAM1Q1e7", "created": 1794081544772, "type": "session.text.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 51, "version": 1}}
+
+data: {"id": "evt_1b797daab001WRdOMRm95s4KzC", "created": 1794081544875, "type": "session.text.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": "1\n2\n3\n4\n5\n6\n7\n8"}}
+
+data: {"id": "evt_1b797db20001zos5v74F2H5At2", "created": 1794081544992, "type": "session.text.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": "\n9\n10\n1"}}
+
+data: {"id": "evt_1b797db91001WbFc6LASIzqOQi", "created": 1794081545105, "type": "session.text.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "delta": "1\n12\n13\n14\n15\n16\n17\n18\n19\n20\n2"}}
+
+data: {"id": "evt_1b797db9f0011o7wpqfdnIhkmI", "created": 1794081545120, "type": "session.text.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "text": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n2"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 52, "version": 1}}
+
+data: {"id": "evt_1b797dba2001ueeseENYEzIni3", "created": 1794081545122, "type": "session.reasoning.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "ordinal": 0, "text": "The user is asking me to slowly count from 1 to 300, with one number per line. This is a simple output task. Plan mode is active, but this isn't a plan discussion or file modification, just a direct response. Let me count from 1 to 300, one per line.\n\nIt's a long output but simple. I just need to write it out. Let's be careful.", "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 53, "version": 1}}
+
+data: {"id": "evt_1b797dba4001xs4zQ60H0FySWR", "created": 1794081545125, "type": "session.step.streamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 54, "version": 1}}
+
+data: {"id": "evt_1b797dba6001ydXAC7dQ2wGoCT", "created": 1794081545126, "type": "session.step.failed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "assistantMessageID": "msg_1b797c415001RPsbgZYZ25vca1", "error": {"type": "aborted", "message": "Step interrupted"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 55, "version": 1}}
+
+data: {"id": "evt_1b797dba8001jIBUKvWW5bqvyd", "created": 1794081545128, "type": "session.execution.interrupted", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "reason": "user"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 56, "version": 1}}
+
+data: {"id": "evt_1b797e775001ynrm0hGUzPUBED", "created": 1794081548149, "type": "session.agent.selected", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "agent": "build", "previous": "plan"}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 57, "version": 1}}
+
+data: {"id": "evt_1b797e77700299zm6tjGHwosim", "created": 1794081548151, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b797e777001X1oQSq8cVaNusF", "sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "item": {"type": "synthetic", "payload": {"text": "<system-reminder>\nYou are NO LONGER in Plan mode. The previous Plan restrictions no longer apply. Any Plan mode instructions from earlier in this conversation are no longer active.\n</system-reminder>"}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 58, "version": 1}}
+
+data: {"id": "evt_1b797e78f0017xqNOejp33vwZc", "created": 1794081548175, "type": "session.model.selected", "data": {"sessionID": "ses_e486a146dffek2N07HBeeD8gCa", "model": {"id": "qwen3.8-27b", "providerID": "local"}, "previous": {"id": "coder-fast", "providerID": "local", "variant": "default"}}, "durable": {"aggregateID": "ses_e486a146dffek2N07HBeeD8gCa", "seq": 59, "version": 1}}
+
+data: {"id": "evt_1b7984819001LewPjGAH4mXGVb", "created": 1794081572889, "type": "session.created", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "slug": "tidy-mountain", "version": "2.2.5", "projectID": "880458662a2704d04d06217b4779181a15e0277e", "location": {"directory": "/tmp/work"}, "subpath": ""}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 0, "version": 1}}
+
+data: {"id": "evt_1b7984c5c0015IV9wDZ3cpePkM", "created": 1794081573980, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b7984c5b0014bFAVdQbxVkiSP", "sessionID": "ses_togoprobe0000000000000001", "item": {"type": "user", "payload": {"text": "Reply with just: ok"}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 1, "version": 1}}
+
+data: {"id": "evt_1b7984c5d001vGO5WwY7o72ano", "created": 1794081573981, "type": "session.execution.started", "data": {"sessionID": "ses_togoprobe0000000000000001"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 2, "version": 1}}
+
+data: {"id": "evt_1b7984c62001S12cNgE60dlN2V", "created": 1794081573986, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "inboxID": "msg_1b7984c5b0014bFAVdQbxVkiSP"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 4, "version": 1}}
+
+data: {"id": "evt_1b7984ddf001DRQVUKLplgpqFm", "created": 1794081574367, "type": "session.step.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "agent": "build", "model": {"id": "qwen3.8-27b", "providerID": "local"}, "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "started": 1794081574003}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 5, "version": 1}}
+
+data: {"id": "evt_1b7984de2001uusT2csJIQhnF1", "created": 1794081574370, "type": "session.reasoning.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "ordinal": 0, "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 6, "version": 1}}
+
+data: {"id": "evt_1b7984e4a001b6C2vrDudhBepE", "created": 1794081574474, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "ordinal": 0, "delta": "The user said \"just reply with ok\". This is"}}
+
+data: {"id": "evt_1b7984eb0001fPAFJESBmFKvXO", "created": 1794081574576, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "ordinal": 0, "delta": " a simple instruction, so I'll reply with \"ok\"."}}
+
+data: {"id": "evt_1b7984eb00022nV7014GQTwf83", "created": 1794081574576, "type": "session.text.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "ordinal": 0}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 7, "version": 1}}
+
+data: {"id": "evt_1b7984ec9001ZIQyESzCerWHGl", "created": 1794081574601, "type": "session.reasoning.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "ordinal": 0, "text": "The user said \"just reply with ok\". This is a simple instruction, so I'll reply with \"ok\".", "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 8, "version": 1}}
+
+data: {"id": "evt_1b7984ecb001Zx4wkNrQ6CDPuJ", "created": 1794081574603, "type": "session.text.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "ordinal": 0, "delta": "ok"}}
+
+data: {"id": "evt_1b7984ecb0020ODrch79vvNuET", "created": 1794081574603, "type": "session.text.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "ordinal": 0, "text": "ok"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 9, "version": 1}}
+
+data: {"id": "evt_1b7984ecd001cYOmk7jj9VB2C6", "created": 1794081574605, "type": "session.step.streamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 10, "version": 1}}
+
+data: {"id": "evt_1b7984ecf001LnIl2Ji3x8uXsz", "created": 1794081574607, "type": "session.step.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b7984c70001U5fdEYaBm3Ydez", "finish": "stop", "rawFinish": "stop", "tokens": {"input": 15, "output": 28, "reasoning": 0, "cache": {"read": 9045, "write": 0}}, "cost": 0}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 11, "version": 1}}
+
+data: {"id": "evt_1b7984ecf002C2Yk6Q6bjRByWv", "created": 1794081574607, "type": "session.usage.updated", "data": {"sessionID": "ses_togoprobe0000000000000001", "cost": 0, "tokens": {"input": 15, "output": 28, "reasoning": 0, "cache": {"read": 9045, "write": 0}}}}
+
+data: {"id": "evt_1b7984ed00010iMD1llZpR3FOP", "created": 1794081574608, "type": "session.execution.succeeded", "data": {"sessionID": "ses_togoprobe0000000000000001"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 12, "version": 1}}
+
+data: {"id": "evt_1b7985f8a001YxUEi2p2Eu1ix3", "created": 1794081578890, "type": "session.usage.updated", "data": {"sessionID": "ses_togoprobe0000000000000001", "cost": 0, "tokens": {"input": 506, "output": 82, "reasoning": 0, "cache": {"read": 9045, "write": 0}}}}
+
+data: {"id": "evt_1b7985f8a002iUXozc5Yd0vSlt", "created": 1794081578890, "type": "session.renamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "title": "Reply ok"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 14, "version": 1}}
+
+data: {"id": "evt_1b798a4e1001GH66TflfLvyKPF", "created": 1794081596641, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b798a4e0001aWJL61RJsddgPA", "sessionID": "ses_togoprobe0000000000000001", "item": {"type": "user", "payload": {"text": "Reply with just: second"}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 15, "version": 1}}
+
+data: {"id": "evt_1b798a4e2001wAJV3WE3VYmctE", "created": 1794081596642, "type": "session.execution.started", "data": {"sessionID": "ses_togoprobe0000000000000001"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 16, "version": 1}}
+
+data: {"id": "evt_1b798a4e5001GPLWkga73MEFwP", "created": 1794081596645, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "inboxID": "msg_1b798a4e0001aWJL61RJsddgPA"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 17, "version": 1}}
+
+data: {"id": "evt_1b798a6ff001wHREzbotDE5wac", "created": 1794081597183, "type": "session.step.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "agent": "build", "model": {"id": "qwen3.8-27b", "providerID": "local"}, "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "started": 1794081596653}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 18, "version": 1}}
+
+data: {"id": "evt_1b798a701001FK34axYgtI33qq", "created": 1794081597185, "type": "session.reasoning.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "ordinal": 0, "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 19, "version": 1}}
+
+data: {"id": "evt_1b798a767001sri59RhmIMBgFv", "created": 1794081597287, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "ordinal": 0, "delta": "The user is simply asking to reply with \"second\". I"}}
+
+data: {"id": "evt_1b798a7cc001sKAS2PVZk0viIP", "created": 1794081597388, "type": "session.reasoning.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "ordinal": 0, "delta": "'ll reply accordingly."}}
+
+data: {"id": "evt_1b798a7f9001IpQlfLSrkByX5X", "created": 1794081597433, "type": "session.text.started", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "ordinal": 0}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 20, "version": 1}}
+
+data: {"id": "evt_1b798a7fa001LeRw63s9C6GDhx", "created": 1794081597434, "type": "session.reasoning.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "ordinal": 0, "text": "The user is simply asking to reply with \"second\". I'll reply accordingly.", "native": {"reasoningField": "reasoning_content"}}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 21, "version": 1}}
+
+data: {"id": "evt_1b798a7fb001eq2s8cFN9dZnH5", "created": 1794081597435, "type": "session.text.delta", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "ordinal": 0, "delta": "second"}}
+
+data: {"id": "evt_1b798a7fb002hA5oyCzOPvmKMT", "created": 1794081597435, "type": "session.text.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "ordinal": 0, "text": "second"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 22, "version": 1}}
+
+data: {"id": "evt_1b798a7fc001qsBYf0Dv1jqtn6", "created": 1794081597436, "type": "session.step.streamed", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 23, "version": 1}}
+
+data: {"id": "evt_1b798a7fc002EcgXH2IYSnt1jI", "created": 1794081597436, "type": "session.step.ended", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_togoprobe0000000000000001", "assistantMessageID": "msg_1b798a4ea0016CHPZYp0OrvS7O", "finish": "stop", "rawFinish": "stop", "tokens": {"input": 17, "output": 21, "reasoning": 0, "cache": {"read": 9087, "write": 0}}, "cost": 0}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 24, "version": 1}}
+
+data: {"id": "evt_1b798a7fd001FSQ9IpaK9SP9Og", "created": 1794081597437, "type": "session.usage.updated", "data": {"sessionID": "ses_togoprobe0000000000000001", "cost": 0, "tokens": {"input": 523, "output": 103, "reasoning": 0, "cache": {"read": 18132, "write": 0}}}}
+
+data: {"id": "evt_1b798a7fe0011po2mPZVYdAkbN", "created": 1794081597438, "type": "session.execution.succeeded", "data": {"sessionID": "ses_togoprobe0000000000000001"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 25, "version": 1}}
+
+data: {"id": "evt_1b798f7d4001G9i31hzInkuMP6", "created": 1794081617876, "type": "session.agent.selected", "data": {"sessionID": "ses_togoprobe0000000000000001", "agent": "plan"}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 26, "version": 1}}
+
+data: {"id": "evt_1b798f7d7001uxFjmjWd4PlDp3", "created": 1794081617879, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1b798f7d60019c9mj2MHlZrUr7", "sessionID": "ses_togoprobe0000000000000001", "item": {"type": "synthetic", "payload": {"text": "<system-reminder>\nYou are in Plan mode. Discuss the plan with the user directly in the conversation. Do not create or update plan files unless the user explicitly asks you to; when they do, write them only in:\n/Users/u/.opencode/plan\n\nDo not modify any other files or ask a subagent to do so.\n\nYou remain in Plan mode until the user switches agents. If the user asks you to implement changes, do not do so. Tell them they need to switch agents.\n</system-reminder>"}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_togoprobe0000000000000001", "seq": 27, "version": 1}}
+

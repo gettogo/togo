@@ -1,0 +1,39 @@
+{
+  "source": "real",
+  "agentVersion": null,
+  "match": true,
+  "kind": "question",
+  "title": "Please login with your Factory account to continue.",
+  "options": [
+    {
+      "n": 1,
+      "label": "Login",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Sign into a Factory Private deployment",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Exit",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  },
+  "subject": null
+}

@@ -23,7 +23,6 @@ import (
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/opencode"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/openhands"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/pi"
-	_ "github.com/gettogo/togo/helper/internal/harness/adapters/qwen"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/shell"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/vibe"
 )

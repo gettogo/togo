@@ -15,6 +15,7 @@
       "reason": "usage_limit",
       "detail": "Usage limit reached"
     },
-    "host": "studio"
+    "host": "studio",
+    "sessionName": "Claude Code"
   }
 }

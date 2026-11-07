@@ -40,6 +40,15 @@ enum ComposerCopy {
         String(localized: "composer.message", defaultValue: "Message \(name)")
     }
 
+    /// "OMP has no such command.": "/xyz" the agent does not list, held in the field.
+    static func notACommand(_ name: String) -> String {
+        name.isEmpty
+            ? String(localized: "composer.notACommandUnnamed", defaultValue: "Not a known command.")
+            : String(localized: "composer.notACommand", defaultValue: "\(name) has no such command.")
+    }
+
+    static let sendAsText = String(localized: "composer.sendAsText", defaultValue: "Send as text")
+
     /// "Model…": a long list on its own screen.
     static func opensList(_ title: String) -> String {
         String(localized: "composer.opensList", defaultValue: "\(title)…")

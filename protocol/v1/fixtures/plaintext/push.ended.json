@@ -15,6 +15,7 @@
       "reason": "exit",
       "detail": null
     },
-    "host": "studio"
+    "host": "studio",
+    "sessionName": "Claude Code"
   }
 }

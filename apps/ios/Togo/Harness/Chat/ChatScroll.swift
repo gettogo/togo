@@ -136,6 +136,11 @@ struct NeedsScrolling: ViewModifier {
                 guard loaded, let id = ChatScroll.target(old: old, new: new, dragging: scroll.dragging) else { return }
                 scroll.go(.row(id), reduce: reduceMotion, settle: true)
             }
+            // A field a card just revealed rises above the composer, and once more after the
+            // keyboard has come up (`settle`).
+            .environment(\.revealRow, RevealRowAction { [reduceMotion] id in
+                scroll.go(.row(id), reduce: reduceMotion, settle: true)
+            })
     }
 }
 

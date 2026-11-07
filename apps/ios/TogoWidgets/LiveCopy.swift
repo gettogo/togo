@@ -76,6 +76,10 @@ enum LiveCopy {
 
     static let nothingWaiting = String(localized: "live.nothingWaiting", defaultValue: "Nothing waiting")
 
+    static let approve = String(localized: "live.approve", defaultValue: "Approve")
+    static let deny = String(localized: "live.deny", defaultValue: "Deny")
+    static let open = String(localized: "live.open", defaultValue: "Open")
+
     /// The word under a count on its own, as in the circular widget.
     static let waitingWord = String(localized: "live.waitingWord", defaultValue: "waiting")
 

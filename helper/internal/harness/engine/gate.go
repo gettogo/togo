@@ -29,6 +29,10 @@ type gateResult struct {
 	version string
 	ok      bool
 	reason  string
+	// transient is a failure to run the version command (a timeout under
+	// load, a PATH not yet read from the login shell) rather than an answer:
+	// it is not cached and the session asks again.
+	transient bool
 }
 
 // check returns the harness version and whether it is inside the range.
@@ -45,6 +49,9 @@ func (g *gate) check(ctx context.Context, a *adapter, env harness.Env) gateResul
 	if st, err := os.Stat(prog); err == nil {
 		key += "@" + st.ModTime().String()
 	}
+	// Adapters for different versions of one program judge the same
+	// output against different ranges.
+	key += "|" + a.Harness.Pattern + "|" + a.Harness.Range
 	g.mu.Lock()
 	if r, ok := g.cache[key]; ok {
 		g.mu.Unlock()
@@ -57,11 +64,11 @@ func (g *gate) check(ctx context.Context, a *adapter, env harness.Env) gateResul
 	r := gateResult{}
 	switch {
 	case err != nil:
-		r.reason = "the version command failed"
+		r.reason, r.transient = "the version command failed", true
 	default:
 		r = judgeVersion(string(out), a.Harness.Pattern, a.Harness.Range)
 	}
-	if ctx.Err() == nil {
+	if !r.transient {
 		g.mu.Lock()
 		if g.cache == nil {
 			g.cache = map[string]gateResult{}

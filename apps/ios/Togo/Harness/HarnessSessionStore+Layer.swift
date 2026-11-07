@@ -11,6 +11,38 @@ enum SessionLayer: String, Hashable, Sendable {
     case pending
 }
 
+extension SessionLayer {
+    /// A tab's layer before its harness store exists. Until the machines are read, nothing says
+    /// which layer a session gets, so it waits (the loader) rather than showing the terminal
+    /// and its bar first. Then a session that should have a chat, on a machine that serves
+    /// harness.v1, waits for its store; anything else is the terminal.
+    static func beforeStore(hostsLoaded: Bool, listed: Bool, serves: Bool, expectsChat: Bool) -> SessionLayer {
+        if !listed { return hostsLoaded ? .terminal : .pending }
+        return serves && expectsChat ? .pending : .terminal
+    }
+}
+
+/// What takes the typing under a session, from the layer it shows (S4). The chat has its
+/// composer; the terminal has the prompt bar or the compose bar; while it is not known yet which
+/// one the session gets (`pending`), neither shows, only the loader, so the terminal's one-line
+/// bar never flashes under a session that is about to show its chat.
+enum SessionInput: Equatable {
+    case composer
+    case terminal
+    case none
+
+    init(_ layer: SessionLayer) {
+        switch layer {
+        case .chat: self = .composer
+        case .terminal: self = .terminal
+        case .pending: self = .none
+        }
+    }
+
+    /// The app's prompt bar steps aside: the chat's composer types, or nothing does yet.
+    var hidesPromptBar: Bool { self != .terminal }
+}
+
 /// Where "Show in terminal" should land: the terminal scrolls `linesFromBottom` up and marks
 /// the line holding `needle`.
 struct TerminalJump: Hashable, Sendable {
@@ -29,6 +61,15 @@ struct ChatScrollRequest: Equatable, Sendable {
 extension HarnessSessionStore {
     var hasAdapter: Bool { descriptor?.adapter != nil }
 
+    /// The agent as the app names it everywhere ("OMP", "Claude Code"): the catalog's name for
+    /// the adapter's agent, else the helper's own; "" until described.
+    var agentName: String { Self.displayName(descriptor?.adapter) }
+
+    static func displayName(_ adapter: HarnessDescriptor.Adapter?) -> String {
+        guard let adapter else { return "" }
+        return AgentCatalog.name(adapter.id) ?? adapter.name
+    }
+
     func has(_ capability: String) -> Bool { descriptor?.has(capability) ?? false }
 
     var timeline: HarnessTimeline { feed.timeline }
@@ -44,7 +85,7 @@ extension HarnessSessionStore {
     /// Ink while a session expected to have a chat is still being described. Describe failing
     /// or saying there is no adapter ends it at once.
     var awaitsChat: Bool {
-        descriptor == nil && expectsChat && subject.available && !describeFailed && phase != .terminalOnly
+        descriptor == nil && expectsChat && subject.available && !describeFailed && !waitExpired && phase != .terminalOnly
     }
 
     /// The layer on screen: the chosen one where the chat can show, ink while it is expected,

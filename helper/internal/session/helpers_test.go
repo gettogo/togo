@@ -32,8 +32,10 @@ func newService(t *testing.T) *session.Service {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	dir := t.TempDir()
 	return &session.Service{
-		Tmux:     tm,
-		Recent:   &state.Recent{File: filepath.Join(dir, "recent.json")},
+		Tmux: tm,
+		// Every folder counts: the tests' folders are temporary ones, which the
+		// real list leaves out (state.WorthRemembering, tested in state).
+		Recent:   &state.Recent{File: filepath.Join(dir, "recent.json"), Keeps: func(string) bool { return true }},
 		LockFile: filepath.Join(dir, "run", "bib.lock"),
 		Manifest: &session.Manifest{Path: filepath.Join(dir, "sessions.json")},
 		Shell:    testShell(t),

@@ -1,0 +1,30 @@
+{
+  "source": "real",
+  "agentVersion": null,
+  "match": true,
+  "kind": "confirm",
+  "title": "Code Assist login required. Opening authentication page in your browser. Do you want to continue?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ]
+  },
+  "subject": null
+}

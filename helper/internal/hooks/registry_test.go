@@ -33,7 +33,7 @@ func TestRegistryCoversEveryAgent(t *testing.T) {
 			t.Errorf("%s takes hooks but has no config or events", h.ID)
 		}
 	}
-	want := []string{Claude, Codex, Gemini, Auggie, Qwen, Droid, Copilot}
+	want := []string{Claude, Codex, Gemini, Auggie, Droid, Copilot}
 	if !slices.Equal(Agents, want) {
 		t.Fatalf("Agents = %v, want %v", Agents, want)
 	}

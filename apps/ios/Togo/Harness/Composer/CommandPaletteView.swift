@@ -7,10 +7,12 @@ import TogoKit
 /// in a system dialog), a terminal command switches to the terminal. No card in between.
 struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let model: CommandLineModel
     let screenTitle: (String) -> String
     @State private var query = ""
     @State private var path: [String] = []
+    @State private var width: CGFloat = 0
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -38,12 +40,27 @@ struct CommandPaletteView: View {
                     .navigationBarTitleDisplayMode(.inline)
                 }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .onAppear {
+            // A choice command typed in full and sent opens here, already found.
+            if let seed = model.paletteSeed {
+                query = seed
+                model.paletteSeed = nil
+            }
+        }
         .task { await model.loadPalette() }
         // The dialog a command asks with shows here while the palette is up.
         .actionConfirmation(Binding(get: { model.gate.asking }, set: { model.gate.asking = $0 }))
-        .frame(idealWidth: 420, idealHeight: 560)
-        .presentationDetents([.medium, .large])
-        .presentationBackground(Color.togoInk)
+    }
+
+    /// A screen a row opens: pushed here, or, for a large list where this sheet is wide, handed
+    /// over to its own sheet so it can be a split view (`AdaptivePresentation.opening`).
+    private func open(_ screen: String) {
+        let content = AdaptivePresentation.content(forScreen: screen, in: model.store.descriptor)
+        switch AdaptivePresentation.opening(content, sizeClass: sizeClass, containerWidth: width) {
+        case .push: path.append(screen)
+        case .handOver: model.handOver(to: screen)
+        }
     }
 
     private var bare: String { query.hasPrefix("/") ? String(query.dropFirst()) : query }
@@ -65,7 +82,7 @@ struct CommandPaletteView: View {
             if !session.isEmpty {
                 Section {
                     ForEach(session) { row in
-                        SessionSettingRow(model: model, row: row) { path.append($0) }
+                        SessionSettingRow(model: model, row: row) { open($0) }
                             .listRowInsets(EdgeInsets())
                             .groupedRows()
                     }
@@ -112,7 +129,7 @@ struct CommandPaletteView: View {
     private func section(_ title: String, _ items: [HarnessCompletion]) -> some View {
         Section {
             ForEach(items, id: \.self) { item in
-                PaletteCommandRow(model: model, item: item, screenTitle: screenTitle) { path.append($0) }
+                PaletteCommandRow(model: model, item: item, screenTitle: screenTitle) { open($0) }
                     .listRowInsets(EdgeInsets())
                     .groupedRows()
                     .swipeActions(edge: .leading) {

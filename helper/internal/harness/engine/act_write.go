@@ -76,13 +76,19 @@ func setJSONKey(path, key, value string) error {
 	if key == "" || len(parts) > maxKeyDepth || slices.Contains(parts, "") {
 		return errors.New("write: bad key")
 	}
-	doc := map[string]any{}
+	doc := newObject()
 	orig, err := os.ReadFile(path)
 	switch {
 	case err == nil && len(bytes.TrimSpace(orig)) > 0:
-		if err := json.Unmarshal(orig, &doc); err != nil {
+		top, err := decodeOrdered(orig)
+		if err != nil {
 			return err
 		}
+		o, ok := top.(*object)
+		if !ok {
+			return errors.New("write: the file is not a JSON object")
+		}
+		doc = o
 	case err != nil && !errors.Is(err, os.ErrNotExist):
 		return err
 	}
@@ -95,18 +101,19 @@ func setJSONKey(path, key, value string) error {
 	}
 	cur := doc
 	for _, p := range parts[:len(parts)-1] {
-		next, ok := cur[p].(map[string]any)
+		got, taken := cur.get(p)
+		next, ok := got.(*object)
 		if !ok {
-			if _, taken := cur[p]; taken {
+			if taken {
 				return errors.New("write: key crosses a value")
 			}
-			next = map[string]any{}
-			cur[p] = next
+			next = newObject()
+			cur.set(p, next)
 		}
 		cur = next
 	}
-	cur[parts[len(parts)-1]] = v
-	b, err := json.MarshalIndent(doc, "", "  ")
+	cur.set(parts[len(parts)-1], v)
+	b, err := encodeOrdered(doc)
 	if err != nil {
 		return err
 	}

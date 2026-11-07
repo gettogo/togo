@@ -2,9 +2,10 @@ import Foundation
 
 /// How an agent is drawn wherever it shows as a glyph.
 public enum AgentMark: Hashable, Sendable {
-    /// A symbol asset in the app's catalog, made from the agent's Simple Icons path.
+    /// A symbol asset in the app's catalog, made from the agent's official mark (see the
+    /// Acknowledgments' "Agent marks" for each source and its terms).
     case logo(String)
-    /// One or two letters in SF Mono, for an agent without a mark the app may show.
+    /// One or two letters in SF Mono, for an agent without an official mark the app may show.
     case monogram(String)
     /// An SF Symbol, for the shell and programs outside the registry.
     case symbol(String)
@@ -25,25 +26,24 @@ public enum AgentCatalog {
     /// In the helper's registry order.
     public static let entries: [Entry] = [
         Entry(id: "claude", name: "Claude Code", command: "claude", mark: .logo("agent.claude")),
-        Entry(id: "omp", name: "OMP", command: "omp", mark: .monogram("Om")),
+        Entry(id: "omp", name: "OMP", command: "omp", mark: .logo("agent.omp")),
         Entry(id: "codex", name: "Codex", command: "codex", mark: .monogram("Cx")),
         Entry(id: "opencode", name: "OpenCode", command: "opencode", mark: .logo("agent.opencode")),
         Entry(id: "gemini", name: "Gemini CLI", command: "gemini", mark: .monogram("Ge")),
         Entry(id: "copilot", name: "Copilot CLI", command: "copilot", mark: .logo("agent.copilot")),
         Entry(id: "cursor", name: "Cursor CLI", command: "cursor-agent", mark: .logo("agent.cursor")),
-        Entry(id: "qwen", name: "Qwen Code", command: "qwen", mark: .logo("agent.qwen")),
         Entry(id: "aider", name: "Aider", command: "aider", mark: .monogram("Ad")),
-        Entry(id: "amp", name: "Amp", command: "amp", mark: .monogram("Am")),
+        Entry(id: "amp", name: "Amp", command: "amp", mark: .logo("agent.amp")),
         Entry(id: "auggie", name: "Auggie", command: "auggie", mark: .monogram("Au")),
         Entry(id: "cline", name: "Cline", command: "cline", mark: .logo("agent.cline")),
         Entry(id: "crush", name: "Crush", command: "crush", mark: .monogram("Cr")),
         Entry(id: "droid", name: "Droid", command: "droid", mark: .monogram("Dr")),
-        Entry(id: "goose", name: "Goose", command: "goose", mark: .monogram("Go")),
-        Entry(id: "kilo", name: "Kilo Code", command: "kilo", mark: .monogram("Kl")),
-        Entry(id: "kimi", name: "Kimi Code", command: "kimi", mark: .monogram("Km")),
+        Entry(id: "goose", name: "Goose", command: "goose", mark: .logo("agent.goose")),
+        Entry(id: "kilo", name: "Kilo Code", command: "kilo", mark: .logo("agent.kilo")),
+        Entry(id: "kimi", name: "Kimi Code", command: "kimi", mark: .logo("agent.kimi")),
         Entry(id: "kiro", name: "Kiro CLI", command: "kiro-cli", mark: .monogram("Kr")),
-        Entry(id: "openhands", name: "OpenHands", command: "openhands", mark: .monogram("Oh")),
-        Entry(id: "pi", name: "Pi", command: "pi", mark: .monogram("Pi")),
+        Entry(id: "openhands", name: "OpenHands", command: "openhands", mark: .logo("agent.openhands")),
+        Entry(id: "pi", name: "Pi", command: "pi", mark: .logo("agent.pi")),
         Entry(id: "vibe", name: "Mistral Vibe", command: "vibe", mark: .logo("agent.mistral")),
         Entry(id: "shell", name: "Shell", command: "", mark: .symbol("terminal")),
     ]

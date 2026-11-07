@@ -18,17 +18,26 @@ import (
 //go:embed opencode.yaml
 var adapterFile []byte
 
+//go:embed opencode2.yaml
+var adapterFile2 []byte
+
 // MapperEvents is the mapper name the adapter file uses.
 const MapperEvents = "opencode.events"
 
 func init() {
 	harness.RegisterAdapterFile("opencode", adapterFile)
 	harness.RegisterMapper(MapperEvents, func(env harness.Env) harness.Mapper { return NewEvents(env) })
+	// OpenCode 2.x: the engine picks this file or the 1.x one by version.
+	harness.RegisterAdapterFile("opencode2", adapterFile2)
+	harness.RegisterMapper(MapperEvents2, func(env harness.Env) harness.Mapper { return NewEvents2(env) })
 	_ = httpsrc.HTTP{} // the http and sse runners register themselves
 }
 
 // AdapterFile returns the embedded adapter file.
 func AdapterFile() []byte { return adapterFile }
+
+// AdapterFile2 returns the embedded OpenCode 2.x adapter file.
+func AdapterFile2() []byte { return adapterFile2 }
 
 // partialEvery bounds streamed updates of one item.
 const partialEvery = 250 * time.Millisecond

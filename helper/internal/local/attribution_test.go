@@ -14,7 +14,7 @@ func TestForeign(t *testing.T) {
 	}{
 		{"copilot", "claude", true},
 		{"claude", "copilot", true},
-		{"qwen", "claude", true},
+		{"droid", "claude", true},
 		{"claude", "claude", false},
 		{"copilot", "copilot", false},
 		{"shell", "claude", false},

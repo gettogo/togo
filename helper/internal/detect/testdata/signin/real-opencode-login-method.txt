@@ -1,0 +1,40 @@
+┌  Connect an integration
+│
+◆  Select login method
+│  ● Sign in with ChatGPT
+│  ○ Codex browser (legacy)
+│  ○ Codex device code (legacy)
+│  ○ API key
+└
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

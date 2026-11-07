@@ -157,9 +157,12 @@ func ReadMode(text string) map[string]string {
 	if len(lines) > 12 {
 		lines = lines[len(lines)-12:]
 	}
-	box := false
+	box, dialog := false, false
 	for _, l := range lines {
 		low := strings.ToLower(l)
+		if strings.Contains(low, "enter to confirm") || strings.Contains(low, "esc to cancel") {
+			dialog = true // a dialog (folder trust, permission) covers the prompt box
+		}
 		for _, m := range modeLines {
 			if strings.Contains(low, m.text) {
 				return map[string]string{"mode": m.mode}
@@ -171,7 +174,7 @@ func ReadMode(text string) map[string]string {
 			box = true
 		}
 	}
-	if box {
+	if box && !dialog {
 		return map[string]string{"mode": "default"}
 	}
 	return nil

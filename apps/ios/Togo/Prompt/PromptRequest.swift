@@ -1,4 +1,5 @@
 import Foundation
+import TogoKit
 
 /// Something an agent is waiting on, as the bar shows it.
 struct PromptRequest: Identifiable, Equatable, Sendable {
@@ -21,6 +22,10 @@ struct PromptRequest: Identifiable, Equatable, Sendable {
     var more: [PromptOption] = []
     /// Where the answer stands.
     var state: PromptRequestState = .open
+    /// The sign-in step the request is: the page, a code to copy, a secret to paste.
+    var signIn: SignInStep?
+    /// The machine the request came from, for opening its sign-in page.
+    var hostID: HostID?
 
     /// Whether an answer can be sent now.
     var answerable: Bool {

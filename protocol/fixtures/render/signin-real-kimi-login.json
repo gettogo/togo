@@ -1,0 +1,22 @@
+{
+  "name": "signin/real-kimi-login",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "signin",
+    "title": "Confirm code 8S0V-Z822 at kimi.ai",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Signin",
+    "subtitle": "Confirm code 8S0V-Z822 at kimi.ai",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

@@ -39,6 +39,8 @@ type CreateOpts struct {
 	Cols, Rows       int
 	Program          string
 	Args             []string
+	// Muted sets @togo_muted from the start.
+	Muted bool
 }
 
 // Create starts a managed session and returns it as List would. Bad input
@@ -81,6 +83,9 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 		optionAgent:   a.ID,
 		optionName:    name,
 		optionCreated: created.Format(time.RFC3339),
+	}
+	if o.Muted {
+		options[optionMuted] = "1"
 	}
 	if argv := launch.Argv(); argv != nil {
 		if options[optionArgv], err = encodeArgv(argv); err != nil {

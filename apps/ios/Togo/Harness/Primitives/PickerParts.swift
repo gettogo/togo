@@ -1,64 +1,72 @@
 import SwiftUI
 import TogoKit
 
-/// One item: a check when selected, the title, the machine's id or detail in mono, a badge,
-/// and the roles it holds on the trailing edge.
-struct PickerRow: View {
+/// One item: a check when selected, the title, the selector in mono, the facts as chips, and
+/// the roles it holds on the trailing edge. Everything wraps; nothing is cut short.
+struct PickerRowLabel: View {
     let item: PickerModel.Item
+    let picker: HarnessScreen.Picker
     let selected: Bool
     let held: [String]
     let running: Bool
-    let picking: Bool
-    let onTap: () -> Void
     @ScaledMetric(relativeTo: .body) private var checkWidth: CGFloat = 20
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: "checkmark")
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "checkmark")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.togoSnow)
+                .opacity(selected ? 1 : 0)
+                .frame(width: checkWidth)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: item.title)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.togoSnow)
-                    .opacity(selected ? 1 : 0)
-                    .frame(width: checkWidth)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(verbatim: item.title)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(item.disabled == true ? Color.togoMute : Color.togoSnow)
-                    if let subtitle = item.subtitle, !subtitle.isEmpty {
-                        Text(verbatim: subtitle)
-                            .font(.mono(.caption))
-                            .foregroundStyle(Color.togoMute)
-                    }
-                    if let badge = item.badge, !badge.isEmpty {
-                        PrimitiveChip(text: badge, mono: true)
-                            .padding(.top, 3)
-                    }
+                    .foregroundStyle(item.disabled == true ? Color.togoMute : Color.togoSnow)
+                if let selector = PickerModel.selector(of: item, in: picker) {
+                    Text(verbatim: selector)
+                        .font(.mono(.caption))
+                        .foregroundStyle(Color.togoMute)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // The trailing accessory crossfades in place (spinner ↔ what the item holds).
-                ZStack(alignment: .trailing) {
-                    if running {
-                        ProgressView().controlSize(.small)
-                    } else if !held.isEmpty {
-                        Text(verbatim: held.count == 1 ? held[0] : PrimitiveCopy.holds(held.count))
-                            .font(.footnote)
-                            .foregroundStyle(Color.togoMute)
-                    }
+                if let line = PickerModel.subtitleLine(of: item, in: picker) {
+                    Text(verbatim: line)
+                        .font(.mono(.caption))
+                        .foregroundStyle(Color.togoMute)
                 }
-                // motion: cause → effect — the tapped item's accessory turns into a spinner in its fixed slot.
-                .motion(.respond, value: running)
+                let chips = PickerModel.chips(of: item, in: picker)
+                if !chips.isEmpty {
+                    WrapLayout(spacing: 4, lineSpacing: 4) {
+                        ForEach(chips, id: \.self) { PrimitiveChip(text: $0, mono: true) }
+                    }
+                    .padding(.top, 3)
+                }
             }
-            .frame(minHeight: 44)
-            .contentShape(.rect)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // The trailing accessory crossfades in place (spinner ↔ what the item holds).
+            ZStack(alignment: .trailing) {
+                if running {
+                    ProgressView().controlSize(.small)
+                } else if !held.isEmpty {
+                    Text(verbatim: held.count == 1 ? held[0] : PrimitiveCopy.holds(held.count))
+                        .font(.footnote)
+                        .foregroundStyle(Color.togoMute)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+            // motion: cause → effect — the tapped item's accessory turns into a spinner in its fixed slot.
+            .motion(.respond, value: running)
         }
-        .buttonStyle(.plain)
-        .disabled(item.disabled == true)
+        .frame(minHeight: 44)
+        .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([item.title, item.subtitle, item.badge].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityLabel(label)
         .accessibilityValue(value)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint(picking ? PrimitiveCopy.select : "")
+    }
+
+    private var label: String {
+        ([item.title, PickerModel.selector(of: item, in: picker), PickerModel.subtitleLine(of: item, in: picker)]
+            + PickerModel.chips(of: item, in: picker)).compactMap { $0 }.joined(separator: ", ")
     }
 
     private var value: String {
@@ -70,235 +78,105 @@ struct PickerRow: View {
     }
 }
 
-/// A role and what holds it now, as in "default  Opus 4.1". Tap to choose a new holder.
-struct PickerRoleChip: View {
-    @Environment(\.displayScale) private var displayScale
-    let label: String
-    let holder: String?
-    let on: Bool
-    let onTap: () -> Void
+/// The roles summary at the head of the list: every role and what holds it now, one row each,
+/// wrapping at any text size. Tapping a role waits for the item to give it; tapping it again
+/// stops waiting.
+struct PickerRolesSection: View {
+    let refs: [HarnessActionRef]
+    let items: [PickerModel.Item]
+    let picking: String?
+    let toggle: (String) -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(verbatim: label)
-                    .font(.caption)
-                    .foregroundStyle(Color.togoMute)
-                Text(verbatim: holder ?? PrimitiveCopy.notSet)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(holder == nil ? Color.togoMute : Color.togoSnow)
+        Section {
+            ForEach(refs) { ref in
+                let holder = PickerModel.holders(of: ref.id, in: items).first?.title
+                let on = picking == ref.id
+                Button { toggle(ref.id) } label: {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            role(ref, on: on)
+                            Spacer(minLength: 8)
+                            holderText(holder, on: on).multilineTextAlignment(.trailing)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            role(ref, on: on)
+                            holderText(holder, on: on)
+                        }
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .groupedRows()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(ref.label), \(holder ?? PrimitiveCopy.notSet)")
+                .accessibilityHint(on ? PrimitiveCopy.cancel : PrimitiveCopy.choosing(ref.label))
+                .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(minWidth: 96, maxWidth: 190, minHeight: 44, alignment: .leading)
-            .background(Color.togoRaised, in: .rect(cornerRadius: 14, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.togoSnow, lineWidth: on ? 1.5 : 0)
-            }
-            .contentShape(.rect)
+        } header: {
+            Text(PrimitiveCopy.roles).textCase(nil)
+        } footer: {
+            Text(picking.flatMap { id in refs.first { $0.id == id } }.map { PrimitiveCopy.choosing($0.label) }
+                ?? PrimitiveCopy.rolesFooter)
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label), \(holder ?? PrimitiveCopy.notSet)")
-        .accessibilityHint(PrimitiveCopy.choosing(label))
-        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func role(_ ref: HarnessActionRef, on: Bool) -> some View {
+        Text(verbatim: ref.label)
+            .font(.subheadline)
+            .foregroundStyle(on ? Color.togoSnow : Color.togoMute)
+    }
+
+    @ViewBuilder private func holderText(_ holder: String?, on: Bool) -> some View {
+        if on {
+            Text(PrimitiveCopy.cancel)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.togoSnow)
+        } else {
+            Text(verbatim: holder ?? PrimitiveCopy.notSet)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(holder == nil ? Color.togoMute : Color.togoSnow)
+        }
     }
 }
 
-/// The groups beside the list in a regular window: every item, then each group with its count.
+/// The groups beside the list in a split view: every item, then each group with its count,
+/// the selection's group first. The chosen row stays highlighted (`C14`).
 struct PickerSidebar: View {
+    static let allTag = "\u{1}all"
+
     let names: [(name: String, count: Int)]
     let total: Int
     @Binding var selection: String?
 
     var body: some View {
-        List {
-            row(nil, title: PrimitiveCopy.all, count: total)
+        List(selection: Binding<String?>(
+            get: { selection ?? Self.allTag },
+            set: { tag in
+                guard let tag else { return }
+                selection = tag == Self.allTag ? nil : tag
+            }
+        )) {
+            row(title: PrimitiveCopy.all, count: total, mono: false).tag(Self.allTag)
             Section {
                 ForEach(names, id: \.name) { entry in
-                    row(entry.name, title: entry.name, count: entry.count)
+                    row(title: entry.name, count: entry.count, mono: true).tag(entry.name)
                 }
             }
         }
         .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .background(Color.togoInk)
     }
 
-    private func row(_ value: String?, title: String, count: Int) -> some View {
-        Button { selection = value } label: {
-            HStack {
-                Text(verbatim: title)
-                    .font(value == nil ? .body.weight(.semibold) : .mono(.subheadline))
-                    .foregroundStyle(Color.togoSnow)
-                Spacer(minLength: 8)
-                Text(verbatim: "\(count)")
-                    .font(.mono(.caption))
-                    .foregroundStyle(Color.togoMute)
-            }
-            .frame(minHeight: 36)
-            .contentShape(.rect)
+    private func row(title: String, count: Int, mono: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(verbatim: title)
+                .font(mono ? .mono(.subheadline) : .body.weight(.semibold))
+            Spacer(minLength: 8)
+            Text(verbatim: "\(count)")
+                .font(.mono(.caption))
+                .foregroundStyle(Color.togoMute)
         }
-        .buttonStyle(.plain)
-        .listRowBackground(selection == value ? Color.togoGrouped : Color.clear)
-        .accessibilityAddTraits(selection == value ? [.isButton, .isSelected] : .isButton)
-    }
-}
-
-/// An item's card: what the adapter knows about it, its roles, and Select.
-struct PickerItemCard: View {
-    @Environment(\.dismiss) private var dismiss
-    let item: PickerModel.Item
-    let picker: HarnessScreen.Picker
-    /// The list's runner, which shows the toast once the card closes.
-    let parent: PrimitiveActions
-    let context: PrimitiveContext
-    /// Selects the item through the list's own rule (`ActionGate`, close on success).
-    let onSelect: () -> Void
-    @State private var actions = PrimitiveActions()
-
-    private let columns = [GridItem(.adaptive(minimum: 120), spacing: 1)]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    let facts = PickerModel.facts(of: item, picker: picker)
-                    if !facts.isEmpty {
-                        LazyVGrid(columns: columns, spacing: 1) {
-                            ForEach(facts, id: \.key) { fact in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(verbatim: fact.key).font(.caption).foregroundStyle(Color.togoMute)
-                                    Text(verbatim: fact.value).font(.mono(.subheadline)).foregroundStyle(Color.togoSnow)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 11)
-                                .padding(.vertical, 9)
-                                .background(Color.togoGrouped)
-                                .accessibilityElement(children: .combine)
-                            }
-                        }
-                        .clipShape(.rect(cornerRadius: 14, style: .continuous))
-                    }
-                    roles
-                    HStack(spacing: 8) {
-                        Button(PrimitiveCopy.copyID, systemImage: "doc.on.doc") {
-                            UIPasteboard.general.string = item.id
-                            actions.show(PrimitiveFeedback(kind: .done, title: PrimitiveCopy.copied, detail: item.id))
-                        }
-                        Button(PrimitiveCopy.openTerminal, systemImage: "terminal") {
-                            dismiss()
-                            context.showTerminal()
-                        }
-                    }
-                    .buttonStyle(PrimitiveCapsuleStyle(role: .normal))
-                }
-                .padding(Layout.margin)
-            }
-            .background(Color.togoRaised)
-            .navigationTitle(item.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(PrimitiveCopy.done, systemImage: "checkmark", role: .confirm) { dismiss() }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                if item.id != picker.selected, item.disabled != true {
-                    Button {
-                        dismiss()
-                        onSelect()
-                    } label: {
-                        let running = actions.isRunning(picker.onSelect, target: item.id)
-                        Text(PrimitiveCopy.select)
-                            .opacity(running ? 0 : 1)
-                            .overlay {
-                                if running { ProgressView().controlSize(.small) }
-                            }
-                            // motion: cause → effect — the tapped item's accessory turns into a spinner in its fixed slot.
-                            .motion(.respond, value: running)
-                    }
-                    .buttonStyle(PrimitiveCapsuleStyle(role: .primary, large: true))
-                    .padding(.horizontal, Layout.margin)
-                    .padding(.bottom, 8)
-                }
-            }
-            .primitiveActions(actions, context: context)
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let subtitle = item.subtitle {
-                Text(verbatim: subtitle)
-                    .font(.mono(.footnote))
-                    .foregroundStyle(Color.togoMute)
-                    .textSelection(.enabled)
-            }
-            HStack(spacing: 6) {
-                if let badge = item.badge { PrimitiveChip(text: badge, mono: true) }
-                if let group = item.group { PrimitiveChip(text: group, mono: true) }
-                if item.id == picker.selected { PrimitiveChip(text: PrimitiveCopy.selected, tone: .strong, symbol: "checkmark") }
-            }
-        }
-    }
-
-    @ViewBuilder private var roles: some View {
-        let refs = picker.itemActions ?? []
-        if !refs.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(PrimitiveCopy.useAs).font(.subheadline).foregroundStyle(Color.togoMute)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 6)], spacing: 6) {
-                    ForEach(refs) { ref in
-                        let holds = PickerModel.isTrue(item.facets?[ref.id])
-                        Button {
-                            if !holds { run(ref.id, ref: ref) }
-                        } label: {
-                            HStack {
-                                Text(verbatim: ref.label).fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 4)
-                                ZStack {
-                                    if actions.isRunning(ref.id, target: item.id) {
-                                        ProgressView().controlSize(.mini)
-                                    } else if holds {
-                                        Image(systemName: "checkmark").font(.caption.weight(.bold))
-                                    }
-                                }
-                                .slot(width: 16, key: actions.isRunning(ref.id, target: item.id) || holds)
-                            }
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(holds ? Color.togoInk : Color.togoSnow)
-                            .padding(.horizontal, 10)
-                            .frame(minHeight: 44)
-                            .background(holds ? Color.togoSnow : Color.togoGrouped, in: .rect(cornerRadius: 12, style: .continuous))
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(holds ? .isSelected : [])
-                    }
-                }
-            }
-        }
-    }
-
-    /// Runs on the card, then closes it and leaves the toast to the list, unless it failed.
-    private func run(_ id: String, ref: HarnessActionRef? = nil) {
-        Task {
-            let before = actions.feedback?.id
-            defer {
-                if let feedback = actions.feedback, feedback.id != before, !feedback.isFailure {
-                    parent.show(feedback)
-                    dismiss()
-                }
-            }
-            if let ref {
-                await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), place: .toast, context: context)
-            } else {
-                await actions.perform(id, target: item.id, args: PickerModel.args(for: item), context: context)
-            }
-        }
+        .accessibilityElement(children: .combine)
     }
 }

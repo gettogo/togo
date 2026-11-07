@@ -57,6 +57,8 @@ type sess struct {
 	lastPart map[string]time.Time
 	needs    needsState
 	seed     screenSeed
+	// dialog is the title of the dialog the typing guard last reported.
+	dialog string
 }
 
 type queued struct {
@@ -88,12 +90,7 @@ func newSess(e *Engine, info session.Session) *sess {
 		subs: map[harness.Subscriber]*subQueue{}, pending: map[string]harness.Item{}, lastPart: map[string]time.Time{},
 	}
 	if info.Managed {
-		for _, id := range sortedIDs(e.adapters) {
-			if a := e.adapters[id]; a.matches(info.Agent, info.Command) {
-				s.ad = a
-				break
-			}
-		}
+		s.ad = e.adapterFor(info.Agent, info.Command, e.envFor(info))
 	}
 	if s.ad == nil {
 		close(s.ready)
@@ -122,6 +119,11 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 		env.Vars[source.VarPath] = e.cfg.LoginPath(ctx)
 		cancel()
 	}
+	if e.cfg.LoginEnv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		env.Environ = e.cfg.LoginEnv(ctx)
+		cancel()
+	}
 	return env
 }
 
@@ -138,11 +140,47 @@ func (s *sess) begin() {
 	}
 }
 
+// gateRetries are the pauses before asking a version command again after
+// it failed to run. A loaded machine or a login PATH still being read can
+// fail the first probe; one bad probe would otherwise leave the whole
+// session in the terminal.
+var gateRetries = []time.Duration{2 * time.Second, 8 * time.Second}
+
+// checkGate runs the version gate, asking again after a transient failure.
+func (s *sess) checkGate() gateResult {
+	for i := 0; ; i++ {
+		ctx, cancel := context.WithTimeout(s.ctx, gateTimeout+time.Second)
+		r := s.e.gate.check(ctx, s.ad, s.env)
+		cancel()
+		if !r.transient || i >= len(gateRetries) || s.ctx.Err() != nil {
+			return r
+		}
+		select {
+		case <-s.ctx.Done():
+			return r
+		case <-time.After(gateRetries[i]):
+		}
+		if s.e.cfg.LoginPath != nil {
+			lctx, lcancel := context.WithTimeout(s.ctx, 5*time.Second)
+			if p := s.e.cfg.LoginPath(lctx); p != "" {
+				// A new map: readers that copied s.env keep the old one.
+				s.mu.Lock()
+				vars := make(map[string]string, len(s.env.Vars))
+				for k, v := range s.env.Vars {
+					vars[k] = v
+				}
+				vars[source.VarPath] = p
+				s.env.Vars = vars
+				s.mu.Unlock()
+			}
+			lcancel()
+		}
+	}
+}
+
 func (s *sess) start() {
 	defer close(s.ready)
-	ctx, cancel := context.WithTimeout(s.ctx, gateTimeout+time.Second)
-	r := s.e.gate.check(ctx, s.ad, s.env)
-	cancel()
+	r := s.checkGate()
 	s.mu.Lock()
 	s.version, s.gateOK, s.gateWhy = r.version, r.ok, r.reason
 	if !r.ok {
@@ -163,7 +201,7 @@ func (s *sess) start() {
 	s.storeSummaryLocked()
 	s.syncFeedsLocked()
 	s.mu.Unlock()
-	go s.seedFromScreen(0)
+	go s.seedAtStart()
 	if s.e.cfg.OnSummary != nil {
 		s.e.cfg.OnSummary(s.id)
 	}

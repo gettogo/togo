@@ -144,6 +144,9 @@ type SessionCreateParams struct {
 	Rows    int      `json:"rows,omitempty"`
 	Program string   `json:"program,omitempty"`
 	Args    []string `json:"args,omitempty"`
+	// Muted starts the session muted, so a prompt it shows at launch
+	// never pushes.
+	Muted bool `json:"muted,omitempty"`
 }
 
 // AgentsCheckParams is the agents.check params.

@@ -1,0 +1,50 @@
+{
+  "source": "real",
+  "agentVersion": null,
+  "match": true,
+  "kind": "question",
+  "title": "Select login method",
+  "options": [
+    {
+      "n": 1,
+      "label": "Sign in with ChatGPT",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Codex browser (legacy)",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Codex device code (legacy)",
+      "role": "other"
+    },
+    {
+      "n": 4,
+      "label": "API key",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "4": [
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  },
+  "subject": null
+}

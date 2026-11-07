@@ -34,7 +34,7 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 			return e.userItem(s, req.Text, nil, false), nil
 		}
 	}
-	if act, ok := s.ad.Actions["send"]; ok {
+	if act, ok := s.ad.Actions["send"]; ok && !e.sendNotYet(s, act) {
 		// Through the harness API every path and the text go in the one request.
 		text := harness.Together(req.Text, req.Images)
 		raw, _ := json.Marshal(text)
@@ -135,6 +135,12 @@ func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []
 	if im := s.ad.Images; im != nil {
 		insert = im.Insert
 	}
+	if err := e.screenClear(ctx, s); err != nil {
+		return err
+	}
+	if err := e.clearInput(ctx, s); err != nil {
+		return err
+	}
 	steps := harness.Insertions(text, images, insert)
 	for i, step := range steps {
 		if i > 0 {
@@ -147,6 +153,11 @@ func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []
 		}
 		if err := e.cfg.Typist.Type(ctx, s.id, step.Text, step.Submit, false); err != nil {
 			return err
+		}
+		if step.Submit {
+			if err := e.confirmSubmit(ctx, s, step.Text); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -275,4 +286,17 @@ func completeFiles(ctx context.Context, cwd, query string, limit int) []harness.
 		out = append(out, harness.Completion{Insert: "@" + h.rel + " ", Title: filepath.Base(h.rel), Detail: dir})
 	}
 	return out
+}
+
+// sendNotYet reports whether the send action names the harness's session
+// and none exists yet: a fresh OpenCode or Kilo has no session until the
+// first prompt, so that prompt is typed into the TUI, which makes one.
+func (e *Engine) sendNotYet(s *sess, act spec.Action) bool {
+	raw, err := json.Marshal(act)
+	if err != nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return notYet(raw, s.stateLocked())
 }

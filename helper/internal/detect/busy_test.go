@@ -52,19 +52,6 @@ const geminiDialog = `Allow execution of: 'go test ./...'?
 (Use Enter to select, Esc to cancel)
 `
 
-const qwenWorking = `> fix the tests
-
-⠏ Thinking… (12s · ↓ 1.2k tokens · esc to cancel)
-
-> Type your message
-`
-
-const qwenDialog = `Do you want to proceed?
-● 1. Yes, allow once
-  2. No
-Enter to confirm · Esc to cancel
-`
-
 const piWorking = `fix the tests
 
 ⠋ Working... (escape to interrupt)
@@ -90,8 +77,6 @@ func TestBusy(t *testing.T) {
 		{"aider", claudeWorking, false},
 		{"gemini", geminiWorking, true},
 		{"gemini", geminiDialog, false},
-		{"qwen", qwenWorking, true},
-		{"qwen", qwenDialog, false},
 		{"auggie", "Working (5s • esc to interrupt)\n> \n", true},
 		{"auggie", "> \n? for shortcuts\n", false},
 		{"pi", piWorking, true},

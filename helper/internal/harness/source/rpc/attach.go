@@ -136,8 +136,9 @@ func runChild(ctx context.Context, b spec.RPC, env harness.Env) (json.RawMessage
 	}
 	cmd := exec.CommandContext(ctx, prog, b.Child[1:]...)
 	cmd.Dir = env.Cwd
+	cmd.Env = append(cmd.Environ(), env.Environ...)
 	if path := env.Vars["path"]; path != "" {
-		cmd.Env = append(cmd.Environ(), "PATH="+path)
+		cmd.Env = append(cmd.Env, "PATH="+path)
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

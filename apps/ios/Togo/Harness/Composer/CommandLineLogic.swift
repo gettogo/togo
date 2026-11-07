@@ -80,6 +80,37 @@ enum CommandLineLogic {
         }
     }
 
+    /// What a sent draft is: words for the agent, a command from its list, or "/word" the
+    /// agent does not know. "/Users/me/x" and "//" are words, not commands.
+    enum Typed: Equatable {
+        case text
+        /// The command, and what was typed after its word ("" when nothing).
+        case command(HarnessCompletion, args: String)
+        /// "/xyz": looks like a command, but the list has no such word.
+        case unknown(String)
+    }
+
+    static func typed(_ text: String, commands: [HarnessCompletion]) -> Typed {
+        guard let word = commandWord(text) else { return .text }
+        let match = commands.first { command in
+            CommandKind.line(command).lowercased() == word.lowercased() || command.title.lowercased() == word.lowercased()
+        }
+        guard let match else { return .unknown(word) }
+        let rest = text.trimmingCharacters(in: .whitespacesAndNewlines).dropFirst(word.count)
+        return .command(match, args: rest.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// "/compact" from "/compact focus on tests"; nil when the text is not shaped like a command.
+    static func commandWord(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("/") else { return nil }
+        let word = String(trimmed.prefix { !$0.isWhitespace })
+        let body = word.dropFirst()
+        guard let first = body.first, first.isLetter,
+              body.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == ":" }) else { return nil }
+        return word
+    }
+
     /// What Send sends: the draft without its trailing line breaks. nil when there is nothing.
     static func outgoing(_ draft: String) -> String? {
         let text = String(draft.reversed().drop(while: \.isNewline).reversed())

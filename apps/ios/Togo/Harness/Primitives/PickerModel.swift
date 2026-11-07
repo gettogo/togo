@@ -29,8 +29,10 @@ struct PickerModel: Equatable {
     var query = ""
     /// Filter id to option id for choice filters, or "true" for a toggle that is on.
     var filterValues: [String: String] = [:]
-    /// Groups folded shut in the compact list.
-    var collapsed: Set<String> = []
+    /// Groups open in the compact list. Groups start shut, except the one holding the
+    /// selection (or, without one, the first role's holder) and a picker's only group; a
+    /// search opens every group with a match.
+    var expanded: Set<String> = []
     /// The group the sidebar shows in a regular window; nil for every group.
     var sidebarGroup: String?
     /// The item action waiting for the user to tap an item, by action id.
@@ -42,6 +44,22 @@ struct PickerModel: Equatable {
         for filter in picker.filters ?? [] {
             if let value = filter.default, !value.isEmpty { filterValues[filter.id] = value }
         }
+        expanded = Self.initiallyExpanded(picker)
+    }
+
+    /// The id of the "Not set up" section, apart from every group name.
+    static let setupID = "\u{1}setup"
+
+    /// The groups open when the picker appears: the selection's, or without one the groups
+    /// holding the first item action (the default role), and the only group when there is one.
+    static func initiallyExpanded(_ picker: HarnessScreen.Picker) -> Set<String> {
+        let names = Set(picker.items.map { $0.group ?? "" })
+        if names.count == 1 { return names }
+        if let selected = picker.items.first(where: { $0.id == picker.selected }) {
+            return [selected.group ?? ""]
+        }
+        guard let first = picker.itemActions?.first else { return [] }
+        return Set(holders(of: first.id, in: picker.items).map { $0.group ?? "" })
     }
 
     var isSearching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -141,14 +159,31 @@ struct PickerModel: Equatable {
         filterValues[filter.id] ?? (filter.kind == "toggle" ? "false" : Self.allOption)
     }
 
-    /// Whether the group's rows show: always while searching, otherwise unless folded.
-    func isExpanded(_ group: Group) -> Bool {
-        isSearching || !collapsed.contains(group.id)
+    /// Whether the group's rows show: while searching (only matching groups are left), when
+    /// it is the only group left, or when opened.
+    func isExpanded(_ group: Group, alone: Bool = false) -> Bool {
+        isSearching || alone || expanded.contains(group.id)
     }
 
-    mutating func toggle(_ group: Group) {
-        if collapsed.contains(group.id) { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
+    mutating func toggle(_ group: Group) { toggle(id: group.id) }
+
+    mutating func toggle(id: String) {
+        if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
     }
+
+    // MARK: Not set up
+
+    /// The setup entries that match the search. Hidden while a filter or the sidebar narrows
+    /// the list to set-up items, and when the picker has no action to set one up.
+    func setupItems(_ picker: HarnessScreen.Picker) -> [Item] {
+        guard picker.setupAction != nil, sidebarGroup == nil else { return [] }
+        let filtering = filterValues.contains { _, value in value != Self.allOption && value != "false" && !value.isEmpty }
+        guard !filtering else { return [] }
+        return (picker.setup ?? []).filter { Self.matches($0, query: query) }
+    }
+
+    /// The "Not set up" section opens like a group: on a search or when tapped.
+    var isSetupExpanded: Bool { isSearching || expanded.contains(Self.setupID) }
 
     // MARK: Item actions
 

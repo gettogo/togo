@@ -116,22 +116,22 @@ import TogoKit
 
     @Test func favoritesLeadAndMissingAgentsFoldAway() async {
         let library = AgentLibrary.inMemory()
-        library.toggleFavorite("qwen")
+        library.toggleFavorite("kimi")
         library.used("aider")
         let model = NewSessionModel(services: services, hostID: nil, machines: Samples.controlCenter.machines, library: library)
         await model.choose(model.machines[0])
         model.agents = .loaded([
             AgentInfo(id: "claude", name: "Claude Code", installed: true),
             AgentInfo(id: "aider", name: "Aider", installed: true),
-            AgentInfo(id: "qwen", name: "Qwen Code", installed: true),
+            AgentInfo(id: "kimi", name: "Kimi Code", installed: true),
             AgentInfo(id: "gemini", name: "Gemini CLI", installed: false),
         ])
-        #expect(model.installedAgents.map(\.id) == ["qwen", "aider", "claude", "shell"])
+        #expect(model.installedAgents.map(\.id) == ["kimi", "aider", "claude", "shell"])
         #expect(model.missingAgents.map(\.id) == ["gemini"])
-        #expect(model.selectedAgent?.id == "qwen")
-        model.toggleFavorite("qwen")
-        #expect(!model.isFavorite("qwen"))
-        #expect(model.installedAgents.map(\.id) == ["aider", "claude", "qwen", "shell"])
+        #expect(model.selectedAgent?.id == "kimi")
+        model.toggleFavorite("kimi")
+        #expect(!model.isFavorite("kimi"))
+        #expect(model.installedAgents.map(\.id) == ["aider", "claude", "kimi", "shell"])
     }
 
     @Test func browseAnswerAfterLeavingIsIgnored() async {

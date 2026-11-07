@@ -83,7 +83,7 @@ extension CommandLineModel {
                 status: { ModeMemory.statusBlock(store.mission.mission) },
                 describing: { store.phase == .describing || store.phase == .opening },
                 screens: { store.descriptor?.screens ?? [] },
-                agent: { store.descriptor?.adapter?.name ?? "" },
+                agent: { store.agentName },
                 confirmFor: { id in await confirm(store, screen: id) },
                 actionRef: { id in
                     store.mission.mission?.sections.lazy.compactMap { $0.status?.actions?.first { $0.id == id } }.first

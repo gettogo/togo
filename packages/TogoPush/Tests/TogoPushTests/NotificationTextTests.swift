@@ -56,10 +56,10 @@ struct NotificationTextTests {
         #expect(text.category == "togo.request.deny")
     }
 
-    @Test func questionWithoutApproveRoleIsInfo() throws {
+    @Test func questionWithoutApproveRoleOffersItsOptions() throws {
         let options = [PushOption(n: 1, label: "Red", role: "other"), PushOption(n: 2, label: "Blue", role: "other")]
         let text = try #require(build(needsYou(subject: nil, options: options, body: "Which colour?")))
-        #expect(text.category == "togo.info")
+        #expect(text.category == "togo.choice.r_aaaaaaaaaa")
         #expect(text.body == "Which colour?")
         #expect(try #require(build(needsYou(options: [Self.approveDeny[0]]))).category == "togo.info")
     }

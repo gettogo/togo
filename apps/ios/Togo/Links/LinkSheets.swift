@@ -11,7 +11,43 @@ import UIKit
             next?()
             return
         }
+        (controller as? LinkSheetController)?.closedOnPurpose = true
         controller.dismiss(animated: true) { next?() }
+    }
+}
+
+/// A sheet that knows why it went away: closed by its own buttons, swiped away by the user, or
+/// taken down by a presentation under it closing (a picker sheet that settled). Only the last
+/// calls `onTornDown`, so the sheet can come back: nothing closes it without the user.
+final class LinkSheetController: UIHostingController<AnyView>, UIAdaptivePresentationControllerDelegate {
+    var onTornDown: (@MainActor () -> Void)?
+    /// Its own buttons closed it, or the user swiped it down.
+    var closedOnPurpose = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        presentationController?.delegate = self
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        presentationController?.delegate = self
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        // Asked a moment later, once the user's swipe has reported itself and a sheet that
+        // was only covered is known to be still presented.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard let self, !self.closedOnPurpose, self.presentingViewController == nil else { return }
+            self.closedOnPurpose = true
+            self.onTornDown?()
+        }
+    }
+
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        closedOnPurpose = true
     }
 }
 
@@ -158,24 +194,13 @@ enum LinkCopy {
     static let openOnMac = String(localized: "links.openOnMac", defaultValue: "Open on Mac")
     static let linksOnScreen = String(localized: "links.onScreen", defaultValue: "Links on screen")
     static let noLinks = String(localized: "links.none", defaultValue: "No links on screen or in recent output.")
-    static let signIn = String(localized: "links.signIn", defaultValue: "Sign in")
-    static let signedIn = String(localized: "links.signedIn", defaultValue: "Signed in")
-    static let signedInDetail = String(
-        localized: "links.signedInDetail", defaultValue: "The agent on your machine has the code."
-    )
     static let done = String(localized: "links.done", defaultValue: "Done")
-    static let back = String(localized: "links.back", defaultValue: "Back")
-    static let reload = String(localized: "links.reload", defaultValue: "Reload")
-    static let reaching = String(localized: "links.reaching", defaultValue: "Sending the sign-in to your machine")
+    static let dismiss = String(localized: "links.dismiss", defaultValue: "Dismiss")
 
     static func wantsToOpen(agent: String?, host: String) -> String {
         if let agent, !agent.isEmpty {
             return String(localized: "links.wantsToOpen", defaultValue: "\(agent) wants to open \(host)")
         }
         return String(localized: "links.wantsToOpen.unknown", defaultValue: "Your agent wants to open \(host)")
-    }
-
-    static func callbackFailed(_ port: Int, _ reason: String) -> String {
-        String(localized: "links.callbackFailed", defaultValue: "Couldn't reach port \(String(port)) on your machine. \(reason)")
     }
 }

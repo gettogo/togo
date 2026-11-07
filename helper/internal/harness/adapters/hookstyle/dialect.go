@@ -1,5 +1,5 @@
 // Package hookstyle reads hook payloads shaped like Claude Code's, which
-// several harnesses share: Qwen Code and Droid send that shape as is,
+// several harnesses share: Droid sends that shape as is,
 // Mistral Vibe sends it for hooks that use its claude_code protocol, and
 // Copilot CLI sends a camelCase variant with its own event names.
 //
@@ -33,9 +33,6 @@ const (
 	PostCompact        = "PostCompact"
 	TaskCreated        = "TaskCreated"
 	TaskCompleted      = "TaskCompleted"
-	// TodoCreated and TodoCompleted are Qwen Code's todo hooks.
-	TodoCreated   = "TodoCreated"
-	TodoCompleted = "TodoCompleted"
 	// ErrorOccurred is Copilot's errorOccurred: an error the session may
 	// survive, so it is not StopFailure.
 	ErrorOccurred = "ErrorOccurred"
@@ -68,8 +65,6 @@ type Dialect struct {
 
 // Dialects by agent id.
 var dialects = map[string]Dialect{
-	// Qwen Code's hooks say auto-edit; its adapter's mode id is auto_edit.
-	"qwen":  {Agent: "qwen", Answer: AnswerPermissionRequest, Modes: map[string]string{"auto-edit": "auto_edit"}},
 	"droid": {Agent: "droid"},
 	"vibe": {Agent: "vibe", Events: map[string]string{
 		"pre_tool": PreToolUse, "post_tool": PostToolUse, "post_agent": Stop,
@@ -90,7 +85,7 @@ func For(agent string) (Dialect, bool) {
 }
 
 // Agents lists the agents with a dialect.
-func Agents() []string { return []string{"qwen", "droid", "vibe", "copilot"} }
+func Agents() []string { return []string{"droid", "vibe", "copilot"} }
 
 // Canonical returns the canonical name of one of the dialect's events.
 func (d Dialect) Canonical(event string) string {

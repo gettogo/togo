@@ -105,6 +105,12 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         /// Asked (or applied with Undo) before `onSelect` runs, when set.
         public var onSelectConfirm: HarnessSelectConfirm?
         public var itemActions: [HarnessActionRef]?
+        /// What is not set up yet, such as providers not signed in, listed after the items.
+        public var setup: [Item]?
+        /// Sets up one `setup` entry, run with args `{"id": entry id}`.
+        public var setupAction: HarnessActionRef?
+        /// "secret": the setup action asks for a value first (an API key), sent as `value`.
+        public var setupInput: String?
 
         public struct Item: Codable, Hashable, Sendable, Identifiable {
             public var id: String
@@ -146,8 +152,12 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         }
 
         public init(items: [Item], selected: String? = nil, searchable: Bool, filters: [Filter]? = nil,
-                    onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil) {
+                    onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil,
+                    setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil) {
             self.items = items
+            self.setup = setup
+            self.setupAction = setupAction
+            self.setupInput = setupInput
             self.selected = selected
             self.searchable = searchable
             self.filters = filters

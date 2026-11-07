@@ -67,10 +67,7 @@ func RunStderr(ctx context.Context, argv []string, env harness.Env, merge bool) 
 	if env.Cwd != "" {
 		cmd.Dir = Expand(env.Cwd, home(env))
 	}
-	cmd.Env = os.Environ()
-	if p := env.Vars[VarPath]; p != "" {
-		cmd.Env = append(cmd.Env, "PATH="+p)
-	}
+	cmd.Env = withProgDir(Environ(env), prog)
 	var out cappedBuffer
 	cmd.Stdout, cmd.Stderr = &out, io.Discard
 	if merge {
@@ -90,6 +87,41 @@ func RunStderr(ctx context.Context, argv []string, env harness.Env, merge bool) 
 		return nil, fmt.Errorf("source: %s: %w", filepath.Base(prog), err)
 	}
 	return out.b.Bytes(), nil
+}
+
+// withProgDir appends the program's own folder to the environment's PATH
+// when it is missing. A harness installed by npm is a "#!/usr/bin/env node"
+// script whose node sits beside it (/opt/homebrew/bin); before the login
+// PATH is known the helper's PATH lacks that folder, and the script fails
+// with "env: node: No such file or directory".
+func withProgDir(environ []string, prog string) []string {
+	dir := filepath.Dir(prog)
+	path := ""
+	for _, kv := range environ {
+		if v, ok := strings.CutPrefix(kv, "PATH="); ok {
+			path = v
+		}
+	}
+	for _, d := range filepath.SplitList(path) {
+		if d == dir {
+			return environ
+		}
+	}
+	if path == "" {
+		return append(environ, "PATH="+dir)
+	}
+	return append(environ, "PATH="+path+string(filepath.ListSeparator)+dir)
+}
+
+// Environ is the environment a program run for a session gets: the
+// helper's, then the login shell's (its API keys), then the login PATH.
+// Later entries win.
+func Environ(env harness.Env) []string {
+	out := append(os.Environ(), env.Environ...)
+	if p := env.Vars[VarPath]; p != "" {
+		out = append(out, "PATH="+p)
+	}
+	return out
 }
 
 // cappedBuffer keeps at most MaxCLIOutput bytes and fails the write after.

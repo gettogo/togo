@@ -7,6 +7,8 @@ enum NoticeAction: Equatable {
     case openTerminal
     /// A prompt that did not go: its words are back in the field.
     case retry
+    /// "/xyz" is not one of the agent's commands: the words stay in the field until sent as text.
+    case sendAsText
 }
 
 /// Running commands by kind, picking session values and the gate's context. The palette, the
@@ -200,5 +202,18 @@ extension CommandLineModel {
             // The choices' check moves with the next read.
             Task { await self.loadPalette() }
         }
+    }
+
+    /// Closes the palette for a screen that wants its own sheet; `paletteClosed` opens it.
+    func handOver(to screen: String) {
+        handedOverScreen = screen
+        paletteOpen = false
+    }
+
+    /// The palette has gone: a screen it handed over opens now.
+    func paletteClosed() {
+        guard let screen = handedOverScreen else { return }
+        handedOverScreen = nil
+        presentedScreen = screen
     }
 }

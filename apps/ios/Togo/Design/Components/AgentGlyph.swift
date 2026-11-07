@@ -2,8 +2,8 @@ import SwiftUI
 import TogoKit
 
 /// An agent's mark in the current foreground style and font, the size of an SF Symbol beside
-/// it. Logos are Simple Icons paths kept as symbol assets, always in one colour; agents
-/// without one show one or two letters in SF Mono.
+/// it. Logos are the agents' official marks kept as symbol assets, always in one colour; agents
+/// without one Togo may show get one or two letters in SF Mono.
 struct AgentGlyph: View {
     let agent: String
 

@@ -31,16 +31,20 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 	pane := anchor.TmuxPane{Client: svc.Tmux}
 	pl := &ports.Service{Sessions: svc, Panes: svc.Tmux}
 	eng := engine.New(engine.Config{
-		Sessions:   svc,
-		Typist:     engine.SessionTypist{Sessions: svc, Tmux: svc.Tmux, Status: c.Hub.Status},
-		Relaunch:   svc.RelaunchWith,
-		Marker:     &anchor.Marker{Home: o.Home, Pane: pane},
-		Approvals:  c.Approvals,
-		Screen:     pane.Screen,
-		Status:     c.Hub.Status,
+		Sessions:  svc,
+		Typist:    engine.SessionTypist{Sessions: svc, Tmux: svc.Tmux, Status: c.Hub.Status},
+		Relaunch:  svc.RelaunchWith,
+		Marker:    &anchor.Marker{Home: o.Home, Pane: pane},
+		Approvals: c.Approvals,
+		Screen:    pane.Screen,
+		Status:    c.Hub.Status,
+		NeedsYou: func(id, title, body string) {
+			c.Hub.Publish(wire.EventNotify, &id, wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelNeedsYou})
+		},
 		Git:        git.Status,
 		Ports:      pl.List,
 		LoginPath:  func(ctx context.Context) string { return loginPath(ctx, svc, home) },
+		LoginEnv:   state.LoginEnv,
 		Home:       home,
 		AdapterDir: filepath.Join(o.Home, "adapters"),
 		TogoHome:   o.Home,

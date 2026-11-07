@@ -37,7 +37,30 @@ func Reduce(d Dialect, event string, payload []byte, env map[string]string) (wir
 		return wire.HookForward{}, err
 	}
 	ev.Agent = d.Agent
+	if canon == PermissionRequest {
+		permissionSubject(&ev, norm)
+	}
 	return claudehook.Forward(ev, canon, norm), nil
+}
+
+// permissionSubject names what a permission request is about from the
+// tool's own input, which knows each harness's tool names (Droid's
+// Execute, Vibe's search_replace) better than the Claude mapping it went
+// through.
+func permissionSubject(ev *wire.HookEvent, norm json.RawMessage) {
+	var p struct {
+		ToolName  string          `json:"tool_name"`
+		ToolInput json.RawMessage `json:"tool_input"`
+	}
+	if json.Unmarshal(norm, &p) != nil || p.ToolName == "" {
+		return
+	}
+	if _, _, subj := ToolTitle(p.ToolName, p.ToolInput); subj != nil && subj.Validate() == nil {
+		ev.Data.Subject = subj
+		if subj.Kind == wire.SubjectCommand {
+			ev.Data.Command = clip(subj.Text, wire.MaxDetail)
+		}
+	}
 }
 
 // Blocks reports whether the hook for a canonical event may wait for an

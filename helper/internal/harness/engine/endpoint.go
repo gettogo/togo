@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -8,8 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 	"github.com/gettogo/togo/helper/internal/session"
 )
@@ -70,14 +75,14 @@ func (e *Engine) EndpointArgs(agentID, sessionID string) []string {
 	if _, err := session.ValidateID(sessionID); err != nil {
 		return nil
 	}
-	var a *adapter
-	for _, id := range sortedIDs(e.adapters) {
-		if e.adapters[id].matches(agentID, nil) {
-			a = e.adapters[id]
-			break
-		}
-	}
+	a := e.adapterFor(agentID, nil, e.gateEnv())
 	if a == nil || a.Endpoint == nil {
+		return nil
+	}
+	if !e.versionFits(a) {
+		// Launch flags belong to the versions the adapter knows: OpenCode
+		// 2.x refuses 1.x's --port and exits (seen live after it updated
+		// itself), so a harness outside the range starts plain.
 		return nil
 	}
 	ep := endpoint{kind: a.Endpoint.Kind}
@@ -136,7 +141,22 @@ func (e *Engine) EndpointArgs(agentID, sessionID string) []string {
 	}
 	e.eps.byID[sessionID] = ep
 	e.eps.mu.Unlock()
+	e.restart(sessionID)
 	return out
+}
+
+// restart drops the session's adapter state after its harness got a new
+// endpoint (a relaunch: OpenCode 2.x resumes by restarting, on a new port
+// and password). The next request starts it again on the new address, its
+// feeds and mapper reading the new run; open chats are closed and reopen.
+func (e *Engine) restart(id string) {
+	e.mu.Lock()
+	s, ok := e.sessions[id]
+	delete(e.sessions, id)
+	e.mu.Unlock()
+	if ok {
+		s.stop()
+	}
 }
 
 // endpointFor returns the address picked for a session, if any.
@@ -166,4 +186,53 @@ func (e *Engine) EndpointEnv(sessionID string) map[string]string {
 		return nil
 	}
 	return map[string]string{ep.envName: ep.password}
+}
+
+// versionFits reports whether the installed harness is inside the
+// adapter's version range. Only a version read and found outside it
+// counts against it: a probe that could not run (a timeout, no login
+// PATH yet) keeps the flags.
+func (e *Engine) versionFits(a *adapter) bool {
+	r := e.gate.check(context.Background(), a, e.gateEnv())
+	return r.ok || !strings.HasPrefix(r.reason, "version ")
+}
+
+// gateEnv is the environment version commands run in.
+func (e *Engine) gateEnv() harness.Env {
+	env := harness.Env{Vars: map[string]string{}}
+	if e.cfg.LoginPath != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		env.Vars[source.VarPath] = e.cfg.LoginPath(ctx)
+		cancel()
+	}
+	if e.cfg.LoginEnv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		env.Environ = e.cfg.LoginEnv(ctx)
+		cancel()
+	}
+	return env
+}
+
+// adapterFor picks the adapter serving a session. When several match (one
+// per major version of a harness, as OpenCode 1.x and 2.x), the first whose
+// version range holds the installed harness wins; with none, or no version
+// read, the first by id.
+func (e *Engine) adapterFor(agent string, argv []string, env harness.Env) *adapter {
+	var found []*adapter
+	for _, id := range sortedIDs(e.adapters) {
+		if a := e.adapters[id]; a.matches(agent, argv) {
+			found = append(found, a)
+		}
+	}
+	if len(found) == 0 {
+		return nil
+	}
+	if len(found) > 1 {
+		for _, a := range found {
+			if r := e.gate.check(context.Background(), a, env); r.ok {
+				return a
+			}
+		}
+	}
+	return found[0]
 }

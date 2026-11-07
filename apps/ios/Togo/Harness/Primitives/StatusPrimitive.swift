@@ -99,8 +99,8 @@ enum StatusLogic {
         var value: String
     }
 
-    /// The action ids that compact the conversation: claude, copilot, droid, kimi, pi, qwen and
-    /// vibe say `compact`; omp's one-shot is `snapcompact`.
+    /// The action ids that compact the conversation: claude, copilot, droid, kimi, pi and vibe
+    /// say `compact`; omp's one-shot is `snapcompact`.
     static let compactIDs: Set<String> = ["compact", "snapcompact"]
 
     /// The headline numbers: model, mode, effort and cost, the ones the harness reported.

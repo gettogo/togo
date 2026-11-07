@@ -309,11 +309,14 @@ public struct CreateSessionParams: Codable, Hashable, Sendable {
     public var program: String?
     /// Flags for the program, each delivered as one argv entry and never read by a shell.
     public var args: [String]?
+    /// Starts the session muted: nothing it asks reaches a push. Nil leaves it out.
+    public var muted: Bool?
 
     public init(
         agent: String? = nil, cwd: String? = nil, name: String? = nil, cols: Int? = nil, rows: Int? = nil,
-        program: String? = nil, args: [String]? = nil
+        program: String? = nil, args: [String]? = nil, muted: Bool? = nil
     ) {
+        self.muted = muted
         self.program = program
         self.args = args
         self.agent = agent
@@ -391,6 +394,15 @@ public struct AgentList: Codable, Hashable, Sendable {
 
     public init(agents: [AgentInfo]) {
         self.agents = agents
+    }
+}
+
+/// `fs.forgetRecentDir` params.
+public struct ForgetRecentDirParams: Codable, Hashable, Sendable {
+    public var path: String
+
+    public init(path: String) {
+        self.path = path
     }
 }
 

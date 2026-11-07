@@ -40,6 +40,7 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 			return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: name}
 		}
 	}
+	setup := e.pickerSetup(ctx, s, sc.Setup, query)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state := s.stateLocked()
@@ -52,6 +53,14 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 		}
 		p.ItemActions = s.actionRefsLocked(sc.Actions)
 		p.OnSelectConfirm = s.selectConfirmLocked(p.OnSelect)
+		if p.Setup = buildSetup(sc.Setup, setup, p, state); len(p.Setup) > 0 {
+			if refs := s.actionRefsLocked([]string{sc.Setup.Action}); len(refs) == 1 {
+				p.SetupAction = &refs[0]
+				p.SetupInput = sc.Setup.Input
+			} else {
+				p.Setup = nil
+			}
+		}
 		out.Picker = p
 	case harness.PrimSettings:
 		out.Settings = buildSettings(sc, data, state)

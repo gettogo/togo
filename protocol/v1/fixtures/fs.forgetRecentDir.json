@@ -1,0 +1,67 @@
+{
+  "description": "fs.forgetRecentDir takes a folder off the list. Setup creates in ~/alpha, kills it, creates in ~/proj, then forgets ~/alpha (a leading ~ is expanded to the home directory).",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/alpha"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "session.kill",
+      "params": {
+        "id": "s_abcdefghij"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "method": "fs.forgetRecentDir",
+      "params": {
+        "path": "~/alpha"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 6,
+    "method": "fs.recentDirs",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 6,
+    "result": {
+      "dirs": [
+        "<home>/proj"
+      ]
+    }
+  }
+}

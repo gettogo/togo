@@ -56,6 +56,13 @@ type Picker struct {
 	// ItemActions are offered on each item (swipe and context menu), run
 	// with args {"id": item id}.
 	ItemActions []ActionRef `json:"itemActions,omitempty"`
+	// Setup lists what is not set up yet, such as providers not signed
+	// in, shown after the items; SetupAction sets one up, run with args
+	// {"id": item id}. SetupInput "secret" asks for a value first (an API
+	// key), sent as args.value.
+	Setup       []PickerItem `json:"setup,omitempty"`
+	SetupAction *ActionRef   `json:"setupAction,omitempty"`
+	SetupInput  string       `json:"setupInput,omitempty"`
 }
 
 // PickerItem is one choice in a Picker.

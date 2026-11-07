@@ -29,6 +29,13 @@ struct PrimitiveContext {
     var settled: (@MainActor () -> Void)? = nil
     /// Leaves a line in the chat about a change, with Undo when one is offered.
     var note: (@MainActor (_ text: String, _ undo: SessionUndo?) -> Void)? = nil
+    /// The session the screen belongs to, where a store serves it.
+    var subject: HarnessSubject? = nil
+    /// Reads this screen again without showing it, for a sign-in watching the provider list.
+    var readScreen: (@MainActor () async -> HarnessScreen?)? = nil
+    /// Pushes a sign-in page on the presentation's own stack. nil where there is none: the
+    /// agent's page then comes as a sheet over the screen, which stays up under it.
+    var signIn: (@MainActor (SignInPageModel) -> Void)? = nil
 
     @MainActor static let inert = PrimitiveContext(
         run: { _, _, _ in nil }, openScreen: { _ in }, open: { _ in }, showTerminal: {}
@@ -57,13 +64,14 @@ extension PrimitiveContext {
             openScreen: openScreen, open: open, showTerminal: showTerminal
         )
         context.working = { store.working }
-        context.agent = store.descriptor?.adapter?.name ?? ""
+        context.agent = store.agentName
         context.instructionsLine = { store.instructionsLine(for: $0) }
         context.compose = { store.compose($0) }
         context.runAfterTurn = { action, target, args, note in
             store.runAfterTurn(action: action, target: target, args: args, note: note)
         }
         context.note = { text, undo in store.note(text, code: "model", undo: undo) }
+        context.subject = store.subject
         return context
     }
 }

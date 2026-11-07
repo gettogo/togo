@@ -1,0 +1,14 @@
+{
+  "source": "real",
+  "agentVersion": "1.0.107",
+  "match": true,
+  "kind": "question",
+  "title": "Do you trust the files in this folder?",
+  "subject": null,
+  "options": [
+    {"n": 1, "label": "Yes", "role": "approve"},
+    {"n": 2, "label": "Yes, and remember this folder for future sessions", "role": "approve_always"},
+    {"n": 3, "label": "No", "role": "deny"}
+  ],
+  "keys": {"1": ["1"], "2": ["2"], "3": ["Escape"]}
+}

@@ -66,6 +66,28 @@ func (a *Adapter) Validate() error {
 	if im := a.Images; im != nil && im.Insert != "per_path" && im.Insert != "together" {
 		bad("images.insert: %q is not per_path or together", im.Insert)
 	}
+	if m := a.Modes; m != nil {
+		for _, r := range m.Screen {
+			if _, err := regexp.Compile(r.Line); err != nil || r.ID == "" {
+				bad("modes.screen: %q needs a regexp and an id", r.Line)
+			}
+		}
+	}
+	if in := a.Input; in != nil {
+		if re, err := regexp.Compile(in.Line); err != nil || re.NumSubexp() < 1 {
+			bad("input.line: needs a regexp with a group")
+		}
+		for _, e := range in.Empty {
+			if _, err := regexp.Compile(e); err != nil {
+				bad("input.empty: %q does not compile", e)
+			}
+		}
+		for _, k := range append(append([]string{}, in.Clear...), in.Dismiss...) {
+			if !InputKeys[k] {
+				bad("input: key %q is not allowed", k)
+			}
+		}
+	}
 	if ep := a.Endpoint; ep != nil && ep.PasswordEnv != "" {
 		if ep.Kind != EndpointHTTP || !passwordEnvRE.MatchString(ep.PasswordEnv) {
 			bad("endpoint.password_env: %q is not an http endpoint's NAME_PASSWORD", ep.PasswordEnv)
@@ -121,6 +143,20 @@ func (a *Adapter) Validate() error {
 		for _, act := range append([]string{s.OnSelect, s.Submit}, s.Actions...) {
 			if act != "" && !a.hasAction(act) {
 				bad("%s: unknown action %q", where, act)
+			}
+		}
+		if su := s.Setup; su != nil {
+			if s.Primitive != "picker" {
+				bad("%s.setup: only a picker has a setup section", where)
+			}
+			if !a.hasSource(su.Source) {
+				bad("%s.setup: unknown source %q", where, su.Source)
+			}
+			if !a.hasAction(su.Action) {
+				bad("%s.setup: unknown action %q", where, su.Action)
+			}
+			if su.Input != "" && su.Input != "secret" {
+				bad("%s.setup: input %q is not secret", where, su.Input)
 			}
 		}
 		for _, f := range s.Fields {

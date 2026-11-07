@@ -117,7 +117,28 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 		// target means that item.
 		args["id"] = req.Target
 	}
+	// A picker sends {id}, a settings field {value}, and a palette choice
+	// both; a template that names the other one must not render empty and
+	// type a bare "/effort " that opens the harness's own dialog.
+	if _, ok := args["value"]; !ok {
+		if id, ok := args["id"].(string); ok && id != "" {
+			args["value"] = id
+		}
+	}
+	if _, ok := args["id"]; !ok {
+		if v, ok := args["value"].(string); ok && v != "" {
+			args["id"] = v
+		}
+	}
 	res, err := e.run(ctx, s, req.Action, act, args)
+	if err == nil {
+		s.keepMode(req.Action, args, res)
+	}
+	if err == nil && setsUp(s.ad.Screens, req.Action) && (res.Result == harness.ResultApplied || res.Result == harness.ResultTyped) {
+		// A provider signed in or connected: its models and its place in
+		// "Not set up" change, so the next picker reads them afresh.
+		e.cache.forget(s.id)
+	}
 	if err != nil || res.Result != harness.ResultApplied {
 		return res, err
 	}
@@ -170,6 +191,18 @@ func (e *Engine) run(ctx context.Context, s *sess, name string, act spec.Action,
 			return harness.ActionResult{Result: harness.ResultFallback}, nil
 		}
 	}
+	if route.HTTP != nil || route.RPC != nil || route.CLI != nil {
+		// OpenCode answers POST /session//abort or /prompt_async with 200
+		// and does nothing (seen live): a request that names the harness's
+		// session is not sent before there is one.
+		raw, _ := json.Marshal(route)
+		s.mu.Lock()
+		early := notYet(raw, s.stateLocked())
+		s.mu.Unlock()
+		if early {
+			return harness.ActionResult{Result: harness.ResultFallback, Message: "Nothing has started here yet"}, nil
+		}
+	}
 	switch {
 	case route.Type != nil:
 		return e.runType(ctx, s, act, route.Type, data)
@@ -213,6 +246,9 @@ func (e *Engine) runType(ctx context.Context, s *sess, act spec.Action, t *spec.
 		if errors.Is(err, harness.ErrBusy) || ctx.Err() != nil {
 			return harness.ActionResult{}, err
 		}
+		if r, err := dialogResult(err); r.Message != "" {
+			return r, err
+		}
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "Typing into the session failed"}, nil
 	}
 	if e.verify(ctx, s, act.Verify, data) {
@@ -237,6 +273,9 @@ func (e *Engine) runKeys(ctx context.Context, s *sess, act spec.Action, k *spec.
 		return e.cycle(ctx, s, act, k, data)
 	}
 	if err := e.sendKeys(ctx, s, false, k.Keys...); err != nil {
+		if r, err := dialogResult(err); r.Message != "" {
+			return r, err
+		}
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "Sending keys failed"}, nil
 	}
 	if e.verify(ctx, s, act.Verify, data) {
@@ -280,6 +319,9 @@ func (e *Engine) cycle(ctx context.Context, s *sess, act spec.Action, k *spec.Ke
 	}
 	if cur == want {
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
+	}
+	if err := e.screenClear(ctx, s); err != nil {
+		return dialogResult(err)
 	}
 	orig := cur
 	seen := map[string]bool{cur: true}
@@ -397,6 +439,12 @@ func (e *Engine) verify(ctx context.Context, s *sess, v *spec.Verify, data map[s
 	deadline := time.Now().Add(e.scaled(within))
 	for {
 		if got, ok := e.readValue(ctx, s, v, false); ok && got == want {
+			return true
+		}
+		// A typed mode command may write no record: the pane shows the
+		// new mode first. Keep what it shows, so the mode chip follows too.
+		if got, ok := e.readValue(ctx, s, v, true); ok && got == want {
+			s.seedFromScreen(0)
 			return true
 		}
 		if time.Now().After(deadline) {

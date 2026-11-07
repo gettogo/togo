@@ -88,6 +88,22 @@ func TestTargetStandsInForID(t *testing.T) {
 	}
 }
 
+// A settings field sends only {value}; a template that names .id gets it
+// too, and the reverse, so "/effort {{.value}}" never types a bare
+// "/effort " (seen live: Claude then opens its own effort dialog).
+func TestValueAndIDStandInForEachOther(t *testing.T) {
+	const id = "s_typevalu01"
+	pane := &seqPane{mode: "a"}
+	e := newSeq(t, id, pane, nil)
+	deliver(id, map[string]any{"state": map[string]string{"working": "false", "model": "x"}})
+	waitFor(t, func() bool { s, _ := e.served(context.Background(), id); return e.idleNow(s) })
+	res, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: "set_model",
+		Args: map[string]json.RawMessage{"value": json.RawMessage(`"z"`)}})
+	if err != nil || res.Message != "Sent /model z" {
+		t.Fatalf("value only = %+v %v", res, err)
+	}
+}
+
 // A picker's choice comes back with the picker read again, so the phone
 // shows the new selection or role holder without reopening it.
 func TestPickerActionsReturnThePicker(t *testing.T) {

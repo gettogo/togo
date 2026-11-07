@@ -49,6 +49,9 @@ type Config struct {
 	Approvals Approvals
 	// Screen returns the pane's visible text.
 	Screen func(ctx context.Context, id string) (string, error)
+	// NeedsYou tells the phone a session needs the user at the terminal:
+	// the typing guard found a dialog it will not type into.
+	NeedsYou func(id, title, body string)
 	// Status is the hub's status for a session (working, idle, ...).
 	Status func(id string) string
 	// Relaunch restarts the agent with argv in its pane.
@@ -57,6 +60,8 @@ type Config struct {
 	Ports    func(ctx context.Context, id string) ([]ports.Listener, error)
 	// LoginPath is the PATH programs are looked up in.
 	LoginPath func(ctx context.Context) string
+	// LoginEnv is the login shell's environment; nil keeps the helper's.
+	LoginEnv func(ctx context.Context) []string
 	// Home is the user's home folder; AdapterDir holds user overrides;
 	// TogoHome holds the sockets picked for harness endpoints.
 	Home       string

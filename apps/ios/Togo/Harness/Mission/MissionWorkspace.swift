@@ -89,7 +89,11 @@ struct MissionWorkspace: ViewModifier {
                 guard MissionNudge.arrived(old, new) else { return }
                 NeedsAnnouncement.post(MissionCopy.needs(new.needsYou), after: .seconds(1))
             }
-            .sheet(item: $model.screen) { screen in
+            // Resume, MCP servers, Providers, Settings: each by its class, from the descriptor.
+            .harnessPresent(
+                item: $model.screen,
+                as: AdaptivePresentation.content(forScreen: model.screen?.id ?? "", in: model.screen?.store.descriptor)
+            ) { screen in
                 HarnessScreenSheet(store: screen.store, screenID: screen.id) { [app] target in
                     app.followMissionTarget(target, from: screen.tab)
                 }

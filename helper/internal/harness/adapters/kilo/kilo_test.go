@@ -33,6 +33,16 @@ func parse(t *testing.T) *spec.Adapter {
 	return a
 }
 
+// Kilo 7.8.27's TUI server answers 401 (Basic realm) without auth, even on
+// loopback; KILO_SERVER_PASSWORD with user "kilo" opens it (probed live:
+// OPENCODE_SERVER_PASSWORD is not read).
+func TestEndpointSetsKiloPassword(t *testing.T) {
+	a := parse(t)
+	if a.Endpoint.PasswordEnv != "KILO_SERVER_PASSWORD" || a.Endpoint.Username != "kilo" {
+		t.Fatalf("endpoint auth %q/%q", a.Endpoint.PasswordEnv, a.Endpoint.Username)
+	}
+}
+
 func TestAdapterFileParses(t *testing.T) {
 	a := parse(t)
 	if a.Adapter != "kilo" || a.Endpoint == nil || a.Endpoint.Kind != spec.EndpointHTTP {

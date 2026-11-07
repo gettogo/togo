@@ -74,10 +74,14 @@ struct SmartCommandLine: View {
         .onChange(of: ComposerParts(model)) { _, parts in follow(parts) }
         .haptic(.error, trigger: model.notice) { _, notice in notice != nil }
         .task(id: model.draft) { await model.draftChanged() }
-        .sheet(item: Binding(
-            get: { model.presentedScreen.map(ScreenRequest.init) },
-            set: { model.presentedScreen = $0?.id }
-        )) { request in
+        // The screen's class (from the descriptor, before it loads) picks its presentation.
+        .harnessPresent(
+            item: Binding(
+                get: { model.presentedScreen.map(ScreenRequest.init) },
+                set: { model.presentedScreen = $0?.id }
+            ),
+            as: AdaptivePresentation.content(forScreen: model.presentedScreen ?? "", in: model.store.descriptor)
+        ) { request in
             HarnessScreenSheet(store: model.store, screenID: request.id, onOpen: onOpen)
         }
         // The dialog a command or a session change asks with, while the palette is not up.
@@ -85,7 +89,10 @@ struct SmartCommandLine: View {
             get: { model.paletteOpen ? nil : model.gate.asking },
             set: { model.gate.asking = $0 }
         ))
-        .onChange(of: model.focusRequests) { focused = true }
+        // The palette or a sheet may still be closing; the focus is asked for until it holds.
+        .onChange(of: model.focusRequests) {
+            Task { await FocusRetry.land(isFocused: { focused }, focus: { focused = true }) }
+        }
         // "With instructions…" from a sheet or mission control: the line comes here, focused.
         .onChange(of: model.store.draftRequest, initial: true) { _, request in
             guard let request else { return }
@@ -116,6 +123,7 @@ struct SmartCommandLine: View {
                     switch action {
                     case .openTerminal: model.store.layer = .terminal
                     case .retry: Task { await model.submit() }
+                    case .sendAsText: Task { await model.submit(asText: true) }
                     }
                     model.clearNotice()
                 }
@@ -251,10 +259,9 @@ struct SmartCommandLine: View {
             Button(ComposerCopy.commands, systemImage: "slash.circle") { model.paletteOpen = true }
                 .labelStyle(.iconOnly)
                 .buttonStyle(ComposerChipStyle())
-                // A popover from the chip on regular widths; a sheet on compact ones.
-                .popover(isPresented: $model.paletteOpen, arrowEdge: .bottom) {
+                // Every command is a large list to search: a sheet sized by the window's room.
+                .harnessPresent(isPresented: $model.paletteOpen, as: .browse, anchored: true, onDismiss: model.paletteClosed) {
                     CommandPaletteView(model: model, screenTitle: screenTitle)
-                        .presentationCompactAdaptation(.sheet)
                 }
         }
         if model.attachments.available {
@@ -275,7 +282,7 @@ struct SmartCommandLine: View {
     private var assists: Bool { CommandLineLogic.keyboardAssists(model.draft) }
 
     private var placeholder: String {
-        ComposerCopy.message(model.store.descriptor?.adapter?.name ?? "")
+        ComposerCopy.message(model.store.agentName)
             .trimmingCharacters(in: .whitespaces)
     }
 

@@ -1,0 +1,73 @@
+{
+  "name": "signin/real-omp-login-provider",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "signin",
+    "title": "Select provider to login",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "ChatGPT Plus/Pro (Codex Subscription)",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "Anthropic (Claude Pro/Max)",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "Z.AI (GLM Coding Plan)",
+        "role": "other"
+      },
+      {
+        "n": 4,
+        "label": "Z.AI (GLM Coding Plan · Sign in)",
+        "role": "other"
+      },
+      {
+        "n": 5,
+        "label": "Kimi Code",
+        "role": "other"
+      },
+      {
+        "n": 6,
+        "label": "OpenRouter",
+        "role": "other"
+      },
+      {
+        "n": 7,
+        "label": "GitHub Copilot",
+        "role": "other"
+      },
+      {
+        "n": 8,
+        "label": "Devin",
+        "role": "other"
+      },
+      {
+        "n": 9,
+        "label": "Google Antigravity (Gemini, Claude, GPT-OSS)",
+        "role": "other"
+      },
+      {
+        "n": 10,
+        "label": "Google Cloud Code Assist (Gemini CLI)",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Signin",
+    "subtitle": "Select provider to login",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

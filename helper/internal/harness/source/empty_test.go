@@ -12,7 +12,7 @@ import (
 // file before the first todo, or a harness's state file before first use.
 func TestMissingFileIsNull(t *testing.T) {
 	env, h := testEnv(t)
-	for _, path := range []string{"~/.qwen/todos/none.json", filepath.Join(h, "absent", "x.json")} {
+	for _, path := range []string{"~/.togo-absent/todos/none.json", filepath.Join(h, "absent", "x.json")} {
 		out, err := File{kind: "file"}.Fetch(context.Background(), sspec("s", map[string]any{"path": path}), env)
 		if err != nil || string(out) != "null" {
 			t.Errorf("%s = %s, %v; want null", path, out, err)

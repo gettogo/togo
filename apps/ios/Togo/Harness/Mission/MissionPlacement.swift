@@ -7,8 +7,13 @@ enum MissionPresentation: Equatable {
     case sheet
     case inspector
 
-    static func choose(_ horizontalSizeClass: UserInterfaceSizeClass?) -> MissionPresentation {
-        horizontalSizeClass == .regular ? .inspector : .sheet
+    /// The app's policy for side context (`AdaptivePresentation`): an inspector where the
+    /// window is regular and wide enough, else a sheet.
+    static func choose(_ horizontalSizeClass: UserInterfaceSizeClass?, windowWidth: CGFloat? = nil) -> MissionPresentation {
+        let style = AdaptivePresentation.style(
+            for: .sideContext, sizeClass: horizontalSizeClass, containerWidth: windowWidth, hostsInspector: true
+        )
+        return style == .inspector ? .inspector : .sheet
     }
 }
 

@@ -52,6 +52,11 @@ public actor LocalForward {
     private let opener: any TCPChannelOpener
     private let target: ForwardTarget
     private let preferredLocalPort: Int?
+    /// The preferred port or nothing: a sign-in callback must land on the very port its
+    /// redirect names, so a taken port fails `start()` instead of moving elsewhere.
+    private let exactLocalPort: Bool
+    /// Called on each connection accepted, before its channel opens.
+    private let onAccept: (@Sendable () -> Void)?
     private let queue = DispatchQueue(label: "app.togo.forward")
 
     private var listener: NWListener?
@@ -68,10 +73,15 @@ public actor LocalForward {
     /// The address the listener is bound to, once started.
     private(set) var boundHost: String?
 
-    public init(opener: any TCPChannelOpener, target: ForwardTarget, preferredLocalPort: Int?) {
+    public init(
+        opener: any TCPChannelOpener, target: ForwardTarget, preferredLocalPort: Int?,
+        exactLocalPort: Bool = false, onAccept: (@Sendable () -> Void)? = nil
+    ) {
         self.opener = opener
         self.target = target
         self.preferredLocalPort = preferredLocalPort
+        self.exactLocalPort = exactLocalPort && preferredLocalPort != nil
+        self.onAccept = onAccept
         (events, sink) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(16))
     }
 
@@ -95,6 +105,13 @@ public actor LocalForward {
     }
 
     private func bind() async throws -> Int {
+        if exactLocalPort, let preferredLocalPort {
+            guard preferredLocalPort > 0, preferredLocalPort <= 65_535,
+                  let port = NWEndpoint.Port(rawValue: UInt16(preferredLocalPort)) else {
+                throw NWError.posix(.EINVAL)
+            }
+            return try await listen(on: port)
+        }
         if let preferredLocalPort, let port = NWEndpoint.Port(rawValue: UInt16(clamping: preferredLocalPort)),
            preferredLocalPort > 0, let bound = try? await listen(on: port) {
             return bound
@@ -177,6 +194,7 @@ public actor LocalForward {
         let id = nextID
         nextID += 1
         links[id] = Link(connection: connection)
+        onAccept?()
         connection.start(queue: queue)
         links[id]?.task = Task { await self.serve(id, connection) }
     }

@@ -25,6 +25,8 @@ type Tmux interface {
 	ListSessions(ctx context.Context) ([]tmux.SessionInfo, error)
 	CapturePane(ctx context.Context, target string) (string, error)
 	SendKeys(ctx context.Context, target string, literal bool, keys ...string) error
+	// PasteText pastes text as one bracketed paste, off the command line.
+	PasteText(ctx context.Context, target, text string) error
 }
 
 // Config configures a Store.
@@ -156,6 +158,11 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 	s.mu.Unlock()
 	a := s.base(ctx, sessionID, wire.SourceScreen)
 	a.Title, a.Detail, a.Snippet, a.Options = p.Title, p.Detail, p.Snippet, p.Options
+	if p.SignIn != nil {
+		in := *p.SignIn
+		a.SignIn = &in
+		a.AllowText = in.Secret
+	}
 	if p.ReadOnly {
 		a.Answerable = notAnswerable()
 	}

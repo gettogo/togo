@@ -31,15 +31,16 @@ import XCTest
         return XCTWaiter.wait(for: [expectation(for: selected, evaluatedWith: element)], timeout: timeout) == .completed
     }
 
-    func testSwipingTheTerminalChangesTabs() {
+    /// A one-finger swipe belongs to the terminal: it never pages to another session (the
+    /// terminal's two-finger swipe and the chips do).
+    func testOneFingerSwipeKeepsTheTab() {
         let app = openTwoTabs()
-        let api = chip(app, "01"), appChip = chip(app, "04")
+        let appChip = chip(app, "04")
         XCTAssertTrue(waitUntilSelected(appChip))
 
         app.swipeRight()
-        XCTAssertTrue(waitUntilSelected(api))
-        app.swipeLeft()
         XCTAssertTrue(waitUntilSelected(appChip))
+        XCTAssertFalse(chip(app, "01").isSelected)
     }
 
     func testTabChipsMeetTheMinimumSize() {

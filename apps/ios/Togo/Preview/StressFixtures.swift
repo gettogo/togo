@@ -18,8 +18,6 @@ enum StressFixtures {
         AnswerOption(id: 6, label: "Allow always · applies to webfetch on docs.anthropic.com for this session"),
         // Gemini CLI
         AnswerOption(id: 7, label: "Allow always for every tool from server google-workspace-mcp"),
-        // Qwen Code
-        AnswerOption(id: 8, label: "Yes, allow always for 'run_shell_command' with prefix 'npm run'"),
         // Copilot CLI
         AnswerOption(id: 9, label: "Yes, and approve 'gh pr create' for the rest of the running session"),
     ]

@@ -1,0 +1,186 @@
+# OpenCode 2.x, a rewrite: the TUI is a client of a server ("the v2 API"), by default
+# a shared background service. Togo starts a private one for each session,
+# `opencode serve --port N` with a fresh password, and the TUI with `--server URL`, so
+# the API and its /api/event stream serve this TUI only. Checked on OpenCode 2.2.5
+# against a real server: session create, prompt, the event stream (text, reasoning,
+# tools, steps, executions), agent and model switches (the TUI footer follows them),
+# interrupt, permissions (session.permission.reply) and the question tool (a form,
+# session.form.reply). The selected adapter is this file or opencode.yaml (1.x), by the
+# installed version.
+adapter: opencode2
+name: OpenCode
+revision: 1
+match: { agents: [opencode], commands: [opencode] }
+harness: { version: [opencode, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=2 <3" }
+endpoint:
+  kind: http
+  server: [opencode, serve, --hostname, 127.0.0.1, --port, '{{.port}}']
+  launch_args: [--server, 'http://127.0.0.1:{{.port}}']
+  health: /api/info
+  # The server reads OPENCODE_PASSWORD (Basic auth, user "opencode"); the TUI sends
+  # the same variable to it.
+  password_env: OPENCODE_PASSWORD
+  username: opencode
+capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
+  files, mode, model, needs.approvals, needs.questions, agents, changes, ports, status,
+  resume, compact, mcp, settings]
+images: { insert: together }   # how image paths are pasted into the input
+feeds:
+  events:
+    sse: { path: /api/event }
+    mapper: opencode2.events
+    stability: documented
+sources:
+  sessions:
+    http: { path: '/api/session?directory={{.cwd | urlquery}}&limit=50' }
+    select: '[.data[] | select(.parentID == null)] | sort_by(-.time.updated)'
+    cache: 30s
+    stability: documented
+  # Provider and model answers carry settings, headers and request bodies, where keys
+  # live (`settings.apiKey`). The http runner strips secrets first; these paths remove
+  # what is left of them.
+  models:
+    http: { path: '/api/model?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    redact: ['.data[].settings', '.data[].headers', '.data[].body']
+    # An item id is the Model.Ref the session model switch takes, as compact JSON
+    # with sorted keys; the mapper reports the current one as model_ref.
+    select: '[.data[] | select(.enabled and ((.type // "chat") == "chat")) | {id: ({id: .id, providerID: .providerID} | tojson), name: .name, provider: .providerID, providerName: .providerID}]'
+    cache: 5m
+    stability: documented
+  providers:
+    http: { path: '/api/provider?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    redact: ['.data[].settings.apiKey', '.data[].headers', '.data[].body']
+    select: '[.data[] | {id: (.integrationID // .id), name: .name, keySet: ((((.settings._set // []) | index("apiKey")) != null) or (.integrationID != null))}]'
+    cache: 5m
+    stability: documented
+  # Integrations that take a key and have no connection: the model picker's
+  # "Not set up" section, where an API key connects one.
+  unconnected:
+    http: { path: '/api/integration?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    redact: ['.data[].connections']
+    select: '[.data[] | select(((.connections // []) | length) == 0 and any(.methods[]; .type == "key")) | {id: .id, name: .name}] | sort_by(.name | ascii_downcase)'
+    cache: 5m
+    stability: documented
+  agents:
+    http: { path: '/api/agent?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    select: '[.data[] | select(.mode != "subagent" and (.hidden | not)) | {id: .id, name: .name, description: .description}]'
+    cache: 5m
+    stability: documented
+  commands:
+    http: { path: '/api/command?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    select: '.data'
+    cache: 5m
+    stability: documented
+  children:
+    http: { path: '/api/session?parentID={{.state.harness_session | urlquery}}' }
+    select: '[.data[] | {id: .id, title: (.title // "Subagent"), state: (if (.time.busy // 0) > (.time.idle // 0) then "running" else "done" end)}]'
+    stability: documented
+  mcp:
+    http: { path: '/api/mcp?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    select: '[.data[] | {id: .name, title: (.title // .name), state: .status.status}]'
+    cache: 30s
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map: { item.id: .id, item.title: .name, item.group: .providerName, selected: $state.model_ref }
+    filters: [{ id: provider, label: Provider, kind: choice, field: provider }]
+    on_select: set_model
+    setup: { source: unconnected, map: { item.id: .id, item.title: .name }, action: add_provider_key, input: secret }
+  providers:
+    primitive: settings
+    title: Providers
+    section: more
+    capability: settings
+    source: providers
+    fields:
+      # A secret field never carries a value; keySet only says one exists.
+      - { id: key, label: API key, kind: secret, value: .keySet, action: set_provider_key }
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: .title, item.subtitle: '{{.time.updated | ago}}' }
+    on_select: resume
+  mcp:
+    primitive: liveList
+    title: MCP servers
+    section: more
+    capability: mcp
+    source: mcp
+actions:
+  # These switch the session on the server (no config file is written), and the
+  # TUI's footer follows (seen live).
+  set_model:
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/model', body: '{"model": {{.id | object}}}' }
+    stability: documented
+  set_mode:
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/agent', body: '{"agent": {{.id | json}}}' }
+    stability: documented
+  # Connecting a key stores a credential in OpenCode's own store, as its
+  # connect menu does.
+  add_provider_key:
+    label: Add key
+    http: { method: POST, path: '/api/integration/{{.id}}/connect/key?location%5Bdirectory%5D={{.cwd | urlquery}}', body: '{"key": {{.value | json}}}' }
+    stability: unverified
+  set_provider_key:
+    http: { method: POST, path: '/api/integration/{{.target}}/connect/key?location%5Bdirectory%5D={{.cwd | urlquery}}', body: '{"key": {{.value | json}}}' }
+    stability: unverified
+  # A / line from the composer or the palette runs as the server's command.
+  command:
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/command', body: '{"name": {{.command | json}}, "text": {{.arguments | json}}}' }
+    stability: documented
+  send:
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/prompt', body: '{"text": {{.text | json}}}' }
+    stability: documented
+  # 2.x has no TUI control route: a resumed session is a restart on it.
+  resume:
+    relaunch: { argv: [opencode, --session, '{{.id}}'] }
+    stability: documented
+  compact:
+    confirm: Compact the session now?
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/compact', body: '{}' }
+    stability: documented
+  interrupt:
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/interrupt' }
+    stability: documented
+  # Item ids are "<request>~<session>": a permission (per_...) has one question
+  # "0" whose option is the decision; a form's question ids are field keys that
+  # the form filter turns into the reply object.
+  answer:
+    branch:
+      - when: '{{if eq (slice .target 0 4) "per_"}}true{{end}}'
+        http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/permission/{{part "~" 0 .target}}/reply', body: '{"decision": {{index (index .answers "0") 0 | json}}}' }
+      - http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/form/{{part "~" 0 .target}}/reply', body: '{"answer": {{form .answers}}}' }
+    stability: documented
+  stop:
+    role: destructive
+    http: { method: POST, path: '/api/session/{{.target}}/interrupt' }
+    stability: documented
+modes:
+  choices: [{ id: build, label: Build }, { id: plan, label: Plan }]
+  current: agents
+  select: $state.mode
+  set: set_mode
+  # Before the first turn the footer under the input is the only record:
+  # "┃  Build · <model>" (2.2.5).
+  screen:
+    - { line: '^\s*┃\s+Build · ', id: build }
+    - { line: '^\s*┃\s+Plan · ', id: plan }
+commands:
+  static:
+    - { name: models, detail: Choose the model, screen: model }
+    - { name: sessions, detail: Resume a session, screen: resume }
+    - { name: compact, detail: Summarise the session, action: compact }
+  source: commands
+  select: '[.[] | {name: .name, detail: .description, hint: ""}]'
+mission:
+  agents: { source: children }

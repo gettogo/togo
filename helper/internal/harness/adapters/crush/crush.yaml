@@ -48,6 +48,10 @@ actions:
 modes:
   choices: [{ id: default, label: Ask }, { id: yolo, label: Skip prompts }]
   set: set_mode
+  # Started with --yolo, Crush shows YOLO MODE in its footer (seen on 0.100.0);
+  # without it the footer has no mode.
+  screen: [{ line: 'YOLO MODE', id: yolo }]
+  screen_default: default
 commands:
   static:
     - { name: sessions, detail: Switch session, screen: resume }

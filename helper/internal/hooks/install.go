@@ -1,6 +1,6 @@
 // Package hooks adds and removes the entries that make each harness in the
-// Registry that takes hooks (Claude Code, Codex, Gemini CLI, Auggie, Qwen
-// Code, Droid and Copilot CLI) report events to "togo hook <agent> <event>",
+// Registry that takes hooks (Claude Code, Codex, Gemini CLI, Auggie, Droid
+// and Copilot CLI) report events to "togo hook <agent> <event>",
 // and chains Claude Code's status line. It only ever touches entries whose
 // command ends in "hook <agent> <event>", keeps every other key and hook in
 // the harness's config, backs a file up once before its first change, and
@@ -43,11 +43,10 @@ type Options struct {
 	Binary    string // absolute path of the togo executable
 	ClaudeDir string // $CLAUDE_CONFIG_DIR or ~/.claude
 	CodexDir  string // $CODEX_HOME or ~/.codex
-	// The other harnesses' config roots: ~/.gemini, ~/.augment, ~/.qwen,
-	// ~/.factory, ~/.copilot and ~/.vibe.
+	// The other harnesses' config roots: ~/.gemini, ~/.augment, ~/.factory,
+	// ~/.copilot and ~/.vibe.
 	GeminiDir  string
 	AugmentDir string
-	QwenDir    string
 	FactoryDir string
 	CopilotDir string
 	VibeDir    string
@@ -159,8 +158,6 @@ func editsFor(o Options, agent string, add bool) ([]edit, string, error) {
 		return claudeEdits(o, add)
 	case Codex:
 		return codexEdits(o, add)
-	case Qwen:
-		return qwenEdits(o, add)
 	case Droid:
 		return droidEdits(o, add)
 	case Copilot:

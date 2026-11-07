@@ -223,6 +223,13 @@ func FuzzDetectNeverPanics(f *testing.F) {
 		if !ok {
 			return
 		}
+		if p.Kind == KindSignIn {
+			// A sign-in step offers no options: a page, a code, a secret.
+			if p.SignIn == nil || len(p.Options) != 0 || p.Fingerprint == "" {
+				t.Fatalf("inconsistent sign-in %+v", p)
+			}
+			return
+		}
 		if len(p.Options) < 2 || len(p.Keys) != len(p.Options) || p.Fingerprint == "" {
 			t.Fatalf("inconsistent prompt %+v", p)
 		}

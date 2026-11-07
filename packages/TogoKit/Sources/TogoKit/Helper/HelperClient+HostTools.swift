@@ -21,6 +21,13 @@ extension HelperClient {
         let _: EmptyResult = try await readyCall(.browserOpenOnMac, BrowserOpenParams(url: url), needs: Capability.browser)
     }
 
+    // MARK: - Recent folders
+
+    /// Takes `path` off the recent folders (recent.v1).
+    public func forgetRecentDir(_ path: String) async throws {
+        let _: EmptyResult = try await readyCall(.fsForgetRecentDir, ForgetRecentDirParams(path: path), needs: Capability.recent)
+    }
+
     // MARK: - Restore
 
     /// Sessions a host restart ended, newest first.

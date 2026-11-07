@@ -190,6 +190,14 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		return errPromptGone
 	}
 	if d.Kind == wire.DecisionText {
+		if a.SignIn != nil && a.SignIn.Secret {
+			// A key or code goes in as one paste, never as typed keys, and
+			// no error carries it: tmux reads it from a pipe.
+			if err := s.cfg.Tmux.PasteText(ctx, tgt, d.Text); err != nil {
+				return errors.New("approval: could not paste the secret into the session")
+			}
+			return s.send(ctx, tgt, false, "Enter")
+		}
 		if err := s.send(ctx, tgt, true, d.Text); err != nil {
 			return err
 		}

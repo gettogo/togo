@@ -1,0 +1,46 @@
+{
+  "providers": [
+    {
+      "id": "openai-codex",
+      "name": "ChatGPT Plus/Pro (Codex Subscription)",
+      "available": true,
+      "authenticated": false
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic (Claude Pro/Max)",
+      "available": true,
+      "authenticated": false
+    },
+    {
+      "id": "zai",
+      "name": "Z.AI (GLM Coding Plan)",
+      "available": true,
+      "authenticated": false
+    },
+    {
+      "id": "zai-coding-plan",
+      "name": "Z.AI (GLM Coding Plan · Sign in)",
+      "available": true,
+      "authenticated": false
+    },
+    {
+      "id": "moonshot",
+      "name": "Moonshot (Kimi API)",
+      "available": true,
+      "authenticated": true
+    },
+    {
+      "id": "apple",
+      "name": "Apple",
+      "available": true,
+      "authenticated": false
+    },
+    {
+      "id": "broken",
+      "name": "Broken",
+      "available": false,
+      "authenticated": false
+    }
+  ]
+}

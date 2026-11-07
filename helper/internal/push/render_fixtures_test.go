@@ -58,6 +58,7 @@ func (f renderTmux) ListSessions(context.Context) ([]tmux.SessionInfo, error) {
 func (f renderTmux) CapturePane(context.Context, string) (string, error) { return f.screen, nil }
 
 func (renderTmux) SendKeys(context.Context, string, bool, ...string) error { return nil }
+func (renderTmux) PasteText(context.Context, string, string) error         { return nil }
 
 type openCapture struct{ open []wire.ApprovalOpenEvent }
 
@@ -223,6 +224,11 @@ func renderNotification(p wire.PushPlaintext) renderExpect {
 	if len(head) > 0 {
 		title = strings.Join(head, " ")
 	}
+	if p.SessionName != nil {
+		if n := oneLine(*p.SessionName); n != "" && (p.Agent == nil || n != agentDisplay(*p.Agent)) {
+			title += " · " + n
+		}
+	}
 	body := detect.CleanLine(p.Body)
 	if s := p.Subject; s != nil && s.Validate() == nil {
 		body = detect.CleanLine(s.Text)
@@ -230,7 +236,12 @@ func renderNotification(p wire.PushPlaintext) renderExpect {
 			body = detect.CleanLine(u.Host + u.Path)
 		}
 	}
-	return renderExpect{Title: title, Subtitle: oneLine(p.Title), Body: body, Category: category(p.Options)}
+	cat := category(p.Options, p.RequestID)
+	if cat == "togo.info" && body == "" {
+		// No button can answer it: the body says where to.
+		body = "Open to answer"
+	}
+	return renderExpect{Title: title, Subtitle: oneLine(p.Title), Body: body, Category: cat}
 }
 
 func oneLine(s string) string {
@@ -245,14 +256,14 @@ func agentDisplay(agent string) string {
 		return a.Name
 	}
 	a := oneLine(agent)
-	if a == "" {
+	if a == "" || strings.ToLower(a) == wire.AgentCustom {
 		return ""
 	}
 	r, n := utf8.DecodeRuneInString(a)
 	return string(unicode.ToUpper(r)) + a[n:]
 }
 
-func category(opts []wire.Option) string {
+func category(opts []wire.Option, requestID string) string {
 	roles := []string{}
 	for _, o := range opts {
 		roles = append(roles, o.Role)
@@ -262,6 +273,9 @@ func category(opts []wire.Option) string {
 		return "togo.request"
 	case deny:
 		return "togo.request.deny"
+	case len(opts) > 0 && len(opts) <= 4 && !approve && !slices.Contains(roles, wire.RoleApproveAlways):
+		// A single question's own options, one button each.
+		return "togo.choice." + requestID
 	}
 	return "togo.info"
 }

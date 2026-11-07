@@ -38,6 +38,8 @@ enum PrimitiveCopy {
         defaultValue: "Stored on the machine. Togo never shows it and keeps no copy."
     )
     static let running = String(localized: "primitive.running", defaultValue: "Running")
+    static let notSetUp = String(localized: "primitive.notSetUp", defaultValue: "Not set up")
+    static let apiKey = String(localized: "primitive.apiKey", defaultValue: "API key")
     static let submit = String(localized: "primitive.submit", defaultValue: "Send answer")
     static let confirm = String(localized: "primitive.confirm", defaultValue: "Confirm")
     static let yourAnswer = String(localized: "primitive.yourAnswer", defaultValue: "Or type an answer")
@@ -159,4 +161,16 @@ enum PrimitiveCopy {
     static func linesSpoken(added: Int, removed: Int) -> String {
         String(localized: "primitive.linesSpoken", defaultValue: "\(added) added, \(removed) removed")
     }
+
+    // MARK: Large picker
+
+    static let groups = String(localized: "primitive.groups", defaultValue: "Groups")
+    static let roles = String(localized: "primitive.roles", defaultValue: "Roles")
+    static let noItemChosen = String(localized: "primitive.noItemChosen", defaultValue: "Nothing chosen")
+    static let chooseForDetails = String(
+        localized: "primitive.chooseForDetails", defaultValue: "Choose one from the list to see its details."
+    )
+    static let rolesFooter = String(
+        localized: "primitive.rolesFooter", defaultValue: "Tap a role, then the one to give it."
+    )
 }

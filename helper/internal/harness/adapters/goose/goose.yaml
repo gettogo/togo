@@ -2,8 +2,9 @@
 # their own sessions) and no hooks. Sessions: `goose session list --format json --working_dir`
 # (flags checked on 1.57; the JSON fields were not seen, the owner has no sessions yet).
 # Writes: documented in-TUI commands with arguments (`/mode`, `/model`), relaunch with
-# `session --resume --session-id`. The current mode is not readable, so the chip shows choices
-# without a selection.
+# `session --resume --session-id`. Goose keeps the mode in its own session database
+# (goose_mode, under a session id Togo does not learn) and shows it nowhere on screen, so
+# the chip shows the mode last picked from Togo once Goose took it; before that, none.
 adapter: goose
 name: Goose
 revision: 1

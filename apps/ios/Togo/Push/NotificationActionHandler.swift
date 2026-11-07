@@ -104,6 +104,16 @@ struct DeliveredRequest: Hashable, Sendable {
             }
             return target.flatMap(URL.init(string:)).flatMap(DeepLink.init(url:))
         default:
+            if let n = NotificationActionID.optionNumber(actionIdentifier) {
+                // A question's own option, picked from its notification.
+                guard let info = userInfo[NotificationServiceCore.infoKey] as? [String: Any],
+                      let requestId = info["requestId"] as? String,
+                      let hostId = info["hostId"] as? String
+                else { return nil }
+                let session = (info["sessionId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                await answer(hostId: hostId, requestId: requestId, decision: "option:\(n)", threadID: session ?? hostId)
+                return nil
+            }
             return target.flatMap(URL.init(string:)).flatMap(DeepLink.init(url:))
         }
     }

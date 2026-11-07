@@ -97,6 +97,7 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		s.turn, s.started, s.steps = id+".turn", at, 0
 		s.state["working"], s.state["idle"] = "true", "false"
+		s.state[harness.StateWorkingAt] = harness.StampWorking(at)
 		items = append(items, harness.Item{ID: id, TurnID: s.turn, Kind: harness.KindUser, At: at,
 			User: &harness.UserBody{Text: hookstyle.Clip(text(m.Content)), Source: "unknown"}})
 		return append(items, s.turnItem(harness.StateRunning, nil)), nil
@@ -178,6 +179,7 @@ func (s *session) close(at time.Time) []harness.Item {
 	items = append(items, s.turnItem(harness.StateOK, &at))
 	s.turn = ""
 	s.state["working"], s.state["idle"] = "false", "true"
+	s.state[harness.StateWorkingAt] = harness.StampWorking(at)
 	return items
 }
 

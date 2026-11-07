@@ -22,6 +22,7 @@ enum NewSessionCopy {
     static let recentHeading = String(localized: "new.folder.recent", defaultValue: "Recent folders")
     static let recentLoading = String(localized: "new.folder.recentLoading", defaultValue: "Loading recent folders")
     static let recentEmpty = String(localized: "new.folder.recentEmpty", defaultValue: "No recent folders yet")
+    static let removeRecent = String(localized: "new.folder.removeRecent", defaultValue: "Remove from Recent")
     static let otherHeading = String(localized: "new.folder.other", defaultValue: "Other folders")
     static let home = String(localized: "new.folder.home", defaultValue: "Home")
     static let browse = String(localized: "new.folder.browse", defaultValue: "Browse")

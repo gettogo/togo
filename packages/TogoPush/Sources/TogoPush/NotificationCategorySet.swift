@@ -83,17 +83,69 @@ public enum NotificationCategorySet {
         ]
     }
 
-    /// The categories for the current shared setting. Unreadable defaults (before first
-    /// unlock) mean Approve needs unlock.
-    public static func current(defaults: UserDefaults? = SharedSettings.defaults) -> Set<UNNotificationCategory> {
-        make(approveWithoutUnlock: defaults?.bool(forKey: SharedSettings.approveWithoutUnlock) ?? false)
+    /// The categories for the current shared setting, with one choice category for each
+    /// waiting question in `pending`. Unreadable defaults (before first unlock) mean Approve
+    /// needs unlock.
+    public static func current(
+        defaults: UserDefaults? = SharedSettings.defaults, pending: [PendingRequest] = []
+    ) -> Set<UNNotificationCategory> {
+        let without = defaults?.bool(forKey: SharedSettings.approveWithoutUnlock) ?? false
+        return make(approveWithoutUnlock: without).union(choices(pending, approveWithoutUnlock: without))
     }
 
-    /// Registers the categories for the current shared setting. The extension calls it for
-    /// every push; the app calls it at launch and after the setting changes.
+    /// Registers the categories for the current shared setting and the waiting questions the
+    /// shared pending store holds. The extension calls it for every push; the app calls it at
+    /// launch and after the setting changes.
     public static func register(
-        center: UNUserNotificationCenter = .current(), defaults: UserDefaults? = SharedSettings.defaults
+        center: UNUserNotificationCenter = .current(), defaults: UserDefaults? = SharedSettings.defaults,
+        pending: [PendingRequest]? = nil
     ) {
-        center.setNotificationCategories(current(defaults: defaults))
+        let waiting = pending ?? SharedGroup.storeDirectory(SharedGroup.ios).map {
+            PendingStore(directory: $0, clock: { Date() }).all()
+        } ?? []
+        center.setNotificationCategories(current(defaults: defaults, pending: waiting))
+    }
+
+    /// The most options a question gets buttons for; the lock screen shows four actions.
+    public static let maxChoices = 4
+
+    /// Whether a request's options are a question's own answers that buttons can pick: one to
+    /// four, none of them approve, deny or approve always (those use the request categories,
+    /// and approve always needs the app).
+    public static func offersChoices(_ options: [PushOption]) -> Bool {
+        (1...maxChoices).contains(options.count)
+            && !options.contains { ["approve", "deny", "approve_always"].contains($0.role) }
+    }
+
+    /// One category per unanswered question in `pending`, a button per option. Picking one
+    /// sends input to the agent, so it needs the device unlocked unless the user turned that
+    /// off, like Approve. Reply joins them when the request takes a typed answer.
+    public static func choices(_ pending: [PendingRequest], approveWithoutUnlock: Bool) -> Set<UNNotificationCategory> {
+        var out = Set<UNNotificationCategory>()
+        for request in pending where request.answered == nil && offersChoices(request.options) {
+            var actions: [UNNotificationAction] = request.options.map { option in
+                UNNotificationAction(
+                    identifier: NotificationActionID.option(option.n),
+                    title: PromptText.clean(option.label, maxLines: 1),
+                    options: approveWithoutUnlock ? [] : .authenticationRequired
+                )
+            }
+            if request.allowText == true { actions.append(replyAction()) }
+            out.insert(UNNotificationCategory(
+                identifier: NotificationCategoryID.choice(request.requestId), actions: actions, intentIdentifiers: []
+            ))
+        }
+        return out
+    }
+
+    private static func replyAction() -> UNTextInputNotificationAction {
+        UNTextInputNotificationAction(
+            identifier: NotificationActionID.reply,
+            title: String(localized: "notif.reply", defaultValue: "Reply"),
+            options: [.foreground, .authenticationRequired],
+            icon: UNNotificationActionIcon(systemImageName: "arrowshape.turn.up.left"),
+            textInputButtonTitle: String(localized: "notif.reply.send", defaultValue: "Send"),
+            textInputPlaceholder: String(localized: "notif.reply.placeholder", defaultValue: "Message")
+        )
     }
 }

@@ -48,6 +48,9 @@ import UIKit
     @ObservationIgnored let expectsChat: Bool
     /// Describe failed at least once since the last success: the terminal shows meanwhile.
     private(set) var describeFailed = false
+    /// Describe has not answered within `pendingTimeout`: the loader gives way to the terminal,
+    /// a clear state, and the chat still takes over if it comes.
+    private(set) var waitExpired = false
     /// The first `.opened` has been applied: what shows from here on arrives, what showed
     /// before it was simply there (first load is a cut).
     private(set) var hasLoaded = false
@@ -97,16 +100,19 @@ import UIKit
     @ObservationIgnored private var needsDescribe = true
     @ObservationIgnored private let retryFloor: Duration
     @ObservationIgnored private let retryCeiling: Duration
+    @ObservationIgnored private let pendingTimeout: Duration
+    @ObservationIgnored private var waitTask: Task<Void, Never>?
 
     init(
         subject: HarnessSubject, services: any HarnessServices,
         retry: (floor: Duration, ceiling: Duration) = (.milliseconds(500), .seconds(10)),
-        expectsChat: Bool = false, cached: HarnessDescriptor? = nil
+        expectsChat: Bool = false, cached: HarnessDescriptor? = nil, pendingTimeout: Duration = .seconds(8)
     ) {
         self.subject = subject
         self.services = services
         retryFloor = retry.floor
         retryCeiling = retry.ceiling
+        self.pendingTimeout = pendingTimeout
         self.expectsChat = expectsChat || cached?.adapter != nil
         // A descriptor this tab already had is adopted at once, so a reopened tab shows its chat
         // on the first frame; describe still runs in the background and replaces it.
@@ -162,6 +168,18 @@ import UIKit
     func launch() {
         guard runTask == nil else { return }
         runTask = Task { [weak self] in await HarnessSessionStore.run(weak: self) }
+        startWaitClock()
+    }
+
+    /// Bounds the loader: a session still undescribed after `pendingTimeout` shows its terminal.
+    func startWaitClock() {
+        guard waitTask == nil, awaitsChat else { return }
+        let timeout = pendingTimeout
+        waitTask = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled, let self, self.descriptor == nil else { return }
+            self.waitExpired = true
+        }
     }
 
     /// Describes the session, opens its feed and applies it until `stop` or cancellation,
@@ -228,6 +246,8 @@ import UIKit
         pumpTask?.cancel()
         pumpTask = nil
         graceTask?.cancel()
+        waitTask?.cancel()
+        waitTask = nil
     }
 
     private enum FollowEnd {

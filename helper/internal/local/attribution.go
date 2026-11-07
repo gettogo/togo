@@ -10,7 +10,7 @@ import (
 // HookAgents are the agents whose `togo hook <agent>` reports reach
 // local.hook.
 var HookAgents = map[string]bool{
-	"claude": true, "codex": true, "qwen": true, "droid": true, "vibe": true, "copilot": true,
+	"claude": true, "codex": true, "droid": true, "vibe": true, "copilot": true,
 	"auggie": true, "gemini": true,
 }
 

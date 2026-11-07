@@ -121,7 +121,7 @@ func (r *replay) State() map[string]string {
 
 // ReadScreen reads "mode: x" from the fake pane.
 func (r *replay) ReadScreen(text string) map[string]string {
-	if m, ok := strings.CutPrefix(text, "mode: "); ok {
+	if m, ok := strings.CutPrefix(text, "mode: "); ok && m != "" {
 		return map[string]string{"mode": m}
 	}
 	return nil

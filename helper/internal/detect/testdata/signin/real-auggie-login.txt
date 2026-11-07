@@ -1,0 +1,40 @@
+🔐 Starting Augment authentication...
+
+🌐 Opening authentication page in your browser...
+Please complete authentication in your browser.
+(This window will update automatically when done)
+
+⏳ Waiting for authentication...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

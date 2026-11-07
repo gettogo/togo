@@ -1,0 +1,40 @@
+To log in, visit:
+
+https://ampcode.com/auth/cli/device?user_code=QRLJ-CBJZ
+
+and confirm that the code shown matches: QRLJ-CBJZ
+
+Waiting for confirmation in the browser...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

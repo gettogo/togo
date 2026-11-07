@@ -43,7 +43,8 @@ sources:
     stability: experimental
   efforts:
     rpc: { method: model/list }
-    select: '[.data[] | select(.id == $state.model) | .supportedReasoningEfforts[]]'
+    # Before a thread reports its model (a fresh session), the default model's efforts.
+    select: '[.data[] | select(if ($state.model // "") == "" then .isDefault else .id == $state.model end) | .supportedReasoningEfforts[]]'
     cache: 10m
     stability: experimental
   threads:
