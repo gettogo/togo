@@ -4,7 +4,7 @@ import UIKit
 
 /// The calm, full-window conversation built from the session's items: prompts, folded work
 /// lines, replies, and inline approvals and questions. The composer sits at its foot, placed by
-/// the workspace; the mission pill sits at its top.
+/// the workspace; the chat keeps its height clear and starts at the top, with no band above it.
 struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: HarnessSessionStore
@@ -12,39 +12,40 @@ struct ChatView: View {
 
     @State private var expanded: [String: Disclosure] = [:]
     @State private var detail: HarnessItem?
+    @State private var selecting: SelectedText?
     @State private var announcer = ChatAnnouncer()
+    @State private var scroll = ChatScrollModel()
     @Namespace private var rotorSpace
     /// Mirrors of store state that put a view in or take it out, so each change runs in its
-    /// own transaction (spec §2.3): the live line, the mission pill and "Earlier".
+    /// own transaction (spec §2.3): the live line and "Earlier". Until the store's first load
+    /// they follow it without animation: what is there on open is simply there.
     @State private var live: WorkingState?
-    @State private var showsPill: Bool
     @State private var showsEarlierButton: Bool
-    /// A needs card's drift is moving, so the pill's beacon holds still.
-    @State private var ambientTaken = false
 
     init(store: HarnessSessionStore, actions: ChatActions = .inert) {
         self.store = store
         self.actions = actions
         _live = State(initialValue: store.liveWork)
-        _showsPill = State(initialValue: store.hasMission)
         _showsEarlierButton = State(initialValue: Self.showsEarlier(store))
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
+                // "Earlier" is a navigation affordance at the top: it is simply there or not.
                 if showsEarlierButton {
                     earlier
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
                 let gaps = ChatGaps.gaps(rows)
-                // Rows arriving while the chat is open reveal in the store's `resize`
+                // Rows arriving while the chat is open land in the store's `resize`
                 // transaction; rows on first render, from Earlier or by scrolling land at once.
                 ForEach(rows) { row in
                     gapped(row, gap: gaps[row.id])
                         .id(row.id)
+                        .modifier(NeedsVisibility(id: row.isNeeds ? row.id : nil, scroll: scroll))
                         .accessibilityRotorEntry(id: row.id, in: rotorSpace)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                        // motion: preventing a jump — the conversation glides up to make room while the new row only fades in place; a needs card instead grows in place as it is scrolled into view (attention).
+                        .transition(row.isNeeds ? Motion.unfold(reduce: reduceMotion) : Motion.arrive(reduce: reduceMotion))
                 }
                 // The chat's one live indicator stays at the foot for the whole turn: one view,
                 // so waiting and working morph in place. Stop lives in the composer.
@@ -52,7 +53,8 @@ struct ChatView: View {
                     LiveLine(state: live)
                         .id("chat.working")
                         .accessibilityIdentifier("chat.working")
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                        // motion: continuity — the line is simply there when a turn starts (the spinner starting is the signal) and leaves as the work line above turns into "Worked … ✓".
+                        .transition(.asymmetric(insertion: .identity, removal: Motion.conceal(reduce: reduceMotion)))
                 }
                 // Prompts the phone still holds, after the conversation: the one place they show.
                 ForEach(store.queue.prompts) { prompt in
@@ -61,7 +63,8 @@ struct ChatView: View {
                         onCancel: { store.cancelQueued(prompt.id) },
                         onRetry: { store.retryQueued(prompt.id) }
                     )
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: cause → effect — the sent prompt lands in the send's own transaction as the draft clears; it only fades, nothing flies.
+                    .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
             .padding(.horizontal, 16)
@@ -74,22 +77,12 @@ struct ChatView: View {
         .scrollDismissesKeyboard(.interactively)
         .overlay {
             placeholder
+                // motion: state change — "Reading" gives way to the empty state in place, never a jump.
                 .motion(.fade, value: placeholderKind)
         }
-        // A bar, not a plain inset: the chat starts below the pill, and anything scrolled up
-        // under it fades behind the system's scroll edge effect instead of sitting cut in half.
-        .safeAreaBar(edge: .top, spacing: 0) {
-            if showsPill {
-                MissionPill(summary: store.mission.summary) { store.showsMission = true }
-                    .environment(\.ambientTaken, ambientTaken)
-                    .transition(.asymmetric(
-                        insertion: Motion.present(from: .top, reduce: reduceMotion),
-                        removal: Motion.conceal(reduce: reduceMotion)
-                    ))
-            }
-        }
-        .onPreferenceChange(AmbientClaim.self) { ambientTaken = $0 }
-        .scrollEdgeEffectStyle(.hard, for: .top)
+        // Keeps the composer's height clear, scrolls to what needs the user and offers the
+        // "Needs you" capsule while a card is off screen.
+        .modifier(ChatScrolling(store: store, marks: needsMarks, scroll: scroll))
         .background(Color.togoInk)
         .environment(\.chatImageFetch, imageFetch)
         .accessibilityRotor(ChatCopy.rotorPrompts) { rotor(where: \.isPrompt) }
@@ -97,13 +90,9 @@ struct ChatView: View {
         .accessibilityRotor(ChatCopy.rotorReplies) { rotor(where: \.isReply) }
         .onChange(of: rows, initial: true) { _, rows in announcer.update(rows) }
         .onChange(of: store.liveWork) { _, work in follow(work) }
-        .onChange(of: store.hasMission) { _, has in
-            // The pill presents on dropIn with the chat's inset; it leaves by concealing while
-            // the inset closes on resize.
-            withAnimation(Motion.animation(has ? .dropIn : .resize, reduce: reduceMotion)) { showsPill = has }
-        }
         .onChange(of: Self.showsEarlier(store)) { _, shows in
-            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { showsEarlierButton = shows }
+            // Instant: it sits above what the person reads, so nothing they see moves.
+            withTransaction(Transaction(animation: nil)) { showsEarlierButton = shows }
         }
         .modifier(WorkingAnnouncements(active: store.liveWork != nil))
         .sheet(item: $detail) { step in
@@ -111,16 +100,48 @@ struct ChatView: View {
                 Task { await store.showInTerminal(step) }
             }
         }
+        .sheet(item: $selecting) { selected in
+            SelectTextSheet(text: selected.text)
+        }
+        // After the sheets, so the step details' links go through the same router.
+        .environment(\.openURL, OpenURLAction { url in open(url) })
     }
 
-    /// The live line arrives and leaves in a `resize` transaction; while it stays, its clock
-    /// and words change in place.
+    /// The live line is simply there when a turn starts and leaves with it, in a `resize`
+    /// transaction so the rows make room; while it stays, its contents change with no
+    /// animation at all, so the store's arrival transaction never reaches the clock. Before
+    /// the first load it is simply there.
     private func follow(_ work: WorkingState?) {
-        guard (live == nil) != (work == nil) else {
-            live = work
-            return
+        let change = LiveFollow.change(from: live, to: work, loaded: store.hasLoaded)
+        if change.animates {
+            // motion: preventing a jump — the rows above make room as the turn's live line comes or goes.
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { live = work }
+        } else {
+            withTransaction(Transaction(animation: nil)) { live = work }
         }
-        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { live = work }
+        if change == .appear, let target = ChatScroll.liveAppeared(
+            was: false, now: true, afterSend: store.awaitingSince != nil, dragging: scroll.dragging
+        ) {
+            scroll.go(target, reduce: reduceMotion)
+        }
+    }
+
+    /// The open needs cards, for scrolling to them and for the capsule.
+    private var needsMarks: [NeedsMark] {
+        ChatScroll.marks(rows) { approval in actions.card(approval.requestId) != nil }
+    }
+
+    /// A link tapped in the chat. A file opens in the review, which waits for the step's
+    /// details to close first.
+    private func open(_ url: URL) -> OpenURLAction.Result {
+        guard detail != nil, case .file = ChatLinks.route(url) else { return actions.open(url) }
+        detail = nil
+        let actions = self.actions
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            _ = actions.open(url)
+        }
+        return .handled
     }
 
     /// Pictures by path come through the helper where it serves `fs.image`.
@@ -183,13 +204,13 @@ struct ChatView: View {
                                 .font(.footnote)
                         }
                     }
-                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self))
+                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self) { selecting = $0 })
                 }
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
                 ReplyRow(text: text.text)
-                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(text.text), host: self))
+                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(text.text), host: self) { selecting = $0 })
             }
         case .work(let id, let summary, let steps):
             let disclosure = expanded[id] ?? Disclosure()
@@ -218,7 +239,7 @@ struct ChatView: View {
                 TurnMarkerRow(notice: notice, gap: gap)
             } else if case .notice(let notice) = item.body {
                 ChatNoticeRow(notice: notice)
-                    .modifier(RowActions(item: item, spoken: notice.text, host: self))
+                    .modifier(RowActions(item: item, spoken: notice.text, host: self) { selecting = $0 })
             }
         case .shell(let item):
             CommandBlockView(item: item, store: store)
@@ -228,19 +249,27 @@ struct ChatView: View {
     @ViewBuilder private func needsView(_ item: HarnessItem) -> some View {
         switch item.body {
         case .approval(let approval):
-            ApprovalRow(item: item, approval: approval, card: actions.card(approval.requestId)) { decision in
+            ApprovalRow(
+                item: item, approval: approval, card: actions.card(approval.requestId),
+                failure: actions.failure(approval.requestId), showInTerminal: terminalAction(item)
+            ) { decision in
                 actions.answer(approval.requestId, decision)
             }
             .contextMenu { terminalButton(item) }
         case .question(let question):
-            QuestionRow(item: item, question: question) { answers in
-                guard let result = try? await store.answer(item, answers: answers) else { return false }
-                return result.result != .failed
+            QuestionRow(item: item, question: question, showInTerminal: terminalAction(item)) { args in
+                await store.answerReporting(item, args: args)
             }
             .contextMenu { terminalButton(item) }
         default:
             EmptyView()
         }
+    }
+
+    /// "Show in terminal" for an item that has a place there.
+    private func terminalAction(_ item: HarnessItem) -> (() -> Void)? {
+        guard canShow(item) else { return nil }
+        return { Task { await store.showInTerminal(item) } }
     }
 
     @ViewBuilder fileprivate func terminalButton(_ item: HarnessItem) -> some View {
@@ -304,11 +333,9 @@ struct ChatView: View {
             case .describing, .opening:
                 ProgressView(ChatCopy.reading)
                     .foregroundStyle(Color.togoMute)
-                    .transition(.opacity)
             case .reconnecting:
                 ProgressView(ChatCopy.reconnecting)
                     .foregroundStyle(Color.togoMute)
-                    .transition(.opacity)
             case .live, .terminalOnly:
                 ContentUnavailableView {
                     Label(ChatCopy.emptyTitle, systemImage: "bubble.left.and.text.bubble.right")
@@ -316,7 +343,6 @@ struct ChatView: View {
                     Text(ChatCopy.emptyDetail)
                 }
                 .foregroundStyle(Color.togoMute)
-                .transition(.opacity)
             }
         }
     }
@@ -336,6 +362,8 @@ private struct RowActions: ViewModifier {
     let item: HarnessItem
     let spoken: String
     let host: ChatView
+    /// Opens the row's words in a sheet where any part can be selected.
+    let select: (SelectedText) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -349,6 +377,9 @@ private struct RowActions: ViewModifier {
         if let text = item.chatText {
             Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
             Button(ChatCopy.quote, systemImage: "text.quote") { host.actions.quote(ChatQuote.quoted(text)) }
+            Button(ChatCopy.selectText, systemImage: "selection.pin.in.out") {
+                select(SelectedText(id: item.id, text: text))
+            }
         }
         host.terminalButton(item)
         if case .user(let user) = item.body, user.queued {
@@ -415,4 +446,24 @@ extension ChatRow {
 extension HarnessSessionStore {
     /// Mission control has something to show for this session.
     var hasMission: Bool { mission.mission.map { !$0.sections.isEmpty } ?? false }
+}
+
+/// A row's words opened in the Select text sheet.
+struct SelectedText: Identifiable {
+    let id: String
+    let text: String
+}
+
+/// Tells the scroll model whether a needs card is on screen; other rows pass through.
+private struct NeedsVisibility: ViewModifier {
+    let id: String?
+    let scroll: ChatScrollModel
+
+    func body(content: Content) -> some View {
+        if let id {
+            content.needsVisibility(id, in: scroll)
+        } else {
+            content
+        }
+    }
 }

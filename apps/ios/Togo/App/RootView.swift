@@ -29,6 +29,7 @@ struct RootView: View {
         // swap plays under the launch overlay, the next when the first machine is added.
         ZStack {
             if !store.services.hostsLoaded {
+                // motion: state change — the app's whole layer changed (loading → first run or app)
                 Color.togoInk.ignoresSafeArea()
                     .transition(.opacity)
             } else if hasNoMachines {
@@ -36,15 +37,18 @@ struct RootView: View {
                     store.sheet = .addMachine
                 }
                     .task { PerfSignposts.interactive() }
+                    // motion: state change — the app's whole layer changed
                     .transition(.opacity)
             } else {
                 // The control center, or the sidebar beside the workspace, is the app's first
                 // usable screen; what launch put off starts once it is up.
                 controlCenter
                     .task { PerfSignposts.interactive() }
+                    // motion: state change — the app's whole layer changed
                     .transition(.opacity)
             }
         }
+        // motion: state change — loading, first run and the app swap as whole layers
         .motion(.fade, value: RootStage(loaded: store.services.hostsLoaded, empty: hasNoMachines))
         .sheet(item: formSheet) { sheet in
             RootSheet(

@@ -71,6 +71,7 @@ struct WorkspacePanes<Overlay: View>: View {
                     store.arrangePanes(visible: visible)
                 }
                 .onChange(of: PaneSettle.Key(report)) { old, new in
+                    // motion: preventing a jump — the cover lifts off the panes as the new arrangement lands, hiding the terminal's one resize.
                     withAnimation(Motion.animation(.reveal, reduce: reduceMotion)) { _ = settle.begin(from: old, to: new) }
                 }
                 .onChange(of: KeyboardOwner(focused: store.focusedTab?.id, twoPanes: report.geometry.showsTwoPanes)) {
@@ -115,6 +116,7 @@ struct WorkspacePanes<Overlay: View>: View {
                 // Leaves at once rather than fading: a pane on its way out still holds a terminal
                 // the remaining pane may be about to show.
                 pane(.secondary, in: rect, header: true)
+                    // motion: continuity — the leaving pane goes at once: its terminal may be about to show in the other pane.
                     .transition(.identity)
             }
             if let band = geometry.band {
@@ -200,6 +202,7 @@ private struct PaneCover: View {
     var body: some View {
         Color.togoInk
             .opacity(1 - PaneSettle.coverOpacity)
+            // motion: preventing a jump — ink over the panes lifts away as they settle, so the resize is never seen.
             .transition(CoverLift())
             .allowsHitTesting(false)
             .accessibilityHidden(true)

@@ -43,6 +43,7 @@ struct IdentityKeyed<Value: Equatable, Key: Equatable, Content: View>: View {
         content(shown)
             .onChange(of: value) { _, new in
                 if IdentityMotion.changesIdentity(from: shown, to: new, key: key, quiet: quiet) {
+                    // motion: preventing a jump — rows arriving or leaving open and close space; the rest glide
                     withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { shown = new }
                 } else {
                     shown = new
@@ -66,24 +67,70 @@ enum CaseName {
 extension View {
     /// Content that is replaced whole when `phase` changes case, such as a sheet or a screen
     /// going loading → loaded → failed in a fixed frame: the old content and the new crossfade
-    /// with a small vertical exchange on `respond` (a crossfade under Reduce Motion), so nothing
-    /// pops. A change inside one case (new text, a new value) updates in place.
+    /// in place on `respond`, with no shift. A phase that lasted under 250 ms is replaced at once,
+    /// so a fast load never flickers a spinner. A change inside one case (new text, a new value)
+    /// updates in place.
     func phaseSwap(_ phase: Any) -> some View {
         modifier(PhaseSwap(key: CaseName.of(phase)))
+    }
+}
+
+/// When a phase swap crossfades: only when the phase it replaces was on screen long enough to be
+/// read. Pure, so the rule is testable without views.
+enum PhaseSwapTiming {
+    /// A phase shown for less than this is replaced at once.
+    static let minimumShown: TimeInterval = 0.25
+
+    static func crossfades(shownFor elapsed: TimeInterval) -> Bool {
+        elapsed >= minimumShown
+    }
+}
+
+/// When the current phase began; a reference, so the transaction closure can read and move it in
+/// the same update that changes the phase.
+private final class PhaseStart {
+    var key: String
+    var at: Date
+
+    init(key: String, at: Date) {
+        self.key = key
+        self.at = at
+    }
+
+    /// Records a change to `key` at `now`; returns whether the swap crossfades. A repeat call
+    /// for the same key in one update answers the same way.
+    func change(to key: String, now: Date) -> Bool? {
+        guard key != self.key else { return nil }
+        let crossfades = PhaseSwapTiming.crossfades(shownFor: now.timeIntervalSince(at))
+        self.key = key
+        at = now
+        return crossfades
     }
 }
 
 private struct PhaseSwap: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let key: String
+    @State private var start: PhaseStart
+
+    init(key: String) {
+        self.key = key
+        _start = State(initialValue: PhaseStart(key: key, at: .now))
+    }
 
     func body(content: Content) -> some View {
         ZStack {
+            // motion: state change — the old phase and the new crossfade in the same place
             content
                 .id(key)
                 .transition(Motion.swap(reduce: reduceMotion))
         }
-        .motion(.respond, value: key)
+        .transaction(value: key) { transaction in
+            guard let crossfades = start.change(to: key, now: .now), !transaction.disablesAnimations else { return }
+            let quick = !crossfades
+            // motion: state change — loading became loaded (or failed) in the same place
+            transaction.animation = quick ? nil : Motion.animation(.respond, reduce: reduceMotion)
+        }
     }
 }
 
@@ -113,6 +160,7 @@ private struct MirrorsLive<Value: Equatable>: ViewModifier {
 
     func body(content: Content) -> some View {
         content.onChange(of: live) { _, new in
+            // motion: preventing a jump — a line arriving or leaving moves the rows around it with it
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { mirror.held = [new] }
         }
     }

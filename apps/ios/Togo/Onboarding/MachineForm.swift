@@ -246,7 +246,8 @@ private struct FieldError: View {
         }
         .font(.footnote)
         .foregroundStyle(Color.togoSnow)
-        .transition(Motion.revealConceal(reduce: reduceMotion))
+        // motion: preventing a jump — the form opens a row for the error under the failing field
+        .transition(Motion.arrive(reduce: reduceMotion))
         .accessibilityLabel(String(localized: "onboard.form.errorPrefix", defaultValue: "Error: \(text)"))
     }
 }

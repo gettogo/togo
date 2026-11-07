@@ -51,11 +51,13 @@ struct TabStrip: View {
                 }
                 .padding(.horizontal, 12)
                 // One surface for the focused chip, sliding to the next one on the settle.
+                // motion: continuity — the selection surface slides to the chosen chip.
                 .motion(.tabSettle, value: selected)
             }
             .scrollIndicators(.hidden)
             .onChange(of: selected) { _, id in
                 guard let id else { return }
+                // motion: continuity — the strip scrolls the chosen chip toward its centre.
                 withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
                     proxy.scrollTo(id, anchor: .center)
                 }
@@ -90,6 +92,7 @@ struct TabStrip: View {
                     // Under Reduce Motion the surface cross-fades between chips instead of sliding.
                     Capsule()
                         .fill(Color.togoRaised)
+                        // motion: continuity — one selection surface moves between chips.
                         .matchedGeometryEffect(id: reduceMotion ? AnyHashable(chip.id) : AnyHashable("selection"), in: selection)
                 } else if isBeside {
                     Capsule().fill(Color.togoRaised)

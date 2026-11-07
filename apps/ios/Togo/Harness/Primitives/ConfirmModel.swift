@@ -25,13 +25,30 @@ import TogoKit
     private(set) var armed = false
     /// The question changed under the user while they were answering it.
     private(set) var changed = false
+    /// No route from the phone reached the question (`fallback`, or no result): it is still
+    /// open in the terminal, where the user finishes it. Answering again stays possible.
+    private(set) var handedOff = false
     @ObservationIgnored private(set) var arming: Task<Void, Never>?
     private let armDelay: Duration
 
-    init(confirm: HarnessScreen.Confirm, armDelay: Duration = PromptBarModel.defaultArmDelay) {
+    /// `arms` false waits for `beginArming()`, for a view that makes its model on every render
+    /// and keeps only the first.
+    init(confirm: HarnessScreen.Confirm, armDelay: Duration = PromptBarModel.defaultArmDelay, arms: Bool = true) {
         self.confirm = confirm
         self.armDelay = armDelay
+        if arms { rearm() }
+    }
+
+    /// Starts the arming delay once the question is on screen; again does nothing.
+    func beginArming() {
+        guard !armed, arming == nil else { return }
         rearm()
+    }
+
+    /// The answer went through but the question is still open (the harness did not close it):
+    /// it can be answered again.
+    func reopen() {
+        if case .answered = phase { phase = .open }
     }
 
     /// A fresh read of the screen. The same question keeps its answers; a different one starts
@@ -114,6 +131,7 @@ import TogoKit
     func submit(for shown: HarnessScreen.Confirm, send: (_ args: [String: JSONValue]) async -> HarnessActionResult?) async {
         guard shown == confirm, canSubmit else { return }
         phase = .sending
+        handedOff = false
         let result = await send(Self.args(answers))
         guard shown == confirm else { return }
         switch result?.result {
@@ -123,8 +141,10 @@ import TogoKit
             phase = .failed(result?.message ?? PrimitiveCopy.failed)
             rearm()
         default:
-            // No answer, or the terminal took over: the question stays as it was.
+            // No route reached it, or the terminal took over: the question is still open there,
+            // and the card says to finish it in the terminal.
             phase = .open
+            handedOff = true
         }
     }
 

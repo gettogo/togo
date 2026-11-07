@@ -31,22 +31,56 @@ struct PrimitiveFeedback: Equatable, Identifiable {
     }
 
     static func == (a: PrimitiveFeedback, b: PrimitiveFeedback) -> Bool { a.id == b.id }
+
+    /// The outcome in a button's own words: "Restarted", "Sent", "Done".
+    static func shortTitle(_ feedback: PrimitiveFeedback) -> String {
+        switch feedback.kind {
+        case .restarted: PrimitiveCopy.restartedShort
+        case .failed: PrimitiveCopy.didntWork
+        default: feedback.title
+        }
+    }
+}
+
+/// Where an action's outcome shows.
+enum FeedbackPlace: Equatable {
+    /// On the control that ran it: its label becomes the outcome, a failure's reason under it.
+    case control
+    /// On the control for success; a failure, which needs room for its reason, in the toast
+    /// (bar buttons).
+    case label
+    /// In the toast: the control is gone or out of sight (swipe and context-menu actions).
+    case toast
+    /// Nowhere: the caller says it (a pick that closes its sheet, a settings field).
+    case none
+}
+
+/// A selection or a field change that may restart the agent: it goes through `ActionGate`.
+struct GatedChange {
+    var action: String
+    var target: String?
+    var args: [String: JSONValue]?
+    var confirm: HarnessSelectConfirm?
+    /// The setting's name: "Model", for "Model Sonnet".
+    var setting: String
+    /// What it changes to: "Sonnet".
+    var value: String
+    /// The value it replaces and the args that put it back, for Undo after a restart.
+    var previous: (label: String, args: [String: JSONValue]?)?
 }
 
 /// Runs a screen's actions: one at a time per action and target, asking first when the action
-/// says to, and keeping what the last one said for the toast. A primitive owns one.
+/// says to (`ActionGate`), and keeping what the last one said on its control.
 @MainActor @Observable final class PrimitiveActions {
-    /// An action waiting on the user's yes before it runs.
-    struct Pending: Identifiable {
-        var id: String { PrimitiveActions.key(ref.id, target) }
-        var ref: HarnessActionRef
-        var target: String?
-        var args: [String: JSONValue]?
-    }
-
     private(set) var running: Set<String> = []
+    /// The toast, only for results whose control is not on screen.
     private(set) var feedback: PrimitiveFeedback?
-    var asking: Pending?
+    /// What each control's last run said, by action and target; it reverts after a moment.
+    private(set) var outcomes: [String: PrimitiveFeedback] = [:]
+    /// The latest in-place outcome, for its haptic.
+    private(set) var lastOutcome: PrimitiveFeedback?
+    /// The question the system dialog is asking.
+    var asking: ActionGateRequest?
 
     init() {}
 
@@ -58,6 +92,10 @@ struct PrimitiveFeedback: Equatable, Identifiable {
         running.contains(Self.key(action, target))
     }
 
+    func outcome(_ action: String, target: String? = nil) -> PrimitiveFeedback? {
+        outcomes[Self.key(action, target)]
+    }
+
     var isBusy: Bool { !running.isEmpty }
 
     /// The action's fixed args under the user's: a key the user gives wins.
@@ -67,43 +105,139 @@ struct PrimitiveFeedback: Equatable, Identifiable {
         return fixed.merging(user) { _, mine in mine }
     }
 
-    /// Runs an offered action, or asks first when it carries a confirm line.
-    func trigger(_ ref: HarnessActionRef, target: String? = nil, args: [String: JSONValue]? = nil, context: PrimitiveContext) async {
-        if let confirm = ref.confirm, !confirm.isEmpty {
-            asking = Pending(ref: ref, target: target, args: args)
-            return
+    /// Runs an offered action, or asks first when it carries a confirm line. The dialog offers
+    /// "With instructions…" when a command runs this action with an optional argument
+    /// (compact's focus): that leaves the command in the composer instead.
+    func trigger(
+        _ ref: HarnessActionRef, target: String? = nil, args: [String: JSONValue]? = nil,
+        place: FeedbackPlace = .control, context: PrimitiveContext
+    ) async {
+        let merged = Self.merged(fixed: ref.args, user: args)
+        let line = context.compose == nil ? nil : context.instructionsLine(ref.id)
+        switch ActionGate.decide(confirm: ref.confirm, effect: nil, working: context.working(), label: ref.label,
+                                 agent: context.agent, instructions: line) {
+        case .confirm(var dialog):
+            dialog.destructive = ref.role == .destructive
+            asking = ActionGateRequest(
+                dialog: dialog,
+                run: { [weak self] in await self?.perform(ref.id, target: target, args: merged, place: place, context: context) },
+                instructions: context.compose
+            )
+        case .run, .runWithUndo:
+            await perform(ref.id, target: target, args: merged, place: place, context: context)
         }
-        await perform(ref.id, target: target, args: Self.merged(fixed: ref.args, user: args), context: context)
     }
 
-    /// The user said yes to `pending`. It is passed in rather than read from `asking`: the
-    /// dialog clears `asking` as it closes, before a task started by its button runs.
-    func confirm(_ pending: Pending, context: PrimitiveContext) async {
-        if asking?.id == pending.id { asking = nil }
-        await perform(pending.ref.id, target: pending.target, args: Self.merged(fixed: pending.ref.args, user: pending.args), context: context)
+    /// A selection or field change (`onSelectConfirm`, `actionConfirm`, the state chip): idle
+    /// relaunches run and offer Undo in the chat; while the agent works a relaunch asks, with
+    /// "After this reply". `done` gets the result once it ran (nil when cancelled or held).
+    func change(_ change: GatedChange, context: PrimitiveContext, done: @escaping @MainActor (HarnessActionResult?) -> Void = { _ in }) async {
+        let decision = ActionGate.decide(
+            confirm: change.confirm?.text, effect: change.confirm?.effect, working: context.working(),
+            label: change.setting, agent: context.agent, previous: change.previous?.label
+        )
+        switch decision {
+        case .run:
+            done(await apply(change, undo: nil, context: context))
+        case .runWithUndo:
+            done(await apply(change, undo: change.previous, context: context))
+        case .confirm(let dialog):
+            asking = ActionGateRequest(
+                dialog: dialog,
+                run: { [weak self] in done(await self?.apply(change, undo: nil, context: context)) },
+                afterReply: Self.afterReply(change, context: context, done: done)
+            )
+        }
+    }
+
+    /// "After this reply": the change is held for the turn's end; the host may close now.
+    private static func afterReply(
+        _ change: GatedChange, context: PrimitiveContext, done: @escaping @MainActor (HarnessActionResult?) -> Void
+    ) -> (@MainActor () -> Void)? {
+        guard let hold = context.runAfterTurn else { return nil }
+        return {
+            hold(change.action, change.target, change.args, PrimitiveCopy.restartedWith(change.value))
+            done(HarnessActionResult(result: .queued))
+        }
+    }
+
+    /// Runs a change and leaves its line in the chat: "Effort high", "Restarted with Sonnet"
+    /// with Undo, or "Effort high, waiting for Claude" while the harness has not shown it yet.
+    private func apply(_ change: GatedChange, undo: (label: String, args: [String: JSONValue]?)?, context: PrimitiveContext) async -> HarnessActionResult? {
+        let result = await perform(change.action, target: change.target, args: change.args, place: .none, context: context)
+        guard let result, let note = context.note else { return result }
+        switch result.result {
+        case .relaunched:
+            let back = undo.map { previous in
+                SessionUndo(title: PrimitiveCopy.backTo(previous.label)) { [weak self] in
+                    var reverse = change
+                    reverse.args = previous.args
+                    reverse.value = previous.label
+                    reverse.previous = nil
+                    _ = await self?.apply(reverse, undo: nil, context: context)
+                }
+            }
+            note(PrimitiveCopy.restartedWith(change.value), back)
+        case .typed:
+            note(PrimitiveCopy.setWaiting(change.setting, change.value, agent: context.agent), nil)
+        case .applied, .queued:
+            note(PrimitiveCopy.setTo(change.setting, change.value), nil)
+        default:
+            break
+        }
+        return result
     }
 
     /// Runs `action` unless the same one is already on its way. Returns the result, or nil
     /// when it did not run or failed in a way the context reported.
     @discardableResult
-    func perform(_ action: String, target: String? = nil, args: [String: JSONValue]? = nil, context: PrimitiveContext) async -> HarnessActionResult? {
+    func perform(
+        _ action: String, target: String? = nil, args: [String: JSONValue]? = nil,
+        place: FeedbackPlace = .toast, context: PrimitiveContext
+    ) async -> HarnessActionResult? {
         let key = Self.key(action, target)
         guard running.insert(key).inserted else { return nil }
         defer { running.remove(key) }
         let result = await context.run(action, target, args)
-        if let feedback = PrimitiveFeedback.from(result) { show(feedback) }
+        if let feedback = PrimitiveFeedback.from(result) { say(feedback, key: key, place: place) }
         if result?.result == .fallback { context.showTerminal() }
         return result
     }
 
-    /// The toast presents from the top on `dropIn`; its haptic plays with it.
+    private func say(_ feedback: PrimitiveFeedback, key: String, place: FeedbackPlace) {
+        switch place {
+        case .none:
+            return
+        case .toast:
+            show(feedback)
+        case .label where feedback.isFailure:
+            show(feedback)
+        case .control, .label:
+            // motion: cause → effect — the tapped control's own label becomes the outcome.
+            withAnimation(Motion.animation(.respond, reduce: Self.reduceMotion)) { outcomes[key] = feedback }
+            lastOutcome = feedback
+            AccessibilityNotification.Announcement(feedback.title).post()
+            let id = feedback.id
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(feedback.isFailure ? 5 : 2.4))
+                guard let self, self.outcomes[key]?.id == id else { return }
+                // motion: state change — the label returns to what the control does.
+                withAnimation(Motion.animation(.respond, reduce: Self.reduceMotion)) { self.outcomes[key] = nil }
+            }
+        }
+    }
+
+    /// The toast, for a result whose control is not on screen. It comes from the top edge it
+    /// lives on; its haptic plays with it.
     func show(_ feedback: PrimitiveFeedback) {
+        // motion: origin — the toast comes from the top edge it lives on, away from any control.
         withAnimation(Motion.animation(.dropIn, reduce: Self.reduceMotion)) { self.feedback = feedback }
     }
 
     /// The toast leaves by concealing; it never rides the arrival spring out.
     func clearFeedback(_ id: UUID) {
         guard feedback?.id == id else { return }
+        // motion: state change — the toast is done; it fades where it is.
         withAnimation(Motion.animation(.conceal, reduce: Self.reduceMotion)) { feedback = nil }
     }
 
@@ -130,6 +264,7 @@ private struct PrimitiveActionsModifier: ViewModifier {
                 ZStack {
                     if let feedback = actions.feedback {
                         FeedbackToast(feedback: feedback)
+                            // motion: origin — the toast presents from the top edge it lives on.
                             .transition(.asymmetric(
                                 insertion: Motion.present(from: .top, reduce: reduceMotion),
                                 removal: Motion.conceal(reduce: reduceMotion)
@@ -144,22 +279,14 @@ private struct PrimitiveActionsModifier: ViewModifier {
                 }
                 .padding(.top, 8)
             }
-            .confirmationDialog(
-                actions.asking?.ref.confirm ?? "",
-                isPresented: Binding(get: { actions.asking != nil }, set: { if !$0 { actions.asking = nil } }),
-                titleVisibility: .visible,
-                presenting: actions.asking
-            ) { pending in
-                Button(pending.ref.label, role: pending.ref.role == .destructive ? .destructive : nil) {
-                    Task { await actions.confirm(pending, context: context) }
-                }
-                Button(PrimitiveCopy.cancel, role: .cancel) { actions.asking = nil }
-            }
+            .actionConfirmation($actions.asking)
             .haptic(.done, trigger: actions.feedback) { _, new in
                 guard let new else { return false }
                 return !new.isFailure && new.kind != .terminal
             }
             .haptic(.error, trigger: actions.feedback) { _, new in new?.isFailure == true }
+            .haptic(.done, trigger: actions.lastOutcome) { _, new in new.map { !$0.isFailure } ?? false }
+            .haptic(.error, trigger: actions.lastOutcome) { _, new in new?.isFailure == true }
     }
 }
 
@@ -172,7 +299,6 @@ private struct FeedbackToast: View {
             HStack(spacing: 6) {
                 if feedback.isFailure {
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(PrimitiveTint.fail)
-                        .transition(.opacity)
                 }
                 Text(feedback.title)
                     .font(.subheadline.weight(.semibold))
@@ -195,7 +321,9 @@ private struct FeedbackToast: View {
     }
 }
 
-/// A row of action buttons, wrapping to a column when the text is too large for one line.
+/// A row of action buttons, wrapping to a column when the text is too large for one line. A
+/// button's own label becomes its outcome ("Restarted ✓"), and a failure's reason shows under
+/// the row at once; no toast.
 struct PrimitiveActionRow: View {
     let refs: [HarnessActionRef]
     var target: String?
@@ -205,11 +333,24 @@ struct PrimitiveActionRow: View {
 
     var body: some View {
         if !refs.isEmpty {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { buttons }
-                VStack(alignment: .leading, spacing: 8) { buttons }
+            VStack(alignment: .leading, spacing: 6) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { buttons }
+                    VStack(alignment: .leading, spacing: 8) { buttons }
+                }
+                // Errors land at once, at the control that failed (motion principles v2 §2).
+                ForEach(failures, id: \.id) { failure in
+                    Text(verbatim: failure.title)
+                        .font(.footnote)
+                        .foregroundStyle(PrimitiveTint.fail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
+    }
+
+    private var failures: [PrimitiveFeedback] {
+        refs.compactMap { actions.outcome($0.id, target: target) }.filter(\.isFailure)
     }
 
     @ViewBuilder private var buttons: some View {
@@ -217,11 +358,41 @@ struct PrimitiveActionRow: View {
             Button {
                 Task { await actions.trigger(ref, target: target, context: context) }
             } label: {
-                BusyLabel(title: ref.label, busy: actions.isRunning(ref.id, target: target))
+                OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id, target: target),
+                             busy: actions.isRunning(ref.id, target: target))
             }
             .buttonStyle(PrimitiveCapsuleStyle(role: ref.role, large: large))
             .disabled(actions.isRunning(ref.id, target: target))
             .accessibilityValue(actions.isRunning(ref.id, target: target) ? PrimitiveCopy.running : "")
         }
+    }
+}
+
+/// A control's label that becomes its outcome in place: "Restart" → "Restarted ✓", or
+/// "Didn't work" after a failure, then back. A spinner holds its place while it runs.
+struct OutcomeLabel: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let title: String
+    let outcome: PrimitiveFeedback?
+    let busy: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(words)
+                // motion: cause → effect — the words morph from what it does into what it did.
+                .contentTransition(reduceMotion ? .opacity : .interpolate)
+            if let outcome, !outcome.isFailure {
+                Image(systemName: "checkmark").font(.caption.weight(.bold))
+            }
+        }
+        .opacity(busy ? 0 : 1)
+        .overlay {
+            if busy { ProgressView().controlSize(.small) }
+        }
+    }
+
+    private var words: String {
+        guard let outcome else { return title }
+        return outcome.isFailure ? PrimitiveCopy.didntWork : PrimitiveFeedback.shortTitle(outcome)
     }
 }

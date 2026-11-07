@@ -47,12 +47,6 @@ screens:
     search: true
     map: { item.id: .id, item.title: '{{.title | truncate 60}}', item.subtitle: '{{.updatedAt | ago}}' }
     on_select: resume
-  compact:
-    primitive: confirm
-    title: Compact
-    section: status
-    capability: compact
-    submit: compact
 actions:
   set_model:
     label: Use model
@@ -86,8 +80,10 @@ modes:
     - { id: plan, label: Plan }
   select: $state.mode
   set: set_mode
+status:
+  actions: [compact]   # inline on the context meter
 commands:
   static:
-    - { name: compact, detail: Summarise the conversation }
-    - { name: model, detail: Choose the model, screen: model }
+    - { name: compact, detail: Summarise the conversation, action: compact }
+    - { name: model, detail: Choose the model, kind: picker, screen: model }
     - { name: sessions, detail: Resume a session, screen: resume }

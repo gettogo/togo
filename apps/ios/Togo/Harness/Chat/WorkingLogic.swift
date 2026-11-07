@@ -177,10 +177,15 @@ enum WorkingCopy {
         return state.clock.currentWait(at: now)
     }
 
+    /// The clock on its own: "12s", "1m 4s"; empty when there is none.
+    static func clock(_ state: WorkingState, now: Date) -> String {
+        seconds(state, now: now).map(ChatCopy.clock) ?? ""
+    }
+
     /// "Working · 12s", "Waiting for you · 12s".
     static func line(_ state: WorkingState, now: Date) -> String {
         guard let seconds = seconds(state, now: now) else { return word(state) }
-        return "\(word(state)) · \(ChatCopy.clock(seconds))"
+        return "\(word(state))\(LiveLineLayout.separator)\(ChatCopy.clock(seconds))"
     }
 
     /// "Working, 12 seconds, Reading src/a.ts"; "Waiting for you, 12 seconds" while a request

@@ -140,6 +140,7 @@ func (a *Adapter) Validate() error {
 	if c := a.Commands; c != nil && c.Source != "" && !a.hasSource(c.Source) {
 		bad("commands.source: unknown source %q", c.Source)
 	}
+	a.validateCommands(bad)
 	for _, name := range sortedKeys(a.Mission) {
 		if src := a.Mission[name].Source; src != "" && !a.hasSource(src) {
 			bad("mission.%s: unknown source %q", name, src)
@@ -156,6 +157,9 @@ func checkSource(bad func(string, ...any), where string, s *Source) {
 		bad("%s: hook and sse stream; declare them under feeds", where)
 	}
 	checkStability(bad, where, s.Stability)
+	if c := s.CLI; c != nil && c.Stderr != "" && c.Stderr != StderrMerge {
+		bad("%s.cli: stderr %q is not merge", where, c.Stderr)
+	}
 	if r := s.RPC; r != nil && r.Framing != "" && r.Framing != FramingJSONRPC && r.Framing != FramingTyped {
 		bad("%s.rpc: framing %q is not jsonrpc or typed", where, r.Framing)
 	}

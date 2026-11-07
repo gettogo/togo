@@ -31,9 +31,21 @@ enum MissionLayout {
         }
     }
 
-    /// The adapter's extra screens placed in the status section, such as Usage or MCP servers.
+    /// The adapter's extra screens placed in the status section that are real pages, such as
+    /// omp's Compaction settings. A status screen repeats the block the section already shows
+    /// (or leads to a failure without it), and a confirm screen is a page holding one button:
+    /// Compact sits on the context meter instead, so neither is listed.
     static func statusScreens(_ descriptor: HarnessDescriptor?) -> [HarnessDescriptor.ScreenRef] {
-        descriptor?.screens.filter { $0.section == MissionSectionKind.status.rawValue } ?? []
+        descriptor?.screens.filter { screen in
+            screen.section == MissionSectionKind.status.rawValue
+                && screen.primitive != .status && screen.primitive != .confirm
+        } ?? []
+    }
+
+    /// The adapter's `more` screens (Resume, MCP servers, Providers, Settings), listed in the
+    /// session menu's Session section.
+    static func moreScreens(_ descriptor: HarnessDescriptor?) -> [HarnessDescriptor.ScreenRef] {
+        descriptor?.screens.filter { $0.section == "more" } ?? []
     }
 
     /// The plan section as a checklist: rows are items, children nest, and the progress comes
@@ -90,16 +102,5 @@ enum MissionLayout {
         case .ports: return HarnessOpen(kind: .url, ref: row.id)
         default: return nil
         }
-    }
-}
-
-/// How mission control is presented: a sheet over the chat where the window is narrow, a
-/// side inspector beside it where there is room (iPad, an unfolded Duo).
-enum MissionPresentation: Equatable {
-    case sheet
-    case inspector
-
-    static func choose(_ horizontalSizeClass: UserInterfaceSizeClass?) -> MissionPresentation {
-        horizontalSizeClass == .regular ? .inspector : .sheet
     }
 }

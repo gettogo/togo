@@ -1,0 +1,36 @@
+{
+  "source": "real",
+  "agentVersion": "2.1.319",
+  "match": true,
+  "kind": "question",
+  "title": "Which fruits do you like (pick any)",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Apple",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Pear",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Plum",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  }
+}

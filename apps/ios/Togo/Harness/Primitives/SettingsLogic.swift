@@ -96,4 +96,36 @@ enum SettingsLogic {
         let options = field.options ?? []
         return options.count <= 6 && options.contains { $0.detail?.isEmpty == false }
     }
+
+    /// A form with one field: a change that lands closes it.
+    static func isSingleField(_ settings: HarnessScreen.Settings) -> Bool {
+        settings.sections.reduce(0) { $0 + $1.fields.count } == 1
+    }
+
+    /// The change a commit makes, for `ActionGate`: the field's confirm, its new value in words
+    /// (a secret never named), and its current value to go back to.
+    static func change(_ field: Field, to value: JSONValue, action: String) -> GatedChange {
+        GatedChange(
+            action: action, target: field.id, args: commitArgs(value), confirm: field.actionConfirm,
+            setting: field.label, value: words(field, value),
+            previous: field.kind == .secret ? nil : someWords(field, field.value).map { ($0, commitArgs(field.value)) }
+        )
+    }
+
+    /// A value as the chat says it: an option's label, on or off, a number, the text; a
+    /// secret is never named.
+    static func words(_ field: Field, _ value: JSONValue) -> String {
+        switch field.kind {
+        case .secret: return PrimitiveCopy.set
+        case .toggle: return bool(value) ? PrimitiveCopy.on : PrimitiveCopy.off
+        case .choice: return choiceLabel(field, value: value) ?? ""
+        case .number: return number(value).map(numberText) ?? ""
+        default: return string(value) ?? ""
+        }
+    }
+
+    private static func someWords(_ field: Field, _ value: JSONValue) -> String? {
+        let text = words(field, value)
+        return text.isEmpty ? nil : text
+    }
 }

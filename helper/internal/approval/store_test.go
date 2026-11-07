@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -158,7 +159,13 @@ func TestHookApprovalAdoptsLaterPrompt(t *testing.T) {
 	f := &fakeTmux{}
 	st := New(Config{Tmux: f, Pub: &fakePub{}})
 	a := st.OpenFromHook(context.Background(), "s_aaaaaaaaaa", wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
-	wantConflict(t, st.Answer(context.Background(), a.RequestID, "deny", wire.ByPhone), wire.ConflictPromptGone, "")
+	if a.Answerable == nil || *a.Answerable {
+		t.Fatalf("a hook request with nothing on screen is answerable: %+v", a)
+	}
+	var inv *session.InvalidParamsError
+	if err := st.Answer(context.Background(), a.RequestID, "deny", wire.ByPhone); !errors.As(err, &inv) {
+		t.Fatalf("err = %v, want invalid params", err)
+	}
 
 	b := st.OpenFromHook(context.Background(), "s_aaaaaaaaaa", wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
 	f.mu.Lock()

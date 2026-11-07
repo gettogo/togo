@@ -34,6 +34,7 @@ struct PromptBeacon: View {
                 }
                 lit = false
                 Task { @MainActor in
+                    // motion: attention — the beacon lights once as the request arrives.
                     withAnimation(Motion.animation(.dropIn, reduce: reduceMotion)) { lit = true }
                 }
             }
@@ -102,6 +103,7 @@ struct PromptCapsuleStyle: ButtonStyle {
             .contentShape(.capsule)
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            // motion: cause → effect — the button gives under the finger.
             .motion(.confirm, value: configuration.isPressed)
     }
 

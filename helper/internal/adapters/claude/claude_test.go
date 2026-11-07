@@ -230,3 +230,14 @@ func TestExitPayloadsReadLeniently(t *testing.T) {
 		}
 	}
 }
+
+func TestAskUserQuestionPermissionIsNotAnApproval(t *testing.T) {
+	raw, err := os.ReadFile("testdata/permission_request_ask.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, _, err := Map("PermissionRequest", raw, map[string]string{"TOGO_SESSION": "s_aaaaaaaaaa"})
+	if err != nil || ev.Event != local.EventHarness {
+		t.Fatalf("event %q err %v, want harness", ev.Event, err)
+	}
+}

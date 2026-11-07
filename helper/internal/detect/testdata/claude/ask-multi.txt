@@ -1,0 +1,17 @@
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Color  ☒ Fruits  ✔ Submit  →
+
+Which fruits do you like (pick any)
+
+❯ 1. [✔] Apple
+         Crisp
+  2. [ ] Pear
+         Juicy
+  3. [✔] Plum
+         Tart
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

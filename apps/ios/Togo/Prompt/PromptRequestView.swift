@@ -18,6 +18,10 @@ struct PromptRequestView: View {
     /// swap choreography: the answers conceal, then the bar resizes as the outcome line
     /// reveals (motion spec §2.3).
     @State private var shownState: Mirrored<PromptRequestState>
+    @Namespace private var answerSpace
+    /// Yes or No as the person tapped it here, so the outcome line comes out of that button.
+    @State private var tapped = AnswerTap<PromptAnswer>()
+    @State private var settle: AnswerSettle = .collapse
 
     init(model: PromptBarModel, request: PromptRequest, position: Int, count: Int, replying: Bool) {
         self.model = model
@@ -77,18 +81,36 @@ struct PromptRequestView: View {
                 options: request.more.map { AnswerOption(id: $0.id, label: $0.label) }
             ) { model.answer(.option($0.id), to: request.id) }
         }
-        .onChange(of: request.state) { _, new in
-            Motion.settle(
-                $shownState, to: new, small: PromptOutcomeMotion.isSmall(from: shownState.value, to: new),
-                reduce: reduceMotion
-            )
-        }
+        .onChange(of: request.state) { _, new in follow(new) }
         .haptic(.approve, trigger: request.state) { _, new in new == .done(.approved) }
         .haptic(.deny, trigger: request.state) { _, new in new == .done(.denied) }
         .haptic(.error, trigger: request.state) { _, new in if case .failed = new { true } else { false } }
     }
 
     private var large: Bool { typeSize.isAccessibilitySize }
+
+    /// The person's own Yes or No becomes the outcome line in one transaction; anything else
+    /// conceals the answers first, then the bar resizes to the line.
+    private func follow(_ new: PromptRequestState) {
+        if case .done(let outcome) = new {
+            settle = tapped.settle(answeredHere: outcome == .approved || outcome == .denied)
+        } else {
+            settle = .collapse
+        }
+        guard settle == .travel else {
+            Motion.settle(
+                $shownState, to: new, small: PromptOutcomeMotion.isSmall(from: shownState.value, to: new),
+                reduce: reduceMotion
+            )
+            return
+        }
+        shownState.generation += 1
+        // motion: cause → effect — the tapped Yes or No travels into the outcome line as the answers give way around it.
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
+            shownState.value = new
+            shownState.shown = true
+        }
+    }
 
     /// The answers, or where the answer stands once one is on its way or back.
     @ViewBuilder private var outcome: some View {
@@ -102,6 +124,7 @@ struct PromptRequestView: View {
             answers.disabled(true)
         case .done(let outcome):
             stateLine(outcome.label, failure: false)
+                .answerSource(AnswerMatch.id(request.id), in: answerSpace, active: settle == .travel)
         case .withdrawn:
             stateLine(PromptCopy.withdrawn, failure: false)
         }
@@ -139,11 +162,10 @@ struct PromptRequestView: View {
                     .font(.system(.caption2, design: .monospaced))
                     .foregroundStyle(Color.togoMute)
                     .fixedSize()
-                    .rollingNumber(Double(position))
-                    .transition(.opacity)
+                    .countChange(Double(position))
             }
         }
-        // The queue count appears and rolls on `respond`; the bar's height does not change.
+        // motion: state change — the queue count appears in place as a second request waits; the bar's height does not change.
         .motion(.respond, value: queue)
         .contentShape(.rect)
         .onTapGesture { if !request.sessionID.isEmpty { model.onOpen(request) } }
@@ -168,12 +190,14 @@ struct PromptRequestView: View {
     @ViewBuilder private var answerButtons: some View {
         let hint = request.command.map { PromptCopy.answerHint(question: request.question, command: $0) } ?? request.question
         if request.asksYesOrNo {
-            Button(PromptCopy.yes) { model.answer(.yes, to: request.id) }
+            Button(PromptCopy.yes) { answer(.yes) }
                 .buttonStyle(.promptCapsule(.beacon))
                 .accessibilityHint(hint)
-            Button(PromptCopy.no) { model.answer(.no, to: request.id) }
+                .answerSource(AnswerMatch.id(request.id), in: answerSpace, active: tapped.isSource(.yes))
+            Button(PromptCopy.no) { answer(.no) }
                 .buttonStyle(.promptCapsule(.plain))
                 .accessibilityHint(hint)
+                .answerSource(AnswerMatch.id(request.id), in: answerSpace, active: tapped.isSource(.no))
         }
         if !request.more.isEmpty {
             Button(PromptCopy.more) { showingMore = true }
@@ -185,6 +209,11 @@ struct PromptRequestView: View {
                 .buttonStyle(.promptCapsule(.plain))
                 .accessibilityHint(PromptCopy.replyHint)
         }
+    }
+
+    private func answer(_ answer: PromptAnswer) {
+        tapped.record(answer)
+        model.answer(answer, to: request.id)
     }
 
     private var replyLine: some View {
@@ -284,13 +313,12 @@ struct PromptCommandWell: View {
             .accessibilityLabel(command)
             if fullHeight > shownHeight + 1 {
                 // Known from the first layout, so it is there from the first frame; a later
-                // change (rotation, text size) reveals rather than pops.
+                // change (rotation, text size) lands with that change.
                 Button(PromptCopy.showAll, action: onShowAll)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoSnow)
                     .frame(minHeight: 44)
                     .contentShape(.rect)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .task(id: command) {

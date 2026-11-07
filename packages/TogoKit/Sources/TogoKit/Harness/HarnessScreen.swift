@@ -27,6 +27,24 @@ public struct HarnessActionRef: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
+/// Asked before a selection or a field change runs. `effect` relaunch: the change restarts the agent,
+/// so the app confirms only while it works and offers Undo when it is idle.
+public struct HarnessSelectConfirm: Codable, Hashable, Sendable {
+    public struct Effect: OpenString {
+        public var rawValue: String
+        public init(rawValue: String) { self.rawValue = rawValue }
+        public static let relaunch: Self = "relaunch"
+    }
+
+    public var text: String
+    public var effect: Effect?
+
+    public init(text: String, effect: Effect? = nil) {
+        self.text = text
+        self.effect = effect
+    }
+}
+
 /// The seven primitives every native screen is drawn with.
 public struct HarnessPrimitive: OpenString {
     public var rawValue: String
@@ -84,6 +102,8 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var searchable: Bool
         public var filters: [Filter]?
         public var onSelect: String
+        /// Asked (or applied with Undo) before `onSelect` runs, when set.
+        public var onSelectConfirm: HarnessSelectConfirm?
         public var itemActions: [HarnessActionRef]?
 
         public struct Item: Codable, Hashable, Sendable, Identifiable {
@@ -126,12 +146,13 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         }
 
         public init(items: [Item], selected: String? = nil, searchable: Bool, filters: [Filter]? = nil,
-                    onSelect: String, itemActions: [HarnessActionRef]? = nil) {
+                    onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil) {
             self.items = items
             self.selected = selected
             self.searchable = searchable
             self.filters = filters
             self.onSelect = onSelect
+            self.onSelectConfirm = onSelectConfirm
             self.itemActions = itemActions
         }
     }
@@ -176,10 +197,13 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public var placeholder: String?
             public var readOnly: Bool?
             public var action: String?
+            /// Asked (or applied with Undo) before `action` runs, when set.
+            public var actionConfirm: HarnessSelectConfirm?
 
             public init(id: String, label: String, help: String? = nil, kind: FieldKind, value: JSONValue,
                         isSet: Bool? = nil, options: [HarnessChoice]? = nil, min: Double? = nil, max: Double? = nil,
-                        placeholder: String? = nil, readOnly: Bool? = nil, action: String? = nil) {
+                        placeholder: String? = nil, readOnly: Bool? = nil, action: String? = nil,
+                        actionConfirm: HarnessSelectConfirm? = nil) {
                 self.id = id
                 self.label = label
                 self.help = help
@@ -192,6 +216,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
                 self.placeholder = placeholder
                 self.readOnly = readOnly
                 self.action = action
+                self.actionConfirm = actionConfirm
             }
         }
 

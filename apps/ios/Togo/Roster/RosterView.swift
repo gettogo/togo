@@ -210,6 +210,7 @@ struct RosterView: View {
             return
         }
         keys.cursor = TabID(hostID: row.hostID, sessionID: row.id)
+        // motion: cause → effect — the tapped line's session flows into the pane beside it
         withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
             store.showFromSidebar(row, transport: transport)
         }
@@ -277,23 +278,24 @@ struct RosterHeadline: View {
                         // trunc-ok: the headline is a count and two words
                         .lineLimit(1)
                         .fixedSize()
-                        .rollingNumber(Double(roster.waiting))
+                        // The needs count is an event: it may roll. Nothing else here does.
+                        .countChange(Double(roster.waiting))
                 }
+                // motion: attention — something now needs you; the beacon line appears in place
                 .transition(.opacity)
             }
             if !roster.tallyText.isEmpty {
+                // The session tally is a background value: it changes at once, never rolls.
                 Text(verbatim: roster.tallyText)
                     .font(.system(.footnote, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(Color.togoMute)
                     .fixedSize(horizontal: false, vertical: true)
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-                    .transition(.opacity)
+                    .transaction { $0.animation = nil }
             }
         }
-        // The beacon lights and the words swap on `respond`; the counts roll.
+        // motion: attention — the beacon lights when something needs you, and goes out after
         .motion(.respond, value: roster.waiting)
-        .motion(.respond, value: roster.tallyText)
         .background(alignment: .leading) {
             if launchTarget {
                 Color.clear

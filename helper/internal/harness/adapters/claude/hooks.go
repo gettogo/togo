@@ -136,6 +136,7 @@ func firstNonEmpty(v ...string) string {
 
 // Mode lines Claude Code draws under its prompt box.
 var modeLines = []struct{ text, mode string }{
+	{"manual mode on", "default"}, // 2.1.319 draws the default mode too
 	{"plan mode on", "plan"},
 	{"accept edits on", "acceptEdits"},
 	{"bypass permissions on", "bypassPermissions"},

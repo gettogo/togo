@@ -4,8 +4,9 @@ import Testing
 import TogoKit
 @testable import Togo
 
-/// Mission control: the pill's words, which sections show and in what order, how it is
-/// presented per width, and what the roster says from a session's mission summary.
+/// Mission control: the summary's words, which sections show and in what order, how it is
+/// presented per width, the session menu's screens, and what the roster says from a session's
+/// mission summary.
 @MainActor
 struct MissionTests {
     // MARK: Pill
@@ -83,17 +84,48 @@ struct MissionTests {
         #expect(MissionLayout.sections(nil, capabilities: nil).isEmpty)
     }
 
-    @Test func statusScreensAreThoseInTheStatusSection() {
+    @Test func statusScreensAreRealPagesInTheStatusSection() {
         let descriptor = HarnessDescriptor(
             adapter: .init(id: "claude", name: "Claude Code", harnessVersion: "2.1.319", revision: 1),
             capabilities: [HarnessCapability.status],
             screens: [
                 .init(id: "usage", primitive: .status, title: "Usage", section: "status"),
+                .init(id: "compaction", primitive: .settings, title: "Compaction", section: "status"),
                 .init(id: "model", primitive: .picker, title: "Model", section: "composer"),
             ]
         )
-        #expect(MissionLayout.statusScreens(descriptor).map(\.id) == ["usage"])
+        #expect(MissionLayout.statusScreens(descriptor).map(\.id) == ["compaction"])
         #expect(MissionLayout.statusScreens(nil).isEmpty)
+    }
+
+    @Test func theSessionMenuListsTheMoreScreens() {
+        let descriptor = HarnessDescriptor(
+            adapter: .init(id: "opencode", name: "OpenCode", harnessVersion: "1", revision: 1),
+            capabilities: [HarnessCapability.chat],
+            screens: [
+                .init(id: "resume", primitive: .picker, title: "Resume", section: "more"),
+                .init(id: "mcp", primitive: .liveList, title: "MCP servers", section: "more"),
+                .init(id: "providers", primitive: .picker, title: "Providers", section: "more"),
+                .init(id: "model", primitive: .picker, title: "Model", section: "composer"),
+                .init(id: "usage", primitive: .status, title: "Usage", section: "status"),
+            ]
+        )
+        #expect(MissionLayout.moreScreens(descriptor).map(\.id) == ["resume", "mcp", "providers"])
+        #expect(MissionLayout.moreScreens(nil).isEmpty)
+        // Each item says it opens a screen.
+        #expect(MissionCopy.opensScreen("Resume") == "Resume…")
+        #expect(MissionSessionSection.symbol("mcp") == "server.rack")
+    }
+
+    @Test func onlyTheNeedsCountRolls() {
+        #expect(MissionSectionHeader.countRolls(.needs))
+        for kind in [MissionSectionKind.agents, .background, .plan, .changes, .ports, .status] {
+            #expect(!MissionSectionHeader.countRolls(kind))
+        }
+    }
+
+    @Test func aSessionWithoutMissionControlSaysTerminalOnly() {
+        #expect(MissionCopy.unavailableDetail == "Terminal only")
     }
 
     @Test func planRowsBecomeAChecklist() {

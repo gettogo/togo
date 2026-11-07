@@ -1,8 +1,10 @@
-// Package hooks adds and removes the entries that make Claude Code, Codex and,
-// when named, Qwen Code, Droid and Copilot CLI
-// report events to "togo hook <agent> <event>". It only ever touches entries
-// whose command ends in "hook <agent> <event>", keeps every other key and
-// hook in the agent's config, and refuses to write a file it cannot parse.
+// Package hooks adds and removes the entries that make each harness in the
+// Registry that takes hooks (Claude Code, Codex, Gemini CLI, Auggie, Qwen
+// Code, Droid and Copilot CLI) report events to "togo hook <agent> <event>",
+// and chains Claude Code's status line. It only ever touches entries whose
+// command ends in "hook <agent> <event>", keeps every other key and hook in
+// the harness's config, backs a file up once before its first change, and
+// refuses to write a file it cannot parse or a Togo entry the user edited.
 package hooks
 
 import (
@@ -14,7 +16,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // Agent names accepted by Install, Uninstall and Status.
@@ -22,9 +23,6 @@ const (
 	Claude = "claude"
 	Codex  = "codex"
 )
-
-// Agents lists every supported agent in a stable order.
-var Agents = []string{Claude, Codex}
 
 // Status values reported per agent.
 const (
@@ -45,23 +43,33 @@ type Options struct {
 	Binary    string // absolute path of the togo executable
 	ClaudeDir string // $CLAUDE_CONFIG_DIR or ~/.claude
 	CodexDir  string // $CODEX_HOME or ~/.codex
-	// QwenDir, FactoryDir and CopilotDir are ~/.qwen, ~/.factory and
-	// ~/.copilot, for the Optional agents.
+	// The other harnesses' config roots: ~/.gemini, ~/.augment, ~/.qwen,
+	// ~/.factory, ~/.copilot and ~/.vibe.
+	GeminiDir  string
+	AugmentDir string
 	QwenDir    string
 	FactoryDir string
 	CopilotDir string
+	VibeDir    string
 	Cwd        string // project directory for Local
 	Local      bool   // Claude: edit ./.claude/settings.local.json instead
-	Block      bool   // Claude: also hook PermissionRequest
+	Block      bool   // also hook the approval event, so the phone can answer
+	// NoStatusLine leaves Claude's status line as it is on install.
+	NoStatusLine bool
+	// HasBinary reports whether a harness's program is installed; nil
+	// counts every program as installed, so only the config root decides.
+	HasBinary func(command string) bool
 }
 
 // Result is the outcome for one agent. State is "installed", "unchanged",
-// "removed", "restored", "skipped" (no config root) or "refused" with Err.
+// "removed", "skipped" (not installed here) or "refused" with Err. Backup
+// is the copy of Path taken before Togo's first change, when there is one.
 type Result struct {
-	Agent string
-	Path  string
-	State string
-	Err   error
+	Agent  string
+	Path   string
+	State  string
+	Backup string
+	Err    error
 }
 
 // Install adds togo's hook entries for each named agent. Running it again
@@ -81,9 +89,6 @@ func Status(o Options) map[string]string {
 	out := map[string]string{}
 	for _, agent := range Agents {
 		out[agent] = status(o, agent)
-	}
-	for _, agent := range Optional {
-		out[agent] = optionalStatus(o, agent)
 	}
 	return out
 }
@@ -109,13 +114,19 @@ func install(o Options, agent string) Result {
 	if len(edits) > 0 {
 		res.Path = edits[0].path
 	}
+	h, _ := Lookup(agent)
 	switch {
 	case err != nil:
 		res.State, res.Err = "refused", err
-	case root == "":
+	case root == "" || !(o.Local && agent == Claude) && !h.Present(o):
 		res.State = "skipped"
 	default:
 		res.State, res.Err = applyAll(o, edits, false)
+	}
+	if res.Path != "" {
+		if _, err := os.Stat(res.Path + backupSuffix); err == nil {
+			res.Backup = res.Path + backupSuffix
+		}
 	}
 	return res
 }
@@ -154,6 +165,10 @@ func editsFor(o Options, agent string, add bool) ([]edit, string, error) {
 		return droidEdits(o, add)
 	case Copilot:
 		return copilotEdits(o, add)
+	case Gemini:
+		return geminiEdits(o, add)
+	case Auggie:
+		return auggieEdits(o, add)
 	}
 	return nil, "", fmt.Errorf("unknown agent %q", agent)
 }
@@ -249,7 +264,11 @@ func commit(o Options, path string, cur, out []byte, existed, undo bool) (bool, 
 	}
 	prev, tracked := led.find(path)
 	ours := tracked && existed && prev.After == sum(cur)
-	if existed && !ours {
+	// The backup is taken once, before Togo's first change, and a later
+	// install never overwrites it. A file the user edited since keeps that
+	// first backup; uninstall then removes Togo's entries instead of
+	// restoring it.
+	if existed && !ours && !(tracked && fileExists(path+backupSuffix)) {
 		if err := writeBackup(path, cur); err != nil {
 			return false, err
 		}
@@ -288,6 +307,11 @@ func tryRestore(o Options, path string, cur []byte) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 	return orig, true, nil
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func writeBackup(path string, data []byte) error {
@@ -339,22 +363,6 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
-}
-
-// shellQuote single-quotes s for the sh -c line agents run hook commands
-// through, so a binary path with spaces or quotes stays one word.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-func hookCommand(binary, agent, event string) string {
-	return shellQuote(binary) + " hook " + agent + " " + event
-}
-
-// owned reports whether a hook command is one togo installed for agent.
-func owned(cmd, agent string) bool {
-	f := strings.Fields(cmd)
-	return len(f) >= 3 && f[len(f)-3] == "hook" && f[len(f)-2] == agent
 }
 
 // recordFile lists, per edited file, the hash before and after togo's write so
@@ -418,18 +426,15 @@ func (l *recordFile) save() error {
 }
 
 func status(o Options, agent string) string {
-	var path, root string
-	var events []string
-	switch agent {
-	case Claude:
-		root, path, events = o.ClaudeDir, filepath.Join(o.ClaudeDir, "settings.json"), claudeBase
-		if o.Local {
-			root, path = filepath.Join(o.Cwd, ".claude"), filepath.Join(o.Cwd, ".claude", "settings.local.json")
-		}
-	case Codex:
-		root, path, events = o.CodexDir, filepath.Join(o.CodexDir, "hooks.json"), codexEvents
+	h, ok := Lookup(agent)
+	if !ok || h.Setup != SetupHooks {
+		return StatusNoAgent
 	}
-	if st, err := os.Stat(root); root == "" || err != nil || !st.IsDir() {
+	root, path, events := h.Root(o), h.Config(o), h.events
+	if agent == Claude && o.Local {
+		root, path = filepath.Join(o.Cwd, ".claude"), filepath.Join(o.Cwd, ".claude", "settings.local.json")
+	}
+	if !dirExists(root) {
 		return StatusNoAgent
 	}
 	data, err := os.ReadFile(path)

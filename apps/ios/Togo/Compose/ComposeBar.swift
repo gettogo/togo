@@ -201,14 +201,15 @@ struct ComposeBar: View {
                     .padding(.top, 6)
             }
             if let dictation = model.dictation, shown.stage.dictation != 0 {
+                // One row whose words change in place from stage to stage: no re-identity, no rise.
                 DictationLine(model: dictation, phase: shown.dictation)
-                    .id(shown.stage.dictation)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — the dictation row arrives by opacity as the bar makes room.
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
             if shown.stage.image != 0 {
                 ImageStatusRow(flow: model.images, phase: shown.image)
-                    .id(shown.stage.image)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — the picture's status row arrives by opacity; its words then change in place.
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 4) {
@@ -307,7 +308,6 @@ struct ComposeBar: View {
                     .accessibilityLabel(ComposeCopy.photo)
                 }
             }
-            .transition(.opacity)
         }
     }
 
@@ -322,7 +322,6 @@ struct ComposeBar: View {
             }
             .fixedSize()
             .accessibilityLabel(ComposeCopy.history)
-            .transition(.opacity)
         }
     }
 
@@ -339,6 +338,7 @@ struct ComposeBar: View {
         }
         .disabled(!model.canSend)
         .accessibilityLabel(ComposeCopy.send)
+        // motion: state change — Send lights as there is something to send.
         .motion(.respond, value: model.canSend)
     }
 }

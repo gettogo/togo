@@ -13,6 +13,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/source"
+	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
 
 // gateTimeout bounds one version probe.
@@ -52,7 +53,7 @@ func (g *gate) check(ctx context.Context, a *adapter, env harness.Env) gateResul
 	g.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, gateTimeout)
 	defer cancel()
-	out, err := source.Run(ctx, append([]string{prog}, argv[1:]...), env)
+	out, err := source.RunStderr(ctx, append([]string{prog}, argv[1:]...), env, a.Harness.Stderr == spec.StderrMerge)
 	r := gateResult{}
 	switch {
 	case err != nil:

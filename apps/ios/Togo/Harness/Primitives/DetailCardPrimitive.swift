@@ -35,10 +35,11 @@ struct DetailCardPrimitive: View {
             DetailBody(content: detail.body)
             if !detail.actions.isEmpty {
                 PrimitiveActionRow(refs: DetailCardLogic.ordered(detail.actions), large: true, actions: actions, context: context)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — actions a refresh brings arrive by opacity in place.
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
         }
-        // Actions that arrive with a refresh reveal in place.
+        // motion: preventing a jump — actions a refresh brings open their room in place.
         .motion(.respond, value: detail.actions.map(\.id))
         .primitiveCard(radius: 24, padding: 18)
     }

@@ -303,20 +303,23 @@ func (s *Subject) UnmarshalJSON(b []byte) error {
 // never listed. When Subject is set, Detail is Subject.Text truncated to
 // MaxDetail runes, for apps that predate Subject.
 type Approval struct {
-	RequestID string     `json:"requestId"`
-	SessionID *string    `json:"sessionId"`
-	Bib       *string    `json:"bib"`
-	Agent     string     `json:"agent"`
-	Source    string     `json:"source"`
-	Title     string     `json:"title"`
-	Detail    *string    `json:"detail"`
-	Subject   *Subject   `json:"subject"`
-	Snippet   string     `json:"snippet"`
-	Options   []Option   `json:"options"`
-	AllowText bool       `json:"allowText"`
-	CreatedAt time.Time  `json:"createdAt"`
-	ExpiresAt *time.Time `json:"expiresAt"`
-	State     string     `json:"state"`
+	RequestID string   `json:"requestId"`
+	SessionID *string  `json:"sessionId"`
+	Bib       *string  `json:"bib"`
+	Agent     string   `json:"agent"`
+	Source    string   `json:"source"`
+	Title     string   `json:"title"`
+	Detail    *string  `json:"detail"`
+	Subject   *Subject `json:"subject"`
+	Snippet   string   `json:"snippet"`
+	Options   []Option `json:"options"`
+	AllowText bool     `json:"allowText"`
+	// Answerable is false while no answer from the phone can be delivered
+	// (no options and no fingerprint yet). Nil means true.
+	Answerable *bool      `json:"answerable,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  *time.Time `json:"expiresAt"`
+	State      string     `json:"state"`
 }
 
 // MarshalJSON writes nil Options as [], which the schema requires.

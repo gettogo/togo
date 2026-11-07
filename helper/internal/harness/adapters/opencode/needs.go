@@ -18,7 +18,7 @@ import (
 
 // MaxQuestions is how many questions of one request the answer action can
 // send back.
-const MaxQuestions = 4
+const MaxQuestions = 16
 
 type toolRef struct {
 	MessageID string `json:"messageID"`

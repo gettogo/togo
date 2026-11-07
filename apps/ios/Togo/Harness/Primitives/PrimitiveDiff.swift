@@ -52,6 +52,7 @@ struct PrimitiveDiff: View {
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(Color.togoMute)
                     .rotationEffect(.degrees(isOpen(file) && !reduceMotion ? 90 : 0))
+                    // motion: state change — the fold chevron turns with the file it opens.
                     .motion(.respond, value: isOpen(file))
                     .accessibilityHidden(true)
                 Text(verbatim: file.path.isEmpty ? PrimitiveCopy.changes : file.path)

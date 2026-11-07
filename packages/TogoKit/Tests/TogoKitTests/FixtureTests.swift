@@ -208,6 +208,8 @@ struct FixtureTests {
         case .harnessInterrupt: (SessionIDParams.self, HarnessActionResult.self)
         case .harnessComplete: (HarnessCompleteParams.self, HarnessCompleteResult.self)
         case .harnessLocate: (HarnessLocateParams.self, HarnessLocation.self)
+        case .integrationsStatus: (EmptyParams.self, IntegrationsStatus.self)
+        case .integrationsInstall, .integrationsUninstall: (IntegrationsChangeParams.self, IntegrationsChange.self)
         }
     }
 

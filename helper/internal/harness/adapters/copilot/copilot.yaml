@@ -10,8 +10,9 @@ name: Copilot CLI
 revision: 1
 match: { agents: [copilot], commands: [copilot] }
 harness: { version: [copilot, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.0.100 <2" }
+# No status capability: the hooks carry no model, usage or context to fill one.
 capabilities: [chat, chat.anchors, send.queue, interrupt, commands, files, model, needs.approvals,
-  agents, changes, ports, status, resume, compact]
+  agents, changes, ports, resume, compact]
 feeds:
   hooks:            # `togo hook copilot <event>` in ~/.copilot/hooks/togo.json (installed only by `togo hooks install --agent copilot`)
     hook:
@@ -26,10 +27,17 @@ sources:
     select: '[.[] | select((.head[0].data.context.cwd // .head[0].data.cwd // "") == $state.cwd) | {id: (.path | split("/") | .[-2]), updated: .mtime, title: ([.tail[] | select(.type == "user.message") | .data.content] | last)}]'
     cache: 30s
     stability: internal
+  # `copilot help config` lists the models its `model` setting takes, one
+  # quoted id per line under `model`:; Auto lets Copilot pick.
   models:
-    static:
-      - { id: auto, label: Auto, detail: Copilot picks per request }
+    cli: { argv: [copilot, help, config], format: text }
+    select: '[{id: "auto", label: "Auto", detail: "Copilot picks per request"}] + [(split("`model`:")[1] // "") | (split("\n\n")[0] // "") | split("\n")[] | capture("^\\s*- \"(?<id>[^\"]+)\"") | {id: .id, label: .id}]'
+    cache: 1h
+    timeout: 15s
     stability: documented
+    fallback:
+      static:
+        - { id: auto, label: Auto, detail: Copilot picks per request }
 screens:
   model:
     primitive: picker
@@ -37,6 +45,7 @@ screens:
     section: composer
     capability: model
     source: models
+    search: true
     map: { item.id: .id, item.title: .label, item.subtitle: .detail, selected: $state.model }
     on_select: set_model
   resume:
@@ -48,12 +57,6 @@ screens:
     search: true
     map: { item.id: .id, item.title: '{{.title | default .id | truncate 60}}', item.subtitle: '{{.updated | ago}}' }
     on_select: resume
-  compact:
-    primitive: confirm
-    title: Compact
-    section: status
-    capability: compact
-    submit: compact
 actions:
   set_model:
     label: Use model
@@ -76,13 +79,15 @@ actions:
   interrupt:
     keys: { keys: [Escape] }
     stability: documented
+status:
+  actions: [compact]   # inline on the context meter, once a status block exists
 commands:
   static:
-    - { name: model, hint: '[model]', detail: Select the model, screen: model }
-    - { name: compact, hint: '[focus]', detail: Summarise the conversation }
+    - { name: model, hint: '[model]', detail: Select the model, kind: picker, screen: model }
+    - { name: compact, hint: '[focus]', detail: Summarise the conversation, action: compact }
     - { name: resume, hint: '[id]', detail: Switch sessions, screen: resume }
     - { name: plan, detail: Plan before coding }
-    - { name: tasks, detail: Subagents and shell tasks }
-    - { name: diff, detail: Review changes }
-    - { name: usage, detail: Session usage }
-    - { name: context, detail: Context window usage }
+    - { name: tasks, detail: Subagents and shell tasks, kind: terminal }
+    - { name: diff, detail: Review changes, opens: changes }
+    - { name: usage, detail: Session usage, kind: terminal }
+    - { name: context, detail: Context window usage, kind: terminal }

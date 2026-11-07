@@ -22,7 +22,7 @@ struct TutorialFlow: View {
     @State private var demo: AppStore?
     /// The last page's buttons as the bar shows them. A swipe moves the page with no
     /// transaction, so the bar follows here: Continue gives way to the last page's two buttons
-    /// in one `resize`, and back.
+    /// at once, and back (buttons are controls, not news).
     @State private var readyFollowed: Bool?
 
     private var readyShown: Bool { readyFollowed ?? (model.page == .ready) }
@@ -38,7 +38,7 @@ struct TutorialFlow: View {
             .background(Color.togoInk)
             .safeAreaInset(edge: .bottom, spacing: 0) { controls }
             .onChange(of: model.page == .ready) { _, ready in
-                withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { readyFollowed = ready }
+                withTransaction(Transaction(animation: nil)) { readyFollowed = ready }
             }
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
@@ -99,11 +99,9 @@ struct TutorialFlow: View {
                                 .buttonStyle(.secondary)
                         }
                     }
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
                 } else {
                     Button(String(localized: "tutorial.continue", defaultValue: "Continue")) { step(model.next) }
                         .buttonStyle(.primary)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
         }
@@ -134,6 +132,7 @@ struct TutorialFlow: View {
             transaction.disablesAnimations = true
             withTransaction(transaction, move)
         } else {
+            // motion: continuity — the next page slides in from where the swipe would bring it
             withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion), move)
         }
     }
@@ -162,6 +161,7 @@ struct PageIndicator: View {
                     .frame(width: item == page ? 20 : 8, height: 4)
             }
         }
+        // motion: continuity — the long bar travels with the page the user is on
         .motion(.tabSettle, value: page)
         .frame(minHeight: 8)
         .accessibilityElement(children: .ignore)

@@ -39,7 +39,7 @@ func (CLI) Fetch(ctx context.Context, s harness.SourceSpec, env harness.Env) (js
 	if err := json.Unmarshal(s.Raw, &c); err != nil {
 		return nil, fmt.Errorf("source %s: %w", s.Name, err)
 	}
-	out, err := Run(ctx, c.Argv, env)
+	out, err := RunStderr(ctx, c.Argv, env, c.Stderr == spec.StderrMerge)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +49,13 @@ func (CLI) Fetch(ctx context.Context, s harness.SourceSpec, env harness.Env) (js
 // Run executes argv without a shell and returns stdout, capped at
 // MaxCLIOutput. Stderr is discarded.
 func Run(ctx context.Context, argv []string, env harness.Env) ([]byte, error) {
+	return RunStderr(ctx, argv, env, false)
+}
+
+// RunStderr is Run that, with merge, reads stderr into the same capped
+// output: some harnesses print their version or lists there when stdin is
+// not a terminal.
+func RunStderr(ctx context.Context, argv []string, env harness.Env, merge bool) ([]byte, error) {
 	if len(argv) == 0 || argv[0] == "" {
 		return nil, errors.New("source: empty argv")
 	}
@@ -66,6 +73,9 @@ func Run(ctx context.Context, argv []string, env harness.Env) ([]byte, error) {
 	}
 	var out cappedBuffer
 	cmd.Stdout, cmd.Stderr = &out, io.Discard
+	if merge {
+		cmd.Stderr = &out
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = time.Second

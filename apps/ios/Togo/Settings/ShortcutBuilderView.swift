@@ -271,6 +271,7 @@ private struct KeyCap: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        // motion: cause → effect — the tapped key lights in place
         .motion(.respond, value: selected)
     }
 }

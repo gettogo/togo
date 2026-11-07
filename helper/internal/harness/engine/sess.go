@@ -55,6 +55,8 @@ type sess struct {
 	sum      atomic.Pointer[harness.Summary]
 	pending  map[string]harness.Item // coalesced partial updates
 	lastPart map[string]time.Time
+	needs    needsState
+	seed     screenSeed
 }
 
 type queued struct {
@@ -161,6 +163,7 @@ func (s *sess) start() {
 	s.storeSummaryLocked()
 	s.syncFeedsLocked()
 	s.mu.Unlock()
+	go s.seedFromScreen(0)
 	if s.e.cfg.OnSummary != nil {
 		s.e.cfg.OnSummary(s.id)
 	}
@@ -280,6 +283,7 @@ func (s *sess) mapperStateLocked() (map[string]string, []map[string]string) {
 			}
 		}
 	}
+	s.seed.overlay(out)
 	return out, states
 }
 
@@ -429,6 +433,9 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 	}
 	items, ops := safeMap(m, rec, s.e.cfg.Logf)
 	s.publishLocked(items, ops)
+	if s.needs.hint {
+		s.hookFiredLocked()
+	}
 	s.afterRecordLocked()
 	if run := s.feeds[rec.Source]; run != nil {
 		run.failures = 0
@@ -484,5 +491,6 @@ func (s *sess) setWorkingLocked(w bool) {
 	if was && !w {
 		s.e.turnEnded(s)
 		s.drainLocked()
+		go s.seedFromScreen(seedSettle)
 	}
 }

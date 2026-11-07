@@ -9,48 +9,55 @@ import (
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
-// answerQuestion answers a question item through the pending approval
-// that is that question: the one request whose options carry every option
-// of the question (and, when the agent puts it there, its prompt). The
-// chosen option is matched by label; typed text goes only to a request
-// that takes text. Nothing is ever sent to another request: a missing or
-// answered item, no matching request, or two that both match all fail.
+// answerQuestion answers a question item through the pending approvals
+// that are its questions: for each answered question, the one request
+// whose options carry every option of it (and, when the agent puts it
+// there, its prompt). Options are matched by label; typed text goes only to
+// a request that takes text. One request picks one option, so a question
+// answered with several values must be finished in the terminal. Nothing
+// is ever sent to another request: a missing or answered item, no
+// matching request, or two that both match all fail.
 func (e *Engine) answerQuestion(ctx context.Context, s *sess, target string, answers map[string][]string) (harness.ActionResult, error) {
-	if e.cfg.Approvals == nil {
-		return harness.ActionResult{Result: harness.ResultFallback}, nil
+	item, res, err := e.openQuestion(s, target)
+	if item == nil {
+		return res, err
 	}
-	s.mu.Lock()
-	it, ok := e.log.Get(s.id, target)
-	s.mu.Unlock()
-	if !ok || it.Question == nil || len(it.Question.Questions) == 0 {
-		return harness.ActionResult{Result: harness.ResultFailed, Message: "The question is no longer open"}, nil
-	}
-	if len(it.Question.Answered) > 0 {
-		return harness.ActionResult{Result: harness.ResultFailed, Message: "The question was already answered"}, nil
-	}
-	var (
+	type step struct {
 		q      harness.Question
 		chosen string
-	)
-	for _, qu := range it.Question.Questions {
-		if v := answers[qu.ID]; len(v) > 0 && v[0] != "" {
-			q, chosen = qu, v[0]
-			break
-		}
 	}
-	if chosen == "" {
+	var steps []step
+	for _, qu := range item.Questions {
+		vals := nonEmpty(answers[qu.ID])
+		switch {
+		case len(vals) == 0:
+			continue
+		case len(vals) > 1:
+			return harness.ActionResult{Result: harness.ResultFailed, Message: "Several answers to one question can only be given in the terminal"}, nil
+		}
+		steps = append(steps, step{qu, vals[0]})
+	}
+	if len(steps) == 0 {
 		return harness.ActionResult{}, invalidArgs("answers names no question of this item")
 	}
-	a, ok := requestFor(e.cfg.Approvals.Pending(s.id), q)
-	if !ok {
-		return harness.ActionResult{Result: harness.ResultFailed, Message: "The question is not waiting at the terminal"}, nil
+	type send struct{ id, raw string }
+	var sends []send
+	pending := e.cfg.Approvals.Pending(s.id)
+	for _, st := range steps {
+		a, ok := requestFor(pending, st.q)
+		if !ok {
+			return harness.ActionResult{Result: harness.ResultFailed, Message: "The question is not waiting at the terminal"}, nil
+		}
+		raw, ok := decisionFor(st.q, st.chosen, a)
+		if !ok {
+			return harness.ActionResult{}, invalidArgs("the answer is not one of the question's options")
+		}
+		sends = append(sends, send{a.RequestID, raw})
 	}
-	raw, ok := decisionFor(q, chosen, a)
-	if !ok {
-		return harness.ActionResult{}, invalidArgs("the answer is not one of the question's options")
-	}
-	if err := e.cfg.Approvals.Answer(ctx, a.RequestID, raw, wire.ByPhone); err != nil {
-		return harness.ActionResult{Result: harness.ResultFailed, Message: "The answer was not accepted"}, nil
+	for _, sd := range sends {
+		if err := e.cfg.Approvals.Answer(ctx, sd.id, sd.raw, wire.ByPhone); err != nil {
+			return harness.ActionResult{Result: harness.ResultFailed, Message: "The answer was not accepted"}, nil
+		}
 	}
 	return harness.ActionResult{Result: harness.ResultApplied}, nil
 }

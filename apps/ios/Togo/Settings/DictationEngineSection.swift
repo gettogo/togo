@@ -139,6 +139,7 @@ struct DictationEngineSection: View {
         if let fraction = model.fraction {
             VStack(alignment: .leading, spacing: 8) {
                 Text(DictationCopy.whisperDownloading(whisper.name))
+                // motion: state change — the bar fills as the download progresses
                 ProgressView(value: fraction)
                     .motion(.progress, value: fraction)
                     .tint(Color.togoSnow)

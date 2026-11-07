@@ -43,7 +43,7 @@ func checkArgs(args map[string]json.RawMessage) (map[string]any, error) {
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return nil, invalidArgs("args must be JSON")
 		}
-		if err := checkArgValue(k, v); err != nil {
+		if err := checkArgValue(k, v, k == "text" || k == "answers"); err != nil {
 			return nil, err
 		}
 		out[k] = v
@@ -51,20 +51,23 @@ func checkArgs(args map[string]json.RawMessage) (map[string]any, error) {
 	return out, nil
 }
 
-func checkArgValue(key string, v any) error {
+// checkArgValue checks one arg value. texty values (text, and every value
+// under answers, where a typed answer may span lines) may hold newlines and
+// tabs.
+func checkArgValue(key string, v any, texty bool) error {
 	switch x := v.(type) {
 	case string:
 		if len(x) > maxArgString || !utf8.ValidString(x) {
 			return invalidArgs("an arg is too long")
 		}
 		if strings.ContainsFunc(x, func(r rune) bool {
-			return unicode.IsControl(r) && !(key == "text" && (r == '\n' || r == '\t'))
+			return unicode.IsControl(r) && !(texty && (r == '\n' || r == '\t'))
 		}) {
 			return invalidArgs("an arg has a control character")
 		}
 	case []any:
 		for _, e := range x {
-			if err := checkArgValue(key, e); err != nil {
+			if err := checkArgValue(key, e, texty); err != nil {
 				return err
 			}
 		}
@@ -73,7 +76,7 @@ func checkArgValue(key string, v any) error {
 			return invalidArgs("an arg has too many keys")
 		}
 		for k, e := range x {
-			if err := checkArgValue(k, e); err != nil {
+			if err := checkArgValue(k, e, texty); err != nil {
 				return err
 			}
 		}
@@ -93,6 +96,11 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 			return harness.ActionResult{Result: harness.ResultApplied}, nil
 		} else if sent {
 			return harness.ActionResult{Result: harness.ResultFailed, Message: "The prompt was already sent"}, nil
+		}
+		if !s.stoppable(req.Target) {
+			// Not a queued prompt and not a running agent or job: never
+			// handed to the stop route, which would act on a wrong id.
+			return harness.ActionResult{Result: harness.ResultFailed, Message: "Nothing running has that id"}, nil
 		}
 	}
 	act, ok := s.ad.Actions[req.Action]
@@ -273,6 +281,7 @@ func (e *Engine) cycle(ctx context.Context, s *sess, act spec.Action, k *spec.Ke
 	if cur == want {
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
 	}
+	orig := cur
 	seen := map[string]bool{cur: true}
 	max := min(k.Max, maxCycle)
 	for press := 1; press <= max; press++ {
@@ -281,21 +290,23 @@ func (e *Engine) cycle(ctx context.Context, s *sess, act spec.Action, k *spec.Ke
 		}
 		next, res, done := e.awaitChange(ctx, s, v, cur, within, press)
 		if done {
-			return res, ctx.Err()
+			if ctx.Err() != nil {
+				return res, ctx.Err()
+			}
+			return e.restoreMode(ctx, s, k, v, orig, cur, within, res.Message), nil
 		}
 		cur = next
 		switch {
 		case cur == want:
 			return harness.ActionResult{Result: harness.ResultApplied}, nil
 		case len(known) > 0 && !known[cur]:
-			return harness.ActionResult{Result: harness.ResultFailed, Message: "The mode changed to one Togo does not know; stopped"}, nil
+			return e.restoreMode(ctx, s, k, v, orig, cur, within, "The mode changed to one Togo does not know"), nil
 		case seen[cur]:
-			return harness.ActionResult{Result: harness.ResultFailed, Message: "The modes came round without reaching it; stopped"}, nil
+			return e.restoreMode(ctx, s, k, v, orig, cur, within, "That mode is not in this session's cycle"), nil
 		}
 		seen[cur] = true
 	}
-	return harness.ActionResult{Result: harness.ResultFailed,
-		Message: fmt.Sprintf("The mode was not reached in %d presses; stopped", max)}, nil
+	return e.restoreMode(ctx, s, k, v, orig, cur, within, fmt.Sprintf("The mode was not reached in %d presses", max)), nil
 }
 
 // awaitChange waits for the verify value to move off prev after a press.
@@ -421,23 +432,33 @@ func (e *Engine) runCLI(ctx context.Context, s *sess, act spec.Action, c *spec.C
 func (e *Engine) runBuiltin(ctx context.Context, s *sess, name string, args map[string]any) (harness.ActionResult, error) {
 	switch name {
 	case "approval_answer":
-		answers := map[string][]string{}
-		if m, ok := args["answers"].(map[string]any); ok {
-			for k, v := range m {
-				switch x := v.(type) {
-				case []any:
-					for _, e := range x {
-						answers[k] = append(answers[k], toString(e))
-					}
-				case string:
-					answers[k] = []string{x}
-				}
-			}
-		}
+		answers := answerArgs(args)
 		target, _ := args["target"].(string)
 		return e.answerQuestion(ctx, s, target, answers)
+	case "claude_ask":
+		answers := answerArgs(args)
+		target, _ := args["target"].(string)
+		return e.answerClaudeQuestion(ctx, s, target, answers)
 	case "rpc_reply":
 		return e.rpcReply(ctx, s, args)
 	}
 	return harness.ActionResult{Result: harness.ResultFallback}, nil
+}
+
+// answerArgs reads the answer action's {"answers": {question id: [values]}}.
+func answerArgs(args map[string]any) map[string][]string {
+	answers := map[string][]string{}
+	if m, ok := args["answers"].(map[string]any); ok {
+		for k, v := range m {
+			switch x := v.(type) {
+			case []any:
+				for _, e := range x {
+					answers[k] = append(answers[k], toString(e))
+				}
+			case string:
+				answers[k] = []string{x}
+			}
+		}
+	}
+	return answers
 }

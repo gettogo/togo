@@ -84,7 +84,7 @@ import UIKit
             }
             let id = UUID()
             let item = Item(id: id, preview: prepared.preview, state: .uploading, encoded: prepared.encoded)
-            // The chip arrives and the composer's glass grows in one transaction.
+            // motion: cause → effect — the picked picture's chip grows in place as the glass makes room.
             withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { items.append(item) }
             uploads.append(Task { await self.deliver(id) })
         }
@@ -92,6 +92,7 @@ import UIKit
     }
 
     func remove(_ id: UUID) {
+        // motion: preventing a jump — the removed chip conceals and the strip closes its room.
         withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { items.removeAll { $0.id == id } }
     }
 
@@ -99,6 +100,7 @@ import UIKit
 
     /// A chip's state (uploading, ready, failed) crossfades in place.
     private func setState(_ state: Item.State, at index: Int) {
+        // motion: state change — the chip's veil crossfades in place as the upload moves on.
         withAnimation(Motion.animation(.respond, reduce: Self.reduceMotion)) { items[index].state = state }
     }
 

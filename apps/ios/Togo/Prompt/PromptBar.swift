@@ -37,6 +37,7 @@ struct PromptBar: View {
         ZStack(alignment: .bottom) {
             if stage != .hidden {
                 bar(stage)
+                    // motion: origin — the bar presents from the bottom edge it lives on, only when its first request is news.
                     .transition(.asymmetric(
                         insertion: Motion.present(from: .bottom, reduce: reduceMotion),
                         removal: Motion.conceal(reduce: reduceMotion)
@@ -60,6 +61,7 @@ struct PromptBar: View {
             .id(Self.contentID(stage))
             // The old content has already concealed by the time it is replaced, so it leaves at
             // once; the new content rises from below while the bar sizes to it.
+            // motion: continuity — the next request takes the answered one's place in the same bar.
             .transition(Self.contentTransition(reduce: reduceMotion))
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(PromptRequestLight(on: stage.request != nil, radius: Self.radius))
@@ -158,11 +160,13 @@ struct PromptBar: View {
         case let .concealThenRise(role):
             // The old content settles down and out on `conceal`; when it has gone, the newest
             // stage rises in on `role` and the bar's height follows in the same transaction.
+            // motion: continuity — the answered request settles out before the next one takes its place.
             withAnimation(Motion.animation(.conceal, reduce: false), completionCriteria: .logicallyComplete) {
                 contentOffset = Self.settleDistance
                 contentOpacity = 0
             } completion: {
                 guard swaps.isCurrent(swap) else { return }
+                // motion: continuity — the newest stage comes in as the bar sizes to it, in one transaction.
                 withAnimation(Motion.animation(role, reduce: false)) {
                     shown = model.stage
                     contentOffset = 0
@@ -180,6 +184,7 @@ struct PromptBar: View {
             contentOpacity = 1
         }
         if let role {
+            // motion: state change — the bar moves to its next stage on the role the change calls for.
             withAnimation(Motion.animation(role, reduce: reduceMotion), apply)
         } else {
             apply()

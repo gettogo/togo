@@ -4,8 +4,9 @@ import TogoKit
 extension View {
     /// Presents `store`'s mission control while `store.showsMission` is set: a sheet with
     /// medium and large detents that leaves the chat usable behind it on a compact width, a
-    /// trailing inspector beside the chat on a regular one. Diffs and previews leave through
-    /// `openExternal`; a sheet closes first so the review can take the screen.
+    /// trailing inspector beside the chat on a regular one, open by default where both fit.
+    /// Diffs and previews leave through `openExternal`; a sheet closes first so the review can
+    /// take the screen.
     func missionControl(
         _ store: HarnessSessionStore?, actions: ChatActions = .inert,
         openExternal: @escaping (HarnessOpen) -> Void = { _ in }
@@ -42,8 +43,25 @@ private struct MissionControlPresenter: ViewModifier {
     @State private var detent: PresentationDetent = .medium
     /// A diff or preview asked for from the sheet, opened once the sheet has gone.
     @State private var pending: HarnessOpen?
+    /// The workspace's width with the inspector's column and the bars included.
+    @State private var width: CGFloat = 0
 
     private var presentation: MissionPresentation { MissionPresentation.choose(sizeClass) }
+
+    /// What decides whether the inspector opens by itself.
+    private struct DefaultKey: Equatable {
+        var session: String?
+        var presentation: MissionPresentation
+        var wide: Bool
+        var hasMission: Bool
+    }
+
+    private var defaultKey: DefaultKey {
+        DefaultKey(
+            session: store.map { MissionInspectorMemory.key($0.subject) }, presentation: presentation,
+            wide: width >= MissionPlacement.openByDefaultWidth, hasMission: store?.hasMission ?? false
+        )
+    }
 
     func body(content: Content) -> some View {
         content
@@ -60,7 +78,21 @@ private struct MissionControlPresenter: ViewModifier {
             .inspector(isPresented: shown(.inspector)) {
                 if let store {
                     stack(store, inSheet: false)
-                        .inspectorColumnWidth(min: 280, ideal: 320, max: 440)
+                        .inspectorColumnWidth(min: 280, ideal: MissionPlacement.inspectorIdeal, max: 440)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing
+            } action: { width = $0 }
+            .onChange(of: presentation) { old, new in
+                // Folding a Duo with the inspector open does not raise a sheet nobody asked for.
+                if old == .inspector, new == .sheet, let store, store.showsMission { store.showsMission = false }
+            }
+            .onChange(of: defaultKey, initial: true) { _, key in
+                guard let store, !store.showsMission else { return }
+                let closed = MissionInspectorMemory.shared.closedByUser(store.subject)
+                if MissionPlacement.opensByDefault(key.presentation, width: width, hasMission: key.hasMission, closedByUser: closed) {
+                    store.showsMission = true
                 }
             }
     }
@@ -73,6 +105,7 @@ private struct MissionControlPresenter: ViewModifier {
                 // only a close from this one's own presentation clears it.
                 guard presentation == kind, let store, store.showsMission != shown else { return }
                 store.showsMission = shown
+                MissionInspectorMemory.shared.record(shown: shown, for: store.subject, in: kind)
                 if !shown { detent = .medium }
             }
         )
@@ -89,9 +122,13 @@ private struct MissionControlPresenter: ViewModifier {
                     openExternal(target)
                 }
             },
-            showChat: {
+            showChat: { needs in
                 if inSheet { store.showsMission = false }
-                store.layer = .chat
+                if store.chatAvailable, needs != nil || store.oldestOpenNeeds != nil {
+                    store.revealNeeds(id: needs)
+                } else {
+                    store.layer = .chat
+                }
             },
             onDone: inSheet ? { store.showsMission = false } : nil
         )
@@ -101,52 +138,5 @@ private struct MissionControlPresenter: ViewModifier {
         guard let target = pending else { return }
         pending = nil
         openExternal(target)
-    }
-}
-
-/// The bar item that shows and hides mission control beside the chat. A symbol and a title,
-/// so it can stand in a vertical bar on Duo; Cmd-I from a hardware keyboard.
-struct MissionToolbarItem: ToolbarContent {
-    let store: HarnessSessionStore
-
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button(MissionCopy.title, systemImage: "gauge.with.dots.needle.33percent") { store.showsMission.toggle() }
-                .keyboardShortcut("i", modifiers: .command)
-                .accessibilityValue(MissionText.spoken(store.mission.summary))
-                .accessibilityHint(MissionCopy.toggleHint)
-        }
-    }
-}
-
-extension AppStore {
-    /// The bar item for the focused tab while its chat shows and it has mission control.
-    var missionItem: MissionToolbarItem? {
-        guard let tab = focusedTab, let harness = harness(for: tab.id),
-              harness.shownLayer == .chat, harness.hasMission else { return nil }
-        return MissionToolbarItem(store: harness)
-    }
-
-    /// Follows a target mission control hands out for the session in `tab`: a background
-    /// process's live terminal as a tab, a subagent's chat or the session's terminal through
-    /// `openHarnessTarget`, and anything else in the review.
-    func followMissionTarget(_ target: HarnessOpen, from tab: TabID) {
-        if target.kind == .terminal, let terminal = TerminalTarget(target.ref) {
-            openBackgroundTerminal(terminal, on: tab.hostID)
-        } else if !openHarnessTarget(target, from: tab) {
-            openMissionTarget(target, hostID: tab.hostID, sessionID: tab.sessionID)
-        }
-    }
-
-    /// Opens a mission control target that leaves for the review: a diff on Changes, a port
-    /// or URL on Ports.
-    func openMissionTarget(_ target: HarnessOpen, hostID: HostID, sessionID: String) {
-        guard let row = controlCenter.machines.first(where: { $0.id == hostID })?.sessions
-            .first(where: { $0.id == sessionID }) else { return }
-        switch target.kind {
-        case .diff: review(row, tab: .changes)
-        case .url: review(row, tab: .ports)
-        default: break
-        }
     }
 }

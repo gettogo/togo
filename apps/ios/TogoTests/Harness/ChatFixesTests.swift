@@ -55,7 +55,8 @@ import TogoKit
         let state = WorkingLogic.state(items: items, working: true, awaitingSince: nil, localSince: t0, now: t0 + 24)
         #expect(state?.waiting == true)
         #expect(state?.step == nil)
-        #expect(WorkingCopy.spoken(state!, now: t0 + 24) == WorkingCopy.waiting)
+        // The line counts the wait itself: "Waiting for you, 24 seconds".
+        #expect(WorkingCopy.spoken(state!, now: t0 + 24) == "\(WorkingCopy.waiting), \(ChatCopy.spokenClock(24))")
     }
 
     @Test func aSubagentsOpenQuestionCountsToo() {

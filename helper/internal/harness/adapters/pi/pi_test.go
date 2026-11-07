@@ -49,7 +49,7 @@ func TestModelTable(t *testing.T) {
 	raw, _ := json.Marshal(table)
 	var in any
 	json.Unmarshal(raw, &in)
-	out, err := engine.JQ(a.Sources["models"].Select, in, nil)
+	out, err := engine.JQ(a.Sources["models"].Fallback.Select, in, nil)
 	if err != nil || len(out) != 1 {
 		t.Fatalf("%v %v", out, err)
 	}

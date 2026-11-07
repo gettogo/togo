@@ -99,15 +99,17 @@ import TogoKit
         #expect(other == .request(request("a"), position: 1, count: 1))
     }
 
-    /// The chat answers its own session's requests inline, so the bar leaves them out.
-    @Test func aChatKeepsItsOwnRequests() {
+    /// The bar leaves out a chat's own request only when the chat draws it (A1 C3); a chat with
+    /// no store, or whose adapter does not show approvals, leaves it in the bar
+    /// (`NeedsCardTests` covers the drawn case).
+    @Test func aChatKeepsItsOwnRequestsOnlyWhenItDrawsThem() {
         var state = Samples.controlCenter
         state.requests = [
             Samples.request(id: "mine", bib: "04", title: "Run npm test?"),
             Samples.request(id: "other", bib: "01", title: "Edit routes.ts?"),
         ]
         let store = AppStore(services: services, controlCenter: state)
-        #expect(PromptFeed.requests(in: store, inlineIn: four).map(\.id) == ["other"])
+        #expect(PromptFeed.requests(in: store, inlineIn: four).map(\.id) == ["mine", "other"])
         #expect(PromptFeed.requests(in: store).map(\.id) == ["mine", "other"])
     }
 

@@ -84,8 +84,8 @@ func TestInstallAddsEntriesPreservesOthers(t *testing.T) {
 			t.Errorf("missing %q in\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "PermissionRequest") {
-		t.Error("PermissionRequest installed without --block")
+	if !strings.Contains(got, `"matcher": "AskUserQuestion"`) || strings.Count(got, "hook claude PermissionRequest") != 1 {
+		t.Error("PermissionRequest is not hooked for AskUserQuestion alone without --block")
 	}
 	if idx := strings.Index(got, `"model"`); idx > strings.Index(got, `"hooks"`) {
 		t.Error("key order changed")
@@ -102,10 +102,14 @@ func TestBlockAddsPermissionRequestAndDropsItWithout(t *testing.T) {
 	if !strings.Contains(read(t, settingsPath(e)), "hook claude PermissionRequest") {
 		t.Fatal("PermissionRequest missing with --block")
 	}
+	if strings.Contains(read(t, settingsPath(e)), "AskUserQuestion") {
+		t.Fatal("--block kept the AskUserQuestion matcher")
+	}
 	e.o.Block = false
 	mustOK(t, Install(e.o, []string{Claude}))
-	if strings.Contains(read(t, settingsPath(e)), "PermissionRequest") {
-		t.Error("PermissionRequest kept after reinstall without --block")
+	got := read(t, settingsPath(e))
+	if strings.Count(got, "hook claude PermissionRequest") != 1 || !strings.Contains(got, `"matcher": "AskUserQuestion"`) {
+		t.Errorf("reinstall without --block did not narrow PermissionRequest to AskUserQuestion:\n%s", got)
 	}
 }
 
@@ -113,11 +117,11 @@ func TestInstallTwiceNoOp(t *testing.T) {
 	e := newEnv(t)
 	write(t, settingsPath(e), fixture(t, "settings.json"))
 	write(t, filepath.Join(e.o.CodexDir, "config.toml"), fixture(t, "config.toml"))
-	mustOK(t, Install(e.o, Agents))
+	mustOK(t, Install(e.o, claudeCodex))
 	first := read(t, settingsPath(e))
 	firstToml := read(t, filepath.Join(e.o.CodexDir, "config.toml"))
 	firstHooks := read(t, filepath.Join(e.o.CodexDir, "hooks.json"))
-	rs := Install(e.o, Agents)
+	rs := Install(e.o, claudeCodex)
 	mustOK(t, rs)
 	for _, r := range rs {
 		if r.State != "unchanged" {
@@ -147,13 +151,13 @@ func TestUninstallRestoresExactBytes(t *testing.T) {
 	write(t, settingsPath(e), orig)
 	tomlPath := filepath.Join(e.o.CodexDir, "config.toml")
 	write(t, tomlPath, fixture(t, "config.toml"))
-	mustOK(t, Install(e.o, Agents))
+	mustOK(t, Install(e.o, claudeCodex))
 	if _, err := os.Stat(settingsPath(e) + backupSuffix); err != nil {
 		t.Errorf("no backup copy: %v", err)
 	}
 	e.o.Block = true
-	mustOK(t, Install(e.o, Agents))
-	mustOK(t, Uninstall(e.o, Agents))
+	mustOK(t, Install(e.o, claudeCodex))
+	mustOK(t, Uninstall(e.o, claudeCodex))
 	if read(t, settingsPath(e)) != string(orig) {
 		t.Errorf("settings not restored:\n%s", read(t, settingsPath(e)))
 	}
@@ -203,17 +207,17 @@ func TestSkipsAgentWithoutConfigRoot(t *testing.T) {
 	}
 }
 
-func TestStatusLineNotOverwritten(t *testing.T) {
+func TestUsersStatusLineIsChainedNotReplaced(t *testing.T) {
 	e := newEnv(t)
 	write(t, settingsPath(e), []byte(`{"statusLine":{"type":"command","command":"my-line.sh"}}`))
 	mustOK(t, Install(e.o, []string{Claude}))
 	got := read(t, settingsPath(e))
-	if !strings.Contains(got, "my-line.sh") || strings.Contains(got, "hook claude statusline") {
-		t.Errorf("user statusLine replaced:\n%s", got)
+	if !strings.Contains(got, "hook claude statusline --then 'my-line.sh'") {
+		t.Errorf("user statusLine not chained:\n%s", got)
 	}
 	mustOK(t, Uninstall(e.o, []string{Claude}))
-	if !strings.Contains(read(t, settingsPath(e)), "my-line.sh") {
-		t.Error("user statusLine removed on uninstall")
+	if !strings.Contains(read(t, settingsPath(e)), `"my-line.sh"`) {
+		t.Error("user statusLine not restored on uninstall")
 	}
 }
 
@@ -459,3 +463,6 @@ func TestInstallAddsSessionEndAndStopFailure(t *testing.T) {
 		t.Errorf("second install changed the file (state %s)", rs[0].State)
 	}
 }
+
+// claudeCodex are the two harnesses newEnv sets up.
+var claudeCodex = []string{Claude, Codex}

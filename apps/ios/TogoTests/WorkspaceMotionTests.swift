@@ -22,27 +22,42 @@ import UIKit
         var settle = PaneSettle()
         let single = key(size: Self.iPad)
         let split = key(size: Self.iPad, secondary: true)
-        #expect(settle.begin(from: single, to: split))
+        let began1 = settle.begin(from: single, to: split)
+        #expect(began1)
         #expect(settle.generation == 1)
         // The same arrangement measured again is not a change.
-        #expect(!settle.begin(from: split, to: split))
+        let began2 = settle.begin(from: split, to: split)
+        #expect(!began2)
         #expect(settle.generation == 1)
     }
 
     @Test func theFirstLayoutLandsWithoutACover() {
         var settle = PaneSettle()
-        #expect(!settle.begin(from: key(size: .zero), to: key(size: Self.iPad)))
+        let began3 = settle.begin(from: key(size: .zero), to: key(size: Self.iPad))
+        #expect(!began3)
         #expect(settle.generation == 0)
     }
 
     @Test func aFoldTheSidebarAndADividerEachSettle() {
         var settle = PaneSettle()
-        let flat = key(size: CGSize(width: 951, height: 669))
-        #expect(settle.begin(from: flat, to: key(size: CGSize(width: 951, height: 669), fold: Self.book)))
+        // Folding moves the split of two panes to the fold. One pane spanning the fold keeps its
+        // frame, so its terminal is not resized and nothing settles.
+        let flat = key(size: CGSize(width: 951, height: 669), secondary: true)
+        let began4 = settle.begin(from: flat, to: key(size: CGSize(width: 951, height: 669), fold: Self.book, secondary: true))
+        #expect(began4)
+        let spanning = key(size: CGSize(width: 951, height: 669))
+        let foldedSpanning = key(size: CGSize(width: 951, height: 669), fold: Self.book)
+        #expect(spanning == foldedSpanning)
         // The sidebar narrows the panes.
-        #expect(settle.begin(from: key(size: Self.iPad), to: key(size: CGSize(width: 712, height: 1376))))
-        // A divider released at a new split.
-        #expect(settle.begin(from: key(size: Self.iPad, secondary: true), to: key(size: Self.iPad, secondary: true, fraction: 0.6)))
+        let began5 = settle.begin(from: key(size: Self.iPad), to: key(size: CGSize(width: 712, height: 1376)))
+        #expect(began5)
+        // A divider released at a new split. The divider snaps to thirds and halves where both
+        // panes keep their minimum width, so it moves on a landscape iPad; portrait has only half.
+        let landscape = CGSize(width: 1376, height: 1032)
+        let began6 = settle.begin(from: key(size: landscape, secondary: true), to: key(size: landscape, secondary: true, fraction: 2.0 / 3))
+        #expect(began6)
+        let snapped = settle.begin(from: key(size: Self.iPad, secondary: true), to: key(size: Self.iPad, secondary: true, fraction: 0.6))
+        #expect(!snapped)
         #expect(settle.generation == 3)
     }
 
@@ -50,7 +65,9 @@ import UIKit
 
     @Test func aTerminalIsFittedOncePerSizeChange() async throws {
         let container = TerminalContainer()
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
         window.rootViewController = container
         window.makeKeyAndVisible()
         defer { window.isHidden = true }

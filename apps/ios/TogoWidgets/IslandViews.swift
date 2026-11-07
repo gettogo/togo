@@ -57,9 +57,11 @@ struct IslandCompactTrailing: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.togoAccent)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             } else {
                 LiveStatusText(status: LiveStatus(state.status, stale: isStale), font: .subheadline, reason: state.reason)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
@@ -87,12 +89,15 @@ struct IslandMinimal: View {
                     .foregroundStyle(Color.togoAccent)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
                     .accessibilityLabel(LiveCopy.waiting(state.waiting))
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             } else if let bib = state.bib {
                 IslandBib(bib: bib, style: .caption)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             } else {
                 IslandMark()
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
@@ -130,6 +135,7 @@ struct IslandExpandedTrailing: View {
                 LiveElapsed(since: state.since)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
@@ -162,6 +168,7 @@ struct IslandExpandedCenter: View {
                     // trunc-ok: "3 waiting"
                     .lineLimit(1)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
@@ -190,6 +197,7 @@ struct IslandExpandedBottom: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(Color.togoRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }

@@ -289,9 +289,21 @@ extension AppStore {
         harnessTabs.store(for: id)
     }
 
-    /// The layer the tab shows now.
+    /// The layer the tab shows now. Before its store exists, a session that should have a chat
+    /// on a machine that serves harness.v1 shows ink, never the terminal.
     func layer(for id: TabID) -> SessionLayer {
-        harness(for: id)?.shownLayer ?? .terminal
+        if let store = harness(for: id) { return store.shownLayer }
+        let serves = machine(for: id.hostID)?.capabilities.contains(Capability.harness) ?? false
+        return serves && expectsChat(id) ? .pending : .terminal
+    }
+
+    /// The session should have a chat: it had one before, the hub reports a mission for it, or
+    /// its agent is one Togo has an adapter for.
+    func expectsChat(_ id: TabID) -> Bool {
+        if harnessTabs.cachedDescriptor(for: id) != nil { return true }
+        guard let row = controlCenter.machines.first(where: { $0.id == id.hostID })?.sessions
+            .first(where: { $0.id == id.sessionID }) else { return false }
+        return row.mission != nil || HarnessAdapters.expected(agent: row.agent)
     }
 
     /// Flips the focused tab between chat and terminal, when it has both.
@@ -302,8 +314,23 @@ extension AppStore {
 
     /// Starts and stops the tabs' harness stores to match the open tabs.
     func syncHarness() {
-        harnessTabs.sync(tabs: workspace.tabs.map(\.id)) { [weak self] hostID in
-            self?.machine(for: hostID)?.capabilities
-        }
+        harnessTabs.sync(
+            tabs: workspace.tabs.map(\.id),
+            capabilities: { [weak self] hostID in self?.machine(for: hostID)?.capabilities },
+            expectsChat: { [weak self] id in self?.expectsChat(id) ?? false }
+        )
+    }
+}
+
+/// The agents the helper has an adapter for (`helper/internal/harness/adapters`). A session of
+/// one of them is expected to have a chat until describe says otherwise.
+enum HarnessAdapters {
+    static let known: Set<String> = [
+        "aider", "amp", "auggie", "claude", "cline", "codex", "copilot", "crush", "cursor", "droid", "gemini",
+        "goose", "kilo", "kimi", "kiro", "omp", "opencode", "openhands", "pi", "qwen", "vibe",
+    ]
+
+    static func expected(agent: String) -> Bool {
+        known.contains(agent.lowercased())
     }
 }

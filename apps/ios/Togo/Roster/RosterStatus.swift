@@ -54,6 +54,9 @@ struct RosterStatus: View {
     /// One turn of the spinner takes one second.
     static let spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     static let spinnerLoop: TimeInterval = 1
+    /// The spinner's frames are read from the reference date, so its schedule starts there too:
+    /// a tick lands on every frame, and a re-render never re-anchors it.
+    static let spinnerEpoch = Date(timeIntervalSinceReferenceDate: 0)
 
     /// The mono glyph before the word, if the state has one. Only "Working" has frames.
     static func glyph(for state: RosterState, animated: Bool, at time: TimeInterval = 0) -> String? {
@@ -81,6 +84,7 @@ struct RosterStatus: View {
                 .fontWeight(state == .needsYou ? .semibold : .regular)
                 .foregroundStyle(wordColor)
                 .contentTransition(reduceMotion ? .identity : .interpolate)
+                // motion: state change — the row's status word changes in place; nothing moves.
                 .motion(.fade, value: word)
                 // trunc-ok: a status word from a fixed short set
                 .lineLimit(1)
@@ -102,7 +106,7 @@ struct RosterStatus: View {
                 .background(Circle().fill(Color.togoAccent.opacity(0.18)))
         case .working:
             if spins {
-                TimelineView(.periodic(from: .now, by: Self.spinnerLoop / Double(Self.spinnerFrames.count))) { context in
+                TimelineView(.periodic(from: Self.spinnerEpoch, by: Self.spinnerLoop / Double(Self.spinnerFrames.count))) { context in
                     mono(Self.glyph(for: .working, animated: true, at: context.date.timeIntervalSinceReferenceDate))
                 }
             } else {

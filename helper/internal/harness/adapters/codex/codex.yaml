@@ -51,11 +51,6 @@ sources:
     select: '[.data[] | select(.parentThreadId == null)]'
     cache: 30s
     stability: experimental
-  limits:
-    rpc: { method: account/rateLimits/read }
-    select: '.rateLimits'
-    cache: 60s
-    stability: experimental
 screens:
   model:
     primitive: picker
@@ -82,24 +77,22 @@ screens:
     search: true
     map: { item.id: .id, item.title: '{{.name | default .preview | truncate 60}}', item.subtitle: '{{.updatedAt | ago}}' }
     on_select: resume
-  usage:
-    primitive: status
-    title: Usage
-    section: status
-    capability: status.usage
-    source: limits
 actions:
   # Codex has no live setter for a running thread: model, effort and approval
   # policy change through turn/start overrides only. These write the default in
-  # config.toml, which the next thread and a relaunch pick up.
+  # config.toml, which the next thread and a relaunch pick up; the result says
+  # so (0.144 has no thread-scoped setter outside turn/start).
   set_model:
     label: Use model
+    note: Applies to new threads
     rpc: { method: config/value/write, params: { keyPath: model, value: '{{.id}}', mergeStrategy: replace } }
     stability: experimental
   set_effort:
+    note: Applies to new threads
     rpc: { method: config/value/write, params: { keyPath: model_reasoning_effort, value: '{{.id}}', mergeStrategy: replace } }
     stability: experimental
   set_mode:
+    note: Applies to new threads
     rpc: { method: config/value/write, params: { keyPath: approval_policy, value: '{{.id}}', mergeStrategy: replace } }
     stability: experimental
   resume:
@@ -115,6 +108,8 @@ actions:
   answer:
     builtin: rpc_reply          # answers the pending server request named by target
     stability: experimental
+status:
+  actions: [compact]   # inline on the context meter
 modes:
   choices:
     - { id: untrusted, label: Ask }
@@ -124,8 +119,8 @@ modes:
   set: set_mode
 commands:
   static:
-    - { name: model, detail: Choose model and effort, screen: model }
-    - { name: compact, detail: Summarise the thread }
+    - { name: model, detail: Choose model and effort, kind: picker, screen: model }
+    - { name: compact, detail: Summarise the thread, action: compact }
     - { name: review, detail: Review current changes }
-    - { name: diff, detail: Show the git diff }
-    - { name: status, detail: Session and usage, screen: usage }
+    - { name: diff, detail: Show the git diff, opens: changes }
+    - { name: status, detail: Session and usage, opens: status }

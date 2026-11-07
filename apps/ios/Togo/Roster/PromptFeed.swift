@@ -8,15 +8,29 @@ enum PromptFeed {
     /// The requests as the bar shows them, oldest first. The store keeps cards in the order
     /// they arrived, across machines. An answered one stays, with its outcome, until the store
     /// lets it go a moment later.
-    /// `inlineIn` is a tab whose chat shows its own requests inline; the bar leaves those out.
+    /// `inlineIn` is a tab whose chat shows its own requests inline; the bar leaves out only
+    /// those the chat really draws (`chatShows`), so no request is ever invisible.
     @MainActor static func requests(in store: AppStore, inlineIn chat: TabID? = nil) -> [PromptRequest] {
-        store.controlCenter.requests.filter { card in chat == nil || card.tabID != chat }.map { card in
+        store.controlCenter.requests.filter { card in
+            chat == nil || card.tabID != chat || !chatShows(card, in: store)
+        }.map { card in
             let row = card.tabID.flatMap { id in
                 store.controlCenter.machines.first { $0.id == id.hostID }?.sessions.first { $0.id == id.sessionID }
             }
             return request(
                 card, row: row, machineName: store.machineName(for: card.hostID), failure: store.answerFailures[card.id]
             )
+        }
+    }
+
+    /// The tab's chat draws this request: its adapter declares approvals, or its conversation
+    /// holds the request's approval item or a question that is the same prompt.
+    @MainActor static func chatShows(_ card: RequestCard, in store: AppStore) -> Bool {
+        guard let id = card.tabID, let harness = store.harness(for: id) else { return false }
+        if harness.has(HarnessCapability.needsApprovals) { return true }
+        if harness.timeline.item("approval-" + card.id) != nil { return true }
+        return harness.timeline.items.contains { item in
+            if case .question(let question) = item.body { question.requestId == card.id } else { false }
         }
     }
 

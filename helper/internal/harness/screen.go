@@ -50,6 +50,9 @@ type Picker struct {
 	Filters    []Filter `json:"filters,omitempty"`
 	// OnSelect is the action run with args {"id": item id}.
 	OnSelect string `json:"onSelect"`
+	// OnSelectConfirm is OnSelect's confirm line and effect, when it has
+	// one.
+	OnSelectConfirm *SelectConfirm `json:"onSelectConfirm,omitempty"`
 	// ItemActions are offered on each item (swipe and context menu), run
 	// with args {"id": item id}.
 	ItemActions []ActionRef `json:"itemActions,omitempty"`
@@ -119,6 +122,19 @@ type Field struct {
 	ReadOnly    bool            `json:"readOnly,omitempty"`
 	// Action is run with args {"value": new value} when the user commits.
 	Action string `json:"action,omitempty"`
+	// ActionConfirm is Action's confirm line and effect, when it has one.
+	ActionConfirm *SelectConfirm `json:"actionConfirm,omitempty"`
+}
+
+// EffectRelaunch is a selection that restarts the agent.
+const EffectRelaunch = "relaunch"
+
+// SelectConfirm is asked before a selection or field change runs. Effect
+// relaunch lets the app confirm only while the agent works and offer Undo
+// when it is idle.
+type SelectConfirm struct {
+	Text   string  `json:"text"`
+	Effect *string `json:"effect"`
 }
 
 // Checklist is a plan or todo list.

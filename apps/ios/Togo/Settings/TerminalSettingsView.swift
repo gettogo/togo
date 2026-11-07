@@ -109,12 +109,14 @@ struct TerminalSettingsView: View {
 
     @ViewBuilder private var importFooter: some View {
         if let importError {
+            // motion: state change — the import failed; the footer's words change in place
             Label(importError, systemImage: "exclamationmark.circle")
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                .transition(Motion.arrive(reduce: reduceMotion))
                 .foregroundStyle(Color.togoSnow)
         } else {
+            // motion: state change — the footer's usual words come back in place
             Text(settingsText("settings.terminal.import.footer", "Reads iTerm2, Ghostty and Xresources theme files."))
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                .transition(Motion.arrive(reduce: reduceMotion))
         }
     }
 
@@ -162,11 +164,12 @@ struct TerminalSettingsView: View {
             changed.customThemes.removeAll { $0.id == theme.id }
             changed.customThemes.append(theme)
             changed.themeID = theme.id
+            // motion: preventing a jump — the error line leaves and the rows under it close up
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { importError = nil }
             update(changed)
         } catch {
             let message = ThemeImport.message(for: error, filename: (try? result.get())?.lastPathComponent)
-            // The error line arrives in a `resize` transaction, so the rows under it move with it.
+            // motion: preventing a jump — the error line opens space; the rows under it move with it
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { importError = message }
         }
     }

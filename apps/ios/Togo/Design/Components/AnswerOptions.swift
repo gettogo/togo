@@ -29,46 +29,61 @@ enum AnswerOptionText {
 
 /// The extra answers as a list: each one's full title with its explanation under it, both
 /// wrapping freely. Inline under a card's buttons, or as the body of `AnswerOptionsSheet`.
+/// Inline, the card's growing edge uncovers them (`unfolds`); nothing steps in on its own.
 struct AnswerOptionList: View {
     let options: [AnswerOption]
-    /// Opened by the person on screen: the options step in one after another (30 ms apart).
-    var revealing = false
     /// The option on its way: it shows a spinner in place, the others dim.
     var sending: Int?
+    /// The option the person tapped, as the matched-geometry id and namespace its answered line
+    /// comes out of; nil for the others.
+    var source: (Int) -> (id: String, namespace: Namespace.ID)? = { _ in nil }
     let pick: (AnswerOption) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
-                Group {
-                    if index > 0 { Rectangle().fill(Color.togoLine).frame(height: 1) }
-                    Button { pick(option) } label: { AnswerOptionRow(option: option, busy: sending == option.id) }
-                        .buttonStyle(AnswerOptionStyle())
-                        .opacity(sending != nil && sending != option.id ? 0.4 : 1)
-                        .accessibilityLabel(option.title)
-                        .accessibilityHint(option.explanation ?? "")
-                }
-                .revealOnAppear(index: index, active: revealing)
+                if index > 0 { Rectangle().fill(Color.togoLine).frame(height: 1) }
+                Button { pick(option) } label: { AnswerOptionRow(option: option, busy: sending == option.id) }
+                    .buttonStyle(AnswerOptionStyle())
+                    .opacity(sending != nil && sending != option.id ? 0.4 : 1)
+                    .modifier(OptionSource(source: source(option.id)))
+                    .accessibilityLabel(option.title)
+                    .accessibilityHint(option.explanation ?? "")
             }
         }
+        // motion: cause → effect — the tapped option shows its spinner while the others dim.
         .motion(.respond, value: sending)
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
         .clipShape(.rect(cornerRadius: 12, style: .continuous))
     }
 }
 
+private struct OptionSource: ViewModifier {
+    let source: (id: String, namespace: Namespace.ID)?
+
+    func body(content: Content) -> some View {
+        if let source {
+            content.answerSource(source.id, in: source.namespace, active: true)
+        } else {
+            content
+        }
+    }
+}
+
 private struct AnswerOptionRow: View {
+    @ScaledMetric(relativeTo: .body) private var spinner: CGFloat = 20
     let option: AnswerOption
     var busy = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             text
-            // A fixed slot, so a spinner never pushes the words.
+            // A fixed slot of constant width, so a spinner never pushes the words: it fades in
+            // the room that is always there.
             ZStack {
-                if busy { ProgressView().controlSize(.small).transition(.opacity) }
+                if busy { ProgressView().controlSize(.small) }
             }
-            .slot(width: busy ? 20 : 0, key: busy)
+            .slot(width: spinner, key: busy)
         }
     }
 

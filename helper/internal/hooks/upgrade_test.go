@@ -31,7 +31,7 @@ func TestReinstallUpgradesOlderInstall(t *testing.T) {
 	if st[Claude] != StatusOutdated || st[Codex] != StatusOutdated {
 		t.Fatalf("status before %v", st)
 	}
-	rs := Install(e.o, Agents)
+	rs := Install(e.o, claudeCodex)
 	mustOK(t, rs)
 	for _, r := range rs {
 		if r.State != "installed" {
@@ -51,7 +51,7 @@ func TestReinstallUpgradesOlderInstall(t *testing.T) {
 		t.Errorf("user settings lost: %s", got)
 	}
 	first, firstCodex := got, read(t, filepath.Join(e.o.CodexDir, "hooks.json"))
-	for _, r := range Install(e.o, Agents) {
+	for _, r := range Install(e.o, claudeCodex) {
 		if r.Err != nil || r.State != "unchanged" {
 			t.Errorf("%s third run %s %v", r.Agent, r.State, r.Err)
 		}

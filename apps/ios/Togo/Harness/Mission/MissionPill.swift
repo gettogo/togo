@@ -1,114 +1,54 @@
 import SwiftUI
 import TogoKit
 
-/// The live activity pill at the top of the chat: "2 agents  1 shell  plan 3/7" in mono, a
-/// small plan ring or a working mark at its leading edge, and the beacon while something needs
-/// the user. Tap it, or pull it down, to open mission control.
+/// A session's mission at a glance, as the preview over a roster line's long-press menu:
+/// "2 agents  1 shell  plan 3/7" in mono, a small plan ring or a working mark at its leading
+/// edge, and the beacon while something needs the user. Still: it is a snapshot, not a control.
 struct MissionPill: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 12
     @ScaledMetric(relativeTo: .footnote) private var slotSide: CGFloat = 16
     let summary: MissionSummary
-    let onOpen: () -> Void
 
-    /// How far the pill follows a pull. It tracks the finger with no animation and springs
-    /// back on `tabSettle` when the finger lifts (or the gesture is cancelled).
-    @GestureState(reset: { _, transaction in
-        transaction.animation = Motion.animation(.tabSettle, reduce: MissionPill.reduceMotionNow)
-    }) private var pull: CGFloat = 0
-    /// A new request arrived: the pill swells once on `emphasis` and settles back.
-    @State private var nudged = false
-    /// Counts nudges, so an older nudge's settle never cuts a newer one short.
-    @State private var nudges = 0
-    /// What the pill shows. It follows `summary` in one `resize` transaction, so the width, the
-    /// rolling counts, the lit ground and the leading glyph move together (motion spec §2.3).
-    @State private var shown: MissionSummary
-
-    init(summary: MissionSummary, onOpen: @escaping () -> Void) {
+    init(summary: MissionSummary) {
         self.summary = summary
-        self.onOpen = onOpen
-        _shown = State(initialValue: summary)
     }
 
-    private var needsYou: Bool { shown.needsYou > 0 }
-    private var text: String { MissionText.pill(shown) }
-
-    nonisolated static var reduceMotionNow: Bool {
-        MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+    /// The stress fixtures' call shape from when the pill was a button; the preview has no action.
+    init(summary: MissionSummary, _ unused: () -> Void) {
+        self.init(summary: summary)
     }
+
+    private var needsYou: Bool { summary.needsYou > 0 }
+    private var text: String { MissionText.pill(summary) }
 
     var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: 8) {
-                leading
-                    .slot(width: slotSide, height: slotSide, key: leadingKind)
-                // One line when it fits; at large sizes each count takes a line of its own, so
-                // none is lost and none breaks inside its number.
-                ViewThatFits(in: .horizontal) {
-                    countText(text)
-                    VStack(spacing: 2) {
-                        ForEach(lines, id: \.self) { countText($0) }
-                    }
-                    VStack(spacing: 2) {
-                        ForEach(lines, id: \.self) { countText($0, wraps: true) }
-                    }
+        HStack(spacing: 8) {
+            leading
+                .frame(width: slotSide, height: slotSide)
+            // One line when it fits; at large sizes each count takes a line of its own, so
+            // none is lost and none breaks inside its number.
+            ViewThatFits(in: .horizontal) {
+                countText(text)
+                VStack(spacing: 2) {
+                    ForEach(lines, id: \.self) { countText($0) }
                 }
-                // Like the system's bar items the pill stops growing at AX2; VoiceOver and the
-                // sheet it opens carry the counts at any size.
-                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.togoMuteDim)
-                    .accessibilityHidden(true)
+                VStack(spacing: 2) {
+                    ForEach(lines, id: \.self) { countText($0, wraps: true) }
+                }
             }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 34)
-            .background { MissionPillSurface(lit: needsYou) }
-            .contentShape(.rect(cornerRadius: 17, style: .continuous))
         }
-        .buttonStyle(MissionPillPress())
-        .hoverEffect(.highlight)
-        .scaleEffect(nudged ? 1.06 : 1)
-        .offset(y: pull)
-        .simultaneousGesture(pullDown)
-        .haptic(.connect, trigger: summary.needsYou, change: { old, new in new > old })
-        .padding(.top, 6)
-        .padding(.bottom, 4)
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 14)
+        .frame(minHeight: 34)
+        .background { MissionPillSurface(lit: needsYou) }
+        .padding(8)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(MissionCopy.title)
-        .accessibilityValue(MissionText.spoken(shown))
-        .accessibilityHint(MissionCopy.openHint)
-        .accessibilityIdentifier("mission.pill")
-        .onChange(of: summary) { old, new in
-            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { shown = new }
-            guard new.needsYou > old.needsYou else { return }
-            NeedsAnnouncement.post(MissionCopy.needs(new.needsYou), after: .seconds(1))
-            nudge()
-        }
-    }
-
-    /// One swell and settle on `emphasis`, at the moment the request arrives. Under Reduce
-    /// Motion the pill holds still; the lit ground and the haptic carry it.
-    private func nudge() {
-        guard !reduceMotion else { return }
-        nudges += 1
-        let mine = nudges
-        withAnimation(Motion.animation(.emphasis, reduce: false), completionCriteria: .logicallyComplete) {
-            nudged = true
-        } completion: {
-            guard nudges == mine else { return }
-            withAnimation(Motion.animation(.emphasis, reduce: false)) { nudged = false }
-        }
-    }
-
-    /// Which glyph leads, so the slot crossfades only when it changes kind.
-    private var leadingKind: Int {
-        if needsYou { return 0 }
-        return MissionText.planFraction(shown) == nil ? 2 : 1
+        .accessibilityValue(MissionText.spoken(summary))
+        .accessibilityIdentifier("mission.preview")
     }
 
     private var lines: [String] {
-        let parts = MissionText.parts(shown)
+        let parts = MissionText.parts(summary)
         return parts.isEmpty ? [text] : parts
     }
 
@@ -121,40 +61,28 @@ struct MissionPill: View {
             .foregroundStyle(needsYou ? Color.togoSnow : Color.togoMute)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: !wraps, vertical: true)
-            .contentTransition(.numericText())
     }
 
     @ViewBuilder private var leading: some View {
         if needsYou {
-            BreathingBeacon()
-                .transition(.opacity)
-        } else if let fraction = MissionText.planFraction(shown) {
+            Circle()
+                .fill(Color.togoAccent)
+                .frame(width: mark * 0.66, height: mark * 0.66)
+                .accessibilityHidden(true)
+        } else if let fraction = MissionText.planFraction(summary) {
             MissionPlanRing(fraction: fraction, side: mark)
-                .transition(.opacity)
         } else {
             Circle()
-                .fill(shown.working ? Color.togoSnow : Color.togoMuteDim)
+                .fill(summary.working ? Color.togoSnow : Color.togoMuteDim)
                 .frame(width: mark * 0.5, height: mark * 0.5)
                 .frame(width: mark, height: mark)
                 .accessibilityHidden(true)
-                .transition(.opacity)
         }
-    }
-
-    /// Pulling the pill down opens mission control, the way a sheet's grabber would.
-    private var pullDown: some Gesture {
-        DragGesture(minimumDistance: 6)
-            .updating($pull) { value, state, _ in
-                state = min(max(value.translation.height, 0), 28) * 0.5
-            }
-            .onEnded { value in
-                if value.translation.height > 20 || value.predictedEndTranslation.height > 60 { onOpen() }
-            }
     }
 }
 
-/// The pill's ground: the opaque raised surface with the one hairline, so the chat never
-/// shows through it, lit from inside with the beacon's own blue while something needs the user.
+/// The pill's ground: the opaque raised surface with the one hairline, lit from inside with the
+/// beacon's own blue while something needs the user.
 private struct MissionPillSurface: View {
     let lit: Bool
 
@@ -167,82 +95,6 @@ private struct MissionPillSurface: View {
             .overlay {
                 RoundedRectangle(cornerRadius: 17, style: .continuous).strokeBorder(lit ? Color.togoAccent.opacity(0.55) : Color.togoLine, lineWidth: 1)
             }
-    }
-}
-
-/// The beacon dot breathing slowly while something waits: its halo swells and fades over one
-/// `ambient` period, drawn from time at up to 30 fps. Still under Reduce Motion, Low Power
-/// Mode, in paused snapshots, while the app is not in front, and while another loop on the
-/// screen (a needs card's drift) has the one self-moving slot (spec §4, §5).
-private struct BreathingBeacon: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.loopsPaused) private var loopsPaused
-    @Environment(\.ambientTaken) private var ambientTaken
-    @Environment(\.scenePhase) private var scenePhase
-    @ScaledMetric(relativeTo: .headline) private var side: CGFloat = 8
-    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-
-    /// One breath, in seconds: the `ambient` role's period.
-    static let breath: TimeInterval = Motion.nominalDuration(.ambient)
-
-    var body: some View {
-        TimelineView(AnimationTimelineSchedule(minimumInterval: 1.0 / 30, paused: !breathes)) { context in
-            dot(breathes ? Self.level(at: context.date.timeIntervalSinceReferenceDate) : 0.5)
-        }
-        .accessibilityHidden(true)
-        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
-            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        }
-    }
-
-    private var breathes: Bool {
-        !reduceMotion && !loopsPaused && !lowPower && !ambientTaken && scenePhase == .active
-    }
-
-    /// 0 at the out-breath, 1 at the in-breath, eased like a sine.
-    static func level(at time: TimeInterval) -> Double {
-        0.5 - 0.5 * cos(time / breath * 2 * .pi)
-    }
-
-    /// The core stays put; only the faint halo around it breathes, inside the pill.
-    private func dot(_ level: Double) -> some View {
-        Circle()
-            .fill(Color.togoAccent)
-            .frame(width: side, height: side)
-            .background {
-                Circle()
-                    .fill(Color.togoAccent.opacity(0.10 + 0.20 * level))
-                    .padding(-(2 + 3 * level))
-            }
-            .frame(width: side + 8, height: side + 8)
-    }
-}
-
-/// Says a new request needs the user, once: the chat's own line for a request names it and
-/// goes first, so a second announcement within a few seconds is dropped.
-@MainActor enum NeedsAnnouncement {
-    private static var last: Date?
-    static let window: TimeInterval = 3
-
-    static func post(_ text: String, after delay: Duration = .zero) {
-        guard UIAccessibility.isVoiceOverRunning else { return }
-        Task { @MainActor in
-            if delay > .zero { try? await Task.sleep(for: delay) }
-            if let last, Date.now.timeIntervalSince(last) < window { return }
-            last = .now
-            var line = AttributedString(text)
-            line.accessibilitySpeechAnnouncementPriority = .high
-            AccessibilityNotification.Announcement(line).post()
-        }
-    }
-}
-
-/// A pressed pill dims a little, like a system bar button.
-private struct MissionPillPress: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
@@ -259,6 +111,7 @@ struct MissionPlanRing: View {
                 .trim(from: 0, to: max(0.02, fraction))
                 .stroke(Color.togoSnow, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+                // motion: continuity — the ring fills from the old share of the plan to the new.
                 .motion(.progress, value: fraction)
         }
         .frame(width: side, height: side)
@@ -267,12 +120,12 @@ struct MissionPlanRing: View {
 }
 
 #if DEBUG
-#Preview("Mission pill") {
+#Preview("Mission preview") {
     VStack(spacing: 16) {
-        MissionPill(summary: MissionSummary(agents: 2, background: 1, plan: .init(done: 3, total: 7), working: true)) {}
-        MissionPill(summary: MissionSummary(needsYou: 1, agents: 1)) {}
-        MissionPill(summary: MissionSummary(working: true)) {}
-        MissionPill(summary: MissionSummary()) {}
+        MissionPill(summary: MissionSummary(agents: 2, background: 1, plan: .init(done: 3, total: 7), working: true))
+        MissionPill(summary: MissionSummary(needsYou: 1, agents: 1))
+        MissionPill(summary: MissionSummary(working: true))
+        MissionPill(summary: MissionSummary())
     }
     .padding()
     .background(Color.togoInk)

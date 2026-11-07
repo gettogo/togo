@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
+	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/harness"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/claude"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
@@ -77,6 +78,15 @@ func (a *oneApproval) Pending(string) []wire.Approval {
 
 func (a *oneApproval) Answer(_ context.Context, id, raw, _ string) error {
 	a.answered = id + " " + raw
+	return nil
+}
+
+// AnswerAsk records the key driver's answers: no question hook waits in
+// the fixture, so Claude's dialog is answered with keys.
+func (a *oneApproval) AnswerAsk(_ context.Context, _ string, answers []approval.AskAnswer) error {
+	for _, x := range answers {
+		a.answered += x.Prompt + "=" + strings.Join(x.Labels, ",") + x.Text + ";"
+	}
 	return nil
 }
 
@@ -316,8 +326,8 @@ func TestHarnessFixtures(t *testing.T) {
 			if msg := match(wantMap, full, "$"); msg != "" {
 				t.Errorf("%s\nresponse: %s", msg, resp)
 			}
-			if a, ok := env.approvals.(*oneApproval); ok && a.answered != "r_question01 option:2" {
-				t.Errorf("answered %q, want r_question01 option:2", a.answered)
+			if a, ok := env.approvals.(*oneApproval); ok && a.answered != "Which channel?=Stable;" {
+				t.Errorf("answered %q, want Which channel?=Stable;", a.answered)
 			}
 		})
 	}

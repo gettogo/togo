@@ -24,6 +24,7 @@ func (e *Engine) startBuiltins(s *sess) {
 			e.addApproval(s, a)
 		}
 	}
+	s.watchHookFeeds()
 	caps := s.ad.Capabilities
 	if harness.Has(caps, harness.CapChanges) && e.cfg.Git != nil {
 		go e.every(s, changesEvery, func(ctx context.Context) { e.refreshChanges(ctx, s) })
@@ -44,8 +45,12 @@ func (e *Engine) startBuiltins(s *sess) {
 	}
 }
 
+// hasNeeds reports whether the chat shows the session's approvals. The
+// screen detector serves every agent, so every adapter-served session
+// does whenever approvals are served at all.
 func (s *sess) hasNeeds() bool {
-	return harness.Has(s.ad.Capabilities, harness.CapNeedsApprovals) || harness.Has(s.ad.Capabilities, harness.CapNeedsQuestions)
+	return s.e.cfg.Approvals != nil || harness.Has(s.ad.Capabilities, harness.CapNeedsApprovals) ||
+		harness.Has(s.ad.Capabilities, harness.CapNeedsQuestions)
 }
 
 func (e *Engine) every(s *sess, d time.Duration, fn func(ctx context.Context)) {
@@ -236,7 +241,7 @@ func (e *Engine) addApproval(s *sess, a wire.Approval) {
 		return
 	}
 	item := harness.Item{ID: "approval-" + a.RequestID, TurnID: s.turn, Kind: harness.KindApproval, At: a.CreatedAt,
-		Approval: &harness.ApprovalBody{RequestID: a.RequestID}}
+		Approval: &harness.ApprovalBody{RequestID: a.RequestID, Owner: s.ownerLocked(a)}}
 	row := harness.Row{ID: a.RequestID, Title: a.Title, State: harness.StateWaiting,
 		Open: &harness.Open{Kind: harness.OpenApproval, Ref: a.RequestID}}
 	if a.Subject != nil {
@@ -277,7 +282,7 @@ func (e *Engine) approvalClosed(ev wire.Event) {
 		if resolution == "" {
 			resolution = "gone"
 		}
-		it.Approval = &harness.ApprovalBody{RequestID: reqID, Resolved: resolution}
+		it.Approval = &harness.ApprovalBody{RequestID: reqID, Resolved: resolution, Owner: it.Approval.Owner}
 		s.publishLocked([]harness.Item{it}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: reqID}})
 		s.mu.Unlock()
 	}

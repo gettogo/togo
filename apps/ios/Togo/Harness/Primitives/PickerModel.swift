@@ -171,20 +171,38 @@ struct PickerModel: Equatable {
             .map { (key: $0.key, value: $0.value) }
     }
 
-    /// What tapping an item does: hand it to the item action waiting for one, open its card
-    /// when it has actions of its own, or select it.
+    /// What tapping an item does: hand it to the item action waiting for one,
+    /// or select it.
     enum Tap: Equatable {
         case assign(action: String)
-        case details
         case select
         case none
     }
 
+    /// A tap selects, even when items carry actions: those are in swipe and the context menu
+    /// (audit 3 §4.3). While a role chip waits for an item, the tap hands it the item.
     func tap(_ item: Item, in picker: HarnessScreen.Picker) -> Tap {
         if item.disabled == true { return .none }
         if let picking { return .assign(action: picking) }
-        if !(picker.itemActions ?? []).isEmpty { return .details }
         return item.id == picker.selected ? .none : .select
+    }
+
+    /// Whether a selection's result closes its sheet: it landed, was typed, restarted the agent
+    /// or waits for the turn's end. A failure keeps the list, with its reason.
+    static func closes(_ result: HarnessActionResult?) -> Bool {
+        guard let result else { return false }
+        return [.applied, .typed, .relaunched, .queued].contains(result.result)
+    }
+
+    /// The change a selection makes, for `ActionGate`: the screen's confirm, the item's name,
+    /// and the selected item to go back to.
+    static func change(selecting item: Item, in picker: HarnessScreen.Picker, setting: String) -> GatedChange {
+        let previous = picker.items.first { $0.id == picker.selected }
+        return GatedChange(
+            action: picker.onSelect, target: item.id, args: args(for: item), confirm: picker.onSelectConfirm,
+            setting: setting, value: item.title,
+            previous: previous.map { ($0.title, args(for: $0)) }
+        )
     }
 
     /// The args a selection or item action carries: `{"id": item id}`.

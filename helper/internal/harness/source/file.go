@@ -71,10 +71,17 @@ func (f File) Fetch(_ context.Context, s harness.SourceSpec, env harness.Env) (j
 		return json.Marshal(list)
 	}
 	p, err := Confine(fs.Path, env)
+	if errors.Is(err, os.ErrNotExist) {
+		// Not written yet (a todo file before the first todo): empty.
+		return json.RawMessage("null"), nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	b, err := readCapped(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return json.RawMessage("null"), nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -108,14 +115,12 @@ type GlobEntry struct {
 
 // Glob lists the confined files matching pattern, newest first, at most
 // MaxGlobFiles. For jsonl files Head and Tail hold the first and last
-// records; a json file's document is Head's only element.
+// records; a json file's document is Head's only element. No match is an
+// empty list: a harness with no sessions yet has nothing to list.
 func Glob(pattern, format string, env harness.Env) ([]GlobEntry, error) {
 	matches, err := globConfined(pattern, env)
 	if err != nil {
 		return nil, err
-	}
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("source: nothing matches the glob: %w", os.ErrNotExist)
 	}
 	out := make([]GlobEntry, 0, len(matches))
 	for _, m := range matches {

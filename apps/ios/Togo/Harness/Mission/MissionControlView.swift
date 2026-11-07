@@ -8,7 +8,7 @@ enum MissionRoute: Hashable {
     case agent(String)
     /// A background job's live output.
     case job(HarnessRow)
-    /// A native screen, such as Usage from the status section.
+    /// A native screen, such as omp's Compaction settings from the status section.
     case screen(String)
 }
 
@@ -24,16 +24,17 @@ struct MissionControlView: View {
     var actions: ChatActions = .inert
     /// Pushes a route onto the host's stack.
     var push: (MissionRoute) -> Void = { _ in }
-    /// The user wants the chat itself, for a need mission control cannot answer here.
-    var showChat: () -> Void = {}
+    /// The user wants the chat itself, for a need mission control cannot answer here: scrolled
+    /// to that request's card (its item id) when known, else to the oldest open one.
+    var showChat: (String?) -> Void = { _ in }
 
     private var sections: [HarnessSection] {
         MissionLayout.sections(store.mission.mission, capabilities: store.descriptor.map { Set($0.capabilities) })
     }
 
     var body: some View {
-        // Rows and sections arriving or leaving glide on `resize`; text inside them updates in
-        // place (motion spec §2.5). Network changes are never animated implicitly.
+        // Rows and sections arriving or leaving move in one `resize` transaction (`IdentityKeyed`);
+        // text inside them updates in place. The first render is a cut.
         IdentityKeyed(sections, key: MissionLayout.shape) { sections in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 26) {
@@ -43,7 +44,9 @@ struct MissionControlView: View {
                             content(section)
                         }
                         .id(section.kind.rawValue)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                        // motion: preventing a jump — a section that arrives fades in where the
+                        // sections below glided to make room; nothing rises.
+                        .transition(Motion.arrive(reduce: reduceMotion))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -72,27 +75,31 @@ struct MissionControlView: View {
         case .plan:
             if section.rows.isEmpty {
                 MissionEmptyLine(text: MissionCopy.empty(.plan))
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — the empty line and the plan swap in one slot, in place.
+                    .transition(Motion.swap(reduce: reduceMotion))
             } else {
                 ChecklistPrimitive(
                     checklist: MissionLayout.checklist(section.rows, summary: store.mission.summary.plan),
                     context: context, embedded: true
                 )
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                // motion: state change — the plan takes the empty line's slot, crossfading in place.
+                .transition(Motion.swap(reduce: reduceMotion))
             }
         case .status:
             statusSection(section)
         default:
             if section.rows.isEmpty {
                 MissionEmptyLine(text: MissionCopy.empty(section.kind))
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — the empty line and the rows swap in one slot, in place.
+                    .transition(Motion.swap(reduce: reduceMotion))
             } else {
                 MissionCard {
                     ForEach(section.rows) { row in
                         rowView(row, kind: section.kind)
                     }
                 }
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                // motion: state change — the rows take the empty line's slot, crossfading in place.
+                .transition(Motion.swap(reduce: reduceMotion))
             }
         }
     }
@@ -100,7 +107,9 @@ struct MissionControlView: View {
     @ViewBuilder private func rowView(_ row: HarnessRow, kind: MissionSectionKind) -> some View {
         switch kind {
         case .needs:
-            MissionNeedsRow(row: row, store: store, actions: actions, onShowChat: showChat)
+            MissionNeedsRow(row: row, store: store, actions: actions, showTerminal: { context.showTerminal() }) {
+                showChat(MissionLayout.needsItem(for: row, in: store.timeline)?.id)
+            }
         case .background:
             Button { open(row, kind: kind) } label: { MissionBackgroundRow(row: row) }
                 .buttonStyle(.plain)
@@ -116,15 +125,20 @@ struct MissionControlView: View {
         }
     }
 
+    /// The Status block, Compact on its context meter; before the first status arrives, the
+    /// honest line saying when it will. Then any real pages the adapter lists here (never a
+    /// second copy of the block, never a page holding one Confirm button).
     @ViewBuilder private func statusSection(_ section: HarnessSection) -> some View {
         let screens = MissionLayout.statusScreens(store.descriptor)
         VStack(alignment: .leading, spacing: 12) {
             if let status = section.status {
                 StatusPrimitive(status: status, context: context, embedded: true)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
-            } else if screens.isEmpty {
-                MissionEmptyLine(text: MissionCopy.nothingYet)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — the block takes the waiting line's slot, in place.
+                    .transition(Motion.swap(reduce: reduceMotion))
+            } else {
+                MissionEmptyLine(text: MissionCopy.statusPending(store.descriptor?.adapter?.name))
+                    // motion: state change — the waiting line gives its slot to the block, in place.
+                    .transition(Motion.swap(reduce: reduceMotion))
             }
             if !screens.isEmpty {
                 MissionCard {
@@ -134,6 +148,7 @@ struct MissionControlView: View {
                                 Text(screen.title)
                                     .font(.body)
                                     .foregroundStyle(Color.togoSnow)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 8)
                                 Image(systemName: "chevron.right")
                                     .font(.footnote.weight(.semibold))
@@ -141,6 +156,7 @@ struct MissionControlView: View {
                                     .accessibilityHidden(true)
                             }
                             .padding(.horizontal, 14)
+                            .padding(.vertical, 11)
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(.rect)
                         }
@@ -166,7 +182,7 @@ struct MissionControlView: View {
         case .chat: push(.agent(target.ref))
         case .terminal: push(.job(row))
         case .screen: push(.screen(target.ref))
-        case .approval: showChat()
+        case .approval: showChat(MissionLayout.needsItem(for: row, in: store.timeline)?.id)
         default: context.open(target)
         }
     }
@@ -194,7 +210,7 @@ struct MissionControlView: View {
     // MARK: Placeholder
 
     /// Reading or unavailable while there are no sections. It gives way to the sections in
-    /// their `resize` transaction, and its own reading → unavailable swap crossfades.
+    /// their `resize` transaction, and its own reading → unavailable swap crossfades in place.
     @ViewBuilder private func placeholder(empty: Bool) -> some View {
         ZStack {
             if empty {
@@ -202,6 +218,7 @@ struct MissionControlView: View {
                 case .describing, .opening, .reconnecting:
                     ProgressView(MissionCopy.reading)
                         .foregroundStyle(Color.togoMute)
+                        // motion: state change — reading becomes unavailable in the same place.
                         .transition(Motion.swap(reduce: reduceMotion))
                 case .live, .terminalOnly:
                     ContentUnavailableView {
@@ -210,10 +227,12 @@ struct MissionControlView: View {
                         Text(MissionCopy.unavailableDetail)
                     }
                     .foregroundStyle(Color.togoMute)
+                    // motion: state change — unavailable replaces reading in the same place.
                     .transition(Motion.swap(reduce: reduceMotion))
                 }
             }
         }
+        // motion: state change — the reading → unavailable crossfade, once the session answers.
         .motion(.respond, value: placeholderReading)
     }
 
@@ -232,7 +251,7 @@ struct MissionControlStack: View {
     var actions: ChatActions = .inert
     /// Opens a diff or a preview in the review.
     var openExternal: (HarnessOpen) -> Void = { _ in }
-    var showChat: () -> Void = {}
+    var showChat: (String?) -> Void = { _ in }
     /// Set in a sheet, which has a Done button; an inspector closes from its bar item.
     var onDone: (() -> Void)?
 
@@ -249,6 +268,8 @@ struct MissionControlStack: View {
                 destination(route)
             }
         }
+        // Links in rows, cards and screens go through the chat's router, as in the chat.
+        .environment(\.openURL, OpenURLAction { actions.open($0) })
     }
 
     @ToolbarContentBuilder private var doneItem: some ToolbarContent {

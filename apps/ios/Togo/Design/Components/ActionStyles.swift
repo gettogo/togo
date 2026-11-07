@@ -25,6 +25,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .contentShape(.capsule)
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            // motion: cause → effect — the button gives under the finger, so the press is felt where it lands.
             .motion(.confirm, value: configuration.isPressed)
     }
 }

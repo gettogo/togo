@@ -63,7 +63,8 @@ public struct WorkSummary: Hashable, Sendable {
 /// Folds a conversation into chat rows. Per turn: the prompt, then one work row for every tool,
 /// thinking, agent, background and plan item (numbers from the turn item when present), then
 /// the replies; approvals and questions stay as their own rows where they occurred, so the
-/// user never has to expand anything to act. Items without a turn keep their own rows, and
+/// user never has to expand anything to act (an approval a question owns is drawn by the
+/// question). Items without a turn keep their own rows, and
 /// steps without a turn next to each other share one work row. Items of a subagent's own
 /// conversation (with a `parent`) never appear.
 public enum TurnFold {
@@ -167,6 +168,9 @@ public enum TurnFold {
         switch item.body {
         case .user: .prompt(item)
         case .assistant: .reply(item)
+        // An approval a question owns is that question at the terminal: the question's card
+        // answers it, so it never draws a second card.
+        case .approval(let approval) where approval.owner != nil: nil
         case .approval, .question: .needs(item)
         case .notice: .notice(item)
         case .shell: .shell(item)

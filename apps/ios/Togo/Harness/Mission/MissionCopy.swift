@@ -14,7 +14,7 @@ enum MissionCopy {
     static let nothingYet = String(localized: "mission.nothingYet", defaultValue: "Nothing here yet")
     static let unavailable = String(localized: "mission.unavailable", defaultValue: "This session has no mission control")
     static let unavailableDetail = String(
-        localized: "mission.unavailable.detail", defaultValue: "Its agent shows everything in the terminal."
+        localized: "mission.unavailable.detail", defaultValue: "Terminal only"
     )
     static let answerInChat = String(localized: "mission.answerInChat", defaultValue: "Answer in the chat")
     static let openTerminal = String(localized: "mission.openTerminal", defaultValue: "Open terminal")
@@ -23,6 +23,28 @@ enum MissionCopy {
     static let openPreview = String(localized: "mission.openPreview", defaultValue: "Open preview")
     static let more = String(localized: "mission.more", defaultValue: "More")
     static let noOutputYet = String(localized: "mission.background.noOutput", defaultValue: "No output yet")
+
+    // MARK: Bar item and session menu
+
+    static let goToRequest = String(localized: "mission.menu.goToRequest", defaultValue: "Go to request")
+    static let stop = String(localized: "mission.menu.stop", defaultValue: "Stop")
+    static let compactMenu = String(localized: "mission.menu.compact", defaultValue: "Compact…")
+    static let compactConfirm = String(localized: "mission.menu.compactConfirm", defaultValue: "Compact the conversation now?")
+    static let stopFailed = String(localized: "mission.menu.stopFailed", defaultValue: "Couldn't stop. The terminal can.")
+    static let sessionSection = String(localized: "mission.session.section", defaultValue: "Session")
+
+    /// A session menu item that opens one of the adapter's screens: "Resume…".
+    static func opensScreen(_ title: String) -> String {
+        String(localized: "mission.session.screen", defaultValue: "\(title)…")
+    }
+
+    /// The Status section before the first status arrives: when it will.
+    static func statusPending(_ agent: String?) -> String {
+        guard let agent, !agent.isEmpty else {
+            return String(localized: "mission.status.pending", defaultValue: "Usage shows after the next reply")
+        }
+        return String(localized: "mission.status.pending.agent", defaultValue: "Usage shows after \(agent)'s next reply")
+    }
 
     /// A background loop named by what it runs: "Loop: echo, sleep".
     static func loop(_ names: String) -> String {

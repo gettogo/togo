@@ -15,8 +15,9 @@ struct AgentStep: View {
                 agents
                     .phaseSwap(model.agents)
                 if case .loaded = model.agents, model.showsFlags {
+                    // motion: cause → effect — picking an agent uncovers its launch options under it
                     launchOptions
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                        .transition(Motion.unfold(reduce: reduceMotion))
                 }
                 nameField
                 // At large text sizes the pinned footer would cover the list, so the error scrolls.
@@ -24,11 +25,10 @@ struct AgentStep: View {
                     InlineError(message: error)
                 }
             }
-            // The agents arriving, the launch options and an error line move the steps below
-            // them on `resize`.
+            // The agents arriving and the launch options move the steps below them on `resize`.
+            // An error line lands at once, with the error haptic, so it is never late.
             .resizesOnRows([
-                CaseName.of(model.agents), "\(model.showsFlags)", "\(model.createError != nil)",
-                "\(model.selectedPreset != nil)",
+                CaseName.of(model.agents), "\(model.showsFlags)", "\(model.selectedPreset != nil)",
             ])
         }
         // The list scrolls under the Start button behind the system's soft edge.
@@ -53,10 +53,13 @@ struct AgentStep: View {
                 if !model.missingAgents.isEmpty {
                     missingToggle
                     if missing.open {
-                        ForEach(Array(model.missingAgents.enumerated()), id: \.element.id) { index, agent in
-                            agentRow(agent)
-                                .disclosed(missing, index: index)
+                        // motion: cause → effect — the tap opens the list; its edge uncovers the agents in order
+                        VStack(spacing: 0) {
+                            ForEach(model.missingAgents, id: \.id) { agent in
+                                agentRow(agent)
+                            }
                         }
+                        .unfolds(missing)
                     }
                 }
             }
@@ -85,6 +88,7 @@ struct AgentStep: View {
     private func star(_ agent: AgentInfo) -> some View {
         let on = model.isFavorite(agent.id)
         return Button {
+            // motion: cause → effect — the tapped star fills in place
             withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { model.toggleFavorite(agent.id) }
         } label: {
             // The star fills in place and bounces once when it is set; under Reduce Motion it
@@ -119,6 +123,7 @@ struct AgentStep: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoMute)
                     .rotationEffect(.degrees(missing.isOpen ? 90 : 0))
+                    // motion: cause → effect — the chevron turns as the list opens
                     .motion(.respond, value: missing.isOpen)
             }
             .frame(minHeight: 44)
@@ -161,7 +166,8 @@ struct AgentStep: View {
                     .font(.body)
                     .foregroundStyle(Color.togoSnow)
                     .frame(minHeight: 44)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: cause → effect — picking a preset uncovers its toggle under the flags
+                    .transition(Motion.unfold(reduce: reduceMotion))
             }
         }
     }
@@ -189,6 +195,5 @@ struct AgentStep: View {
         }
         .screenMargins()
         .padding(.vertical, 12)
-        .resizesOnRows(model.createError != nil)
     }
 }

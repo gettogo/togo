@@ -9,7 +9,8 @@ name: Goose
 revision: 1
 match: { agents: [goose], commands: [goose] }
 harness: { version: [goose, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.57 <2" }
-capabilities: [interrupt, commands, mode, model, changes, ports, resume]
+# No model capability: nothing reads the current model and there is no model list.
+capabilities: [interrupt, commands, mode, changes, ports, resume, compact]
 sources:
   sessions:
     cli: { argv: [goose, session, list, --format, json, --working_dir, '{{.cwd}}', --limit, '50'] }
@@ -36,6 +37,11 @@ actions:
     label: Use model
     type: { text: '/model {{.id}}', submit: true, when_idle: true }
     stability: documented-command
+  compact:
+    label: Compact
+    confirm: Compact the conversation now?
+    type: { text: '/compact', submit: true, when_idle: true }
+    stability: documented-command
   resume:
     label: Resume
     relaunch: { argv: [goose, session, --resume, --session-id, '{{.id}}'] }
@@ -52,8 +58,8 @@ modes:
   set: set_mode
 commands:
   static:
-    - { name: mode, hint: '<auto|approve|smart_approve|chat>', detail: Set the goose mode }
-    - { name: model, hint: '[name]', detail: Show or switch the model }
-    - { name: compact, detail: Compact the conversation }
-    - { name: prompts, detail: List extension prompts }
-    - { name: skills, detail: List or enable skills }
+    - { name: mode, hint: '<auto|approve|smart_approve|chat>', detail: Set the goose mode, kind: choice, action: set_mode }
+    - { name: model, hint: '[name]', detail: Show or switch the model, kind: args }
+    - { name: compact, detail: Compact the conversation, action: compact }
+    - { name: prompts, detail: List extension prompts, kind: terminal }
+    - { name: skills, detail: List or enable skills, kind: terminal }

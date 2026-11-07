@@ -33,10 +33,13 @@ struct RequestDetailView: View {
                             .foregroundStyle(.secondary)
                             // trunc-ok: "1 of 3"
                             .lineLimit(1)
-                            .contentTransition(reduceMotion ? .identity : .numericText(value: Double(count)))
+                            // The queue count is an event: it may roll.
+                            .countChange(Double(count))
+                            // motion: state change — a second request is waiting; the counter appears
                             .transition(.opacity)
                     }
                 }
+                // motion: state change — the counter appears or leaves as the queue changes
                 .motion(.respond, value: count)
                 Text(request.title)
                     .font(.headline)
@@ -83,11 +86,13 @@ private struct AnswerButtons: View {
     /// The state on screen. It follows the store's in one transaction, so the buttons give way
     /// to the result, and a failure line arrives, with the screen around them moving too.
     @State private var shown: WatchStore.RequestState?
+    /// The screen's own origin for the five-second re-read, so the schedule never re-anchors.
+    @State private var opened = Date.now
     private var canApprove: Bool { WatchStore.canApprove(request) }
 
     var body: some View {
         // The ten-minute limit passes while the screen is open; the state is read again often.
-        TimelineView(.periodic(from: .now, by: 5)) { timeline in
+        TimelineView(.periodic(from: opened, by: 5)) { timeline in
             // The revision is read so a refused tap redraws at once.
             let _ = store.revision
             let state = store.state(of: request.requestId, at: timeline.date)
@@ -129,15 +134,21 @@ private struct AnswerButtons: View {
         }
     }
 
-    /// A result presents (`dropIn`); a change among the buttons' own states, such as sending or
-    /// a failure line, responds in place.
+    /// The buttons give way to a result in place (a crossfade while the screen resizes); a
+    /// change among the buttons' own states, such as sending, responds in place. A failure
+    /// lands at once, with the failure haptic.
     private func follow(_ new: WatchStore.RequestState) {
         guard let old = shown else {
             shown = new
             return
         }
         guard old != new else { return }
-        let role: MotionRole = new.isResult && !old.isResult ? .dropIn : .respond
+        if new == .failed || new == .notSetUp {
+            withTransaction(Transaction(animation: nil)) { shown = new }
+            return
+        }
+        let role: MotionRole = new.isResult && !old.isResult ? .resize : .respond
+        // motion: cause → effect — the tapped answer becomes its result in the same place
         withAnimation(Motion.animation(role, reduce: reduceMotion)) { shown = new }
     }
 
@@ -147,12 +158,10 @@ private struct AnswerButtons: View {
             Text(WatchCopy.sendFailed)
                 .font(.footnote)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(Motion.revealConceal(reduce: reduceMotion))
         } else if state == .notSetUp {
             Text(WatchCopy.notSetUp(machine: request.host.map { PromptText.clean($0, maxLines: 1) }))
                 .font(.footnote)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
         Button {
             guard armed else { return }
@@ -166,6 +175,7 @@ private struct AnswerButtons: View {
         .buttonBorderShape(.capsule)
         .tint(.togoAccent)
         .disabled(!canApprove || sending)
+        // motion: cause → effect — the buttons give way to the result in the same place
         .transition(Motion.swap(reduce: reduceMotion))
         if !canApprove {
             Text(WatchCopy.answerOnPhone)
@@ -183,6 +193,7 @@ private struct AnswerButtons: View {
         .buttonStyle(.plain)
         .frame(minHeight: 36)
         .disabled(sending)
+        // motion: cause → effect — the buttons give way to the result in the same place
         .transition(Motion.swap(reduce: reduceMotion))
     }
 
@@ -191,6 +202,7 @@ private struct AnswerButtons: View {
             .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(.quaternary, in: .capsule)
+            // motion: cause → effect — the result takes the tapped buttons' place
             .transition(Motion.swap(reduce: reduceMotion))
     }
 }

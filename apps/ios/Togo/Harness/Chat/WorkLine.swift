@@ -41,6 +41,7 @@ struct WorkLine: View {
                             .font(.caption2.weight(.semibold))
                             .rotationEffect(.degrees(disclosure.isOpen && !reduceMotion ? 90 : 0))
                             .opacity(steps.isEmpty ? 0 : 1)
+                            // motion: cause → effect — the chevron turns as the person opens the steps under it.
                             .motion(.respond, value: disclosure.isOpen)
                     }
                 }
@@ -56,9 +57,10 @@ struct WorkLine: View {
                     Button(ChatCopy.showInTerminal, action: showInTerminal)
                 }
             }
+            // The steps were underneath the line: its growing edge uncovers them in place.
             if disclosure.open, !steps.isEmpty {
                 StepList(steps: steps, onStep: onStep)
-                    .disclosed(disclosure)
+                    .unfolds(disclosure)
             }
         }
         // The steps never draw outside the line's slot while it shrinks.
@@ -68,8 +70,9 @@ struct WorkLine: View {
     private var isWaiting: Bool { counting && summary.running && waiting }
 }
 
-/// The line's words. While it counts, it ticks once a second and the digits roll; finished, it
-/// says "Worked 1m 12s" with the waits left out.
+/// The line's words. While it counts (a subagent's thread, which has no live line) the clock
+/// ticks at the end of the line, never animated; finished, it says "Worked 1m 12s" with the
+/// waits left out.
 private struct WorkLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let summary: WorkSummary
@@ -84,9 +87,15 @@ private struct WorkLabel: View {
                     .foregroundStyle(Color.togoAccentText)
                     .fixedSize(horizontal: false, vertical: true)
             } else if summary.running, counting {
-                TimelineView(.periodic(from: summary.startedAt ?? .now, by: 1)) { context in
-                    text(ChatCopy.workLine(summary, now: context.date))
-                        .rollingNumber((summary.elapsed(now: context.date) ?? 0).rounded(.down))
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    text(ChatCopy.workRunningLead(summary))
+                    if let clock = summary.clock {
+                        text(LiveLineLayout.separator)
+                        TimelineView(.periodic(from: clock.displayOrigin(waiting: false), by: 1)) { context in
+                            text(ChatCopy.clock(summary.elapsed(now: context.date) ?? 0))
+                                .clockText()
+                        }
+                    }
                 }
             } else if summary.running {
                 text(ChatCopy.workCounts(summary))
@@ -95,8 +104,8 @@ private struct WorkLabel: View {
             }
         }
         .contentTransition(reduceMotion ? .identity : .interpolate)
+        // motion: state change — "Working" turns into "Worked …" in place as the turn ends.
         .motion(.respond, value: summary.running)
-        .motion(.respond, value: waiting)
     }
 
     private func text(_ words: String) -> some View {
@@ -129,25 +138,28 @@ private struct WorkGlyph: View {
                     .frame(width: beacon, height: beacon)
                     .padding(3)
                     .background(Circle().fill(Color.togoAccent.opacity(0.18)))
-                    .transition(.opacity)
             } else if summary.running, counting {
                 LiveSpinner()
-                    .transition(.opacity)
             } else {
                 Image(systemName: symbol)
                     .font(.footnote)
                     .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                     .symbolEffect(.bounce, options: .nonRepeating, value: finishes)
-                    .transition(.opacity)
             }
         }
         .frame(width: side)
-        .motion(.respond, value: summary.running)
-        .motion(.respond, value: waiting)
+        // motion: continuity — the spinner becomes the turn's check in the same fixed slot, where the eye already is.
+        .motion(.respond, value: GlyphKey(running: summary.running, waiting: waiting))
         .onChange(of: summary.running) { was, running in
             if was, !running, !summary.failed, !reduceMotion { finishes += 1 }
         }
         .accessibilityHidden(true)
+    }
+
+    /// One driver for the slot: whichever of the two changed.
+    private struct GlyphKey: Equatable {
+        var running: Bool
+        var waiting: Bool
     }
 
     private var symbol: String {
@@ -237,7 +249,10 @@ struct StepRow: View {
                     .lineLimit(2)
                 ForEach(info.files, id: \.path) { file in
                     HStack(spacing: 8) {
-                        PathText(file.path, style: .caption)
+                        // The changed file opens its diff (the chat's link router).
+                        Link(destination: ChatLinks.fileURL(path: file.path, line: nil, changed: true)) {
+                            PathText(file.path, style: .caption)
+                        }
                         Text(verbatim: ChatCopy.lines(file))
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(Color.togoMute)
@@ -358,7 +373,9 @@ struct StepDetail: View {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(info.files, id: \.path) { file in
                                 HStack {
-                                    PathText(file.path, style: .footnote)
+                                    Link(destination: ChatLinks.fileURL(path: file.path, line: nil, changed: true)) {
+                                        PathText(file.path, style: .footnote)
+                                    }
                                     Spacer()
                                     Text(verbatim: ChatCopy.lines(file))
                                         .font(.system(.footnote, design: .monospaced))

@@ -52,6 +52,7 @@ struct SessionsView: View {
             }
             .overlay {
                 if sessions.isEmpty {
+                    // motion: state change — the last session left; the empty state takes its place
                     ContentUnavailableView(WatchCopy.noSessions, systemImage: "iphone")
                         .transition(Motion.swap(reduce: reduceMotion))
                 }
@@ -63,6 +64,7 @@ struct SessionsView: View {
                 shown = new
                 return
             }
+            // motion: preventing a jump — sessions arriving or leaving open and close space
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { shown = new }
         }
     }
@@ -89,7 +91,8 @@ private struct SessionRow: View {
                     .foregroundStyle(.secondary)
                     // trunc-ok: the agent's live last action, one line on the wrist; the phone shows it in full
                     .lineLimit(1)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: preventing a jump — the row grows for the agent's last action, by opacity
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
         }
         .padding(.vertical, 2)

@@ -142,12 +142,17 @@ import TogoKit
 
     // MARK: Completion
 
-    @Test func choosingACommandReplacesTheDraft() {
+    /// A command from the menu does its job by kind: one that needs words puts itself in the
+    /// field with the cursor after it, and Return waits for the words.
+    @Test func choosingACommandThatNeedsWordsPutsItInTheField() {
         let model = make()
-        model.draft = "/comp"
-        model.choose(HarnessSamples.commands[0])
-        #expect(model.draft == "/compact ")
+        model.draft = "/ad"
+        model.choose(HarnessCompletion(insert: "/add ", title: "/add", detail: "Add files", hint: "<file>", kind: .args))
+        #expect(model.draft == "/add @")
         #expect(model.menu == .none)
+        #expect(!model.canSend)
+        model.draft = "/add src/a.go"
+        #expect(model.canSend)
     }
 
     @Test func choosingAFileReplacesTheWord() {

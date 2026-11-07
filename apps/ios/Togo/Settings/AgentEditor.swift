@@ -173,12 +173,14 @@ private struct CheckRow: View {
                     .foregroundStyle(Color.togoMute)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.interpolate)
+                    // motion: cause → effect — the tapped Check shows its result under it
                     .transition(.opacity)
             }
         }
         .padding(.vertical, 2)
-        // The result line arrives on `resize`; Checking → Found swaps its words on `respond`.
+        // The result line arrives on `resize`.
         .resizesOnRows(state != nil)
+        // motion: cause → effect — Checking → Found swaps its words in place
         .motion(.respond, value: state.map { CaseName.of($0) })
     }
 

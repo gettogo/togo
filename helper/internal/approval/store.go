@@ -58,12 +58,19 @@ type entry struct {
 	ask         chan string
 }
 
+// notAnswerable is Approval.Answerable for a request the phone cannot
+// answer yet.
+func notAnswerable() *bool { f := false; return &f }
+
 // Store holds approvals. It implements the watch package's PromptSink.
 type Store struct {
 	cfg Config
 
 	mu      sync.Mutex
 	entries map[string]*entry
+	// questions are blocking AskUserQuestion hooks waiting for answers.
+	questions map[uint64]*questionWait
+	nextWait  uint64
 	// paneLocks serialise everything that reads a pane and then acts on
 	// what it saw (an answer typing keys, the watcher closing a prompt),
 	// so a capture, its check and the keys sent are one step per pane.
@@ -79,7 +86,7 @@ func New(cfg Config) *Store {
 	if cfg.NewID == nil {
 		cfg.NewID = wire.NewRequestID
 	}
-	return &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}}
+	return &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
 }
 
 // lockFor returns the mutex serialising work on one session's pane.
@@ -133,6 +140,10 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		cur.fingerprint = p.Fingerprint
 		cur.a.Options = p.Options
 		cur.a.Snippet = p.Snippet
+		cur.a.Answerable = nil
+		if p.ReadOnly {
+			cur.a.Answerable = notAnswerable()
+		}
 		if cur.a.Subject == nil {
 			withSubject(&cur.a, p.Subject)
 		}
@@ -145,6 +156,9 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 	s.mu.Unlock()
 	a := s.base(ctx, sessionID, wire.SourceScreen)
 	a.Title, a.Detail, a.Snippet, a.Options = p.Title, p.Detail, p.Snippet, p.Options
+	if p.ReadOnly {
+		a.Answerable = notAnswerable()
+	}
 	withSubject(&a, p.Subject)
 	s.open(a, p.Fingerprint, nil)
 }
@@ -202,12 +216,37 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 				if subject == nil {
 					subject = p.Subject
 				}
+				if p.ReadOnly {
+					a.Answerable = notAnswerable()
+				}
 			}
 		}
 	}
+	if fp == "" && len(a.Options) == 0 {
+		// Nothing on screen to answer through yet: shown as waiting in the
+		// terminal until the watcher sees the prompt and adopts it.
+		a.Answerable = notAnswerable()
+	}
 	withSubject(&a, subject)
 	s.mu.Lock()
+	if s.questionWaitingLocked(sessionID) {
+		// An AskUserQuestion hook is holding this prompt for the phone; its
+		// question item answers it, so no second request opens.
+		s.mu.Unlock()
+		return wire.Approval{}
+	}
 	if cur := s.pendingForSession(sessionID); cur != nil {
+		if fp == "" && cur.fingerprint != "" {
+			// A hook that saw nothing on screen never replaces a request
+			// the watcher read: that one can be answered, this one not.
+			cur.a.Source, cur.a.Agent, cur.a.Title, cur.a.Detail = a.Source, a.Agent, a.Title, a.Detail
+			if a.Subject != nil {
+				cur.a.Subject = a.Subject
+			}
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+			s.mu.Unlock()
+			return cur.a
+		}
 		if fp != "" && cur.fingerprint == fp {
 			// The watcher already opened this prompt; the hook only adds
 			// what it knows about the request.

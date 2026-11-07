@@ -80,9 +80,11 @@ struct HistoryView: View {
                 HStack {
                     Text(model.loadingMore ? HistoryCopy.loadingMore : HistoryCopy.showMore)
                         .contentTransition(.interpolate)
+                    // motion: cause → effect — the tapped Show more now shows it loading
                     if model.loadingMore { ProgressView().transition(.opacity) }
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
+                // motion: cause → effect — the button's words and spinner change in place on the tap
                 .motion(.respond, value: model.loadingMore)
             }
             .buttonStyle(.secondary)

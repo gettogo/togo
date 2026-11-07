@@ -31,7 +31,6 @@ struct WorkspaceFindBar: View {
                     .foregroundStyle(Color.togoMute)
                     // trunc-ok: the fixed words "No matches"
                     .lineLimit(1)
-                    .transition(.opacity)
             }
             Button(WorkspaceCopy.findPrevious, systemImage: "chevron.up") { find(backwards: true) }
                 .labelStyle(.iconOnly)
@@ -57,6 +56,7 @@ struct WorkspaceFindBar: View {
     /// "No matches" comes and goes in place, on `respond`.
     private func setMissed(_ value: Bool) {
         guard missed != value else { return }
+        // motion: state change — "No matches" comes and goes in place.
         withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { missed = value }
     }
 }

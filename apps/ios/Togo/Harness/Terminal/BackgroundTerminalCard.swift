@@ -32,6 +32,7 @@ struct BackgroundJobCard: View {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: symbol)
                         .contentTransition(.symbolEffect(.replace))
+                        // motion: state change — the job's symbol turns into how it ended, in its tile.
                         .motion(.respond, value: symbol)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(look.color)
@@ -80,7 +81,6 @@ struct BackgroundJobCard: View {
                     Text(TerminalSyncCopy.noOutput)
                         .font(.footnote)
                         .foregroundStyle(Color.togoMute)
-                        .transition(.opacity)
                 }
             } else {
                 Text(verbatim: job.tail.joined(separator: "\n"))
@@ -88,9 +88,9 @@ struct BackgroundJobCard: View {
                     .foregroundStyle(Color.togoSnow.opacity(0.8))
                     .lineLimit(BackgroundJob.tailLines)
                     .primitiveWell(radius: 10)
-                    .transition(.opacity)
             }
         }
+        // motion: state change — "No output yet" gives way to the first output in place.
         .motion(.fade, value: job.tail.isEmpty)
     }
 
@@ -99,11 +99,13 @@ struct BackgroundJobCard: View {
             if loopsPaused {
                 Text(verbatim: PrimitiveElapsed.string(0)).hidden()
             } else {
+                // One schedule from the start, the origin of the number shown; the clock is never
+                // animated.
                 TimelineView(.periodic(from: started, by: 1)) { timeline in
                     let seconds = timeline.date.timeIntervalSince(started).rounded(.down)
                     Text(verbatim: PrimitiveElapsed.string(seconds))
                         .font(.mono(.caption))
-                        .rollingNumber(seconds)
+                        .clockText()
                         .foregroundStyle(Color.togoMute)
                 }
             }

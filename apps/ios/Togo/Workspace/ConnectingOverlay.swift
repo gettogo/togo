@@ -103,7 +103,7 @@ struct ConnectingOverlayHost: View {
                 ConnectingOverlay(kind: arrivedKind, arrived: true, retry: retry, addMachine: addMachine)
             }
         }
-        .transition(.opacity)
+        // motion: state change — connecting gives way to the terminal (or what went wrong) in place.
         .motion(.fade, value: kind ?? arrivedKind)
         .onChange(of: kind) { old, new in
             guard new == nil, let old, old.isWalking else {

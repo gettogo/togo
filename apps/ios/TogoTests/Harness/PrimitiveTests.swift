@@ -67,11 +67,12 @@ import TogoKit
         let ref = HarnessActionRef(id: "stop", label: "Stop", role: .destructive, confirm: "Stop it?", args: ["force": .bool(false)])
         await actions.trigger(ref, target: "dev", context: context)
         #expect(runs.isEmpty)
-        #expect(actions.asking?.ref == ref)
+        #expect(actions.asking?.dialog.title == "Stop it?")
+        #expect(actions.asking?.dialog.destructive == true)
         // The dialog clears what it presented as it closes, before the button's task runs.
         let pending = actions.asking!
         actions.asking = nil
-        await actions.confirm(pending, context: context)
+        await pending.run()
         #expect(runs.map(\.0) == ["stop"])
         #expect(runs.first?.1 == ["force": .bool(false)])
         #expect(actions.asking == nil)
@@ -164,7 +165,8 @@ import TogoKit
     @Test func tappingAnItemPicksTheRightThing() {
         var model = PickerModel(models)
         let haiku = models.items[2]
-        #expect(model.tap(haiku, in: models) == .details)
+        // Items with roles still select on a tap; the roles are in swipe and the menu.
+        #expect(model.tap(haiku, in: models) == .select)
         model.picking = "slow"
         #expect(model.tap(haiku, in: models) == .assign(action: "slow"))
         let plain = HarnessSamples.model.picker!

@@ -6,9 +6,9 @@ import UIKit
 /// output underneath, and Copy output, Rerun and Collapse. Tapping the command line collapses
 /// or opens the output. Long output starts collapsed.
 ///
-/// Motion: the output opens and closes as a two-phase disclosure on `resize`, so the chat rows
-/// below move with the block and the output never draws outside it; the action bar reveals
-/// when the command ends; the status glyph crossfades in a fixed slot.
+/// Motion: the output unfolds and closes as a two-phase disclosure on `resize`, so the chat rows
+/// below move with the block and the output never draws outside it; the action bar and a
+/// failure are simply there when they happen; the status glyph crossfades in a fixed slot.
 struct CommandBlockView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: HarnessItem
@@ -46,7 +46,8 @@ struct CommandBlockView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
                     }
-                    .disclosed(shown)
+                    // The block's growing edge uncovers the output in place.
+                    .unfolds(shown)
                 } else {
                     Text(verbatim: TerminalSyncCopy.lines(block.lineCount))
                         .font(.mono(.caption))
@@ -54,12 +55,10 @@ struct CommandBlockView: View {
                         .padding(.horizontal, 12)
                         .padding(.bottom, 10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
             if ended ?? !block.isRunning {
                 actionBar(block, collapsed: collapsed)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
@@ -69,7 +68,8 @@ struct CommandBlockView: View {
         .accessibilityElement(children: .contain)
         .onAppear { if ended == nil { ended = !block.isRunning } }
         .onChange(of: block.isRunning) { _, running in
-            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { ended = !running }
+            // The command ending is a state change: the action bar is simply there.
+            withTransaction(Transaction(animation: nil)) { ended = !running }
         }
     }
 
@@ -91,6 +91,7 @@ struct CommandBlockView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color.togoMute)
                         .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                        // motion: cause → effect — the chevron flips as the person opens or closes the output.
                         .motion(.respond, value: collapsed)
                         .accessibilityHidden(true)
                 }
@@ -111,13 +112,13 @@ struct CommandBlockView: View {
         ZStack {
             switch block.status {
             case .running:
-                ProgressView().controlSize(.mini).transition(.opacity)
+                ProgressView().controlSize(.mini)
             case .succeeded:
-                Image(systemName: "checkmark").foregroundStyle(PrimitiveTint.ok).transition(.opacity)
+                Image(systemName: "checkmark").foregroundStyle(PrimitiveTint.ok)
             case .failed:
-                Image(systemName: "xmark").foregroundStyle(PrimitiveTint.fail).transition(.opacity)
+                Image(systemName: "xmark").foregroundStyle(PrimitiveTint.fail)
             case .finished:
-                Text(verbatim: "$").foregroundStyle(Color.togoMute).transition(.opacity)
+                Text(verbatim: "$").foregroundStyle(Color.togoMute)
             }
         }
         .slot(width: 16, key: block.status)
@@ -133,7 +134,6 @@ struct CommandBlockView: View {
             if let failure {
                 Text(failure)
                     .foregroundStyle(Color.togoMute)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             Spacer(minLength: 0)
         }
@@ -181,7 +181,7 @@ struct CommandBlockView: View {
     }
 
     private func rerun(_ block: CommandBlock) {
-        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { failure = nil }
+        failure = nil
         Task { await sendAgain(block) }
     }
 
@@ -190,8 +190,9 @@ struct CommandBlockView: View {
             try await store.send(block.command, mode: .now)
             Haptic.done.play()
         } catch {
+            // Instant, at the action that failed, with the error haptic.
             Haptic.error.play()
-            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { failure = TerminalSyncCopy.rerunFailed }
+            failure = TerminalSyncCopy.rerunFailed
         }
     }
 }

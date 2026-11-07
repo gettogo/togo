@@ -95,7 +95,8 @@ struct CommitSheet: View {
                     }
                 }
                 .font(.footnote)
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                // motion: cause → effect — turning on Amend opens what it replaces under the toggle
+                .transition(Motion.arrive(reduce: reduceMotion))
             }
         }
     }
@@ -123,16 +124,20 @@ struct CommitSheet: View {
             } label: {
                 // One slot: the spinner and the words crossfade, and the button keeps its size.
                 ZStack {
+                    // motion: cause → effect — the tapped button now shows the commit running
                     if model.isWorking {
                         ProgressView().tint(Color.togoInk)
                             .transition(.opacity)
                     } else {
                         Text(model.amend ? ChangesCopy.amendButton : ChangesCopy.commit)
                             .contentTransition(.interpolate)
+                            // motion: cause → effect — the label swaps back in the same place
                             .transition(.opacity)
                     }
                 }
+                // motion: cause → effect — the tap turns the label into the spinner in place
                 .motion(.respond, value: model.isWorking)
+                // motion: cause → effect — the Amend toggle renames the button in place
                 .motion(.respond, value: model.amend)
             }
             .buttonStyle(.primary)

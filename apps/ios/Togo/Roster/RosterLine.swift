@@ -43,9 +43,10 @@ struct RosterLine: View {
         }
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // A machine going away or connecting greys its lines on `respond`; the words inside a
-        // line otherwise update in place (design-language §3).
+        // motion: state change — a machine going away or connecting greys its lines in place;
+        // the words inside a line otherwise update with no animation.
         .motion(.respond, value: stale)
+        // motion: state change — the status word turns to "Connecting" and back in place.
         .motion(.respond, value: connecting)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)

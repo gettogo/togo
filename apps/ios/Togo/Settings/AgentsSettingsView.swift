@@ -9,9 +9,14 @@ struct AgentsSettingsView: View {
     @State private var deleting: AgentPreset?
     @State private var adding = false
 
+    /// Machines whose helper can set agents up, for the integrations rows.
+    private var helperMachines: [SettingsMachine] {
+        machines.filter { if case .present = $0.helper { true } else { false } }
+    }
+
     var body: some View {
         Group {
-            if library.presets.isEmpty {
+            if library.presets.isEmpty && helperMachines.isEmpty {
                 StateView(
                     kind: .empty,
                     title: settingsText("settings.agents.empty.title", "No saved agents"),
@@ -45,6 +50,25 @@ struct AgentsSettingsView: View {
 
     private var list: some View {
         List {
+            if !helperMachines.isEmpty {
+                Section {
+                    ForEach(helperMachines) { machine in
+                        NavigationLink {
+                            MachineIntegrationsPage(machine: machine.id, name: machine.name)
+                        } label: {
+                            Text(verbatim: machine.name)
+                                .frame(minHeight: 44, alignment: .leading)
+                        }
+                    }
+                } header: {
+                    Text(IntegrationsCopy.title)
+                } footer: {
+                    Text(settingsText(
+                        "settings.agents.integrations.footer", "Set up each agent on a machine so its chat and requests reach this device."
+                    ))
+                }
+                .groupedRows()
+            }
             Section {
                 ForEach(library.presets) { preset in
                     NavigationLink {

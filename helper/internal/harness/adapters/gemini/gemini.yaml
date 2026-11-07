@@ -84,14 +84,16 @@ actions:
   interrupt:
     keys: { keys: [Escape] }
     stability: documented
+status:
+  actions: [compact]   # inline on the context meter
 commands:
   static:
-    - { name: model, detail: Choose the model, screen: model }
-    - { name: compress, detail: Summarise the conversation }
-    - { name: stats, detail: Session statistics }
-    - { name: memory, hint: '[show|add|refresh]', detail: Manage GEMINI.md memory }
-    - { name: tools, detail: List the available tools }
-    - { name: mcp, detail: List MCP servers and tools }
-    - { name: settings, detail: Open the settings dialog }
-    - { name: resume, detail: Browse earlier chats }
-    - { name: clear, detail: Clear the screen and start a new chat }
+    - { name: model, detail: Choose the model, kind: picker, screen: model }
+    - { name: compress, detail: Summarise the conversation, action: compact }
+    - { name: stats, detail: Session statistics, opens: status }
+    - { name: memory, hint: '[show|add|refresh]', detail: Manage GEMINI.md memory, kind: terminal }
+    - { name: tools, detail: List the available tools, kind: terminal }
+    - { name: mcp, detail: List MCP servers and tools, kind: terminal }
+    - { name: settings, detail: Gemini settings, screen: settings }
+    - { name: resume, detail: Browse earlier chats, kind: terminal }
+    - { name: clear, detail: Clear the screen and start a new chat, role: destructive }

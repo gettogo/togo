@@ -61,11 +61,15 @@ type Dialect struct {
 	// Answer is how a blocking PermissionRequest hook answers: one of the
 	// Answer* shapes, or "" when the harness has no hook that can.
 	Answer string
+	// Modes maps the harness's permission_mode values to the adapter's
+	// mode ids where they differ.
+	Modes map[string]string
 }
 
 // Dialects by agent id.
 var dialects = map[string]Dialect{
-	"qwen":  {Agent: "qwen", Answer: AnswerPermissionRequest},
+	// Qwen Code's hooks say auto-edit; its adapter's mode id is auto_edit.
+	"qwen":  {Agent: "qwen", Answer: AnswerPermissionRequest, Modes: map[string]string{"auto-edit": "auto_edit"}},
 	"droid": {Agent: "droid"},
 	"vibe": {Agent: "vibe", Events: map[string]string{
 		"pre_tool": PreToolUse, "post_tool": PostToolUse, "post_agent": Stop,
@@ -115,6 +119,9 @@ var keyAliases = map[string]string{
 	"agentType":            "agent_type",
 	"initialPrompt":        "prompt",
 	"notificationType":     "notification_type",
+	"workingDirectory":     "cwd",
+	"agentName":            "agent_type",
+	"agentDisplayName":     "agent_type",
 }
 
 // ErrPayload is returned for a payload that is not a JSON object. It never
@@ -147,13 +154,38 @@ func Normalize(d Dialect, event string, payload []byte) (string, json.RawMessage
 			obj["tool_input"] = json.RawMessage(s)
 		}
 	}
-	// Copilot's errorOccurred carries {error: {message}}.
+	// Copilot's errorOccurred carries {error: {message}} or a plain string.
 	if canon == ErrorOccurred {
 		var e struct {
 			Message string `json:"message"`
 		}
-		if json.Unmarshal(obj["error"], &e) == nil && e.Message != "" {
+		var str string
+		switch {
+		case json.Unmarshal(obj["error"], &e) == nil && e.Message != "":
 			obj["error_details"], _ = json.Marshal(e.Message)
+		case json.Unmarshal(obj["error"], &str) == nil && str != "":
+			obj["error_details"], _ = json.Marshal(str)
+			delete(obj, "error")
+		}
+	}
+	// Copilot's subagent hooks name the agent but carry no id: the tool
+	// call that started it, else its name, keys the agent row.
+	if canon == SubagentStart || canon == SubagentStop {
+		if _, ok := obj["agent_id"]; !ok {
+			for _, k := range []string{"tool_use_id", "agent_type"} {
+				if v, ok := obj[k]; ok {
+					obj["agent_id"] = v
+					break
+				}
+			}
+		}
+	}
+	if len(d.Modes) > 0 {
+		var mode string
+		if json.Unmarshal(obj["permission_mode"], &mode) == nil {
+			if id, ok := d.Modes[mode]; ok {
+				obj["permission_mode"], _ = json.Marshal(id)
+			}
 		}
 	}
 	obj["hook_event_name"], _ = json.Marshal(canon)

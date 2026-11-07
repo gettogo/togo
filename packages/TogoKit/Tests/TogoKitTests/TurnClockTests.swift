@@ -114,4 +114,57 @@ struct TurnClockTests {
         ledger.observe([approval("ap", at: 3, resolved: true)], now: t0 + 90)
         #expect(ledger.resolvedAt == ["ap": t0 + 20])
     }
+
+    // MARK: - The origin of the number on screen
+
+    /// Working: the origin is the turn's start, so `now - origin` is the working time and a
+    /// one-second schedule from it ticks exactly when the shown second changes.
+    @Test func displayOriginWhileWorking() {
+        let clock = TurnClock(start: t0)
+        #expect(clock.displayOrigin(waiting: false, at: t0 + 7) == t0)
+        #expect(clock.displayOrigin(waiting: false, at: t0 + 300) == t0)
+    }
+
+    /// Waiting: the origin is the open wait's start, so the number shown is the wait.
+    @Test func displayOriginWhileWaiting() {
+        let clock = TurnClock(start: t0, waits: [.init(start: t0 + 30, end: nil)])
+        #expect(clock.displayOrigin(waiting: true, at: t0 + 42) == t0 + 30)
+        #expect(clock.displayOrigin(waiting: true, at: t0 + 90) == t0 + 30)
+        #expect((t0 + 42).timeIntervalSince(clock.displayOrigin(waiting: true, at: t0 + 42)) == clock.currentWait(at: t0 + 42))
+        // A wait that began before the turn counts from the turn's start.
+        let early = TurnClock(start: t0, waits: [.init(start: t0 - 5, end: nil)])
+        #expect(early.displayOrigin(waiting: true, at: t0 + 3) == t0)
+    }
+
+    /// Resumed after an answer: the origin moves on by the wait and then stays fixed, so the
+    /// working number continues from its paused value.
+    @Test func displayOriginAfterTheWaitResumes() {
+        let clock = TurnClock(start: t0, waits: [.init(start: t0 + 10, end: t0 + 40)])
+        let origin = clock.displayOrigin(waiting: false, at: t0 + 41)
+        #expect(origin == t0 + 30)
+        #expect(clock.displayOrigin(waiting: false, at: t0 + 100) == origin)
+        for second in [41.0, 55, 100] {
+            #expect((t0 + second).timeIntervalSince(origin) == clock.worked(at: t0 + second))
+        }
+        // Asked for the wait's origin with no wait open, it answers the working one.
+        #expect(clock.displayOrigin(waiting: true, at: t0 + 41) == origin)
+    }
+
+    /// Each one-second tick from the shown origin changes the shown number by exactly one,
+    /// across a wait boundary and back.
+    @Test func shownSecondsStepByOneFromTheOrigin() {
+        let waiting = TurnClock(start: t0, waits: [.init(start: t0 + 10.4, end: nil)])
+        let waitOrigin = waiting.displayOrigin(waiting: true, at: t0 + 11)
+        for tick in 0..<5 {
+            let at = waitOrigin + Double(tick)
+            #expect(Int(waiting.currentWait(at: at) ?? -1) == tick)
+        }
+        let resumed = TurnClock(start: t0, waits: [.init(start: t0 + 10.4, end: t0 + 20.9)])
+        let origin = resumed.displayOrigin(waiting: false, at: t0 + 21)
+        let paused = Int(resumed.worked(at: t0 + 20.9))
+        for tick in 0..<5 {
+            let at = origin + Double(paused + tick)
+            #expect(Int(resumed.worked(at: at).rounded()) == paused + tick)
+        }
+    }
 }

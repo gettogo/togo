@@ -1,0 +1,87 @@
+{
+  "description": "Undo Gemini CLI's setup: Togo's entries go and the file is back as it was.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "integrations.uninstall",
+    "params": {
+      "agents": [
+        "gemini"
+      ]
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "results": [
+        {
+          "id": "gemini",
+          "state": "removed",
+          "path": "/home/u/.gemini/settings.json"
+        }
+      ],
+      "integrations": [
+        {
+          "id": "claude",
+          "name": "Claude Code",
+          "installed": true,
+          "setup": "hooks",
+          "state": "ready",
+          "hooks": "installed",
+          "statusLine": "chained",
+          "path": "/home/u/.claude/settings.json",
+          "backup": "/home/u/.claude/settings.json.togo-backup",
+          "lastHookAt": "2026-11-07T09:12:00Z",
+          "statusLineAt": "2026-11-07T09:12:30Z"
+        },
+        {
+          "id": "gemini",
+          "name": "Gemini CLI",
+          "installed": true,
+          "setup": "hooks",
+          "state": "needsSetup",
+          "hooks": "absent",
+          "path": "/home/u/.gemini/settings.json",
+          "fix": "togo hooks install --agent gemini"
+        },
+        {
+          "id": "vibe",
+          "name": "Mistral Vibe",
+          "installed": true,
+          "setup": "pending",
+          "state": "notSupported"
+        },
+        {
+          "id": "kimi",
+          "name": "Kimi Code",
+          "installed": true,
+          "setup": "none",
+          "state": "notNeeded"
+        },
+        {
+          "id": "aider",
+          "name": "Aider",
+          "installed": false,
+          "setup": "none",
+          "state": "notInstalled"
+        }
+      ]
+    }
+  }
+}

@@ -63,7 +63,9 @@ struct PrimitiveStateGlyph: View {
             .font(font)
             .foregroundStyle(look.color)
             .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+            // One bounce when it finishes, where nothing else confirms it.
             .symbolEffect(.bounce, options: .nonRepeating, value: reduceMotion ? false : (state == .done || state == .ok))
+            // motion: state change — the glyph swaps in its fixed slot.
             .motion(.respond, value: state)
             .accessibilityHidden(true)
     }
@@ -159,6 +161,7 @@ struct PrimitiveCapsuleStyle: ButtonStyle {
             .contentShape(.capsule)
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            // motion: cause → effect — the pressed capsule gives under the finger.
             .motion(.confirm, value: configuration.isPressed)
     }
 

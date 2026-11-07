@@ -10,7 +10,8 @@ name: Auggie
 revision: 1
 match: { agents: [auggie], commands: [auggie] }
 harness: { version: [auggie, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.37 <0.50" }
-capabilities: [chat, chat.anchors, send.queue, interrupt, commands, mode, model, effort, changes, status, resume]
+# No status capability: nothing maps a status block from the hooks.
+capabilities: [chat, chat.anchors, send.queue, interrupt, commands, mode, model, effort, changes, resume]
 feeds:
   hooks:
     hook: { events: [SessionStart, PromptSubmit, PreToolUse, PostToolUse, Notification, Stop, SessionEnd] }
@@ -21,8 +22,11 @@ sources:
     cli: { argv: [auggie, session, list, --json, --limit, '50'] }
     cache: 30s
     stability: unverified
+  # Logged out, `model list --json` prints a plain sentence: read only JSON, so
+  # the picker is empty rather than unreadable.
   models:
-    cli: { argv: [auggie, model, list, --json] }
+    cli: { argv: [auggie, model, list, --json], format: text }
+    select: '(try fromjson catch null) as $j | if ($j | type) == "array" then $j elif ($j | type) == "object" then ($j.models // []) else [] end'
     cache: 10m
     timeout: 10s
     stability: unverified
@@ -50,16 +54,20 @@ screens:
     capability: resume
     source: sessions
     search: true
-    map: { item.id: .sessionId, item.title: '{{.title | default .firstUserMessage | truncate 60}}', item.subtitle: '{{.modified | ago}}' }
+    map: { item.id: .sessionId, item.title: '{{.name | default .firstUserMessage | default .sessionId | truncate 60}}', item.subtitle: '{{.modified | ago}}' }
     on_select: resume
 actions:
+  # Relaunch into this conversation (--resume, not --continue, which takes the
+  # newest one). Before the hooks named it there is no route: the terminal.
   set_model:
     confirm: Restart Auggie with this model? The session continues.
-    relaunch: { argv: [auggie, -m, '{{.id}}', --continue] }
+    branch:
+      - { when: '{{.state.harness_session}}', relaunch: { argv: [auggie, -m, '{{.id}}', --resume, '{{.state.harness_session}}'] } }
     stability: documented
   set_effort:
     confirm: Restart Auggie with this effort? The session continues.
-    relaunch: { argv: [auggie, --reasoning-effort, '{{.value}}', --continue] }
+    branch:
+      - { when: '{{.state.harness_session}}', relaunch: { argv: [auggie, --reasoning-effort, '{{.value}}', --resume, '{{.state.harness_session}}'] } }
     stability: documented
   # /ask and /plan toggle their mode; with neither on, Auggie codes.
   set_mode:
@@ -78,12 +86,12 @@ modes:
   set: set_mode
 commands:
   static:
-    - { name: model, detail: Select the model, screen: model }
-    - { name: ask, detail: Toggle ask mode }
-    - { name: plan, detail: Toggle plan mode }
-    - { name: agents, detail: Browse subagents }
-    - { name: task, detail: Task manager }
-    - { name: diffs, detail: File changes this session }
-    - { name: context, detail: Context usage }
-    - { name: stats, detail: Session statistics }
+    - { name: model, detail: Select the model, kind: picker, screen: model }
+    - { name: ask, detail: Toggle ask mode, kind: choice, action: set_mode }
+    - { name: plan, detail: Toggle plan mode, kind: choice, action: set_mode }
+    - { name: agents, detail: Browse subagents, kind: terminal }
+    - { name: task, detail: Task manager, kind: terminal }
+    - { name: diffs, detail: File changes this session, opens: changes }
+    - { name: context, detail: Context usage, kind: terminal }
+    - { name: stats, detail: Session statistics, kind: terminal }
     - { name: sessions, detail: Resume a session, screen: resume }

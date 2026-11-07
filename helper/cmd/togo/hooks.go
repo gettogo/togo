@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
+	"strings"
 
+	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/hooks"
 	"github.com/gettogo/togo/helper/internal/state"
 )
@@ -17,14 +18,26 @@ func init() {
 	register("hooks", func(_ context.Context, args []string, env map[string]string, _ io.Reader, stdout, stderr io.Writer) int {
 		return runHooks(args, env, stdout, stderr)
 	})
-	addUsage("  hooks install|uninstall|status [--agent claude|codex|qwen|droid|copilot|all] [--local] [--block] [--json]\n" +
-		"                                                add or remove agent hook entries. install is safe to run\n" +
-		"                                                again: it adds the events a newer togo hooks and keeps\n" +
-		"                                                the rest. Run it after updating togo when status says outdated")
+	addUsage("  hooks install|uninstall|status [--agent <id>|all] [--local] [--block] [--no-statusline] [--json]\n" +
+		"                                                set up every installed harness that takes hooks (Claude Code,\n" +
+		"                                                Codex, Gemini CLI, Auggie, Qwen Code, Droid, Copilot CLI) and\n" +
+		"                                                chain Claude's status line. Each file is backed up once\n" +
+		"                                                (<file>.togo-backup) before its first change; install is safe\n" +
+		"                                                to run again, and uninstall puts every file back")
 }
 
-// hookOptions resolves the agent config roots from the environment the same
-// way the agents do.
+// binaryCheck finds a harness's program on the login PATH and the usual
+// install directories. Tests replace it.
+var binaryCheck = func(ctx context.Context, home string) func(string) bool {
+	path, fallbacks := state.LoginPath(ctx), agents.FallbackDirs(home)
+	return func(command string) bool {
+		_, _, ok := agents.Find(command, path, fallbacks)
+		return ok
+	}
+}
+
+// hookOptions resolves the harness config roots from the environment the
+// same way the harnesses do.
 func hookOptions(env map[string]string, local, block bool) (hooks.Options, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -42,25 +55,10 @@ func hookOptions(env map[string]string, local, block bool) (hooks.Options, error
 	if err != nil {
 		return hooks.Options{}, err
 	}
-	pick := func(key, fallback string) string {
-		if v := env[key]; v != "" {
-			return v
-		}
-		return filepath.Join(home, fallback)
-	}
-	return hooks.Options{
-		TogoHome:  togoHome,
-		Binary:    exe,
-		ClaudeDir: pick("CLAUDE_CONFIG_DIR", ".claude"),
-		CodexDir:  pick("CODEX_HOME", ".codex"),
-		// Only an explicit --agent qwen, droid or copilot writes these.
-		QwenDir:    filepath.Join(home, ".qwen"),
-		FactoryDir: filepath.Join(home, ".factory"),
-		CopilotDir: pick("COPILOT_HOME", ".copilot"),
-		Cwd:        cwd,
-		Local:      local,
-		Block:      block,
-	}, nil
+	o := hooks.DefaultOptions(func(k string) string { return env[k] }, home, togoHome, exe)
+	o.Cwd, o.Local, o.Block = cwd, local, block
+	o.HasBinary = binaryCheck(context.Background(), home)
+	return o, nil
 }
 
 func runHooks(args []string, env map[string]string, stdout, stderr io.Writer) int {
@@ -69,9 +67,10 @@ func runHooks(args []string, env map[string]string, stdout, stderr io.Writer) in
 	}
 	action := args[0]
 	fs := newFlagSet("hooks " + action)
-	agent := fs.String("agent", "all", "claude, codex or all; qwen, droid or copilot only when named")
+	agent := fs.String("agent", "all", "one harness ("+strings.Join(hooks.Agents, ", ")+") or all")
 	local := fs.Bool("local", false, "edit ./.claude/settings.local.json (Claude only)")
-	block := fs.Bool("block", false, "also hook PermissionRequest so the phone can answer")
+	block := fs.Bool("block", false, "also hook the approval event, so the phone can answer")
+	noLine := fs.Bool("no-statusline", false, "leave Claude's status line as it is")
 	asJSON := fs.Bool("json", false, "print status as JSON")
 	rest, err := parseArgs(fs, args[1:])
 	if err != nil {
@@ -83,7 +82,7 @@ func runHooks(args []string, env map[string]string, stdout, stderr io.Writer) in
 	agents := hooks.Agents
 	if *agent != "all" {
 		if !hooks.Known(*agent) {
-			return usageError(stderr, fmt.Errorf("unknown agent %q", *agent))
+			return usageError(stderr, fmt.Errorf("unknown agent %q (one of %s)", *agent, strings.Join(hooks.Agents, ", ")))
 		}
 		agents = []string{*agent}
 	}
@@ -97,6 +96,7 @@ func runHooks(args []string, env map[string]string, stdout, stderr io.Writer) in
 	if err != nil {
 		return fail(stderr, err)
 	}
+	o.NoStatusLine = *noLine
 	switch action {
 	case "status":
 		return printHookStatus(hooks.Status(o), *asJSON, stdout, stderr)
@@ -115,7 +115,7 @@ func printHookStatus(st map[string]string, asJSON bool, stdout, stderr io.Writer
 		return exitOK
 	}
 	outdated := false
-	for _, a := range append(slices.Clone(hooks.Agents), hooks.Optional...) {
+	for _, a := range hooks.Agents {
 		fmt.Fprintf(stdout, "%s: %s\n", a, st[a])
 		outdated = outdated || st[a] == hooks.StatusOutdated
 	}
@@ -125,15 +125,22 @@ func printHookStatus(st map[string]string, asJSON bool, stdout, stderr io.Writer
 	return exitOK
 }
 
+// printHookResults prints one line per harness: installed (with its
+// backup), unchanged, removed, skipped: not installed, or refused: why.
 func printHookResults(rs []hooks.Result, stdout, stderr io.Writer) int {
 	code := exitOK
 	for _, r := range rs {
 		switch {
 		case r.Err != nil:
+			fmt.Fprintf(stdout, "%s: refused: %s\n", r.Agent, r.Err)
 			fmt.Fprintf(stderr, "togo: %s hooks left unchanged: %s\n", r.Agent, r.Err)
 			code = exitError
 		case r.State == "skipped":
-			fmt.Fprintf(stdout, "%s: not found, skipped\n", r.Agent)
+			fmt.Fprintf(stdout, "%s: skipped: not installed\n", r.Agent)
+		case r.State == "installed" && r.Backup != "":
+			fmt.Fprintf(stdout, "%s: installed (%s, backup %s)\n", r.Agent, r.Path, r.Backup)
+		case r.State == "installed" || r.State == "removed":
+			fmt.Fprintf(stdout, "%s: %s (%s)\n", r.Agent, r.State, r.Path)
 		default:
 			fmt.Fprintf(stdout, "%s: %s\n", r.Agent, r.State)
 		}

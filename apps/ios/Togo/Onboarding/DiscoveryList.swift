@@ -77,13 +77,15 @@ struct DiscoveryList: View {
                 Text(String(localized: "onboard.discovery.empty", defaultValue: "No machines found nearby. Enter an address."))
                     .font(.body)
                     .foregroundStyle(Color.togoMute)
+                    // motion: state change — the search ended empty, in the same row
                     .transition(.opacity)
             } else {
+                // motion: state change — searching again, in the same row
                 PawWalk(String(localized: "onboard.discovery.searching", defaultValue: "Looking for machines nearby"))
                     .transition(.opacity)
             }
         }
-        // Searching → "No machines found" crossfades on `respond`, in a row that keeps its height.
+        // motion: state change — Searching → "No machines found" crossfades in a row of fixed height
         .motion(.respond, value: phase == .quiet)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .listRowBackground(Color.togoInk)

@@ -147,6 +147,7 @@ struct WaitingSmallView: View {
                 Text(LiveCopy.nothingWaiting)
                     .font(.headline)
                     .foregroundStyle(Color.togoMute)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             } else {
                 Text(verbatim: "\(summary.count)")
@@ -161,6 +162,7 @@ struct WaitingSmallView: View {
                 if let oldest = summary.oldest {
                     OldestLine(oldest: oldest)
                         .foregroundStyle(Color.togoMute)
+                        // motion: state change — the system crossfades between entries in place; nothing moves.
                         .transition(.opacity)
                 }
             }
@@ -184,6 +186,7 @@ struct WaitingRectangularView: View {
                 .lineLimit(1)
             if summary.count > 0, let oldest = summary.oldest {
                 OldestLine(oldest: oldest, font: .subheadline)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }

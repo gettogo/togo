@@ -32,6 +32,9 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			continue
 		}
 		s.prepareLocked(&it, mark)
+		if it.Kind == harness.KindQuestion && it.Question != nil {
+			s.questionLocked(&it)
+		}
 		if txt := partialText(it); txt != nil && txt.Partial {
 			if t, ok := s.lastPart[it.ID]; ok && now.Sub(t) < partialEvery {
 				s.pending[it.ID] = it
@@ -54,6 +57,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 	for i := range ops {
 		if ops[i].Op == harness.OpStatus && ops[i].Status != nil {
 			st := *ops[i].Status
+			s.mergeStatusLocked(&st)
 			s.decorateStatusLocked(&st)
 			ops[i].Status = &st
 		}
@@ -61,6 +65,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 	if d := s.mission.apply(ops); d != nil {
 		s.missionDeltaLocked(d)
 	}
+	s.relinkLocked()
 }
 
 // decorateStatusLocked fills the status block's mode, effort and actions
@@ -71,30 +76,53 @@ func (s *sess) decorateStatusLocked(st *harness.StatusBlock) {
 			st.Mode = m
 		}
 	}
+	state := s.stateLocked()
 	if st.Effort == "" {
-		st.Effort = s.stateLocked()["effort"]
+		st.Effort = state["effort"]
+	}
+	if st.Model == "" {
+		st.Model = state["model"]
 	}
 	if len(st.Actions) == 0 {
+		// Status screens' actions, then the adapter's status.actions
+		// (compact on the context meter), once each.
+		var names []string
 		for _, name := range s.ad.screenOrder {
 			sc := s.ad.Screens[name]
 			if sc.Primitive == harness.PrimStatus && sc.Section == harness.SectionStatus {
-				st.Actions = append(st.Actions, s.actionRefsLocked(sc.Actions)...)
+				names = append(names, sc.Actions...)
 			}
 		}
+		st.Actions = s.statusActionRefsLocked(names)
 	}
 }
 
-// refreshStatusLocked updates the status block when the mode or effort
-// changed since it was last built.
+// refreshStatusLocked updates the status block when the mode, effort or
+// model changed since it was last built, and creates it once any of them
+// is known: the mode chip reads it even when no status line reports.
 func (s *sess) refreshStatusLocked() {
 	sec := s.mission.section(harness.SectionStatus)
-	if sec == nil || sec.Status == nil {
+	if sec == nil {
+		return
+	}
+	if sec.Status == nil {
+		st := harness.StatusBlock{}
+		s.decorateStatusLocked(&st)
+		if st.Mode == "" && st.Effort == "" && st.Model == "" {
+			return
+		}
+		if d := s.mission.apply([]harness.Op{{Op: harness.OpStatus, Status: &st}}); d != nil {
+			s.missionDeltaLocked(d)
+		}
 		return
 	}
 	st := *sec.Status
 	st.Mode, st.Effort = "", ""
+	if st.Model == s.stateLocked()["model"] {
+		st.Model = ""
+	}
 	s.decorateStatusLocked(&st)
-	if st.Mode != sec.Status.Mode || st.Effort != sec.Status.Effort {
+	if st.Mode != sec.Status.Mode || st.Effort != sec.Status.Effort || st.Model != sec.Status.Model {
 		if d := s.mission.apply([]harness.Op{{Op: harness.OpStatus, Status: &st}}); d != nil {
 			s.missionDeltaLocked(d)
 		}

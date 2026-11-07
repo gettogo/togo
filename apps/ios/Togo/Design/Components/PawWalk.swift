@@ -45,6 +45,7 @@ struct PawWalk: View {
             guard !reduceMotion, !paused, ending == .walking else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.step)
+                // motion: state change — the lit paw steps along, so the person sees the work is still going.
                 withAnimation(Motion.animation(.pawStep, reduce: reduceMotion)) { lit = (lit + 1) % Self.paws.count }
             }
         }

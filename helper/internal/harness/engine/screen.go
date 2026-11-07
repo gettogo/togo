@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 
@@ -50,9 +51,15 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 			return harness.Screen{}, &harness.FallbackError{Reason: "parse", Detail: name}
 		}
 		p.ItemActions = s.actionRefsLocked(sc.Actions)
+		p.OnSelectConfirm = s.selectConfirmLocked(p.OnSelect)
 		out.Picker = p
 	case harness.PrimSettings:
 		out.Settings = buildSettings(sc, data, state)
+		for _, sec := range out.Settings.Sections {
+			for i := range sec.Fields {
+				sec.Fields[i].ActionConfirm = s.selectConfirmLocked(sec.Fields[i].Action)
+			}
+		}
 		out.Actions = s.actionRefsLocked(sc.Actions)
 	case harness.PrimChecklist:
 		out.Checklist = s.buildChecklistLocked(sc, data, state)
@@ -75,12 +82,13 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 		out.Confirm = c
 		out.Actions = s.actionRefsLocked(sc.Actions)
 	case harness.PrimStatus:
-		sec := s.mission.section(harness.SectionStatus)
-		if sec == nil || sec.Status == nil {
-			return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: name}
+		// Before the harness reports any status the block is empty, not a
+		// failure: "couldn't read this screen" would be a dead end.
+		st := harness.StatusBlock{}
+		if sec := s.mission.section(harness.SectionStatus); sec != nil && sec.Status != nil {
+			st = *sec.Status
 		}
-		st := *sec.Status
-		st.Actions = s.actionRefsLocked(sc.Actions)
+		st.Actions = s.statusActionRefsLocked(sc.Actions)
 		out.Status = &st
 	default:
 		return harness.Screen{}, &harness.FallbackError{Reason: "parse", Detail: name}
@@ -247,6 +255,43 @@ func buildDetail(sc spec.Screen, data any, state map[string]string) *harness.Det
 		d.Subtitle, _ = MapValue(expr, data, state)
 	}
 	return d
+}
+
+// selectConfirmLocked is what the app asks before a selection runs the
+// named action: its confirm line, and whether it restarts the agent. Nil
+// when the action asks nothing and costs nothing.
+func (s *sess) selectConfirmLocked(name string) *harness.SelectConfirm {
+	act, ok := s.ad.Actions[name]
+	if !ok {
+		return nil
+	}
+	effect := act.ActionEffect()
+	if act.Confirm == "" && effect == "" {
+		return nil
+	}
+	c := &harness.SelectConfirm{Text: act.Confirm}
+	if effect == spec.EffectRelaunch {
+		e := harness.EffectRelaunch
+		c.Effect = &e
+		if c.Text == "" {
+			c.Text = "Restart " + s.ad.Name + "?"
+		}
+	}
+	return c
+}
+
+// statusActionRefsLocked lists a status screen's actions followed by the
+// adapter's status.actions (compact on the context meter), once each.
+func (s *sess) statusActionRefsLocked(screen []string) []harness.ActionRef {
+	names := append([]string{}, screen...)
+	if st := s.ad.Status; st != nil {
+		for _, n := range st.Actions {
+			if !slices.Contains(names, n) {
+				names = append(names, n)
+			}
+		}
+	}
+	return s.actionRefsLocked(names)
 }
 
 // actionRefsLocked lists declared actions as refs.

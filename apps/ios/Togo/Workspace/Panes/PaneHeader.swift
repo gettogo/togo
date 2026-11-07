@@ -52,6 +52,7 @@ struct PaneHeader: View {
                 .fill(Color.togoLine)
                 .frame(height: 1 / displayScale)
         }
+        // motion: state change — the focused pane's header brightens in place.
         .motion(.fade, value: focused)
         // Like the workspace chrome, it stops growing at the third accessibility size.
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)

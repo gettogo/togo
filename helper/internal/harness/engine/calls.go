@@ -30,7 +30,7 @@ func (e *Engine) runCall(ctx context.Context, s *sess, act spec.Action, kind str
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "The harness refused the change"}, nil
 	}
 	e.verify(ctx, s, act.Verify, data)
-	return harness.ActionResult{Result: harness.ResultApplied}, nil
+	return harness.ActionResult{Result: harness.ResultApplied, Message: act.Note}, nil
 }
 
 // rpcAnswerer is the rpc runner's way to answer a server request the

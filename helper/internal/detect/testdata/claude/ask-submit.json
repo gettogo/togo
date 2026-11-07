@@ -1,0 +1,28 @@
+{
+  "source": "real",
+  "agentVersion": "2.1.319",
+  "match": true,
+  "kind": "question",
+  "title": "Ready to submit your answers?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Submit answers",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Cancel",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ]
+  }
+}

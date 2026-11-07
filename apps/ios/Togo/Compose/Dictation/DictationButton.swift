@@ -38,6 +38,7 @@ struct DictationButton: View {
             .accessibilityHint(on ? "" : DictationCopy.hint)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { Task { await model.toggle() } }
+            // motion: state change — the mic button lights while it listens.
             .motion(.respond, value: on)
             .haptic(.listen, trigger: model.isListening) { $0 }
     }
@@ -98,7 +99,7 @@ struct DictationLine: View {
                 }
             }
         }
-        // "Listening" gives way to the first words heard in place.
+        // motion: state change — "Listening" gives way to the first words heard, in place.
         .motion(.respond, value: partial.isEmpty)
         .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
         .padding(.horizontal, 16)
@@ -215,6 +216,7 @@ private struct LevelMeter: View {
             }
         }
         .frame(height: height)
+        // motion: state change — the bars follow the voice level, so the person sees they are heard.
         .motion(.listen, value: level)
         .accessibilityHidden(true)
     }

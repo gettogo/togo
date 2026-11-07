@@ -22,9 +22,9 @@ struct ApproveButton: View {
                         ProgressView()
                             .controlSize(.small)
                             .tint(Color.togoInk)
-                            .transition(.opacity)
                     }
                 }
+                // motion: cause → effect — the tapped button's words give way to a spinner; the button keeps its size.
                 .motion(.respond, value: busy)
         }
         .buttonStyle(ApproveStyle())
@@ -55,7 +55,9 @@ private struct ApproveStyle: ButtonStyle {
             .contentShape(.rect(cornerRadius: 22, style: .continuous))
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            // motion: cause → effect — the button gives under the finger, so the press is felt where it lands.
             .motion(.confirm, value: configuration.isPressed)
+            // motion: state change — the button dims in place when it can't be pressed.
             .motion(.respond, value: isEnabled)
     }
 }

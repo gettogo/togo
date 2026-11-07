@@ -26,6 +26,7 @@ struct ChecklistPrimitive: View {
                 Text(PrimitiveCopy.nothingHere)
                     .foregroundStyle(Color.togoMute)
                     .frame(maxWidth: .infinity, minHeight: 120)
+                    // motion: state change — empty and the list swap in place, nothing shifts.
                     .transition(Motion.swap(reduce: reduceMotion))
             } else {
                 VStack(spacing: 0) {
@@ -35,10 +36,12 @@ struct ChecklistPrimitive: View {
                     }
                 }
                 .background(Color.togoRaised, in: .rect(cornerRadius: 18, style: .continuous))
+                // motion: state change — the list and its empty line swap in place.
                 .transition(Motion.swap(reduce: reduceMotion))
             }
         }
-        // Empty ↔ items is a swap in place (refreshes are network-driven, so keyed on it).
+        // Refreshes are network-driven, so the swap is keyed on emptiness alone.
+        // motion: state change — empty ↔ items crossfade in place.
         .motion(.respond, value: checklist.items.isEmpty)
         .accessibilityRotor(String(localized: "primitive.rotor.open", defaultValue: "Open items")) {
             ForEach(ChecklistLogic.flatten(checklist.items).filter { !ChecklistLogic.isFinished($0.item.state) }, id: \.item.id) { entry in
@@ -101,7 +104,8 @@ private struct ChecklistProgress: View {
                         .stroke(finished ? PrimitiveTint.ok : Color.togoSnow, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     Text(verbatim: "\(checklist.done)/\(checklist.total)")
-                        .rollingNumber(Double(checklist.done))
+                        // An event the person cares about (an item done): it counts up.
+                        .countChange(Double(checklist.done), countsDown: false)
                         .font(.mono(.caption, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.togoSnow)
@@ -109,10 +113,11 @@ private struct ChecklistProgress: View {
                         .minimumScaleFactor(0.6)
                 }
                 .frame(width: ring, height: ring)
+                // motion: state change — the ring fills toward what is done.
                 .motion(.progress, value: fraction)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(PrimitiveCopy.progress(done: checklist.done, total: checklist.total))
-                        .rollingNumber(Double(checklist.done))
+                        .countChange(Double(checklist.done), countsDown: false)
                         .font(.headline)
                         .foregroundStyle(Color.togoSnow)
                     if let current = ChecklistLogic.current(checklist.items) {
@@ -121,8 +126,7 @@ private struct ChecklistProgress: View {
                             .foregroundStyle(Color.togoMute)
                             // trunc-ok: the current item, also listed in full below
                             .lineLimit(2)
-                            .contentTransition(.interpolate)
-                            .motion(.respond, value: current.text)
+                            // The current step is status text: it changes at once.
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

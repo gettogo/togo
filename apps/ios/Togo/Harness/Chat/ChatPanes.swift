@@ -24,18 +24,29 @@ struct ChatPanes: View {
 
     @ViewBuilder private func pane(_ pane: Pane, height: CGFloat) -> some View {
         let id = pane == .primary ? store.workspace.selected : store.workspace.secondary
-        if let id, let harness = store.harness(for: id), let rect = geometry.frame(of: pane) {
+        if let id, let rect = geometry.frame(of: pane) {
             let top = geometry.showsTwoPanes ? PaneGeometry.headerHeight : 0
-            let bottom = max(0, rect.maxY - (height - insets.bottom))
+            let layer = store.layer(for: id)
+            let harness = store.harness(for: id)
+            // The composer's own height is reserved inside the chat (`composerClearance`); what
+            // is left here is the keyboard and the home indicator.
+            let below = max(0, rect.maxY - (height - insets.bottom))
+            let bottom = max(0, below - (harness?.composerClearance ?? 0))
             // In book posture with one pane, the chat keeps to the leading page; the rest of the
             // pane stays ink so the terminal underneath does not show beside it.
             let page = geometry.chatFrame(of: pane) ?? rect
-            let shown = harness.shownLayer == .chat
+            let shown = layer == .chat
             ZStack {
-                // Kept alive under the terminal layer, only hidden, so its scroll position and
-                // folds are where they were when the chat comes back. Its loops hold still while
-                // it is away.
-                if harness.chatAvailable {
+                if layer == .pending {
+                    // The chat is expected but not described yet: plain ink over the terminal,
+                    // never the terminal itself. Pending to chat or terminal is a cut.
+                    Color.togoInk
+                        .accessibilityHidden(true)
+                } else if let harness, harness.chatAvailable {
+                    // Kept alive under the terminal layer, only hidden, so its scroll position and
+                    // folds are where they were when the chat comes back. Its loops hold still
+                    // while it is away. Only the user's toggle fades it (its own transaction);
+                    // the chat becoming available is a cut.
                     ChatView(store: harness, actions: store.chatActions(for: id))
                         .padding(.bottom, bottom)
                         .padding(.leading, max(0, page.minX - rect.minX))
@@ -45,15 +56,29 @@ struct ChatPanes: View {
                         .allowsHitTesting(shown)
                         .accessibilityHidden(!shown)
                         .environment(\.loopsPaused, !shown)
-                        .transition(.opacity)
                         .simultaneousGesture(TapGesture().onEnded { store.focus(pane) })
                 }
             }
-            .motion(.fade, value: shown)
             // A subagent's own conversation, from a work step or a mission row.
-            .subagentChat(store: harness, actions: store.chatActions(for: id))
+            .modifier(OptionalSubagentChat(harness: harness, actions: store.chatActions(for: id)))
+            // Links in the chat and the sheets it opens go through the chat's router.
+            .environment(\.openURL, OpenURLAction { [store] url in store.openChatLink(url, from: id) })
             .frame(width: rect.width, height: max(0, rect.height - top))
             .offset(x: rect.minX, y: rect.minY + top)
+        }
+    }
+}
+
+/// The subagent sheet for a pane whose tab has a store.
+private struct OptionalSubagentChat: ViewModifier {
+    let harness: HarnessSessionStore?
+    let actions: ChatActions
+
+    func body(content: Content) -> some View {
+        if let harness {
+            content.subagentChat(store: harness, actions: actions)
+        } else {
+            content
         }
     }
 }
@@ -69,7 +94,9 @@ extension AppStore {
             quote: { text in
                 guard let model = store.harnessTabs.composer(for: id) else { return }
                 model.draft = model.draft.isEmpty ? text : model.draft + "\n" + text
-            }
+            },
+            failure: { requestID in store.answerFailures[requestID] },
+            open: { url in store.openChatLink(url, from: id) }
         )
     }
 }
@@ -85,9 +112,9 @@ struct LayerToolbarItem: ToolbarContent {
             Button {
                 // The terminal under the chat must not keep the keyboard.
                 if layer == .terminal { Self.resignKeyboard() }
-                // The symbol turns into the other layer's; the layers themselves cross-fade on
-                // their own role.
-                withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) { toggle() }
+                // motion: cause → effect — the user's toggle crossfades the layers in place and
+                // turns the symbol into the other layer's; nothing else ever fades them.
+                withAnimation(Motion.animation(.fade, reduce: UIAccessibility.isReduceMotionEnabled)) { toggle() }
             } label: {
                 Label(title, systemImage: symbol)
                     .contentTransition(UIAccessibility.isReduceMotionEnabled ? .identity : .symbolEffect(.replace))

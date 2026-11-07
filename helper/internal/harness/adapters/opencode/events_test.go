@@ -264,7 +264,7 @@ func TestActionTemplates(t *testing.T) {
 		t.Fatalf("permission body %s", got)
 	}
 	qs := map[string]any{"target": "que_1", "answers": map[string]any{"0": []any{"blue"}, "1": []any{"a", "b"}}}
-	if got := render(ans[1].HTTP.Body, qs); got != `{"answers": [["blue"], ["a","b"]]}` {
+	if got := render(ans[1].HTTP.Body, qs); got != `{"answers": [["blue"],["a","b"]]}` {
 		t.Fatalf("question body %s", got)
 	}
 	ref := modelRef("local", "qwen3.8-27b")

@@ -34,6 +34,14 @@ type Adapter struct {
 	Mission      map[string]Mission `yaml:"mission"`
 	// Images says how the harness takes pictures in a prompt.
 	Images *Images `yaml:"images"`
+	// Status declares what the mission Status block offers.
+	Status *Status `yaml:"status"`
+}
+
+// Status declares the Status block's inline actions, such as compact on
+// the context meter. They replace a confirm-only screen.
+type Status struct {
+	Actions []string `yaml:"actions"`
 }
 
 // Images is how a harness takes image paths typed into its input: insert
@@ -55,7 +63,13 @@ type Gate struct {
 	Version []string `yaml:"version"` // argv that prints the version
 	Pattern string   `yaml:"pattern"` // regexp with one group
 	Range   string   `yaml:"range"`   // ">=2.1.250 <3"
+	// Stderr "merge" reads the version from stderr too, for harnesses
+	// that print it there when stdin is not a terminal (pi).
+	Stderr string `yaml:"stderr"`
 }
+
+// StderrMerge reads a program's stderr together with its stdout.
+const StderrMerge = "merge"
 
 // Endpoint kinds.
 const (
@@ -151,6 +165,8 @@ type CLI struct {
 	Argv []string `yaml:"argv"`
 	// Format is json (default), jsonl, toml or text.
 	Format string `yaml:"format"`
+	// Stderr "merge" appends stderr to the output; empty drops it.
+	Stderr string `yaml:"stderr"`
 }
 
 // File reads a file (json, toml) or tails one (jsonl). Path is a template
@@ -253,9 +269,15 @@ type Action struct {
 	Label   string `yaml:"label"`
 	Role    string `yaml:"role"`
 	Confirm string `yaml:"confirm"`
-	Routes  `yaml:",inline"`
-	Branch  []Branch `yaml:"branch"`
-	Verify  *Verify  `yaml:"verify"`
+	// Effect says what the action costs beyond its value: "relaunch"
+	// restarts the harness. Derived from the routes when empty.
+	Effect string `yaml:"effect"`
+	// Note is said with a successful result, when the change has a catch
+	// ("Applies to new threads").
+	Note   string `yaml:"note"`
+	Routes `yaml:",inline"`
+	Branch []Branch `yaml:"branch"`
+	Verify *Verify  `yaml:"verify"`
 	// Stability is required.
 	Stability string `yaml:"stability"`
 }
@@ -362,6 +384,17 @@ type StaticCommand struct {
 	Hint   string `yaml:"hint"`
 	Detail string `yaml:"detail"`
 	Screen string `yaml:"screen"`
+	// Kind is how the app runs the command: choice, picker, args, run or
+	// terminal. Derived when empty (CommandKind).
+	Kind string `yaml:"kind"`
+	// Action runs this action instead of typing the command, so its
+	// confirm and role apply.
+	Action string `yaml:"action"`
+	// Role is "destructive" for a command the app asks about first.
+	Role string `yaml:"role"`
+	// Opens names a native home shown instead of typing: status, changes
+	// or a screen.
+	Opens string `yaml:"opens"`
 }
 
 // Mission declares where a mission control section's rows come from when a

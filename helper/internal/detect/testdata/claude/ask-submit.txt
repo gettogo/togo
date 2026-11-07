@@ -1,0 +1,14 @@
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Color  ☒ Fruits  ✔ Submit  →
+
+Review your answers
+
+ ● Which color do you prefer?
+   → Blue
+ ● Which fruits do you like (pick any)
+   → Apple, Plum
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel

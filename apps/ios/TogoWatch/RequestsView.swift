@@ -17,10 +17,12 @@ struct RequestsView: View {
         ZStack {
             switch shown ?? page {
             case let .request(id, position, count):
+                // motion: state change — the next request takes the answered one's place, in place
                 RequestDetailView(store: store, requestId: id, position: position, count: count)
                     .id(id)
                     .transition(Motion.swap(reduce: reduceMotion))
             case .allClear:
+                // motion: state change — nothing is left; the all-clear takes the request's place
                 AllClearView(store: store)
                     .transition(Motion.swap(reduce: reduceMotion))
             }
@@ -30,7 +32,8 @@ struct RequestsView: View {
                 shown = new
                 return
             }
-            withAnimation(Motion.animation(.dropIn, reduce: reduceMotion)) { shown = new }
+            // motion: state change — a crossfade in place, no shift
+            withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { shown = new }
         }
         .onChange(of: store.requests.first?.requestId) { old, new in
             let answered = old.map { store.outcome($0) == .approved || store.outcome($0) == .denied } ?? false

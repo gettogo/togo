@@ -97,6 +97,12 @@ struct ImageViewerRequest: Identifiable {
 
 /// One picture at thumbnail size: the image once loaded, else a quiet tile saying what it is.
 struct ChatThumbnail: View {
+    /// One driver for the crossfade: loaded or failed, whichever changed.
+    private struct ThumbKey: Equatable {
+        var loaded: Bool
+        var failed: Bool
+    }
+
     @Environment(\.chatImageFetch) private var fetch
     let ref: HarnessImage
     let side: CGFloat
@@ -112,15 +118,12 @@ struct ChatThumbnail: View {
                     .aspectRatio(contentMode: square ? .fill : .fit)
                     .frame(width: square ? side : nil, height: square ? side : nil)
                     .frame(maxWidth: square ? side : side * 1.4, maxHeight: side)
-                    .transition(.opacity)
             } else {
                 tile
-                    .transition(.opacity)
             }
         }
-        // The picture crossfades over its placeholder in the same frame.
-        .motion(.respond, value: image != nil)
-        .motion(.respond, value: failed)
+        // motion: state change — the picture crossfades over its placeholder in the same frame, nothing moves.
+        .motion(.respond, value: ThumbKey(loaded: image != nil, failed: failed))
         .clipShape(.rect(cornerRadius: 10, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.togoLine, lineWidth: 0.5)

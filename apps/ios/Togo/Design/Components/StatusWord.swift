@@ -16,6 +16,7 @@ struct StatusWord: View {
             .fontWeight(status == .needsYou ? .semibold : .regular)
             .foregroundStyle(status == .needsYou ? Color.togoAccentText : Color.togoMute)
             .contentTransition(reduceMotion ? .identity : .interpolate)
+            // motion: state change — the status word changes in place; nothing moves.
             .motion(.fade, value: Self.label(status, exit: exit))
             // trunc-ok: a status word from a fixed short set; ended states say a short phrase
             .lineLimit(1)

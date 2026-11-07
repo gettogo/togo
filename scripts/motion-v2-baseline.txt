@@ -1,0 +1,2 @@
+# Motion principles v2 baseline: empty. Every v2 rule is an error everywhere; any line here
+# (other than these comments) fails scripts/check-motion.sh. Fix an offence, never list it.

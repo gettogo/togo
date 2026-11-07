@@ -21,7 +21,8 @@ struct AttachmentStrip: View {
                         onRetry: { Task { await attachments.retry(item.id) } }
                     )
                     // Chips arrive and leave in ComposerAttachments' `resize` transactions.
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: cause → effect — the chip arrives by opacity in place as the strip grows.
+                    .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
             .padding(.horizontal, 12)
@@ -110,13 +111,11 @@ private struct AttachmentChip: View {
                 Color.black.opacity(0.35)
                 ProgressView().controlSize(.small).tint(Color.togoSnow)
             }
-            .transition(.opacity)
         case .failed:
             ZStack {
                 Color.black.opacity(0.5)
                 Image(systemName: "arrow.clockwise").font(.footnote.weight(.semibold)).foregroundStyle(Color.togoSnow)
             }
-            .transition(.opacity)
         case .ready:
             EmptyView()
         }

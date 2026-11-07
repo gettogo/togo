@@ -70,6 +70,7 @@ struct WaitingComplicationView: View {
             // The system animates between entries: the beacon lights or goes out, the count rolls.
             if entry.count > 0 {
                 Circle().fill(Color.togoAccent)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
                 Text(entry.count, format: .number)
                     .font(.system(.caption, design: .monospaced).weight(.semibold))
@@ -77,6 +78,7 @@ struct WaitingComplicationView: View {
                     .contentTransition(.numericText(value: Double(entry.count)))
             } else {
                 Circle().strokeBorder(Color.secondary, lineWidth: 2)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
@@ -115,6 +117,7 @@ struct WaitingComplicationView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if entry.count == 0 {
                     Text(Self.allClear).font(.headline)
+                        // motion: state change — the system crossfades between entries in place; nothing moves.
                         .transition(.opacity)
                 } else {
                     // "04  Run npm test?"

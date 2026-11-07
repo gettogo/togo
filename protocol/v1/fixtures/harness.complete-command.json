@@ -1,5 +1,5 @@
 {
-  "description": "The / menu lists matching commands; model opens the native picker instead of inserting text. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
+  "description": "The / menu lists matching commands with how each runs; model is a choice in place over its four aliases, the current one selected, and a pick runs set_model. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
   "setup": [
     {
       "jsonrpc": "2.0",
@@ -44,7 +44,32 @@
           "title": "/model",
           "detail": "Set the AI model",
           "hint": "[model]",
-          "screen": "model"
+          "screen": "model",
+          "kind": "choice",
+          "action": "set_model",
+          "choices": [
+            {
+              "id": "opus",
+              "label": "Opus",
+              "selected": true
+            },
+            {
+              "id": "sonnet",
+              "label": "Sonnet"
+            },
+            {
+              "id": "haiku",
+              "label": "Haiku"
+            },
+            {
+              "id": "opus[1m]",
+              "label": "Opus 1M"
+            },
+            {
+              "id": "fable",
+              "label": "Fable"
+            }
+          ]
         }
       ]
     }

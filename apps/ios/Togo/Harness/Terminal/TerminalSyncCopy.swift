@@ -34,16 +34,14 @@ enum TerminalSyncCopy {
 
     // MARK: Capture sheet
 
-    static let history = String(localized: "sync.capture.title", defaultValue: "Terminal history")
     static let loading = String(localized: "sync.capture.loading", defaultValue: "Reading the terminal")
     static let captureFailed = String(localized: "sync.capture.failed", defaultValue: "Couldn't read the terminal")
     static let tryAgain = String(localized: "sync.capture.retry", defaultValue: "Try again")
     static let copyAll = String(localized: "sync.capture.copy", defaultValue: "Copy all")
     static let done = String(localized: "sync.capture.done", defaultValue: "Done")
     static let marked = String(localized: "sync.capture.marked", defaultValue: "Marked line")
-    static let notOnPhone = String(
-        localized: "sync.capture.note", defaultValue: "This point is not on the phone, so here it is from the machine."
-    )
+    /// The history sheet's title: the lines come from the machine, not the phone.
+    static let fromMachine = String(localized: "sync.capture.note", defaultValue: "From the machine")
 
     // MARK: Command blocks
 

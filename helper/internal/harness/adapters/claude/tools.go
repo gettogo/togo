@@ -26,7 +26,9 @@ func (t *transcript) toolUse(e entry, b block, at time.Time, turn, parent string
 	case planTools[b.Name]:
 		return t.planUse(b, in, at, turn, parent)
 	case b.Name == "AskUserQuestion":
-		return []harness.Item{t.question(b, in, at, turn, parent)}, nil
+		it := t.question(b, in, at, turn, parent)
+		t.questions[b.ID] = &it
+		return []harness.Item{it}, nil
 	}
 	title, category, subj := describeTool(b.Name, in, t.cwd)
 	it := harness.Item{ID: b.ID, TurnID: turn, Parent: parent, Kind: harness.KindTool, At: at,
@@ -90,6 +92,9 @@ func describeTool(name string, in map[string]any, cwd string) (string, string, *
 
 // toolResult completes a tool call with its outcome.
 func (t *transcript) toolResult(e entry, b block, at time.Time) ([]harness.Item, []harness.Op) {
+	if q, ok := t.questions[b.ToolUseID]; ok {
+		return t.questionResult(e, b, q), nil
+	}
 	it, ok := t.tools[b.ToolUseID]
 	if !ok {
 		return nil, nil

@@ -67,10 +67,57 @@ enum PrimitiveCopy {
     static let noBody = String(localized: "primitive.noBody", defaultValue: "Nothing to show")
     static let moreLines = String(localized: "primitive.moreLines", defaultValue: "More in the terminal")
     static let changes = String(localized: "primitive.changes", defaultValue: "Changes")
+    static let on = String(localized: "primitive.on", defaultValue: "on")
+    static let off = String(localized: "primitive.off", defaultValue: "off")
+    static let restart = String(localized: "primitive.restart", defaultValue: "Restart")
+    static let restartedShort = String(localized: "primitive.restartedShort", defaultValue: "Restarted")
+    static let didntWork = String(localized: "primitive.didntWork", defaultValue: "Didn't work")
+    static let afterThisReply = String(localized: "primitive.afterThisReply", defaultValue: "After this reply")
+    static let withInstructions = String(localized: "primitive.withInstructions", defaultValue: "With instructions…")
 
-    /// "Last read 4 min ago" for a stale screen.
-    static func stale(_ ago: String) -> String {
-        String(localized: "primitive.stale", defaultValue: "Couldn't refresh. Last read \(ago).")
+    /// "Restart Claude now? The current reply stops."
+    static func restartNow(_ agent: String) -> String {
+        agent.isEmpty
+            ? String(localized: "primitive.restartNowAgent", defaultValue: "Restart the agent now? The current reply stops.")
+            : String(localized: "primitive.restartNow", defaultValue: "Restart \(agent) now? The current reply stops.")
+    }
+
+    /// "Compact now", the confirm button when the dialog also offers instructions.
+    static func runNow(_ label: String) -> String {
+        String(localized: "primitive.runNow", defaultValue: "\(label) now")
+    }
+
+    /// "Clear?", a dialog's title for a destructive action with no line of its own.
+    static func asking(_ label: String) -> String {
+        String(localized: "primitive.asking", defaultValue: "\(label)?")
+    }
+
+    /// "Restarted with Sonnet".
+    static func restartedWith(_ value: String) -> String {
+        String(localized: "primitive.restartedWith", defaultValue: "Restarted with \(value)")
+    }
+
+    /// "Back to Opus", the Undo after a restart.
+    static func backTo(_ value: String) -> String {
+        String(localized: "primitive.backTo", defaultValue: "Back to \(value)")
+    }
+
+    /// "Effort high".
+    static func setTo(_ setting: String, _ value: String) -> String {
+        setting.isEmpty ? value : String(localized: "primitive.setTo", defaultValue: "\(setting) \(value)")
+    }
+
+    /// "Effort high, waiting for Claude": typed, not yet shown by the harness.
+    static func setWaiting(_ setting: String, _ value: String, agent: String) -> String {
+        let set = setTo(setting, value)
+        return agent.isEmpty
+            ? String(localized: "primitive.setWaitingAgent", defaultValue: "\(set), waiting for the agent")
+            : String(localized: "primitive.setWaiting", defaultValue: "\(set), waiting for \(agent)")
+    }
+
+    /// "Updated 2 min ago", a stale screen's bar subtitle.
+    static func updated(_ ago: String) -> String {
+        String(localized: "primitive.updated", defaultValue: "Updated \(ago)")
     }
 
     /// "3 of 7 done".

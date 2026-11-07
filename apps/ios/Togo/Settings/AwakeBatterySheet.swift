@@ -33,6 +33,7 @@ struct AwakeBatterySheet: View {
                             .contentTransition(reduceMotion ? .opacity : .interpolate)
                     }
                     .buttonStyle(.primary(.full))
+                    // motion: cause → effect — the tapped Copy says Copied in place
                     .motion(.respond, value: copied)
                     Button(settingsText("awake.sheet.done", "Done")) { dismiss() }
                         .buttonStyle(.secondary(.full))

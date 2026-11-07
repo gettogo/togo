@@ -236,19 +236,21 @@ private struct PortRow: View {
     /// One slot: the spinner and Open or Show crossfade on `respond`.
     private var trailing: some View {
         ZStack {
+            // motion: cause → effect — the tapped Open becomes the spinner, then Show, in one slot
             if state == .opening {
                 ProgressView()
                     .frame(minWidth: 44, minHeight: 44)
                     .accessibilityLabel(PortsCopy.opening)
-                    .transition(.opacity)
             } else if previewable {
                 let isOpen = if case .open? = state { true } else { false }
                 Button(isOpen ? PortsCopy.show : PortsCopy.open, action: open)
                     .buttonStyle(.secondary(.fit))
                     .accessibilityLabel(isOpen ? PortsCopy.showLabel(port.port) : PortsCopy.openLabel(port.port))
+                    // motion: cause → effect — the button comes back in the same slot
                     .transition(.opacity)
             }
         }
+        // motion: cause → effect — Open, the spinner and Show crossfade in one fixed slot
         .motion(.respond, value: state.map { CaseName.of($0) })
     }
 }
@@ -313,7 +315,8 @@ private struct ManualPortRow: View {
                         .foregroundStyle(Color.togoSnow)
                 }
                 .labelStyle(NoteLabelStyle(hasIcon: true))
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                // motion: preventing a jump — the list row opens for the error under the field
+                .transition(Motion.arrive(reduce: reduceMotion))
             }
         }
         .mirrors(model.manualError, into: $errorShown)

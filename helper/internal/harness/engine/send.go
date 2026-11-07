@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
 
 // MaxQueued is how many prompts a session holds while the agent works.
@@ -23,6 +24,16 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		return harness.SendResult{}, err
 	}
 	images := harness.ImageRefs(req.Images)
+	if act, ok := s.ad.Actions[actionCommand]; ok && len(req.Images) == 0 {
+		if name, args, ok := slashCommand(req.Text); ok {
+			// The harness API takes a / line as a command, not as prompt
+			// text the model would read (OpenCode's /init).
+			if err := e.runCommand(ctx, s, act, name, args); err != nil {
+				return harness.SendResult{}, err
+			}
+			return e.userItem(s, req.Text, nil, false), nil
+		}
+	}
 	if act, ok := s.ad.Actions["send"]; ok {
 		// Through the harness API every path and the text go in the one request.
 		text := harness.Together(req.Text, req.Images)
@@ -65,6 +76,56 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		return harness.SendResult{}, err
 	}
 	return e.userItem(s, req.Text, images, false), nil
+}
+
+// actionCommand is the action that runs a / line through the harness's
+// API, when the adapter has one.
+const actionCommand = "command"
+
+// commandAccept is how long a command request may take to be refused.
+// OpenCode answers POST /session/{id}/command only when the reply is
+// done, so a request still open after this was accepted and runs on.
+var commandAccept = 3 * time.Second
+
+// runCommand runs the command action and returns once the harness refused
+// it or has held it for commandAccept.
+func (e *Engine) runCommand(ctx context.Context, s *sess, act spec.Action, name, args string) error {
+	type outcome struct {
+		res harness.ActionResult
+		err error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		res, err := e.run(context.WithoutCancel(ctx), s, actionCommand, act, map[string]any{"command": name, "arguments": args})
+		done <- outcome{res, err}
+	}()
+	select {
+	case o := <-done:
+		if o.err != nil {
+			return o.err
+		}
+		if o.res.Result == harness.ResultFailed || o.res.Result == harness.ResultFallback {
+			return &harness.FallbackError{Reason: "source", Detail: o.res.Message}
+		}
+	case <-time.After(commandAccept):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
+}
+
+// slashCommand splits "/name rest" into the command name and its
+// arguments. A lone "/" or a path such as "/usr/bin" is not a command.
+func slashCommand(text string) (name, args string, ok bool) {
+	t := strings.TrimSpace(text)
+	if !strings.HasPrefix(t, "/") {
+		return "", "", false
+	}
+	name, args, _ = strings.Cut(t[1:], " ")
+	if name == "" || strings.ContainsAny(name, "/\n\t") {
+		return "", "", false
+	}
+	return name, strings.TrimSpace(args), true
 }
 
 // typePrompt pastes a prompt and its image paths in the order the
@@ -152,62 +213,6 @@ func (e *Engine) Complete(ctx context.Context, req harness.CompleteRequest) (har
 		items = []harness.Completion{}
 	}
 	return harness.CompleteResult{Items: items}, nil
-}
-
-func (e *Engine) completeCommands(ctx context.Context, s *sess, query string, limit int) []harness.Completion {
-	c := s.ad.Commands
-	if c == nil {
-		return nil
-	}
-	type cmd struct{ name, hint, detail, screen string }
-	var all []cmd
-	for _, sc := range c.Static {
-		all = append(all, cmd{sc.Name, sc.Hint, sc.Detail, sc.Screen})
-	}
-	if c.Source != "" {
-		if data, _, err := e.fetch(ctx, s, c.Source, nil, false); err == nil {
-			list := data
-			if c.Select != "" {
-				s.mu.Lock()
-				st := s.stateLocked()
-				s.mu.Unlock()
-				if v, err := JQFirst(c.Select, data, st); err == nil {
-					list = v
-				}
-			}
-			arr, _ := list.([]any)
-			for _, el := range arr {
-				m, _ := el.(map[string]any)
-				all = append(all, cmd{toString(m["name"]), toString(m["hint"]), toString(m["detail"]), ""})
-			}
-		}
-	}
-	q := strings.ToLower(strings.TrimPrefix(query, "/"))
-	var out []harness.Completion
-	seen := map[string]bool{}
-	for _, pass := range []func(string) bool{
-		func(n string) bool { return strings.HasPrefix(n, q) },
-		func(n string) bool { return !strings.HasPrefix(n, q) && strings.Contains(n, q) },
-	} {
-		for _, cm := range all {
-			n := strings.ToLower(cm.name)
-			if cm.name == "" || seen[n] || !pass(n) {
-				continue
-			}
-			seen[n] = true
-			comp := harness.Completion{Insert: "/" + cm.name + " ", Title: "/" + cm.name, Detail: cm.detail, Hint: cm.hint}
-			if cm.screen != "" {
-				if _, ok := s.ad.Screens[cm.screen]; ok {
-					comp.Screen = cm.screen
-				}
-			}
-			out = append(out, comp)
-			if len(out) >= limit {
-				return out
-			}
-		}
-	}
-	return out
 }
 
 // maxWalk bounds how many entries a file completion visits.

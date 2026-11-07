@@ -93,6 +93,7 @@ struct RequestCollapse: ViewModifier {
             // conceals the answered card before the next stage rises (`PromptBar.move`), and
             // everything else that moves with it (a roster line's word, the bar's height)
             // travels on `resize`.
+            // motion: preventing a jump — the answered card leaves and the rows close the gap on one transaction.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
                 store.dismissAnswered(ids)
             }

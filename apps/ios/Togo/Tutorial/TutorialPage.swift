@@ -172,6 +172,7 @@ struct TutorialMore<Content: View>: View {
                 .foregroundStyle(Color.togoSnow)
                 .frame(minHeight: 44)
                 .contentShape(.rect)
+                // motion: cause → effect — the tapped row's chevron turns as it opens
                 .motion(.respond, value: expanded)
             }
             .buttonStyle(.plain)
@@ -182,7 +183,8 @@ struct TutorialMore<Content: View>: View {
                 VStack(alignment: .leading, spacing: 20) {
                     content
                 }
-                .disclosed(disclosure)
+                // The tap opens it: its edge uncovers the words, nothing rises.
+                .unfolds(disclosure)
             }
         }
     }
@@ -236,6 +238,13 @@ struct ConnectionDiagram: View {
 
     /// The entrance waits this long, so it starts once the page has settled.
     static let entranceDelay = 0.25
+    /// The diagram's agents attach one after another, in order (the tutorial's explanatory
+    /// stagger, the one kept by motion principles v2): each rises this far as it fades in...
+    static let agentRise: CGFloat = 6
+    /// ...a beat after the helper appears, 30 ms apart, at most 150 ms in total.
+    static func agentDelay(_ index: Int) -> Double {
+        0.06 + min(Double(max(index, 0)) * 0.03, 0.15)
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
@@ -253,8 +262,9 @@ struct ConnectionDiagram: View {
         ))
         .onAppear {
             guard animated, !reduceMotion, !shown else { return }
-            // A first-run entrance: a beat after the page settles, the link draws in and the
-            // agents reveal one after another (30 ms apart, 150 ms at most).
+            // motion: origin — first run only: the link draws from the phone to the machine and
+            // the agents attach one after another (30 ms apart, 150 ms at most), so the order
+            // explains how Togo reaches them.
             withAnimation(Motion.animation(.progress, reduce: reduceMotion)?.delay(Self.entranceDelay)) { shown = true }
         }
     }
@@ -306,12 +316,12 @@ struct ConnectionDiagram: View {
                         .padding(.vertical, 3)
                         .background(Color.togoGrouped, in: .rect(cornerRadius: 4))
                         .opacity(complete ? 1 : 0)
-                        .offset(y: complete ? 0 : Motion.revealRise(reduce: reduceMotion))
-                        // Each agent reveals on its own beat of the entrance's transaction.
+                        .offset(y: complete || reduceMotion ? 0 : Self.agentRise)
+                        // motion: origin — each agent attaches to the machine in turn, so the order explains it
                         .transaction(value: complete) { transaction in
                             guard transaction.animation != nil else { return }
                             transaction.animation = Motion.animation(.reveal, reduce: reduceMotion)?
-                                .delay(Self.entranceDelay + Motion.revealDelay + Motion.staggerDelay(index))
+                                .delay(Self.entranceDelay + Self.agentDelay(index))
                         }
                 }
             }

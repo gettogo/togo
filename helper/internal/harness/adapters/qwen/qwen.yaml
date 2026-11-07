@@ -8,8 +8,9 @@ name: Qwen Code
 revision: 1
 match: { agents: [qwen], commands: [qwen] }
 harness: { version: [qwen, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.21 <0.30" }
+# No status capability: neither the hooks nor the chat log fill a status block.
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode,
-  needs.approvals, agents, plan, changes, ports, status, resume, compact]
+  needs.approvals, agents, plan, changes, ports, resume, compact]
 feeds:
   hooks:            # `togo hook qwen <event>` in ~/.qwen/settings.json (installed only by `togo hooks install --agent qwen`)
     hook:
@@ -53,19 +54,14 @@ screens:
     section: plan
     capability: plan
     source: todos
-  compact:
-    primitive: confirm
-    title: Compress
-    section: status
-    capability: compact
-    submit: compact
+    map: { item.id: .id, item.title: .content, item.state: 'if .status == "completed" then "done" elif .status == "in_progress" then "active" else "pending" end' }
 actions:
-  set_mode:         # /approval-mode takes plan|default|auto-edit|auto|yolo; hooks report auto_edit
+  set_mode:         # /approval-mode takes plan|default|auto-edit|auto|yolo; the mapper reads auto-edit as auto_edit
     label: Mode
     branch:
       - { when: '{{eq .id "auto_edit"}}', type: { text: '/approval-mode auto-edit', submit: true, when_idle: true } }
       - { type: { text: '/approval-mode {{.id}}', submit: true, when_idle: true } }
-    verify: { source: hooks, select: .permission_mode, equals: '{{.id}}', within: 5s }
+    verify: { source: hooks, select: $state.mode, equals: '{{.id}}', within: 5s }
     stability: documented-command
   compact:
     label: Compress
@@ -90,15 +86,15 @@ modes:
     - { id: auto, label: Auto }
     - { id: yolo, label: YOLO }
   current: hooks
-  select: .permission_mode
+  select: $state.mode
   set: set_mode
 commands:
   static:
-    - { name: approval-mode, hint: '<mode>', detail: Set the approval mode }
-    - { name: compress, detail: Summarise the conversation }
+    - { name: approval-mode, hint: '<mode>', detail: Set the approval mode, kind: choice, action: set_mode }
+    - { name: compress, detail: Summarise the conversation, action: compact }
     - { name: resume, detail: Resume a session, screen: resume }
-    - { name: stats, detail: Session statistics }
-    - { name: memory, hint: '[show|add|refresh]', detail: Manage QWEN.md memory }
-    - { name: agents, detail: Manage subagents }
+    - { name: stats, detail: Session statistics, kind: terminal }
+    - { name: memory, hint: '[show|add|refresh]', detail: Manage QWEN.md memory, kind: terminal }
+    - { name: agents, detail: Manage subagents, kind: terminal }
 mission:
-  plan: { source: todos }
+  plan: { source: todos, map: { item.id: .id, item.title: .content, item.state: 'if .status == "completed" then "done" elif .status == "in_progress" then "active" else "pending" end' } }

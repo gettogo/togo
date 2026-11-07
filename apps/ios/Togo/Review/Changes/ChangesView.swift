@@ -101,9 +101,11 @@ struct ChangesView: View {
                     .padding(.horizontal, Layout.margin)
                     .padding(.vertical, 12)
                     .background(Color.togoInk)
-                    .transition(Motion.present(from: .bottom, reduce: reduceMotion))
             }
         }
+        // The commit bar comes with the repository being writable, not with anything the user
+        // did here, so it lands at once.
+        .transaction(value: shown.canWrite) { $0.animation = nil }
     }
 
     /// The read-only reason, a cut-short list and the last refusal, each in a sentence.

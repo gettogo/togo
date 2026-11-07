@@ -204,4 +204,102 @@ if [ -n "$stale" ]; then
 	echo "$stale" | awk -F '\t' '{ printf "%s: %s: %s\n", $1, $2, $3 }'
 	status=1
 fi
+
+# Motion principles v2 (§6). Prints "<file>\t<rule>\t<source>" per offence:
+#   no-rise                revealRise, swapShift, revealOnAppear, or `.offset(y:` in a transition
+#                          (outside PromptBar and Tutorial/, where the edge or the order explains it)
+#   no-roll-in-timeline    numericText, rollingNumber or countChange inside a TimelineView closure
+#   periodic-now           TimelineView(.periodic(from: .now …)), which re-anchors on every render
+#   motion-purpose         .transition(, withAnimation(, .motion( or matchedGeometryEffect( with no
+#                          `// motion: <purpose> — <what the eye learns>` on it or within 3 lines above
+#   availability-animates  .motion(/.animation( keyed on shownLayer, chatAvailable or hasMission
+# scripts/motion-v2-baseline.txt is empty: every offence fails, and so does any entry in it.
+# The rules check themselves first against scripts/motion-lint/v2-*.txt; TogoTests/MotionLint.swift
+# implements the same rules for the test target. Change both together.
+v2rules='
+function trim(t) { sub(/^[ \t]+/, "", t); sub(/[ \t]+$/, "", t); return t }
+function braces(t,    i, c, d) {
+	d = 0
+	for (i = 1; i <= length(t); i++) { c = substr(t, i, 1); if (c == "{") d++; else if (c == "}") d-- }
+	return d
+}
+function iscode(t) { t = trim(t); return t != "" && t !~ /^\/\// && t !~ /^#/ }
+function report(i, rule,    key) {
+	key = path SUBSEP i SUBSEP rule
+	if (key in seen) return
+	seen[key] = 1
+	printf "%s\t%s\t%s\n", path, rule, trim(src[i])
+}
+function judge(    i, j, k, line, b, exempt, inTrans, tdepth, purposed) {
+	exempt = (path ~ /PromptBar/ || path ~ /(^|\/)Tutorial\//)
+	inTrans = 0; tdepth = 0
+	for (i = 1; i <= n; i++) {
+		line = src[i]
+		if (!iscode(line)) continue
+		if (line ~ /:[ \t]*([A-Za-z]+[ \t]*&[ \t]*)?Transition[ \t]*\{/) { inTrans = 1; tdepth = 0 }
+		if (!exempt) {
+			if (line ~ /revealRise|swapShift|revealOnAppear/) report(i, "no-rise")
+			else if (index(line, ".offset(y:") && (inTrans || line ~ /[Tt]ransition|asymmetric|combined\(with:/)) report(i, "no-rise")
+		}
+		if (inTrans) { tdepth += braces(line); if (tdepth <= 0) inTrans = 0 }
+		if (index(line, "TimelineView(")) {
+			if (line ~ /numericText|rollingNumber|countChange/) report(i, "no-roll-in-timeline")
+			b = braces(line); j = i
+			while (b > 0 && j < n && j < i + 150) {
+				j++
+				if (iscode(src[j]) && src[j] ~ /numericText|rollingNumber|countChange/) report(j, "no-roll-in-timeline")
+				b += braces(src[j])
+			}
+		}
+		if (line ~ /\.periodic\(from:[ \t]*(\.now|Date\(\))/) report(i, "periodic-now")
+		if (line ~ /\.transition\(|withAnimation\(|\.motion\(|matchedGeometryEffect\(/ && line !~ /func (motion|transition)\(/) {
+			purposed = 0
+			for (k = i; k >= 1 && k >= i - 3; k--) if (index(src[k], "// motion:")) purposed = 1
+			if (!purposed) report(i, "motion-purpose")
+		}
+		if (line ~ /(\.motion\(|\.animation\()/ && line ~ /value:[^)]*(shownLayer|chatAvailable|hasMission)/)
+			report(i, "availability-animates")
+	}
+}
+FNR == 1 && NR > 1 { judge(); n = 0 }
+FNR == 1 { path = FILENAME; sub(/^\.\//, "", path) }
+{ src[++n] = $0 }
+END { if (n > 0) judge() }'
+
+vfix="$fixtures/v2-flagged.txt"
+vok="$fixtures/v2-allowed.txt"
+want="$(sed -n 's|^[[:space:]]*// expect \([a-z-]*\).*|\1|p' "$vfix" | sort)"
+got="$(awk "$v2rules" "$vfix" | cut -f2 | sort)"
+if [ "$want" != "$got" ]; then
+	echo "check-motion: the v2 rules flag these in $vfix:" >&2
+	awk "$v2rules" "$vfix" >&2
+	echo "expected rules:" >&2
+	echo "$want" >&2
+	exit 2
+fi
+wrong="$(awk "$v2rules" "$vok")"
+if [ -n "$wrong" ]; then
+	echo "check-motion: the v2 rules flag lines in $vok:" >&2
+	echo "$wrong" >&2
+	exit 2
+fi
+
+v2found="$(
+	cd "$apps"
+	dirs="$(basename "$root")"
+	for extra in TogoWatch TogoWidgets TogoWatchWidgets; do [ -d "$extra" ] && dirs="$dirs $extra"; done
+	# shellcheck disable=SC2086
+	find $dirs -name '*.swift' ! -path '*/Design/Motion*.swift' -print0 | sort -z | xargs -0 awk "$v2rules" | sort -u
+)"
+v2known="$(grep -v -e '^#' -e '^[[:space:]]*$' "$here/motion-v2-baseline.txt" 2>/dev/null || true)"
+if [ -n "$v2known" ]; then
+	echo "check-motion: scripts/motion-v2-baseline.txt must stay empty; fix these instead of listing them:"
+	echo "$v2known"
+	status=1
+fi
+if [ -n "$v2found" ]; then
+	echo "Motion principles v2: offences; fix them (a // motion: <purpose> comment, or no animation):"
+	echo "$v2found" | awk -F '\t' '{ printf "%s: %s: %s\n", $1, $2, $3 }'
+	status=1
+fi
 exit "$status"

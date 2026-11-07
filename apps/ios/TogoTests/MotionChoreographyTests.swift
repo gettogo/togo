@@ -5,7 +5,7 @@ import Testing
 /// The choreography helpers: roles' values, the two-phase disclosure and its reversal guard,
 /// the mirrored swap, and the Reduce Motion variants of the transitions.
 @MainActor struct MotionChoreographyTests {
-    @Test func newRolesMatchTheSpec() {
+    @Test func rolesMatchTheSpec() {
         #expect(Motion.spec(.respond) == MotionSpec(curve: .spring(response: 0.24, damping: 0.92), reduced: .fade(0.12)))
         #expect(Motion.spec(.resize) == MotionSpec(curve: .spring(response: 0.36, damping: 0.90), reduced: .fade(0.15)))
         #expect(Motion.spec(.reveal) == MotionSpec(curve: .easeOut(0.22), reduced: .fade(0.15)))
@@ -15,38 +15,54 @@ import Testing
         #expect(Motion.spec(.ambient) == MotionSpec(curve: .easeInOut(3.2), reduced: .instant))
     }
 
-    @Test func revealStartsABeatAfterTheResize() {
-        #expect(Motion.revealAnimation(reduce: false) == .easeOut(duration: 0.22).delay(0.06))
-        #expect(Motion.revealAnimation(reduce: false, index: 2) == .easeOut(duration: 0.22).delay(0.12))
-        // Under Reduce Motion: a plain fade, no delay, no stagger.
-        #expect(Motion.revealAnimation(reduce: true) == .easeOut(duration: 0.15))
-        #expect(Motion.revealAnimation(reduce: true, index: 4) == .easeOut(duration: 0.15))
-    }
-
-    @Test func staggerIsCapped() {
-        #expect(Motion.staggerDelay(0) == 0)
-        #expect(abs(Motion.staggerDelay(3) - 0.09) < 1e-9)
-        #expect(Motion.staggerDelay(5) == 0.15)
-        #expect(Motion.staggerDelay(40) == 0.15)
-        #expect(Motion.staggerDelay(-1) == 0)
-    }
-
-    /// Under Reduce Motion transitions keep opacity and drop every movement.
-    @Test func transitionsOnlyFadeUnderReduceMotion() {
-        #expect(Motion.revealRise(reduce: false) == 6)
-        #expect(Motion.revealRise(reduce: true) == 0)
-        #expect(Motion.swapShift(reduce: false) == 4)
-        #expect(Motion.swapShift(reduce: true) == 0)
+    /// Content arrives with its opacity only: no rise, no delay, no stagger. Under Reduce Motion
+    /// a surface presenting from its edge only fades.
+    @Test func transitionsNeverRise() {
         #expect(Motion.presentMoves(reduce: false))
         #expect(!Motion.presentMoves(reduce: true))
         // They all build.
         for reduce in [false, true] {
-            _ = Motion.reveal(reduce: reduce)
+            _ = Motion.arrive(reduce: reduce)
+            _ = Motion.unfold(reduce: reduce)
             _ = Motion.conceal(reduce: reduce)
-            _ = Motion.revealConceal(reduce: reduce)
             _ = Motion.swap(reduce: reduce)
             _ = Motion.present(from: .top, reduce: reduce)
         }
+    }
+
+    /// The shared vocabulary itself never moves content to make it appear and never delays it:
+    /// no offset, no delay, no stagger anywhere in the choreography file.
+    @Test func vocabularyHasNoRiseOrDelay() throws {
+        let code = try MotionLint.source("apps/ios/Togo/Design/MotionChoreography.swift")
+            .split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        for banned in [".offset(", ".delay(", "revealRise", "swapShift", "revealDelay", "staggerDelay", ".move(edge: .bottom"] {
+            #expect(!code.contains(banned), "\(banned)")
+        }
+    }
+
+    /// A clock is never animated: monospaced digits, no content transition, and any inherited
+    /// animation stripped. The rolling forwarder and the old reveals are gone.
+    @Test func clockTextStripsAnimation() throws {
+        let code = try MotionLint.source("apps/ios/Togo/Design/MotionChoreography.swift")
+        let clock = try #require(code.range(of: "func clockText() -> some View {"))
+        let body = code[clock.upperBound...].prefix(while: { $0 != "}" })
+        #expect(body.contains("monospacedDigit()"))
+        #expect(body.contains(".contentTransition(.identity)"))
+        #expect(code[clock.upperBound...].contains(".transaction { $0.animation = nil }"))
+        for retired in ["func rollingNumber(", "func revealOnAppear(", "func revealConceal(", "func reveal("] {
+            #expect(!code.contains(retired), "\(retired)")
+        }
+        _ = Text(verbatim: "1m 9s").clockText()
+    }
+
+    /// A phase shown for under 250 ms is replaced at once; one shown longer crossfades.
+    @Test func phaseSwapIsInstantUnder250ms() {
+        #expect(!PhaseSwapTiming.crossfades(shownFor: 0))
+        #expect(!PhaseSwapTiming.crossfades(shownFor: 0.1))
+        #expect(!PhaseSwapTiming.crossfades(shownFor: 0.249))
+        #expect(PhaseSwapTiming.crossfades(shownFor: 0.25))
+        #expect(PhaseSwapTiming.crossfades(shownFor: 2))
     }
 
     @Test func disclosureOpensInOneStep() {

@@ -2,27 +2,20 @@ package hooks
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 )
 
-// Agents Install accepts only when named: their hooks feed Togo's native
-// views but writing them changes another harness's config, so "all" and
-// Status's default list leave them out.
+// Harnesses whose hooks follow Claude Code's shape (qwen, droid) or Copilot
+// CLI's own format. Their hooks are their native chat feed, so setup
+// installs them whenever the harness is installed.
 const (
 	Qwen    = "qwen"
 	Droid   = "droid"
 	Copilot = "copilot"
 )
-
-// Optional lists the agents installed only on request.
-var Optional = []string{Qwen, Droid, Copilot}
-
-// Known reports whether agent is one Install accepts.
-func Known(agent string) bool {
-	return slices.Contains(Agents, agent) || slices.Contains(Optional, agent)
-}
 
 // qwenEvents are Qwen Code's hooks the qwen adapter reads; they share
 // Claude Code's names and shape.
@@ -75,9 +68,12 @@ func copilotEdits(o Options, add bool) ([]edit, string, error) {
 	if st, err := os.Stat(root); root == "" || err != nil || !st.IsDir() {
 		return nil, "", nil
 	}
-	return []edit{{path: filepath.Join(root, "hooks", "togo.json"), transform: func([]byte) ([]byte, error) {
+	return []edit{{path: filepath.Join(root, "hooks", "togo.json"), transform: func(cur []byte) ([]byte, error) {
 		if !add {
 			return nil, nil
+		}
+		if err := copilotEdited(cur, o.Binary); err != nil {
+			return nil, err
 		}
 		events := slices.Clone(copilotEvents)
 		if o.Block {
@@ -99,28 +95,26 @@ func copilotEdits(o Options, add bool) ([]edit, string, error) {
 	}}}, root, nil
 }
 
-// optionalStatus is status for the Optional agents.
-func optionalStatus(o Options, agent string) string {
-	var root, path string
-	var events []string
-	switch agent {
-	case Qwen:
-		root, path, events = o.QwenDir, filepath.Join(o.QwenDir, "settings.json"), qwenEvents
-	case Droid:
-		root, path, events = o.FactoryDir, filepath.Join(o.FactoryDir, "hooks.json"), droidEvents
-	case Copilot:
-		root, path, events = o.CopilotDir, filepath.Join(o.CopilotDir, "hooks", "togo.json"), copilotEvents
+// copilotEdited refuses to replace a togo.json whose hooks are no longer
+// plain Togo commands: the user changed Togo's file, and install leaves it.
+func copilotEdited(cur []byte, binary string) error {
+	if len(cur) == 0 {
+		return nil
 	}
-	if st, err := os.Stat(root); root == "" || err != nil || !st.IsDir() {
-		return StatusNoAgent
+	var doc struct {
+		Hooks map[string][]struct {
+			Bash string `json:"bash"`
+		} `json:"hooks"`
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return StatusAbsent
+	if err := json.Unmarshal(cur, &doc); err != nil {
+		return fmt.Errorf("parse JSON: %w", err)
 	}
-	have, err := ownedEvents(data, agent)
-	if err != nil {
-		return StatusAbsent
+	for ev, list := range doc.Hooks {
+		for _, h := range list {
+			if !plainCommand(h.Bash, Copilot) {
+				return fmt.Errorf("%w: hooks.%s runs %q", ErrEdited, ev, h.Bash)
+			}
+		}
 	}
-	return coverage(have, events)
+	return nil
 }

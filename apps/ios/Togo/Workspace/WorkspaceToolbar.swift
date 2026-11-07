@@ -5,7 +5,8 @@ import TogoKit
 /// move into the vertical bar beside the status bar and the terminal keeps the whole height.
 /// Every item has a symbol and a title: the symbol shows in the bar, the title in overflow and
 /// to VoiceOver. Order: the way back first, then the session's buttons (the layer switch
-/// leading them), its menu last.
+/// leading them), its menu last. When the bar runs out of room the items stay in this order of
+/// priority: mission control while it has a badge, the session menu, the layer switch, the rest.
 struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     let leading: WorkspaceLeading
     let onLeading: () -> Void
@@ -14,7 +15,7 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     let review: ReviewToolbarItems?
     /// "Terminal" or "Chat", for a session an adapter serves.
     let layer: LayerToolbarItem?
-    /// Mission control beside the chat, on a regular width.
+    /// Mission control, on every size class while the chat shows and the session has one.
     var mission: MissionToolbarItem? = nil
     @ViewBuilder let actions: () -> Actions
 
@@ -31,7 +32,11 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
             }
         }
         if let layer {
-            layer
+            if #available(iOS 27.0, *) {
+                layer.visibilityPriority(ToolbarItemVisibilityPriority(lowerThan: .high))
+            } else {
+                layer
+            }
         }
         if let mission {
             mission
@@ -104,21 +109,38 @@ enum WorkspaceLeading: Equatable {
     }
 }
 
+/// Which review items mission control already carries. On the chat layer of a session whose
+/// mission has Ports or Changes, those sections are one tap away in mission control, so the
+/// bar leaves Preview or Changes out; on the terminal layer, and for sessions without the
+/// capability, they stay.
+struct ReviewFold: Equatable {
+    var preview = false
+    var changes = false
+
+    /// `descriptor` is the focused session's while its chat shows with a mission, else nil.
+    init(_ descriptor: HarnessDescriptor?) {
+        guard let descriptor else { return }
+        preview = descriptor.has(HarnessCapability.ports)
+        changes = descriptor.has(HarnessCapability.changes)
+    }
+}
+
 /// "Preview" and "3 changes", each its own bar item so both can go vertical. The count is a
 /// badge on the symbol; the words stay the item's title.
 struct ReviewToolbarItems: ToolbarContent {
     let store: AppStore
     let row: SessionRow
     let model: ReviewHeaderModel
+    var folded = ReviewFold(nil)
 
     var body: some ToolbarContent {
-        if model.hasPorts {
+        if model.hasPorts, !folded.preview {
             ToolbarItem(placement: .primaryAction) {
                 Button(ReviewEntryCopy.preview, systemImage: "safari") { store.review(row, tab: .ports) }
                     .accessibilityHint(ReviewEntryCopy.previewHint)
             }
         }
-        if let label = model.changesLabel {
+        if let label = model.changesLabel, !folded.changes {
             ToolbarItem(placement: .primaryAction) {
                 Button(label, systemImage: "plus.forwardslash.minus") { store.review(row, tab: .changes) }
                     .badge(model.changes)
@@ -131,14 +153,19 @@ struct ReviewToolbarItems: ToolbarContent {
 
 /// What the custom header used to draw, said in the navigation title and subtitle instead:
 /// the session's name, then its bib, status, agent, machine and the link while it has something
-/// to say. A passing message such as "Copied" takes the subtitle until the next one.
+/// to say. A passing message such as "Copied" takes the subtitle until the next one. A session
+/// with mission control shows its glance there instead ("2 agents  plan 3/7", nothing when
+/// nothing is counted); the session menu keeps the status line at its top.
 struct WorkspaceTitle: Equatable {
     var title: String
+    /// The bar's subtitle.
     var subtitle: String
+    /// The bib, status, agent, machine and link (or the passing message), for the session menu.
+    var detail: String
     /// Why the link fell back from the transport asked for, for the session menu.
     var fallback: String?
 
-    init(tab: WorkspaceTab, row: SessionRow?, machine: String?, message: String?) {
+    init(tab: WorkspaceTab, row: SessionRow?, machine: String?, message: String?, glance: String? = nil) {
         let name = row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? tab.title
         title = name
         let link = tab.link
@@ -149,6 +176,7 @@ struct WorkspaceTitle: Equatable {
         }
         if let message {
             subtitle = message
+            detail = message
             return
         }
         var words: [String] = []
@@ -162,7 +190,8 @@ struct WorkspaceTitle: Equatable {
         } else {
             words.append(link.word)
         }
-        subtitle = words.joined(separator: " · ")
+        detail = words.joined(separator: " · ")
+        subtitle = glance ?? detail
     }
 }
 

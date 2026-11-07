@@ -117,6 +117,29 @@ type Completion struct {
 	// Screen, when set, opens a native screen instead of inserting text
 	// (the / menu's "model" opens the model picker).
 	Screen string `json:"screen,omitempty"`
+	// Kind is how the app runs it: choice, picker, args, run or terminal.
+	Kind string `json:"kind,omitempty"`
+	// Role is "destructive" when the app asks before running it.
+	Role string `json:"role,omitempty"`
+	// Action is an action id run instead of typing the command. For a
+	// choice it is the action a picked value runs, with args {"id": v,
+	// "value": v}.
+	Action string `json:"action,omitempty"`
+	// Opens names a native home shown instead of typing: status, changes
+	// or a screen id.
+	Opens string `json:"opens,omitempty"`
+	// Choices are a choice command's values, the current one selected.
+	Choices []CommandChoice `json:"choices,omitempty"`
+}
+
+// MaxChoices bounds a completion's choices.
+const MaxChoices = 50
+
+// CommandChoice is one value of a choice command.
+type CommandChoice struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Selected bool   `json:"selected,omitempty"`
 }
 
 // CompleteResult is harness.complete's result.

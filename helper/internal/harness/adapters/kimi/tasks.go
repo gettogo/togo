@@ -146,7 +146,9 @@ func (w *Wire) question(r record, at time.Time) ([]harness.Item, []harness.Op) {
 	if len(qs) == 0 {
 		qs = []harness.Question{{ID: "0", Prompt: title}}
 	}
-	it := harness.Item{ID: r.ID, TurnID: w.turnID(), Kind: harness.KindQuestion, At: at, Question: &harness.QuestionBody{Questions: qs}}
+	answerable := false // answered in Kimi's TUI only
+	it := harness.Item{ID: r.ID, TurnID: w.turnID(), Kind: harness.KindQuestion, At: at,
+		Question: &harness.QuestionBody{Questions: qs, Answerable: &answerable}}
 	w.open[r.ID] = it
 	return []harness.Item{it}, []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionNeeds, Row: &harness.Row{ID: r.ID,
 		Title: title, State: harness.RowActive, Started: x.Ptr(at), Open: &harness.Open{Kind: harness.OpenTerminal, Ref: w.env.SessionID}}}}
@@ -164,8 +166,11 @@ func (w *Wire) resolved(r record) ([]harness.Item, []harness.Op) {
 	json.Unmarshal(r.Response, &resp)
 	qb := *it.Question
 	qb.Answered = map[string][]string{}
+	// Every question gets an entry, empty when the answer names none of
+	// them (dismissed, or a key shape Kimi changed), so the card closes.
 	for _, q := range qb.Questions {
-		if a, ok := resp.Answers[q.Prompt]; ok {
+		qb.Answered[q.ID] = []string{}
+		if a, ok := resp.Answers[q.Prompt]; ok && a != "" {
 			qb.Answered[q.ID] = []string{a}
 		}
 	}

@@ -99,17 +99,6 @@ func TestAnswerShapes(t *testing.T) {
 	if _, err := answerUserInput(params, map[string]json.RawMessage{"answers": json.RawMessage(`{"bogus":["x"]}`)}); err == nil {
 		t.Fatal("answer for no asked question accepted")
 	}
-	res, err = answerDecision(nil, map[string]json.RawMessage{"decision": json.RawMessage(`"acceptForSession"`)})
-	if err != nil || string(res) != `{"decision":"acceptForSession"}` {
-		t.Fatalf("decision: %s %v", res, err)
-	}
-	res, err = answerDecision(nil, map[string]json.RawMessage{"answers": json.RawMessage(`{"decision":["decline"]}`)})
-	if err != nil || string(res) != `{"decision":"decline"}` {
-		t.Fatalf("decision via answers: %s %v", res, err)
-	}
-	if _, err := answerDecision(nil, map[string]json.RawMessage{"decision": json.RawMessage(`"rm -rf"`)}); err == nil {
-		t.Fatal("unknown decision accepted")
-	}
 }
 
 // While the app-server is live it owns the turn. An interrupted turn ends

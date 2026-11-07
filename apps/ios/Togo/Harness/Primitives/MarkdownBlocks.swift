@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Markdown as blocks the app draws with system text: headings, paragraphs, list items, quotes,
 /// rules and fenced code. Inline marks (bold, code spans, links) are left to `AttributedString`.
@@ -80,18 +81,22 @@ enum PrimitiveMarkdownBlock: Equatable {
         return nil
     }
 
-    /// Inline markdown as an attributed string, or the plain text when it does not parse.
+    /// Inline markdown as an attributed string with its links (markdown links, bare URLs, file
+    /// references; `ChatLinks`), or the plain text when it does not parse.
     static func inline(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+        ChatLinks.markdown(text)
     }
 }
 
 /// Draws markdown blocks: SF for prose, SF Mono in deepest wells for code.
 struct PrimitiveMarkdown: View {
     let blocks: [PrimitiveMarkdownBlock]
+    private let source: String
+
+    @State private var selecting = false
 
     init(_ markdown: String) {
+        source = markdown
         blocks = PrimitiveMarkdownBlock.parse(markdown)
     }
 
@@ -102,7 +107,14 @@ struct PrimitiveMarkdown: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .textSelection(.enabled)
+        // Links underline in the text's colour and open on a tap; Copy and Select text are in
+        // the menu, so selection never sits on the tap path.
+        .tint(Color.togoSnow)
+        .contextMenu {
+            Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = source }
+            Button(ChatCopy.selectText, systemImage: "selection.pin.in.out") { selecting = true }
+        }
+        .sheet(isPresented: $selecting) { SelectTextSheet(text: source) }
     }
 
     @ViewBuilder private func view(_ block: PrimitiveMarkdownBlock) -> some View {
@@ -134,7 +146,7 @@ struct PrimitiveMarkdown: View {
             .fixedSize(horizontal: false, vertical: true)
         case let .code(_, text):
             ScrollView(.horizontal) {
-                Text(verbatim: text)
+                Text(ChatLinks.plain(text))
                     .font(.mono(.footnote))
                     .foregroundStyle(Color.togoSnow)
                     .fixedSize(horizontal: true, vertical: false)

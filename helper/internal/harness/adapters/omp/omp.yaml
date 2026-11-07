@@ -40,10 +40,14 @@ sources:
     cache: 1m
     timeout: 8s
     stability: documented
+  # `omp ps` respawns its broker when it is gone, which can take ~10 s. A
+  # global service's row id is global:<scope>:<name>, so Stop can name its
+  # scope; a project's is the process name `omp ps stop` takes.
   jobs:
     cli: { argv: [omp, ps, --json] }
-    select: '[.[] | .daemons[]?]'
+    select: '[.[] | . as $p | .daemons[]? | . + {rowId: (if $p.kind == "global" then "global:" + (($p.scope // $p.name // "") | tostring) + ":" + .name else .name end)}]'
     cache: 5s
+    timeout: 15s
     stability: documented
 screens:
   model:
@@ -93,6 +97,7 @@ screens:
     section: background
     capability: background
     source: jobs
+    map: { item.id: .rowId, item.title: .name, item.subtitle: '.command // .state // empty', item.state: '.state // empty' }
 actions:
   switch_model:
     label: Use model
@@ -158,15 +163,22 @@ actions:
     keys: { keys: [Escape], until: idle, max: 2 }
     stability: documented
   stop:
+    label: Stop
     role: destructive
-    cli: { argv: [omp, ps, stop, '{{.target}}'] }
+    branch:
+      - when: '{{if eq (part ":" 0 .target) "global"}}true{{end}}'
+        cli: { argv: [omp, ps, stop, '{{part ":" 2 .target}}', '--global={{part ":" 1 .target}}'] }
+      - cli: { argv: [omp, ps, stop, '{{.target}}'] }
     stability: documented
+status:
+  actions: [snapcompact]   # inline on the context meter
 commands:
   # The native pickers for omp's own commands; the rest come from omp.
   static:
-    - { name: model, hint: '[model]', detail: Choose the model, screen: model }
+    - { name: model, hint: '[model]', detail: Choose the model, kind: picker, screen: model }
     - { name: effort, hint: '[level]', detail: Set reasoning effort, screen: effort }
+    - { name: compact, hint: '[mode]', detail: Compact the session, action: compact }
   source: commands
   select: '[.commands[] | {name: .name, detail: .description, hint: .input.hint}]'
 mission:
-  background: { source: jobs, refresh: 10s, map: { item.id: .name, item.title: .name, item.subtitle: '.command // .status // empty' } }
+  background: { source: jobs, refresh: 10s, map: { item.id: .rowId, item.title: .name, item.subtitle: '.command // .state // empty' } }

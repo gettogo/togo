@@ -15,9 +15,7 @@ enum ChatCopy {
     static let reading = String(localized: "chat.reading", defaultValue: "Reading the conversation")
     static let reconnecting = String(localized: "chat.reconnecting", defaultValue: "Reconnecting")
     static let emptyTitle = String(localized: "chat.empty.title", defaultValue: "Nothing said yet")
-    static let emptyDetail = String(
-        localized: "chat.empty.detail", defaultValue: "Write below to start. The terminal is one tap away."
-    )
+    static let emptyDetail = String(localized: "chat.empty.detail.short", defaultValue: "Write below to start.")
     static let earlier = String(localized: "chat.earlier", defaultValue: "Show earlier")
 
     static let copy = String(localized: "chat.copy", defaultValue: "Copy")
@@ -67,6 +65,21 @@ enum ChatCopy {
         localized: "chat.needs.inTerminal", defaultValue: "Waiting for an answer in the terminal"
     )
     static let answerFailed = String(localized: "chat.needs.failed", defaultValue: "Couldn't send the answer. Try again.")
+    /// The card cannot be answered from the phone: its answers live in the terminal.
+    static let answerInTerminal = String(localized: "chat.needs.answerInTerminal", defaultValue: "Answer in the terminal")
+    /// The answer reached the terminal but the harness could not take it from the phone.
+    static let finishInTerminal = String(localized: "chat.needs.finishInTerminal", defaultValue: "Finish this in the terminal")
+    static let otherAnswer = String(localized: "chat.needs.other", defaultValue: "Other answer")
+    static let questionChanged = String(
+        localized: "chat.needs.changed", defaultValue: "The question changed. Check your answer."
+    )
+    static let jumpToNeeds = String(localized: "chat.needs.jump", defaultValue: "Needs you, below")
+    static let jumpToNeedsHint = String(localized: "chat.needs.jump.hint", defaultValue: "Scrolls to the request")
+
+    // MARK: Links and text
+
+    static let selectText = String(localized: "chat.selectText", defaultValue: "Select text")
+    static let openLink = String(localized: "chat.link.open", defaultValue: "Open")
 
     static func spokenNeeds(_ title: String) -> String {
         String(localized: "chat.needs.spoken", defaultValue: "Needs you: \(title)")
@@ -96,6 +109,15 @@ enum ChatCopy {
             parts.append(time.map { String(localized: "chat.work.worked", defaultValue: "Worked \($0)") }
                 ?? String(localized: "chat.work.workedBare", defaultValue: "Worked"))
         }
+        if summary.steps > 0 { parts.append(steps(summary.steps)) }
+        if summary.filesChanged > 0 { parts.append(files(summary.filesChanged)) }
+        return parts.joined(separator: "  ")
+    }
+
+    /// A running line's words before its clock, which comes last: "Working  6 steps  2 files
+    /// changed".
+    static func workRunningLead(_ summary: WorkSummary) -> String {
+        var parts = [String(localized: "chat.work.workingBare", defaultValue: "Working")]
         if summary.steps > 0 { parts.append(steps(summary.steps)) }
         if summary.filesChanged > 0 { parts.append(files(summary.filesChanged)) }
         return parts.joined(separator: "  ")

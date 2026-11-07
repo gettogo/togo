@@ -117,7 +117,7 @@ private struct ToolButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // The fill moves to the chosen tool in place.
+        // motion: cause → effect — the fill moves to the tool the person chose, in place.
         .motion(.respond, value: selected)
         .accessibilityLabel(tool.title)
         .accessibilityAddTraits(selected ? .isSelected : [])

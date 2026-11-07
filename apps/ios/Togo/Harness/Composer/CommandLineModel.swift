@@ -20,72 +20,6 @@ import TogoKit
         }
     }
 
-    /// Everything the model asks of the session, so tests can stand in for it.
-    struct Routes {
-        var has: @MainActor (String) -> Bool
-        var working: @MainActor () -> Bool
-        var mode: @MainActor () -> String
-        var modes: @MainActor () -> [HarnessChoice]
-        /// Queued prompts the conversation shows, oldest first.
-        var queued: @MainActor () -> [HarnessItem]
-        /// Names the harness, so history and favourites stay with it.
-        var scope: @MainActor () -> String
-        var complete: @MainActor (HarnessCompleteParams.Kind, String) async throws -> [HarnessCompletion]
-        /// Sends a prompt; the user item when the route returns one.
-        var send: @MainActor (String, HarnessSendParams.Mode) async throws -> HarnessItem?
-        var interrupt: @MainActor () async throws -> HarnessActionResult
-        var run: @MainActor (String, String?, [String: JSONValue]?) async throws -> HarnessActionResult
-        /// A prompt sent now reaches the session: the agent is idle, or the harness queues.
-        var canSendNow: @MainActor () -> Bool = { true }
-        /// Prompts the phone holds before the helper has them, oldest first.
-        var pending: @MainActor () -> [PendingPrompt] = { [] }
-        var cancelPending: @MainActor (UUID) -> Void = { _ in }
-        var retryPending: @MainActor (UUID) -> Void = { _ in }
-        /// Sends a prompt with image paths in it, as one message.
-        var sendImages: (@MainActor (String, HarnessSendParams.Mode, [String]) async throws -> HarnessItem?)?
-        /// Writes a picture to the session's folder on the machine; nil where it cannot take one.
-        var upload: ComposerAttachments.Upload?
-
-        /// Pictures go through `fs.upload` where the machine's helper serves it.
-        @MainActor static func uploadRoute(_ store: HarnessSessionStore) -> ComposerAttachments.Upload? {
-            guard store.subject.capabilities.contains(Capability.upload) else { return nil }
-            let services = store.services
-            let subject = store.subject
-            return { name, data in try await services.upload(subject, name: name, data: data) }
-        }
-
-        @MainActor static func store(_ store: HarnessSessionStore) -> Routes {
-            Routes(
-                has: { store.has($0) },
-                working: { store.working },
-                mode: { store.currentMode },
-                modes: { store.descriptor?.modes ?? [] },
-                queued: {
-                    store.timeline.conversation().filter { item in
-                        if case let .user(user) = item.body { user.queued } else { false }
-                    }
-                },
-                scope: { store.descriptor?.adapter?.id ?? "" },
-                complete: { kind, query in try await store.services.complete(store.subject, kind: kind, query: query) },
-                send: { text, mode in
-                    try await store.send(text, mode: mode)
-                    return nil
-                },
-                interrupt: { try await store.interrupt() },
-                run: { action, target, args in try await store.run(action: action, target: target, args: args) },
-                canSendNow: { store.canSendNow },
-                pending: { store.queue.prompts },
-                cancelPending: { store.cancelQueued($0) },
-                retryPending: { store.retryQueued($0) },
-                sendImages: { text, mode, images in
-                    try await store.send(text, mode: mode, images: images)
-                    return nil
-                },
-                upload: uploadRoute(store)
-            )
-        }
-    }
-
     static let debounce: Duration = .milliseconds(150)
 
     var draft = ""
@@ -103,7 +37,18 @@ import TogoKit
     private(set) var palette: [HarnessCompletion] = []
     private(set) var sending = false
     /// One quiet line about the last thing that did not work, or what an action said.
-    private(set) var notice: String?
+    var notice: String?
+    /// What the notice offers: Open terminal after a failed stop, Try again after a failed send.
+    var noticeAction: NoticeAction?
+    /// An args command waiting for its argument ("/add "): Return stays off until it is there.
+    var pendingArgs: String?
+    /// Bumped when the field should take the keyboard (an args command, "With instructions…").
+    private(set) var focusRequests = 0
+    /// Runs session changes through `ActionGate`; its `asking` is the dialog the composer or the
+    /// palette shows.
+    let gate = PrimitiveActions()
+    /// The line that failed to go, for Try again.
+    var failedLine: String?
     /// Prompts this phone queued that the conversation does not show yet.
     private(set) var pendingQueued: [HarnessItem] = []
     /// A mode this phone set, with the mode it replaced: it holds until the session reports
@@ -139,9 +84,19 @@ import TogoKit
     }
     var modes: [HarnessChoice] { routes.modes() }
     var modeLabel: String? { ModeMemory.label(for: mode, in: modes) }
+    var status: HarnessStatus? { routes.status() }
     /// The agent is working, so a send queues and Interrupt shows.
     var working: Bool { routes.working() }
     var showsModeChip: Bool { routes.has(HarnessCapability.mode) && !modes.isEmpty }
+    /// The Session rows the chip and the palette show.
+    var sessionRows: [StateChip.Row] {
+        StateChip.rows(screens: routes.screens(), commands: palette, modes: modes, hasMode: showsModeChip)
+    }
+    /// "Opus · high · Manual"; nil for the placeholder.
+    var stateTitle: String? {
+        StateChip.title(rows: sessionRows, status: status, modeLabel: modeLabel, describing: routes.describing())
+    }
+    var showsStateChip: Bool { !sessionRows.isEmpty }
     var canInterrupt: Bool { working && routes.has(HarnessCapability.interrupt) }
     var scope: String { routes.scope() }
 
@@ -155,6 +110,7 @@ import TogoKit
     /// Something to send, and every picture already on the machine.
     var canSend: Bool {
         guard !sending, !attachments.isUploading else { return false }
+        if let pendingArgs, !CommandKind.argumentGiven(draft: draft, command: pendingArgs) { return false }
         if attachments.isEmpty { return CommandLineLogic.outgoing(draft) != nil }
         return attachments.isReady
     }
@@ -237,18 +193,17 @@ import TogoKit
         return items.indices.contains(highlight) ? items[highlight] : nil
     }
 
-    /// A completion with a screen opens it; any other lands in the draft in place of what
-    /// called the menu.
+    /// A command does its job by kind, as in the palette (`CommandKind`): a list opens its
+    /// screen, words go to the field, a run runs. A choice lands in the draft, its values
+    /// under it in the menu. A file replaces the word that called the menu.
     func choose(_ completion: HarnessCompletion) {
         let trigger = CommandLineLogic.trigger(in: draft)
-        closeMenu()
-        cache = nil
-        if let screen = completion.screen, !screen.isEmpty {
-            if case .command = trigger { draft = "" }
-            memory.record(CommandMemory.commandWord(completion.insert.isEmpty ? completion.title : completion.insert), scope: scope)
-            presentedScreen = screen
+        if case .command = trigger, let runs = takeFromMenu(completion) {
+            if runs { Task { await self.perform(completion) } }
             return
         }
+        closeMenu()
+        cache = nil
         guard let trigger else {
             draft += completion.insert
             return
@@ -263,7 +218,36 @@ import TogoKit
             choose(highlighted)
             return
         }
+        if menu != .none, let highlighted, case .command = CommandLineLogic.trigger(in: draft), let runs = takeFromMenu(highlighted) {
+            // Typed in full: the command still does its job by kind (a destructive one asks).
+            if runs { await perform(highlighted) }
+            return
+        }
         await submit()
+    }
+
+    /// A command from the `/` menu does its job by kind, as in the palette. nil for a choice,
+    /// which the caller inserts (its values show under it); false when it opened its screen;
+    /// true when the caller should `perform` it.
+    private func takeFromMenu(_ completion: HarnessCompletion) -> Bool? {
+        let dispatch = CommandKind.dispatch(completion)
+        if case .choose = dispatch { return nil }
+        closeMenu()
+        cache = nil
+        draft = ""
+        switch dispatch {
+        case .push(let screen), .open(.screen(let screen)):
+            memory.record(CommandMemory.commandWord(CommandKind.line(completion)), scope: scope)
+            presentedScreen = screen
+            return false
+        case let .compose(line, files):
+            memory.record(CommandMemory.commandWord(line), scope: scope)
+            pendingArgs = line
+            compose(files ? line + "@" : line)
+            return false
+        default:
+            return true
+        }
     }
 
     // MARK: History and favourites
@@ -296,6 +280,7 @@ import TogoKit
         paletteFailed = false
         do {
             palette = try await routes.complete(.command, "")
+            store.commandList = palette
         } catch {
             Self.log.error("command list failed: \(String(describing: error), privacy: .public)")
             // A spinner that never ends reads as a hang: say so and offer to try again.
@@ -319,6 +304,9 @@ import TogoKit
         closeMenu()
         historyIndex = nil
         notice = nil
+        noticeAction = nil
+        pendingArgs = nil
+        store.undo = nil
         if !text.isEmpty { memory.record(text, scope: scope) }
         let mode = CommandLineLogic.sendMode(working: working || !canSendNow)
         do {
@@ -358,6 +346,7 @@ import TogoKit
     private func restore(_ text: String, _ error: any Error) {
         if draft.isEmpty { draft = text }
         notice = ComposerCopy.notSent
+        noticeAction = .retry
     }
 
     /// Stop: a stop the helper could not finish says so, rather than leaving Stop looking dead.
@@ -366,13 +355,18 @@ import TogoKit
         do {
             let result = try await routes.interrupt()
             switch result.result {
-            case .failed: notice = result.message ?? ComposerCopy.notInterrupted
-            case .fallback: notice = ComposerCopy.notInterrupted
+            case .failed: stopFailed(result.message)
+            case .fallback: stopFailed(nil)
             default: break
             }
         } catch {
-            notice = ComposerCopy.notInterrupted
+            stopFailed(nil)
         }
+    }
+
+    private func stopFailed(_ message: String?) {
+        notice = message ?? ComposerCopy.notInterrupted
+        noticeAction = .openTerminal
     }
 
     /// Takes a queued prompt back before its turn.
@@ -389,23 +383,36 @@ import TogoKit
         }
     }
 
+    /// Sets the mode through `ActionGate`: a mode change that restarts the agent asks while it
+    /// works. The chip keeps the new mode until the session reports another.
     func setMode(_ id: String) async {
-        guard id != mode, modes.contains(where: { $0.id == id }) else { return }
-        do {
-            let result = try await routes.run("set_mode", nil, ["id": .string(id)])
-            switch result.result {
-            case .failed, .fallback:
-                notice = result.message ?? ComposerCopy.modeNotChanged
+        guard id != mode, let choice = modes.first(where: { $0.id == id }) else { return }
+        let previous = modes.first { $0.id == mode }
+        let over = routes.mode()
+        let change = GatedChange(
+            action: "set_mode", args: ["id": .string(id)], confirm: nil, setting: PrimitiveCopy.mode, value: choice.label,
+            previous: previous.map { ($0.label, ["id": .string($0.id)]) }
+        )
+        await gate.change(change, context: gateContext) { [weak self] result in
+            guard let self else { return }
+            switch result?.result {
+            case .failed?, .fallback?, nil:
+                if result != nil { self.notice = result?.message ?? ComposerCopy.modeNotChanged }
             default:
-                modeOverride = (id, routes.mode())
-                notice = nil
+                self.modeOverride = (id, over)
+                self.notice = nil
+                self.paletteOpen = false
             }
-        } catch {
-            notice = ComposerCopy.modeNotChanged
         }
     }
 
     func clearNotice() {
         notice = nil
+        noticeAction = nil
+    }
+
+    /// The field takes the keyboard.
+    func requestFocus() {
+        focusRequests += 1
     }
 }

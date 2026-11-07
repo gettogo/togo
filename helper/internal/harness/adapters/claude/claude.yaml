@@ -40,9 +40,10 @@ sources:
       - { id: sonnet, label: Sonnet, detail: Fast and capable }
       - { id: haiku, label: Haiku, detail: Fastest }
       - { id: 'opus[1m]', label: Opus, detail: 1M context, badge: 1M }
+      - { id: fable, label: Fable }
     stability: documented
   efforts:
-    static: [low, medium, high, max]
+    static: [low, medium, high, xhigh, max]
     stability: documented
   sessions:
     file: { glob: '~/.claude/projects/{{.cwd_key}}/*.jsonl', format: jsonl }
@@ -64,7 +65,7 @@ screens:
     section: composer
     capability: effort
     fields:
-      - { id: effort, label: Effort, kind: choice, value: $state.effort, options: [low, medium, high, max], action: set_effort }
+      - { id: effort, label: Effort, kind: choice, value: $state.effort, options: [low, medium, high, xhigh, max], action: set_effort }
   resume:
     primitive: picker
     title: Resume
@@ -79,33 +80,20 @@ screens:
     title: Plan
     section: plan
     capability: plan
-  usage:
-    primitive: status
-    title: Usage
-    section: status
-    capability: status.usage
-    source: status
-    actions: [compact]
-  compact:
-    primitive: confirm
-    title: Compact
-    section: status
-    capability: compact
-    submit: compact
 actions:
   set_model:
     label: Use model
     type: { text: '/model {{.id}}', submit: true, when_idle: true }
-    verify: { source: status, select: $state.model, equals: '{{.id}}', within: 5s }
+    verify: { source: transcript, select: $state.model, equals: '{{.id}}', within: 5s }
     stability: documented-command
   set_effort:
     label: Set effort
     type: { text: '/effort {{.value}}', submit: true, when_idle: true }
-    verify: { source: status, select: $state.effort, equals: '{{.value}}', within: 5s }
+    verify: { source: transcript, select: $state.effort, equals: '{{.value}}', within: 5s }
     stability: documented-command
   set_mode:         # Shift+Tab is the documented mode cycle; each press is read back from the screen
     label: Mode
-    keys: { keys: [BTab], cycle: true, max: 4 }
+    keys: { keys: [BTab], cycle: true, max: 6 }
     verify: { source: hooks, select: $state.mode, equals: '{{.id}}', within: 3s }
     stability: documented
   resume:
@@ -120,8 +108,8 @@ actions:
     confirm: Compact the conversation now?
     type: { text: '/compact {{.focus}}', submit: true, when_idle: true }
     stability: documented-command
-  answer:
-    builtin: approval_answer   # questions and approvals answer through approvals.v1
+  answer:           # AskUserQuestion: a waiting PermissionRequest hook takes the answers as updatedInput;
+    builtin: claude_ask   # without one, the dialog is driven with keys and read back after every step
     stability: documented
   # Stop ends the whole turn: Escape until idle (at an approval the first
   # press denies it), then Ctrl-X Ctrl-K twice for background agents, which
@@ -134,21 +122,29 @@ actions:
     role: destructive
     cli: { argv: [claude, stop, '{{.target}}'] }
     stability: documented
+# Every mode Claude Code can report (2.1.319's own labels), so the chip never shows a raw id
+# and a Shift+Tab cycle that passes auto, dontAsk or bypassPermissions keeps going instead of
+# stopping there. Those three are reached only when Claude offers them in its cycle.
 modes:
   choices:
-    - { id: default, label: Ask }
-    - { id: acceptEdits, label: Auto edit }
+    - { id: default, label: Manual }
+    - { id: acceptEdits, label: Accept edits }
     - { id: plan, label: Plan }
+    - { id: auto, label: Auto }
+    - { id: dontAsk, label: "Don't ask" }
+    - { id: bypassPermissions, label: Bypass permissions }
   current: hooks
   select: $state.mode
   set: set_mode
+status:
+  actions: [compact]   # inline on the context meter
 commands:
   static:
     - { name: model, hint: '[model]', detail: Set the AI model, screen: model }
     - { name: effort, hint: '[level]', detail: Set reasoning effort, screen: effort }
-    - { name: compact, hint: '[instructions]', detail: Summarise the conversation }
+    - { name: compact, hint: '[instructions]', detail: Summarise the conversation, action: compact }
     - { name: resume, hint: '[session]', detail: Resume a conversation, screen: resume }
-    - { name: clear, detail: Start a new conversation }
+    - { name: clear, detail: Start a new conversation, role: destructive }
     - { name: review, detail: Review a pull request }
 # No mission source: `claude agents --json` lists every Claude Code session on the machine,
 # not this session's jobs, so background rows come only from this session's transcript.

@@ -167,6 +167,7 @@ struct ChoiceRow<Detail: View>: View {
                     .foregroundStyle(Color.togoMute)
             }
             Spacer(minLength: 8)
+            // motion: cause → effect — the check lands on the row the user chose
             if selected {
                 Image(systemName: "checkmark").fontWeight(.semibold).accessibilityHidden(true)
                     .transition(.opacity)
@@ -175,10 +176,11 @@ struct ChoiceRow<Detail: View>: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoMute)
                     .accessibilityHidden(true)
+                    // motion: cause → effect — the chevron comes back as the check leaves
                     .transition(.opacity)
             }
         }
-        // The check moves to the chosen row on `respond`.
+        // motion: cause → effect — the check moves to the chosen row
         .motion(.respond, value: selected)
         .foregroundStyle(enabled ? Color.togoSnow : Color.togoMute)
         .padding(.vertical, 10)
@@ -219,11 +221,9 @@ struct RetryButton: View {
     }
 }
 
-/// Plain error line shown on the step the failure belongs to.
-/// It reveals when it arrives and conceals when it clears; the parent moves the rows around
-/// it in the same `resize` transaction (`resizesOnRows`).
+/// Plain error line shown on the step the failure belongs to. It lands at once, at the control
+/// that failed, with the error haptic the step plays; errors never fly in.
 struct InlineError: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let message: String
 
     var body: some View {
@@ -232,7 +232,6 @@ struct InlineError: View {
             .foregroundStyle(Color.togoSnow)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityLabel(message)
-            .transition(Motion.revealConceal(reduce: reduceMotion))
     }
 }
 

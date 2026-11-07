@@ -7,9 +7,10 @@ import TogoKit
 /// long enough to read. `needsYou` marks a question the agent is waiting on: the beacon
 /// lights and Send takes the approve fill.
 ///
-/// Motion: the answered state swaps in place through the §2.3 settle (the form conceals, the
-/// sheet's content resizes, the answer reveals); the changed and failed lines reveal in a
-/// `resize` transaction; the sending spinner has its own slot after the button.
+/// Motion: the answered state replaces the form in place (the form conceals, the content
+/// resizes, the answer arrives by opacity, nothing rises); the changed and failed lines land
+/// at once, in a space that opens without animation; the sending spinner has its own slot
+/// after the button.
 struct ConfirmPrimitive: View {
     @Environment(\.loopsPaused) private var loopsPaused
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,13 +63,11 @@ struct ConfirmPrimitive: View {
         .haptic(.error, trigger: model.phase) { _, new in
             if case .failed = new { true } else { false }
         }
+        // motion: continuity — the form gives way in place to its answer: same place, new state.
         .onChange(of: isAnswered) { _, answered in Motion.settle($answered, to: answered, reduce: reduceMotion) }
-        .onChange(of: failedMessage) { _, message in
-            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { failure = message }
-        }
-        .onChange(of: model.changed) { _, now in
-            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { changed = now }
-        }
+        // Errors and "the question changed" are status: they land at once, at the form.
+        .onChange(of: failedMessage) { _, message in failure = message }
+        .onChange(of: model.changed) { _, now in changed = now }
     }
 
     @ViewBuilder private var content: some View {
@@ -114,14 +113,12 @@ struct ConfirmPrimitive: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
                 .accessibilityAddTraits(.updatesFrequently)
-                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
         if let failure {
             Text(failure)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PrimitiveTint.fail)
                 .accessibilityAddTraits(.updatesFrequently)
-                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
     }
 
@@ -149,8 +146,9 @@ struct ConfirmPrimitive: View {
             }
             // A slot after the button, so the spinner never pushes it.
             ZStack {
-                if model.phase == .sending { ProgressView().controlSize(.small).transition(.opacity) }
+                if model.phase == .sending { ProgressView().controlSize(.small) }
             }
+            // motion: state change — the spinner crossfades in its own slot; the button never moves.
             .slot(width: 20, key: model.phase == .sending)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -256,6 +254,7 @@ private struct ConfirmQuestionView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        // motion: cause → effect — the tapped option fills in place.
         .motion(.respond, value: on)
         .accessibilityLabel(option.shownTitle)
         .accessibilityHint(option.shownDetail ?? "")

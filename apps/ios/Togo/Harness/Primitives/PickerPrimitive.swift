@@ -4,20 +4,26 @@ import TogoKit
 /// A searchable, grouped list with one selection, such as a model or a session to resume.
 ///
 /// Compact width: role chips, filter chips and the groups as sections that fold. Regular
-/// width: the groups move into a sidebar beside the list. Tapping an item selects it, hands it
-/// to the role chip waiting for one, or, when items carry actions, opens its card. Every item
-/// action is also in the row's context menu and VoiceOver actions.
+/// width: the groups move into a sidebar beside the list. Tapping an item selects it (or hands
+/// it to the role chip waiting for one); item actions are in swipe, the context menu and
+/// VoiceOver actions, with the card one more step away. A selection goes through `ActionGate`
+/// and closes the host when it lands; a failure stays here with its reason.
 struct PickerPrimitive: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let picker: HarnessScreen.Picker
+    /// The screen's title, for the chat's line: "Model Sonnet".
+    var title = ""
     let context: PrimitiveContext
     @State private var model: PickerModel
     @State private var actions = PrimitiveActions()
     @State private var card: PickerModel.Item?
+    /// Why the last selection failed, shown at the top of the list at once.
+    @State private var failure: String?
 
-    init(picker: HarnessScreen.Picker, context: PrimitiveContext) {
+    init(picker: HarnessScreen.Picker, title: String = "", context: PrimitiveContext) {
         self.picker = picker
+        self.title = title
         self.context = context
         _model = State(initialValue: PickerModel(picker))
     }
@@ -36,13 +42,14 @@ struct PickerPrimitive: View {
             }
             .primitiveActions(actions, context: context)
             .sheet(item: $card) { item in
-                PickerItemCard(item: item, picker: picker, parent: actions, context: context)
+                PickerItemCard(item: item, picker: picker, parent: actions, context: context) { select(item) }
             }
     }
 
     /// Picking mode and group folds change the List in a `resize` transaction at the tap, never
     /// through an implicit animation on the List.
     private func setPicking(_ id: String?) {
+        // motion: preventing a jump — the banner's room opens and the list moves down with it.
         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { model.picking = id }
     }
 
@@ -63,13 +70,21 @@ struct PickerPrimitive: View {
     private var list: some View {
         let groups = model.groups(picker)
         return List {
+            if let failure {
+                // Errors land at once, at the list that failed (motion principles v2 §2).
+                Label(failure, systemImage: "exclamationmark.circle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(PrimitiveTint.fail)
+                    .listRowBackground(Color.clear)
+            }
             if !itemActions.isEmpty || hasChips {
                 Section {
                     VStack(alignment: .leading, spacing: 10) {
                         if !itemActions.isEmpty { roleChips }
                         if let picking = model.picking, let ref = itemActions.first(where: { $0.id == picking }) {
                             pickBanner(ref)
-                                .transition(Motion.revealConceal(reduce: reduceMotion))
+                                // motion: cause → effect — the chip's tap opens the banner in place, uncovered by its growing edge.
+                                .transition(Motion.unfold(reduce: reduceMotion))
                         }
                         if hasChips { filterChips }
                     }
@@ -91,9 +106,11 @@ struct PickerPrimitive: View {
         }
         .groupedList()
         .overlay {
+            // motion: state change — the list and its empty state swap in place, nothing shifts.
             Group {
-                if groups.isEmpty { empty.transition(.opacity) }
+                if groups.isEmpty { empty.transition(Motion.swap(reduce: reduceMotion)) }
             }
+            // motion: state change — the swap is keyed on emptiness alone.
             .motion(.fade, value: groups.isEmpty)
         }
     }
@@ -110,10 +127,11 @@ struct PickerPrimitive: View {
         ) { tap(item) }
         .groupedRows()
         .contextMenu { menu(for: item) }
-        .swipeActions(edge: .leading) {
-            if item.id != picker.selected, item.disabled != true {
-                Button(PrimitiveCopy.select, systemImage: "checkmark") { select(item) }
-                    .tint(Color.togoSnow)
+        .swipeActions(edge: .trailing) {
+            // The item's roles: the tap selects, so these sit one swipe away.
+            ForEach(itemActions.prefix(3)) { ref in
+                Button(ref.label) { assign(ref, item) }
+                    .tint(Color.togoMute)
             }
         }
         .accessibilityActions {
@@ -147,8 +165,6 @@ struct PickerPrimitive: View {
         switch model.tap(item, in: picker) {
         case .assign(let id):
             if let ref = itemActions.first(where: { $0.id == id }) { assign(ref, item) }
-        case .details:
-            card = item
         case .select:
             select(item)
         case .none:
@@ -156,13 +172,25 @@ struct PickerPrimitive: View {
         }
     }
 
+    /// Selects through `ActionGate`: a restart asks while the agent works, and runs with Undo
+    /// while it is idle. Landing closes the host; failing keeps the list with the reason.
     private func select(_ item: PickerModel.Item) {
-        Task { await actions.perform(picker.onSelect, target: item.id, args: PickerModel.args(for: item), context: context) }
+        failure = nil
+        let change = PickerModel.change(selecting: item, in: picker, setting: title)
+        Task {
+            await actions.change(change, context: context) { result in
+                if PickerModel.closes(result) {
+                    context.settled?()
+                } else if let result, result.result == .failed {
+                    failure = result.message ?? PrimitiveCopy.failed
+                }
+            }
+        }
     }
 
     private func assign(_ ref: HarnessActionRef, _ item: PickerModel.Item) {
         setPicking(nil)
-        Task { await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), context: context) }
+        Task { await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), place: .toast, context: context) }
     }
 
     private func copy(_ text: String) {
@@ -247,6 +275,7 @@ struct PickerPrimitive: View {
             .padding(.horizontal, 16)
         }
         .scrollIndicators(.hidden)
+        // motion: state change — the tapped filter chip fills in place.
         .motion(.respond, value: model.filterValues)
     }
 
@@ -278,6 +307,7 @@ struct PickerPrimitive: View {
         let count = model.hasNarrowing ? group.items.count : group.total
         return Button {
             guard !usesSidebar, !model.isSearching else { return }
+            // motion: cause → effect — the group folds where it was tapped; rows below glide.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { model.toggle(group) }
         } label: {
             HStack(spacing: 8) {

@@ -54,14 +54,15 @@ struct MachinesSettingsView: View {
                     action: .init(settingsText("settings.machines.add", "Add a machine"), run: add)
                 )
                 .background(Color.togoInk)
+                // motion: state change — the last machine left; the empty state takes its place
                 .transition(.opacity)
             } else {
+                // motion: state change — the first machine arrived; the list takes the empty state's place
                 list
                     .transition(.opacity)
             }
         }
-        // The empty state and the list swap on `fade` as the first machine arrives or the last
-        // leaves.
+        // motion: state change — the empty state and the list crossfade whole
         .motion(.fade, value: machines.isEmpty && removing.isEmpty)
         .navigationTitle(settingsText("settings.machines.title", "Machines"))
         .navigationBarTitleDisplayMode(.inline)

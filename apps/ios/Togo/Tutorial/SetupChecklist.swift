@@ -180,6 +180,7 @@ struct SetupChecklist: View {
             Motion.toggle($steps, reduce: reduceMotion)
             return
         }
+        // motion: preventing a jump — the tapped step opens; the steps under it make room
         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
             expanded = item
             Motion.set($steps, open: true)
@@ -228,7 +229,8 @@ private struct SetupItemRow: View {
                 .padding(.leading, stacked ? 16 : 56)
                 .padding(.trailing, 16)
                 .padding(.bottom, 16)
-                .disclosed(steps)
+                // The tap opens it: its edge uncovers the steps, nothing rises.
+                .unfolds(steps)
             }
         }
     }
@@ -267,6 +269,7 @@ private struct SetupItemRow: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoMute)
                     .rotationEffect(.degrees(expanded ? 180 : 0))
+                    // motion: cause → effect — the chevron turns as the step opens
                     .motion(.respond, value: expanded)
             }
             .padding(.vertical, 12)

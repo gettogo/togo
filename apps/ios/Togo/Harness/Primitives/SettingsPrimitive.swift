@@ -3,14 +3,18 @@ import TogoKit
 import UIKit
 
 /// A form of typed fields: toggles, choices, text, numbers and secrets. Each change commits
-/// on its own by running the field's action with `{"value": v}`; the control shows the new
-/// value at once and goes back if the harness refuses it.
+/// on its own by running the field's action with `{"value": v}` through `ActionGate` (a change
+/// that restarts the agent asks while it works and offers Undo while it is idle); the control
+/// shows the new value at once and goes back, with the reason under it, if the harness refuses.
+/// A one-field form closes its host once the change lands.
 struct SettingsPrimitive: View {
     let settings: HarnessScreen.Settings
     let context: PrimitiveContext
     @State private var actions = PrimitiveActions()
     /// Values the user set that the harness has not confirmed yet, by field id.
     @State private var pending: [String: JSONValue] = [:]
+    /// Why a field's last change was refused, by field id.
+    @State private var failures: [String: String] = [:]
 
     var body: some View {
         Form {
@@ -23,6 +27,13 @@ struct SettingsPrimitive: View {
                             running: field.action.map { actions.isRunning($0, target: field.id) } ?? false
                         ) { commit(field, $0) }
                         .listRowBackground(Color.togoGrouped)
+                        if let failure = failures[field.id] {
+                            // Errors land at once, under the field that failed.
+                            Text(failure)
+                                .font(.footnote)
+                                .foregroundStyle(PrimitiveTint.fail)
+                                .listRowBackground(Color.togoGrouped)
+                        }
                     }
                 } header: {
                     if let title = section.title { Text(title).textCase(nil) }
@@ -42,11 +53,18 @@ struct SettingsPrimitive: View {
     private func commit(_ field: SettingsLogic.Field, _ value: JSONValue) {
         guard SettingsLogic.isEditable(field), let action = field.action else { return }
         if field.kind != .secret { pending[field.id] = value }
+        failures[field.id] = nil
+        let change = SettingsLogic.change(field, to: value, action: action)
+        let closes = SettingsLogic.isSingleField(settings)
         Task {
-            let result = await actions.perform(action, target: field.id, args: SettingsLogic.commitArgs(value), context: context)
-            if result == nil || result?.result == .failed || result?.result == .fallback {
-                // The control goes back to the confirmed value in place.
-                withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) { pending[field.id] = nil }
+            await actions.change(change, context: context) { result in
+                if result == nil || result?.result == .failed || result?.result == .fallback {
+                    // motion: state change — the control goes back to the confirmed value in place.
+                    withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) { pending[field.id] = nil }
+                    if let result, result.result == .failed { failures[field.id] = result.message ?? PrimitiveCopy.failed }
+                } else if closes, PickerModel.closes(result) {
+                    context.settled?()
+                }
             }
         }
     }
@@ -229,15 +247,17 @@ private struct TextValueField: View {
             }
             ZStack {
                 if running {
-                    ProgressView().controlSize(.small).transition(.opacity)
+                    ProgressView().controlSize(.small)
                 } else if let draft, draft != value {
                     Button(PrimitiveCopy.save, action: save)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.togoSnow)
                         .frame(minWidth: 44, minHeight: 44)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                        // motion: cause → effect — typing opens Save in place beside the field.
+                        .transition(Motion.unfold(reduce: reduceMotion))
                 }
             }
+            // motion: state change — Save and the spinner swap in their fixed slot.
             .motion(.respond, value: running)
             .motion(.respond, value: draft != nil && draft != value)
         }
@@ -278,10 +298,12 @@ private struct SecretField: View {
                     .foregroundStyle(Color.togoMute)
                 if editable, !editing {
                     Button(field.isSet == true ? PrimitiveCopy.replace : PrimitiveCopy.set) {
+                        // motion: cause → effect — Set opens the editor under it, uncovered by its growing edge.
                         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { editing = true }
                         focused = true
                     }
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — Set gives way at once to the editor it opened.
+                    .transition(.identity)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.togoSnow)
                     .frame(minWidth: 44, minHeight: 44)
@@ -305,7 +327,8 @@ private struct SecretField: View {
                 }
                 Text(PrimitiveCopy.secretFooter).font(.footnote).foregroundStyle(Color.togoMute)
                 }
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                // motion: cause → effect — the editor unfolds in place under Set.
+                .transition(Motion.unfold(reduce: reduceMotion))
             }
         }
         .onDisappear { entry = "" }
@@ -319,6 +342,7 @@ private struct SecretField: View {
 
     private func close() {
         entry = ""
+        // motion: preventing a jump — the editor's room closes after it conceals.
         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { editing = false }
         focused = false
     }
@@ -330,7 +354,7 @@ private struct RunningMark: View {
 
     var body: some View {
         ZStack {
-            if running { ProgressView().controlSize(.small).transition(.opacity) }
+            if running { ProgressView().controlSize(.small) }
         }
         .slot(width: 20, key: running)
     }

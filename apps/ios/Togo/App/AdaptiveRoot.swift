@@ -94,8 +94,10 @@ struct AdaptiveRoot<Destination: View>: View {
     /// The sidebar as drawn. It follows `store.sidebar.isHidden` (set from many places) in one
     /// `sidebar` transaction, so every toggle moves the same way.
     @State private var sidebarShown: Bool?
-    /// The roster's bar as drawn. It rises back on `dropIn` when the cover closes, and goes at
-    /// once when the cover opens over it.
+    /// The roster's bar as drawn. It is simply there again when the cover closes (it is the
+    /// same bar the user left; the zoom back to the row is the motion), and goes at once when
+    /// the cover opens over it. It presents from the bottom only when its first request
+    /// arrives, which `PromptBar` itself does.
     @State private var rosterBarShown: Bool?
 
     var body: some View {
@@ -132,14 +134,12 @@ struct AdaptiveRoot<Destination: View>: View {
             if let id { zoomSource = id }
         }
         .onChange(of: store.sidebar.isHidden) { _, hidden in
+            // motion: origin — the sidebar lives at the leading edge and comes from there
             withAnimation(Motion.animation(.sidebar, reduce: reduceMotion)) { sidebarShown = !hidden }
         }
         .onChange(of: store.workspaceOpen) { _, open in
-            if open {
-                rosterBarShown = false
-            } else {
-                withAnimation(Motion.animation(.dropIn, reduce: reduceMotion)) { rosterBarShown = true }
-            }
+            // Both directions are cuts: the bar is not news when the user comes back to it.
+            withTransaction(Transaction(animation: nil)) { rosterBarShown = !open }
         }
     }
 
@@ -205,6 +205,7 @@ struct AdaptiveRoot<Destination: View>: View {
     private var compactRoot: some View {
         ZStack {
             if store.monitorShown {
+                // motion: state change — the whole layer changed (roster ↔ monitor)
                 RosterMonitor(store: store, services: monitor, now: now)
                     .transition(.opacity)
             } else {
@@ -212,16 +213,16 @@ struct AdaptiveRoot<Destination: View>: View {
                 RosterView(store: store, terminals: terminals, zoom: zoom, now: now, launchTarget: true)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         if rosterBarShown ?? !store.workspaceOpen {
+                            // motion: continuity — the same bar the user left, simply there (a cut)
                             promptBar
-                                .transition(.asymmetric(
-                                    insertion: Motion.present(from: .bottom, reduce: reduceMotion),
-                                    removal: .identity
-                                ))
+                                .transition(.identity)
                         }
                     }
+                    // motion: state change — the whole layer changed (monitor ↔ roster)
                     .transition(.opacity)
             }
         }
+        // motion: state change — the user switched the root layer; it crossfades whole
         .motion(.fade, value: store.monitorShown)
     }
 
@@ -246,6 +247,7 @@ struct AdaptiveRoot<Destination: View>: View {
                     .overlay(alignment: .trailing) {
                         Rectangle().fill(Color.togoLine).frame(width: 1 / displayScale).ignoresSafeArea()
                     }
+                    // motion: origin — the sidebar lives at the leading edge and comes from there
                     .transition(Motion.present(from: .leading, reduce: reduceMotion))
                     .zIndex(1)
                 }
@@ -317,6 +319,7 @@ private struct WorkspaceEntrance: ViewModifier {
         if reduceMotion {
             content
                 .opacity(shown ? 1 : 0)
+                // motion: origin — under Reduce Motion a fade stands in for the zoom out of the row
                 .onAppear { withAnimation(Motion.animation(.rowGrow, reduce: true)) { shown = true } }
         } else if let namespace {
             content.navigationTransition(Motion.rowGrow(sourceID: sourceID, in: namespace))

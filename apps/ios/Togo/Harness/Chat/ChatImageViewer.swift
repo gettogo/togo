@@ -50,18 +50,15 @@ struct ChatImageViewer: View {
             if let image = loaded[at] {
                 ZoomableImage(image: image)
                     .accessibilityLabel(ChatImageCopy.label(images[at], index: at, of: images.count))
-                    .transition(.opacity)
             } else if failed.contains(at) {
                 ContentUnavailableView(ChatImageCopy.unavailable, systemImage: "photo")
                     .foregroundStyle(Color.togoMute)
-                    .transition(.opacity)
             } else {
                 ProgressView()
-                    .transition(.opacity)
             }
         }
-        .motion(.fade, value: loaded[at] != nil)
-        .motion(.fade, value: failed.contains(at))
+        // motion: state change — the spinner gives way to the picture (or why it can't show) in place.
+        .motion(.fade, value: PageKey(loaded: loaded[at] != nil, failed: failed.contains(at)))
         .task {
             guard loaded[at] == nil else { return }
             if let image = await ChatImageLoader.shared.load(images[at], fetch: fetch) {
@@ -121,4 +118,10 @@ private struct ZoomableImage: UIViewRepresentable {
             }
         }
     }
+}
+
+/// One driver for a page's crossfade: loaded or failed, whichever changed.
+private struct PageKey: Equatable {
+    var loaded: Bool
+    var failed: Bool
 }

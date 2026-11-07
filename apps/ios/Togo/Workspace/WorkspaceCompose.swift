@@ -131,12 +131,20 @@ struct WorkspaceComposeBar: View {
     var body: some View {
         Group {
             // A tab showing its chat has the smart command line instead, always at its foot.
-            if let tab = store.composeTab, store.layer(for: tab.id) == .chat,
+            // While the chat is still expected (ink) it shows disabled, so the composer is
+            // already in its place and the chat's clearance does not jump when it opens.
+            if let tab = store.composeTab, store.layer(for: tab.id) != .terminal,
                let model = store.harnessTabs.composer(for: tab.id) {
                 SmartCommandLine(model: model)
+                    .disabled(store.layer(for: tab.id) == .pending)
                     .modifier(ComposerMargins())
                     // A little air above the keyboard, and above the home indicator.
                     .padding(.bottom, ComposerMargins.bottom)
+                    // The chat keeps its last card clear of this height (`composerClearance`).
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        guard let harness = store.harness(for: tab.id), harness.composerClearance != height else { return }
+                        harness.composerClearance = height
+                    }
                     .id(tab.id)
             } else if let tab = store.composeTab, store.composing == tab.id, terminals.shows(tab.id, in: window),
                let handle = terminals.handle(for: tab.id) {

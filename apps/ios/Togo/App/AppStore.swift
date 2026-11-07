@@ -196,7 +196,17 @@ import TogoKit
             setPhase(.done(.answeredElsewhere), of: cardID)
         } catch {
             setPhase(.open, of: cardID)
-            answerFailures[cardID] = ControlCenterCopy.answerFailed(hostName(card.hostID))
+            answerFailures[cardID] = Self.answerFailure(error, machine: hostName(card.hostID))
+        }
+    }
+
+    /// Why an answer did not arrive, in the words the card shows: the helper's own reason when
+    /// it turned the answer down ("approval offers no approve option"), else that the machine
+    /// was out of reach.
+    static func answerFailure(_ error: any Error, machine: String) -> String {
+        switch error as? HelperError {
+        case .rpc?, .refused?, .conflict?: ServiceErrors.message(error)
+        default: ControlCenterCopy.answerFailed(machine)
         }
     }
 
@@ -269,6 +279,9 @@ import TogoKit
         }
         workspace.selected = id
         touch(id)
+        // The tab's chat store exists before the first frame, so the layer is decided there
+        // (ink or chat), not after a render that would show the terminal.
+        syncHarness()
         workspaceOpen = true
     }
 

@@ -1,0 +1,28 @@
+{
+  "source": "synthetic",
+  "agentVersion": "2.1.319",
+  "match": true,
+  "kind": "question",
+  "title": "Which color do you prefer?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Red",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Blue",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ]
+  }
+}

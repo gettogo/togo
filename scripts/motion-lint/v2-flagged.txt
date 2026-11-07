@@ -1,0 +1,41 @@
+// Every case under an "// expect <rule>" line must be flagged by the v2 pass in
+// scripts/check-motion.sh (and TogoTests/MotionLint.swift), once per expect line.
+// expect no-rise
+let lift = Motion.revealRise(reduce: reduce)
+// expect no-rise
+let shift = Motion.swapShift(reduce: reduce)
+// expect no-rise
+Text("a").revealOnAppear(index: 1)
+// motion: origin — the row comes from below
+// expect no-rise
+Text("a").transition(.opacity.combined(with: .offset(y: 6)))
+struct Lift: Transition {
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        // expect no-rise
+        content.offset(y: phase.isIdentity ? 0 : 6)
+    }
+}
+// expect periodic-now
+TimelineView(.periodic(from: .now, by: 1)) { context in Text("") }
+TimelineView(.periodic(from: start, by: 1)) { context in
+    // expect no-roll-in-timeline
+    Text("1s").rollingNumber(seconds)
+    // expect no-roll-in-timeline
+    Text("1s").contentTransition(.numericText(value: seconds))
+    // expect no-roll-in-timeline
+    Text("1s").countChange(seconds)
+}
+// expect motion-purpose
+Text("a").transition(.opacity)
+// expect motion-purpose
+withAnimation(Motion.animation(.resize, reduce: r)) { open = true }
+// expect motion-purpose
+Text("a").motion(.respond, value: on)
+// expect motion-purpose
+Text("a").matchedGeometryEffect(id: "a", in: ns)
+// motion: state change — the layer changed
+// expect availability-animates
+Pane().motion(.fade, value: store.shownLayer)
+// motion: state change — chat became available
+// expect availability-animates
+Pane().animation(Motion.animation(.fade, reduce: r), value: chatAvailable)

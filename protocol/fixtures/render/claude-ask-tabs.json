@@ -1,0 +1,33 @@
+{
+  "name": "claude/ask-tabs",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "claude",
+    "title": "Which color do you prefer?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Red",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "Blue",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Claude Code",
+    "subtitle": "Which color do you prefer?",
+    "body": "",
+    "category": "togo.info"
+  }
+}

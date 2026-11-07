@@ -48,7 +48,10 @@ var hookAdapters = map[string]hookAdapter{
 }
 
 func init() {
-	register("hook", func(ctx context.Context, args []string, env map[string]string, stdin io.Reader, stdout, _ io.Writer) int {
+	register("hook", func(ctx context.Context, args []string, env map[string]string, stdin io.Reader, stdout, stderr io.Writer) int {
+		if then, rest, ok := cutThen(args); ok {
+			return runStatuslineChain(ctx, rest, then, env, stdin, stdout, stderr)
+		}
 		return runHook(ctx, args, env, stdin, stdout)
 	})
 }
@@ -123,6 +126,16 @@ func runHook(ctx context.Context, args []string, env map[string]string, stdin io
 	if err != nil {
 		log("hook %s %s: %v", agent, event, err)
 		return exitOK
+	}
+	if agent == "claude" && event == "PermissionRequest" {
+		if questions, prompts, ok := claudeAsk(payload); ok {
+			// Questions always wait for the phone, with or without --block:
+			// answering them never grants a permission.
+			if ev.SessionID != nil {
+				claudeQuestion(ctx, sock, ev, questions, prompts, stdout, log)
+			}
+			return exitOK
+		}
 	}
 	if blocks && (block || env["TOGO_HOOK_BLOCK"] == "1") {
 		hookBlock(ctx, sock, agent, ev, decision, stdout, log)

@@ -23,6 +23,7 @@ type transcript struct {
 	state      map[string]string
 	turn       *turnState
 	tools      map[string]*harness.Item // tool calls by id
+	questions  map[string]*harness.Item // AskUserQuestion calls by id
 	texts      map[string]string        // assistant text by message id
 	agents     map[string]*harness.Item // agent items by agent id
 	prompts    map[string]string        // Agent call id by prompt, until its agent id is known
@@ -49,7 +50,7 @@ type turnState struct {
 func newTranscript(env harness.Env) *transcript {
 	return &transcript{
 		env: env, cwd: env.Cwd, state: map[string]string{},
-		tools: map[string]*harness.Item{}, texts: map[string]string{}, agents: map[string]*harness.Item{},
+		tools: map[string]*harness.Item{}, questions: map[string]*harness.Item{}, texts: map[string]string{}, agents: map[string]*harness.Item{},
 		prompts: map[string]string{}, roles: map[string]string{}, shellAbout: map[string]string{}, bgTasks: map[string]string{}, changes: map[string]*harness.FileChange{},
 	}
 }
@@ -99,6 +100,7 @@ type message struct {
 	Role    string          `json:"role"`
 	Model   string          `json:"model"`
 	Content json.RawMessage `json:"content"`
+	Usage   *usage          `json:"usage"`
 }
 
 type block struct {
@@ -330,6 +332,9 @@ func (t *transcript) assistant(e entry) ([]harness.Item, []harness.Op) {
 	}
 	var items []harness.Item
 	var ops []harness.Op
+	if !e.IsSidechain && m.Model != "<synthetic>" {
+		ops = append(ops, contextOps(m)...)
+	}
 	for _, b := range blocks {
 		switch b.Type {
 		case "text":

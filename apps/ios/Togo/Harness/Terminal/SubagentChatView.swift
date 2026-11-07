@@ -19,6 +19,7 @@ struct SubagentChatView: View {
     @State private var expanded: [String: Disclosure] = [:]
     @State private var detail: HarnessItem?
     @State private var nested: String?
+    @State private var scroll = ChatScrollModel()
 
     var body: some View {
         let thread = SubagentThread(id: agentID, timeline: store.timeline)
@@ -26,11 +27,12 @@ struct SubagentChatView: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 header(thread)
                 let waiting = WorkingLogic.hasOpenNeeds(rows: thread.rows)
-                // Rows that arrive while open reveal in the store's arrival transaction.
+                // Rows that arrive while open land in the store's arrival transaction.
                 ForEach(thread.rows) { row in
                     rowView(row, waiting: waiting)
                         .id(row.id)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                        // motion: preventing a jump — the thread glides up to make room while the new row only fades in place; a needs card grows in place instead (attention).
+                        .transition(row.isNeeds ? Motion.unfold(reduce: reduceMotion) : Motion.arrive(reduce: reduceMotion))
                 }
             }
             .padding(16)
@@ -39,19 +41,22 @@ struct SubagentChatView: View {
         }
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        // A card that needs the user scrolls into view as it arrives, as in the main chat.
+        .modifier(NeedsScrolling(
+            marks: ChatScroll.marks(thread.rows) { approval in actions.card(approval.requestId) != nil },
+            loaded: store.hasLoaded, scroll: scroll
+        ))
+        // The empty state is there or not: the first row arriving is not an event of its own.
         .overlay {
-            Group {
-                if thread.rows.isEmpty {
-                    ContentUnavailableView {
-                        Label(TerminalSyncCopy.subagentEmpty, systemImage: "person.2")
-                    } description: {
-                        Text(TerminalSyncCopy.subagentEmptyDetail)
-                    }
-                    .foregroundStyle(Color.togoMute)
-                    .transition(.opacity)
+            if thread.rows.isEmpty {
+                ContentUnavailableView {
+                    Label(TerminalSyncCopy.subagentEmpty, systemImage: "person.2")
+                } description: {
+                    Text(TerminalSyncCopy.subagentEmptyDetail)
                 }
+                .foregroundStyle(Color.togoMute)
+                .transaction { $0.animation = nil }
             }
-            .motion(.fade, value: thread.rows.isEmpty)
         }
         .background(Color.togoInk)
         .navigationTitle(thread.title)
@@ -86,9 +91,10 @@ struct SubagentChatView: View {
                     .foregroundStyle(Color.togoMute)
             }
             if let summary = thread.agent?.summary, !summary.isEmpty {
+                // The summary is status: it is simply there, never carried by the arrival transaction.
                 MarkdownText(text: summary)
                     .foregroundStyle(Color.togoSnow)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    .transaction { $0.animation = nil }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -141,14 +147,16 @@ struct SubagentChatView: View {
     @ViewBuilder private func needsView(_ item: HarnessItem) -> some View {
         switch item.body {
         case .approval(let approval):
-            ApprovalRow(item: item, approval: approval, card: actions.card(approval.requestId)) { decision in
+            ApprovalRow(
+                item: item, approval: approval, card: actions.card(approval.requestId),
+                failure: actions.failure(approval.requestId), showInTerminal: terminalAction(item)
+            ) { decision in
                 actions.answer(approval.requestId, decision)
             }
             .contextMenu { menu(item) }
         case .question(let question):
-            QuestionRow(item: item, question: question) { answers in
-                guard let result = try? await store.answer(item, answers: answers) else { return false }
-                return result.result != .failed
+            QuestionRow(item: item, question: question, showInTerminal: terminalAction(item)) { args in
+                await store.answerReporting(item, args: args)
             }
             .contextMenu { menu(item) }
         default:
@@ -175,6 +183,15 @@ struct SubagentChatView: View {
             nested = step.id
         } else {
             detail = step
+        }
+    }
+
+    /// "Show in terminal" for an item that has a place there; it leaves this conversation.
+    private func terminalAction(_ item: HarnessItem) -> (() -> Void)? {
+        guard canShow(item) else { return nil }
+        return {
+            store.focusedAgent = nil
+            Task { await store.showInTerminal(item) }
         }
     }
 

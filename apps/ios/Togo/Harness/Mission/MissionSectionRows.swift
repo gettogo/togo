@@ -2,7 +2,8 @@ import SwiftUI
 import TogoKit
 
 /// A section's header: its symbol and name, the row count in mono, and the beacon on Needs
-/// you while anything waits. A header to VoiceOver.
+/// you while anything waits. Only the needs count rolls (an event); the others change in
+/// place. A header to VoiceOver.
 struct MissionSectionHeader: View {
     @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 16
     let kind: MissionSectionKind
@@ -16,12 +17,14 @@ struct MissionSectionHeader: View {
             ZStack {
                 if lit {
                     BeaconDot()
+                        // motion: state change — the beacon lights in the symbol's slot.
                         .transition(.opacity)
                 } else {
                     Image(systemName: MissionCopy.symbol(kind))
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.togoMute)
                         .accessibilityHidden(true)
+                        // motion: state change — the symbol returns to its slot as the beacon goes.
                         .transition(.opacity)
                 }
             }
@@ -31,18 +34,33 @@ struct MissionSectionHeader: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
             if count > 0, kind != .status {
-                Text(verbatim: "\(count)")
-                    .font(.mono(.caption))
-                    .foregroundStyle(Color.togoMute)
-                    .rollingNumber(Double(count))
-                    .transition(.opacity)
+                countText
             }
             Spacer(minLength: 0)
         }
+        // motion: state change — the beacon lights and the count appears when the section
+        // stops being empty; nothing moves.
         .motion(.respond, value: count > 0)
         .padding(.horizontal, 4)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Only the needs count is an event the user cares about; every other count is a
+    /// background value.
+    static func countRolls(_ kind: MissionSectionKind) -> Bool { kind == .needs }
+
+    /// The needs count rolls when a request arrives or is answered; any other count is a
+    /// background value and simply changes.
+    @ViewBuilder private var countText: some View {
+        let text = Text(verbatim: "\(count)")
+            .font(.mono(.caption))
+            .foregroundStyle(Color.togoMute)
+        if Self.countRolls(kind) {
+            text.countChange(Double(count))
+        } else {
+            text.monospacedDigit()
+        }
     }
 }
 
@@ -64,7 +82,9 @@ struct MissionCard<Content: View>: View {
                         }
                         row
                     }
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: preventing a jump — a row fades in where the rows below glided
+                    // to make room (the `resize` that inserts it); nothing rises.
+                    .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
         }
@@ -125,8 +145,8 @@ struct MissionRowView: View {
                     ProgressView(value: min(max(progress, 0), 1))
                         .tint(Color.togoSnow)
                         .padding(.top, 2)
+                        // motion: continuity — the bar fills from where it was to the new value.
                         .motion(.progress, value: progress)
-                        .transition(.opacity)
                 }
             }
             if opens {
@@ -153,8 +173,9 @@ struct MissionRowView: View {
     }
 }
 
-/// How long a live row has run, ticking once a second; each tick rolls its digits (motion
-/// spec §2.7).
+/// How long a live row has run. One driver ticking on the row's own start, so the shown second
+/// changes exactly on the tick; the digits simply change, never animated (a clock is not an
+/// event). It sits last on its line, so its growth pushes nothing.
 struct MissionClock: View {
     let start: Date
 
@@ -167,7 +188,7 @@ struct MissionClock: View {
                 // trunc-ok: a timer, at most 8 characters
                 .lineLimit(1)
                 .fixedSize()
-                .rollingNumber(seconds)
+                .clockText()
         }
     }
 }
@@ -188,8 +209,9 @@ struct MissionBackgroundRow: View {
                     .font(.body)
                     .foregroundStyle(Color.togoSnow)
                     .fixedSize(horizontal: false, vertical: true)
-                if row.state.isLive {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in subtitle(at: context.date) }
+                if row.state.isLive, let start = row.startedAt?.date {
+                    // One driver on the job's own start: the shown second changes on the tick.
+                    TimelineView(.periodic(from: start, by: 1)) { context in subtitle(at: context.date) }
                 } else {
                     subtitle(at: .now)
                 }
@@ -230,7 +252,7 @@ struct MissionBackgroundRow: View {
                 if let clock {
                     Text(verbatim: clock)
                         .fixedSize()
-                        .rollingNumber(row.startedAt.map { now.timeIntervalSince($0.date).rounded(.down) } ?? 0)
+                        .clockText()
                 }
             }
             .font(.mono(.caption))
@@ -255,15 +277,21 @@ struct MissionNeedsRow: View {
     let row: HarnessRow
     let store: HarnessSessionStore
     let actions: ChatActions
+    /// Leaves mission control for the terminal, where a request's prompt waits.
+    var showTerminal: () -> Void = {}
     let onShowChat: () -> Void
     /// Whether the answerable row shows: it follows the item loading (network) through the
     /// swap choreography, so the plain line conceals before the card grows in (spec §2.3).
     @State private var loaded: Mirrored<Bool>
 
-    init(row: HarnessRow, store: HarnessSessionStore, actions: ChatActions, onShowChat: @escaping () -> Void) {
+    init(
+        row: HarnessRow, store: HarnessSessionStore, actions: ChatActions,
+        showTerminal: @escaping () -> Void = {}, onShowChat: @escaping () -> Void
+    ) {
         self.row = row
         self.store = store
         self.actions = actions
+        self.showTerminal = showTerminal
         self.onShowChat = onShowChat
         _loaded = State(initialValue: Mirrored(Self.answerable(row, store)))
     }
@@ -293,18 +321,31 @@ struct MissionNeedsRow: View {
     @ViewBuilder private func answer(_ item: HarnessItem) -> some View {
         switch item.body {
         case .approval(let approval):
-            ApprovalRow(item: item, approval: approval, card: actions.card(approval.requestId)) { decision in
+            // The helper's own words when an answer did not arrive, as in the chat.
+            ApprovalRow(
+                item: item, approval: approval, card: actions.card(approval.requestId),
+                failure: actions.failure(approval.requestId), showInTerminal: terminalAction(item)
+            ) { decision in
                 actions.answer(approval.requestId, decision)
             }
             .padding(14)
         case .question(let question):
-            QuestionRow(item: item, question: question) { answers in
-                guard let result = try? await store.answer(item, answers: answers) else { return false }
-                return result.result != .failed
+            QuestionRow(item: item, question: question, showInTerminal: terminalAction(item)) { args in
+                await store.answerReporting(item, args: args)
             }
             .padding(14)
         default:
             plain
+        }
+    }
+
+    /// Mission control steps aside and the terminal shows the request's prompt, where the
+    /// item has a place there.
+    private func terminalAction(_ item: HarnessItem) -> (() -> Void)? {
+        guard item.anchor != nil, store.has(HarnessCapability.anchors) else { return nil }
+        return { [store, showTerminal] in
+            showTerminal()
+            Task { await store.showInTerminal(item) }
         }
     }
 

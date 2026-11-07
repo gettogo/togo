@@ -1,5 +1,5 @@
 {
-  "description": "A screen whose source fails with no cached copy is refused with reason fallback; the app opens the terminal. Harness deviation: the claude adapter's sessions source points at a missing directory. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
+  "description": "A screen whose source has nothing to list yet (the claude adapter's sessions glob matches no file) is an empty screen, not a refusal: an empty glob or a missing file reads as empty. Resuming may restart the agent, so the picker carries onSelectConfirm. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
   "setup": [
     {
       "jsonrpc": "2.0",
@@ -36,13 +36,22 @@
   "response": {
     "jsonrpc": "2.0",
     "id": 3,
-    "error": {
-      "code": -32008,
-      "message": "refused",
-      "data": {
-        "reason": "fallback",
-        "detail": "source"
-      }
+    "result": {
+      "id": "resume",
+      "primitive": "picker",
+      "title": "Resume",
+      "fetchedAt": "2026-11-03T12:00:00Z",
+      "stale": false,
+      "picker": {
+        "items": [],
+        "searchable": true,
+        "onSelect": "resume",
+        "onSelectConfirm": {
+          "text": "Restart Claude Code?",
+          "effect": "relaunch"
+        }
+      },
+      "actions": []
     }
   }
 }

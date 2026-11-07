@@ -3,7 +3,9 @@ import TogoKit
 
 /// A native screen in a sheet: reads it from the session, draws it, and pushes any screen it
 /// opens onto the same stack. "Terminal" closes the sheet and switches the session to its
-/// terminal; open targets other than screens go to `onOpen`.
+/// terminal; open targets other than screens go to `onOpen`. A pick that lands closes the sheet
+/// to the chat, which says what changed (one rule for every host but mission control's pushes,
+/// which keep Back).
 struct HarnessScreenSheet: View {
     @Environment(\.dismiss) private var dismiss
     let store: HarnessSessionStore
@@ -35,7 +37,8 @@ struct HarnessScreenSheet: View {
             showTerminal: {
                 dismiss()
                 store.layer = .terminal
-            }
+            },
+            onSettled: { dismiss() }
         )
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -60,6 +63,9 @@ struct HarnessScreenLoader: View {
     let openScreen: @MainActor (String) -> Void
     let open: @MainActor (HarnessOpen) -> Void
     let showTerminal: @MainActor () -> Void
+    /// A selection or setting landed (applied, typed, restarted or held for the turn's end):
+    /// the host closes. nil keeps the screen, as mission control's pushes do.
+    var onSettled: (@MainActor () -> Void)? = nil
     @State private var phase: Phase = .loading
 
     var body: some View {
@@ -70,10 +76,8 @@ struct HarnessScreenLoader: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.togoInk)
                     .navigationTitle(title)
-                    .transition(.opacity)
             case .loaded(let screen):
                 PrimitiveScreenView(screen: screen, context: context)
-                    .transition(.opacity)
             case .failed(let fallback):
                 TerminalHandOff(
                     context: context, title: PrimitiveCopy.couldNotLoad,
@@ -89,11 +93,10 @@ struct HarnessScreenLoader: View {
                         }
                     }
                 }
-                .transition(.opacity)
             }
         }
-        // Loading, loaded and failed crossfade in the sheet; a refresh of a loaded screen
-        // changes it in place.
+        // A refresh of a loaded screen changes it in place.
+        // motion: state change — loading becomes the screen (or its failure) in place, a crossfade with no shift.
         .motion(.fade, value: phaseKind)
         .task(id: screenID) { await load(showingProgress: true) }
     }
@@ -114,6 +117,7 @@ struct HarnessScreenLoader: View {
     private var context: PrimitiveContext {
         var context = PrimitiveContext.store(store, openScreen: openScreen, open: open, showTerminal: showTerminal)
         context.reload = { await load(showingProgress: false) }
+        context.settled = onSettled
         return context
     }
 

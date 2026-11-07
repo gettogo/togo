@@ -9,8 +9,9 @@ name: Droid
 revision: 1
 match: { agents: [droid], commands: [droid] }
 harness: { version: [droid, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=1.5 <2" }
+# No status capability: the hooks carry no model, usage or context to fill one.
 capabilities: [chat, chat.anchors, send.queue, interrupt, commands, files, needs.approvals, agents,
-  changes, ports, status, resume, compact]
+  changes, ports, resume, compact]
 feeds:
   hooks:            # `togo hook droid <event>` in ~/.factory/hooks.json (installed only by `togo hooks install --agent droid`)
     hook:
@@ -34,16 +35,12 @@ screens:
     search: true
     map: { item.id: .id, item.title: '{{.title | default .id | truncate 60}}', item.subtitle: '{{.updated | ago}}' }
     on_select: resume
-  compact:
-    primitive: confirm
-    title: Compress
-    section: status
-    capability: compact
-    submit: compact
 actions:
+  # Droid asks "compress now?" itself after /compress, so Togo asks nothing
+  # first: one confirmation, Droid's, which the prompt detector brings to
+  # the phone.
   compact:
     label: Compress
-    confirm: Compress the session now?
     type: { text: '/compress', submit: true, when_idle: true }
     stability: documented-command
   resume:
@@ -51,7 +48,7 @@ actions:
     branch:
       - { when: '{{.state.idle}}', type: { text: '/resume {{.id}}', submit: true, when_idle: true } }
       - { relaunch: { argv: [droid, --resume, '{{.id}}'] } }
-    verify: { source: hooks, select: .session_id, equals: '{{.id}}', within: 10s }
+    verify: { source: hooks, select: $state.harness_session, equals: '{{.id}}', within: 10s }
     stability: documented-command
   answer:
     builtin: approval_answer
@@ -59,12 +56,14 @@ actions:
   interrupt:
     keys: { keys: [Escape], until: idle, max: 2 }
     stability: documented
+status:
+  actions: [compact]   # inline on the context meter, once a status block exists
 commands:
   static:
-    - { name: model, detail: Open the model selector }
-    - { name: compress, detail: Compress the session }
+    - { name: model, detail: Open the model selector, kind: terminal }
+    - { name: compress, detail: Compress the session, action: compact }
     - { name: resume, hint: '[id]', detail: Resume a session, screen: resume }
-    - { name: context, detail: Context window usage }
-    - { name: cost, detail: Token usage and cost }
-    - { name: droids, detail: Custom droids (subagents) }
+    - { name: context, detail: Context window usage, kind: terminal }
+    - { name: cost, detail: Token usage and cost, kind: terminal }
+    - { name: droids, detail: Custom droids (subagents), kind: terminal }
     - { name: review, detail: Review current changes }

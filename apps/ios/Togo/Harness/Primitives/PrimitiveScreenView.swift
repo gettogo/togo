@@ -2,10 +2,11 @@ import SwiftUI
 import TogoKit
 
 /// Draws a screen with the primitive it names, or the terminal hand-off for one this build does
-/// not know. It redraws from the screen an action's result carries, says when the copy is
-/// stale, and always offers the terminal in the bar. The host supplies the navigation stack.
+/// not know. It redraws from the screen an action's result carries, says in the bar's subtitle
+/// when the copy is stale ("Updated 2 min ago"), and always offers the terminal in the bar. A
+/// Confirm with no questions is never a page: it asks in the system dialog. The host supplies
+/// the navigation stack.
 struct PrimitiveScreenView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let screen: HarnessScreen
     let context: PrimitiveContext
     /// The screen an action's result carried, newer than `screen` until the host reads again.
@@ -15,16 +16,9 @@ struct PrimitiveScreenView: View {
     var body: some View {
         let shown = PrimitiveScreenLogic.newest(screen, latest)
         primitive(shown)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if shown.stale {
-                    staleLine(shown)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
-                }
-            }
-            // The stale line and the action bar arrive with the inset in one transaction.
-            .motion(.respond, value: shown.stale)
-            .motion(.respond, value: shown.actions.map(\.id))
             .navigationTitle(shown.title)
+            // A background state: instant, in the bar, not a band over the content.
+            .navigationSubtitle(PrimitiveScreenLogic.subtitle(shown) ?? "")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(PrimitiveCopy.terminal, systemImage: "terminal") { context.showTerminal() }
@@ -32,8 +26,14 @@ struct PrimitiveScreenView: View {
                 if !shown.actions.isEmpty {
                     ToolbarItemGroup(placement: .bottomBar) {
                         ForEach(shown.actions) { ref in
-                            Button(ref.label, systemImage: PrimitiveActionSymbol.of(ref), role: ref.role == .destructive ? .destructive : nil) {
-                                Task { await actions.trigger(ref, context: local) }
+                            Button(role: ref.role == .destructive ? .destructive : nil) {
+                                Task { await actions.trigger(ref, place: .label, context: local) }
+                            } label: {
+                                Label {
+                                    OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id))
+                                } icon: {
+                                    Image(systemName: PrimitiveActionSymbol.of(ref))
+                                }
                             }
                             .disabled(actions.isRunning(ref.id))
                         }
@@ -59,7 +59,7 @@ struct PrimitiveScreenView: View {
     @ViewBuilder private func primitive(_ screen: HarnessScreen) -> some View {
         switch PrimitiveScreenLogic.payload(screen) {
         case .picker(let picker):
-            PickerPrimitive(picker: picker, context: local)
+            PickerPrimitive(picker: picker, title: screen.title, context: local)
         case .settings(let settings):
             SettingsPrimitive(settings: settings, context: local)
         case .checklist(let checklist):
@@ -68,6 +68,8 @@ struct PrimitiveScreenView: View {
             LiveListPrimitive(list: list, context: local)
         case .detail(let detail):
             DetailCardPrimitive(detail: detail, context: local)
+        case .confirm(let confirm) where confirm.questions.isEmpty:
+            ConfirmDialogScreen(screen: screen, confirm: confirm, context: local)
         case .confirm(let confirm):
             ConfirmPrimitive(confirm: confirm, context: local)
         case .status(let status):
@@ -75,17 +77,6 @@ struct PrimitiveScreenView: View {
         case .unknown:
             TerminalHandOff(context: context)
         }
-    }
-
-    private func staleLine(_ screen: HarnessScreen) -> some View {
-        Text(PrimitiveCopy.stale(screen.fetchedAt.date.formatted(.relative(presentation: .named))))
-            .font(.footnote)
-            .foregroundStyle(Color.togoMute)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Layout.margin)
-            .padding(.vertical, 6)
-            .background(Color.togoInk)
-            .accessibilityAddTraits(.updatesFrequently)
     }
 }
 
@@ -116,6 +107,22 @@ enum PrimitiveScreenLogic {
         }
     }
 
+    /// The bar's subtitle: "Updated 2 min ago" for a stale copy, nil when it is fresh.
+    static func subtitle(_ screen: HarnessScreen) -> String? {
+        guard screen.stale else { return nil }
+        return PrimitiveCopy.updated(screen.fetchedAt.date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
+    }
+
+    /// The dialog a Confirm with no questions asks with: its message, its submit as the button.
+    static func dialog(_ screen: HarnessScreen, _ confirm: HarnessScreen.Confirm) -> ActionGate.Dialog {
+        let message = confirm.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return ActionGate.Dialog(
+            title: message.isEmpty ? PrimitiveCopy.asking(screen.title) : message,
+            confirmLabel: screen.title.isEmpty ? PrimitiveCopy.confirm : screen.title,
+            destructive: confirm.destructive, offersAfterReply: false, instructions: nil
+        )
+    }
+
     /// The later of the host's screen and the one an action returned, by when each was read.
     static func newest(_ host: HarnessScreen, _ fromAction: HarnessScreen?) -> HarnessScreen {
         guard let fromAction, fromAction.id == host.id, fromAction.fetchedAt > host.fetchedAt else { return host }
@@ -135,5 +142,46 @@ struct TerminalHandOff: View {
         })
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.togoInk)
+    }
+}
+
+/// A Confirm with no questions: never a page with one button. It asks in the system dialog as
+/// it opens; the answer closes the host (the chat says what happened), and a host that keeps
+/// its pages shows the outcome where the question was.
+private struct ConfirmDialogScreen: View {
+    let screen: HarnessScreen
+    let confirm: HarnessScreen.Confirm
+    let context: PrimitiveContext
+    @State private var actions = PrimitiveActions()
+    @State private var asked = false
+
+    var body: some View {
+        Group {
+            if let outcome = actions.outcome(confirm.submit) {
+                StateView(kind: outcome.isFailure ? .error : .empty, title: outcome.title, message: outcome.detail ?? "")
+            } else if asked, actions.asking == nil, !actions.isBusy {
+                // Dismissed without an answer: the question, quietly; Back or Done leaves.
+                StateView(kind: .empty, title: PrimitiveScreenLogic.dialog(screen, confirm).title, message: "")
+            } else {
+                Color.togoInk
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.togoInk)
+        .actionConfirmation($actions.asking)
+        .onAppear {
+            guard !asked else { return }
+            asked = true
+            let submit = confirm.submit
+            actions.asking = ActionGateRequest(
+                dialog: PrimitiveScreenLogic.dialog(screen, confirm),
+                run: {
+                    let result = await actions.perform(submit, place: .control, context: context)
+                    if PickerModel.closes(result) { context.settled?() }
+                },
+                // Cancel: nothing to stay for.
+                cancel: { context.settled?() }
+            )
+        }
     }
 }

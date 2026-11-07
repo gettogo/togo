@@ -18,7 +18,10 @@ import (
 var claudeBase = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "StopFailure", "SessionEnd",
 	"PostToolUseFailure", "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "TaskCreated", "TaskCompleted"}
 
-const permissionRequest = "PermissionRequest"
+const (
+	permissionRequest = "PermissionRequest"
+	askUserQuestion   = "AskUserQuestion"
+)
 
 func claudeEdits(o Options, add bool) ([]edit, string, error) {
 	root, path := o.ClaudeDir, filepath.Join(o.ClaudeDir, "settings.json")
@@ -29,17 +32,22 @@ func claudeEdits(o Options, add bool) ([]edit, string, error) {
 	} else if st, err := os.Stat(root); root == "" || err != nil || !st.IsDir() {
 		return nil, "", nil
 	}
-	want := slices.Clone(claudeBase)
+	// PermissionRequest is always hooked for AskUserQuestion, so the
+	// phone can answer Claude's questions; --block hooks it for every tool.
+	want := append(slices.Clone(claudeBase), permissionRequest)
+	matchers := map[string]string{permissionRequest: askUserQuestion}
 	if o.Block {
-		want = append(want, permissionRequest)
+		matchers = nil
 	}
 	s := spec{
 		agent:      Claude,
 		binary:     o.Binary,
 		want:       want,
 		all:        append(slices.Clone(claudeBase), permissionRequest),
-		statusLine: true,
+		statusLine: !(add && o.NoStatusLine),
 		add:        add,
+		matchers:   matchers,
+		togoHome:   o.TogoHome,
 	}
 	return []edit{{path: path, transform: func(cur []byte) ([]byte, error) { return editHooksJSON(cur, s) }}}, root, nil
 }
@@ -54,6 +62,11 @@ type spec struct {
 	all        []string
 	statusLine bool
 	add        bool
+	// matchers gives an event's togo group a matcher (Claude:
+	// PermissionRequest only for AskUserQuestion without --block).
+	matchers map[string]string
+	// togoHome holds the chained status line's original command.
+	togoHome string
 }
 
 // editHooksJSON adds or removes togo's entries in a Claude-style settings
@@ -82,7 +95,7 @@ func editHooksJSON(cur []byte, s spec) ([]byte, error) {
 			}
 		}
 		want := s.add && slices.Contains(s.want, ev)
-		out, c, err := editEvent(groups, s.agent, hookCommand(s.binary, s.agent, ev), want)
+		out, c, err := editEvent(groups, s.agent, hookCommand(s.binary, s.agent, ev), want, s.matchers[ev], s.add)
 		if err != nil {
 			return nil, fmt.Errorf("hooks.%s: %w", ev, err)
 		}
@@ -119,7 +132,7 @@ func editHooksJSON(cur []byte, s spec) ([]byte, error) {
 // editEvent drops every togo handler in the event's groups and, when want,
 // keeps exactly one with the current command. A group left with no handlers
 // is dropped.
-func editEvent(groups []json.RawMessage, agent, cmd string, want bool) ([]json.RawMessage, bool, error) {
+func editEvent(groups []json.RawMessage, agent, cmd string, want bool, matcher string, install bool) ([]json.RawMessage, bool, error) {
 	var out []json.RawMessage
 	changed, found := false, false
 	for _, g := range groups {
@@ -127,7 +140,9 @@ func editEvent(groups []json.RawMessage, agent, cmd string, want bool) ([]json.R
 			out = append(out, g)
 			continue
 		}
-		ng, keep, c, placed, err := editGroup(g, agent, cmd, want && !found)
+		// A togo handler under another matcher (an earlier install with or
+		// without --block) is removed and placed again under this one.
+		ng, keep, c, placed, err := editGroup(g, agent, cmd, want && !found && groupMatcher(g) == matcher, install)
 		if err != nil {
 			return nil, false, err
 		}
@@ -138,15 +153,29 @@ func editEvent(groups []json.RawMessage, agent, cmd string, want bool) ([]json.R
 		}
 	}
 	if want && !found {
-		out = append(out, mustJSON(map[string]any{"hooks": []any{map[string]any{"type": "command", "command": cmd}}}))
+		group := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": cmd}}}
+		if matcher != "" {
+			group["matcher"] = matcher
+		}
+		out = append(out, mustJSON(group))
 		changed = true
 	}
 	return out, changed, nil
 }
 
+// groupMatcher is a matcher group's matcher, "" when it has none.
+func groupMatcher(g json.RawMessage) string {
+	var m struct {
+		Matcher string `json:"matcher"`
+	}
+	_ = json.Unmarshal(g, &m)
+	return m.Matcher
+}
+
 // editGroup rewrites one matcher group. keep is false when the group ends up
-// without handlers because togo's were its only ones.
-func editGroup(g json.RawMessage, agent, cmd string, want bool) (json.RawMessage, bool, bool, bool, error) {
+// without handlers because togo's were its only ones. On install, a togo
+// handler the user changed by hand is refused rather than rewritten.
+func editGroup(g json.RawMessage, agent, cmd string, want, install bool) (json.RawMessage, bool, bool, bool, error) {
 	obj, err := parseObject(g)
 	if err != nil {
 		return nil, false, false, false, err
@@ -174,6 +203,9 @@ func editGroup(g json.RawMessage, agent, cmd string, want bool) (json.RawMessage
 			kept = append(kept, h)
 			continue
 		}
+		if install && c != cmd && !plainCommand(c, agent) {
+			return nil, false, false, false, fmt.Errorf("%w: %q", ErrEdited, c)
+		}
 		switch {
 		case want && !placed && c == cmd:
 			placed = true
@@ -196,43 +228,11 @@ func editGroup(g json.RawMessage, agent, cmd string, want bool) (json.RawMessage
 	return encodeObject(obj, "", ""), true, true, placed, nil
 }
 
-// editStatusLine sets statusLine only when the user has none, refreshes it
-// when it is togo's, and removes it on uninstall only when it is togo's.
-func editStatusLine(top *object, s spec, unit string) (bool, error) {
-	cmd := hookCommand(s.binary, s.agent, "statusline")
-	raw, ok := top.get("statusLine")
-	if !ok || string(bytes.TrimSpace(raw)) == "null" {
-		if !s.add {
-			return false, nil
-		}
-		top.set("statusLine", pretty(mustJSON(map[string]any{"type": "command", "command": cmd}), unit, unit))
-		return true, nil
-	}
-	obj, err := parseObject(raw)
-	if err != nil {
-		return false, fmt.Errorf("statusLine: %w", err)
-	}
-	var c string
-	if v, ok := obj.get("command"); ok {
-		_ = json.Unmarshal(v, &c)
-	}
-	if !owned(c, s.agent) {
-		return false, nil
-	}
-	if !s.add {
-		top.del("statusLine")
-		return true, nil
-	}
-	if c == cmd {
-		return false, nil
-	}
-	obj.set("command", mustJSON(cmd))
-	top.set("statusLine", pretty(encodeObject(obj, "", ""), unit, unit))
-	return true, nil
-}
-
 // ownedEvents lists the events that have a togo entry.
 func ownedEvents(data []byte, agent string) (map[string]bool, error) {
+	if agent == Auggie {
+		return auggieOwnedEvents(data)
+	}
 	top, err := parseObject(data)
 	if err != nil {
 		return nil, err

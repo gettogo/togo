@@ -48,6 +48,19 @@ public struct TurnClock: Hashable, Sendable {
         now.addingTimeInterval(-worked(at: now))
     }
 
+    /// The origin of the number on screen, for a one-second schedule
+    /// (`TimelineView(.periodic(from: displayOrigin, by: 1))`) whose ticks land exactly when the
+    /// shown second changes. While `waiting` with a wait open: that wait's start (the number is
+    /// the wait). Otherwise the turn's start plus the time spent waiting so far, which stays
+    /// fixed while the turn works, so `now - origin` is the working time.
+    public func displayOrigin(waiting: Bool, at now: Date = .now) -> Date {
+        if waiting, end == nil, let open = waits.last(where: { $0.end == nil }) {
+            return max(open.start, start)
+        }
+        let stop = max(start, end ?? now)
+        return start.addingTimeInterval(waited(until: stop))
+    }
+
     /// Seconds spent waiting between the start and `stop`, overlapping waits counted once.
     private func waited(until stop: Date) -> TimeInterval {
         let spans = waits.compactMap { wait -> (Date, Date)? in

@@ -38,6 +38,7 @@ struct RestorableSessionRow: View {
             VStack(alignment: .leading, spacing: 4) { buttons(offered) }
         }
         .disabled(busy)
+        // motion: cause → effect — the buttons dim in place while the restore the person asked for runs.
         .motion(.respond, value: busy)
     }
 

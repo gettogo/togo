@@ -385,6 +385,7 @@ private struct ReviewEntrance: ViewModifier {
         if reduceMotion {
             content
                 .opacity(shown ? 1 : 0)
+                // motion: origin — under Reduce Motion a fade stands in for the slide up
                 .onAppear { withAnimation(Motion.animation(.rowGrow, reduce: reduceMotion)) { shown = true } }
         } else {
             content

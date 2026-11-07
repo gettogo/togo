@@ -9,7 +9,7 @@ revision: 1
 match: { agents: [vibe], commands: [vibe] }
 harness: { version: [vibe, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=3.1 <4" }
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode,
-  needs.approvals, changes, ports, status, resume, compact]
+  needs.approvals, changes, ports, resume, compact]
 feeds:
   hooks:            # not installed by Togo: Vibe reads claude_code hooks from Claude-format plugins
     hook: { events: [PreToolUse, PostToolUse, Stop] }
@@ -39,12 +39,6 @@ screens:
     search: true
     map: { item.id: .id, item.title: '{{.title | default .id | truncate 60}}', item.subtitle: '{{.updated | ago}}' }
     on_select: resume
-  compact:
-    primitive: confirm
-    title: Compact
-    section: status
-    capability: compact
-    submit: compact
 actions:
   set_mode:
     label: Agent
@@ -75,8 +69,10 @@ modes:
   current: config
   select: .default_agent
   set: set_mode
+status:
+  actions: [compact]   # inline on the context meter, once a status block exists
 commands:
   static:
-    - { name: compact, detail: Summarise the conversation }
-    - { name: config, detail: Settings }
+    - { name: compact, detail: Summarise the conversation, action: compact }
+    - { name: config, detail: Settings, kind: terminal }
     - { name: resume, detail: Resume a session, screen: resume }

@@ -6,10 +6,13 @@ import TogoKit
 /// a request is open. One view with one identity, so going from waiting to working is a morph
 /// in place, never a second line popping in.
 ///
-/// - The clock is the turn's stopwatch (`TurnClock`): working time pauses during a wait and
-///   resumes where it paused; the digits roll each second.
-/// - The glyph sits in a fixed slot and crossfades; the words crossfade; the step has a fixed
-///   one-line slot, so the line's height never changes while it runs.
+/// - The clock is never animated (motion principles v2 §4). It is its own `Text`, last on its
+///   line, so "9s" → "10s" pushes nothing; one `TimelineView` ticks from the origin of the
+///   number on screen (`TurnClock.displayOrigin`), so the digit changes exactly on the tick.
+/// - Waiting ↔ working changes the word and the glyph in place; the number cuts to the other
+///   clock (the wait, or the paused working time) without rolling.
+/// - The step is status text that changes many times a minute: instant, in a one-line slot
+///   that is there all turn, so the line's height never changes while it runs.
 struct LiveLine: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
@@ -20,38 +23,39 @@ struct LiveLine: View {
             LiveGlyph(waiting: state.waiting)
                 .frame(width: side)
             VStack(alignment: .leading, spacing: 2) {
-                TimelineView(.periodic(from: state.clock.start, by: 1)) { context in
-                    label(at: context.date)
-                }
+                label
                 stepLine
             }
         }
         .foregroundStyle(Color.togoMute)
         .frame(minHeight: 44, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .motion(.respond, value: state.waiting)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: WorkingCopy.spoken(state, now: .now)))
     }
 
-    private func label(at now: Date) -> some View {
-        let seconds = WorkingCopy.seconds(state, now: now).map { $0.rounded(.down) }
-        return HStack(spacing: 0) {
+    /// The word, the separator, then the clock: the clock last, so its width never moves them.
+    private var label: some View {
+        HStack(spacing: 0) {
             Text(verbatim: WorkingCopy.word(state))
                 .fontWeight(state.waiting ? .semibold : .regular)
                 .foregroundStyle(state.waiting ? Color.togoAccentText : Color.togoMute)
                 .contentTransition(reduceMotion ? .identity : .interpolate)
-            if let seconds {
-                Text(verbatim: " · ")
-                Text(verbatim: ChatCopy.clock(seconds))
-                    .rollingNumber(seconds)
+                // motion: state change — "Working" becomes "Waiting for you" in the beacon, in place; only the word moves.
+                .motion(.respond, value: state.waiting)
+            if WorkingCopy.seconds(state, now: .now) != nil {
+                Text(verbatim: LiveLineLayout.separator)
+                TimelineView(.periodic(from: LiveLineLayout.origin(state), by: 1)) { context in
+                    Text(verbatim: WorkingCopy.clock(state, now: context.date))
+                        .clockText()
+                }
             }
         }
         .font(.system(.footnote, design: .monospaced))
     }
 
     /// What the agent does now, in a slot one line tall that is there all turn, so a step
-    /// arriving or leaving never moves the chat.
+    /// arriving or leaving never moves the chat. It changes instantly: it is status text.
     private var stepLine: some View {
         Text(verbatim: state.step ?? " ")
             .font(.footnote)
@@ -59,8 +63,34 @@ struct LiveLine: View {
             .lineLimit(1)
             .truncationMode(.middle)
             .opacity(state.step == nil ? 0 : 1)
-            .contentTransition(reduceMotion ? .identity : .interpolate)
-            .motion(.respond, value: state.step)
+            .contentTransition(.identity)
+            .transaction { $0.animation = nil }
+    }
+}
+
+/// The live line's layout rules, pure so they are tested without a view.
+enum LiveLineLayout {
+    static let separator = " · "
+
+    /// The pieces of the line in order. The clock, when there is one, is always last.
+    enum Segment: Equatable {
+        case word(String)
+        case separator
+        case clock(String)
+    }
+
+    static func segments(_ state: WorkingState, now: Date) -> [Segment] {
+        var out: [Segment] = [.word(WorkingCopy.word(state))]
+        if WorkingCopy.seconds(state, now: now) != nil {
+            out += [.separator, .clock(WorkingCopy.clock(state, now: now))]
+        }
+        return out
+    }
+
+    /// Where the one-second schedule starts: the origin of the number on screen, so each tick
+    /// lands exactly when the shown second changes. Never `.now`, which re-anchors on render.
+    static func origin(_ state: WorkingState) -> Date {
+        state.clock.displayOrigin(waiting: state.waiting)
     }
 }
 
@@ -82,12 +112,12 @@ private struct LiveGlyph: View {
                     .frame(width: beacon, height: beacon)
                     .padding(3)
                     .background(Circle().fill(Color.togoAccent.opacity(0.18)))
-                    .transition(.opacity)
             } else {
                 LiveSpinner()
-                    .transition(.opacity)
             }
         }
+        // motion: state change — the spinner gives way to the still beacon in the same fixed slot: the agent stopped for the user.
+        .motion(.respond, value: waiting)
         .accessibilityHidden(true)
     }
 }

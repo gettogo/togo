@@ -212,14 +212,14 @@ struct RosterSection: View {
                 .tint(SwipeTint.neutral)
             }
         }
-        .contextMenu {
+        .modifier(RosterLineMenu(mission: line.mission) {
             SessionMenu(row: row, actions: actions, etAvailable: etAvailable, perform: perform) {
                 RosterMissionMenuButton(line: line)
                 if draggable {
                     OpenInWindowButton(tab: id)
                 }
             }
-        }
+        })
     }
 
     /// The selected line sits on the raised surface; the keyboard cursor draws a ring.
@@ -227,17 +227,20 @@ struct RosterSection: View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         return ZStack {
             Color.togoInk
+            // motion: cause → effect — the line the user picked lights in place
             if selected == id {
                 shape.fill(Color.togoRaised).padding(.horizontal, 6)
                     .transition(.opacity)
             }
+            // motion: cause → effect — the keyboard cursor lands on this line
             if cursor == id {
                 shape.strokeBorder(Color.togoSnow, lineWidth: 2).padding(.horizontal, 6)
                     .transition(.opacity)
             }
         }
-        // The surface and the ring move with the selection on `respond`, never with layout.
+        // motion: cause → effect — the surface and the ring follow the selection, never layout
         .motion(.respond, value: selected == id)
+        // motion: cause → effect — the ring follows the keyboard cursor
         .motion(.respond, value: cursor == id)
     }
 }
@@ -261,14 +264,15 @@ struct RosterMachineHeading: View {
                 Text(verbatim: "\(count)")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(Color.togoMute)
-                    .rollingNumber(Double(count))
+                    // A background count: it changes at once.
+                    .monospacedDigit()
                 if let caption {
                     Text(caption)
                         .font(.footnote)
                         .foregroundStyle(Color.togoMute)
                         .fixedSize(horizontal: false, vertical: true)
-                        .contentTransition(.interpolate)
-                        .transition(.opacity)
+                        // Status text: it changes at once as the machine comes and goes.
+                        .transaction { $0.animation = nil }
                 }
                 Spacer(minLength: 0)
                 if let onWake, !typeSize.isAccessibilitySize {
@@ -280,8 +284,6 @@ struct RosterMachineHeading: View {
             }
         }
         .textCase(nil)
-        // The reachability words change on `respond` as the machine comes and goes.
-        .motion(.respond, value: caption)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

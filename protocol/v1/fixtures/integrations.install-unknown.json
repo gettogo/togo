@@ -1,0 +1,39 @@
+{
+  "description": "Only registry ids are accepted; a harness that takes no hooks (or any other name) is refused and nothing changes.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "integrations.install",
+    "params": {
+      "agents": [
+        "kimi"
+      ]
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": {
+      "code": -32602,
+      "message": "invalid params",
+      "data": {
+        "reason": "unknown_agent"
+      }
+    }
+  }
+}

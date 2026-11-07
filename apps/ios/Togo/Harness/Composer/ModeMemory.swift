@@ -1,9 +1,10 @@
 import Foundation
 import TogoKit
 
-/// Which mode the mode chip shows. The live status line wins, then the last mode the session
+/// Which mode the state chip shows. The live status line wins, then the last mode the session
 /// reported, then what it said when it was described. A mode once known is kept through updates
-/// that leave it out, so the chip never drops back to "Mode" between two status lines.
+/// that leave it out. While none is known the chip leaves the mode out; it never shows a word
+/// standing in for one.
 enum ModeMemory {
     static func current(status: String?, remembered: String?, described: String?) -> String {
         for candidate in [status, remembered, described] {
@@ -14,7 +15,12 @@ enum ModeMemory {
 
     /// The mode a session's mission reports in its status section, if any.
     static func status(_ mission: HarnessMission?) -> String? {
-        mission?.sections.first { $0.kind == .status }?.status?.mode
+        statusBlock(mission)?.mode
+    }
+
+    /// The session's Status block, if its mission has one.
+    static func statusBlock(_ mission: HarnessMission?) -> HarnessStatus? {
+        mission?.sections.first { $0.kind == .status }?.status
     }
 }
 

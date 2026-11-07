@@ -8,7 +8,6 @@ enum ComposerCopy {
     static let stop = String(localized: "composer.stop", defaultValue: "Stop")
     static let commands = String(localized: "composer.commands", defaultValue: "Commands")
     static let mention = String(localized: "composer.mention", defaultValue: "Mention a file")
-    static let mode = String(localized: "composer.mode", defaultValue: "Mode")
     static let queued = String(localized: "composer.queued", defaultValue: "Queued")
     static let cancelQueued = String(localized: "composer.cancelQueued", defaultValue: "Take back")
     static let favourite = String(localized: "composer.favourite", defaultValue: "Add to favourites")
@@ -17,19 +16,13 @@ enum ComposerCopy {
     static let recent = String(localized: "composer.recent", defaultValue: "Recent")
     static let allCommands = String(localized: "composer.allCommands", defaultValue: "All commands")
     static let noCommands = String(localized: "composer.noCommands", defaultValue: "No commands match")
-    static let returnSends = String(localized: "composer.returnSends", defaultValue: "Return still sends it as typed.")
     static let filterCommands = String(localized: "composer.filterCommands", defaultValue: "Type to filter")
-    static let input = String(localized: "composer.input", defaultValue: "Input")
-    static let optional = String(localized: "composer.optional", defaultValue: "optional")
-    static let open = String(localized: "composer.open", defaultValue: "Open")
-    static let hasNative = String(localized: "composer.hasNative", defaultValue: "Opens a native screen")
-    static let hasNativeDetail = String(localized: "composer.hasNativeDetail", defaultValue: "The same choices without typing.")
-    static let typesIntoTerminal = String(
-        localized: "composer.typesIntoTerminal", defaultValue: "Send types the command into the session. Togo never runs it itself."
-    )
-    static let takesInput = String(localized: "composer.takesInput", defaultValue: "Takes input")
-    static let notSent = String(localized: "composer.notSent", defaultValue: "Not sent. Your words are back in the field.")
-    static let notInterrupted = String(localized: "composer.notInterrupted", defaultValue: "Couldn't interrupt. The terminal has Esc.")
+    static let notSent = String(localized: "composer.notSent", defaultValue: "Not sent")
+    static let notInterrupted = String(localized: "composer.notInterrupted", defaultValue: "Couldn't stop")
+    static let openTerminal = String(localized: "composer.openTerminal", defaultValue: "Open terminal")
+    static let session = String(localized: "composer.session", defaultValue: "Session")
+    static let sessionState = String(localized: "composer.sessionState", defaultValue: "Model, effort and mode")
+    static let addInstructions = String(localized: "composer.addInstructions", defaultValue: "Add instructions…")
     static let commandsFailed = String(localized: "composer.commandsFailed", defaultValue: "Couldn't read the commands")
     static let tryAgain = String(localized: "composer.tryAgain", defaultValue: "Try again")
     static let notCancelled = String(localized: "composer.notCancelled", defaultValue: "Couldn't take it back")
@@ -47,14 +40,19 @@ enum ComposerCopy {
         String(localized: "composer.message", defaultValue: "Message \(name)")
     }
 
-    /// "Opens Model".
-    static func opens(_ title: String) -> String {
-        String(localized: "composer.opens", defaultValue: "Opens \(title)")
+    /// "Model…": a long list on its own screen.
+    static func opensList(_ title: String) -> String {
+        String(localized: "composer.opensList", defaultValue: "\(title)…")
     }
 
-    /// "Mode: Ask", for VoiceOver.
-    static func modeValue(_ label: String) -> String {
-        String(localized: "composer.modeValue", defaultValue: "Mode: \(label)")
+    /// "The effort didn't change".
+    static func notChanged(_ setting: String) -> String {
+        String(localized: "composer.notChanged", defaultValue: "\(setting) didn't change")
+    }
+
+    /// `Send "/foo" as typed`, the row an empty or failed palette offers.
+    static func sendAsTyped(_ line: String) -> String {
+        String(localized: "composer.sendAsTyped", defaultValue: "Send \u{201C}\(line)\u{201D} as typed")
     }
 
     // MARK: Pictures

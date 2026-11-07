@@ -42,6 +42,7 @@ struct PaneView: View {
                     .allowsHitTesting(false)
             }
         }
+        // motion: cause → effect — the pane outlines as the person drags a tab over it.
         .motion(.fade, value: targeted)
         .simultaneousGesture(TapGesture().onEnded { Self.tapped(pane, store: store) })
         .dropDestination(for: TabID.self) { ids, _ in
@@ -116,7 +117,6 @@ struct PaneView: View {
             if let tab {
                 page(tab)
                     .id(tab.id)
-                    .transition(.opacity)
             }
         }
         .animation(Motion.animation(.tabSettle, reduce: true), value: tab?.id)
@@ -143,17 +143,18 @@ struct PaneView: View {
                 // terminal may be on screen in the other pane's pager, and a terminal has one
                 // place at a time.
                 PagePlaceholder(label: store.chipLabel(for: tab))
-                    .transition(.opacity)
             } else {
                 // A terminal has one place at a time, so it never lingers in a fade on its way to
                 // the other pane; the placeholder fades over it instead.
                 TerminalSlot(tab: tab.id, terminals: terminals)
                     .id(tab.id)
                     .opacity(Self.terminalOpacity(for: tab.link))
+                    // motion: continuity — a terminal has one place at a time, so it lands at once and never fades.
                     .transition(.identity)
             }
             ConnectingOverlayHost(kind: overlay, addMachine: { store.showSheet(.addMachine) }) { retry(tab) }
         }
+        // motion: state change — the pane dims while its link reconnects.
         .motion(Self.dimRole, value: reconnecting)
         .haptic(.connect, trigger: tab.link.isLive) { $0 && isShown }
     }

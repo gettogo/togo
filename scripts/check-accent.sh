@@ -10,7 +10,7 @@ hits=$(grep -rn --include='*.swift' 'togoAccent' \
         apps/ios/Togo apps/ios/TogoWidgets apps/ios/TogoWatch apps/ios/TogoWatchWidgets 2>/dev/null \
     | grep -v -e '^apps/ios/Togo/Design/Palette.swift:' \
         -e '/StatusWord.swift:' -e '/Roster/RosterStatus.swift:' -e '/Roster/RosterView.swift:' -e '/Prompt/PromptBeacon.swift:' -e '/ApproveButton.swift:' \
-        -e '^apps/ios/Togo/Harness/Mission/MissionPill.swift:' -e '^apps/ios/Togo/Harness/Chat/WorkLine.swift:' -e '^apps/ios/Togo/Harness/Chat/BeaconFill.swift:' \
+        -e '^apps/ios/Togo/Harness/Mission/MissionPill.swift:' -e '^apps/ios/Togo/Harness/Chat/WorkLine.swift:' -e '^apps/ios/Togo/Harness/Chat/BeaconFill.swift:' -e '^apps/ios/Togo/Harness/Chat/LiveLine.swift:' \
         -e '^apps/ios/Togo/Launch/' \
         -e '^apps/ios/TogoWidgets/LiveLockScreenView.swift:' -e '^apps/ios/TogoWidgets/IslandViews.swift:' \
         -e '^apps/ios/TogoWidgets/WaitingWidget.swift:' \

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -93,6 +94,12 @@ func (e *Engine) fetch(ctx context.Context, s *sess, name string, query map[stri
 	if err != nil {
 		return nil, false, err
 	}
+	if notYet(raw, state) {
+		// A session-scoped source before the harness named its session
+		// (OpenCode's /session//todo before the first prompt): empty,
+		// not a failure.
+		return nil, false, nil
+	}
 	rendered, err := RenderJSON(raw, data_)
 	if err != nil {
 		return nil, false, err
@@ -122,6 +129,12 @@ func (e *Engine) fetch(ctx context.Context, s *sess, name string, query map[stri
 	}
 	e.cache.put(key, cacheEntry{session: s.id, at: e.cfg.Now(), data: v})
 	return v, false, nil
+}
+
+// notYet reports whether a source's templates need the harness's session
+// id and it is not known yet.
+func notYet(raw json.RawMessage, state map[string]string) bool {
+	return state["harness_session"] == "" && bytes.Contains(raw, []byte("harness_session"))
 }
 
 // read runs one source block and post-processes its result.

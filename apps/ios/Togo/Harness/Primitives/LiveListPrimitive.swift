@@ -41,29 +41,34 @@ struct LiveListPrimitive: View {
                 Text(verbatim: summary)
                     .font(.mono(.footnote))
                     .foregroundStyle(Color.togoMute)
-                    .contentTransition(.numericText())
+                    // A summary of counts is a background update: it changes in place, no roll.
+                    .contentTransition(.identity)
                     .padding(.horizontal, 4)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — the summary line arrives by opacity where it sits.
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
             if list.rows.isEmpty {
                 Text(PrimitiveCopy.nothingHere)
                     .foregroundStyle(Color.togoMute)
                     .frame(maxWidth: .infinity, minHeight: 120)
+                    // motion: state change — empty and the list swap in place, nothing shifts.
                     .transition(Motion.swap(reduce: reduceMotion))
             } else {
                 VStack(spacing: 0) {
                     ForEach(LiveListLogic.flatten(list.rows)) { entry in
                         LiveRow(row: entry.row, depth: entry.depth, first: entry.index == 0, actions: actions, context: context)
-                            .transition(Motion.revealConceal(reduce: reduceMotion))
+                            // motion: preventing a jump — a new row arrives by opacity while its neighbours make room.
+                            .transition(Motion.arrive(reduce: reduceMotion))
                     }
                 }
                 .background(Color.togoRaised, in: .rect(cornerRadius: 18, style: .continuous))
                 .clipShape(.rect(cornerRadius: 18, style: .continuous))
+                // motion: state change — the list and its empty line swap in place.
                 .transition(Motion.swap(reduce: reduceMotion))
             }
         }
-        // identity-keyed insert/remove: rows arriving or leaving on a refresh reveal and conceal;
-        // tail lines and values inside a row change in place.
+        // Keyed on row identity only: tail lines and values inside a row change in place.
+        // motion: preventing a jump — rows arriving or leaving on a refresh open and close their room.
         .motion(.respond, value: LiveListLogic.flatten(list.rows).map(\.id))
     }
 }
@@ -157,8 +162,10 @@ private struct LiveRow: View {
                 ProgressView(value: min(1, max(0, progress)))
                     .tint(row.state == .failed ? PrimitiveTint.fail : Color.togoSnow)
                     .padding(.leading, tile + 10)
+                    // motion: state change — the bar fills toward the new progress.
                     .motion(.progress, value: progress)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — the bar arrives by opacity in its place.
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
             let tail = LiveListLogic.tail(row)
             if !tail.isEmpty {
@@ -171,7 +178,8 @@ private struct LiveRow: View {
             if let refs = row.actions, !refs.isEmpty {
                 PrimitiveActionRow(refs: refs, target: row.id, actions: actions, context: context)
                     .padding(.leading, tile + 10)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — actions a refresh brings arrive by opacity in place.
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
         }
         .padding(.leading, 14 + CGFloat(depth) * indent)
@@ -188,7 +196,8 @@ private struct LiveRow: View {
             }
             ForEach(row.actions ?? []) { ref in
                 Button(ref.label, systemImage: PrimitiveActionSymbol.of(ref), role: ref.role == .destructive ? .destructive : nil) {
-                    Task { await actions.trigger(ref, target: row.id, context: context) }
+                    // From a menu that closes: the toast says how it went.
+                    Task { await actions.trigger(ref, target: row.id, place: .toast, context: context) }
                 }
             }
             Button(PrimitiveCopy.openTerminal, systemImage: "terminal") { context.showTerminal() }
@@ -200,7 +209,7 @@ private struct LiveRow: View {
         .accessibilityAction { if let open = row.open { context.open(open) } }
         .accessibilityActions {
             ForEach(row.actions ?? []) { ref in
-                Button(ref.label) { Task { await actions.trigger(ref, target: row.id, context: context) } }
+                Button(ref.label) { Task { await actions.trigger(ref, target: row.id, place: .toast, context: context) } }
             }
         }
     }
@@ -214,7 +223,8 @@ private struct LiveRow: View {
                     let seconds = timeline.date.timeIntervalSince(started).rounded(.down)
                     Text(verbatim: PrimitiveElapsed.string(seconds))
                         .font(.mono(.caption))
-                        .rollingNumber(seconds)
+                        // A clock never animates (motion principles v2 §4).
+                        .clockText()
                         .foregroundStyle(Color.togoMute)
                 }
             }

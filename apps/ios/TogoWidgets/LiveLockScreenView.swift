@@ -46,6 +46,7 @@ struct LiveLockScreenView: View {
             }
             if let command = LiveCopy.command(state.command) {
                 commandBlock(command)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
@@ -72,6 +73,7 @@ struct LiveLockScreenView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
                     .layoutPriority(1)
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }
@@ -89,6 +91,7 @@ struct LiveLockScreenView: View {
                     // trunc-ok: "3 waiting"
                     .lineLimit(1)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    // motion: state change — the system crossfades between entries in place; nothing moves.
                     .transition(.opacity)
             }
         }

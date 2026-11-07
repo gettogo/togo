@@ -69,6 +69,7 @@
         { "if": { "properties": { "method": { "const": "local.signal" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalSignalParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.hook" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalHookParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.ask" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalAskParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.question" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalQuestionParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.notify" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalNotifyParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.openUrl" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalOpenUrlParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "browser.openOnMac" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/BrowserOpenOnMacParams" } }, "required": ["params"] } },
@@ -82,6 +83,9 @@
         { "if": { "properties": { "method": { "const": "harness.interrupt" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessSessionParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "harness.complete" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessCompleteParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "harness.locate" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessLocateParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "integrations.status" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/EmptyParams" } } } },
+        { "if": { "properties": { "method": { "const": "integrations.install" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/IntegrationsChangeParams" } } } },
+        { "if": { "properties": { "method": { "const": "integrations.uninstall" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/IntegrationsChangeParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.job" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalJobParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.shutdown" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalShutdownParams" } }, "required": ["params"] } }
       ]
@@ -339,7 +343,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"image.v1\" (fs.image), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"image.v1\" (fs.image), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission), \"integrations.v1\" (integrations.status, integrations.install, integrations.uninstall). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -460,6 +464,67 @@
         "submit": { "type": "boolean" }
       },
       "required": ["id", "text", "submit"],
+      "additionalProperties": false
+    },
+    "IntegrationsChangeParams": {
+      "description": "integrations.install and integrations.uninstall (integrations.v1) -> IntegrationsChangeResult. agents: registry ids of harnesses that take hooks (claude, codex, gemini, auggie, qwen, droid, copilot), each at most once; anything else is -32602 (reason unknown_agent) and nothing changes. install with no agents sets up every harness installed on the machine; uninstall needs at least one. block also hooks the harness's approval event so the phone can answer (claude, codex, qwen, copilot). The helper runs its own installer as the user: it backs each file up once (<file>.togo-backup) before Togo's first change, writes nothing when nothing changes, chains Claude Code's own status line, refuses a Togo entry the user changed by hand, and uninstall restores each file byte for byte when nothing else changed since.",
+      "type": "object",
+      "properties": {
+        "agents": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" }, "maxItems": 32 },
+        "block": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "IntegrationReport": {
+      "description": "One harness's setup state. installed: the harness's program (and, for one that takes hooks, its config folder) is on the machine. setup: hooks (Togo writes hook entries), none (it talks to Togo another way: nothing to set up) or pending (it has hooks, not confirmed yet: nothing is written). state: ready, needsSetup, outdated (an older Togo's entries; install updates them), notNeeded, notSupported or notInstalled; clients show unknown values as needsSetup. hooks: installed, outdated or absent, for setup hooks. statusLine, for a harness whose status line Togo chains: chained (the user's own runs after Togo's and prints as before), togo (Togo's own; the user had none), own (the user's, not chained yet) or absent. path: the file Togo edits; backup: its copy from before Togo's first change, when there is one. lastHookAt and statusLineAt: when the helper last received the harness's hook and its status line (RFC 3339, UTC), absent when never. fix: the command that sets it up on the machine, when it needs one.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "installed": { "type": "boolean" },
+        "setup": { "type": "string" },
+        "state": { "type": "string" },
+        "hooks": { "type": "string" },
+        "statusLine": { "type": "string" },
+        "path": { "type": "string" },
+        "backup": { "type": "string" },
+        "lastHookAt": { "type": "string" },
+        "statusLineAt": { "type": "string" },
+        "fix": { "type": "string" }
+      },
+      "required": ["id", "name", "installed", "setup", "state"],
+      "additionalProperties": false
+    },
+    "IntegrationsStatus": {
+      "description": "integrations.status (integrations.v1) -> this result: one row per harness the helper knows, in registry order (the rows `togo doctor` prints).",
+      "type": "object",
+      "properties": {
+        "integrations": { "type": "array", "items": { "$ref": "#/$defs/IntegrationReport" } }
+      },
+      "required": ["integrations"],
+      "additionalProperties": false
+    },
+    "IntegrationOutcome": {
+      "description": "One harness's install or uninstall outcome. state: installed, unchanged, removed, skipped (not installed on the machine) or refused, with error saying why (the file could not be parsed, or a Togo entry was changed by hand); a refused harness's files are left as they were.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "state": { "type": "string" },
+        "path": { "type": "string" },
+        "backup": { "type": "string" },
+        "error": { "type": "string" }
+      },
+      "required": ["id", "state"],
+      "additionalProperties": false
+    },
+    "IntegrationsChangeResult": {
+      "description": "integrations.install and integrations.uninstall result: each harness's outcome, then every row after the change.",
+      "type": "object",
+      "properties": {
+        "results": { "type": "array", "items": { "$ref": "#/$defs/IntegrationOutcome" } },
+        "integrations": { "type": "array", "items": { "$ref": "#/$defs/IntegrationReport" } }
+      },
+      "required": ["results", "integrations"],
       "additionalProperties": false
     },
     "NotifySettings": {
@@ -847,6 +912,10 @@
           }
         },
         "allowText": {
+          "type": "boolean"
+        },
+        "answerable": {
+          "description": "False while the helper cannot deliver an answer from the phone (a hook request with no options and no screen fingerprint yet); the app then shows it as waiting in the terminal. Absent means true.",
           "type": "boolean"
         },
         "createdAt": {
@@ -2004,6 +2073,17 @@
       ],
       "additionalProperties": false
     },
+    "LocalQuestionParams": {
+      "description": "local.question -> {answers?: {<prompt>: <answer>}, reason: answered|timeout}. Sent by a blocking Claude Code AskUserQuestion hook: it holds the question dialog until the question item is answered from the phone, then replies with the answers keyed by question prompt (labels of a multi-select joined with \", \"). Returns timeout at once when no device can answer.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "$ref": "#/$defs/ManagedSessionId" },
+        "questions": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 2000 } },
+        "timeoutSec": { "type": "integer", "minimum": 1, "maximum": 3600 }
+      },
+      "required": ["sessionId", "questions", "timeoutSec"],
+      "additionalProperties": false
+    },
     "LocalAskParams": {
       "description": "local.ask. Opens an approval with source ask and blocks until it is answered or timeoutSec passes.",
       "type": "object",
@@ -2363,7 +2443,11 @@
     },
     "HarnessItemApproval": {
       "type": "object",
-      "properties": { "requestId": { "$ref": "#/$defs/RequestId" }, "resolved": { "enum": ["phone", "desk", "expired", "gone"] } },
+      "properties": {
+        "requestId": { "$ref": "#/$defs/RequestId" },
+        "resolved": { "enum": ["phone", "desk", "expired", "gone"] },
+        "owner": { "description": "The id of the question item that is the same prompt. The question item answers it; clients do not draw this approval on its own.", "type": "string" }
+      },
       "required": ["requestId"],
       "additionalProperties": false
     },
@@ -2371,7 +2455,9 @@
       "type": "object",
       "properties": {
         "questions": { "type": "array", "items": { "$ref": "#/$defs/HarnessQuestion" } },
-        "answered": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
+        "answered": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+        "answerable": { "description": "False when the harness offers no way to answer from the phone; the app shows the questions read-only with Answer in the terminal. Absent means true.", "type": "boolean" },
+        "requestId": { "description": "The pending approval that is this question at the terminal, when one is linked (its approval item carries owner = this item's id).", "type": "string" }
       },
       "required": ["questions"],
       "additionalProperties": false
@@ -2646,6 +2732,7 @@
         "searchable": { "type": "boolean" },
         "filters": { "type": "array", "items": { "$ref": "#/$defs/HarnessFilter" } },
         "onSelect": { "type": "string" },
+        "onSelectConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
         "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } }
       },
       "required": ["items", "searchable", "onSelect"],
@@ -2665,7 +2752,8 @@
         "max": { "type": "number" },
         "placeholder": { "type": "string" },
         "readOnly": { "type": "boolean" },
-        "action": { "type": "string" }
+        "action": { "type": "string" },
+        "actionConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" }
       },
       "required": ["id", "label", "kind", "value"],
       "additionalProperties": false,
@@ -2943,7 +3031,12 @@
               "title": { "type": "string" },
               "detail": { "type": "string" },
               "hint": { "type": "string" },
-              "screen": { "type": "string" }
+              "screen": { "type": "string" },
+              "kind": { "description": "How the palette runs the command. choice: a menu in place from choices; picker: push screen; args: to the composer, Return waits for the argument; run: runs at once; terminal: typed, and the app shows the terminal. Absent from older helpers: the app derives it from screen and hint.", "enum": ["choice", "picker", "args", "run", "terminal"] },
+              "role": { "description": "destructive: the app asks in a system confirmation before running.", "enum": ["normal", "destructive"] },
+              "action": { "description": "A harness.action id the command runs instead of typing its text (e.g. compact, undo).", "type": "string" },
+              "opens": { "description": "A native home the command opens instead of typing: status, changes, or a screen id.", "type": "string" },
+              "choices": { "description": "For kind choice: the values, with the current one selected.", "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/HarnessCommandChoice" } }
             },
             "required": ["insert", "title"],
             "additionalProperties": false
@@ -2951,6 +3044,19 @@
         }
       },
       "required": ["items"],
+      "additionalProperties": false
+    },
+    "HarnessCommandChoice": {
+      "type": "object",
+      "properties": { "id": { "type": "string" }, "label": { "type": "string", "maxLength": 200 }, "selected": { "type": "boolean" } },
+      "required": ["id", "label"],
+      "additionalProperties": false
+    },
+    "HarnessSelectConfirm": {
+      "description": "Asked before a selection or field change runs. effect relaunch: the change restarts the agent; the app confirms only while it works and offers Undo when idle.",
+      "type": "object",
+      "properties": { "text": { "type": "string", "maxLength": 400 }, "effect": { "anyOf": [{ "enum": ["relaunch"] }, { "type": "null" }] } },
+      "required": ["text"],
       "additionalProperties": false
     },
     "HarnessLocateParams": {
@@ -3479,6 +3585,9 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.interrupt" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessActionResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.complete" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessCompleteResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.locate" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessLocation" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "integrations.status" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/IntegrationsStatus" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "integrations.install" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/IntegrationsChangeResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "integrations.uninstall" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/IntegrationsChangeResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "local.openUrl" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/LocalOpenUrlResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "host.info" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HostInfo" } } } } } }
       ]

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -21,22 +22,25 @@ func optionalEnv(t *testing.T) env {
 	return e
 }
 
-func TestOptionalAgentsNotInAll(t *testing.T) {
-	for _, a := range Optional {
-		for _, b := range Agents {
-			if a == b {
-				t.Fatalf("%s is installed by default", a)
-			}
-		}
+// Qwen, Droid and Copilot are part of the default set whenever they are
+// installed.
+func TestDefaultSetIncludesInstalledHookHarnesses(t *testing.T) {
+	e := optionalEnv(t)
+	for _, a := range []string{Qwen, Droid, Copilot} {
 		if !Known(a) {
 			t.Fatalf("%s unknown", a)
 		}
 	}
-	e := optionalEnv(t)
-	mustOK(t, Install(e.o, Agents))
+	got := Default(e.o)
+	for _, a := range []string{Claude, Codex, Qwen, Droid, Copilot} {
+		if !slices.Contains(got, a) {
+			t.Fatalf("default %v lacks %s", got, a)
+		}
+	}
+	mustOK(t, Install(e.o, Default(e.o)))
 	for _, p := range []string{filepath.Join(e.o.QwenDir, "settings.json"), filepath.Join(e.o.FactoryDir, "hooks.json"), filepath.Join(e.o.CopilotDir, "hooks", "togo.json")} {
-		if _, err := os.Stat(p); err == nil {
-			t.Fatalf("installing the default agents wrote %s", p)
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("default install did not write %s", p)
 		}
 	}
 }

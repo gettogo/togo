@@ -48,6 +48,7 @@ struct RosterMonitor: View {
             RosterView(store: store, wide: store.workspaceInline, now: now)
         }
         .offset(monitor.shift)
+        // motion: preventing a jump — the roster drifts a few points at a time so a screen left on never burns in, and never jumps.
         .motion(.dim, value: monitor.shift)
         .overlay { dimmer }
         .simultaneousGesture(SpatialTapGesture().onEnded { _ in monitor.touch() })
@@ -131,6 +132,7 @@ struct RosterMonitor: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityHidden(!monitor.dimmed)
             .accessibilityAction { monitor.touch() }
+            // motion: state change — the idle monitor dims slowly rather than going dark at once.
             .motion(.dim, value: monitor.dimmed)
     }
 }

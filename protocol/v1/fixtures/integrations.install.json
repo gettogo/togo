@@ -1,0 +1,88 @@
+{
+  "description": "One-tap Set up for Gemini CLI: the helper backs up ~/.gemini/settings.json, adds its hooks and returns every row after the change.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "integrations.install",
+    "params": {
+      "agents": [
+        "gemini"
+      ]
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "results": [
+        {
+          "id": "gemini",
+          "state": "installed",
+          "path": "/home/u/.gemini/settings.json",
+          "backup": "/home/u/.gemini/settings.json.togo-backup"
+        }
+      ],
+      "integrations": [
+        {
+          "id": "claude",
+          "name": "Claude Code",
+          "installed": true,
+          "setup": "hooks",
+          "state": "ready",
+          "hooks": "installed",
+          "statusLine": "chained",
+          "path": "/home/u/.claude/settings.json",
+          "backup": "/home/u/.claude/settings.json.togo-backup",
+          "lastHookAt": "2026-11-07T09:12:00Z",
+          "statusLineAt": "2026-11-07T09:12:30Z"
+        },
+        {
+          "id": "gemini",
+          "name": "Gemini CLI",
+          "installed": true,
+          "setup": "hooks",
+          "state": "ready",
+          "hooks": "installed",
+          "path": "/home/u/.gemini/settings.json",
+          "backup": "/home/u/.gemini/settings.json.togo-backup"
+        },
+        {
+          "id": "vibe",
+          "name": "Mistral Vibe",
+          "installed": true,
+          "setup": "pending",
+          "state": "notSupported"
+        },
+        {
+          "id": "kimi",
+          "name": "Kimi Code",
+          "installed": true,
+          "setup": "none",
+          "state": "notNeeded"
+        },
+        {
+          "id": "aider",
+          "name": "Aider",
+          "installed": false,
+          "setup": "none",
+          "state": "notInstalled"
+        }
+      ]
+    }
+  }
+}

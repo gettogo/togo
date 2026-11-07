@@ -57,13 +57,13 @@ commands:
   static:
     - { name: add, hint: '<file>', detail: Add files to the chat }
     - { name: drop, hint: '<file>', detail: Remove files from the chat }
-    - { name: model, hint: '<model>', detail: Switch the main model, screen: model }
-    - { name: chat-mode, hint: '<mode>', detail: Switch chat mode }
-    - { name: architect, detail: Architect mode for one message }
-    - { name: ask, detail: Ask without editing }
-    - { name: diff, detail: Diff since the last message }
-    - { name: undo, detail: Undo the last aider commit }
-    - { name: tokens, detail: Context token report }
-    - { name: clear, detail: Clear the chat history }
+    - { name: model, hint: '<model>', detail: Switch the main model, kind: picker, screen: model }
+    - { name: chat-mode, hint: '<mode>', detail: Switch chat mode, kind: choice, action: set_mode }
+    - { name: architect, hint: '<message>', detail: Architect mode for one message }
+    - { name: ask, hint: '<message>', detail: Ask without editing }
+    - { name: diff, detail: Diff since the last message, opens: changes }
+    - { name: undo, detail: Undo the last aider commit, action: undo }
+    - { name: tokens, detail: Context token report, kind: terminal }
+    - { name: clear, detail: Clear the chat history, role: destructive }
     - { name: run, hint: '<command>', detail: Run a shell command }
     - { name: test, hint: '<command>', detail: Run tests and fix failures }

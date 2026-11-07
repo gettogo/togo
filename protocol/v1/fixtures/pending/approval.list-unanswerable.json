@@ -1,0 +1,48 @@
+{
+  "description": "A hook opened a permission request before the screen showed its prompt: no options and no fingerprint yet, so it cannot be answered from the phone. answerable false; the app shows it as waiting in the terminal until the screen detector adopts it. Pending: the Go replay has no way to raise a hook request before the list.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "approval.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "approvals": [
+        {
+          "requestId": "r_abcdefghij",
+          "sessionId": "s_abcdefghij",
+          "bib": "01",
+          "agent": "claude",
+          "source": "hook",
+          "title": "Claude needs your permission",
+          "detail": null,
+          "snippet": "",
+          "options": [],
+          "allowText": false,
+          "answerable": false,
+          "createdAt": "2026-11-03T12:00:00Z",
+          "expiresAt": null,
+          "state": "pending"
+        }
+      ]
+    }
+  }
+}

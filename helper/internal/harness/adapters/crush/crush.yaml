@@ -42,8 +42,8 @@ actions:
       - { when: '{{eq .id "yolo"}}', relaunch: { argv: [crush, --yolo, --continue] } }
       - { relaunch: { argv: [crush, --continue] } }
     stability: documented
-  interrupt:
-    keys: { keys: [Escape] }
+  interrupt:         # Crush asks for a second Escape before it cancels
+    keys: { keys: [Escape, Escape] }
     stability: documented
 modes:
   choices: [{ id: default, label: Ask }, { id: yolo, label: Skip prompts }]

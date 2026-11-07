@@ -190,7 +190,6 @@ private struct PlainStart: View {
                 if let error = model.createError { InlineError(message: error) }
                 StartButton(title: NewSessionCopy.plainStart, creating: model.creating, onStart: onStart)
             }
-            .resizesOnRows(model.createError != nil)
         }
     }
 }
@@ -210,6 +209,7 @@ struct StartButton: View {
         }
         .buttonStyle(.primary)
         .disabled(creating)
+        // motion: cause → effect — the tapped button shows it is creating, in place
         .motion(.respond, value: creating)
     }
 }

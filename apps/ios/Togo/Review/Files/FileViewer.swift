@@ -83,7 +83,8 @@ struct FileViewer: View {
             .padding(.horizontal, Layout.margin)
             .padding(.vertical, hasHeader ? 8 : 0)
             .background(Color.togoInk)
-            .transition(Motion.revealConceal(reduce: reduceMotion))
+            // motion: state change — the file loaded; its header fades in with it, nothing rises
+            .transition(Motion.arrive(reduce: reduceMotion))
         }
     }
 
@@ -175,6 +176,7 @@ private struct ZoomableImage: View {
                         .onEnded { _ in settled = zoom }
                 )
                 .onTapGesture(count: 2) {
+                    // motion: cause → effect — the double tap zooms the picture where it was tapped
                     withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
                         zoom = zoom > 1 ? 1 : 3
                         settled = zoom

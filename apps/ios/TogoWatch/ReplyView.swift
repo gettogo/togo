@@ -109,8 +109,14 @@ struct ReplyView: View {
                 shown = new
                 return
             }
+            // A problem lands at once, with the failure haptic; errors never fly.
+            if case .problem = new {
+                withTransaction(Transaction(animation: nil)) { shown = new }
+                return
+            }
             // A result line arriving or leaving resizes; Send and Sending only respond.
             let role: MotionRole = old.hasLine || new.hasLine ? .resize : .respond
+            // motion: cause → effect — the tapped Send becomes Sending, then Sent, in place
             withAnimation(Motion.animation(role, reduce: reduceMotion)) { shown = new }
         }
         .onChange(of: model.state) { _, state in
@@ -136,13 +142,13 @@ struct ReplyView: View {
         case .sent:
             Label(WatchCopy.replySent, systemImage: "checkmark")
                 .font(.footnote.weight(.semibold))
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                // motion: cause → effect — the reply went; the line says so under Send
+                .transition(Motion.arrive(reduce: reduceMotion))
         case .problem(let sentence):
             Text(sentence)
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
                 .id(sentence)
-                .transition(Motion.revealConceal(reduce: reduceMotion))
         case .editing, .sending:
             EmptyView()
         }

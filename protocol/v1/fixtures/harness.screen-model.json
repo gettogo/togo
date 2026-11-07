@@ -64,6 +64,10 @@
             "title": "Opus",
             "subtitle": "1M context",
             "badge": "1M"
+          },
+          {
+            "id": "fable",
+            "title": "Fable"
           }
         ],
         "selected": "opus",

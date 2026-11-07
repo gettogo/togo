@@ -214,10 +214,14 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         public var requestId: String
         /// phone, desk, expired or gone once closed.
         public var resolved: String?
+        /// The question item that is this same prompt. The question answers it, so the chat does
+        /// not draw this approval on its own.
+        public var owner: String?
 
-        public init(requestId: String, resolved: String? = nil) {
+        public init(requestId: String, resolved: String? = nil, owner: String? = nil) {
             self.requestId = requestId
             self.resolved = resolved
+            self.owner = owner
         }
     }
 
@@ -226,10 +230,20 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         public var questions: [HarnessQuestion]
         /// Chosen option ids or text per question id, once answered.
         public var answered: [String: [String]]?
+        /// False when the harness offers no way to answer from the phone. Nil (older helpers) means true.
+        public var answerable: Bool?
+        /// The pending approval that is this question at the terminal, once linked.
+        public var requestId: String?
 
-        public init(questions: [HarnessQuestion], answered: [String: [String]]? = nil) {
+        /// Whether the phone can answer: `answerable` with its default.
+        public var isAnswerable: Bool { answerable ?? true }
+
+        public init(questions: [HarnessQuestion], answered: [String: [String]]? = nil, answerable: Bool? = nil,
+                    requestId: String? = nil) {
             self.questions = questions
             self.answered = answered
+            self.answerable = answerable
+            self.requestId = requestId
         }
     }
 

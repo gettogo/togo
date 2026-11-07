@@ -9,6 +9,10 @@ struct ChatActions {
     var answer: @MainActor (_ requestID: String, _ decision: Decision) -> Void
     /// Puts quoted text in the composer.
     var quote: @MainActor (_ text: String) -> Void
+    /// Why the last answer to a request did not arrive, while it is still open.
+    var failure: @MainActor (_ requestID: String) -> String? = { _ in nil }
+    /// Opens a link tapped in the chat: web pages, files, anything else (`ChatLinks`).
+    var open: @MainActor (_ url: URL) -> OpenURLAction.Result = { _ in .systemAction }
 
     @MainActor static let inert = ChatActions(card: { _ in nil }, answer: { _, _ in }, quote: { _ in })
 }
@@ -25,27 +29,43 @@ enum NeedsShape: Equatable {
 /// moving light, with the same approve button as the prompt bar. Never folded; once answered
 /// it settles into a quiet line.
 ///
-/// Motion (spec §2.1–§2.3): More opens and closes as a two-phase disclosure; the answer the
-/// person tapped shows its progress in place while the others dim; the helper's answer is
-/// mirrored, so the card conceals, then the row shrinks to its line while the line reveals.
+/// Motion (motion principles v2): the card's body unfolds when the card arrives for a request
+/// that waited in the terminal; More unfolds its list; the answer the person tapped shows its
+/// progress in place while the others dim, then becomes the answered line ("Approve" travels
+/// into "Approved"). Answered anywhere else, the card collapses in place to its line and the
+/// check bounces once.
 struct ApprovalRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: HarnessItem
     let approval: HarnessItem.Approval
     let card: RequestCard?
+    /// Why the last answer did not arrive, while the request is still open.
+    var failure: String?
+    /// The way to the prompt in the terminal, when the item has a place there.
+    var showInTerminal: (() -> Void)?
     let answer: (Decision) -> Void
 
+    @Namespace private var answerSpace
     @State private var approvals = 0
     @State private var denials = 0
+    /// The answer the person tapped here, so the answered line comes out of it.
+    @State private var tapped = AnswerTap<Decision>()
+    /// How the card last settled, so the line's check bounces only when nothing here caused it.
+    @State private var settle: AnswerSettle = .collapse
     @State private var more = Disclosure()
     @State private var shown: Mirrored<NeedsShape>
     /// The card as last seen, so it can conceal after the control center drops it.
     @State private var lastCard: RequestCard?
 
-    init(item: HarnessItem, approval: HarnessItem.Approval, card: RequestCard?, answer: @escaping (Decision) -> Void) {
+    init(
+        item: HarnessItem, approval: HarnessItem.Approval, card: RequestCard?, failure: String? = nil,
+        showInTerminal: (() -> Void)? = nil, answer: @escaping (Decision) -> Void
+    ) {
         self.item = item
         self.approval = approval
         self.card = card
+        self.failure = failure
+        self.showInTerminal = showInTerminal
         self.answer = answer
         _shown = State(initialValue: Mirrored(Self.shape(approval: approval, card: card)))
         _lastCard = State(initialValue: card)
@@ -55,7 +75,8 @@ struct ApprovalRow: View {
         ZStack(alignment: .topLeading) {
             switch shown.value {
             case .settled(let text):
-                SettledLine(text: text, celebrates: shown.generation > 0)
+                SettledLine(text: text, celebrates: shown.generation > 0 && settle.bounces)
+                    .answerSource(AnswerMatch.id(item.id), in: answerSpace, active: settle == .travel)
                     .settling(shown)
             case .waiting, .card:
                 cardView
@@ -65,19 +86,41 @@ struct ApprovalRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .haptic(.approve, trigger: approvals)
         .haptic(.deny, trigger: denials)
+        .haptic(.error, trigger: failure) { _, new in new != nil }
         .onChange(of: card) { _, card in if let card { lastCard = card } }
         .onChange(of: target) { _, target in follow(target) }
     }
 
     /// The card arriving for a request that waited in the terminal grows in place on its
-    /// ground; settling into the answered line conceals the card first (spec §2.3).
+    /// ground. The person's own answer becomes the line in one transaction; any other answer
+    /// conceals the card first, then the row shrinks to its line (spec §2.3).
     private func follow(_ target: NeedsShape) {
         switch (shown.value, target) {
         case (.waiting, .card), (.card, .waiting):
+            // motion: preventing a jump — the card grows in place as its body unfolds under the header.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { shown.value = target }
+        case (_, .settled):
+            settle = tapped.settle(answeredHere: Self.answeredHere(approval: approval, card: card))
+            guard settle == .travel else {
+                Motion.settle($shown, to: target, reduce: reduceMotion)
+                return
+            }
+            shown.generation += 1
+            // motion: cause → effect — the tapped answer travels into the answered line as the card shrinks around it.
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
+                shown.value = target
+                shown.shown = true
+            }
         default:
             Motion.settle($shown, to: target, reduce: reduceMotion)
         }
+    }
+
+    /// The request was answered by this phone (approved or denied here), not elsewhere and not
+    /// by expiring.
+    static func answeredHere(approval: HarnessItem.Approval, card: RequestCard?) -> Bool {
+        if let card, case .done(let outcome) = card.phase { return outcome == .approved || outcome == .denied }
+        return approval.resolved == "phone"
     }
 
     private var target: NeedsShape { Self.shape(approval: approval, card: card) }
@@ -97,13 +140,32 @@ struct ApprovalRow: View {
                         CodeWell(text: detail)
                     }
                     answers(card)
+                    if let failure, card.phase == .open {
+                        // Instant, at the answers that failed, with the error haptic.
+                        Text(failure)
+                            .font(.footnote)
+                            .foregroundStyle(Color.togoSnow)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("chat.needs.failure")
+                    }
                 }
-                .transition(Motion.revealConceal(reduce: reduceMotion))
+                // motion: state change — the card's body is uncovered under the header as the card grows.
+                .transition(Motion.unfold(reduce: reduceMotion))
             } else {
-                Text(ChatCopy.waitingInTerminal)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.togoMute)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                // Not answerable from here: the prompt waits in the terminal, and the card
+                // says so with the way there. Never an Approve or Deny that cannot work.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(ChatCopy.waitingInTerminal)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.togoMute)
+                    if let showInTerminal {
+                        Button(ChatCopy.showInTerminal, systemImage: "terminal", action: showInTerminal)
+                            .buttonStyle(PlainAnswerStyle())
+                            .font(.subheadline)
+                    }
+                }
+                // motion: state change — the terminal line is uncovered in place as the card changes shape.
+                .transition(Motion.unfold(reduce: reduceMotion))
             }
         }
         .modifier(NeedsCard())
@@ -132,7 +194,14 @@ struct ApprovalRow: View {
             return .settled(words)
         }
         if let resolved = approval.resolved { return .settled(ChatCopy.resolved(resolved)) }
-        return card == nil ? .waiting : .card
+        guard let card, answerable(card) else { return .waiting }
+        return .card
+    }
+
+    /// A request the phone can answer: it offers options, or takes words. One with neither (a
+    /// hook saw the prompt before the screen did) waits in the terminal.
+    static func answerable(_ card: RequestCard) -> Bool {
+        !card.options.isEmpty || card.allowText
     }
 
     /// Yes and No in a row, stacked when the labels are too long for one. Extra answers open
@@ -144,9 +213,13 @@ struct ApprovalRow: View {
                 HStack(spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
                 VStack(alignment: .leading, spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
             }
+            // More: the card's growing edge uncovers the extra answers top to bottom.
             if more.open, !extra.isEmpty {
-                AnswerOptionList(options: extra, revealing: true, sending: sendingOption(card)) { pick($0) }
-                    .disclosed(more)
+                AnswerOptionList(
+                    options: extra, sending: sendingOption(card),
+                    source: { tapped.isSource(.option($0)) ? (id: AnswerMatch.id(item.id), namespace: answerSpace) : nil }
+                ) { pick($0) }
+                    .unfolds(more)
             }
         }
         // Never draws outside the card while it shrinks.
@@ -159,11 +232,13 @@ struct ApprovalRow: View {
         let sending = sendingDecision(card)
         ApproveButton(approveLabel(card), busy: sending == approveDecision(card)) { approve(card) }
             .opacity(Self.dims(sending, keeping: approveDecision(card)) ? 0.4 : 1)
+            .answerSource(AnswerMatch.id(item.id), in: answerSpace, active: tapped.isSource(approveDecision(card)))
         Button { deny(card) } label: {
             BusyLabel(title: ChatCopy.deny, busy: sending == denyDecision(card))
         }
         .buttonStyle(PlainAnswerStyle())
         .opacity(Self.dims(sending, keeping: denyDecision(card)) ? 0.4 : 1)
+        .answerSource(AnswerMatch.id(item.id), in: answerSpace, active: tapped.isSource(denyDecision(card)))
         if hasExtra {
             Button { Motion.toggle($more, reduce: reduceMotion) } label: {
                 Text(more.isOpen ? AnswerOptionsCopy.hide : ChatCopy.more)
@@ -171,6 +246,7 @@ struct ApprovalRow: View {
             }
             .buttonStyle(PlainAnswerStyle())
             .opacity(sending == nil ? 1 : 0.4)
+            // motion: cause → effect — "More" becomes "Fewer" in place as the list opens under it.
             .motion(.respond, value: more.isOpen)
             .accessibilityValue(more.isOpen ? Text(AnswerOptionsCopy.hide) : Text(ChatCopy.more))
         }
@@ -199,15 +275,18 @@ struct ApprovalRow: View {
 
     private func approve(_ card: RequestCard) {
         approvals += 1
+        tapped.record(approveDecision(card))
         answer(approveDecision(card))
     }
 
     private func deny(_ card: RequestCard) {
         denials += 1
+        tapped.record(denyDecision(card))
         answer(denyDecision(card))
     }
 
     private func pick(_ option: AnswerOption) {
+        tapped.record(.option(option.id))
         answer(.option(option.id))
     }
 
@@ -238,9 +317,9 @@ struct BusyLabel: View {
                 if busy {
                     ProgressView()
                         .controlSize(.small)
-                        .transition(.opacity)
                 }
             }
+            // motion: cause → effect — the tapped answer's words give way to a spinner in their own room.
             .motion(.respond, value: busy)
     }
 }
@@ -253,8 +332,8 @@ struct NeedsHeader: View {
     }
 }
 
-/// An answered request, settled into one quiet line. When it settles while on screen its
-/// check bounces once; history shows it still.
+/// An answered request, settled into one quiet line. When it settles on screen from an answer
+/// given elsewhere its check bounces once; the person's own answer and history show it still.
 struct SettledLine: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let text: String

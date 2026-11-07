@@ -9,6 +9,9 @@ import TogoKit
     @ObservationIgnored let services: any HarnessServices
     private(set) var stores: [TabID: HarnessSessionStore] = [:]
     @ObservationIgnored private var composers: [TabID: CommandLineModel] = [:]
+    /// The last descriptor each tab's session had, so a reopened tab or a fresh store shows its
+    /// chat on the first frame and describes again in the background.
+    @ObservationIgnored private var descriptors: [TabID: HarnessDescriptor] = [:]
     @ObservationIgnored private var active = true
 
     init(services: any HarnessServices) {
@@ -30,10 +33,12 @@ import TogoKit
 
     /// Keeps one store per open tab. `capabilities` gives the helper capabilities of a tab's
     /// machine, nil while the machine is not listed yet; a tab waits for them. A tab whose
-    /// machine gains harness.v1 gets a fresh store.
-    func sync(tabs: [TabID], capabilities: (HostID) -> Set<String>?) {
+    /// machine gains harness.v1 gets a fresh store. `expectsChat` says whether a tab's session
+    /// should have a chat, so its store shows ink rather than the terminal until it knows.
+    func sync(tabs: [TabID], capabilities: (HostID) -> Set<String>?, expectsChat: (TabID) -> Bool = { _ in false }) {
         let open = Set(tabs)
         for id in stores.keys where !open.contains(id) {
+            // Its descriptor stays, so reopening the tab shows its chat at once.
             remove(id)
         }
         for id in tabs {
@@ -43,10 +48,17 @@ import TogoKit
                 guard subject.available, !existing.subject.available else { continue }
                 remove(id)
             }
-            let store = HarnessSessionStore(subject: subject, services: services)
+            let store = HarnessSessionStore(
+                subject: subject, services: services, expectsChat: expectsChat(id), cached: descriptors[id]
+            )
             stores[id] = store
             if active { store.launch() }
         }
+    }
+
+    /// The descriptor kept for a tab, for tests and for a store made again.
+    func cachedDescriptor(for id: TabID) -> HarnessDescriptor? {
+        descriptors[id] ?? stores[id]?.descriptor.flatMap { $0.adapter == nil ? nil : $0 }
     }
 
     /// The app went to the background or came back. Connections close in the background, so
@@ -65,6 +77,7 @@ import TogoKit
     }
 
     private func remove(_ id: TabID) {
+        if let described = stores[id]?.descriptor, described.adapter != nil { descriptors[id] = described }
         stores.removeValue(forKey: id)?.stop()
         composers[id] = nil
     }

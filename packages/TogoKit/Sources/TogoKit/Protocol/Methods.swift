@@ -51,4 +51,7 @@ public enum Method: String, Sendable {
     case harnessInterrupt = "harness.interrupt"
     case harnessComplete = "harness.complete"
     case harnessLocate = "harness.locate"
+    case integrationsStatus = "integrations.status"
+    case integrationsInstall = "integrations.install"
+    case integrationsUninstall = "integrations.uninstall"
 }

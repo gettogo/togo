@@ -29,6 +29,24 @@ func callRecord(method string, res json.RawMessage) Message {
 	return Message{Method: method, Params: params, ID: nil}
 }
 
+// methodLimits reads the account's rate limits; methodLimitsUpdated is the
+// notification that carries the same snapshot after each turn.
+const (
+	methodLimits        = "account/rateLimits/read"
+	methodLimitsUpdated = "account/rateLimits/updated"
+)
+
+// readLimits reads the rate limits once at connect and feeds them as the
+// update notification, so the meters show before the first turn ends. A
+// logged-out account answers with an error, and the meters wait.
+func readLimits(ctx context.Context, c *Conn, push func(Message)) {
+	res, err := c.Call(ctx, methodLimits, nil)
+	if err != nil || len(res) == 0 || string(res) == "null" {
+		return
+	}
+	push(Message{Method: methodLimitsUpdated, Params: res})
+}
+
 // attach runs the feed's call on a fresh connection.
 func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, push func(Message)) {
 	p := params(b.Params)
@@ -39,6 +57,7 @@ func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, push func(Mess
 		}
 		return
 	}
+	go readLimits(ctx, c, push)
 	if id := p["threadId"]; id != "" {
 		for ctx.Err() == nil {
 			if r.resume(ctx, c, id, push) {

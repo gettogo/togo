@@ -52,7 +52,7 @@ const (
 
 // Concurrent lists the local methods that block and must run off the
 // connection's read loop (rpc.HelperInfo.Concurrent).
-var Concurrent = []string{wire.MethodLocalAsk}
+var Concurrent = []string{wire.MethodLocalAsk, wire.MethodLocalQuestion}
 
 // Hub is the part of the event hub the hook handler drives.
 type Hub interface {
@@ -97,15 +97,18 @@ type Handlers struct {
 	// turns marks sessions with a turn under way that has not yet been
 	// reported done (by Stop, or by an idle prompt standing in for it).
 	turns map[string]bool
+	// asking marks sessions running AskUserQuestion.
+	asking map[string]bool
 }
 
-// Methods returns the four local methods.
+// Methods returns the local methods.
 func (h *Handlers) Methods() map[string]api.Method {
 	return map[string]api.Method{
-		wire.MethodLocalHook:   h.hook,
-		wire.MethodLocalNotify: h.notify,
-		wire.MethodLocalAsk:    h.ask,
-		wire.MethodLocalJob:    h.job,
+		wire.MethodLocalHook:     h.hook,
+		wire.MethodLocalNotify:   h.notify,
+		wire.MethodLocalAsk:      h.ask,
+		wire.MethodLocalJob:      h.job,
+		wire.MethodLocalQuestion: h.question,
 	}
 }
 
@@ -190,6 +193,12 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		h.setTurn(id, true)
 	}
 	switch ev.Event {
+	case EventTool:
+		h.noteTool(id, ev.Data.Tool)
+	case EventPrompt, EventToolDone, EventStop, EventIdle, EventEnd, EventFailure, EventUsageLimit:
+		h.noteTool(id, "")
+	}
+	switch ev.Event {
 	case EventPrompt:
 		// A new turn makes any prompt left from the last one moot.
 		h.closeAgentPrompts(id)
@@ -204,7 +213,9 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		h.closeAgentPrompts(id)
 		h.Hub.SetStatus(id, statusWorking, nil)
 	case EventPermission:
-		h.Approvals.OpenFromHook(ctx, id, ev)
+		if !h.askingQuestion(id) {
+			h.Approvals.OpenFromHook(ctx, id, ev)
+		}
 	case EventAttention:
 		h.publishNotify(id, wire.LevelNeedsYou, clip(firstNonEmpty(ev.Data.Message, "Needs you"), wire.MaxTitle), "")
 	case EventNotify:

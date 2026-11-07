@@ -14,9 +14,9 @@ struct DiffScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var width: CGFloat = 0
     @State private var draft: DiffModel.CommentDraft?
-    /// The write banner and the hunk bar as drawn: each comes and goes in a `resize`
-    /// transaction, so the code below moves with it.
-    @State private var messageShown = LiveMirror<DiffModel.Message?>()
+    /// The hunk bar as drawn: it comes and goes in a `resize` transaction, so the code below
+    /// moves with it. The write banner is an outcome of the user's action: it lands at once,
+    /// with the error haptic.
     @State private var readyShown = LiveMirror<Bool>()
 
     /// `onOpen` shows another review screen, such as an image the diff cannot draw.
@@ -35,6 +35,7 @@ struct DiffScreen: View {
             .background(Color.togoInk)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .safeAreaInset(edge: .top, spacing: 0) { banner }
+            .transaction(value: model.message) { $0.animation = nil }
             .navigationTitle(Text(verbatim: model.displayName))
             .navigationSubtitle(Text(verbatim: model.displayFolder))
             .navigationBarTitleDisplayMode(.inline)
@@ -61,7 +62,6 @@ struct DiffScreen: View {
             .onAppear { model.mode = storedMode }
             .onChange(of: model.mode) { storedMode = model.mode }
             .onChange(of: showsSplit, initial: true) { model.showsSplit = showsSplit }
-            .mirrors(model.message, into: $messageShown)
             .mirrors(model.state == .ready, into: $readyShown)
             .haptic(.done, trigger: model.successes)
             .haptic(.discard, trigger: model.discards)
@@ -94,13 +94,12 @@ struct DiffScreen: View {
     // MARK: Banner
 
     @ViewBuilder private var banner: some View {
-        if let message = messageShown.read(model.message) {
+        if let message = model.message {
             WriteBanner(message: message) {
                 Task { await model.retry() }
             } dismiss: {
                 model.dismissMessage()
             }
-            .transition(Motion.revealConceal(reduce: reduceMotion))
         }
     }
 

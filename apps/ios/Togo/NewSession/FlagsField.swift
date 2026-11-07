@@ -29,6 +29,7 @@ struct FlagsField: View {
                 .overlay(alignment: .bottom) { if underlined { Color.togoLine.frame(height: 1) } }
                 .disabled(!enabled)
                 .accessibilityLabel(NewSessionCopy.flags)
+            // The error replaces the footer at once: a check of what was typed, not news.
             if let error {
                 InlineError(message: error)
             } else if let footer {
@@ -36,10 +37,8 @@ struct FlagsField: View {
                     .font(.footnote)
                     .foregroundStyle(Color.togoMute)
                     .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
             }
         }
-        .resizesOnRows(error != nil)
     }
 
     /// Undoes smart punctuation from the keyboard or a pasted document where it would change

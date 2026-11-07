@@ -142,6 +142,7 @@ struct LinksSheet: View {
                     .contentTransition(.interpolate)
             }
             .buttonStyle(.secondary(.fit))
+            // motion: cause → effect — the tapped Copy says Copied in place
             .motion(.respond, value: copied == url)
             Button(LinkCopy.open) { handle.close { open(url) } }
                 .buttonStyle(.primary(.fit))

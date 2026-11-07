@@ -259,6 +259,11 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 	if d.Capabilities == nil {
 		d.Capabilities = []string{}
 	}
+	if e.cfg.Approvals != nil && s.gateOK && !harness.Has(d.Capabilities, harness.CapNeedsApprovals) {
+		// The screen detector serves every agent: the chat shows its
+		// approvals whatever the adapter declares.
+		d.Capabilities = append(d.Capabilities, harness.CapNeedsApprovals)
+	}
 	if im := a.Images; im != nil && im.Insert != "" {
 		d.Images = &harness.ImagePolicy{Insert: im.Insert}
 	}
@@ -268,6 +273,9 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 		}
 		sc := a.Screens[name]
 		if sc.Capability != "" && (!harness.Has(a.Capabilities, sc.Capability) || s.degraded[sc.Capability]) {
+			continue
+		}
+		if !s.screenListableLocked(sc) {
 			continue
 		}
 		d.Screens = append(d.Screens, harness.ScreenRef{ID: name, Primitive: sc.Primitive, Title: sc.Title, Section: sc.Section})

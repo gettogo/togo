@@ -304,7 +304,9 @@ struct TerminalSlot: View {
             if terminals.shows(tab, in: window) {
                 let store = terminals.appStore(in: window)
                 let harness = store?.harness(for: tab)
-                let covered = harness?.shownLayer == .chat
+                // Under the chat, or under the ink while the chat is expected, the terminal is
+                // covered: it never takes the keyboard before the chat decides.
+                let covered = (store?.layer(for: tab) ?? .terminal) != .terminal
                 // The size SwiftUI gives the slot, so every change to it fits the grid again.
                 GeometryReader { proxy in
                     TabTerminalView(
@@ -330,10 +332,9 @@ struct TerminalSlot: View {
                 }
             } else {
                 ElsewhereNotice {
-                    // The notice fades from over the terminal arriving under it.
+                    // motion: continuity — the notice fades from over the terminal arriving under it.
                     withAnimation(Motion.animation(.fade, reduce: reduceMotion)) { terminals.show(tab, in: window) }
                 }
-                .transition(.opacity)
             }
         }
     }

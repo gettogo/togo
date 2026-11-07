@@ -1,0 +1,67 @@
+{
+  "description": "A model picker whose selection restarts the agent: onSelectConfirm says so, and effect relaunch lets the app confirm only while the agent works. Pending: served once adapters carry onSelectConfirm.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.screen",
+    "params": {
+      "id": "s_abcdefghij",
+      "screen": "model"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "id": "model",
+      "primitive": "picker",
+      "title": "Model",
+      "fetchedAt": "2026-11-03T12:00:00Z",
+      "stale": false,
+      "picker": {
+        "items": [
+          {
+            "id": "gemini-3-pro",
+            "title": "Gemini 3 Pro"
+          },
+          {
+            "id": "gemini-3-flash",
+            "title": "Gemini 3 Flash"
+          }
+        ],
+        "selected": "gemini-3-pro",
+        "searchable": false,
+        "onSelect": "set_model",
+        "onSelectConfirm": {
+          "text": "Restart Gemini with this model?",
+          "effect": "relaunch"
+        }
+      },
+      "actions": []
+    }
+  }
+}

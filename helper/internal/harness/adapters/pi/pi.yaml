@@ -8,7 +8,8 @@ adapter: pi
 name: Pi
 revision: 1
 match: { agents: [pi], commands: [pi] }
-harness: { version: [pi, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.73 <0.80" }
+# Without a terminal on stdin pi prints its version on stderr.
+harness: { version: [pi, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.73 <0.80", stderr: merge }
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
   changes, status, resume, compact]
 feeds:
@@ -17,13 +18,17 @@ feeds:
     mapper: pi.session
     stability: documented
 sources:
-  # `pi --list-models` prints a table: provider, model, context, max-out, thinking, images.
+  # pi's rpc mode answers get_available_models without a session or network.
   models:
-    cli: { argv: [pi, --list-models, --offline], format: text }
-    select: '[split("\n")[1:][] | select(length > 0) | [splits(" +")] | {id: (.[0] + "/" + .[1]), provider: .[0], name: .[1], context: .[2], thinking: (.[4] == "yes")}]'
+    rpc: { method: get_available_models, child: [pi, --mode, rpc, --no-session, --offline], framing: typed }
+    select: '[(.models // [])[] | {id: (.provider + "/" + .id), provider: .provider, name: (.name // .id), thinking: (.reasoning == true), context: ((.contextWindow // 0) as $c | if $c >= 1000000 then ((($c / 100000) | floor) / 10 | tostring) + "M" elif $c >= 1000 then ((($c / 100) | floor) / 10 | tostring) + "K" else ($c | tostring) end)}]'
     cache: 10m
-    timeout: 10s
+    timeout: 12s
     stability: documented
+    # `pi --list-models` prints the same as a table, on stderr without a terminal.
+    fallback:
+      cli: { argv: [pi, --list-models, --offline], format: text, stderr: merge }
+      select: '[split("\n")[1:][] | select(length > 0) | [splits(" +")] | {id: (.[0] + "/" + .[1]), provider: .[0], name: .[1], context: .[2], thinking: (.[4] == "yes")}]'
   sessions:
     file: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', format: jsonl }
     select: '[.[] | {id: (.head.id // .name), title: ([.tail[] | select(.type == "session_info") | .name] | last // .name), updated: .mtime}]'
@@ -56,12 +61,6 @@ screens:
     search: true
     map: { item.id: .id, item.title: .title, item.subtitle: '{{.updated | ago}}' }
     on_select: resume
-  compact:
-    primitive: confirm
-    title: Compact
-    section: status
-    capability: compact
-    submit: compact
 actions:
   # An exact provider/id applies at once; anything else opens Pi's picker,
   # so the change is checked against the session's model_change entry.
@@ -85,14 +84,16 @@ actions:
   interrupt:
     keys: { keys: [Escape] }
     stability: documented
+status:
+  actions: [compact]   # inline on the context meter
 commands:
   static:
     - { name: model, detail: Select model, screen: model }
-    - { name: compact, detail: Manually compact the session context }
+    - { name: compact, detail: Manually compact the session context, action: compact }
     - { name: resume, detail: Resume a different session, screen: resume }
-    - { name: new, detail: Start a new session }
-    - { name: name, detail: Set session display name }
-    - { name: session, detail: Show session info and stats }
-    - { name: tree, detail: Navigate session tree }
-    - { name: fork, detail: Create a new fork from a previous user message }
-    - { name: settings, detail: Open settings menu }
+    - { name: new, detail: Start a new session, role: destructive }
+    - { name: name, hint: '<name>', detail: Set session display name }
+    - { name: session, detail: Show session info and stats, opens: status }
+    - { name: tree, detail: Navigate session tree, kind: terminal }
+    - { name: fork, detail: Create a new fork from a previous user message, kind: terminal }
+    - { name: settings, detail: Open settings menu, kind: terminal }

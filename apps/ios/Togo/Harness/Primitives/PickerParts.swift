@@ -39,14 +39,14 @@ struct PickerRow: View {
                 // The trailing accessory crossfades in place (spinner ↔ what the item holds).
                 ZStack(alignment: .trailing) {
                     if running {
-                        ProgressView().controlSize(.small).transition(.opacity)
+                        ProgressView().controlSize(.small)
                     } else if !held.isEmpty {
                         Text(verbatim: held.count == 1 ? held[0] : PrimitiveCopy.holds(held.count))
                             .font(.footnote)
                             .foregroundStyle(Color.togoMute)
-                            .transition(.opacity)
                     }
                 }
+                // motion: cause → effect — the tapped item's accessory turns into a spinner in its fixed slot.
                 .motion(.respond, value: running)
             }
             .frame(minHeight: 44)
@@ -154,6 +154,8 @@ struct PickerItemCard: View {
     /// The list's runner, which shows the toast once the card closes.
     let parent: PrimitiveActions
     let context: PrimitiveContext
+    /// Selects the item through the list's own rule (`ActionGate`, close on success).
+    let onSelect: () -> Void
     @State private var actions = PrimitiveActions()
 
     private let columns = [GridItem(.adaptive(minimum: 120), spacing: 1)]
@@ -206,14 +208,16 @@ struct PickerItemCard: View {
             .safeAreaInset(edge: .bottom) {
                 if item.id != picker.selected, item.disabled != true {
                     Button {
-                        run(picker.onSelect)
+                        dismiss()
+                        onSelect()
                     } label: {
                         let running = actions.isRunning(picker.onSelect, target: item.id)
                         Text(PrimitiveCopy.select)
                             .opacity(running ? 0 : 1)
                             .overlay {
-                                if running { ProgressView().controlSize(.small).transition(.opacity) }
+                                if running { ProgressView().controlSize(.small) }
                             }
+                            // motion: cause → effect — the tapped item's accessory turns into a spinner in its fixed slot.
                             .motion(.respond, value: running)
                     }
                     .buttonStyle(PrimitiveCapsuleStyle(role: .primary, large: true))
@@ -258,9 +262,9 @@ struct PickerItemCard: View {
                                 Spacer(minLength: 4)
                                 ZStack {
                                     if actions.isRunning(ref.id, target: item.id) {
-                                        ProgressView().controlSize(.mini).transition(.opacity)
+                                        ProgressView().controlSize(.mini)
                                     } else if holds {
-                                        Image(systemName: "checkmark").font(.caption.weight(.bold)).transition(.opacity)
+                                        Image(systemName: "checkmark").font(.caption.weight(.bold))
                                     }
                                 }
                                 .slot(width: 16, key: actions.isRunning(ref.id, target: item.id) || holds)
@@ -291,7 +295,7 @@ struct PickerItemCard: View {
                 }
             }
             if let ref {
-                await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), context: context)
+                await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), place: .toast, context: context)
             } else {
                 await actions.perform(id, target: item.id, args: PickerModel.args(for: item), context: context)
             }

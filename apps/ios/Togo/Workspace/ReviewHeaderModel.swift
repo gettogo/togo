@@ -122,6 +122,7 @@ enum ReviewEntryCopy {
         // the system bar crossfades them rather than snapping.
         let changed = changes != self.changes || more != moreChanges || hasPorts != self.hasPorts
         guard changed else { return }
+        // motion: state change — the bar's items come and go by a crossfade rather than snapping.
         withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) {
             self.changes = changes
             moreChanges = more

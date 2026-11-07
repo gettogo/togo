@@ -95,6 +95,12 @@ func Map(event string, stdin []byte, env map[string]string) (wire.HookEvent, Out
 		ev.Event, ev.Data.Tool = local.EventToolDone, clean(p.ToolName, maxTool)
 	case "PermissionRequest":
 		ev.Event, ev.Data.Tool = local.EventPermission, clean(p.ToolName, maxTool)
+		if p.ToolName == "AskUserQuestion" {
+			// A question, not a permission: the question item shows and
+			// answers it, so no approval opens.
+			ev.Event = local.EventHarness
+			break
+		}
 		what := target(p.ToolInput)
 		ev.Data.Command = clean(what, maxCommand)
 		ev.Data.Subject = detect.NewSubject(detect.SubjectKindForTool(p.ToolName), what)

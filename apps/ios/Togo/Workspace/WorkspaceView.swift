@@ -37,6 +37,8 @@ struct WorkspaceView: View {
     /// The session menu is open, so zen keeps the bar up under it.
     @State private var menuOpen = false
     @State private var review: ReviewHeaderModel
+    /// Mission control's bar item, its long-press Compact and the session menu's screens.
+    @State private var mission = MissionWorkspaceModel()
 
     init(store: AppStore, terminals: TerminalPool, zen: ZenChrome? = nil) {
         self.store = store
@@ -60,7 +62,9 @@ struct WorkspaceView: View {
                         .opacity(chromeLayout.shown ? 1 : 0)
                         .allowsHitTesting(chromeLayout.shown)
                         .accessibilityHidden(!chromeLayout.shown)
-                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                        // motion: origin — the user opened a second tab or find: the row's space
+                        // opens downwards from the bar and uncovers it; nothing rises.
+                        .transition(Motion.unfold(reduce: reduceMotion))
                 }
             }
             .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar })
@@ -84,8 +88,9 @@ struct WorkspaceView: View {
                     .modifier(PaneColumns(state: panes) { [store] in $0.geometry.composeFrame(focused: store.workspace.focused) })
             }
             .background(Color.togoInk)
-            // The pill and the bar item open it: a sheet on a phone, an inspector when wide.
+            // The bar item opens it: a sheet on a phone, an inspector when wide.
             .modifier(FocusedMissionControl(app: store))
+            .modifier(MissionWorkspace(app: store, model: mission))
             .background { shortcuts }
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
@@ -104,10 +109,12 @@ struct WorkspaceView: View {
                 openFind()
             }
             .onChange(of: liveBar.key(tab: store.focusedTab?.id)) {
-                // An item arriving, leaving or changing face crossfades on `respond`.
+                // motion: state change — an item arriving, leaving or changing face crossfades
+                // in its place in the bar.
                 withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { barFollowed = liveBar }
             }
             .onChange(of: showsStrip) { _, shows in
+                // motion: preventing a jump — the strip's row opens and the terminal lands once.
                 withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { stripFollowed = shows }
             }
             .alert(
@@ -136,6 +143,7 @@ struct WorkspaceView: View {
 
     /// Chip taps and shortcuts settle like a swipe does. Under Reduce Motion the pages fade.
     private func show(_ id: TabID) {
+        // motion: continuity — the chosen tab's page settles in, as a swipe to it would.
         withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
             store.choose(id)
         }
@@ -181,7 +189,8 @@ struct WorkspaceView: View {
         let row = store.session(for: tab)
         return WorkspaceTitle(
             tab: tab, row: row, machine: store.machine(for: tab.hostID)?.name,
-            message: status ?? store.workspace.ended ?? row.flatMap { LifecycleCopy.line(status: $0.status, exit: $0.exit) }
+            message: status ?? store.workspace.ended ?? row.flatMap { LifecycleCopy.line(status: $0.status, exit: $0.exit) },
+            glance: store.missionStore.map { MissionPlacement.glance($0.mission.summary) }
         )
     }
 
@@ -196,7 +205,9 @@ struct WorkspaceView: View {
             }
             if finding {
                 WorkspaceFindBar(search: focusedSearch, focused: $findFocused, onDone: endFind)
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: origin — the user asked for find: its row opens under the strip
+                    // and uncovers the field in place.
+                    .transition(Motion.unfold(reduce: reduceMotion))
             }
             Rectangle()
                 .fill(Color.togoLine)
@@ -212,7 +223,9 @@ struct WorkspaceView: View {
         if let tab = store.focusedTab {
             WorkspaceToolbar(
                 leading: leading, onLeading: leadingAction, runAgain: bar.runAgain,
-                review: focusedRow.map { ReviewToolbarItems(store: store, row: $0, model: review) },
+                review: focusedRow.map {
+                    ReviewToolbarItems(store: store, row: $0, model: review, folded: ReviewFold(store.missionStore?.descriptor))
+                },
                 layer: bar.layer, mission: bar.mission
             ) {
                 actions(for: tab, row: store.session(for: tab))
@@ -228,8 +241,9 @@ struct WorkspaceView: View {
     private var liveBar: WorkspaceBarItems {
         WorkspaceBarItems(
             runAgain: store.focusedTab.flatMap(runAgain), layer: store.layerItem,
-            // A compact width has the pill at the top of the chat instead.
-            mission: sizeClass == .regular ? store.missionItem : nil
+            mission: mission.item(for: store, presentation: MissionPresentation.choose(sizeClass)) { line in
+                if let line { status = line }
+            }
         )
     }
 
@@ -274,7 +288,7 @@ struct WorkspaceView: View {
         // and why the link fell back from the transport asked for.
         if let title {
             Section {
-                Text(title.subtitle)
+                Text(title.detail)
                 if let fallback = title.fallback { Text(fallback) }
             } header: {
                 Text(title.title)
@@ -285,6 +299,9 @@ struct WorkspaceView: View {
             store.open(hostID: tab.hostID, sessionID: tab.sessionID, transport: transport)
         }
         OpenInWindowButton(tab: tab.id)
+        if let harness = store.harness(for: tab.id), harness.chatAvailable {
+            MissionSessionSection(store: harness, tab: tab.id, model: mission)
+        }
         Toggle(isOn: Binding(get: { store.zen }, set: { _ in store.toggleZen() })) {
             Label(ZenCopy.zenMode, systemImage: "arrow.up.left.and.arrow.down.right")
         }
@@ -361,6 +378,7 @@ struct WorkspaceView: View {
     private func openFind() {
         findFocused = true
         guard !finding else { return }
+        // motion: preventing a jump — space opens above the terminal for the find row.
         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { finding = true }
     }
 
@@ -369,6 +387,7 @@ struct WorkspaceView: View {
         guard finding else { return }
         focusedSearch?.clear()
         findFocused = false
+        // motion: preventing a jump — the find row conceals, then its space closes.
         withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { finding = false }
     }
 
@@ -379,6 +398,7 @@ struct WorkspaceView: View {
     private var shortcuts: some View {
         ForEach(Array(chips.prefix(9).enumerated()), id: \.element.id) { index, chip in
             Button(WorkspaceCopy.goTo([chip.bib, chip.name].compactMap(\.self).joined(separator: " "))) {
+                // motion: continuity — the numbered tab's page settles in, as a swipe would.
                 withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
                     store.selectTab(number: index + 1)
                 }

@@ -39,7 +39,8 @@ enum RosterMission {
 }
 
 /// The mission line under a roster line's name: the plan's ring when there is a plan, then the
-/// mission words in mono. Nothing when the session has nothing to say.
+/// mission words in mono. Nothing when the session has nothing to say. A background value, so
+/// the words change in place: nothing rolls and nothing fades.
 struct RosterMissionLine: View {
     @ScaledMetric(relativeTo: .caption) private var ring: CGFloat = 10
     let meta: SessionMeta
@@ -59,9 +60,7 @@ struct RosterMissionLine: View {
                     .monospacedDigit()
                     .foregroundStyle(stale ? Color.togoMuteDim : Color.togoMute)
                     .fixedSize(horizontal: false, vertical: true)
-                    .contentTransition(.numericText())
             }
-            .motion(.fade, value: text)
         }
     }
 }
@@ -94,6 +93,21 @@ struct RosterMissionMenuButton: View {
     }
 }
 
+/// A roster line's long-press menu. A line with a mission shows its summary as the preview
+/// over the menu; any other line lifts itself, as usual.
+struct RosterLineMenu<Items: View>: ViewModifier {
+    let mission: MissionSummary?
+    @ViewBuilder let items: () -> Items
+
+    func body(content: Content) -> some View {
+        if let mission {
+            content.contextMenu(menuItems: items) { MissionPill(summary: mission) }
+        } else {
+            content.contextMenu(menuItems: items)
+        }
+    }
+}
+
 /// How a roster mission sheet hands off when it closes.
 enum RosterMissionExit: Equatable {
     /// A diff or a preview for the review.
@@ -117,7 +131,7 @@ struct RosterMissionSheet: View {
                 MissionControlStack(
                     store: store, actions: actions,
                     openExternal: { exit(.external($0)) },
-                    showChat: { exit(.chat) },
+                    showChat: { _ in exit(.chat) },
                     onDone: { exit(nil) }
                 )
             } else {
@@ -151,7 +165,9 @@ struct RosterMissionSheet: View {
         return ChatActions(
             card: { requestID in app.controlCenter.requests.first { $0.id == requestID } },
             answer: { requestID, decision in Task { await app.answer(requestID, decision) } },
-            quote: { _ in }
+            quote: { _ in },
+            failure: { requestID in app.answerFailures[requestID] },
+            open: { [tab] url in app.openChatLink(url, from: tab) }
         )
     }
 }

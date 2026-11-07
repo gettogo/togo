@@ -1,0 +1,14 @@
+Configuration Settings:
+
+  `model`: AI model to use for Copilot CLI; can be changed with /model command or --model flag option.
+    - "claude-sonnet-5.5"
+    - "claude-sonnet-5"
+    - "claude-fable-5.1"
+    - "claude-fable-5"
+    - "claude-opus-5.5"
+    - "claude-opus-5"
+    - "claude-opus-4.8"
+    - "kimi-k3"
+
+  `contextTier`: context window tier.
+    - "default"

@@ -90,37 +90,39 @@
           "primitive": "checklist",
           "title": "Plan",
           "section": "plan"
-        },
-        {
-          "id": "usage",
-          "primitive": "status",
-          "title": "Usage",
-          "section": "status"
-        },
-        {
-          "id": "compact",
-          "primitive": "confirm",
-          "title": "Compact",
-          "section": "status"
         }
       ],
       "modes": [
         {
           "id": "default",
-          "label": "Ask"
+          "label": "Manual"
         },
         {
           "id": "acceptEdits",
-          "label": "Auto edit"
+          "label": "Accept edits"
         },
         {
           "id": "plan",
           "label": "Plan"
+        },
+        {
+          "id": "auto",
+          "label": "Auto"
+        },
+        {
+          "id": "dontAsk",
+          "label": "Don't ask"
+        },
+        {
+          "id": "bypassPermissions",
+          "label": "Bypass permissions"
         }
       ],
       "mode": "default",
       "degraded": [],
-      "images": { "insert": "per_path" }
+      "images": {
+        "insert": "per_path"
+      }
     }
   }
 }

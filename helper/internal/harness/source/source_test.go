@@ -128,8 +128,8 @@ func TestGlobListsNewestFirst(t *testing.T) {
 	if len(list) != 2 || list[0].Name != "new" || len(list[0].Tail) != 2 || len(list[1].Head) != 1 {
 		t.Fatalf("glob = %s", out)
 	}
-	if _, err := (File{kind: "file"}).Fetch(context.Background(), sspec("s", map[string]any{"glob": "~/nothing/*.jsonl"}), env); err == nil {
-		t.Fatal("empty glob is not an error")
+	if out, err := (File{kind: "file"}).Fetch(context.Background(), sspec("s", map[string]any{"glob": "~/nothing/*.jsonl"}), env); err != nil || string(out) != "[]" {
+		t.Fatalf("empty glob = %s, %v; want an empty list", out, err)
 	}
 }
 

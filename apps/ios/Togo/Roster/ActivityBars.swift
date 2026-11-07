@@ -59,9 +59,9 @@ struct ActivityBars: View {
                     }
                 }
                 .frame(height: Self.maxHeight, alignment: .bottom)
-                .transition(.opacity)
             }
         }
+        // motion: state change — the bars fade in place when there is activity to show.
         .motion(.fade, value: values.isEmpty)
         .accessibilityHidden(true)
     }

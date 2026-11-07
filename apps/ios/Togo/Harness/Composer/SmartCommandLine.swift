@@ -2,16 +2,19 @@ import SwiftUI
 import TogoKit
 
 /// The composer: a text field that types into the session (or the harness API), with the
-/// / and @ menus, the mode chip, Interrupt while the agent works, and how many prompts wait.
+/// / and @ menus, the state chip (model · effort · mode), Stop in the send button's place while
+/// the agent works, and how many prompts wait.
 ///
 /// Hardware keys: Return sends (or takes the highlighted completion), Shift-Return breaks the
 /// line, Up and Down move through the menu or the history, Tab takes a completion, Esc closes
 /// the menu or interrupts, Command-K focuses the field.
 ///
 /// Motion: what the bar shows besides the field (the menu, the queued count, notices, the
-/// pictures, the mode chip, Stop) is mirrored in `shown`, so each change runs in one explicit
-/// transaction that moves the glass and the chat's inset with it. Arrivals reveal as the
-/// glass grows; leavers conceal first and the glass shrinks after (spec §2.1/§2.2).
+/// pictures) is mirrored in `shown`, so each change runs in one explicit transaction that moves
+/// the glass and the chat's inset with it. The `/` menu unfolds upward from the composer's edge,
+/// where `/` was typed; a picture's chip arrives by opacity as the strip makes room; status
+/// lines (queued, notices) land at once. Leavers conceal first and the glass shrinks after. The
+/// state chip is always there; its words morph in place. Stop takes the send button's slot.
 struct SmartCommandLine: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.loopsPaused) private var loopsPaused
@@ -36,15 +39,18 @@ struct SmartCommandLine: View {
     private func follow(_ parts: ComposerParts) {
         let gone = shown.parts.subtracting(parts.parts)
         guard !gone.isEmpty else {
+            // motion: preventing a jump — the glass grows for what arrives; the chat's inset moves with it.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
                 shown = parts
                 leaving = []
             }
             return
         }
+        // motion: preventing a jump — what leaves conceals first, then the glass shrinks.
         withAnimation(Motion.animation(.conceal, reduce: reduceMotion), completionCriteria: .logicallyComplete) {
             leaving.formUnion(gone)
         } completion: {
+            // motion: preventing a jump — the glass closes the room the leaver had.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
                 shown = ComposerParts(model)
                 leaving = []
@@ -59,7 +65,9 @@ struct SmartCommandLine: View {
             if shown.menu {
                 CommandMenuPanel(model: model, screenTitle: screenTitle)
                     .opacity(fades(.menu))
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: origin — the menu opens upward from the composer's edge, where `/` was typed.
+                    .transition(.asymmetric(insertion: reduceMotion ? .opacity : AnyTransition(UnfoldingUp()),
+                                            removal: Motion.conceal(reduce: reduceMotion)))
             }
             bar
         }
@@ -72,8 +80,17 @@ struct SmartCommandLine: View {
         )) { request in
             HarnessScreenSheet(store: model.store, screenID: request.id, onOpen: onOpen)
         }
-        .sheet(isPresented: $model.paletteOpen) {
-            CommandPaletteView(model: model, screenTitle: screenTitle)
+        // The dialog a command or a session change asks with, while the palette is not up.
+        .actionConfirmation(Binding(
+            get: { model.paletteOpen ? nil : model.gate.asking },
+            set: { model.gate.asking = $0 }
+        ))
+        .onChange(of: model.focusRequests) { focused = true }
+        // "With instructions…" from a sheet or mission control: the line comes here, focused.
+        .onChange(of: model.store.draftRequest, initial: true) { _, request in
+            guard let request else { return }
+            model.store.draftRequest = nil
+            model.compose(request.text)
         }
         .background { shortcuts }
     }
@@ -85,29 +102,46 @@ struct SmartCommandLine: View {
                 Text(ComposerCopy.queuedCount(shown.queued))
                     .font(.footnote)
                     .foregroundStyle(Color.togoMute)
-                    .rollingNumber(Double(shown.queued))
+                    // The queued count is an event: it rolls, downward as prompts go.
+                    .countChange(Double(shown.queued))
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(fades(.queued))
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — status: the line is simply there (a cut).
+                    .transition(.identity)
             }
             if let notice = shown.notice {
-                Text(notice)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(PrimitiveTint.fail)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.updatesFrequently)
-                    .opacity(fades(.notice))
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
-                    // How long the notice stays is the model's hold; its leaving is choreographed.
-                    .task(id: notice) {
-                        guard !loopsPaused else { return }
-                        try? await Task.sleep(for: .seconds(5))
-                        model.clearNotice()
+                ComposerNoticeLine(text: notice, action: model.noticeAction) { action in
+                    switch action {
+                    case .openTerminal: model.store.layer = .terminal
+                    case .retry: Task { await model.submit() }
                     }
+                    model.clearNotice()
+                }
+                .opacity(fades(.notice))
+                // motion: state change — errors land at once, at the composer that failed (a cut).
+                .transition(.identity)
+                // How long the notice stays is the model's hold; its leaving is choreographed.
+                .task(id: notice) {
+                    guard !loopsPaused else { return }
+                    try? await Task.sleep(for: .seconds(model.noticeAction == nil ? 5 : 8))
+                    model.clearNotice()
+                }
+            }
+            if let undo = shown.undo {
+                UndoLine(title: undo.title) {
+                    model.store.undo = nil
+                    Task { await undo.run() }
+                }
+                .opacity(fades(.undo))
+                // motion: state change — Undo is simply there after the restart (a cut).
+                .transition(.identity)
+                .task(id: undo.id) {
+                    guard !loopsPaused else { return }
+                    try? await Task.sleep(for: .seconds(10))
+                    if model.store.undo?.id == undo.id { model.store.undo = nil }
+                }
             }
             if let notice = shown.attachNotice {
                 Text(notice)
@@ -117,7 +151,8 @@ struct SmartCommandLine: View {
                     .padding(.top, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(fades(.attachNotice))
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: state change — a note about the pictures lands at once (a cut).
+                    .transition(.identity)
                     .task(id: notice) {
                         guard !loopsPaused else { return }
                         try? await Task.sleep(for: .seconds(5))
@@ -127,7 +162,8 @@ struct SmartCommandLine: View {
             if shown.pictures {
                 AttachmentStrip(attachments: model.attachments)
                     .opacity(fades(.pictures))
-                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // motion: cause → effect — the picked picture's strip arrives by opacity as the glass makes room.
+                    .transition(Motion.arrive(reduce: reduceMotion))
             }
             field
             accessories
@@ -163,11 +199,20 @@ struct SmartCommandLine: View {
         .frame(minHeight: 50)
     }
 
+    /// Stop takes the send button's slot while the agent works and nothing waits in the field;
+    /// a draft turns it back into Queue. One button, its symbol replaced in place.
+    private var stops: Bool { model.canInterrupt && CommandLineLogic.outgoing(model.draft) == nil && model.attachments.isEmpty }
+
     private var sendButton: some View {
         Button {
-            Task { await model.submit() }
+            if stops {
+                Task { await model.interrupt() }
+            } else {
+                Task { await model.submit() }
+            }
         } label: {
-            Image(systemName: model.working ? "text.append" : "arrow.up")
+            Image(systemName: stops ? "stop.fill" : (model.working ? "text.append" : "arrow.up"))
+                // motion: state change — the send button becomes Stop in place: same slot, new job.
                 .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                 .font(.body.weight(.bold))
                 .foregroundStyle(Color.togoInk)
@@ -177,23 +222,23 @@ struct SmartCommandLine: View {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
-        .disabled(!model.canSend)
-        .opacity(model.canSend ? 1 : 0.35)
-        .accessibilityLabel(model.working ? ComposerCopy.queue : ComposerCopy.send)
-        .motion(.respond, value: model.canSend)
-        .motion(.respond, value: model.working)
+        .disabled(!stops && !model.canSend)
+        .opacity(stops || model.canSend ? 1 : 0.35)
+        .accessibilityLabel(stops ? ComposerCopy.interrupt : (model.working ? ComposerCopy.queue : ComposerCopy.send))
+        // motion: state change — the button dims or lights as sending becomes possible.
+        .motion(.respond, value: stops || model.canSend)
     }
 
-    /// The chips in one row, or the mode chip on a row of its own above the others when the
-    /// mode's name and the text size leave no room, so the mode is never cut short.
+    /// The chips in one row, or the state chip on a row of its own above the others when its
+    /// words and the text size leave no room, so the model, effort and mode are never cut short.
     private var accessories: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 6) {
-                if shown.modeChip { shownModeChip }
+                if model.showsStateChip { SessionStateChip(model: model) }
                 tools
             }
             VStack(alignment: .leading, spacing: 0) {
-                if shown.modeChip { shownModeChip }
+                if model.showsStateChip { SessionStateChip(model: model) }
                 HStack(spacing: 6) { tools }
             }
         }
@@ -206,6 +251,11 @@ struct SmartCommandLine: View {
             Button(ComposerCopy.commands, systemImage: "slash.circle") { model.paletteOpen = true }
                 .labelStyle(.iconOnly)
                 .buttonStyle(ComposerChipStyle())
+                // A popover from the chip on regular widths; a sheet on compact ones.
+                .popover(isPresented: $model.paletteOpen, arrowEdge: .bottom) {
+                    CommandPaletteView(model: model, screenTitle: screenTitle)
+                        .presentationCompactAdaptation(.sheet)
+                }
         }
         if model.attachments.available {
             AttachMenu(attachments: model.attachments)
@@ -219,41 +269,6 @@ struct SmartCommandLine: View {
             .buttonStyle(ComposerChipStyle())
         }
         Spacer(minLength: 0)
-        if shown.stop {
-            StopChip { Task { await model.interrupt() } }
-                .opacity(fades(.stop))
-                .transition(Motion.revealConceal(reduce: reduceMotion))
-        }
-    }
-
-    private var shownModeChip: some View {
-        modeChip
-            .opacity(fades(.modeChip))
-            .transition(Motion.revealConceal(reduce: reduceMotion))
-    }
-
-    private var modeChip: some View {
-        Menu {
-            Picker(ComposerCopy.mode, selection: Binding(
-                get: { model.mode },
-                set: { id in Task { await model.setMode(id) } }
-            )) {
-                ForEach(model.modes) { mode in
-                    Text(mode.label).tag(mode.id)
-                }
-            }
-        } label: {
-            Label(model.modeLabel ?? ComposerCopy.mode, systemImage: "dial.medium")
-                .labelStyle(.titleAndIcon)
-                // trunc-ok: two lines in a full-width row of its own. A long mode name wraps inside its chip rather than losing its end.
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-        }
-        .menuStyle(.button)
-        .buttonStyle(ComposerChipStyle())
-        .accessibilityLabel(ComposerCopy.mode)
-        .accessibilityValue(model.modeLabel ?? "")
-        .help(model.modeLabel.map(ComposerCopy.modeValue) ?? ComposerCopy.mode)
     }
 
     /// The keyboard helps with natural language only.
@@ -314,96 +329,6 @@ struct SmartCommandLine: View {
             .frame(width: 0, height: 0)
             .opacity(0)
             .accessibilityHidden(true)
-    }
-}
-
-/// What the bar shows besides the field, mirrored so each change is one transaction.
-struct ComposerParts: Equatable {
-    enum Part: Hashable { case menu, queued, notice, attachNotice, pictures, modeChip, stop }
-
-    var menu = false
-    var queued = 0
-    var notice: String?
-    var attachNotice: String?
-    var pictures = false
-    var modeChip = false
-    var stop = false
-
-    @MainActor init(_ model: CommandLineModel) {
-        menu = model.menu != .none
-        queued = model.queuedCount
-        notice = model.notice
-        attachNotice = model.attachments.notice
-        pictures = !model.attachments.isEmpty
-        modeChip = model.showsModeChip
-        stop = model.canInterrupt
-    }
-
-    init() {}
-
-    /// The parts present, for telling what leaves.
-    var parts: Set<Part> {
-        var out: Set<Part> = []
-        if menu { out.insert(.menu) }
-        if queued > 0 { out.insert(.queued) }
-        if notice != nil { out.insert(.notice) }
-        if attachNotice != nil { out.insert(.attachNotice) }
-        if pictures { out.insert(.pictures) }
-        if modeChip { out.insert(.modeChip) }
-        if stop { out.insert(.stop) }
-        return out
-    }
-}
-
-/// A screen id the composer opens in a sheet.
-struct ScreenRequest: Identifiable {
-    var id: String
-}
-
-/// Stop for the running turn: the stop mark and "Stop", or the mark alone when the row is too
-/// narrow for both, so the word never truncates. VoiceOver says "Interrupt" either way.
-private struct StopChip: View {
-    let action: () -> Void
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            button(.titleAndIcon)
-            button(.iconOnly)
-        }
-        .layoutPriority(1)
-    }
-
-    private func button(_ style: some LabelStyle) -> some View {
-        Button(action: action) {
-            Label(ComposerCopy.stop, systemImage: "stop.fill")
-                .labelStyle(style)
-                .fixedSize()
-        }
-        .buttonStyle(ComposerChipStyle(prominent: true))
-        .accessibilityLabel(ComposerCopy.interrupt)
-    }
-}
-
-/// The small capsules under the field: the mode chip, commands, @ and Stop.
-struct ComposerChipStyle: ButtonStyle {
-    @Environment(\.displayScale) private var displayScale
-    var prominent = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.subheadline.weight(.semibold))
-            // trunc-ok: chips are icons, Stop (which drops to its icon via ViewThatFits) or the mode chip, which overrides this and wraps
-            .foregroundStyle(prominent ? Color.togoInk : Color.togoSnow)
-            .lineLimit(1)
-            .padding(.horizontal, 12)
-            .frame(minWidth: 34, minHeight: 32)
-            .background(prominent ? Color.togoSnow : Color.togoSnow.opacity(0.06), in: .capsule)
-            .overlay {
-                if !prominent { Capsule().strokeBorder(Color.togoLine, lineWidth: 1 / displayScale) }
-            }
-            .frame(minHeight: 44)
-            .contentShape(.capsule)
-            .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 

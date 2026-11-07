@@ -130,4 +130,63 @@ import UIKit
         #expect(LaunchTimeline.reducedFade == .milliseconds(Int(Motion.nominalDuration(.fade) * 1000)))
         #expect(LaunchTimeline.reducedFade <= .milliseconds(200))
     }
+
+    // MARK: Motion principles v2 lint (§6)
+
+    /// The v2 rules flag every case in the shared fixture, once per `// expect` line, and
+    /// nothing in the allowed fixture, the same as `scripts/check-motion.sh`.
+    @Test func v2RulesMatchTheirFixtures() throws {
+        let flagged = try MotionLint.v2Fixture("v2-flagged.txt")
+        let found = MotionLint.v2Offences(in: flagged.source, path: "Lint/v2-flagged.swift")
+        #expect(found.map(\.rule).sorted() == flagged.expected.sorted(), "\(found)")
+        let allowed = try MotionLint.v2Fixture("v2-allowed.txt")
+        #expect(MotionLint.v2Offences(in: allowed.source, path: "Lint/v2-allowed.swift").isEmpty)
+    }
+
+    private func rules(_ source: String, path: String = "Chat/Row.swift") -> [String] {
+        MotionLint.v2Offences(in: source, path: path).map(\.rule)
+    }
+
+    @Test func noRiseRule() {
+        #expect(rules("x.transition(.move(edge: .top).combined(with: .offset(y: 4))) // motion: origin — x") == ["no-rise"])
+        #expect(rules("Text(\"a\").revealOnAppear(index: 0)") == ["no-rise"])
+        #expect(rules("struct Up: Transition {\n  func body() {\n    content.offset(y: 6)\n  }\n}") == ["no-rise"])
+        // An offset outside a transition is layout, not an arrival.
+        #expect(rules("Text(\"a\").offset(y: 6)").isEmpty)
+        #expect(rules("struct Up: Transition {\n}\nText(\"a\").offset(y: 6)").isEmpty)
+        // The prompt bar's edge and the tutorial's order explain their movement.
+        #expect(rules("Text(\"a\").revealOnAppear(index: 0)", path: "Tutorial/TutorialPage.swift").isEmpty)
+        #expect(rules("let t = AnyTransition.offset(y: 8)", path: "Roster/PromptBar.swift").isEmpty)
+    }
+
+    @Test func noRollInTimelineRule() {
+        let rolling = "TimelineView(.periodic(from: origin, by: 1)) { _ in\n  Text(\"1s\").rollingNumber(1)\n}"
+        #expect(rules(rolling) == ["no-roll-in-timeline"])
+        #expect(rules("TimelineView(.periodic(from: origin, by: 1)) { _ in Text(\"\").countChange(1) }") == ["no-roll-in-timeline"])
+        let clock = "TimelineView(.periodic(from: origin, by: 1)) { _ in\n  Text(\"1s\").clockText()\n}\nText(\"2\").countChange(2)"
+        #expect(rules(clock).isEmpty)
+    }
+
+    @Test func periodicNowRule() {
+        #expect(rules("TimelineView(.periodic(from: .now, by: 1)) { _ in }") == ["periodic-now"])
+        #expect(rules("TimelineView(.periodic(from: Date(), by: 1)) { _ in }") == ["periodic-now"])
+        #expect(rules("TimelineView(.periodic(from: clock.displayOrigin(waiting: w), by: 1)) { _ in }").isEmpty)
+    }
+
+    @Test func motionPurposeRule() {
+        #expect(rules("withAnimation(Motion.animation(.resize, reduce: r)) { open = true }") == ["motion-purpose"])
+        #expect(rules("x.matchedGeometryEffect(id: 1, in: ns)") == ["motion-purpose"])
+        #expect(rules("// motion: cause → effect — the tap became the line\nx.matchedGeometryEffect(id: 1, in: ns)").isEmpty)
+        // Within three lines above, not four.
+        #expect(rules("// motion: state change — x\na\nb\nx.motion(.respond, value: v)").isEmpty)
+        #expect(rules("// motion: state change — x\na\nb\nc\nx.motion(.respond, value: v)") == ["motion-purpose"])
+    }
+
+    @Test func availabilityAnimatesRule() {
+        let keyed = "// motion: state change — x\nPane().motion(.fade, value: store.shownLayer)"
+        #expect(rules(keyed) == ["availability-animates"])
+        let mission = "// motion: state change — x\nBar().animation(Motion.animation(.fade, reduce: r), value: hasMission)"
+        #expect(rules(mission) == ["availability-animates"])
+        #expect(rules("// motion: state change — the user toggled\nPane().motion(.fade, value: harness.layer)").isEmpty)
+    }
 }

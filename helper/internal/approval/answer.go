@@ -62,6 +62,10 @@ func (s *Store) Answer(ctx context.Context, requestID, raw, by string) error {
 		s.mu.Unlock()
 		return err
 	}
+	if e.a.Answerable != nil && !*e.a.Answerable {
+		s.mu.Unlock()
+		return invalid("this request can only be answered in the terminal")
+	}
 	opt, err := pick(e.a, d)
 	if err != nil {
 		s.mu.Unlock()

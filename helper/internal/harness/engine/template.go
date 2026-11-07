@@ -34,6 +34,62 @@ var funcs = template.FuncMap{
 	"replace":  replace,
 	"sha256":   sha256Hex,
 	"object":   objectFilter,
+	"slots":    slotsFilter,
+	"part":     part,
+}
+
+// part returns the i-th piece of s split on sep, or "" when there is none:
+// {{part ":" 1 .target}} reads a scope out of a composite row id.
+func part(sep string, i int, s any) string {
+	pieces := strings.Split(toString(s), sep)
+	if i < 0 || i >= len(pieces) {
+		return ""
+	}
+	return pieces[i]
+}
+
+// MaxSlots is the most questions slotsFilter answers in one reply.
+const MaxSlots = 16
+
+// slotsFilter turns answers keyed "0", "1"... into a JSON array with one
+// array of strings per question, in order, [] for a question left
+// unanswered: OpenCode's question reply. A string answer is one value.
+func slotsFilter(v any) (string, error) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("slots: answers are not an object")
+	}
+	n := 0
+	for k := range m {
+		i, err := strconv.Atoi(k)
+		if err != nil || i < 0 || i >= MaxSlots || strconv.Itoa(i) != k {
+			return "", fmt.Errorf("slots: %q is not a question index", k)
+		}
+		n = max(n, i+1)
+	}
+	out := make([][]string, n)
+	for i := range out {
+		out[i] = []string{}
+		switch x := m[strconv.Itoa(i)].(type) {
+		case string:
+			out[i] = append(out[i], x)
+		case []any:
+			for _, e := range x {
+				str, ok := e.(string)
+				if !ok {
+					return "", fmt.Errorf("slots: an answer is not text")
+				}
+				out[i] = append(out[i], str)
+			}
+		case []string:
+			out[i] = append(out[i], x...)
+		case nil:
+		default:
+			return "", fmt.Errorf("slots: an answer is not text")
+		}
+	}
+	b, err := json.Marshal(out)
+	return string(b), err
 }
 
 // objectFilter re-encodes s, which must be a JSON object of string

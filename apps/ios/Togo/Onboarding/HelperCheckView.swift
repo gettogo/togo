@@ -48,6 +48,12 @@ struct HelperCheckView: View {
             ) {
                 AwayFromHomeNote(machine: machine, state: away)
             }
+            Text(String(
+                localized: "onboard.helper.integrations",
+                defaultValue: "Next, set up each agent's chat and requests in Settings › Agents › \(machine). One tap sets them all up."
+            ))
+            .font(.footnote)
+            .foregroundStyle(Color.togoMute)
             notes
         } actions: {
             Button(String(localized: "onboard.save", defaultValue: "Save"), action: onSave)
@@ -130,6 +136,7 @@ struct HelperCheckView: View {
             Label(saveError, systemImage: "exclamationmark.circle")
                 .font(.footnote)
                 .foregroundStyle(Color.togoSnow)
+                // motion: preventing a jump — the list opens a row for the failed save, in place
                 .transition(.opacity)
         }
     }

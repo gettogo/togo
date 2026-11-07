@@ -111,6 +111,11 @@ actions:
   set_provider_key:
     http: { method: PUT, path: '/auth/{{.target}}', body: '{"type": "api", "key": {{.value | json}}}' }
     stability: documented
+  # A / line from the composer or the palette runs as the server's command
+  # (`/init`, user commands), never as prompt text the model would read.
+  command:
+    http: { method: POST, path: '/session/{{.state.harness_session}}/command', body: '{"command": {{.command | json}}, "arguments": {{.arguments | json}}}' }
+    stability: documented
   send:
     http: { method: POST, path: '/session/{{.state.harness_session}}/prompt_async', body: '{"parts": [{"type": "text", "text": {{.text | json}}}]}' }
     stability: documented
@@ -132,7 +137,8 @@ actions:
     branch:
       - when: '{{if eq (slice .target 0 4) "per_"}}true{{end}}'
         http: { method: POST, path: '/permission/{{.target}}/reply', body: '{"reply": {{index (index .answers "0") 0 | json}}}' }
-      - http: { method: POST, path: '/question/{{.target}}/reply', body: '{"answers": [{{index .answers "0" | json}}{{with index .answers "1"}}, {{json .}}{{end}}{{with index .answers "2"}}, {{json .}}{{end}}{{with index .answers "3"}}, {{json .}}{{end}}]}' }
+      # One slot per question, in order, [] for one left unanswered.
+      - http: { method: POST, path: '/question/{{.target}}/reply', body: '{"answers": {{slots .answers}}}' }
     stability: documented
   stop:
     role: destructive
@@ -149,8 +155,14 @@ modes:
   select: $state.mode
   set: set_mode
 commands:
+  # The TUI's own pickers open natively; the server's commands (with an
+  # argument when the template takes one) run through the command action.
+  static:
+    - { name: models, detail: Choose the model, screen: model }
+    - { name: sessions, detail: Resume a session, screen: resume }
+    - { name: compact, detail: Summarise the session, action: compact }
   source: commands
-  select: '[.[] | {name: .name, detail: .description}]'
+  select: '[.[] | {name: .name, detail: .description, hint: (if ((.hints // []) | length) > 0 then "<arguments>" else "" end)}]'
 mission:
   plan: { source: todo }
   agents: { source: children }

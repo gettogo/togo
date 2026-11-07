@@ -55,6 +55,9 @@ type Prompt struct {
 	// moves, redraws and unrelated output do not make the same prompt look
 	// new, while the same question about a different command does.
 	Fingerprint string
+	// ReadOnly marks a prompt one key cannot answer (Claude's tabbed or
+	// multi-select question dialog); its question item answers it.
+	ReadOnly bool
 }
 
 // Detect inspects the last 40 non-empty lines of screen and reports the
@@ -70,7 +73,14 @@ func Detect(screen string) (Prompt, bool) {
 		lines[i] = unbox(l)
 		boxed[i] = lines[i] != l
 	}
-	p, ok := matchConfirm(lines)
+	var p Prompt
+	ok := false
+	if a, isAsk := ParseAsk(screen); isAsk && !a.Review {
+		p, ok = askPrompt(a), true
+	}
+	if !ok {
+		p, ok = matchConfirm(lines)
+	}
 	if !ok {
 		p, ok = matchMenu(lines, boxed)
 	}

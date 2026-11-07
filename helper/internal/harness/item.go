@@ -186,6 +186,9 @@ type ApprovalBody struct {
 	RequestID string `json:"requestId"`
 	// Resolved is set once the approval closed: phone, desk, expired or gone.
 	Resolved string `json:"resolved,omitempty"`
+	// Owner is the question item that is this same prompt; the question
+	// answers it and clients do not draw the approval on its own.
+	Owner string `json:"owner,omitempty"`
 }
 
 // QuestionBody is one or more questions the agent asked, each with
@@ -195,6 +198,12 @@ type QuestionBody struct {
 	// Answered holds the chosen option ids or text per question id once the
 	// questions were answered, from the phone or the desk.
 	Answered map[string][]string `json:"answered,omitempty"`
+	// Answerable is false when the adapter offers no way to answer from
+	// the phone. Nil means true.
+	Answerable *bool `json:"answerable,omitempty"`
+	// RequestID is the pending approval that is this question at the
+	// terminal, once linked.
+	RequestID string `json:"requestId,omitempty"`
 }
 
 // Question is one question of a Confirm, in an item or a screen.

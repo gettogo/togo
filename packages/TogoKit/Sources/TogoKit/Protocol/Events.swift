@@ -117,13 +117,16 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
     public var snippet: String
     public var options: [ApprovalOption]
     public var allowText: Bool
+    /// False while the helper cannot deliver an answer from the phone (a hook request with no
+    /// options and no screen fingerprint yet): show it as waiting in the terminal. Absent means true.
+    public var answerable: Bool
     public var createdAt: Date
     public var expiresAt: Date?
 
     public init(
         requestId: String, sessionId: String?, bib: String?, agent: String, source: Source,
         title: String, detail: String?, snippet: String, options: [ApprovalOption],
-        allowText: Bool, createdAt: Date, expiresAt: Date?, subject: Subject? = nil
+        allowText: Bool, createdAt: Date, expiresAt: Date?, subject: Subject? = nil, answerable: Bool = true
     ) {
         self.requestId = requestId
         self.sessionId = sessionId
@@ -136,13 +139,14 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         self.snippet = snippet
         self.options = options
         self.allowText = allowText
+        self.answerable = answerable
         self.createdAt = createdAt
         self.expiresAt = expiresAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case requestId, sessionId, bib, agent, source, title, detail, subject, snippet, options, allowText
-        case createdAt, expiresAt, state
+        case answerable, createdAt, expiresAt, state
     }
 
     public init(from decoder: any Decoder) throws {
@@ -159,6 +163,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         snippet = try container.decode(String.self, forKey: .snippet)
         options = try container.decode([ApprovalOption].self, forKey: .options)
         allowText = try container.decode(Bool.self, forKey: .allowText)
+        answerable = try container.decodeIfPresent(Bool.self, forKey: .answerable) ?? true
         createdAt = try container.decodeTimestamp(forKey: .createdAt)
         expiresAt = try container.decodeTimestampIfPresent(forKey: .expiresAt)
     }
@@ -177,6 +182,7 @@ public struct Approval: Codable, Hashable, Sendable, Identifiable {
         try container.encode(snippet, forKey: .snippet)
         try container.encode(options, forKey: .options)
         try container.encode(allowText, forKey: .allowText)
+        if !answerable { try container.encode(false, forKey: .answerable) }
         try container.encodeTimestamp(createdAt, forKey: .createdAt)
         try container.encodeTimestamp(expiresAt, forKey: .expiresAt)
         try container.encode("pending", forKey: .state)

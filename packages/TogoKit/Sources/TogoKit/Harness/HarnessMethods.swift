@@ -269,18 +269,62 @@ public struct HarnessCompleteParams: Codable, Hashable, Sendable {
 /// One / or @ suggestion. With `screen` set, choosing it opens that native screen instead of
 /// inserting text.
 public struct HarnessCompletion: Codable, Hashable, Sendable {
+    /// How the palette runs a command. Nil from older helpers: derive it from `screen` and `hint`.
+    public struct Kind: OpenString {
+        public var rawValue: String
+        public init(rawValue: String) { self.rawValue = rawValue }
+        /// A menu in place from `choices`, the current one checked.
+        public static let choice: Self = "choice"
+        /// Push the searchable picker named by `screen`.
+        public static let picker: Self = "picker"
+        /// To the composer; Return waits for the argument.
+        public static let args: Self = "args"
+        /// Runs at once (a destructive one asks first).
+        public static let run: Self = "run"
+        /// Typed into the terminal, which the app then shows.
+        public static let terminal: Self = "terminal"
+    }
+
+    /// One value of a `choice` command.
+    public struct Choice: Codable, Hashable, Sendable, Identifiable {
+        public var id: String
+        public var label: String
+        public var selected: Bool?
+
+        public init(id: String, label: String, selected: Bool? = nil) {
+            self.id = id
+            self.label = label
+            self.selected = selected
+        }
+    }
+
     public var insert: String
     public var title: String
     public var detail: String?
     public var hint: String?
     public var screen: String?
+    public var kind: Kind?
+    /// `destructive` asks in a system confirmation first.
+    public var role: HarnessActionRef.Role?
+    /// A `harness.action` id run instead of typing the command.
+    public var action: String?
+    /// A native home opened instead of typing: `status`, `changes` or a screen id.
+    public var opens: String?
+    public var choices: [Choice]?
 
-    public init(insert: String, title: String, detail: String? = nil, hint: String? = nil, screen: String? = nil) {
+    public init(insert: String, title: String, detail: String? = nil, hint: String? = nil, screen: String? = nil,
+                kind: Kind? = nil, role: HarnessActionRef.Role? = nil, action: String? = nil, opens: String? = nil,
+                choices: [Choice]? = nil) {
         self.insert = insert
         self.title = title
         self.detail = detail
         self.hint = hint
         self.screen = screen
+        self.kind = kind
+        self.role = role
+        self.action = action
+        self.opens = opens
+        self.choices = choices
     }
 }
 

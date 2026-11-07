@@ -25,6 +25,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/hostinfo"
 	"github.com/gettogo/togo/helper/internal/hub"
+	"github.com/gettogo/togo/helper/internal/integrations"
 	"github.com/gettogo/togo/helper/internal/local"
 	"github.com/gettogo/togo/helper/internal/mailbox"
 	"github.com/gettogo/togo/helper/internal/notify"
@@ -52,6 +53,7 @@ var Capabilities = []string{
 	wire.CapLifecycle,
 	wire.CapRestore,
 	harness.Capability,
+	integrations.Capability,
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read
@@ -181,6 +183,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	}
 	git := gitx.Git{}
 	c.Harness = newHarness(c, svc, &git, o)
+	integ := integrations.New(o.Home, o.TogoPath)
 
 	ext := map[string]api.Method{}
 	for _, m := range []map[string]api.Method{
@@ -204,6 +207,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		{wire.MethodSessionRestorable: api.Restorable(svc), wire.MethodSessionDismiss: api.Dismiss(svc)},
 		{wire.MethodSessionRestore: api.Restore(svc, c.restored)},
 		harness.Methods(c.Harness),
+		integ.Methods(),
 	} {
 		for name := range m {
 			if _, dup := ext[name]; dup {
@@ -211,6 +215,9 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 			}
 		}
 		maps.Copy(ext, m)
+	}
+	if hook, ok := ext[wire.MethodLocalHook]; ok {
+		ext[wire.MethodLocalHook] = integ.Observe(o.Home, hook)
 	}
 	base.Ext = ext
 	base.Logf = logf

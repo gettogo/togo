@@ -34,7 +34,7 @@ struct CaptureSheet: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(TerminalSyncCopy.history)
+                .navigationTitle(TerminalSyncCopy.fromMachine)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
@@ -55,13 +55,13 @@ struct CaptureSheet: View {
         .task(id: attempt) { await load() }
     }
 
-    /// Loading, failed and loaded crossfade in the sheet.
+    /// Loading, failed and loaded crossfade in place in the sheet.
     private var content: some View {
         ZStack {
             phaseView
-                .transition(.opacity)
                 .id(phaseKind)
         }
+        // motion: state change — reading gives way to the history (or why it failed) in place.
         .motion(.fade, value: phaseKind)
     }
 
@@ -95,10 +95,6 @@ struct CaptureSheet: View {
         ScrollViewReader { proxy in
             ScrollView([.vertical]) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    Text(TerminalSyncCopy.notOnPhone)
-                        .font(.footnote)
-                        .foregroundStyle(Color.togoMute)
-                        .padding(.bottom, 12)
                     ForEach(lines.indices, id: \.self) { index in
                         line(lines[index], marked: index == marked)
                             .id(index)

@@ -85,19 +85,20 @@ type liveSession struct {
 // that most recently started working, else the last focus, shown as done,
 // or as ended or failed when that session's agent exited.
 type LiveTracker struct {
-	mu      sync.Mutex
-	reqs    map[string]liveRequest
-	working map[string]liveSession
-	exited  map[string]string // session id -> ended or failed
-	reasons map[string]string // session id -> exit reason word
-	lastID  string            // session of the last working focus
-	last    LiveState         // last computed state, the source of done
-	hasLast bool
-	quietAt time.Time // when nothing was left waiting or working
-	rose    bool      // waiting went from 0 to more since the last Next
-	active  bool      // an update or start went out since the last end
-	sent    LiveState
-	hasSent bool
+	mu       sync.Mutex
+	reqs     map[string]liveRequest
+	working  map[string]liveSession
+	exited   map[string]string // session id -> ended or failed
+	reasons  map[string]string // session id -> exit reason word
+	lastID   string            // session of the last working focus
+	last     LiveState         // last computed state, the source of done
+	hasLast  bool
+	quietAt  time.Time // when nothing was left waiting or working
+	rose     bool      // waiting went from 0 to more since the last Next
+	pausedAt time.Time // when requests started waiting on the user; working clocks pause
+	active   bool      // an update or start went out since the last end
+	sent     LiveState
+	hasSent  bool
 }
 
 func (t *LiveTracker) lazy() {
@@ -125,6 +126,7 @@ func (t *LiveTracker) Open(rid string, created time.Time, bib *string, agent str
 	}
 	if len(t.reqs) == 0 {
 		t.rose = true
+		t.pausedAt = now
 	}
 	t.reqs[rid] = r
 	t.settle(now)
@@ -135,8 +137,29 @@ func (t *LiveTracker) Close(rid string, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.lazy()
+	_, open := t.reqs[rid]
 	delete(t.reqs, rid)
+	if open && len(t.reqs) == 0 {
+		t.resume(now)
+	}
 	t.settle(now)
+}
+
+// resume restarts the working clocks paused while requests waited on the
+// user, so the time shown counts working time only, not the wait.
+func (t *LiveTracker) resume(now time.Time) {
+	if t.pausedAt.IsZero() {
+		return
+	}
+	if wait := now.Sub(t.pausedAt); wait > 0 {
+		for id, s := range t.working {
+			if s.since.Before(t.pausedAt) {
+				s.since = s.since.Add(wait)
+				t.working[id] = s
+			}
+		}
+	}
+	t.pausedAt = time.Time{}
 }
 
 // Session records a session's status. needs_you is ignored, since pending

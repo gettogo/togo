@@ -1,0 +1,112 @@
+{
+  "description": "The / menu with how each command runs: effort is a choice in place with the current value checked, model pushes its picker, compact runs the compact action, clear is destructive, review runs at once. Pending: served once the commands carry kind, role, action, opens and choices.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.complete",
+    "params": {
+      "id": "s_abcdefghij",
+      "kind": "command",
+      "query": ""
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "items": [
+        {
+          "insert": "/effort ",
+          "title": "/effort",
+          "detail": "Set the reasoning effort",
+          "hint": "[level]",
+          "screen": "effort",
+          "kind": "choice",
+          "choices": [
+            {
+              "id": "low",
+              "label": "Low"
+            },
+            {
+              "id": "medium",
+              "label": "Medium"
+            },
+            {
+              "id": "high",
+              "label": "High",
+              "selected": true
+            },
+            {
+              "id": "xhigh",
+              "label": "Extra high"
+            },
+            {
+              "id": "max",
+              "label": "Max"
+            }
+          ]
+        },
+        {
+          "insert": "/model ",
+          "title": "/model",
+          "detail": "Set the AI model",
+          "hint": "[model]",
+          "screen": "model",
+          "kind": "picker"
+        },
+        {
+          "insert": "/compact ",
+          "title": "/compact",
+          "detail": "Summarise the conversation to free context",
+          "hint": "[instructions]",
+          "kind": "run",
+          "action": "compact"
+        },
+        {
+          "insert": "/clear",
+          "title": "/clear",
+          "detail": "Start a new conversation",
+          "kind": "run",
+          "role": "destructive"
+        },
+        {
+          "insert": "/status",
+          "title": "/status",
+          "detail": "Show status",
+          "kind": "run",
+          "opens": "status"
+        },
+        {
+          "insert": "/config",
+          "title": "/config",
+          "detail": "Open the settings panel",
+          "kind": "terminal"
+        }
+      ]
+    }
+  }
+}

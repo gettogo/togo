@@ -55,6 +55,7 @@ extension ComposeShape {
             shown.wrappedValue = next
             return
         }
+        // motion: preventing a jump — the bar opens or closes its room with its rows, so nothing above it jumps.
         withAnimation(Motion.animation(.resize, reduce: reduce)) { shown.wrappedValue = next }
     }
 }

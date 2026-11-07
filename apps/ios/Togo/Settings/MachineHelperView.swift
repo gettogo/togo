@@ -2,7 +2,7 @@ import SwiftUI
 import TogoKit
 
 /// What one machine's helper lets this device change. The notification settings come first;
-/// `extra` adds sections of its own below them.
+/// `extra` adds sections of its own below them, then the machine's agent integrations.
 struct MachineHelperView<Extra: View>: View {
     let machine: HostID
     let name: String
@@ -27,6 +27,7 @@ struct MachineHelperView<Extra: View>: View {
 
     /// Owns the model, which needs the tools from the environment.
     private struct Loaded<Content: View>: View {
+        let machine: HostID
         let name: String
         let supportsNotify: Bool
         let content: Content
@@ -36,6 +37,7 @@ struct MachineHelperView<Extra: View>: View {
             machine: HostID, name: String, supportsNotify: Bool, tools: any MachineTools,
             @ViewBuilder content: () -> Content
         ) {
+            self.machine = machine
             self.name = name
             self.supportsNotify = supportsNotify
             self.content = content()
@@ -46,6 +48,7 @@ struct MachineHelperView<Extra: View>: View {
             List {
                 MachineNotifySection(name: name, supported: supportsNotify, model: model)
                 content
+                MachineIntegrationsSection(machine: machine)
             }
             .groupedList()
             .navigationTitle(name)
