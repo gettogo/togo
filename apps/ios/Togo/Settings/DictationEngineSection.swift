@@ -140,6 +140,7 @@ struct DictationEngineSection: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(DictationCopy.whisperDownloading(whisper.name))
                 ProgressView(value: fraction)
+                    .motion(.progress, value: fraction)
                     .tint(Color.togoSnow)
             }
             .padding(.vertical, 6)

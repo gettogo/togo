@@ -6,14 +6,23 @@ import TogoKit
 /// prompt bar does: capsules, a `>` reply line, Send only once the question has been on screen
 /// long enough to read. `needsYou` marks a question the agent is waiting on: the beacon
 /// lights and Send takes the approve fill.
+///
+/// Motion: the answered state swaps in place through the §2.3 settle (the form conceals, the
+/// sheet's content resizes, the answer reveals); the changed and failed lines reveal in a
+/// `resize` transaction; the sending spinner has its own slot after the button.
 struct ConfirmPrimitive: View {
     @Environment(\.loopsPaused) private var loopsPaused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let confirm: HarnessScreen.Confirm
     let context: PrimitiveContext
     var needsYou = false
     /// Drawn inside another scroll view: no scroll of its own.
     var embedded = false
     @State private var model: ConfirmModel
+    @State private var answered = Mirrored(false)
+    /// Mirrors of the status lines, so they arrive and leave in a transaction.
+    @State private var failure: String?
+    @State private var changed = false
 
     init(confirm: HarnessScreen.Confirm, context: PrimitiveContext, needsYou: Bool = false, embedded: Bool = false) {
         self.confirm = confirm
@@ -21,6 +30,18 @@ struct ConfirmPrimitive: View {
         self.needsYou = needsYou
         self.embedded = embedded
         _model = State(initialValue: ConfirmModel(confirm: confirm))
+    }
+
+    private var isAnswered: Bool {
+        if case .answered = model.phase { true } else { false }
+    }
+
+    private var answerMessage: String? {
+        if case let .answered(message) = model.phase { message } else { nil }
+    }
+
+    private var failedMessage: String? {
+        if case let .failed(message) = model.phase { message } else { nil }
     }
 
     var body: some View {
@@ -41,14 +62,28 @@ struct ConfirmPrimitive: View {
         .haptic(.error, trigger: model.phase) { _, new in
             if case .failed = new { true } else { false }
         }
-        .motion(.dropIn, value: model.phase)
+        .onChange(of: isAnswered) { _, answered in Motion.settle($answered, to: answered, reduce: reduceMotion) }
+        .onChange(of: failedMessage) { _, message in
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { failure = message }
+        }
+        .onChange(of: model.changed) { _, now in
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { changed = now }
+        }
     }
 
     @ViewBuilder private var content: some View {
-        if case let .answered(message) = model.phase {
-            answered(message)
+        if answered.value {
+            answeredView(answerMessage)
+                .settling(answered)
         } else {
-            VStack(alignment: .leading, spacing: 18) {
+            form
+                .settling(answered)
+        }
+    }
+
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Group {
                 if needsYou {
                     HStack(spacing: 8) {
                         PromptBeacon(lights: false)
@@ -74,17 +109,19 @@ struct ConfirmPrimitive: View {
     }
 
     @ViewBuilder private var status: some View {
-        if model.changed {
+        if changed {
             Text(PrimitiveCopy.changedWhileOpen)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
                 .accessibilityAddTraits(.updatesFrequently)
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
-        if case let .failed(message) = model.phase {
-            Text(message)
+        if let failure {
+            Text(failure)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PrimitiveTint.fail)
                 .accessibilityAddTraits(.updatesFrequently)
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
     }
 
@@ -95,7 +132,6 @@ struct ConfirmPrimitive: View {
         let run = context.run
         let send: () -> Void = { _ = Task { await model.submit(for: shown) { await run(action, nil, $0) } } }
         HStack(spacing: 10) {
-            if model.phase == .sending { ProgressView().controlSize(.small) }
             if confirm.destructive {
                 Button(title, role: .destructive) { send() }
                     .buttonStyle(PrimitiveCapsuleStyle(role: .destructive, large: true))
@@ -111,11 +147,16 @@ struct ConfirmPrimitive: View {
                     .disabled(!model.canSubmit)
                     .keyboardShortcut(.defaultAction)
             }
+            // A slot after the button, so the spinner never pushes it.
+            ZStack {
+                if model.phase == .sending { ProgressView().controlSize(.small).transition(.opacity) }
+            }
+            .slot(width: 20, key: model.phase == .sending)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func answered(_ message: String?) -> some View {
+    private func answeredView(_ message: String?) -> some View {
         VStack(spacing: 10) {
             Image(systemName: "checkmark")
                 .font(.title2.weight(.semibold))
@@ -137,6 +178,7 @@ struct ConfirmPrimitive: View {
 
 /// One question: its header, the prompt, the options as capsules and a reply line.
 private struct ConfirmQuestionView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let question: HarnessQuestion
     let index: Int
     let count: Int
@@ -194,6 +236,7 @@ private struct ConfirmQuestionView: View {
         return Button { model.toggle(option.id, in: question) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: question.multi ? (on ? "checkmark.square.fill" : "square") : (on ? "largecircle.fill.circle" : "circle"))
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                     .foregroundStyle(on ? Color.togoInk : Color.togoMute)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
@@ -213,7 +256,7 @@ private struct ConfirmQuestionView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .motion(.confirm, value: on)
+        .motion(.respond, value: on)
         .accessibilityLabel(option.shownTitle)
         .accessibilityHint(option.shownDetail ?? "")
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)

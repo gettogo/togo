@@ -14,6 +14,7 @@ struct FileBrowserView: View {
 
     var body: some View {
         content
+            .phaseSwap(model.items.isEmpty ? "\(CaseName.of(model.state)) empty" : CaseName.of(model.state))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.togoInk)
             .safeAreaInset(edge: .top, spacing: 0) { banner }

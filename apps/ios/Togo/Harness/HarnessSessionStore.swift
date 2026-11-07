@@ -1,6 +1,8 @@
 import Foundation
 import Observation
+import SwiftUI
 import TogoKit
+import UIKit
 
 /// The three layers of a session. Chat is the default where the harness has an adapter; the
 /// terminal is the source of truth, one tap away.
@@ -70,6 +72,9 @@ struct TerminalJump: Hashable, Sendable {
     private(set) var localWorkSince: Date?
     /// The last mode the session reported, kept while later updates leave it out.
     private(set) var rememberedMode: String?
+    /// When this phone saw each request answered, for the turn's stopwatch (`TurnClock`).
+    private(set) var resolvedAt: [String: Date] = [:]
+    @ObservationIgnored private var ledger = ResolutionLedger()
 
     @ObservationIgnored private var layerChosen = false
     /// The helper said "working" since the last send.
@@ -108,7 +113,8 @@ struct TerminalJump: Hashable, Sendable {
     var liveWork: WorkingState? {
         WorkingLogic.state(
             items: feed.timeline.conversation(), working: working, awaitingSince: awaitingSince,
-            localSince: localWorkSince, now: .now, needsYou: feed.mission.summary.needsYou
+            localSince: localWorkSince, now: .now, needsYou: feed.mission.summary.needsYou,
+            resolvedAt: resolvedAt
         )
     }
 
@@ -237,14 +243,13 @@ struct TerminalJump: Hashable, Sendable {
                     opened = true
                     phase = .live
                     let outcome = feed.load(result)
-                    changed()
+                    changed(arrivals: false)
                     if outcome == .reopen { return .reopen }
                 case .note(let note):
-                    if feed.apply(note) == .reopen {
+                    if apply(note) == .reopen {
                         if note.kind == .reset, note.reason == "adapter" { needsDescribe = true }
                         return .reopen
                     }
-                    changed()
                 }
             }
             return .dropped(opened: opened)
@@ -293,8 +298,30 @@ struct TerminalJump: Hashable, Sendable {
         phase = .terminalOnly
     }
 
-    private func changed() {
-        rows = SubagentThread.mainRows(feed.timeline)
+    /// Applies a feed note. A note that brings items the chat has not seen applies in the
+    /// arrival transaction, so new rows, a subagent's thread and the live line move together;
+    /// updates to items already shown (streamed text) land without animation.
+    private func apply(_ note: HarnessNotification) -> HarnessApply {
+        let arrives = feed.isLoaded && (note.items ?? []).contains { feed.timeline.item($0.id) == nil }
+        guard arrives else {
+            let outcome = feed.apply(note)
+            if outcome != .reopen { changed() }
+            return outcome
+        }
+        var outcome = HarnessApply.applied
+        withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) {
+            outcome = feed.apply(note)
+            if outcome != .reopen { changed(arrivals: false) }
+        }
+        return outcome
+    }
+
+    /// Rebuilds the rows after the feed changed. Rows that arrive while the chat is open reveal
+    /// in one `resize` transaction keyed on the row ids only (spec §2.5): streamed text and
+    /// other changes inside a row land without animation, and a fresh open never animates.
+    private func changed(arrivals: Bool = true) {
+        if ledger.observe(feed.timeline.items, now: .now) { resolvedAt = ledger.resolvedAt }
+        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: arrivals)
         rememberMode()
         refreshWorking()
         pump()
@@ -309,7 +336,25 @@ struct TerminalJump: Hashable, Sendable {
         defer { loadingOlder = false }
         guard let page = try? await services.history(subject, before: before) else { return }
         feed.prepend(page)
-        rows = SubagentThread.mainRows(feed.timeline)
+        // Rows from "Earlier" land without animation; the scroll keeps its place.
+        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: false)
+    }
+
+    /// Rows and queued prompts arrive and leave on `resize`; under Reduce Motion a fade.
+    private static var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
+
+    private func setRows(_ next: [ChatRow], arrivals: Bool) {
+        guard arrivals, !rows.isEmpty, rows.map(\.id) != next.map(\.id) else {
+            rows = next
+            return
+        }
+        withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { rows = next }
+    }
+
+    /// Changes the phone's own queue in the arrival transaction, so a held prompt's row
+    /// reveals and leaves like any other row.
+    private func changeQueue(_ change: (inout PromptQueue) -> Void) {
+        withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { change(&queue) }
     }
 
     // MARK: Composer
@@ -327,7 +372,9 @@ struct TerminalJump: Hashable, Sendable {
             changed()
             return
         }
-        guard queue.add(text, images: images) != nil else {
+        var added: UUID?
+        changeQueue { added = $0.add(text, images: images) }
+        guard added != nil else {
             if queue.isFull { throw QueueFull() }
             return
         }
@@ -341,7 +388,7 @@ struct TerminalJump: Hashable, Sendable {
     }
 
     func cancelQueued(_ id: UUID) {
-        queue.cancel(id)
+        changeQueue { _ = $0.cancel(id) }
     }
 
     /// Takes back a prompt the harness holds in its own queue: `stop` aimed at the queued user
@@ -353,7 +400,7 @@ struct TerminalJump: Hashable, Sendable {
     }
 
     func retryQueued(_ id: UUID) {
-        queue.retry(id)
+        changeQueue { $0.retry(id) }
         pump()
     }
 
@@ -379,10 +426,13 @@ struct TerminalJump: Hashable, Sendable {
         guard let prompt = queue.next(canSend: canSendNow) else { return }
         do {
             let item = try await services.send(subject, text: prompt.text, mode: .queue, images: prompt.images)
-            queue.sent(prompt.id)
-            feed.insertSent(item)
+            // One transaction: the held row leaves as the delivered prompt arrives in its place.
+            withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) {
+                queue.sent(prompt.id)
+                feed.insertSent(item)
+                rows = SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt)
+            }
             markSent()
-            rows = SubagentThread.mainRows(feed.timeline)
         } catch HelperError.conflict(let reason) where reason == "busy" {
             // The turn is still going; the next change of the mission tries again.
             queue.requeue(prompt.id)
@@ -392,7 +442,7 @@ struct TerminalJump: Hashable, Sendable {
             queue.requeue(prompt.id)
             return
         } catch {
-            queue.failed(prompt.id, message: ServiceErrors.message(error))
+            changeQueue { $0.failed(prompt.id, message: ServiceErrors.message(error)) }
             return
         }
         await deliverNext()

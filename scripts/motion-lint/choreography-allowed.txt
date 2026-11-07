@@ -1,0 +1,20 @@
+// None of these may be flagged by the choreography pass.
+Text("a").animation(Motion.animation(.fade, reduce: r), value: x)
+Text("a").animation(
+    Motion.animation(.fade, reduce: r),
+    value: x
+)
+Text("a").animation(nil, value: x)
+Text("a").motion(.fade, value: x)
+Text("a").motion(.confirm, value: pressed)
+Text("a").motion(.respond, value: on)
+TimelineView(.animation) { context in Text("") }
+TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { context in Text("") }
+withAnimation(Motion.animation(.resize, reduce: r)) { expanded.toggle() }
+let ok = await model.refresh()
+withAnimation(Motion.animation(.fade, reduce: r)) { shown = ok }
+Text("a").transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+Text("a").transition(.opacity)
+Text("a").transition(Motion.reveal(reduce: reduceMotion))
+transaction.animation = Motion.animation(.paneFlow, reduce: reduceMotion)
+// VStack {}.motion(.rowGrow, value: expanded) in a comment

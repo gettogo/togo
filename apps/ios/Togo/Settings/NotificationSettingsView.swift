@@ -301,6 +301,11 @@ struct NotificationMachinesSection: View {
                 .textCase(nil)
         }
         .groupedRows()
+        // A machine's command toggle and its "turns on when…" note arrive on `resize`.
+        .resizesOnRows(machines.map { machine in
+            let note = Self.commandNote(machine, showing: settings.liveActivityCommand(for: machine.id)) != nil
+            return "\(machine.id) \(machine.canShowCommands) \(note) \(CaseName.of(machine.state))"
+        })
     }
 
     @ViewBuilder private func row(_ machine: NotificationMachine) -> some View {

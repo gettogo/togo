@@ -4,6 +4,7 @@ import TogoKit
 /// A section's header: its symbol and name, the row count in mono, and the beacon on Needs
 /// you while anything waits. A header to VoiceOver.
 struct MissionSectionHeader: View {
+    @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 16
     let kind: MissionSectionKind
     let count: Int
 
@@ -11,26 +12,34 @@ struct MissionSectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            if lit {
-                BeaconDot()
-                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
-            } else {
-                Image(systemName: MissionCopy.symbol(kind))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.togoMute)
-                    .accessibilityHidden(true)
+            // One fixed slot, so the beacon and the symbol crossfade and the name never moves.
+            ZStack {
+                if lit {
+                    BeaconDot()
+                        .transition(.opacity)
+                } else {
+                    Image(systemName: MissionCopy.symbol(kind))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.togoMute)
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
+                }
             }
+            .slot(width: mark, height: mark, key: lit)
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
             Text(MissionCopy.header(kind))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
             if count > 0, kind != .status {
                 Text(verbatim: "\(count)")
                     .font(.mono(.caption))
-                    .monospacedDigit()
                     .foregroundStyle(Color.togoMute)
+                    .rollingNumber(Double(count))
+                    .transition(.opacity)
             }
             Spacer(minLength: 0)
         }
+        .motion(.respond, value: count > 0)
         .padding(.horizontal, 4)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -38,21 +47,29 @@ struct MissionSectionHeader: View {
 }
 
 /// Rows on the raised surface, one hairline between them.
+/// Rows keep their own ids (the subview ids of the `ForEach` inside), so a row that arrives or
+/// leaves is that row, never its neighbour's content morphing into it. The card clips, so a row
+/// concealing while the card shrinks never draws outside it.
 struct MissionCard<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(spacing: 0) {
             Group(subviews: content) { rows in
-                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                    if index > 0 {
-                        Rectangle().fill(Color.togoLine).frame(height: 1).padding(.leading, 44)
+                ForEach(rows) { row in
+                    VStack(spacing: 0) {
+                        if row.id != rows.first?.id {
+                            Rectangle().fill(Color.togoLine).frame(height: 1).padding(.leading, 44)
+                        }
+                        row
                     }
-                    row
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
         }
         .background(Color.togoRaised, in: .rect(cornerRadius: 18, style: .continuous))
+        .clipShape(.rect(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -95,13 +112,7 @@ struct MissionRowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let start = row.startedAt?.date, row.state.isLive {
-                        Text(start, style: .timer)
-                            .font(.mono(.caption))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.togoMute)
-                            // trunc-ok: a timer, at most 8 characters
-                            .lineLimit(1)
-                            .fixedSize()
+                        MissionClock(start: start)
                     }
                 }
                 if let subtitle = row.subtitle, !subtitle.isEmpty {
@@ -114,6 +125,8 @@ struct MissionRowView: View {
                     ProgressView(value: min(max(progress, 0), 1))
                         .tint(Color.togoSnow)
                         .padding(.top, 2)
+                        .motion(.progress, value: progress)
+                        .transition(.opacity)
                 }
             }
             if opens {
@@ -137,6 +150,25 @@ struct MissionRowView: View {
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
+    }
+}
+
+/// How long a live row has run, ticking once a second; each tick rolls its digits (motion
+/// spec §2.7).
+struct MissionClock: View {
+    let start: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: start, by: 1)) { context in
+            let seconds = max(0, context.date.timeIntervalSince(start)).rounded(.down)
+            Text(verbatim: BackgroundLabel.timer(seconds))
+                .font(.mono(.caption))
+                .foregroundStyle(Color.togoMute)
+                // trunc-ok: a timer, at most 8 characters
+                .lineLimit(1)
+                .fixedSize()
+                .rollingNumber(seconds)
+        }
     }
 }
 
@@ -195,7 +227,11 @@ struct MissionBackgroundRow: View {
                         .lineLimit(2)
                         .truncationMode(.middle)
                 }
-                if let clock { Text(verbatim: clock).fixedSize() }
+                if let clock {
+                    Text(verbatim: clock)
+                        .fixedSize()
+                        .rollingNumber(row.startedAt.map { now.timeIntervalSince($0.date).rounded(.down) } ?? 0)
+                }
             }
             .font(.mono(.caption))
             .monospacedDigit()
@@ -215,29 +251,59 @@ struct MissionBackgroundRow: View {
 /// Something that needs the user, answered right here: the chat's own approval or question
 /// row when the item is loaded, else its title under the beacon with a way to the chat.
 struct MissionNeedsRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let row: HarnessRow
     let store: HarnessSessionStore
     let actions: ChatActions
     let onShowChat: () -> Void
+    /// Whether the answerable row shows: it follows the item loading (network) through the
+    /// swap choreography, so the plain line conceals before the card grows in (spec §2.3).
+    @State private var loaded: Mirrored<Bool>
+
+    init(row: HarnessRow, store: HarnessSessionStore, actions: ChatActions, onShowChat: @escaping () -> Void) {
+        self.row = row
+        self.store = store
+        self.actions = actions
+        self.onShowChat = onShowChat
+        _loaded = State(initialValue: Mirrored(Self.answerable(row, store)))
+    }
+
+    private static func answerable(_ row: HarnessRow, _ store: HarnessSessionStore) -> Bool {
+        guard let item = MissionLayout.needsItem(for: row, in: store.timeline) else { return false }
+        switch item.body {
+        case .approval, .question: return true
+        default: return false
+        }
+    }
 
     var body: some View {
-        if let item = MissionLayout.needsItem(for: row, in: store.timeline) {
-            switch item.body {
-            case .approval(let approval):
-                ApprovalRow(item: item, approval: approval, card: actions.card(approval.requestId)) { decision in
-                    actions.answer(approval.requestId, decision)
-                }
-                .padding(14)
-            case .question(let question):
-                QuestionRow(item: item, question: question) { answers in
-                    guard let result = try? await store.answer(item, answers: answers) else { return false }
-                    return result.result != .failed
-                }
-                .padding(14)
-            default:
+        Group {
+            if loaded.value, let item = MissionLayout.needsItem(for: row, in: store.timeline) {
+                answer(item)
+            } else {
                 plain
             }
-        } else {
+        }
+        .settling(loaded)
+        .onChange(of: Self.answerable(row, store)) { _, now in
+            Motion.settle($loaded, to: now, reduce: reduceMotion)
+        }
+    }
+
+    @ViewBuilder private func answer(_ item: HarnessItem) -> some View {
+        switch item.body {
+        case .approval(let approval):
+            ApprovalRow(item: item, approval: approval, card: actions.card(approval.requestId)) { decision in
+                actions.answer(approval.requestId, decision)
+            }
+            .padding(14)
+        case .question(let question):
+            QuestionRow(item: item, question: question) { answers in
+                guard let result = try? await store.answer(item, answers: answers) else { return false }
+                return result.result != .failed
+            }
+            .padding(14)
+        default:
             plain
         }
     }

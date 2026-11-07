@@ -8,6 +8,7 @@ import UIKit
 /// for the system back button, or present it with `subagentChat(store:actions:)`, which adds a
 /// way back to the agent that started it.
 struct SubagentChatView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: HarnessSessionStore
     let agentID: String
     var actions: ChatActions = .inert
@@ -15,7 +16,7 @@ struct SubagentChatView: View {
     /// already gives one.
     var showsBack = false
 
-    @State private var expanded: Set<String> = []
+    @State private var expanded: [String: Disclosure] = [:]
     @State private var detail: HarnessItem?
     @State private var nested: String?
 
@@ -25,9 +26,11 @@ struct SubagentChatView: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 header(thread)
                 let waiting = WorkingLogic.hasOpenNeeds(rows: thread.rows)
+                // Rows that arrive while open reveal in the store's arrival transaction.
                 ForEach(thread.rows) { row in
                     rowView(row, waiting: waiting)
                         .id(row.id)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
             .padding(16)
@@ -37,14 +40,18 @@ struct SubagentChatView: View {
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .overlay {
-            if thread.rows.isEmpty {
-                ContentUnavailableView {
-                    Label(TerminalSyncCopy.subagentEmpty, systemImage: "person.2")
-                } description: {
-                    Text(TerminalSyncCopy.subagentEmptyDetail)
+            Group {
+                if thread.rows.isEmpty {
+                    ContentUnavailableView {
+                        Label(TerminalSyncCopy.subagentEmpty, systemImage: "person.2")
+                    } description: {
+                        Text(TerminalSyncCopy.subagentEmptyDetail)
+                    }
+                    .foregroundStyle(Color.togoMute)
+                    .transition(.opacity)
                 }
-                .foregroundStyle(Color.togoMute)
             }
+            .motion(.fade, value: thread.rows.isEmpty)
         }
         .background(Color.togoInk)
         .navigationTitle(thread.title)
@@ -81,6 +88,7 @@ struct SubagentChatView: View {
             if let summary = thread.agent?.summary, !summary.isEmpty {
                 MarkdownText(text: summary)
                     .foregroundStyle(Color.togoSnow)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,10 +120,11 @@ struct SubagentChatView: View {
                     .contextMenu { menu(item) }
             }
         case .work(let id, let summary, let steps):
+            let disclosure = expanded[id] ?? Disclosure()
             WorkLine(
-                summary: summary, steps: steps, expanded: expanded.contains(id),
+                summary: summary, steps: steps, disclosure: disclosure,
                 onToggle: { toggle(id) }, onStep: open,
-                spoken: ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)),
+                spoken: ChatCopy.spokenWork(summary, now: .now, expanded: disclosure.isOpen),
                 waiting: waiting
             )
         case .needs(let item):
@@ -173,8 +182,10 @@ struct SubagentChatView: View {
         item.anchor != nil && store.has(HarnessCapability.anchors)
     }
 
+    /// Opens or closes a work line's steps as a two-phase disclosure (spec §2.1/§2.2).
     private func toggle(_ id: String) {
-        if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
+        let disclosure = Binding { expanded[id] ?? Disclosure() } set: { expanded[id] = $0 }
+        Motion.toggle(disclosure, reduce: reduceMotion)
     }
 }
 

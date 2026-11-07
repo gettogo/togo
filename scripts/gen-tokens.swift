@@ -142,10 +142,11 @@ func palette(_ roles: [Role]) -> String {
 let motionRoleKeys = [
     "tabSettle", "dropIn", "collapse", "shrinkIntoTab", "confirm", "fade", "pawStep", "rowGrow",
     "paneFlow", "sidebar", "chrome", "dim", "listen",
+    "respond", "resize", "reveal", "conceal", "emphasis", "progress", "ambient",
 ]
 
 func seconds(_ value: Any?, _ what: String) -> String {
-    guard let number = value as? NSNumber, number.doubleValue > 0, number.doubleValue < 2 else {
+    guard let number = value as? NSNumber, number.doubleValue > 0, number.doubleValue < 5 else {
         fail("\(what) needs a duration in seconds")
     }
     return String(format: "%.2f", number.doubleValue)

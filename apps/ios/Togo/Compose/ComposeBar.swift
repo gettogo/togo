@@ -144,10 +144,13 @@ struct DictationSpeech {
 /// A multi-line field above the key bar for writing a whole message before it reaches the
 /// session, plus image attach when the machine's helper accepts uploads.
 struct ComposeBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .body) private var sendDiameter: CGFloat = 32
     @State private var model: ComposeModel
     @State private var photo: PhotosPickerItem?
+    /// The rows and buttons around the field as they show (see `ComposeShape`).
+    @State private var shown = ComposeShape()
     private let focusOnAppear: Bool
     /// The bib of the session the text goes to, shown as "To 04"; nil hides the label.
     private let target: String?
@@ -197,10 +200,16 @@ struct ComposeBar: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
             }
-            if let dictation = model.dictation {
-                DictationLine(model: dictation)
+            if let dictation = model.dictation, shown.stage.dictation != 0 {
+                DictationLine(model: dictation, phase: shown.dictation)
+                    .id(shown.stage.dictation)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
-            ImageStatusRow(flow: model.images)
+            if shown.stage.image != 0 {
+                ImageStatusRow(flow: model.images, phase: shown.image)
+                    .id(shown.stage.image)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
+            }
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 4) {
                     field
@@ -226,8 +235,11 @@ struct ComposeBar: View {
             }
         }
         .background(Color.togoInk)
-        .motion(.fade, value: model.images.phase)
-        .motion(.fade, value: dictationStage)
+        .clipped()
+        .onChange(of: live, initial: true) { old, new in
+            guard old != new else { return shown = new }
+            ComposeShape.follow($shown, to: new, reduce: reduceMotion)
+        }
         .onDisappear {
             // Leaving the bar ends a dictation; what was heard stays in the draft.
             model.dictation?.relinquish()
@@ -271,34 +283,36 @@ struct ComposeBar: View {
         }
     }
 
-    /// Which line dictation shows, without the words and level that change many times a second.
-    private var dictationStage: Int {
-        switch model.dictation?.phase {
-        case nil, .idle?, .finishing?, .preparing(nil)?: 0
-        case .preparing?: 1
-        case .listening?: 2
-        case .failed?: 3
-        }
+    /// The rows and buttons the model calls for now.
+    private var live: ComposeShape {
+        ComposeShape(
+            image: model.images.phase, dictation: model.dictation?.phase,
+            photo: model.images.showsPhotoButton, history: !model.history.isEmpty
+        )
     }
 
+    /// The photo button and the history menu come and go with the bar's `resize`.
     @ViewBuilder private var photoButton: some View {
-        if model.images.showsPhotoButton {
-            if model.images.support == .available {
-                PhotosPicker(selection: $photo, matching: .images) {
-                    BarIcon(systemName: "photo")
+        if shown.photo {
+            Group {
+                if model.images.support == .available {
+                    PhotosPicker(selection: $photo, matching: .images) {
+                        BarIcon(systemName: "photo")
+                    }
+                    .accessibilityLabel(ComposeCopy.photo)
+                } else {
+                    Button(action: model.images.explainUnsupported) {
+                        BarIcon(systemName: "photo")
+                    }
+                    .accessibilityLabel(ComposeCopy.photo)
                 }
-                .accessibilityLabel(ComposeCopy.photo)
-            } else {
-                Button(action: model.images.explainUnsupported) {
-                    BarIcon(systemName: "photo")
-                }
-                .accessibilityLabel(ComposeCopy.photo)
             }
+            .transition(.opacity)
         }
     }
 
     @ViewBuilder private var historyMenu: some View {
-        if !model.history.isEmpty {
+        if shown.history {
             Menu {
                 ForEach(model.history, id: \.self) { entry in
                     Button(entry) { model.recall(entry) }
@@ -308,6 +322,7 @@ struct ComposeBar: View {
             }
             .fixedSize()
             .accessibilityLabel(ComposeCopy.history)
+            .transition(.opacity)
         }
     }
 
@@ -324,7 +339,7 @@ struct ComposeBar: View {
         }
         .disabled(!model.canSend)
         .accessibilityLabel(ComposeCopy.send)
-        .motion(.confirm, value: model.canSend)
+        .motion(.respond, value: model.canSend)
     }
 }
 
@@ -347,9 +362,11 @@ private struct BarIcon: View {
 private struct ImageStatusRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let flow: ImagePasteFlow
+    /// The phase as the bar shows it, which leads or trails the model's by a transaction.
+    let phase: ImagePasteFlow.Phase
 
     var body: some View {
-        switch flow.phase {
+        switch phase {
         case .idle, .annotating:
             EmptyView()
         case .uploading:
@@ -359,7 +376,7 @@ private struct ImageStatusRow: View {
         case .failed(let detail):
             row(ComposeCopy.uploadFailed, detail: detail)
         case .loadFailed, .unreadable, .tooLarge, .unsupported, .noHelper:
-            row(flow.phase.message ?? "", detail: nil)
+            row(phase.message ?? "", detail: nil)
         }
     }
 

@@ -292,6 +292,7 @@ import UIKit
 /// A tab's terminal in this window, or, while another window shows it, a note saying so with
 /// a way to bring it here.
 struct TerminalSlot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.windowID) private var window
     let tab: TabID
     let terminals: TerminalPool
@@ -317,6 +318,9 @@ struct TerminalSlot: View {
                         }
                     )
                 }
+                // The terminal takes its frame in one step whatever moves around it, such as the
+                // sidebar or a fold, so its grid is resized once rather than on every frame.
+                .transaction { $0.animation = nil }
                 // Under the chat the terminal is out of reach: VoiceOver passes it by.
                 .accessibilityHidden(covered)
                 .sheet(item: $capture) { request in
@@ -325,7 +329,11 @@ struct TerminalSlot: View {
                     }
                 }
             } else {
-                ElsewhereNotice { terminals.show(tab, in: window) }
+                ElsewhereNotice {
+                    // The notice fades from over the terminal arriving under it.
+                    withAnimation(Motion.animation(.fade, reduce: reduceMotion)) { terminals.show(tab, in: window) }
+                }
+                .transition(.opacity)
             }
         }
     }

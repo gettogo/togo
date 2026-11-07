@@ -5,13 +5,20 @@ import UIKit
 /// A shell command as a block: the command line in SF Mono with how it ended, the tail of its
 /// output underneath, and Copy output, Rerun and Collapse. Tapping the command line collapses
 /// or opens the output. Long output starts collapsed.
+///
+/// Motion: the output opens and closes as a two-phase disclosure on `resize`, so the chat rows
+/// below move with the block and the output never draws outside it; the action bar reveals
+/// when the command ends; the status glyph crossfades in a fixed slot.
 struct CommandBlockView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: HarnessItem
     let store: HarnessSessionStore
 
     /// The user's choice; nil keeps the block's default.
-    @State private var folded: Bool?
+    @State private var output: Disclosure?
     @State private var failure: String?
+    /// Mirrors "the command ended", so the action bar arrives in a transaction.
+    @State private var ended: Bool?
 
     var body: some View {
         if let block = CommandBlock(item) {
@@ -19,37 +26,51 @@ struct CommandBlockView: View {
         }
     }
 
+    private func disclosure(_ block: CommandBlock) -> Disclosure {
+        output ?? Disclosure(open: !block.startsCollapsed)
+    }
+
     private func content(_ block: CommandBlock) -> some View {
-        let collapsed = folded ?? block.startsCollapsed
+        let shown = disclosure(block)
+        let collapsed = !shown.isOpen
         return VStack(alignment: .leading, spacing: 0) {
             header(block, collapsed: collapsed)
             if block.hasOutput {
-                if collapsed {
+                if shown.open {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Rectangle().fill(Color.togoLine).frame(height: 1)
+                        Text(verbatim: block.output)
+                            .font(.mono(.caption))
+                            .foregroundStyle(Color.togoSnow.opacity(0.85))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                    }
+                    .disclosed(shown)
+                } else {
                     Text(verbatim: TerminalSyncCopy.lines(block.lineCount))
                         .font(.mono(.caption))
                         .foregroundStyle(Color.togoMute)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 10)
-                        .transition(.opacity)
-                } else {
-                    Rectangle().fill(Color.togoLine).frame(height: 1)
-                    Text(verbatim: block.output)
-                        .font(.mono(.caption))
-                        .foregroundStyle(Color.togoSnow.opacity(0.85))
-                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .transition(.opacity)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
-            if !block.isRunning {
+            if ended ?? !block.isRunning {
                 actionBar(block, collapsed: collapsed)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
-        .motion(.collapse, value: collapsed)
+        // Nothing draws outside the block while it grows or shrinks.
+        .clipShape(.rect(cornerRadius: 12, style: .continuous))
         .contextMenu { menu(block, collapsed: collapsed) }
         .accessibilityElement(children: .contain)
+        .onAppear { if ended == nil { ended = !block.isRunning } }
+        .onChange(of: block.isRunning) { _, running in
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { ended = !running }
+        }
     }
 
     private func header(_ block: CommandBlock, collapsed: Bool) -> some View {
@@ -69,6 +90,8 @@ struct CommandBlockView: View {
                     Image(systemName: collapsed ? "chevron.down" : "chevron.up")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color.togoMute)
+                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                        .motion(.respond, value: collapsed)
                         .accessibilityHidden(true)
                 }
             }
@@ -83,17 +106,22 @@ struct CommandBlockView: View {
         .accessibilityActions { menu(block, collapsed: collapsed) }
     }
 
-    @ViewBuilder private func statusGlyph(_ block: CommandBlock) -> some View {
-        switch block.status {
-        case .running:
-            ProgressView().controlSize(.mini)
-        case .succeeded:
-            Image(systemName: "checkmark").foregroundStyle(PrimitiveTint.ok).accessibilityHidden(true)
-        case .failed:
-            Image(systemName: "xmark").foregroundStyle(PrimitiveTint.fail).accessibilityHidden(true)
-        case .finished:
-            Text(verbatim: "$").foregroundStyle(Color.togoMute).accessibilityHidden(true)
+    /// Running → how it ended, crossfading in a fixed slot so the command never shifts.
+    private func statusGlyph(_ block: CommandBlock) -> some View {
+        ZStack {
+            switch block.status {
+            case .running:
+                ProgressView().controlSize(.mini).transition(.opacity)
+            case .succeeded:
+                Image(systemName: "checkmark").foregroundStyle(PrimitiveTint.ok).transition(.opacity)
+            case .failed:
+                Image(systemName: "xmark").foregroundStyle(PrimitiveTint.fail).transition(.opacity)
+            case .finished:
+                Text(verbatim: "$").foregroundStyle(Color.togoMute).transition(.opacity)
+            }
         }
+        .slot(width: 16, key: block.status)
+        .accessibilityHidden(true)
     }
 
     private func actionBar(_ block: CommandBlock, collapsed: Bool) -> some View {
@@ -105,6 +133,7 @@ struct CommandBlockView: View {
             if let failure {
                 Text(failure)
                     .foregroundStyle(Color.togoMute)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             Spacer(minLength: 0)
         }
@@ -140,7 +169,9 @@ struct CommandBlockView: View {
 
     private func toggle(_ block: CommandBlock) {
         guard block.hasOutput else { return }
-        folded = !(folded ?? block.startsCollapsed)
+        if output == nil { output = disclosure(block) }
+        let binding = Binding { output ?? Disclosure() } set: { output = $0 }
+        Motion.toggle(binding, reduce: reduceMotion)
     }
 
     private func copy(_ text: String) {
@@ -150,15 +181,17 @@ struct CommandBlockView: View {
     }
 
     private func rerun(_ block: CommandBlock) {
-        failure = nil
-        Task {
-            do {
-                try await store.send(block.command, mode: .now)
-                Haptic.done.play()
-            } catch {
-                failure = TerminalSyncCopy.rerunFailed
-                Haptic.error.play()
-            }
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { failure = nil }
+        Task { await sendAgain(block) }
+    }
+
+    private func sendAgain(_ block: CommandBlock) async {
+        do {
+            try await store.send(block.command, mode: .now)
+            Haptic.done.play()
+        } catch {
+            Haptic.error.play()
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { failure = TerminalSyncCopy.rerunFailed }
         }
     }
 }

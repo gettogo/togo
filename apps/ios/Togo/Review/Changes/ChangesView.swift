@@ -4,6 +4,7 @@ import TogoKit
 /// A session's uncommitted changes: what is staged, what is not, new files and conflicts, with
 /// stage, unstage and discard on each row and a commit sheet below.
 struct ChangesView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: ChangesModel
     let onOpen: (ReviewRoute) -> Void
 
@@ -42,7 +43,11 @@ struct ChangesView: View {
         )
     }
 
-    @ViewBuilder private var content: some View {
+    private var content: some View {
+        phaseContent.phaseSwap(model.phase)
+    }
+
+    @ViewBuilder private var phaseContent: some View {
         switch model.phase {
         case .loading:
             StateView(kind: .loading, title: ChangesCopy.loading, message: model.subject.title)
@@ -54,25 +59,29 @@ struct ChangesView: View {
         case .notRepo:
             StateView(kind: .empty, title: ChangesCopy.notRepo, message: ChangesCopy.notRepoMessage)
         case .loaded:
-            list
+            // Rows arriving or leaving after a refresh or a write glide on `resize`; a row whose
+            // state changes in place does not move (motion spec §2.5).
+            IdentityKeyed(ChangesShown(model), key: ChangesShown.shape) { shown in
+                list(shown)
+            }
         }
     }
 
-    private var list: some View {
+    private func list(_ shown: ChangesShown) -> some View {
         List {
             Section {
                 ChangesHeader(model: model)
                     .groupedRows()
-                notes
+                notes(shown)
             }
-            if model.isEmpty {
+            if shown.sections.isEmpty {
                 Section {
                     StateView(kind: .empty, title: ChangesCopy.noChanges, message: ChangesCopy.noChangesMessage)
                         .padding(.vertical, 24)
                         .listRowBackground(Color.clear)
                 }
             }
-            ForEach(model.sections) { section in
+            ForEach(shown.sections) { section in
                 Section {
                     ForEach(section.rows) { row in
                         ChangeRowView(row: row, canWrite: model.canWrite, open: onOpen, act: act)
@@ -85,29 +94,29 @@ struct ChangesView: View {
         }
         .groupedList()
         .refreshable { await model.refresh() }
-        .motion(.fade, value: model.sections)
         .safeAreaInset(edge: .bottom) {
-            if model.canWrite {
+            if shown.canWrite {
                 Button(ChangesCopy.commit) { model.openCommitSheet() }
                     .buttonStyle(.primary)
                     .padding(.horizontal, Layout.margin)
                     .padding(.vertical, 12)
                     .background(Color.togoInk)
+                    .transition(Motion.present(from: .bottom, reduce: reduceMotion))
             }
         }
     }
 
     /// The read-only reason, a cut-short list and the last refusal, each in a sentence.
-    @ViewBuilder private var notes: some View {
-        if let note = model.readOnlyNote {
+    @ViewBuilder private func notes(_ shown: ChangesShown) -> some View {
+        if let note = shown.readOnlyNote {
             NoteRow(symbol: "lock", message: note)
                 .groupedRows()
         }
-        if let note = model.truncationNote {
+        if let note = shown.truncationNote {
             NoteRow(symbol: "list.bullet", message: note)
                 .groupedRows()
         }
-        if let notice = model.notice {
+        if let notice = shown.notice {
             NoticeRow(
                 notice: notice,
                 retry: { Task { await model.retry() } },
@@ -152,6 +161,31 @@ struct ChangesView: View {
             case .discard: model.requestDiscard(row.paths)
             }
         }
+    }
+}
+
+/// What the changes list draws, mirrored so rows, notes and the commit bar arriving or leaving
+/// move in one `resize` transaction while a row's own state updates in place.
+struct ChangesShown: Equatable {
+    var sections: [ChangeSection]
+    var readOnlyNote: String?
+    var truncationNote: String?
+    var notice: ChangesModel.Notice?
+    var canWrite: Bool
+
+    @MainActor init(_ model: ChangesModel) {
+        sections = model.sections
+        readOnlyNote = model.readOnlyNote
+        truncationNote = model.truncationNote
+        notice = model.notice
+        canWrite = model.canWrite
+    }
+
+    static func shape(_ shown: ChangesShown) -> [String] {
+        var out = shown.sections.map { "\($0.id):" + $0.rows.map { "\($0.id)" }.joined(separator: ",") }
+        out.append("notes \(shown.readOnlyNote != nil) \(shown.truncationNote != nil) \(shown.notice != nil)")
+        out.append("write \(shown.canWrite)")
+        return out
     }
 }
 

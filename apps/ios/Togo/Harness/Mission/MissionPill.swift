@@ -7,21 +7,41 @@ import TogoKit
 struct MissionPill: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 12
+    @ScaledMetric(relativeTo: .footnote) private var slotSide: CGFloat = 16
     let summary: MissionSummary
     let onOpen: () -> Void
 
-    /// How far the pill follows a pull before it lets go and opens.
-    @GestureState private var pull: CGFloat = 0
-    /// A new request arrived: the pill dips once and settles back.
+    /// How far the pill follows a pull. It tracks the finger with no animation and springs
+    /// back on `tabSettle` when the finger lifts (or the gesture is cancelled).
+    @GestureState(reset: { _, transaction in
+        transaction.animation = Motion.animation(.tabSettle, reduce: MissionPill.reduceMotionNow)
+    }) private var pull: CGFloat = 0
+    /// A new request arrived: the pill swells once on `emphasis` and settles back.
     @State private var nudged = false
+    /// Counts nudges, so an older nudge's settle never cuts a newer one short.
+    @State private var nudges = 0
+    /// What the pill shows. It follows `summary` in one `resize` transaction, so the width, the
+    /// rolling counts, the lit ground and the leading glyph move together (motion spec §2.3).
+    @State private var shown: MissionSummary
 
-    private var needsYou: Bool { summary.needsYou > 0 }
-    private var text: String { MissionText.pill(summary) }
+    init(summary: MissionSummary, onOpen: @escaping () -> Void) {
+        self.summary = summary
+        self.onOpen = onOpen
+        _shown = State(initialValue: summary)
+    }
+
+    private var needsYou: Bool { shown.needsYou > 0 }
+    private var text: String { MissionText.pill(shown) }
+
+    nonisolated static var reduceMotionNow: Bool {
+        MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+    }
 
     var body: some View {
         Button(action: onOpen) {
             HStack(spacing: 8) {
                 leading
+                    .slot(width: slotSide, height: slotSide, key: leadingKind)
                 // One line when it fits; at large sizes each count takes a line of its own, so
                 // none is lost and none breaks inside its number.
                 ViewThatFits(in: .horizontal) {
@@ -49,33 +69,46 @@ struct MissionPill: View {
         .buttonStyle(MissionPillPress())
         .hoverEffect(.highlight)
         .scaleEffect(nudged ? 1.06 : 1)
-        .motion(.dropIn, value: nudged)
         .offset(y: pull)
         .simultaneousGesture(pullDown)
-        .motion(.tabSettle, value: pull == 0)
-        .motion(.fade, value: text)
-        .motion(.fade, value: needsYou)
+        .haptic(.connect, trigger: summary.needsYou, change: { old, new in new > old })
         .padding(.top, 6)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity)
         .accessibilityLabel(MissionCopy.title)
-        .accessibilityValue(MissionText.spoken(summary))
+        .accessibilityValue(MissionText.spoken(shown))
         .accessibilityHint(MissionCopy.openHint)
         .accessibilityIdentifier("mission.pill")
-        .onChange(of: summary.needsYou) { old, new in
-            guard new > old else { return }
-            NeedsAnnouncement.post(MissionCopy.needs(new), after: .seconds(1))
-            guard !reduceMotion else { return }
-            nudged = true
-            Task {
-                try? await Task.sleep(for: .milliseconds(220))
-                nudged = false
-            }
+        .onChange(of: summary) { old, new in
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { shown = new }
+            guard new.needsYou > old.needsYou else { return }
+            NeedsAnnouncement.post(MissionCopy.needs(new.needsYou), after: .seconds(1))
+            nudge()
         }
     }
 
+    /// One swell and settle on `emphasis`, at the moment the request arrives. Under Reduce
+    /// Motion the pill holds still; the lit ground and the haptic carry it.
+    private func nudge() {
+        guard !reduceMotion else { return }
+        nudges += 1
+        let mine = nudges
+        withAnimation(Motion.animation(.emphasis, reduce: false), completionCriteria: .logicallyComplete) {
+            nudged = true
+        } completion: {
+            guard nudges == mine else { return }
+            withAnimation(Motion.animation(.emphasis, reduce: false)) { nudged = false }
+        }
+    }
+
+    /// Which glyph leads, so the slot crossfades only when it changes kind.
+    private var leadingKind: Int {
+        if needsYou { return 0 }
+        return MissionText.planFraction(shown) == nil ? 2 : 1
+    }
+
     private var lines: [String] {
-        let parts = MissionText.parts(summary)
+        let parts = MissionText.parts(shown)
         return parts.isEmpty ? [text] : parts
     }
 
@@ -94,14 +127,17 @@ struct MissionPill: View {
     @ViewBuilder private var leading: some View {
         if needsYou {
             BreathingBeacon()
-        } else if let fraction = MissionText.planFraction(summary) {
+                .transition(.opacity)
+        } else if let fraction = MissionText.planFraction(shown) {
             MissionPlanRing(fraction: fraction, side: mark)
+                .transition(.opacity)
         } else {
             Circle()
-                .fill(summary.working ? Color.togoSnow : Color.togoMuteDim)
+                .fill(shown.working ? Color.togoSnow : Color.togoMuteDim)
                 .frame(width: mark * 0.5, height: mark * 0.5)
                 .frame(width: mark, height: mark)
                 .accessibilityHidden(true)
+                .transition(.opacity)
         }
     }
 
@@ -134,28 +170,24 @@ private struct MissionPillSurface: View {
     }
 }
 
-/// The beacon dot breathing slowly while something waits: its halo swells and fades over
-/// about three seconds. Still under Reduce Motion, Low Power Mode, in paused snapshots and
-/// while the app is not in front.
+/// The beacon dot breathing slowly while something waits: its halo swells and fades over one
+/// `ambient` period, drawn from time at up to 30 fps. Still under Reduce Motion, Low Power
+/// Mode, in paused snapshots, while the app is not in front, and while another loop on the
+/// screen (a needs card's drift) has the one self-moving slot (spec §4, §5).
 private struct BreathingBeacon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.loopsPaused) private var loopsPaused
+    @Environment(\.ambientTaken) private var ambientTaken
     @Environment(\.scenePhase) private var scenePhase
     @ScaledMetric(relativeTo: .headline) private var side: CGFloat = 8
     @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
 
-    /// One breath, in seconds.
-    static let breath: TimeInterval = 3.2
+    /// One breath, in seconds: the `ambient` role's period.
+    static let breath: TimeInterval = Motion.nominalDuration(.ambient)
 
     var body: some View {
-        Group {
-            if breathes {
-                TimelineView(.periodic(from: .now, by: 1.0 / 20)) { context in
-                    dot(Self.level(at: context.date.timeIntervalSinceReferenceDate))
-                }
-            } else {
-                dot(0.5)
-            }
+        TimelineView(AnimationTimelineSchedule(minimumInterval: 1.0 / 30, paused: !breathes)) { context in
+            dot(breathes ? Self.level(at: context.date.timeIntervalSinceReferenceDate) : 0.5)
         }
         .accessibilityHidden(true)
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
@@ -164,7 +196,7 @@ private struct BreathingBeacon: View {
     }
 
     private var breathes: Bool {
-        !reduceMotion && !loopsPaused && !lowPower && scenePhase == .active
+        !reduceMotion && !loopsPaused && !lowPower && !ambientTaken && scenePhase == .active
     }
 
     /// 0 at the out-breath, 1 at the in-breath, eased like a sine.
@@ -227,6 +259,7 @@ struct MissionPlanRing: View {
                 .trim(from: 0, to: max(0.02, fraction))
                 .stroke(Color.togoSnow, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+                .motion(.progress, value: fraction)
         }
         .frame(width: side, height: side)
         .accessibilityHidden(true)

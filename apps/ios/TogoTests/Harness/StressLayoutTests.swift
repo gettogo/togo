@@ -72,7 +72,7 @@ import UIKit
 
     @Test func theWaitingLineReadsWhole() {
         let summary = WorkSummary(running: true, startedAt: .now, endedAt: nil, steps: 0, filesChanged: 0, failed: false)
-        let line = WorkLine(summary: summary, steps: [], expanded: false, onToggle: {}, onStep: { _ in }, waiting: true)
+        let line = WorkLine(summary: summary, steps: [], disclosure: Disclosure(), onToggle: {}, onStep: { _ in }, waiting: true)
         let size = fitted(line, width: 200)
         let words = needed(WorkingCopy.waiting, .footnote, weight: .semibold, mono: true, width: 200 - 60)
         #expect(size.height >= words)

@@ -56,4 +56,17 @@ struct WatchHomeTests {
         #expect(lines.map(\.needsYou) == [true, false, false])
         #expect(WatchHome.lines([session("01", "idle"), session("02", "idle")], limit: 1).count == 1)
     }
+
+    @Test func aLineKeepsItsIdentityWhileItsWordsChange() {
+        let working = WatchSession(
+            hostName: "Studio", bib: "04", agentName: "Claude Code", status: "working", activity: nil,
+            machineId: "m", sessionId: "s-04"
+        )
+        var waiting = working
+        waiting.status = "needs_you"
+        waiting.activity = "Reading src/a.ts"
+        #expect(WatchHome.lines([working])[0].id == WatchHome.lines([waiting])[0].id)
+        let other = WatchSession(hostName: "Studio", bib: "05", agentName: "Codex", status: "idle", activity: nil)
+        #expect(WatchHome.lines([working])[0].id != WatchHome.lines([other])[0].id)
+    }
 }

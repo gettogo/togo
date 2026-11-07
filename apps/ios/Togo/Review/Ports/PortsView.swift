@@ -14,6 +14,7 @@ struct PortsView: View {
 
     var body: some View {
         content
+            .phaseSwap(model.subject.canPorts ? CaseName.of(model.phase) : "unavailable")
             .background(Color.togoInk)
             .onAppear { model.appear() }
             .onDisappear { model.disappear() }
@@ -47,23 +48,27 @@ struct PortsView: View {
                     action: .init(ReviewCopy.tryAgain) { Task { await model.refresh() } }
                 )
             case .loaded:
-                list
+                // Ports arriving or leaving, and a port's forward opening or failing, glide on
+                // `resize`; a refresh that changes nothing moves nothing (motion spec §2.5).
+                IdentityKeyed(PortsShown(model), key: PortsShown.shape) { shown in
+                    list(shown)
+                }
             }
         }
     }
 
-    private var list: some View {
+    private func list(_ shown: PortsShown) -> some View {
         List {
             Section {
-                if model.ports.isEmpty {
+                if shown.ports.isEmpty {
                     StateView(kind: .empty, title: PortsCopy.emptyTitle, message: PortsCopy.emptyMessage)
                         .padding(.vertical, 24)
                         .listRowBackground(Color.clear)
                 } else {
-                    ForEach(model.ports, id: \.self) { port in
+                    ForEach(shown.ports, id: \.self) { port in
                         PortRow(
-                            port: port, state: model.states[port.port], note: model.notes[port.port],
-                            gone: model.gone.contains(port.port),
+                            port: port, state: shown.states[port.port], note: shown.notes[port.port],
+                            gone: shown.gone.contains(port.port),
                             open: { Task { await model.open(port) } },
                             copy: { Task { await model.copyLink(port) } },
                             stop: { Task { await model.close(port.port) } }
@@ -90,7 +95,30 @@ struct PortsView: View {
         }
         .groupedList()
         .refreshable { await model.refresh() }
-        .motion(.fade, value: model.ports)
+    }
+}
+
+/// What the ports list draws, mirrored so a change of rows or of a row's lines is one `resize`
+/// transaction.
+struct PortsShown: Equatable {
+    var ports: [ListeningPort]
+    var states: [Int: ForwardState]
+    var notes: [Int: String]
+    var gone: Set<Int>
+
+    @MainActor init(_ model: PortsModel) {
+        ports = model.ports
+        states = model.states
+        notes = model.notes
+        gone = model.gone
+    }
+
+    /// The rows, and per row which lines it shows; not the words in them.
+    static func shape(_ shown: PortsShown) -> [String] {
+        shown.ports.map { port in
+            let state = shown.states[port.port].map { CaseName.of($0) } ?? "none"
+            return "\(String(describing: port)) \(state) \(shown.notes[port.port] != nil) \(shown.gone.contains(port.port))"
+        }
     }
 }
 
@@ -205,17 +233,23 @@ private struct PortRow: View {
         .labelStyle(NoteLabelStyle(hasIcon: symbol != nil))
     }
 
-    @ViewBuilder private var trailing: some View {
-        if state == .opening {
-            ProgressView()
-                .frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel(PortsCopy.opening)
-        } else if previewable {
-            let isOpen = if case .open? = state { true } else { false }
-            Button(isOpen ? PortsCopy.show : PortsCopy.open, action: open)
-                .buttonStyle(.secondary(.fit))
-                .accessibilityLabel(isOpen ? PortsCopy.showLabel(port.port) : PortsCopy.openLabel(port.port))
+    /// One slot: the spinner and Open or Show crossfade on `respond`.
+    private var trailing: some View {
+        ZStack {
+            if state == .opening {
+                ProgressView()
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel(PortsCopy.opening)
+                    .transition(.opacity)
+            } else if previewable {
+                let isOpen = if case .open? = state { true } else { false }
+                Button(isOpen ? PortsCopy.show : PortsCopy.open, action: open)
+                    .buttonStyle(.secondary(.fit))
+                    .accessibilityLabel(isOpen ? PortsCopy.showLabel(port.port) : PortsCopy.openLabel(port.port))
+                    .transition(.opacity)
+            }
         }
+        .motion(.respond, value: state.map { CaseName.of($0) })
     }
 }
 
@@ -233,8 +267,11 @@ private struct NoteLabelStyle: LabelStyle {
 /// A port typed by hand, for a server this session didn't start.
 private struct ManualPortRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: PortsModel
     @FocusState private var focused: Bool
+    /// The error line as drawn: it arrives in a `resize` transaction.
+    @State private var errorShown = LiveMirror<String?>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -265,7 +302,7 @@ private struct ManualPortRow: View {
                     .buttonStyle(.secondary(.fit))
                     .disabled(model.manualText.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            if let error = model.manualError {
+            if let error = errorShown.read(model.manualError) {
                 Label {
                     Text(error)
                         .font(.subheadline)
@@ -276,8 +313,11 @@ private struct ManualPortRow: View {
                         .foregroundStyle(Color.togoSnow)
                 }
                 .labelStyle(NoteLabelStyle(hasIcon: true))
+                .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
+        .mirrors(model.manualError, into: $errorShown)
+        .haptic(.error, trigger: model.manualError) { _, new in new != nil }
     }
 
     private func submit() {

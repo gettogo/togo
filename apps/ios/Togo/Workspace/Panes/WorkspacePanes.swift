@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The terminal area of the workspace: one pane, two side by side, or on a Duo held as a
 /// tabletop the terminal above the fold and the deck below it. One large terminal is the
@@ -18,8 +19,8 @@ struct WorkspacePanes<Overlay: View>: View {
     /// right from the first frame. The insets are the safe area the panes reach under.
     private let overlay: (PaneGeometry, EdgeInsets) -> Overlay
 
-    /// Under Reduce Motion a new arrangement lands at once and fades up from this.
-    @State private var settling = false
+    /// The panes' last settle, so a new arrangement or size fades the panes up into it.
+    @State private var settle = PaneSettle()
 
     init(
         store: AppStore, terminals: TerminalPool, window: WindowID,
@@ -48,17 +49,20 @@ struct WorkspacePanes<Overlay: View>: View {
                 hasSecondary: store.workspace.secondary != nil, primaryFraction: store.workspace.primaryFraction
             )
             panes(report.geometry, width: proxy.size.width, handle: local.inactiveDivision == nil && local.division == nil)
-                // Folds, Split View and Stage Manager move the panes; under Reduce Motion the new
-                // arrangement lands in place and fades up instead.
-                .transaction(value: report.geometry) { transaction in
-                    // A change that asks for no animation lands in one step and resizes the terminal once.
-                    guard !transaction.disablesAnimations else { return }
-                    transaction.animation = reduceMotion ? nil : Motion.animation(.paneFlow, reduce: false)
-                }
-                .opacity(settling ? 0.5 : 1)
                 .overlay(alignment: .topLeading) {
                     let bottom = max(0, proxy.size.height - safe.height)
                     overlay(report.geometry, EdgeInsets(top: 0, leading: 0, bottom: bottom, trailing: 0))
+                }
+                // The terminal never animates its frame (motion spec §4): a fold, Split View, Stage
+                // Manager, the sidebar or a second pane lands every pane, and the chat over it, at its
+                // final frame in one step, so each grid is resized once. What moves is a cover: the
+                // panes dim as they land and brighten into the new arrangement.
+                .transaction(value: report.geometry) { transaction in
+                    transaction.animation = nil
+                }
+                .overlay {
+                    // A new cover for each settle: it arrives dimming the panes and lifts away.
+                    PaneCover().id(settle.generation)
                 }
                 .preference(key: PanesReport.Key.self, value: report)
                 .onChange(of: report.geometry.showsTwoPanes, initial: true) { _, visible in
@@ -66,13 +70,16 @@ struct WorkspacePanes<Overlay: View>: View {
                     guard proxy.size != .zero else { return }
                     store.arrangePanes(visible: visible)
                 }
-                .onChange(of: report.arrangement.kind) {
-                    guard reduceMotion else { return }
-                    settling = true
-                    withAnimation(Motion.animation(.paneFlow, reduce: true)) { settling = false }
+                .onChange(of: PaneSettle.Key(report)) { old, new in
+                    withAnimation(Motion.animation(.reveal, reduce: reduceMotion)) { _ = settle.begin(from: old, to: new) }
                 }
                 .onChange(of: KeyboardOwner(focused: store.focusedTab?.id, twoPanes: report.geometry.showsTwoPanes)) {
-                    keepKeyboardWithFocus()
+                    Self.moveKeyboard(to: store, terminals: terminals)
+                }
+                // A terminal that appears takes the keyboard as it does; when it was the other
+                // pane's, the focused one takes it back in the same keyboard change.
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                    Self.moveKeyboard(to: store, terminals: terminals)
                 }
         }
         // Terminals size themselves to the keyboard and the home indicator, so the panes reach
@@ -93,15 +100,6 @@ struct WorkspacePanes<Overlay: View>: View {
     /// Typing goes to the focused pane. When the other pane's terminal has the keyboard, as
     /// after a chip tap, ⌘1-9, Swap or a terminal appearing on unfold, the focused one takes
     /// it. A keyboard held by anything else, such as the compose field, is left alone.
-    private func keepKeyboardWithFocus() {
-        Self.moveKeyboard(to: store, terminals: terminals)
-        Task { @MainActor in
-            // A terminal that appears takes the keyboard as it does; let that happen first.
-            try? await Task.sleep(for: .milliseconds(120))
-            Self.moveKeyboard(to: store, terminals: terminals)
-        }
-    }
-
     static func moveKeyboard(to store: AppStore, terminals: TerminalPool) {
         guard store.panesVisible, let focused = store.focusedTab?.id,
               let other = store.focusedTab?.id == store.workspace.selected ? store.workspace.secondary : store.workspace.selected,
@@ -149,6 +147,69 @@ struct WorkspacePanes<Overlay: View>: View {
 extension WorkspacePanes where Overlay == EmptyView {
     init(store: AppStore, terminals: TerminalPool, window: WindowID) {
         self.init(store: store, terminals: terminals, window: window) { _, _ in EmptyView() }
+    }
+}
+
+/// The cover the panes land under. A change of arrangement or of the panes' size lands at once
+/// and the panes brighten from `coverOpacity`; a divider dragged to a new split does the same.
+/// The panes never animate their frames, so a terminal's grid is resized once per settle.
+struct PaneSettle: Equatable {
+    /// How far the panes dim as a new arrangement lands.
+    static let coverOpacity = 0.55
+
+    /// What a settle is keyed on: the arrangement, the panes' size and the split. Rounded to
+    /// whole points, so a sub-point wobble in a measure is not a new arrangement.
+    struct Key: Equatable {
+        var kind: PaneArrangement.Kind
+        var width: Int
+        var height: Int
+        var split: Int
+
+        init(_ report: PanesReport) {
+            kind = report.arrangement.kind
+            let bounds = report.geometry.primary.union(report.geometry.secondary ?? report.geometry.primary)
+            width = Int(bounds.maxX.rounded())
+            height = Int(bounds.maxY.rounded())
+            split = Int(report.geometry.primary.width.rounded())
+        }
+
+        init(kind: PaneArrangement.Kind, width: Int, height: Int, split: Int) {
+            self.kind = kind
+            self.width = width
+            self.height = height
+            self.split = split
+        }
+    }
+
+    /// How many settles began. Each one is a new cover, and lands each terminal's grid once.
+    private(set) var generation = 0
+
+    /// Starts a settle for a move from `old` to `new`. False when nothing that resizes a
+    /// terminal changed, or when the panes had no size yet (the first layout lands bare).
+    @discardableResult
+    mutating func begin(from old: Key, to new: Key) -> Bool {
+        guard old != new, old.width > 0, old.height > 0 else { return false }
+        generation += 1
+        return true
+    }
+}
+
+/// Ink over the panes as a new arrangement lands. Its resting state is clear; it arrives at
+/// full strength and lifts away on the inserting transaction, so the panes brighten into place.
+private struct PaneCover: View {
+    var body: some View {
+        Color.togoInk
+            .opacity(1 - PaneSettle.coverOpacity)
+            .transition(CoverLift())
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Shown on insertion, clear at rest and on removal.
+private struct CoverLift: Transition {
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        content.opacity(phase == .willAppear ? 1 : 0)
     }
 }
 

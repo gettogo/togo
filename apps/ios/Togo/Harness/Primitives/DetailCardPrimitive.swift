@@ -5,6 +5,7 @@ import TogoKit
 /// plain machine text) and its actions as buttons under it. A diff or text body sits in a
 /// deepest well inside the card.
 struct DetailCardPrimitive: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let detail: HarnessScreen.Detail
     let context: PrimitiveContext
     /// Drawn inside another scroll view: no scroll of its own.
@@ -34,8 +35,11 @@ struct DetailCardPrimitive: View {
             DetailBody(content: detail.body)
             if !detail.actions.isEmpty {
                 PrimitiveActionRow(refs: DetailCardLogic.ordered(detail.actions), large: true, actions: actions, context: context)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
+        // Actions that arrive with a refresh reveal in place.
+        .motion(.respond, value: detail.actions.map(\.id))
         .primitiveCard(radius: 24, padding: 18)
     }
 }

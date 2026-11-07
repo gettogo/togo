@@ -28,10 +28,14 @@ struct SessionRowView: View {
                     .foregroundStyle(Color.togoMute)
                     // trunc-ok: the agent's latest action, updated live; the row opens the session where the full line is
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                    .transition(.opacity)
             }
             PathText(row.cwd)
         }
         .padding(.vertical, 4)
+        // Muted and stale change the words' colour on `respond`.
+        .motion(.respond, value: row.muted)
+        .motion(.respond, value: stale)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)

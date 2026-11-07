@@ -15,15 +15,20 @@ struct DiscoveryList: View {
             if phase == .denied {
                 denied
             } else {
-                list
+                // Machines found nearby arrive on `resize` (by id); a host's details refresh
+                // in place.
+                IdentityKeyed(hosts, key: { $0.map(\.id) }) { hosts in
+                    list(hosts)
+                }
             }
         }
+        .phaseSwap(phase == .denied ? "denied" : "list")
         .background(Color.togoInk)
         .navigationTitle(String(localized: "onboard.discovery.title", defaultValue: "Add a machine"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var list: some View {
+    private func list(_ hosts: [DiscoveredHost]) -> some View {
         List {
             Section {
                 if hosts.isEmpty {
@@ -64,7 +69,6 @@ struct DiscoveryList: View {
         .scrollContentBackground(.hidden)
         .listRowSeparatorTint(Color.togoLine)
         .listSectionSpacing(28)
-        .motion(.fade, value: hosts)
     }
 
     @ViewBuilder private var emptyRow: some View {
@@ -73,10 +77,14 @@ struct DiscoveryList: View {
                 Text(String(localized: "onboard.discovery.empty", defaultValue: "No machines found nearby. Enter an address."))
                     .font(.body)
                     .foregroundStyle(Color.togoMute)
+                    .transition(.opacity)
             } else {
                 PawWalk(String(localized: "onboard.discovery.searching", defaultValue: "Looking for machines nearby"))
+                    .transition(.opacity)
             }
         }
+        // Searching → "No machines found" crossfades on `respond`, in a row that keeps its height.
+        .motion(.respond, value: phase == .quiet)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .listRowBackground(Color.togoInk)
         .listRowSeparator(.hidden)

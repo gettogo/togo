@@ -50,13 +50,18 @@ struct ChatImageViewer: View {
             if let image = loaded[at] {
                 ZoomableImage(image: image)
                     .accessibilityLabel(ChatImageCopy.label(images[at], index: at, of: images.count))
+                    .transition(.opacity)
             } else if failed.contains(at) {
                 ContentUnavailableView(ChatImageCopy.unavailable, systemImage: "photo")
                     .foregroundStyle(Color.togoMute)
+                    .transition(.opacity)
             } else {
                 ProgressView()
+                    .transition(.opacity)
             }
         }
+        .motion(.fade, value: loaded[at] != nil)
+        .motion(.fade, value: failed.contains(at))
         .task {
             guard loaded[at] == nil else { return }
             if let image = await ChatImageLoader.shared.load(images[at], fetch: fetch) {

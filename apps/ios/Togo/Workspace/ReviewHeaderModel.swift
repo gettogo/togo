@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import UIKit
 import TogoKit
 
 /// Words for the ways into the review screens, under `review.entry.`.
@@ -117,9 +118,15 @@ enum ReviewEntryCopy {
             hasPorts = !ports.isEmpty
         }
         guard generation == self.generation else { return }
-        self.changes = changes
-        moreChanges = more
-        self.hasPorts = hasPorts
+        // The bar's items come and go, and the count changes, in a `respond` transaction, so
+        // the system bar crossfades them rather than snapping.
+        let changed = changes != self.changes || more != moreChanges || hasPorts != self.hasPorts
+        guard changed else { return }
+        withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) {
+            self.changes = changes
+            moreChanges = more
+            self.hasPorts = hasPorts
+        }
     }
 }
 

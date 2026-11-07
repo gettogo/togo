@@ -101,6 +101,15 @@ enum ChatCopy {
         return parts.joined(separator: "  ")
     }
 
+    /// A running line's counts while the live line carries the clock: "6 steps  2 files
+    /// changed"; "Working" before the first count.
+    static func workCounts(_ summary: WorkSummary) -> String {
+        var parts: [String] = []
+        if summary.steps > 0 { parts.append(steps(summary.steps)) }
+        if summary.filesChanged > 0 { parts.append(files(summary.filesChanged)) }
+        return parts.isEmpty ? String(localized: "chat.work.workingBare", defaultValue: "Working") : parts.joined(separator: "  ")
+    }
+
     /// What VoiceOver reads: "Worked 1 minute 12 seconds, 6 steps, 2 files changed, collapsed".
     static func spokenWork(_ summary: WorkSummary, now: Date, expanded isExpanded: Bool) -> String {
         var parts: [String] = []

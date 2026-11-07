@@ -172,9 +172,14 @@ private struct CheckRow: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
                     .fixedSize(horizontal: false, vertical: true)
+                    .contentTransition(.interpolate)
+                    .transition(.opacity)
             }
         }
         .padding(.vertical, 2)
+        // The result line arrives on `resize`; Checking → Found swaps its words on `respond`.
+        .resizesOnRows(state != nil)
+        .motion(.respond, value: state.map { CaseName.of($0) })
     }
 
     @ViewBuilder private func result(_ state: AgentCheckState) -> some View {

@@ -4,6 +4,7 @@ import TogoKit
 /// Where the session stands: model, mode and effort, how full the context is, usage meters with
 /// when they reset, cost, other facts, and actions such as Compact.
 struct StatusPrimitive: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: HarnessStatus
     let context: PrimitiveContext
     /// Drawn inside another scroll view, such as a mission control section: no scroll of its own.
@@ -31,6 +32,7 @@ struct StatusPrimitive: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(cell.label).font(.caption).foregroundStyle(Color.togoMute)
                             Text(verbatim: cell.value)
+                                .contentTransition(.numericText())
                                 .font(.mono(.subheadline, weight: .medium))
                                 .foregroundStyle(Color.togoSnow)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -43,9 +45,11 @@ struct StatusPrimitive: View {
                     }
                 }
                 .clipShape(.rect(cornerRadius: 14, style: .continuous))
+                .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             if let percent = status.contextPercent {
                 StatusMeter(label: PrimitiveCopy.context, percent: percent, resetsAt: nil)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             ForEach(status.meters ?? []) { meter in
                 StatusMeter(label: meter.label, percent: meter.percent, resetsAt: meter.resetsAt?.date)
@@ -56,6 +60,7 @@ struct StatusPrimitive: View {
                         if index > 0 { Rectangle().fill(Color.togoLine).frame(height: 1) }
                         LabeledContent {
                             Text(verbatim: fact.value).font(.mono(.subheadline)).foregroundStyle(Color.togoSnow)
+                                .contentTransition(.numericText())
                         } label: {
                             Text(fact.label).foregroundStyle(Color.togoMute)
                         }
@@ -65,11 +70,16 @@ struct StatusPrimitive: View {
                     }
                 }
                 .background(Color.togoRaised, in: .rect(cornerRadius: 14, style: .continuous))
+                .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             if let refs = status.actions, !refs.isEmpty {
                 PrimitiveActionRow(refs: refs, actions: actions, context: context)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
+        // A refresh changes values in place: numbers roll and new parts reveal. Never on the
+        // first render.
+        .motion(.respond, value: status)
     }
 }
 
@@ -120,13 +130,13 @@ private struct StatusMeter: View {
                 Spacer(minLength: 8)
                 Text(verbatim: StatusLogic.percentText(percent))
                     .font(.mono(.subheadline))
-                    .monospacedDigit()
+                    .rollingNumber(percent)
                     .foregroundStyle(level == .normal ? Color.togoSnow : tint(level))
             }
             Gauge(value: StatusLogic.fraction(percent)) { EmptyView() }
                 .gaugeStyle(.linearCapacity)
                 .tint(tint(level))
-                .motion(.collapse, value: percent)
+                .motion(.progress, value: percent)
             if let resetsAt {
                 Text(PrimitiveCopy.resets(resetsAt.formatted(.relative(presentation: .named))))
                     .font(.footnote)

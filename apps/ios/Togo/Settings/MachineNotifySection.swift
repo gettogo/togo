@@ -212,6 +212,9 @@ struct MachineNotifySection: View {
             }
         }
         .groupedRows()
+        // Loading → the pickers, or → Try again, and the error line: rows arrive and leave on
+        // `resize`.
+        .resizesOnRows([model.settings != nil, model.loading, model.error != nil])
     }
 
     /// A value the helper holds that is not one of the choices still shows, so the picker

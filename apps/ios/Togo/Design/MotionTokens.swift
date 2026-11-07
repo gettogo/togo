@@ -2,7 +2,7 @@
 
 /// What a change is, so the same kind of change always moves the same way.
 enum MotionRole: String, CaseIterable, Sendable {
-    case tabSettle, dropIn, collapse, shrinkIntoTab, confirm, fade, pawStep, rowGrow, paneFlow, sidebar, chrome, dim, listen
+    case tabSettle, dropIn, collapse, shrinkIntoTab, confirm, fade, pawStep, rowGrow, paneFlow, sidebar, chrome, dim, listen, respond, resize, reveal, conceal, emphasis, progress, ambient
 }
 
 extension Motion {
@@ -21,6 +21,13 @@ extension Motion {
         case .chrome: MotionSpec(curve: .easeInOut(0.22), reduced: .fade(0.20))
         case .dim: MotionSpec(curve: .easeInOut(0.60), reduced: .instant)
         case .listen: MotionSpec(curve: .easeOut(0.08), reduced: .instant)
+        case .respond: MotionSpec(curve: .spring(response: 0.24, damping: 0.92), reduced: .fade(0.12))
+        case .resize: MotionSpec(curve: .spring(response: 0.36, damping: 0.90), reduced: .fade(0.15))
+        case .reveal: MotionSpec(curve: .easeOut(0.22), reduced: .fade(0.15))
+        case .conceal: MotionSpec(curve: .easeOut(0.12), reduced: .fade(0.12))
+        case .emphasis: MotionSpec(curve: .spring(response: 0.30, damping: 0.55), reduced: .instant)
+        case .progress: MotionSpec(curve: .spring(response: 0.50, damping: 1.00), reduced: .fade(0.20))
+        case .ambient: MotionSpec(curve: .easeInOut(3.20), reduced: .instant)
         }
     }
 }

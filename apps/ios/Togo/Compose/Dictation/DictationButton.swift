@@ -15,6 +15,7 @@ struct DictationButton: View {
     var body: some View {
         let on = model.isActive
         Image(systemName: on ? "mic.fill" : "mic")
+            .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
             .font(.body.weight(on ? .semibold : .regular))
             .foregroundStyle(on ? Color.togoInk : Color.togoMute)
             .frame(width: diameter, height: diameter)
@@ -37,7 +38,7 @@ struct DictationButton: View {
             .accessibilityHint(on ? "" : DictationCopy.hint)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { Task { await model.toggle() } }
-            .motion(.confirm, value: on)
+            .motion(.respond, value: on)
             .haptic(.listen, trigger: model.isListening) { $0 }
     }
 }
@@ -62,9 +63,11 @@ struct DictationLine: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
     let model: DictationModel
+    /// The phase as the compose bar shows it, so a line leaving keeps its words while it fades.
+    var phase: DictationModel.Phase?
 
     var body: some View {
-        switch model.phase {
+        switch phase ?? model.phase {
         case .idle, .finishing, .preparing(nil):
             EmptyView()
         case .preparing(let fraction?):
@@ -95,6 +98,8 @@ struct DictationLine: View {
                 }
             }
         }
+        // "Listening" gives way to the first words heard in place.
+        .motion(.respond, value: partial.isEmpty)
         .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.top, 8)

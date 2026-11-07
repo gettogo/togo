@@ -63,6 +63,23 @@ enum MissionLayout {
         return timeline.item(row.id)
     }
 
+    /// What moves the layout of mission control: which sections show, which rows are in each
+    /// (by id), and the parts of a row that add a line (a running clock, a subtitle, a progress
+    /// bar). A change here glides on `resize`; any other change (a title, a count, a tail line)
+    /// lands in place (motion spec §2.5).
+    static func shape(_ sections: [HarnessSection]) -> [String] {
+        sections.map { section in
+            let rows = section.rows.map { row in
+                var flags = ""
+                if row.state.isLive { flags += "l" }
+                if !(row.subtitle ?? "").isEmpty { flags += "s" }
+                if row.progress != nil { flags += "p" }
+                return row.id + "/" + flags
+            }
+            return section.kind.rawValue + (section.status == nil ? "" : "+status") + ":" + rows.joined(separator: ",")
+        }
+    }
+
     /// Where a row goes when tapped: its own target, or what its section implies.
     static func target(for row: HarnessRow, in kind: MissionSectionKind) -> HarnessOpen? {
         if let open = row.open { return open }

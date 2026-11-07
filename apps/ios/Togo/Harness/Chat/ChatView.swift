@@ -6,38 +6,53 @@ import UIKit
 /// lines, replies, and inline approvals and questions. The composer sits at its foot, placed by
 /// the workspace; the mission pill sits at its top.
 struct ChatView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: HarnessSessionStore
     var actions: ChatActions = .inert
 
-    @State private var expanded: Set<String> = []
+    @State private var expanded: [String: Disclosure] = [:]
     @State private var detail: HarnessItem?
     @State private var announcer = ChatAnnouncer()
     @Namespace private var rotorSpace
+    /// Mirrors of store state that put a view in or take it out, so each change runs in its
+    /// own transaction (spec §2.3): the live line, the mission pill and "Earlier".
+    @State private var live: WorkingState?
+    @State private var showsPill: Bool
+    @State private var showsEarlierButton: Bool
+    /// A needs card's drift is moving, so the pill's beacon holds still.
+    @State private var ambientTaken = false
+
+    init(store: HarnessSessionStore, actions: ChatActions = .inert) {
+        self.store = store
+        self.actions = actions
+        _live = State(initialValue: store.liveWork)
+        _showsPill = State(initialValue: store.hasMission)
+        _showsEarlierButton = State(initialValue: Self.showsEarlier(store))
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                if showsEarlier {
+                if showsEarlierButton {
                     earlier
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
                 let gaps = ChatGaps.gaps(rows)
+                // Rows arriving while the chat is open reveal in the store's `resize`
+                // transaction; rows on first render, from Earlier or by scrolling land at once.
                 ForEach(rows) { row in
                     gapped(row, gap: gaps[row.id])
                         .id(row.id)
                         .accessibilityRotorEntry(id: row.id, in: rotorSpace)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
-                // While the agent works and its turn has no work line yet, the live line stands
-                // alone below the newest words. Stop lives in the composer.
-                if let live, liveSpot == .foot {
-                    WorkLine(
-                        summary: WorkingLogic.footSummary(live), steps: [], expanded: false,
-                        onToggle: {}, onStep: { _ in },
-                        spoken: WorkingCopy.spoken(live, now: .now), step: live.step,
-                        waiting: live.waiting
-                    )
-                    .id("chat.working")
-                    .accessibilityIdentifier("chat.working")
-                    .transition(.opacity)
+                // The chat's one live indicator stays at the foot for the whole turn: one view,
+                // so waiting and working morph in place. Stop lives in the composer.
+                if let live {
+                    LiveLine(state: live)
+                        .id("chat.working")
+                        .accessibilityIdentifier("chat.working")
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
                 // Prompts the phone still holds, after the conversation: the one place they show.
                 ForEach(store.queue.prompts) { prompt in
@@ -46,9 +61,9 @@ struct ChatView: View {
                         onCancel: { store.cancelQueued(prompt.id) },
                         onRetry: { store.retryQueued(prompt.id) }
                     )
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
-            .motion(.fade, value: liveSpot)
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
             .frame(maxWidth: 720)
@@ -57,14 +72,23 @@ struct ChatView: View {
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollDismissesKeyboard(.interactively)
-        .overlay { placeholder }
+        .overlay {
+            placeholder
+                .motion(.fade, value: placeholderKind)
+        }
         // A bar, not a plain inset: the chat starts below the pill, and anything scrolled up
         // under it fades behind the system's scroll edge effect instead of sitting cut in half.
         .safeAreaBar(edge: .top, spacing: 0) {
-            if store.hasMission {
+            if showsPill {
                 MissionPill(summary: store.mission.summary) { store.showsMission = true }
+                    .environment(\.ambientTaken, ambientTaken)
+                    .transition(.asymmetric(
+                        insertion: Motion.present(from: .top, reduce: reduceMotion),
+                        removal: Motion.conceal(reduce: reduceMotion)
+                    ))
             }
         }
+        .onPreferenceChange(AmbientClaim.self) { ambientTaken = $0 }
         .scrollEdgeEffectStyle(.hard, for: .top)
         .background(Color.togoInk)
         .environment(\.chatImageFetch, imageFetch)
@@ -72,12 +96,31 @@ struct ChatView: View {
         .accessibilityRotor(ChatCopy.rotorNeeds) { rotor(where: \.isNeeds) }
         .accessibilityRotor(ChatCopy.rotorReplies) { rotor(where: \.isReply) }
         .onChange(of: rows, initial: true) { _, rows in announcer.update(rows) }
+        .onChange(of: store.liveWork) { _, work in follow(work) }
+        .onChange(of: store.hasMission) { _, has in
+            // The pill presents on dropIn with the chat's inset; it leaves by concealing while
+            // the inset closes on resize.
+            withAnimation(Motion.animation(has ? .dropIn : .resize, reduce: reduceMotion)) { showsPill = has }
+        }
+        .onChange(of: Self.showsEarlier(store)) { _, shows in
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { showsEarlierButton = shows }
+        }
         .modifier(WorkingAnnouncements(active: store.liveWork != nil))
         .sheet(item: $detail) { step in
             StepDetail(step: step, canShowInTerminal: canShow(step)) {
                 Task { await store.showInTerminal(step) }
             }
         }
+    }
+
+    /// The live line arrives and leaves in a `resize` transaction; while it stays, its clock
+    /// and words change in place.
+    private func follow(_ work: WorkingState?) {
+        guard (live == nil) != (work == nil) else {
+            live = work
+            return
+        }
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { live = work }
     }
 
     /// Pictures by path come through the helper where it serves `fs.image`.
@@ -100,11 +143,6 @@ struct ChatView: View {
         }
         return Array(out.prefix(6))
     }
-
-    private var live: WorkingState? { store.liveWork }
-
-    /// Where the one live indicator sits: on the running turn's work line, or at the foot.
-    private var liveSpot: LivePlacement? { WorkingLogic.placement(rows: rows, live: live) }
 
     /// The main conversation, with the subagents' waiting approvals and questions folded in
     /// where they arrived. A subagent's own conversation is `SubagentChatView`.
@@ -154,31 +192,23 @@ struct ChatView: View {
                     .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(text.text), host: self))
             }
         case .work(let id, let summary, let steps):
-            let liveStep = liveSpot == .row(id) ? live?.step : nil
-            let liveWaiting = liveSpot == .row(id) && live?.waiting == true
-            VStack(alignment: .leading, spacing: 6) {
-            WorkLine(
-                summary: summary, steps: steps, expanded: expanded.contains(id),
-                onToggle: { toggle(id) }, onStep: open,
-                spoken: liveWaiting ? WorkingCopy.waiting
-                    : [ChatCopy.spokenWork(summary, now: .now, expanded: expanded.contains(id)), liveStep]
-                        .compactMap(\.self).joined(separator: ", "),
-                showInTerminal: steps.first.flatMap { first in
-                    canShow(first) ? { Task { await store.showInTerminal(first) } } : nil
-                },
-                step: liveStep,
-                waiting: liveWaiting
-            )
-            .contextMenu {
+            let disclosure = expanded[id] ?? Disclosure()
+            // Pictures the turn's tools read or made show without opening the steps.
+            ChatWorkRow(
+                line: WorkLine(
+                    summary: summary, steps: steps, disclosure: disclosure,
+                    onToggle: { toggle(id) }, onStep: open,
+                    spoken: ChatCopy.spokenWork(summary, now: .now, expanded: disclosure.isOpen),
+                    showInTerminal: steps.first.flatMap { first in
+                        canShow(first) ? { Task { await store.showInTerminal(first) } } : nil
+                    },
+                    // The live line at the foot carries the clock while the turn runs.
+                    counting: live == nil
+                ),
+                pictures: Self.pictures(steps)
+            ) {
                 if let first = steps.first, canShow(first) {
                     Button(ChatCopy.showInTerminal, systemImage: "terminal") { Task { await store.showInTerminal(first) } }
-                }
-            }
-                // Pictures the turn's tools read or made show without opening the steps.
-                let pictures = Self.pictures(steps)
-                if !pictures.isEmpty {
-                    ChatImageGrid(images: pictures)
-                        .padding(.leading, 22)
                 }
             }
         case .needs(let item):
@@ -237,14 +267,27 @@ struct ChatView: View {
         }
     }
 
+    /// Opens or closes a work line's steps: one `resize` transaction moves the rows below and
+    /// the scroll position with them; closing conceals the steps first (spec §2.1/§2.2).
     private func toggle(_ id: String) {
-        if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
+        let disclosure = Binding { expanded[id] ?? Disclosure() } set: { expanded[id] = $0 }
+        Motion.toggle(disclosure, reduce: reduceMotion)
     }
 
     // MARK: Earlier and placeholder
 
-    private var showsEarlier: Bool {
+    private static func showsEarlier(_ store: HarnessSessionStore) -> Bool {
         store.timeline.hasOlder && store.has(HarnessCapability.history)
+    }
+
+    /// Which placeholder shows, so changing it crossfades.
+    private var placeholderKind: Int {
+        guard rows.isEmpty, store.queue.isEmpty, store.liveWork == nil else { return 0 }
+        return switch store.phase {
+        case .describing, .opening: 1
+        case .reconnecting: 2
+        case .live, .terminalOnly: 3
+        }
     }
 
     private var earlier: some View {
@@ -261,9 +304,11 @@ struct ChatView: View {
             case .describing, .opening:
                 ProgressView(ChatCopy.reading)
                     .foregroundStyle(Color.togoMute)
+                    .transition(.opacity)
             case .reconnecting:
                 ProgressView(ChatCopy.reconnecting)
                     .foregroundStyle(Color.togoMute)
+                    .transition(.opacity)
             case .live, .terminalOnly:
                 ContentUnavailableView {
                     Label(ChatCopy.emptyTitle, systemImage: "bubble.left.and.text.bubble.right")
@@ -271,6 +316,7 @@ struct ChatView: View {
                     Text(ChatCopy.emptyDetail)
                 }
                 .foregroundStyle(Color.togoMute)
+                .transition(.opacity)
             }
         }
     }

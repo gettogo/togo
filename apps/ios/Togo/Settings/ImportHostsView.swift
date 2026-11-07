@@ -20,6 +20,12 @@ struct ImportHostsView: View {
             }
         }
         .groupedList()
+        // Paste → review, and the message, skipped and failure lines: rows arrive and leave on
+        // `resize`.
+        .resizesOnRows([
+            "\(model.reviewed)", "\(model.message != nil)", "\(model.skipped.count)", "\(model.failure != nil)",
+            "\(model.rows.count)",
+        ])
         .navigationTitle(settingsText("import.hosts.screenTitle", "Import hosts"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -169,13 +169,17 @@ struct ChoiceRow<Detail: View>: View {
             Spacer(minLength: 8)
             if selected {
                 Image(systemName: "checkmark").fontWeight(.semibold).accessibilityHidden(true)
+                    .transition(.opacity)
             } else if chevron {
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoMute)
                     .accessibilityHidden(true)
+                    .transition(.opacity)
             }
         }
+        // The check moves to the chosen row on `respond`.
+        .motion(.respond, value: selected)
         .foregroundStyle(enabled ? Color.togoSnow : Color.togoMute)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -216,7 +220,10 @@ struct RetryButton: View {
 }
 
 /// Plain error line shown on the step the failure belongs to.
+/// It reveals when it arrives and conceals when it clears; the parent moves the rows around
+/// it in the same `resize` transaction (`resizesOnRows`).
 struct InlineError: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let message: String
 
     var body: some View {
@@ -225,6 +232,7 @@ struct InlineError: View {
             .foregroundStyle(Color.togoSnow)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityLabel(message)
+            .transition(Motion.revealConceal(reduce: reduceMotion))
     }
 }
 

@@ -68,16 +68,19 @@ struct RosterView: View {
         if hasNoMachines {
             RosterNoMachines { store.showSheet(.addMachine) }
         } else {
-            TimelineView(.everyMinute) { context in
-                list(now: now ?? context.date)
+            // Lines arriving and leaving glide on `resize`; nothing else in the list animates.
+            IdentityKeyed(store.rosterShown, key: RosterShown.shape, quiet: RosterShown.quiet) { shown in
+                TimelineView(.everyMinute) { context in
+                    list(shown, now: now ?? context.date)
+                }
             }
         }
     }
 
     // MARK: List
 
-    private func list(now: Date) -> some View {
-        let roster = store.roster
+    private func list(_ shown: RosterShown, now: Date) -> some View {
+        let roster = shown.model
         let selected = RosterModel.selection(focused: shownTab, wide: wide, in: roster)
         return ScrollViewReader { scroller in
             List {
@@ -94,7 +97,7 @@ struct RosterView: View {
                 // The notice has a section of its own that is always there, so its row coming
                 // and going never lands in the same update as a line leaving a machine.
                 Section {
-                    if let notice = store.notice {
+                    if let notice = shown.notice {
                         Label(notice.text, systemImage: notice.isError ? "exclamationmark.circle" : "info.circle")
                             .font(.subheadline)
                             .foregroundStyle(Color.togoSnow)
@@ -107,7 +110,7 @@ struct RosterView: View {
                     RosterSection(
                         group: group, etAvailable: store.etAvailable(group.id), now: now, zoom: zoom,
                         selected: selected, cursor: wide && listFocused ? keys.cursor : nil, draggable: linesDrag,
-                        restoring: store.restoring, wakeNote: store.wakeNotes[group.id], perform: perform
+                        restoring: store.restoring, wakeNote: shown.wakeNotes[group.id], perform: perform
                     )
                 }
             }
@@ -253,6 +256,7 @@ struct RosterView: View {
 /// One small row: "1 needs you" with its beacon and the tally after it in mono, or with
 /// nothing waiting only the tally ("1 idle").
 struct RosterHeadline: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let roster: RosterModel
     /// Marks the leading edge, where the launch mark shrinks to on its way out.
     var launchTarget = false
@@ -269,12 +273,13 @@ struct RosterHeadline: View {
                     BeaconDot()
                     Text(roster.headline)
                         .font(.headline)
-                        .monospacedDigit()
                         .foregroundStyle(Color.togoSnow)
                         // trunc-ok: the headline is a count and two words
                         .lineLimit(1)
                         .fixedSize()
+                        .rollingNumber(Double(roster.waiting))
                 }
+                .transition(.opacity)
             }
             if !roster.tallyText.isEmpty {
                 Text(verbatim: roster.tallyText)
@@ -282,8 +287,13 @@ struct RosterHeadline: View {
                     .monospacedDigit()
                     .foregroundStyle(Color.togoMute)
                     .fixedSize(horizontal: false, vertical: true)
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .transition(.opacity)
             }
         }
+        // The beacon lights and the words swap on `respond`; the counts roll.
+        .motion(.respond, value: roster.waiting)
+        .motion(.respond, value: roster.tallyText)
         .background(alignment: .leading) {
             if launchTarget {
                 Color.clear

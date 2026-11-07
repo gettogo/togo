@@ -38,6 +38,7 @@ struct RestorableSessionRow: View {
             VStack(alignment: .leading, spacing: 4) { buttons(offered) }
         }
         .disabled(busy)
+        .motion(.respond, value: busy)
     }
 
     @ViewBuilder private func buttons(_ offered: [RestoreAction]) -> some View {

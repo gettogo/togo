@@ -125,7 +125,11 @@ extension EnvironmentValues {
     @Entry var liveClockFrozenAt: Date?
 }
 
-/// Time since a status began, counting up. Digits keep their width so the line does not jitter.
+/// A clock counting up from `since`, digits at a fixed width so the line does not jitter.
+/// It follows the turn's one stopwatch (motion spec §2.7): while the agent waits on the user,
+/// `since` is when the request arrived, so it counts the wait; while it works, `since` is now
+/// minus the turn's working time so far, so after an answer the clock resumes where it paused
+/// rather than restarting at zero. Whoever builds the state supplies `since` that way.
 struct LiveElapsed: View {
     @Environment(\.liveClockFrozenAt) private var frozenAt
     let since: Int

@@ -17,11 +17,16 @@ struct HelperCheckView: View {
     @State private var phoneOnTailnet = PhoneTailnet.isConnected()
 
     var body: some View {
-        if case .present(let version) = report.helper {
-            present(version: version)
-        } else {
-            missing
+        Group {
+            if case .present(let version) = report.helper {
+                present(version: version)
+            } else {
+                missing
+            }
         }
+        // A failed save's line arrives on `resize`, with the `.error` haptic.
+        .resizesOnRows(saveError != nil)
+        .haptic(.error, trigger: saveError) { _, new in new != nil }
     }
 
     private func present(version: String) -> some View {
@@ -125,6 +130,7 @@ struct HelperCheckView: View {
             Label(saveError, systemImage: "exclamationmark.circle")
                 .font(.footnote)
                 .foregroundStyle(Color.togoSnow)
+                .transition(.opacity)
         }
     }
 

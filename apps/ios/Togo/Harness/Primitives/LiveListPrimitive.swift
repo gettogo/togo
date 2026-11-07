@@ -6,6 +6,7 @@ import TogoKit
 /// the list reads itself again while it is on screen.
 struct LiveListPrimitive: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let list: HarnessScreen.LiveList
     let context: PrimitiveContext
     /// Drawn inside another scroll view, such as a mission control section: no scroll of its own.
@@ -40,21 +41,30 @@ struct LiveListPrimitive: View {
                 Text(verbatim: summary)
                     .font(.mono(.footnote))
                     .foregroundStyle(Color.togoMute)
+                    .contentTransition(.numericText())
                     .padding(.horizontal, 4)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             if list.rows.isEmpty {
                 Text(PrimitiveCopy.nothingHere)
                     .foregroundStyle(Color.togoMute)
                     .frame(maxWidth: .infinity, minHeight: 120)
+                    .transition(Motion.swap(reduce: reduceMotion))
             } else {
                 VStack(spacing: 0) {
                     ForEach(LiveListLogic.flatten(list.rows)) { entry in
                         LiveRow(row: entry.row, depth: entry.depth, first: entry.index == 0, actions: actions, context: context)
+                            .transition(Motion.revealConceal(reduce: reduceMotion))
                     }
                 }
                 .background(Color.togoRaised, in: .rect(cornerRadius: 18, style: .continuous))
+                .clipShape(.rect(cornerRadius: 18, style: .continuous))
+                .transition(Motion.swap(reduce: reduceMotion))
             }
         }
+        // identity-keyed insert/remove: rows arriving or leaving on a refresh reveal and conceal;
+        // tail lines and values inside a row change in place.
+        .motion(.respond, value: LiveListLogic.flatten(list.rows).map(\.id))
     }
 }
 
@@ -104,6 +114,7 @@ enum LiveListLogic {
 
 private struct LiveRow: View {
     @Environment(\.loopsPaused) private var loopsPaused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let row: HarnessRow
     let depth: Int
     let first: Bool
@@ -146,7 +157,8 @@ private struct LiveRow: View {
                 ProgressView(value: min(1, max(0, progress)))
                     .tint(row.state == .failed ? PrimitiveTint.fail : Color.togoSnow)
                     .padding(.leading, tile + 10)
-                    .motion(.collapse, value: progress)
+                    .motion(.progress, value: progress)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             let tail = LiveListLogic.tail(row)
             if !tail.isEmpty {
@@ -159,6 +171,7 @@ private struct LiveRow: View {
             if let refs = row.actions, !refs.isEmpty {
                 PrimitiveActionRow(refs: refs, target: row.id, actions: actions, context: context)
                     .padding(.leading, tile + 10)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .padding(.leading, 14 + CGFloat(depth) * indent)
@@ -198,9 +211,10 @@ private struct LiveRow: View {
                 Text(verbatim: PrimitiveElapsed.string(0)).hidden()
             } else {
                 TimelineView(.periodic(from: started, by: 1)) { timeline in
-                    Text(verbatim: PrimitiveElapsed.string(timeline.date.timeIntervalSince(started)))
+                    let seconds = timeline.date.timeIntervalSince(started).rounded(.down)
+                    Text(verbatim: PrimitiveElapsed.string(seconds))
                         .font(.mono(.caption))
-                        .monospacedDigit()
+                        .rollingNumber(seconds)
                         .foregroundStyle(Color.togoMute)
                 }
             }

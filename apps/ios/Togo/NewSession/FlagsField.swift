@@ -36,8 +36,10 @@ struct FlagsField: View {
                     .font(.footnote)
                     .foregroundStyle(Color.togoMute)
                     .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
             }
         }
+        .resizesOnRows(error != nil)
     }
 
     /// Undoes smart punctuation from the keyboard or a pasted document where it would change

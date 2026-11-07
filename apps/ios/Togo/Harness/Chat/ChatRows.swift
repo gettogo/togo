@@ -4,6 +4,7 @@ import TogoKit
 /// The user's prompt: plain text on a raised bubble at the trailing edge. A queued one is
 /// dimmed and says so.
 struct PromptBubble: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let text: String
     var note: String?
     var dimmed = false
@@ -20,11 +21,14 @@ struct PromptBubble: View {
                     .padding(.vertical, 10)
                     .background(Color.togoRaised, in: .rect(cornerRadius: 14, style: .continuous))
                     .opacity(dimmed ? 0.6 : 1)
+                    .motion(.respond, value: dimmed)
             }
             if let note {
                 Text(note)
                     .font(.caption)
                     .foregroundStyle(Color.togoMute)
+                    .contentTransition(.interpolate)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .padding(.leading, 48)
@@ -34,7 +38,11 @@ struct PromptBubble: View {
 
 /// A prompt the phone still holds: waiting for the turn, on its way, or refused. Waiting and
 /// refused ones can be taken back; a refused one can go again.
+///
+/// Its state changes in the store's arrival transaction (`resize`): Try again reveals, the note
+/// crossfades, and a refusal plays the error haptic once.
 struct PendingPromptRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let prompt: PendingPrompt
     let onCancel: () -> Void
     let onRetry: () -> Void
@@ -49,23 +57,30 @@ struct PendingPromptRow: View {
             }
             PromptBubble(text: prompt.text, note: note, dimmed: true)
             HStack(spacing: 4) {
-                if case .failed = prompt.state {
+                if failed {
                     Button(ChatCopy.tryAgain, action: onRetry)
                         .buttonStyle(PlainAnswerStyle())
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
                 if prompt.state != .sending {
                     Button(ChatCopy.cancel, action: onCancel)
                         .buttonStyle(PlainAnswerStyle())
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
             .font(.footnote)
         }
+        .haptic(.error, trigger: failed) { _, failed in failed }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(ChatCopy.spokenPrompt(prompt.text) + ", " + (note ?? ""))
         .accessibilityActions {
             if case .failed = prompt.state { Button(ChatCopy.tryAgain, action: onRetry) }
             if prompt.state != .sending { Button(ChatCopy.cancel, action: onCancel) }
         }
+    }
+
+    private var failed: Bool {
+        if case .failed = prompt.state { true } else { false }
     }
 
     private var note: String? {
@@ -131,5 +146,32 @@ extension HarnessItem {
 enum ChatQuote {
     static func quoted(_ text: String) -> String {
         text.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n") + "\n"
+    }
+}
+
+/// A turn's work line in the chat, with the pictures its tools read or made under it. The
+/// pictures reveal in a `resize` transaction when the first one arrives (spec §2.1).
+struct ChatWorkRow<Menu: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let line: WorkLine
+    let pictures: [HarnessImage]
+    @ViewBuilder let menu: () -> Menu
+
+    @State private var showsPictures: Bool?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            line
+                .contextMenu { menu() }
+            if showsPictures ?? !pictures.isEmpty, !pictures.isEmpty {
+                ChatImageGrid(images: pictures)
+                    .padding(.leading, 22)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
+            }
+        }
+        .onAppear { if showsPictures == nil { showsPictures = !pictures.isEmpty } }
+        .onChange(of: pictures.isEmpty) { _, empty in
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { showsPictures = !empty }
+        }
     }
 }

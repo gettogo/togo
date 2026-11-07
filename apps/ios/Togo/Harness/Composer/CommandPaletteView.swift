@@ -66,15 +66,23 @@ struct CommandPaletteView: View {
         }
         .groupedList()
         .overlay {
-            if all.isEmpty, !model.palette.isEmpty {
-                StateView(kind: .empty, title: ComposerCopy.noCommands, message: ComposerCopy.returnSends)
-            } else if model.palette.isEmpty, model.paletteFailed {
-                StateView(kind: .error, title: ComposerCopy.commandsFailed, message: ComposerCopy.returnSends, action: .init(ComposerCopy.tryAgain) {
-                    Task { await model.loadPalette() }
-                })
-            } else if model.palette.isEmpty {
-                ProgressView()
+            // Loading, failed and empty crossfade; the list's own results are exempt (search).
+            Group {
+                if all.isEmpty, !model.palette.isEmpty {
+                    StateView(kind: .empty, title: ComposerCopy.noCommands, message: ComposerCopy.returnSends)
+                        .transition(.opacity)
+                } else if model.palette.isEmpty, model.paletteFailed {
+                    StateView(kind: .error, title: ComposerCopy.commandsFailed, message: ComposerCopy.returnSends, action: .init(ComposerCopy.tryAgain) {
+                        Task { await model.loadPalette() }
+                    })
+                    .transition(.opacity)
+                } else if model.palette.isEmpty {
+                    ProgressView()
+                        .transition(.opacity)
+                }
             }
+            .motion(.fade, value: model.palette.isEmpty)
+            .motion(.fade, value: model.paletteFailed)
         }
     }
 

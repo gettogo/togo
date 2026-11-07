@@ -4,42 +4,55 @@ import TogoKit
 /// A unified diff read by the review's parser and drawn compactly for a card: one header per
 /// file with its counts, folding open, then numbered lines on the added and removed tints.
 /// Long files stop at `lineCap` and point at the terminal for the rest.
+///
+/// Each file folds as a two-phase disclosure on `resize` (spec §2.1/§2.2); the card clips, so
+/// lines never draw outside it while it shrinks.
 struct PrimitiveDiff: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let files: [PrimitiveDiffLogic.File]
-    @State private var open: Set<String>
+    @State private var open: [String: Disclosure]
 
     static let lineCap = 300
 
     init(_ text: String) {
         let files = PrimitiveDiffLogic.files(text)
         self.files = files
-        _open = State(initialValue: PrimitiveDiffLogic.initiallyOpen(files))
+        let initially = PrimitiveDiffLogic.initiallyOpen(files)
+        _open = State(initialValue: Dictionary(
+            files.map { ($0.id, Disclosure(open: initially.contains($0.id))) }, uniquingKeysWith: { first, _ in first }
+        ))
     }
+
+    private func disclosure(_ file: PrimitiveDiffLogic.File) -> Disclosure { open[file.id] ?? Disclosure() }
+
+    private func isOpen(_ file: PrimitiveDiffLogic.File) -> Bool { disclosure(file).isOpen }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(files.enumerated()), id: \.offset) { index, file in
+            ForEach(Array(files.enumerated()), id: \.element.id) { index, file in
                 if index > 0 { Rectangle().fill(Color.togoLine).frame(height: 1) }
                 header(file)
-                if open.contains(file.id) {
+                if disclosure(file).open {
                     lines(file)
+                        .disclosed(disclosure(file))
                 }
             }
         }
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
         .clipShape(.rect(cornerRadius: 12, style: .continuous))
-        .motion(.collapse, value: open)
     }
 
     private func header(_ file: PrimitiveDiffLogic.File) -> some View {
         Button {
-            if open.contains(file.id) { open.remove(file.id) } else { open.insert(file.id) }
+            let binding = Binding { open[file.id] ?? Disclosure() } set: { open[file.id] = $0 }
+            Motion.toggle(binding, reduce: reduceMotion)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(Color.togoMute)
-                    .rotationEffect(.degrees(open.contains(file.id) ? 90 : 0))
+                    .rotationEffect(.degrees(isOpen(file) && !reduceMotion ? 90 : 0))
+                    .motion(.respond, value: isOpen(file))
                     .accessibilityHidden(true)
                 Text(verbatim: file.path.isEmpty ? PrimitiveCopy.changes : file.path)
                     .font(.mono(.caption))
@@ -55,7 +68,7 @@ struct PrimitiveDiff: View {
         .buttonStyle(.plain)
         .accessibilityLabel(file.path.isEmpty ? PrimitiveCopy.changes : file.path)
         .accessibilityValue(PrimitiveCopy.linesSpoken(added: file.added, removed: file.removed))
-        .accessibilityHint(open.contains(file.id)
+        .accessibilityHint(isOpen(file)
             ? String(localized: "primitive.diff.fold", defaultValue: "Hides the lines")
             : String(localized: "primitive.diff.unfold", defaultValue: "Shows the lines"))
     }

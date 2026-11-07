@@ -5,13 +5,17 @@ import TogoKit
 /// changed". Tapping it opens the steps underneath, each a compact row with its files; tapping
 /// a step opens its details. Shell output and subagent conversations stay in mission control.
 ///
-/// While its turn runs it is the chat's one live indicator: the spinner turns, the clock ticks
-/// and, when known, `step` says what the agent does now ("Reading src/auth/sign-in.ts").
+/// In the main chat the live line at the foot carries the turn's clock, so a running work line
+/// only counts its steps (`counting` false) and turns into "Worked …" with a check when the
+/// turn ends. A subagent's thread has no live line, so its running line ticks itself.
+///
+/// The steps open and close as a two-phase disclosure (spec §2.1/§2.2): the parent toggles
+/// `disclosure` with `Motion.toggle`, so the rows below move in the same transaction.
 struct WorkLine: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let summary: WorkSummary
     let steps: [HarnessItem]
-    let expanded: Bool
+    let disclosure: Disclosure
     let onToggle: () -> Void
     let onStep: (HarnessItem) -> Void
     /// How VoiceOver reads the line ("Worked 1 minute 12 seconds, 6 steps, collapsed"). The
@@ -20,31 +24,24 @@ struct WorkLine: View {
     var spoken: String?
     /// "Show in terminal" as an accessibility action on the line, when its first step can.
     var showInTerminal: (() -> Void)?
-    /// What the agent does now, under the line while the turn runs.
-    var step: String?
     /// The running turn waits on the user: the line says "Waiting for you" in the beacon and
-    /// the spinner stops.
+    /// the spinner stops. Only while `counting`.
     var waiting = false
+    /// The line ticks its own clock while it runs; off where the live line ticks for it.
+    var counting = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button(action: onToggle) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    WorkGlyph(summary: summary, waiting: isWaiting)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            WorkLabel(summary: summary, waiting: isWaiting)
-                            Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.semibold))
-                                .rotationEffect(.degrees(expanded && !reduceMotion ? 90 : 0))
-                                .opacity(steps.isEmpty ? 0 : 1)
-                        }
-                        if summary.running, !isWaiting, let step {
-                            Text(verbatim: step)
-                                .font(.footnote)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .transition(.opacity)
-                        }
+                    WorkGlyph(summary: summary, waiting: isWaiting, counting: counting)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        WorkLabel(summary: summary, waiting: isWaiting, counting: counting)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .rotationEffect(.degrees(disclosure.isOpen && !reduceMotion ? 90 : 0))
+                            .opacity(steps.isEmpty ? 0 : 1)
+                            .motion(.respond, value: disclosure.isOpen)
                     }
                 }
                 .foregroundStyle(Color.togoMute)
@@ -59,88 +56,120 @@ struct WorkLine: View {
                     Button(ChatCopy.showInTerminal, action: showInTerminal)
                 }
             }
-            if expanded, !steps.isEmpty {
+            if disclosure.open, !steps.isEmpty {
                 StepList(steps: steps, onStep: onStep)
-                    .transition(.opacity)
+                    .disclosed(disclosure)
             }
         }
-        .motion(.rowGrow, value: expanded)
-        .motion(.fade, value: step)
-        .motion(.fade, value: isWaiting)
+        // The steps never draw outside the line's slot while it shrinks.
+        .clipped()
     }
 
-    private var isWaiting: Bool { summary.running && waiting }
+    private var isWaiting: Bool { counting && summary.running && waiting }
 }
 
-/// The line's words; ticks once a second while the turn runs.
+/// The line's words. While it counts, it ticks once a second and the digits roll; finished, it
+/// says "Worked 1m 12s" with the waits left out.
 private struct WorkLabel: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let summary: WorkSummary
     var waiting = false
+    var counting = true
 
     var body: some View {
-        if waiting {
-            Text(verbatim: WorkingCopy.waiting)
-                .font(.system(.footnote, design: .monospaced).weight(.semibold))
-                .foregroundStyle(Color.togoAccentText)
-                .fixedSize(horizontal: false, vertical: true)
-        } else if summary.running {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                text(at: context.date)
+        Group {
+            if waiting {
+                Text(verbatim: WorkingCopy.waiting)
+                    .font(.system(.footnote, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(Color.togoAccentText)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if summary.running, counting {
+                TimelineView(.periodic(from: summary.startedAt ?? .now, by: 1)) { context in
+                    text(ChatCopy.workLine(summary, now: context.date))
+                        .rollingNumber((summary.elapsed(now: context.date) ?? 0).rounded(.down))
+                }
+            } else if summary.running {
+                text(ChatCopy.workCounts(summary))
+            } else {
+                text(ChatCopy.workLine(summary, now: .now))
             }
-        } else {
-            text(at: .now)
         }
+        .contentTransition(reduceMotion ? .identity : .interpolate)
+        .motion(.respond, value: summary.running)
+        .motion(.respond, value: waiting)
     }
 
-    private func text(at now: Date) -> some View {
-        Text(verbatim: ChatCopy.workLine(summary, now: now))
+    private func text(_ words: String) -> some View {
+        Text(verbatim: words)
             .font(.system(.footnote, design: .monospaced))
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-/// Running: the terminal's braille spinner, drawn as text so it sits on the words' first
-/// baseline. Waiting on the user: the still beacon. Finished: a quiet check, or a stop mark.
+/// Counting: the terminal's braille spinner, drawn as text so it sits on the words' first
+/// baseline, or the still beacon while waiting on the user. Not counting (the live line has
+/// the clock): a quiet dotted circle. Finished: a check that bounces once as the turn ends, or
+/// a stop mark. All in one fixed slot.
 private struct WorkGlyph: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
     @ScaledMetric(relativeTo: .footnote) private var beacon: CGFloat = 7
     let summary: WorkSummary
     var waiting = false
+    var counting = true
+
+    @State private var finishes = 0
 
     var body: some View {
-        Group {
+        ZStack {
             if waiting {
                 Circle()
                     .fill(Color.togoAccent)
                     .frame(width: beacon, height: beacon)
                     .padding(3)
                     .background(Circle().fill(Color.togoAccent.opacity(0.18)))
-            } else if summary.running {
+                    .transition(.opacity)
+            } else if summary.running, counting {
                 LiveSpinner()
+                    .transition(.opacity)
             } else {
-                Image(systemName: summary.failed ? "stop.circle" : "checkmark.circle")
+                Image(systemName: symbol)
                     .font(.footnote)
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                    .symbolEffect(.bounce, options: .nonRepeating, value: finishes)
+                    .transition(.opacity)
             }
         }
         .frame(width: side)
+        .motion(.respond, value: summary.running)
+        .motion(.respond, value: waiting)
+        .onChange(of: summary.running) { was, running in
+            if was, !running, !summary.failed, !reduceMotion { finishes += 1 }
+        }
         .accessibilityHidden(true)
+    }
+
+    private var symbol: String {
+        if summary.running { return "circle.dotted" }
+        return summary.failed ? "stop.circle" : "checkmark.circle"
     }
 }
 
-/// The braille spinner in the footnote's mono. Still under Reduce Motion, Low Power Mode, in a
-/// paused snapshot, and while the app is not in front.
-private struct LiveSpinner: View {
+/// The braille spinner in the footnote's mono, starting on its first frame. Still under Reduce
+/// Motion, Low Power Mode, in a paused snapshot, and while the app is not in front.
+struct LiveSpinner: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.loopsPaused) private var loopsPaused
     @Environment(\.scenePhase) private var scenePhase
     @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+    @State private var origin = Date.now
 
     var body: some View {
         Group {
             if spins {
-                TimelineView(.periodic(from: .now, by: RosterStatus.spinnerLoop / Double(RosterStatus.spinnerFrames.count))) { context in
-                    glyph(RosterStatus.glyph(for: .working, animated: true, at: context.date.timeIntervalSinceReferenceDate))
+                TimelineView(.periodic(from: origin, by: RosterStatus.spinnerLoop / Double(RosterStatus.spinnerFrames.count))) { context in
+                    glyph(RosterStatus.glyph(for: .working, animated: true, at: context.date.timeIntervalSince(origin)))
                 }
             } else {
                 glyph(RosterStatus.glyph(for: .working, animated: false))

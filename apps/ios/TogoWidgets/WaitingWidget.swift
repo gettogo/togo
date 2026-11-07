@@ -147,6 +147,7 @@ struct WaitingSmallView: View {
                 Text(LiveCopy.nothingWaiting)
                     .font(.headline)
                     .foregroundStyle(Color.togoMute)
+                    .transition(.opacity)
             } else {
                 Text(verbatim: "\(summary.count)")
                     .font(.system(size: 48, weight: .semibold))
@@ -160,6 +161,7 @@ struct WaitingSmallView: View {
                 if let oldest = summary.oldest {
                     OldestLine(oldest: oldest)
                         .foregroundStyle(Color.togoMute)
+                        .transition(.opacity)
                 }
             }
         }
@@ -176,11 +178,13 @@ struct WaitingRectangularView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(summary.count == 0 ? LiveCopy.nothingWaiting : LiveCopy.waiting(summary.count))
                 .font(.headline)
+                .contentTransition(.interpolate)
                 .widgetAccentable()
                 // trunc-ok: "3 waiting" or "Nothing waiting"
                 .lineLimit(1)
             if summary.count > 0, let oldest = summary.oldest {
                 OldestLine(oldest: oldest, font: .subheadline)
+                    .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -199,6 +203,7 @@ struct WaitingCircularView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                     .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(summary.count)))
                     .widgetAccentable()
                 Text(LiveCopy.waitingWord)
                     .font(.caption2)

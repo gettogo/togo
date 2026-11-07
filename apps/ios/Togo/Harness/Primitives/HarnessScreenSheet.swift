@@ -70,8 +70,10 @@ struct HarnessScreenLoader: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.togoInk)
                     .navigationTitle(title)
+                    .transition(.opacity)
             case .loaded(let screen):
                 PrimitiveScreenView(screen: screen, context: context)
+                    .transition(.opacity)
             case .failed(let fallback):
                 TerminalHandOff(
                     context: context, title: PrimitiveCopy.couldNotLoad,
@@ -87,9 +89,21 @@ struct HarnessScreenLoader: View {
                         }
                     }
                 }
+                .transition(.opacity)
             }
         }
+        // Loading, loaded and failed crossfade in the sheet; a refresh of a loaded screen
+        // changes it in place.
+        .motion(.fade, value: phaseKind)
         .task(id: screenID) { await load(showingProgress: true) }
+    }
+
+    private var phaseKind: Int {
+        switch phase {
+        case .loading: 0
+        case .loaded: 1
+        case .failed: 2
+        }
     }
 
     /// The screen's title from the descriptor until the screen itself arrives.

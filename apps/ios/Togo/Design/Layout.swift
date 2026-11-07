@@ -40,6 +40,7 @@ extension View {
 /// In book posture the column keeps to one page, the wider one, so no line of text or control
 /// crosses the fold.
 private struct ScreenMargins: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.fold) private var fold
     @Environment(\.foldOrigin) private var anchor
@@ -59,12 +60,17 @@ private struct ScreenMargins: ViewModifier {
                 let frame = proxy.frame(in: .global)
                 return Span(minX: frame.minX, width: frame.width)
             } action: { new in
-                // The first measure places the column; later ones, such as a fold, move it.
+                // The first measure places the column; later ones, such as a fold, move it on
+                // `paneFlow` in this one explicit transaction. The measure is of the full-width
+                // frame outside the column, so moving the column never measures again.
                 var transaction = Transaction()
-                transaction.disablesAnimations = span.width == 0
+                if span.width == 0 {
+                    transaction.disablesAnimations = true
+                } else {
+                    transaction.animation = Motion.animation(.paneFlow, reduce: reduceMotion)
+                }
                 withTransaction(transaction) { span = new }
             }
-            .motion(.paneFlow, value: page)
     }
 
     private struct Span: Equatable {

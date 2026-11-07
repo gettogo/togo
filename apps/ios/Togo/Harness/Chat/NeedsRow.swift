@@ -13,10 +13,23 @@ struct ChatActions {
     @MainActor static let inert = ChatActions(card: { _ in nil }, answer: { _, _ in }, quote: { _ in })
 }
 
+/// What an approval row shows: the card still waiting in the terminal, the card with its
+/// answers, or the quiet line it settles into once answered.
+enum NeedsShape: Equatable {
+    case waiting
+    case card
+    case settled(String)
+}
+
 /// An approval inline in the chat: the one place it uses the beacon, a card on its faint
 /// moving light, with the same approve button as the prompt bar. Never folded; once answered
 /// it settles into a quiet line.
+///
+/// Motion (spec §2.1–§2.3): More opens and closes as a two-phase disclosure; the answer the
+/// person tapped shows its progress in place while the others dim; the helper's answer is
+/// mirrored, so the card conceals, then the row shrinks to its line while the line reveals.
 struct ApprovalRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: HarnessItem
     let approval: HarnessItem.Approval
     let card: RequestCard?
@@ -24,21 +37,58 @@ struct ApprovalRow: View {
 
     @State private var approvals = 0
     @State private var denials = 0
-    @State private var showingMore = false
+    @State private var more = Disclosure()
+    @State private var shown: Mirrored<NeedsShape>
+    /// The card as last seen, so it can conceal after the control center drops it.
+    @State private var lastCard: RequestCard?
 
-    var body: some View {
-        content
-            .haptic(.approve, trigger: approvals)
-            .haptic(.deny, trigger: denials)
+    init(item: HarnessItem, approval: HarnessItem.Approval, card: RequestCard?, answer: @escaping (Decision) -> Void) {
+        self.item = item
+        self.approval = approval
+        self.card = card
+        self.answer = answer
+        _shown = State(initialValue: Mirrored(Self.shape(approval: approval, card: card)))
+        _lastCard = State(initialValue: card)
     }
 
-    @ViewBuilder private var content: some View {
-        if let settled {
-            SettledLine(text: settled)
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                NeedsHeader()
-                if let card {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            switch shown.value {
+            case .settled(let text):
+                SettledLine(text: text, celebrates: shown.generation > 0)
+                    .settling(shown)
+            case .waiting, .card:
+                cardView
+                    .settling(shown)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .haptic(.approve, trigger: approvals)
+        .haptic(.deny, trigger: denials)
+        .onChange(of: card) { _, card in if let card { lastCard = card } }
+        .onChange(of: target) { _, target in follow(target) }
+    }
+
+    /// The card arriving for a request that waited in the terminal grows in place on its
+    /// ground; settling into the answered line conceals the card first (spec §2.3).
+    private func follow(_ target: NeedsShape) {
+        switch (shown.value, target) {
+        case (.waiting, .card), (.card, .waiting):
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { shown.value = target }
+        default:
+            Motion.settle($shown, to: target, reduce: reduceMotion)
+        }
+    }
+
+    private var target: NeedsShape { Self.shape(approval: approval, card: card) }
+
+    private var shownCard: RequestCard? { card ?? lastCard }
+
+    private var cardView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            NeedsHeader()
+            if shown.value == .card, let card = shownCard {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(card.title)
                         .font(.body)
                         .foregroundStyle(Color.togoSnow)
@@ -47,68 +97,98 @@ struct ApprovalRow: View {
                         CodeWell(text: detail)
                     }
                     answers(card)
-                } else {
-                    Text(ChatCopy.waitingInTerminal)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.togoMute)
                 }
+                .transition(Motion.revealConceal(reduce: reduceMotion))
+            } else {
+                Text(ChatCopy.waitingInTerminal)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
-            .modifier(NeedsCard())
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(ChatCopy.spokenNeeds(card?.title ?? ChatCopy.waitingInTerminal))
-            .accessibilityActions {
-                if let card, card.phase == .open {
-                    Button(approveLabel(card)) { approve(card) }
-                    Button(ChatCopy.deny) { deny(card) }
-                    ForEach(extraOptions(card)) { option in
-                        Button(option.title) { answer(.option(option.id)) }
-                    }
+        }
+        .modifier(NeedsCard())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(ChatCopy.spokenNeeds(shownCard?.title ?? ChatCopy.waitingInTerminal))
+        .accessibilityActions {
+            if let card, card.phase == .open {
+                Button(approveLabel(card)) { approve(card) }
+                Button(ChatCopy.deny) { deny(card) }
+                ForEach(extraOptions(card)) { option in
+                    Button(option.title) { pick(option) }
                 }
             }
         }
     }
 
     /// The answered state, from the item or the card, whichever knows first.
-    private var settled: String? {
+    static func shape(approval: HarnessItem.Approval, card: RequestCard?) -> NeedsShape {
         if let card, case .done(let outcome) = card.phase {
-            return switch outcome {
+            let words: String = switch outcome {
             case .approved: ChatCopy.approved
             case .denied: ChatCopy.denied
             case .answeredElsewhere: ChatCopy.answeredElsewhere
             case .expired: ChatCopy.expired
             }
+            return .settled(words)
         }
-        return approval.resolved.map(ChatCopy.resolved)
+        if let resolved = approval.resolved { return .settled(ChatCopy.resolved(resolved)) }
+        return card == nil ? .waiting : .card
     }
 
     /// Yes and No in a row, stacked when the labels are too long for one. Extra answers open
     /// as a list under them, each with its full words, never a menu that clips them.
     private func answers(_ card: RequestCard) -> some View {
-        let sending = card.phase != .open
         let extra = extraOptions(card)
         return VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
                 VStack(alignment: .leading, spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
             }
-            if showingMore, !extra.isEmpty {
-                AnswerOptionList(options: extra) { answer(.option($0.id)) }
-                    .transition(.opacity)
+            if more.open, !extra.isEmpty {
+                AnswerOptionList(options: extra, revealing: true, sending: sendingOption(card)) { pick($0) }
+                    .disclosed(more)
             }
         }
-        .motion(.rowGrow, value: showingMore)
-        .disabled(sending)
+        // Never draws outside the card while it shrinks.
+        .clipped()
+        // Taps stop once an answer is on its way; the look is the buttons' own, not a dim.
+        .allowsHitTesting(card.phase == .open)
     }
 
     @ViewBuilder private func answerButtons(_ card: RequestCard, hasExtra: Bool) -> some View {
-        ApproveButton(approveLabel(card)) { approve(card) }
-        Button(ChatCopy.deny) { deny(card) }
-            .buttonStyle(PlainAnswerStyle())
-        if hasExtra {
-            Button(showingMore ? AnswerOptionsCopy.hide : ChatCopy.more) { showingMore.toggle() }
-                .buttonStyle(PlainAnswerStyle())
-                .accessibilityValue(showingMore ? Text(AnswerOptionsCopy.hide) : Text(ChatCopy.more))
+        let sending = sendingDecision(card)
+        ApproveButton(approveLabel(card), busy: sending == approveDecision(card)) { approve(card) }
+            .opacity(Self.dims(sending, keeping: approveDecision(card)) ? 0.4 : 1)
+        Button { deny(card) } label: {
+            BusyLabel(title: ChatCopy.deny, busy: sending == denyDecision(card))
         }
+        .buttonStyle(PlainAnswerStyle())
+        .opacity(Self.dims(sending, keeping: denyDecision(card)) ? 0.4 : 1)
+        if hasExtra {
+            Button { Motion.toggle($more, reduce: reduceMotion) } label: {
+                Text(more.isOpen ? AnswerOptionsCopy.hide : ChatCopy.more)
+                    .contentTransition(.interpolate)
+            }
+            .buttonStyle(PlainAnswerStyle())
+            .opacity(sending == nil ? 1 : 0.4)
+            .motion(.respond, value: more.isOpen)
+            .accessibilityValue(more.isOpen ? Text(AnswerOptionsCopy.hide) : Text(ChatCopy.more))
+        }
+    }
+
+    /// A button dims while another answer is on its way.
+    static func dims(_ sending: Decision?, keeping decision: Decision) -> Bool {
+        sending != nil && sending != decision
+    }
+
+    private func sendingDecision(_ card: RequestCard) -> Decision? {
+        if case .sending(let decision) = card.phase { return decision }
+        return nil
+    }
+
+    private func sendingOption(_ card: RequestCard) -> Int? {
+        if case .option(let n) = sendingDecision(card) { return n }
+        return nil
     }
 
     private func extraOptions(_ card: RequestCard) -> [AnswerOption] {
@@ -127,6 +207,10 @@ struct ApprovalRow: View {
         answer(denyDecision(card))
     }
 
+    private func pick(_ option: AnswerOption) {
+        answer(.option(option.id))
+    }
+
     /// The approve option's own words; any " · " explanation is left to the hint.
     private func approveLabel(_ card: RequestCard) -> String {
         card.options.first { $0.role == .approve }.map { AnswerOptionText.split($0.label).title } ?? ChatCopy.approve
@@ -141,150 +225,53 @@ struct ApprovalRow: View {
     }
 }
 
-/// Questions the agent asked, answered inline. A single question with single choice answers
-/// on tap; anything more collects the choices and sends them together.
-struct QuestionRow: View {
-    let item: HarnessItem
-    let question: HarnessItem.Question
-    let send: ([String: [String]]) async -> Bool
-
-    @State private var picked: [String: Set<String>] = [:]
-    @State private var typed: [String: String] = [:]
-    @State private var sending = false
-    /// The answer went through: the options stay closed until the item itself updates, so a
-    /// second tap cannot answer again in the meantime.
-    @State private var sent = false
-    @State private var failed = false
+/// A plain answer's words, or a spinner in their place while that answer is on its way; the
+/// words keep their room, so nothing reflows.
+struct BusyLabel: View {
+    let title: String
+    let busy: Bool
 
     var body: some View {
-        if let answered = question.answered, !answered.isEmpty {
-            SettledLine(text: ChatCopy.answered)
-        } else {
-            VStack(alignment: .leading, spacing: 14) {
-                NeedsHeader()
-                ForEach(question.questions) { q in
-                    questionView(q)
-                }
-                if !answersOnTap {
-                    ApproveButton(ChatCopy.send) { submit() }
-                        .disabled(!complete || sending || sent)
-                }
-                if failed {
-                    Text(ChatCopy.answerFailed)
-                        .font(.footnote)
-                        .foregroundStyle(Color.togoMute)
+        Text(title)
+            .opacity(busy ? 0 : 1)
+            .overlay {
+                if busy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .transition(.opacity)
                 }
             }
-            .disabled(sending || sent)
-            .modifier(NeedsCard())
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(ChatCopy.spokenNeeds(question.questions.first?.prompt ?? ""))
-            .onChange(of: item.seq) { sent = false }
-        }
-    }
-
-    private var answersOnTap: Bool {
-        question.questions.count == 1 && !(question.questions[0].multi || question.questions[0].allowText)
-    }
-
-    private var complete: Bool {
-        question.questions.allSatisfy { q in
-            !(picked[q.id] ?? []).isEmpty || !(typed[q.id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty
-        }
-    }
-
-    @ViewBuilder private func questionView(_ q: HarnessQuestion) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let header = q.header {
-                Text(header)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.togoMute)
-            }
-            Text(q.prompt)
-                .font(.body)
-                .foregroundStyle(Color.togoSnow)
-                .fixedSize(horizontal: false, vertical: true)
-            ForEach(q.options) { option in
-                Button { choose(option.id, in: q) } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Image(systemName: (picked[q.id] ?? []).contains(option.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(Color.togoMute)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: option.shownTitle).foregroundStyle(Color.togoSnow)
-                            if let detail = option.shownDetail {
-                                Text(verbatim: detail).font(.footnote).foregroundStyle(Color.togoMute)
-                            }
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                    }
-                    .frame(minHeight: 44)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits((picked[q.id] ?? []).contains(option.id) ? .isSelected : [])
-            }
-            if q.allowText {
-                TextField(ChatCopy.answerPlaceholder, text: binding(for: q.id), axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .padding(12)
-                    .background(Color.togoRaised, in: .rect(cornerRadius: 12, style: .continuous))
-            }
-        }
-    }
-
-    private func binding(for id: String) -> Binding<String> {
-        Binding { typed[id] ?? "" } set: { typed[id] = $0 }
-    }
-
-    private func choose(_ option: String, in q: HarnessQuestion) {
-        var set = picked[q.id] ?? []
-        if q.multi {
-            if set.contains(option) { set.remove(option) } else { set.insert(option) }
-        } else {
-            set = [option]
-        }
-        picked[q.id] = set
-        if answersOnTap { submit() }
-    }
-
-    private func submit() {
-        guard !sending, !sent else { return }
-        var answers: [String: [String]] = [:]
-        for q in question.questions {
-            var values = q.options.map(\.id).filter { (picked[q.id] ?? []).contains($0) }
-            let text = (typed[q.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty { values.append(text) }
-            answers[q.id] = values
-        }
-        sending = true
-        failed = false
-        Task {
-            let ok = await send(answers)
-            sent = ok
-            sending = false
-            failed = !ok
-        }
+            .motion(.respond, value: busy)
     }
 }
 
 /// "Needs you" in the beacon, the only accent in the chat.
-private struct NeedsHeader: View {
+struct NeedsHeader: View {
     var body: some View {
         StatusWord(status: .needsYou, font: .footnote)
             .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// An answered request, settled into one quiet line.
-private struct SettledLine: View {
+/// An answered request, settled into one quiet line. When it settles while on screen its
+/// check bounces once; history shows it still.
+struct SettledLine: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let text: String
+    var celebrates = false
+
+    @State private var bounces = 0
 
     var body: some View {
-        Label(text, systemImage: "checkmark")
-            .font(.footnote)
-            .foregroundStyle(Color.togoMute)
-            .frame(minHeight: 32, alignment: .leading)
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: "checkmark")
+                .symbolEffect(.bounce, options: .nonRepeating, value: bounces)
+        }
+        .font(.footnote)
+        .foregroundStyle(Color.togoMute)
+        .frame(minHeight: 32, alignment: .leading)
+        .onAppear { if celebrates, !reduceMotion { bounces += 1 } }
     }
 }

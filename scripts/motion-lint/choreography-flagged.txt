@@ -1,0 +1,31 @@
+// Every case under an "// expect" line must be flagged once by the choreography pass in
+// scripts/check-motion.sh; the count of "// expect" lines is the count of offences.
+// expect animation-without-value
+Text("a").animation(Motion.animation(.fade, reduce: r))
+// expect animation-without-value
+Text("a").animation(nil)
+// expect animation-without-value (spans lines)
+Text("a").animation(
+    Motion.animation(.fade, reduce: r)
+)
+// expect implicit-layout-role
+VStack {}.motion(.rowGrow, value: expanded)
+// expect implicit-layout-role
+VStack {}.motion(.collapse, value: open)
+// expect implicit-layout-role
+VStack {}.animation(Motion.animation(.paneFlow, reduce: r), value: page)
+// expect implicit-layout-role
+VStack {}.motion(.resize, value: open)
+// expect animation-around-async
+withAnimation(Motion.animation(.fade, reduce: r)) { await model.refresh() }
+// expect animation-around-async (spans lines)
+withAnimation(Motion.animation(.fade, reduce: r)) {
+    shown = true
+    Task { await model.load() }
+}
+// expect moving-transition-without-reduce-motion
+Text("a").transition(.move(edge: .leading))
+// expect moving-transition-without-reduce-motion
+Text("a").transition(.opacity.combined(with: .scale(scale: 0.96)))
+// expect moving-transition-without-reduce-motion
+Text("a").transition(.slide)

@@ -4,7 +4,8 @@ import TogoKit
 struct AgentStep: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showsMissing = false
+    /// The agents this machine lacks, folded away until asked for (spec §2.1, §2.2).
+    @State private var missing = Disclosure()
     let model: NewSessionModel
     let onStart: () async -> Void
 
@@ -12,13 +13,23 @@ struct AgentStep: View {
         StepScaffold(title: NewSessionCopy.agentTitle) {
             VStack(alignment: .leading, spacing: 24) {
                 agents
-                if case .loaded = model.agents, model.showsFlags { launchOptions }
+                    .phaseSwap(model.agents)
+                if case .loaded = model.agents, model.showsFlags {
+                    launchOptions
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                }
                 nameField
                 // At large text sizes the pinned footer would cover the list, so the error scrolls.
                 if dynamicTypeSize.isAccessibilitySize, let error = model.createError {
                     InlineError(message: error)
                 }
             }
+            // The agents arriving, the launch options and an error line move the steps below
+            // them on `resize`.
+            .resizesOnRows([
+                CaseName.of(model.agents), "\(model.showsFlags)", "\(model.createError != nil)",
+                "\(model.selectedPreset != nil)",
+            ])
         }
         // The list scrolls under the Start button behind the system's soft edge.
         .safeAreaBar(edge: .bottom) { footer }
@@ -41,9 +52,10 @@ struct AgentStep: View {
                 }
                 if !model.missingAgents.isEmpty {
                     missingToggle
-                    if showsMissing {
-                        ForEach(model.missingAgents, id: \.id) { agent in
+                    if missing.open {
+                        ForEach(Array(model.missingAgents.enumerated()), id: \.element.id) { index, agent in
                             agentRow(agent)
+                                .disclosed(missing, index: index)
                         }
                     }
                 }
@@ -73,11 +85,15 @@ struct AgentStep: View {
     private func star(_ agent: AgentInfo) -> some View {
         let on = model.isFavorite(agent.id)
         return Button {
-            withAnimation(Motion.animation(.confirm, reduce: reduceMotion)) { model.toggleFavorite(agent.id) }
+            withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { model.toggleFavorite(agent.id) }
         } label: {
+            // The star fills in place and bounces once when it is set; under Reduce Motion it
+            // only changes.
             Image(systemName: on ? "star.fill" : "star")
                 .font(.body)
                 .foregroundStyle(on ? Color.togoSnow : Color.togoMute)
+                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                .symbolEffect(.bounce, options: .nonRepeating, value: reduceMotion ? false : on)
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
@@ -89,7 +105,7 @@ struct AgentStep: View {
     /// Agents the machine lacks stay folded away, so the list is the ones that can start.
     private var missingToggle: some View {
         Button {
-            withAnimation(Motion.animation(.collapse, reduce: reduceMotion)) { showsMissing.toggle() }
+            Motion.toggle($missing, reduce: reduceMotion)
         } label: {
             HStack(spacing: 8) {
                 Text(NewSessionCopy.notInstalledHeading)
@@ -102,14 +118,15 @@ struct AgentStep: View {
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoMute)
-                    .rotationEffect(.degrees(showsMissing ? 90 : 0))
+                    .rotationEffect(.degrees(missing.isOpen ? 90 : 0))
+                    .motion(.respond, value: missing.isOpen)
             }
             .frame(minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isHeader)
-        .accessibilityValue(showsMissing ? NewSessionCopy.expanded : NewSessionCopy.collapsed)
+        .accessibilityValue(missing.isOpen ? NewSessionCopy.expanded : NewSessionCopy.collapsed)
         .padding(.top, 8)
     }
 
@@ -144,6 +161,7 @@ struct AgentStep: View {
                     .font(.body)
                     .foregroundStyle(Color.togoSnow)
                     .frame(minHeight: 44)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
     }
@@ -171,5 +189,6 @@ struct AgentStep: View {
         }
         .screenMargins()
         .padding(.vertical, 12)
+        .resizesOnRows(model.createError != nil)
     }
 }

@@ -48,16 +48,21 @@ struct ActivityBars: View {
 
     var body: some View {
         let values = Self.visible(samples)
-        if !values.isEmpty {
-            HStack(alignment: .bottom, spacing: Self.gap) {
-                ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(color(Self.shade(at: index, of: values.count, live: live)))
-                        .frame(width: Self.barWidth, height: Self.height(for: value))
+        // The bars fade in when the first samples arrive; the samples themselves step in place.
+        ZStack {
+            if !values.isEmpty {
+                HStack(alignment: .bottom, spacing: Self.gap) {
+                    ForEach(Array(values.enumerated()), id: \.offset) { index, value in
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(color(Self.shade(at: index, of: values.count, live: live)))
+                            .frame(width: Self.barWidth, height: Self.height(for: value))
+                    }
                 }
+                .frame(height: Self.maxHeight, alignment: .bottom)
+                .transition(.opacity)
             }
-            .frame(height: Self.maxHeight, alignment: .bottom)
-            .accessibilityHidden(true)
         }
+        .motion(.fade, value: values.isEmpty)
+        .accessibilityHidden(true)
     }
 }

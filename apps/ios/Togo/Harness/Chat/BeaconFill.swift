@@ -26,8 +26,12 @@ struct BeaconFill<S: InsettableShape>: View {
             .fill(Color.togoRaised)
             .overlay {
                 if drifts {
-                    TimelineView(.periodic(from: .now, by: 1.0 / 30)) { context in
-                        pools(at: context.date.timeIntervalSinceReferenceDate)
+                    // One Canvas whose only inputs are the two points, at most 30 frames a
+                    // second, paused with the rest (spec §4, §5).
+                    TimelineView(AnimationTimelineSchedule(minimumInterval: 1.0 / 30, paused: !drifts)) { context in
+                        Canvas { canvas, size in
+                            pools(at: context.date.timeIntervalSinceReferenceDate, in: &canvas, size: size)
+                        }
                     }
                 } else {
                     shape.fill(Color.togoAccent.opacity(Self.still))
@@ -41,6 +45,8 @@ struct BeaconFill<S: InsettableShape>: View {
             .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
                 lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
             }
+            // The drift is this screen's one self-moving thing: other loops hold still.
+            .preference(key: AmbientClaim.self, value: drifts)
             .accessibilityHidden(true)
     }
 
@@ -49,24 +55,20 @@ struct BeaconFill<S: InsettableShape>: View {
     }
 
     /// Two pools on slow loops (about 11 s and 17 s), crossing now and then.
-    private func pools(at time: TimeInterval) -> some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            let reach = max(size.width, size.height)
-            let a = BeaconDrift.point(time: time, period: 11, phase: 0)
-            let b = BeaconDrift.point(time: time, period: 17, phase: 2.1)
-            ZStack {
-                shape.fill(Color.togoAccent.opacity(Self.still * 0.5))
-                RadialGradient(
-                    colors: [Color.togoAccent.opacity(Self.peak), Color.togoAccent.opacity(0)],
-                    center: UnitPoint(x: a.x, y: a.y), startRadius: 0, endRadius: reach * 0.65
-                )
-                RadialGradient(
-                    colors: [Color.togoAccent.opacity(Self.peak * 0.7), Color.togoAccent.opacity(0)],
-                    center: UnitPoint(x: b.x, y: b.y), startRadius: 0, endRadius: reach * 0.5
-                )
-            }
-        }
+    private func pools(at time: TimeInterval, in canvas: inout GraphicsContext, size: CGSize) {
+        let rect = CGRect(origin: .zero, size: size)
+        let reach = max(size.width, size.height)
+        let a = BeaconDrift.point(time: time, period: 11, phase: 0)
+        let b = BeaconDrift.point(time: time, period: 17, phase: 2.1)
+        canvas.fill(Path(rect), with: .color(Color.togoAccent.opacity(Self.still * 0.5)))
+        canvas.fill(Path(rect), with: .radialGradient(
+            Gradient(colors: [Color.togoAccent.opacity(Self.peak), Color.togoAccent.opacity(0)]),
+            center: CGPoint(x: a.x * size.width, y: a.y * size.height), startRadius: 0, endRadius: reach * 0.65
+        ))
+        canvas.fill(Path(rect), with: .radialGradient(
+            Gradient(colors: [Color.togoAccent.opacity(Self.peak * 0.7), Color.togoAccent.opacity(0)]),
+            center: CGPoint(x: b.x * size.width, y: b.y * size.height), startRadius: 0, endRadius: reach * 0.5
+        ))
     }
 }
 

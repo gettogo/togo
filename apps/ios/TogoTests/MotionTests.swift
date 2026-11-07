@@ -13,7 +13,7 @@ struct MotionTests {
                 #expect(duration > 0, "\(role)")
             }
         }
-        #expect(MotionRole.allCases.count == 13)
+        #expect(MotionRole.allCases.count == 20)
     }
 
     @Test func reducedIsShortFadeOrInstant() {
@@ -22,13 +22,15 @@ struct MotionTests {
                 #expect(duration > 0 && duration <= 0.2, "\(role)")
             }
         }
-        for role in [MotionRole.fade, .dim, .listen] {
+        for role in [MotionRole.fade, .dim, .listen, .emphasis, .ambient] {
             #expect(Motion.spec(role).reduced == .instant, "\(role)")
         }
     }
 
+    /// Springs settle quickly. `emphasis` is the one bouncy nudge, and `progress` is critically
+    /// damped and slower so a streamed value never overshoots.
     @Test func springsSettleQuickly() {
-        for role in MotionRole.allCases {
+        for role in MotionRole.allCases where role != .emphasis && role != .progress {
             if case let .spring(response, damping) = Motion.spec(role).curve {
                 #expect(response <= 0.45, "\(role)")
                 #expect(damping >= 0.75, "\(role)")

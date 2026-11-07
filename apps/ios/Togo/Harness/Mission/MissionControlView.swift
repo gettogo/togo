@@ -32,22 +32,26 @@ struct MissionControlView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 26) {
-                ForEach(sections) { section in
-                    VStack(alignment: .leading, spacing: 10) {
-                        MissionSectionHeader(kind: section.kind, count: count(section))
-                        content(section)
+        // Rows and sections arriving or leaving glide on `resize`; text inside them updates in
+        // place (motion spec §2.5). Network changes are never animated implicitly.
+        IdentityKeyed(sections, key: MissionLayout.shape) { sections in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 26) {
+                    ForEach(sections) { section in
+                        VStack(alignment: .leading, spacing: 10) {
+                            MissionSectionHeader(kind: section.kind, count: count(section))
+                            content(section)
+                        }
+                        .id(section.kind.rawValue)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                     }
-                    .id(section.kind.rawValue)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .motion(.rowGrow, value: sections.map(\.rows.count))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
+            .overlay { placeholder(empty: sections.isEmpty) }
         }
-        .overlay { placeholder }
         .background(Color.togoInk)
         .navigationTitle(MissionCopy.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -68,23 +72,27 @@ struct MissionControlView: View {
         case .plan:
             if section.rows.isEmpty {
                 MissionEmptyLine(text: MissionCopy.empty(.plan))
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             } else {
                 ChecklistPrimitive(
                     checklist: MissionLayout.checklist(section.rows, summary: store.mission.summary.plan),
                     context: context, embedded: true
                 )
+                .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         case .status:
             statusSection(section)
         default:
             if section.rows.isEmpty {
                 MissionEmptyLine(text: MissionCopy.empty(section.kind))
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             } else {
                 MissionCard {
                     ForEach(section.rows) { row in
                         rowView(row, kind: section.kind)
                     }
                 }
+                .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
     }
@@ -113,8 +121,10 @@ struct MissionControlView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let status = section.status {
                 StatusPrimitive(status: status, context: context, embedded: true)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             } else if screens.isEmpty {
                 MissionEmptyLine(text: MissionCopy.nothingYet)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             if !screens.isEmpty {
                 MissionCard {
@@ -183,20 +193,34 @@ struct MissionControlView: View {
 
     // MARK: Placeholder
 
-    @ViewBuilder private var placeholder: some View {
-        if sections.isEmpty {
-            switch store.phase {
-            case .describing, .opening, .reconnecting:
-                ProgressView(MissionCopy.reading)
+    /// Reading or unavailable while there are no sections. It gives way to the sections in
+    /// their `resize` transaction, and its own reading → unavailable swap crossfades.
+    @ViewBuilder private func placeholder(empty: Bool) -> some View {
+        ZStack {
+            if empty {
+                switch store.phase {
+                case .describing, .opening, .reconnecting:
+                    ProgressView(MissionCopy.reading)
+                        .foregroundStyle(Color.togoMute)
+                        .transition(Motion.swap(reduce: reduceMotion))
+                case .live, .terminalOnly:
+                    ContentUnavailableView {
+                        Label(MissionCopy.unavailable, systemImage: "gauge.with.dots.needle.33percent")
+                    } description: {
+                        Text(MissionCopy.unavailableDetail)
+                    }
                     .foregroundStyle(Color.togoMute)
-            case .live, .terminalOnly:
-                ContentUnavailableView {
-                    Label(MissionCopy.unavailable, systemImage: "gauge.with.dots.needle.33percent")
-                } description: {
-                    Text(MissionCopy.unavailableDetail)
+                    .transition(Motion.swap(reduce: reduceMotion))
                 }
-                .foregroundStyle(Color.togoMute)
             }
+        }
+        .motion(.respond, value: placeholderReading)
+    }
+
+    private var placeholderReading: Bool {
+        switch store.phase {
+        case .describing, .opening, .reconnecting: true
+        case .live, .terminalOnly: false
         }
     }
 }

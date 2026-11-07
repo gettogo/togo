@@ -20,6 +20,12 @@ struct TutorialFlow: View {
     let onClose: (TutorialExit) -> Void
 
     @State private var demo: AppStore?
+    /// The last page's buttons as the bar shows them. A swipe moves the page with no
+    /// transaction, so the bar follows here: Continue gives way to the last page's two buttons
+    /// in one `resize`, and back.
+    @State private var readyFollowed: Bool?
+
+    private var readyShown: Bool { readyFollowed ?? (model.page == .ready) }
 
     var body: some View {
         NavigationStack {
@@ -31,6 +37,9 @@ struct TutorialFlow: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .background(Color.togoInk)
             .safeAreaInset(edge: .bottom, spacing: 0) { controls }
+            .onChange(of: model.page == .ready) { _, ready in
+                withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { readyFollowed = ready }
+            }
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -77,20 +86,24 @@ struct TutorialFlow: View {
         VStack(spacing: 16) {
             PageIndicator(page: model.page)
             VStack(spacing: 4) {
-                if model.page == .ready {
-                    Button(String(localized: "tutorial.ready.add", defaultValue: "Add your first machine")) {
-                        model.finish()
-                        onClose(.addMachine)
+                if readyShown {
+                    Group {
+                        Button(String(localized: "tutorial.ready.add", defaultValue: "Add your first machine")) {
+                            model.finish()
+                            onClose(.addMachine)
+                        }
+                        .buttonStyle(.primary)
+                        // At accessibility sizes the page carries this button, so the bar stays short.
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            Button(ReadyPage.demoTitle, action: openDemo)
+                                .buttonStyle(.secondary)
+                        }
                     }
-                    .buttonStyle(.primary)
-                    // At accessibility sizes the page carries this button, so the bar stays short.
-                    if !dynamicTypeSize.isAccessibilitySize {
-                        Button(ReadyPage.demoTitle, action: openDemo)
-                            .buttonStyle(.secondary)
-                    }
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
                 } else {
                     Button(String(localized: "tutorial.continue", defaultValue: "Continue")) { step(model.next) }
                         .buttonStyle(.primary)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
         }

@@ -31,18 +31,27 @@ enum AnswerOptionText {
 /// wrapping freely. Inline under a card's buttons, or as the body of `AnswerOptionsSheet`.
 struct AnswerOptionList: View {
     let options: [AnswerOption]
+    /// Opened by the person on screen: the options step in one after another (30 ms apart).
+    var revealing = false
+    /// The option on its way: it shows a spinner in place, the others dim.
+    var sending: Int?
     let pick: (AnswerOption) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
-                if index > 0 { Rectangle().fill(Color.togoLine).frame(height: 1) }
-                Button { pick(option) } label: { AnswerOptionRow(option: option) }
-                    .buttonStyle(AnswerOptionStyle())
-                    .accessibilityLabel(option.title)
-                    .accessibilityHint(option.explanation ?? "")
+                Group {
+                    if index > 0 { Rectangle().fill(Color.togoLine).frame(height: 1) }
+                    Button { pick(option) } label: { AnswerOptionRow(option: option, busy: sending == option.id) }
+                        .buttonStyle(AnswerOptionStyle())
+                        .opacity(sending != nil && sending != option.id ? 0.4 : 1)
+                        .accessibilityLabel(option.title)
+                        .accessibilityHint(option.explanation ?? "")
+                }
+                .revealOnAppear(index: index, active: revealing)
             }
         }
+        .motion(.respond, value: sending)
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
         .clipShape(.rect(cornerRadius: 12, style: .continuous))
     }
@@ -50,8 +59,20 @@ struct AnswerOptionList: View {
 
 private struct AnswerOptionRow: View {
     let option: AnswerOption
+    var busy = false
 
     var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            text
+            // A fixed slot, so a spinner never pushes the words.
+            ZStack {
+                if busy { ProgressView().controlSize(.small).transition(.opacity) }
+            }
+            .slot(width: busy ? 20 : 0, key: busy)
+        }
+    }
+
+    private var text: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(verbatim: option.title)
                 .font(.body.weight(.semibold))

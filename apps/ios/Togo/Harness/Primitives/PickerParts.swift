@@ -36,13 +36,18 @@ struct PickerRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if running {
-                    ProgressView().controlSize(.small)
-                } else if !held.isEmpty {
-                    Text(verbatim: held.count == 1 ? held[0] : PrimitiveCopy.holds(held.count))
-                        .font(.footnote)
-                        .foregroundStyle(Color.togoMute)
+                // The trailing accessory crossfades in place (spinner ↔ what the item holds).
+                ZStack(alignment: .trailing) {
+                    if running {
+                        ProgressView().controlSize(.small).transition(.opacity)
+                    } else if !held.isEmpty {
+                        Text(verbatim: held.count == 1 ? held[0] : PrimitiveCopy.holds(held.count))
+                            .font(.footnote)
+                            .foregroundStyle(Color.togoMute)
+                            .transition(.opacity)
+                    }
                 }
+                .motion(.respond, value: running)
             }
             .frame(minHeight: 44)
             .contentShape(.rect)
@@ -203,10 +208,13 @@ struct PickerItemCard: View {
                     Button {
                         run(picker.onSelect)
                     } label: {
-                        HStack(spacing: 8) {
-                            if actions.isRunning(picker.onSelect, target: item.id) { ProgressView().controlSize(.small) }
-                            Text(PrimitiveCopy.select)
-                        }
+                        let running = actions.isRunning(picker.onSelect, target: item.id)
+                        Text(PrimitiveCopy.select)
+                            .opacity(running ? 0 : 1)
+                            .overlay {
+                                if running { ProgressView().controlSize(.small).transition(.opacity) }
+                            }
+                            .motion(.respond, value: running)
                     }
                     .buttonStyle(PrimitiveCapsuleStyle(role: .primary, large: true))
                     .padding(.horizontal, Layout.margin)
@@ -248,11 +256,14 @@ struct PickerItemCard: View {
                             HStack {
                                 Text(verbatim: ref.label).fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 4)
-                                if actions.isRunning(ref.id, target: item.id) {
-                                    ProgressView().controlSize(.mini)
-                                } else if holds {
-                                    Image(systemName: "checkmark").font(.caption.weight(.bold))
+                                ZStack {
+                                    if actions.isRunning(ref.id, target: item.id) {
+                                        ProgressView().controlSize(.mini).transition(.opacity)
+                                    } else if holds {
+                                        Image(systemName: "checkmark").font(.caption.weight(.bold)).transition(.opacity)
+                                    }
                                 }
+                                .slot(width: 16, key: actions.isRunning(ref.id, target: item.id) || holds)
                             }
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(holds ? Color.togoInk : Color.togoSnow)

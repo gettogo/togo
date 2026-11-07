@@ -20,14 +20,14 @@ struct TabStrip: View {
     let beside: TabID?
     /// The window can show a second pane, so chips offer Open Beside.
     let canOpenBeside: Bool
-    /// Incoming request cards shrink into the chip of their session.
-    let namespace: Namespace.ID
+    /// The focused chip's surface slides from chip to chip.
+    @Namespace private var selection
     let onSelect: (TabID) -> Void
     let onOpenBeside: (TabID) -> Void
     let onClose: (TabID) -> Void
 
     init(
-        chips: [Chip], selected: TabID?, beside: TabID? = nil, canOpenBeside: Bool = false, namespace: Namespace.ID,
+        chips: [Chip], selected: TabID?, beside: TabID? = nil, canOpenBeside: Bool = false,
         onSelect: @escaping (TabID) -> Void, onOpenBeside: @escaping (TabID) -> Void = { _ in },
         onClose: @escaping (TabID) -> Void
     ) {
@@ -35,7 +35,6 @@ struct TabStrip: View {
         self.selected = selected
         self.beside = beside
         self.canOpenBeside = canOpenBeside
-        self.namespace = namespace
         self.onSelect = onSelect
         self.onOpenBeside = onOpenBeside
         self.onClose = onClose
@@ -51,6 +50,8 @@ struct TabStrip: View {
                     }
                 }
                 .padding(.horizontal, 12)
+                // One surface for the focused chip, sliding to the next one on the settle.
+                .motion(.tabSettle, value: selected)
             }
             .scrollIndicators(.hidden)
             .onChange(of: selected) { _, id in
@@ -85,15 +86,19 @@ struct TabStrip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background {
-                Capsule()
-                    .fill(isSelected || isBeside ? Color.togoRaised : Color.clear)
+                if isSelected {
+                    // Under Reduce Motion the surface cross-fades between chips instead of sliding.
+                    Capsule()
+                        .fill(Color.togoRaised)
+                        .matchedGeometryEffect(id: reduceMotion ? AnyHashable(chip.id) : AnyHashable("selection"), in: selection)
+                } else if isBeside {
+                    Capsule().fill(Color.togoRaised)
+                }
             }
-            .matchedGeometryEffect(id: chip.id, in: namespace, isSource: true)
             .frame(minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .motion(.tabSettle, value: isSelected)
         .accessibilityAddTraits(isSelected || isBeside ? .isSelected : [])
         .modifier(ChipDrag(id: chip.id, enabled: canOpenBeside || supportsMultipleWindows))
         .contextMenu {

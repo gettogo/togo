@@ -1,0 +1,3 @@
+# Choreography offences in area C known when the pass was added (path<TAB>rule<TAB>source).
+# Delete a line when its offence is fixed; check-motion.sh fails on stale lines and on new
+# offences. This file must end empty.

@@ -50,7 +50,10 @@ struct PrimitiveStateLook: Equatable {
 }
 
 /// A run state as its symbol, sized with the text beside it.
+///
+/// A change of state replaces the symbol in place on `respond`; reaching done bounces it once.
 struct PrimitiveStateGlyph: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let state: HarnessState
     var font: Font = .body
 
@@ -59,6 +62,9 @@ struct PrimitiveStateGlyph: View {
         Image(systemName: look.symbol)
             .font(font)
             .foregroundStyle(look.color)
+            .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+            .symbolEffect(.bounce, options: .nonRepeating, value: reduceMotion ? false : (state == .done || state == .ok))
+            .motion(.respond, value: state)
             .accessibilityHidden(true)
     }
 }

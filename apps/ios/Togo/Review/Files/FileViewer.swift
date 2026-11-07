@@ -8,6 +8,10 @@ struct FileViewer: View {
     @State private var model: FileViewerModel
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The header (breadcrumb, ref, cut-short notice) as drawn: it arrives with the file in a
+    /// `resize` transaction, so the code below moves down with it.
+    @State private var readyShown = LiveMirror<Bool>()
 
     init(model: FileViewerModel) {
         _model = State(initialValue: model)
@@ -16,8 +20,10 @@ struct FileViewer: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .phaseSwap(model.state)
             .background(Color.togoInk)
             .safeAreaInset(edge: .top, spacing: 0) { header }
+            .mirrors(model.state == .ready, into: $readyShown)
             .navigationTitle(Text(verbatim: model.fileName))
             .navigationBarTitleDisplayMode(.inline)
             .modifier(FindBar(model: model))
@@ -63,7 +69,7 @@ struct FileViewer: View {
     }
 
     @ViewBuilder private var header: some View {
-        if model.state == .ready {
+        if readyShown.read(model.state == .ready) {
             VStack(alignment: .leading, spacing: 4) {
                 if !model.breadcrumb.isEmpty { PathText(model.breadcrumb) }
                 if let ref = model.refBanner {
@@ -77,6 +83,7 @@ struct FileViewer: View {
             .padding(.horizontal, Layout.margin)
             .padding(.vertical, hasHeader ? 8 : 0)
             .background(Color.togoInk)
+            .transition(Motion.revealConceal(reduce: reduceMotion))
         }
     }
 
@@ -168,7 +175,7 @@ private struct ZoomableImage: View {
                         .onEnded { _ in settled = zoom }
                 )
                 .onTapGesture(count: 2) {
-                    withAnimation(Motion.animation(.confirm, reduce: reduceMotion)) {
+                    withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
                         zoom = zoom > 1 ? 1 : 3
                         settled = zoom
                     }

@@ -222,5 +222,11 @@ struct MachineAwakeRows: View {
             }
         }
         .groupedRows()
+        // Loading → the choices, or → Try again, and the footer's lines: rows arrive and leave
+        // on `resize`.
+        .resizesOnRows([
+            model.status != nil, model.loadFailed, model.error != nil,
+            model.status.map { !AwakeCopy.reason($0).isEmpty } ?? false,
+        ])
     }
 }

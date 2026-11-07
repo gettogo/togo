@@ -57,8 +57,10 @@ struct IslandCompactTrailing: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.togoAccent)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    .transition(.opacity)
             } else {
                 LiveStatusText(status: LiveStatus(state.status, stale: isStale), font: .subheadline, reason: state.reason)
+                    .transition(.opacity)
             }
         }
         // trunc-ok: the compact island holds a status word or a count
@@ -85,10 +87,13 @@ struct IslandMinimal: View {
                     .foregroundStyle(Color.togoAccent)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
                     .accessibilityLabel(LiveCopy.waiting(state.waiting))
+                    .transition(.opacity)
             } else if let bib = state.bib {
                 IslandBib(bib: bib, style: .caption)
+                    .transition(.opacity)
             } else {
                 IslandMark()
+                    .transition(.opacity)
             }
         }
         .environment(\.colorScheme, .dark)
@@ -125,6 +130,7 @@ struct IslandExpandedTrailing: View {
                 LiveElapsed(since: state.since)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
+                    .transition(.opacity)
             }
         }
         .padding(.trailing, 4)
@@ -156,6 +162,7 @@ struct IslandExpandedCenter: View {
                     // trunc-ok: "3 waiting"
                     .lineLimit(1)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    .transition(.opacity)
             }
         }
         .padding(.horizontal, 4)
@@ -183,6 +190,7 @@ struct IslandExpandedBottom: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(Color.togoRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .transition(.opacity)
             }
         }
         .padding(.top, 4)

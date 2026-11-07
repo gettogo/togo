@@ -4,6 +4,7 @@ import TogoKit
 /// A plan or todo list: a progress card with a ring and what is being worked on now, then the
 /// items with their states, children indented under their parent.
 struct ChecklistPrimitive: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let checklist: HarnessScreen.Checklist
     let context: PrimitiveContext
     /// Drawn inside another scroll view, such as a mission control section: no scroll of its own.
@@ -25,6 +26,7 @@ struct ChecklistPrimitive: View {
                 Text(PrimitiveCopy.nothingHere)
                     .foregroundStyle(Color.togoMute)
                     .frame(maxWidth: .infinity, minHeight: 120)
+                    .transition(Motion.swap(reduce: reduceMotion))
             } else {
                 VStack(spacing: 0) {
                     ForEach(ChecklistLogic.flatten(checklist.items), id: \.item.id) { entry in
@@ -33,8 +35,11 @@ struct ChecklistPrimitive: View {
                     }
                 }
                 .background(Color.togoRaised, in: .rect(cornerRadius: 18, style: .continuous))
+                .transition(Motion.swap(reduce: reduceMotion))
             }
         }
+        // Empty ↔ items is a swap in place (refreshes are network-driven, so keyed on it).
+        .motion(.respond, value: checklist.items.isEmpty)
         .accessibilityRotor(String(localized: "primitive.rotor.open", defaultValue: "Open items")) {
             ForEach(ChecklistLogic.flatten(checklist.items).filter { !ChecklistLogic.isFinished($0.item.state) }, id: \.item.id) { entry in
                 AccessibilityRotorEntry(entry.item.text, id: entry.item.id)
@@ -96,6 +101,7 @@ private struct ChecklistProgress: View {
                         .stroke(finished ? PrimitiveTint.ok : Color.togoSnow, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     Text(verbatim: "\(checklist.done)/\(checklist.total)")
+                        .rollingNumber(Double(checklist.done))
                         .font(.mono(.caption, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Color.togoSnow)
@@ -103,9 +109,10 @@ private struct ChecklistProgress: View {
                         .minimumScaleFactor(0.6)
                 }
                 .frame(width: ring, height: ring)
-                .motion(.collapse, value: fraction)
+                .motion(.progress, value: fraction)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(PrimitiveCopy.progress(done: checklist.done, total: checklist.total))
+                        .rollingNumber(Double(checklist.done))
                         .font(.headline)
                         .foregroundStyle(Color.togoSnow)
                     if let current = ChecklistLogic.current(checklist.items) {
@@ -114,6 +121,8 @@ private struct ChecklistProgress: View {
                             .foregroundStyle(Color.togoMute)
                             // trunc-ok: the current item, also listed in full below
                             .lineLimit(2)
+                            .contentTransition(.interpolate)
+                            .motion(.respond, value: current.text)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

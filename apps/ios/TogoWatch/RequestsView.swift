@@ -4,25 +4,39 @@ import TogoPush
 /// The first page: the oldest waiting request fills the screen; with none, "All clear"
 /// over the roster. Answering shows the next request.
 struct RequestsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: WatchStore
     /// An answered request kept on the page for a moment, so its result shows.
     @State private var held: String?
+    /// The page on screen. It follows the model's page in one presentation transaction, so the
+    /// next request or "All clear" crossfades in rather than popping.
+    @State private var shown: WatchHome.Page?
 
     var body: some View {
-        Group {
-            switch WatchHome.page(for: store.requests, holding: held) {
+        let page = WatchHome.page(for: store.requests, holding: held)
+        ZStack {
+            switch shown ?? page {
             case let .request(id, position, count):
                 RequestDetailView(store: store, requestId: id, position: position, count: count)
                     .id(id)
-                    .transition(.opacity)
+                    .transition(Motion.swap(reduce: reduceMotion))
             case .allClear:
                 AllClearView(store: store)
+                    .transition(Motion.swap(reduce: reduceMotion))
             }
+        }
+        .onChange(of: page, initial: true) { _, new in
+            guard shown != nil else {
+                shown = new
+                return
+            }
+            withAnimation(Motion.animation(.dropIn, reduce: reduceMotion)) { shown = new }
         }
         .onChange(of: store.requests.first?.requestId) { old, new in
             let answered = old.map { store.outcome($0) == .approved || store.outcome($0) == .denied } ?? false
             guard WatchHome.holds(previous: old, next: new, answeredHere: answered), let old else { return }
             held = old
+            // A model-level hold: the page itself changes through `shown`'s transaction.
             Task { @MainActor in
                 try? await Task.sleep(for: WatchHome.holdAfterAnswer)
                 if held == old { held = nil }
@@ -44,7 +58,7 @@ private struct AllClearView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                ForEach(Array(WatchHome.lines(store.sessions, limit: 4).enumerated()), id: \.offset) { _, line in
+                ForEach(WatchHome.lines(store.sessions, limit: 4), id: \.id) { line in
                     RosterLine(line: line)
                 }
             }

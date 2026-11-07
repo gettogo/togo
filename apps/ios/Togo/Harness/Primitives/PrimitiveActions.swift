@@ -1,6 +1,7 @@
 import Observation
 import SwiftUI
 import TogoKit
+import UIKit
 
 /// What an action's result says to the user, briefly: "Done", "Sent", a failure line, or that
 /// the terminal opened because no native route works.
@@ -95,13 +96,18 @@ struct PrimitiveFeedback: Equatable, Identifiable {
         return result
     }
 
+    /// The toast presents from the top on `dropIn`; its haptic plays with it.
     func show(_ feedback: PrimitiveFeedback) {
-        self.feedback = feedback
+        withAnimation(Motion.animation(.dropIn, reduce: Self.reduceMotion)) { self.feedback = feedback }
     }
 
+    /// The toast leaves by concealing; it never rides the arrival spring out.
     func clearFeedback(_ id: UUID) {
-        if feedback?.id == id { feedback = nil }
+        guard feedback?.id == id else { return }
+        withAnimation(Motion.animation(.conceal, reduce: Self.reduceMotion)) { feedback = nil }
     }
+
+    private static var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
 }
 
 extension View {
@@ -124,7 +130,10 @@ private struct PrimitiveActionsModifier: ViewModifier {
                 ZStack {
                     if let feedback = actions.feedback {
                         FeedbackToast(feedback: feedback)
-                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                            .transition(.asymmetric(
+                                insertion: Motion.present(from: .top, reduce: reduceMotion),
+                                removal: Motion.conceal(reduce: reduceMotion)
+                            ))
                             .task(id: feedback.id) {
                                 AccessibilityNotification.Announcement(feedback.title).post()
                                 guard !loopsPaused else { return }
@@ -134,7 +143,6 @@ private struct PrimitiveActionsModifier: ViewModifier {
                     }
                 }
                 .padding(.top, 8)
-                .motion(.dropIn, value: actions.feedback?.id)
             }
             .confirmationDialog(
                 actions.asking?.ref.confirm ?? "",
@@ -164,6 +172,7 @@ private struct FeedbackToast: View {
             HStack(spacing: 6) {
                 if feedback.isFailure {
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(PrimitiveTint.fail)
+                        .transition(.opacity)
                 }
                 Text(feedback.title)
                     .font(.subheadline.weight(.semibold))
@@ -208,12 +217,7 @@ struct PrimitiveActionRow: View {
             Button {
                 Task { await actions.trigger(ref, target: target, context: context) }
             } label: {
-                HStack(spacing: 6) {
-                    if actions.isRunning(ref.id, target: target) {
-                        ProgressView().controlSize(.small)
-                    }
-                    Text(ref.label)
-                }
+                BusyLabel(title: ref.label, busy: actions.isRunning(ref.id, target: target))
             }
             .buttonStyle(PrimitiveCapsuleStyle(role: ref.role, large: large))
             .disabled(actions.isRunning(ref.id, target: target))

@@ -11,6 +11,8 @@ enum WatchHome {
 
     /// One roster line: mono bib, session name, status word.
     struct Line: Equatable {
+        /// The session's identity, stable while its words change.
+        var id: String
         var bib: String
         var name: String
         var status: String
@@ -59,10 +61,17 @@ enum WatchHome {
         return subject.kind == "command" ? "$ " + text : text
     }
 
+    /// A session's identity across updates: its machine and session ids where the phone sent
+    /// them, otherwise its machine name and bib.
+    static func key(_ session: WatchSession) -> String {
+        "\(session.machineId ?? session.hostName)/\(session.sessionId ?? session.bib)"
+    }
+
     /// One line per session, those that need you first, at most `limit` lines.
     static func lines(_ sessions: [WatchSession], limit: Int? = nil) -> [Line] {
         let all = sessions.map { session in
             Line(
+                id: key(session),
                 bib: PromptText.clean(session.bib, maxLines: 1),
                 name: PromptText.clean(session.agentName, maxLines: 1),
                 status: WatchCopy.status(session),

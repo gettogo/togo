@@ -76,6 +76,10 @@ struct ReplyView: View {
     /// "01 Claude Code", the session the words go to.
     let title: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The state on screen, following the model's in one `resize` transaction, so a result
+    /// line arrives with the button below it moving down in step.
+    @State private var shown: WatchReplyModel.State?
 
     var body: some View {
         ScrollView {
@@ -89,16 +93,26 @@ struct ReplyView: View {
                 Button {
                     Task { await model.send() }
                 } label: {
-                    Text(model.state == .sending ? WatchCopy.sending : WatchCopy.send)
+                    // One label slot: "Send" and "Sending" crossfade in place.
+                    Text(state == .sending ? WatchCopy.sending : WatchCopy.send)
+                        .contentTransition(.interpolate)
                         .frame(maxWidth: .infinity, minHeight: 32)
                 }
                 .disabled(!model.canSend)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(.snappy, value: model.state)
         }
         .navigationTitle(WatchCopy.reply)
         .onChange(of: model.text) { model.edited() }
+        .onChange(of: model.state, initial: true) { _, new in
+            guard let old = shown else {
+                shown = new
+                return
+            }
+            // A result line arriving or leaving resizes; Send and Sending only respond.
+            let role: MotionRole = old.hasLine || new.hasLine ? .resize : .respond
+            withAnimation(Motion.animation(role, reduce: reduceMotion)) { shown = new }
+        }
         .onChange(of: model.state) { _, state in
             switch state {
             case .sent:
@@ -115,17 +129,32 @@ struct ReplyView: View {
         }
     }
 
+    private var state: WatchReplyModel.State { shown ?? model.state }
+
     @ViewBuilder private var status: some View {
-        switch model.state {
+        switch state {
         case .sent:
             Label(WatchCopy.replySent, systemImage: "checkmark")
                 .font(.footnote.weight(.semibold))
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         case .problem(let sentence):
             Text(sentence)
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
+                .id(sentence)
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         case .editing, .sending:
             EmptyView()
+        }
+    }
+}
+
+private extension WatchReplyModel.State {
+    /// The state shows a line of its own above the button.
+    var hasLine: Bool {
+        switch self {
+        case .sent, .problem: true
+        case .editing, .sending: false
         }
     }
 }

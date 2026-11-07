@@ -143,10 +143,14 @@ struct PaneView: View {
                 // terminal may be on screen in the other pane's pager, and a terminal has one
                 // place at a time.
                 PagePlaceholder(label: store.chipLabel(for: tab))
+                    .transition(.opacity)
             } else {
+                // A terminal has one place at a time, so it never lingers in a fade on its way to
+                // the other pane; the placeholder fades over it instead.
                 TerminalSlot(tab: tab.id, terminals: terminals)
                     .id(tab.id)
                     .opacity(Self.terminalOpacity(for: tab.link))
+                    .transition(.identity)
             }
             ConnectingOverlayHost(kind: overlay, addMachine: { store.showSheet(.addMachine) }) { retry(tab) }
         }

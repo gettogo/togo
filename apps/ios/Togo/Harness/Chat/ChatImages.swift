@@ -112,10 +112,15 @@ struct ChatThumbnail: View {
                     .aspectRatio(contentMode: square ? .fill : .fit)
                     .frame(width: square ? side : nil, height: square ? side : nil)
                     .frame(maxWidth: square ? side : side * 1.4, maxHeight: side)
+                    .transition(.opacity)
             } else {
                 tile
+                    .transition(.opacity)
             }
         }
+        // The picture crossfades over its placeholder in the same frame.
+        .motion(.respond, value: image != nil)
+        .motion(.respond, value: failed)
         .clipShape(.rect(cornerRadius: 10, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.togoLine, lineWidth: 0.5)

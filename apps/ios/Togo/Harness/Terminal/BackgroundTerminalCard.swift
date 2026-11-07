@@ -31,6 +31,8 @@ struct BackgroundJobCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: symbol)
+                        .contentTransition(.symbolEffect(.replace))
+                        .motion(.respond, value: symbol)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(look.color)
                         .frame(width: tile, height: tile)
@@ -70,20 +72,26 @@ struct BackgroundJobCard: View {
         job.state.isLive ? "play.rectangle" : PrimitiveStateLook(job.state).symbol
     }
 
-    @ViewBuilder private var tail: some View {
-        if job.tail.isEmpty {
-            if job.state.isLive {
-                Text(TerminalSyncCopy.noOutput)
-                    .font(.footnote)
-                    .foregroundStyle(Color.togoMute)
+    /// "No output yet" ↔ the tail crossfade; the tail's own lines stream in without motion.
+    private var tail: some View {
+        ZStack(alignment: .topLeading) {
+            if job.tail.isEmpty {
+                if job.state.isLive {
+                    Text(TerminalSyncCopy.noOutput)
+                        .font(.footnote)
+                        .foregroundStyle(Color.togoMute)
+                        .transition(.opacity)
+                }
+            } else {
+                Text(verbatim: job.tail.joined(separator: "\n"))
+                    .font(.mono(.caption2))
+                    .foregroundStyle(Color.togoSnow.opacity(0.8))
+                    .lineLimit(BackgroundJob.tailLines)
+                    .primitiveWell(radius: 10)
+                    .transition(.opacity)
             }
-        } else {
-            Text(verbatim: job.tail.joined(separator: "\n"))
-                .font(.mono(.caption2))
-                .foregroundStyle(Color.togoSnow.opacity(0.8))
-                .lineLimit(BackgroundJob.tailLines)
-                .primitiveWell(radius: 10)
         }
+        .motion(.fade, value: job.tail.isEmpty)
     }
 
     @ViewBuilder private var elapsed: some View {
@@ -92,9 +100,10 @@ struct BackgroundJobCard: View {
                 Text(verbatim: PrimitiveElapsed.string(0)).hidden()
             } else {
                 TimelineView(.periodic(from: started, by: 1)) { timeline in
-                    Text(verbatim: PrimitiveElapsed.string(timeline.date.timeIntervalSince(started)))
+                    let seconds = timeline.date.timeIntervalSince(started).rounded(.down)
+                    Text(verbatim: PrimitiveElapsed.string(seconds))
                         .font(.mono(.caption))
-                        .monospacedDigit()
+                        .rollingNumber(seconds)
                         .foregroundStyle(Color.togoMute)
                 }
             }

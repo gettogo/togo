@@ -7,30 +7,64 @@ import TogoKit
 /// Hardware keys: Return sends (or takes the highlighted completion), Shift-Return breaks the
 /// line, Up and Down move through the menu or the history, Tab takes a completion, Esc closes
 /// the menu or interrupts, Command-K focuses the field.
+///
+/// Motion: what the bar shows besides the field (the menu, the queued count, notices, the
+/// pictures, the mode chip, Stop) is mirrored in `shown`, so each change runs in one explicit
+/// transaction that moves the glass and the chat's inset with it. Arrivals reveal as the
+/// glass grows; leavers conceal first and the glass shrinks after (spec §2.1/§2.2).
 struct SmartCommandLine: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.loopsPaused) private var loopsPaused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: CommandLineModel
     /// Where a screen's non-screen open targets go, such as a diff or a URL.
     var onOpen: (HarnessOpen) -> Void = { _ in }
     @FocusState private var focused: Bool
+    @State private var shown: ComposerParts
+    @State private var leaving: Set<ComposerParts.Part> = []
 
     init(model: CommandLineModel, onOpen: @escaping (HarnessOpen) -> Void = { _ in }) {
         self.model = model
         self.onOpen = onOpen
+        _shown = State(initialValue: ComposerParts(model))
+    }
+
+    private func fades(_ part: ComposerParts.Part) -> Double { leaving.contains(part) ? 0 : 1 }
+
+    /// Follows the model: arrivals and changes in one `resize` transaction; anything leaving
+    /// conceals first, then the bar shrinks to what the model shows by then.
+    private func follow(_ parts: ComposerParts) {
+        let gone = shown.parts.subtracting(parts.parts)
+        guard !gone.isEmpty else {
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
+                shown = parts
+                leaving = []
+            }
+            return
+        }
+        withAnimation(Motion.animation(.conceal, reduce: reduceMotion), completionCriteria: .logicallyComplete) {
+            leaving.formUnion(gone)
+        } completion: {
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
+                shown = ComposerParts(model)
+                leaving = []
+            }
+        }
     }
 
     static let radius: CGFloat = 28
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if model.menu != .none {
+            if shown.menu {
                 CommandMenuPanel(model: model, screenTitle: screenTitle)
-                    .transition(.opacity)
+                    .opacity(fades(.menu))
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             bar
         }
-        .motion(.fade, value: model.menu == .none)
+        .onChange(of: ComposerParts(model)) { _, parts in follow(parts) }
+        .haptic(.error, trigger: model.notice) { _, notice in notice != nil }
         .task(id: model.draft) { await model.draftChanged() }
         .sheet(item: Binding(
             get: { model.presentedScreen.map(ScreenRequest.init) },
@@ -47,47 +81,58 @@ struct SmartCommandLine: View {
     private var bar: some View {
         VStack(alignment: .leading, spacing: 0) {
             // The prompts themselves show in the chat, each with Take back; here only how many.
-            if model.queuedCount > 0 {
-                Text(ComposerCopy.queuedCount(model.queuedCount))
+            if shown.queued > 0 {
+                Text(ComposerCopy.queuedCount(shown.queued))
                     .font(.footnote)
                     .foregroundStyle(Color.togoMute)
-                    .monospacedDigit()
+                    .rollingNumber(Double(shown.queued))
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(fades(.queued))
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
-            if let notice = model.notice {
+            if let notice = shown.notice {
                 Text(notice)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(PrimitiveTint.fail)
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.updatesFrequently)
+                    .opacity(fades(.notice))
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
+                    // How long the notice stays is the model's hold; its leaving is choreographed.
                     .task(id: notice) {
                         guard !loopsPaused else { return }
                         try? await Task.sleep(for: .seconds(5))
                         model.clearNotice()
                     }
             }
-            if let notice = model.attachments.notice {
+            if let notice = shown.attachNotice {
                 Text(notice)
                     .font(.footnote)
                     .foregroundStyle(Color.togoMute)
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(fades(.attachNotice))
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
                     .task(id: notice) {
                         guard !loopsPaused else { return }
                         try? await Task.sleep(for: .seconds(5))
                         model.attachments.clearNotice()
                     }
             }
-            if !model.attachments.isEmpty {
+            if shown.pictures {
                 AttachmentStrip(attachments: model.attachments)
-                    .transition(.opacity)
+                    .opacity(fades(.pictures))
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             field
             accessories
         }
-        .motion(.rowGrow, value: model.attachments.isEmpty)
+        // The glass is the container: it resizes in the same transaction as what it holds.
         .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
         .glassEffect(glass, in: .rect(cornerRadius: Self.radius, style: .continuous))
     }
@@ -123,6 +168,7 @@ struct SmartCommandLine: View {
             Task { await model.submit() }
         } label: {
             Image(systemName: model.working ? "text.append" : "arrow.up")
+                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                 .font(.body.weight(.bold))
                 .foregroundStyle(Color.togoInk)
                 .frame(width: 34, height: 34)
@@ -134,7 +180,8 @@ struct SmartCommandLine: View {
         .disabled(!model.canSend)
         .opacity(model.canSend ? 1 : 0.35)
         .accessibilityLabel(model.working ? ComposerCopy.queue : ComposerCopy.send)
-        .motion(.fade, value: model.canSend)
+        .motion(.respond, value: model.canSend)
+        .motion(.respond, value: model.working)
     }
 
     /// The chips in one row, or the mode chip on a row of its own above the others when the
@@ -142,17 +189,16 @@ struct SmartCommandLine: View {
     private var accessories: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 6) {
-                if model.showsModeChip { modeChip }
+                if shown.modeChip { shownModeChip }
                 tools
             }
             VStack(alignment: .leading, spacing: 0) {
-                if model.showsModeChip { modeChip }
+                if shown.modeChip { shownModeChip }
                 HStack(spacing: 6) { tools }
             }
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 8)
-        .motion(.fade, value: model.canInterrupt)
     }
 
     @ViewBuilder private var tools: some View {
@@ -173,10 +219,17 @@ struct SmartCommandLine: View {
             .buttonStyle(ComposerChipStyle())
         }
         Spacer(minLength: 0)
-        if model.canInterrupt {
+        if shown.stop {
             StopChip { Task { await model.interrupt() } }
-                .transition(.opacity)
+                .opacity(fades(.stop))
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
+    }
+
+    private var shownModeChip: some View {
+        modeChip
+            .opacity(fades(.modeChip))
+            .transition(Motion.revealConceal(reduce: reduceMotion))
     }
 
     private var modeChip: some View {
@@ -261,6 +314,44 @@ struct SmartCommandLine: View {
             .frame(width: 0, height: 0)
             .opacity(0)
             .accessibilityHidden(true)
+    }
+}
+
+/// What the bar shows besides the field, mirrored so each change is one transaction.
+struct ComposerParts: Equatable {
+    enum Part: Hashable { case menu, queued, notice, attachNotice, pictures, modeChip, stop }
+
+    var menu = false
+    var queued = 0
+    var notice: String?
+    var attachNotice: String?
+    var pictures = false
+    var modeChip = false
+    var stop = false
+
+    @MainActor init(_ model: CommandLineModel) {
+        menu = model.menu != .none
+        queued = model.queuedCount
+        notice = model.notice
+        attachNotice = model.attachments.notice
+        pictures = !model.attachments.isEmpty
+        modeChip = model.showsModeChip
+        stop = model.canInterrupt
+    }
+
+    init() {}
+
+    /// The parts present, for telling what leaves.
+    var parts: Set<Part> {
+        var out: Set<Part> = []
+        if menu { out.insert(.menu) }
+        if queued > 0 { out.insert(.queued) }
+        if notice != nil { out.insert(.notice) }
+        if attachNotice != nil { out.insert(.attachNotice) }
+        if pictures { out.insert(.pictures) }
+        if modeChip { out.insert(.modeChip) }
+        if stop { out.insert(.stop) }
+        return out
     }
 }
 

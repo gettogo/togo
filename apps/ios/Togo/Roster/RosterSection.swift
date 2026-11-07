@@ -229,11 +229,16 @@ struct RosterSection: View {
             Color.togoInk
             if selected == id {
                 shape.fill(Color.togoRaised).padding(.horizontal, 6)
+                    .transition(.opacity)
             }
             if cursor == id {
                 shape.strokeBorder(Color.togoSnow, lineWidth: 2).padding(.horizontal, 6)
+                    .transition(.opacity)
             }
         }
+        // The surface and the ring move with the selection on `respond`, never with layout.
+        .motion(.respond, value: selected == id)
+        .motion(.respond, value: cursor == id)
     }
 }
 
@@ -255,13 +260,15 @@ struct RosterMachineHeading: View {
                     .foregroundStyle(Color.togoSnow)
                 Text(verbatim: "\(count)")
                     .font(.system(.caption, design: .monospaced))
-                    .monospacedDigit()
                     .foregroundStyle(Color.togoMute)
+                    .rollingNumber(Double(count))
                 if let caption {
                     Text(caption)
                         .font(.footnote)
                         .foregroundStyle(Color.togoMute)
                         .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.interpolate)
+                        .transition(.opacity)
                 }
                 Spacer(minLength: 0)
                 if let onWake, !typeSize.isAccessibilitySize {
@@ -273,6 +280,8 @@ struct RosterMachineHeading: View {
             }
         }
         .textCase(nil)
+        // The reachability words change on `respond` as the machine comes and goes.
+        .motion(.respond, value: caption)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

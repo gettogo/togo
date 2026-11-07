@@ -6,6 +6,7 @@ import UIKit
 /// The row of pictures above the composer's field: each a thumbnail with its own Remove,
 /// progress while it uploads, Try Again when it did not. Tapping one previews it.
 struct AttachmentStrip: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let attachments: ComposerAttachments
     @State private var previewing: ImageViewerRequest?
 
@@ -19,7 +20,8 @@ struct AttachmentStrip: View {
                         onRemove: { attachments.remove(item.id) },
                         onRetry: { Task { await attachments.retry(item.id) } }
                     )
-                    .transition(.opacity)
+                    // Chips arrive and leave in ComposerAttachments' `resize` transactions.
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
             .padding(.horizontal, 12)
@@ -27,7 +29,6 @@ struct AttachmentStrip: View {
             .padding(.bottom, 2)
         }
         .scrollIndicators(.hidden)
-        .motion(.rowGrow, value: attachments.items.map(\.id))
         .fullScreenCover(item: $previewing) { request in
             let items = attachments.items
             ChatImageViewer(
@@ -109,11 +110,13 @@ private struct AttachmentChip: View {
                 Color.black.opacity(0.35)
                 ProgressView().controlSize(.small).tint(Color.togoSnow)
             }
+            .transition(.opacity)
         case .failed:
             ZStack {
                 Color.black.opacity(0.5)
                 Image(systemName: "arrow.clockwise").font(.footnote.weight(.semibold)).foregroundStyle(Color.togoSnow)
             }
+            .transition(.opacity)
         case .ready:
             EmptyView()
         }

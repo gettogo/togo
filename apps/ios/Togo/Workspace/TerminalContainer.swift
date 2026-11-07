@@ -24,6 +24,9 @@ final class TerminalContainer: UIViewController {
     /// Another layer covers the terminal, as the chat does: it takes no touches and VoiceOver
     /// passes it by.
     private(set) var covered = false
+    /// How many times the grid was fitted to a new size: once per fold, sidebar toggle or pane
+    /// change, never per frame of an animation (motion spec §4).
+    private(set) var fits = 0
 
     /// A container can be put on screen without appearing, as when a pager page that held
     /// something else starts showing a terminal, so it also attaches when its view reaches a
@@ -135,6 +138,7 @@ final class TerminalContainer: UIViewController {
         if size != fitted { noteResize() }
         guard size != fitted, let child = wanted, child.parent === self, !holdsForTransition() else { return }
         fitted = size
+        fits += 1
         view.setNeedsLayout()
         view.layoutIfNeeded()
         (child as? TerminalRefitting)?.refit()
@@ -162,6 +166,7 @@ final class TerminalContainer: UIViewController {
         child.didMove(toParent: self)
         // A hold another container put on it ends here, with a fit to this one.
         if !holding {
+            fits += 1
             (child as? TerminalRefitting)?.holdFit(false)
             (child as? TerminalRefitting)?.refit()
         }
@@ -211,6 +216,7 @@ final class TerminalContainer: UIViewController {
         if let child = wanted, child.parent === self {
             child.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             child.view.frame = view.bounds
+            fits += 1
         }
         held?.holdFit(false)
     }

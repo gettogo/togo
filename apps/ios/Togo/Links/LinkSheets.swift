@@ -134,11 +134,15 @@ struct LinksSheet: View {
                     .truncationMode(.middle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button(copied == url ? LinkCopy.copied : LinkCopy.copy) {
+            Button {
                 UIPasteboard.general.url = url
                 copied = url
+            } label: {
+                Text(copied == url ? LinkCopy.copied : LinkCopy.copy)
+                    .contentTransition(.interpolate)
             }
             .buttonStyle(.secondary(.fit))
+            .motion(.respond, value: copied == url)
             Button(LinkCopy.open) { handle.close { open(url) } }
                 .buttonStyle(.primary(.fit))
         }

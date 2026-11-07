@@ -130,6 +130,13 @@ private struct BrowseList: View {
                 directory(listing)
             }
         }
+        // Loading → a folder, or one folder → the next, crossfade in place (motion spec §2.3).
+        .phaseSwap(BrowseList.key(model.browsing))
+    }
+
+    private static func key(_ browsing: Load<ListDirResult>) -> String {
+        if case .loaded(let listing) = browsing { return "loaded " + listing.path }
+        return CaseName.of(browsing)
     }
 
     @ViewBuilder private func directory(_ listing: ListDirResult) -> some View {
@@ -183,6 +190,7 @@ private struct PlainStart: View {
                 if let error = model.createError { InlineError(message: error) }
                 StartButton(title: NewSessionCopy.plainStart, creating: model.creating, onStart: onStart)
             }
+            .resizesOnRows(model.createError != nil)
         }
     }
 }
@@ -198,8 +206,10 @@ struct StartButton: View {
             Task { await onStart() }
         } label: {
             Text(creating ? NewSessionCopy.starting : title)
+                .contentTransition(.interpolate)
         }
         .buttonStyle(.primary)
         .disabled(creating)
+        .motion(.respond, value: creating)
     }
 }

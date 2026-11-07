@@ -271,7 +271,7 @@ private struct KeyCap: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .motion(.confirm, value: selected)
+        .motion(.respond, value: selected)
     }
 }
 

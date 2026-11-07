@@ -3,16 +3,32 @@ import SwiftUI
 /// The one filled button in the app: it answers yes to something that needs the user.
 struct ApproveButton: View {
     let title: String
+    /// The answer is on its way: a spinner takes the words' place, the button keeps its size.
+    var busy = false
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: String, busy: Bool = false, action: @escaping () -> Void) {
         self.title = title
+        self.busy = busy
         self.action = action
     }
 
     var body: some View {
-        Button(title, action: action)
-            .buttonStyle(ApproveStyle())
+        Button(action: action) {
+            Text(title)
+                .opacity(busy ? 0 : 1)
+                .overlay {
+                    if busy {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Color.togoInk)
+                            .transition(.opacity)
+                    }
+                }
+                .motion(.respond, value: busy)
+        }
+        .buttonStyle(ApproveStyle())
+        .accessibilityLabel(title)
     }
 }
 
@@ -40,6 +56,7 @@ private struct ApproveStyle: ButtonStyle {
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
             .motion(.confirm, value: configuration.isPressed)
+            .motion(.respond, value: isEnabled)
     }
 }
 

@@ -113,6 +113,12 @@ struct DictationSettingsView: View {
             .groupedRows()
         }
         .groupedList()
+        // The engine's rows, a download's progress, a failure line, the speech model's state
+        // and the recent list come and go on `resize`; progress itself fills in place.
+        .resizesOnRows([
+            "\(engine.selection)", "\(engine.fraction != nil)", "\(engine.failure != nil)", "\(engine.isInstalled)",
+            "\(model.installing != nil)", model.availability.map { CaseName.of($0) } ?? "nil", "\(model.history.count)",
+        ])
         .navigationTitle(DictationCopy.title)
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: settings, initial: true) {
@@ -164,6 +170,7 @@ struct DictationSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(DictationCopy.downloading(language: language))
                 ProgressView(value: fraction)
+                    .motion(.progress, value: fraction)
                     .tint(Color.togoSnow)
             }
             .padding(.vertical, 6)

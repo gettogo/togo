@@ -25,21 +25,27 @@ struct RootView: View {
     }
 
     var body: some View {
-        Group {
+        // Loading, the first-run screen and the app swap as whole layers on `fade`: the first
+        // swap plays under the launch overlay, the next when the first machine is added.
+        ZStack {
             if !store.services.hostsLoaded {
                 Color.togoInk.ignoresSafeArea()
+                    .transition(.opacity)
             } else if hasNoMachines {
                 FirstRunView(tutorial: tutorial, launchPlaying: launchShown) {
                     store.sheet = .addMachine
                 }
                     .task { PerfSignposts.interactive() }
+                    .transition(.opacity)
             } else {
                 // The control center, or the sidebar beside the workspace, is the app's first
                 // usable screen; what launch put off starts once it is up.
                 controlCenter
                     .task { PerfSignposts.interactive() }
+                    .transition(.opacity)
             }
         }
+        .motion(.fade, value: RootStage(loaded: store.services.hostsLoaded, empty: hasNoMachines))
         .sheet(item: formSheet) { sheet in
             RootSheet(
                 sheet: sheet, store: store, onboarding: onboarding, zoom: zoom, tutorial: tutorial,
@@ -59,6 +65,11 @@ struct RootView: View {
         .readsFold()
         // Every cold launch; it hands over once the first screen is ready.
         .launchOverlay(shown: $launchShown, ready: store.services.hostsLoaded)
+    }
+
+    private struct RootStage: Equatable {
+        var loaded: Bool
+        var empty: Bool
     }
 
     /// Every sheet but the review, which has its own presentation.

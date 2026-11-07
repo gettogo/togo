@@ -32,21 +32,31 @@ public struct WorkSummary: Hashable, Sendable {
     public var steps: Int
     public var filesChanged: Int
     public var failed: Bool
+    /// The stretches the turn waited on the user; they do not count as work.
+    public var waits: [TurnClock.Wait]
 
-    public init(running: Bool, startedAt: Date?, endedAt: Date?, steps: Int, filesChanged: Int, failed: Bool) {
+    public init(running: Bool, startedAt: Date?, endedAt: Date?, steps: Int, filesChanged: Int, failed: Bool,
+                waits: [TurnClock.Wait] = []) {
         self.running = running
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.steps = steps
         self.filesChanged = filesChanged
         self.failed = failed
+        self.waits = waits
     }
 
-    /// How long the work took, or has taken so far at `now` while it runs.
+    /// The turn's stopwatch, or nil when its start is not known.
+    public var clock: TurnClock? {
+        startedAt.map { TurnClock(start: $0, end: running ? nil : endedAt, waits: waits) }
+    }
+
+    /// How long the work took, or has taken so far at `now` while it runs, with the waits on
+    /// the user taken out.
     public func elapsed(now: Date) -> TimeInterval? {
-        guard let startedAt else { return nil }
-        let end = running ? now : (endedAt ?? now)
-        return max(0, end.timeIntervalSince(startedAt))
+        guard var clock else { return nil }
+        if !running, clock.end == nil { clock.end = now }
+        return clock.worked(at: now)
     }
 }
 
@@ -57,7 +67,9 @@ public struct WorkSummary: Hashable, Sendable {
 /// steps without a turn next to each other share one work row. Items of a subagent's own
 /// conversation (with a `parent`) never appear.
 public enum TurnFold {
-    public static func rows(_ items: [HarnessItem]) -> [ChatRow] {
+    /// `resolvedAt` says when requests were answered (see `ResolutionLedger`), so a turn's
+    /// working time leaves out its waits.
+    public static func rows(_ items: [HarnessItem], resolvedAt: [String: Date] = [:]) -> [ChatRow] {
         var rows: [ChatRow] = []
         var turns: [String: Turn] = [:]
         var order: [Slot] = []
@@ -93,7 +105,7 @@ public enum TurnFold {
         for slot in order {
             switch slot {
             case .row(let row): rows.append(row)
-            case .turn(let id): rows.append(contentsOf: turns[id]?.rows(id: id) ?? [])
+            case .turn(let id): rows.append(contentsOf: turns[id]?.rows(id: id, resolvedAt: resolvedAt) ?? [])
             }
         }
         return rows
@@ -119,8 +131,11 @@ public enum TurnFold {
         var steps: [HarnessItem] = []
         var rest: [ChatRow] = []
         var turn: HarnessItem.Turn?
+        /// Everything but the turn item, in order, for the waits.
+        var all: [HarnessItem] = []
 
         mutating func add(_ item: HarnessItem) {
+            if case .turn = item.body {} else { all.append(item) }
             switch item.body {
             case .user: prompts.append(item)
             case .turn(let value): turn = value
@@ -135,10 +150,13 @@ public enum TurnFold {
             }
         }
 
-        func rows(id: String) -> [ChatRow] {
+        func rows(id: String, resolvedAt: [String: Date]) -> [ChatRow] {
             var rows = lead + prompts.map(ChatRow.prompt)
-            let summary = turn.map(TurnFold.summary) ?? TurnFold.computed(steps)
-            if !steps.isEmpty || summary.running || summary.steps > 0 {
+            var summary = turn.map(TurnFold.summary) ?? TurnFold.computed(steps)
+            summary.waits = TurnClock.waits(in: all, resolvedAt: resolvedAt, turnEnd: summary.running ? nil : summary.endedAt)
+            // A running turn with no step yet has no work line: the live line at the chat's
+            // foot carries it, and the work line arrives with the first step.
+            if !steps.isEmpty || summary.steps > 0 {
                 rows.append(.work(id: "work.\(id)", summary: summary, steps: steps))
             }
             return rows + rest

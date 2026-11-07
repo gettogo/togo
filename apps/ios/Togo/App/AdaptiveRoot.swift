@@ -91,6 +91,12 @@ struct AdaptiveRoot<Destination: View>: View {
     @State private var zoomSource: TabID?
     @State private var ownBar = PromptBarModel()
     @State private var windowHeight: CGFloat = 0
+    /// The sidebar as drawn. It follows `store.sidebar.isHidden` (set from many places) in one
+    /// `sidebar` transaction, so every toggle moves the same way.
+    @State private var sidebarShown: Bool?
+    /// The roster's bar as drawn. It rises back on `dropIn` when the cover closes, and goes at
+    /// once when the cover opens over it.
+    @State private var rosterBarShown: Bool?
 
     var body: some View {
         GeometryReader { proxy in
@@ -124,6 +130,16 @@ struct AdaptiveRoot<Destination: View>: View {
         .modifier(RequestCollapse(store: store))
         .onChange(of: store.workspace.selected, initial: true) { _, id in
             if let id { zoomSource = id }
+        }
+        .onChange(of: store.sidebar.isHidden) { _, hidden in
+            withAnimation(Motion.animation(.sidebar, reduce: reduceMotion)) { sidebarShown = !hidden }
+        }
+        .onChange(of: store.workspaceOpen) { _, open in
+            if open {
+                rosterBarShown = false
+            } else {
+                withAnimation(Motion.animation(.dropIn, reduce: reduceMotion)) { rosterBarShown = true }
+            }
         }
     }
 
@@ -185,16 +201,28 @@ struct AdaptiveRoot<Destination: View>: View {
         .transaction(value: store.workspaceOpen) { if reduceMotion { $0.disablesAnimations = true } }
     }
 
-    @ViewBuilder private var compactRoot: some View {
-        if store.monitorShown {
-            RosterMonitor(store: store, services: monitor, now: now)
-        } else {
-            // One live bar at a time: while the terminal covers the roster, the bar is the cover's.
-            RosterView(store: store, terminals: terminals, zoom: zoom, now: now, launchTarget: true)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if !store.workspaceOpen { promptBar }
-                }
+    /// The monitor and the roster swap as whole layers on `fade`.
+    private var compactRoot: some View {
+        ZStack {
+            if store.monitorShown {
+                RosterMonitor(store: store, services: monitor, now: now)
+                    .transition(.opacity)
+            } else {
+                // One live bar at a time: while the terminal covers the roster, the bar is the cover's.
+                RosterView(store: store, terminals: terminals, zoom: zoom, now: now, launchTarget: true)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if rosterBarShown ?? !store.workspaceOpen {
+                            promptBar
+                                .transition(.asymmetric(
+                                    insertion: Motion.present(from: .bottom, reduce: reduceMotion),
+                                    removal: .identity
+                                ))
+                        }
+                    }
+                    .transition(.opacity)
+            }
         }
+        .motion(.fade, value: store.monitorShown)
     }
 
     // MARK: Regular
@@ -206,8 +234,11 @@ struct AdaptiveRoot<Destination: View>: View {
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
         } else {
+            // The sidebar slides and fades on `sidebar`; the detail column (the terminal) takes
+            // its final width in one step, so its grid resizes once, never frame by frame
+            // (motion spec §4). The sidebar draws above it while it slides out.
             HStack(spacing: 0) {
-                if !store.sidebar.isHidden {
+                if sidebarShown ?? !store.sidebar.isHidden {
                     NavigationStack {
                         RosterView(store: store, terminals: terminals, wide: true, now: now, launchTarget: true)
                     }
@@ -215,16 +246,17 @@ struct AdaptiveRoot<Destination: View>: View {
                     .overlay(alignment: .trailing) {
                         Rectangle().fill(Color.togoLine).frame(width: 1 / displayScale).ignoresSafeArea()
                     }
-                    .transition(.move(edge: .leading))
+                    .transition(Motion.present(from: .leading, reduce: reduceMotion))
+                    .zIndex(1)
                 }
                 NavigationStack(path: $store.path) {
                     detailRoot(detail)
                         .navigationDestination(for: AppRoute.self, destination: destination)
                 }
                 .frame(maxWidth: .infinity)
+                .transaction(value: sidebarShown) { $0.animation = nil }
             }
             .background(Color.togoInk)
-            .motion(.sidebar, value: store.sidebar.isHidden)
         }
     }
 

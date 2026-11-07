@@ -31,6 +31,10 @@ struct AwayFromHomeNote: View {
     @State private var stepsShown = false
 
     var body: some View {
+        content.phaseSwap(state)
+    }
+
+    @ViewBuilder private var content: some View {
         switch state {
         case .ready:
             ReadinessLine(

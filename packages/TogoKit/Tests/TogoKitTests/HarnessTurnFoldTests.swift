@@ -49,10 +49,15 @@ struct HarnessTurnFoldTests {
         #expect(summary.elapsed(now: .now) == 72)
     }
 
-    @Test func runningTurnShowsWorkBeforeAnyStep() {
+    /// The live line at the chat's foot stands for a running turn until its first step.
+    @Test func runningTurnHasNoWorkLineBeforeAnyStep() {
         let rows = TurnFold.rows([S.user("u1", seq: 1), S.turn("u1", seq: 2, state: .running, steps: 0, files: 0)])
-        #expect(rows.map(\.id) == ["u1", "work.u1"])
-        guard case .work(_, let summary, _) = rows[1] else { Issue.record("no work row"); return }
+        #expect(rows.map(\.id) == ["u1"])
+        let stepped = TurnFold.rows([
+            S.user("u1", seq: 1), S.turn("u1", seq: 2, state: .running, steps: 1, files: 0), S.tool("t1", seq: 3, turn: "u1"),
+        ])
+        #expect(stepped.map(\.id) == ["u1", "work.u1"])
+        guard stepped.count == 2, case .work(_, let summary, _) = stepped[1] else { Issue.record("no work row"); return }
         #expect(summary.running)
     }
 

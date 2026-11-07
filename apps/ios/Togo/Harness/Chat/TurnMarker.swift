@@ -15,7 +15,6 @@ struct TurnMarkerRow: View {
             Text(verbatim: TurnMarkerCopy.marker(notice.text, gap: gap))
                 .font(.footnote)
                 .foregroundStyle(Color.togoMute)
-                .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .layoutPriority(1)
             hairline

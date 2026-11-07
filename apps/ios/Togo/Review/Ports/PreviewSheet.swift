@@ -46,6 +46,8 @@ private struct WebPreview: View {
                     content(page)
                 }
             }
+            // A failed load covers the page with its sentence on `fade`, and leaves the same way.
+            .motion(.fade, value: page?.failure)
             .background(Color.togoInk)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -84,6 +86,7 @@ private struct WebPreview: View {
                 action: .init(PortsCopy.reload) { reload() }
             )
             .background(Color.togoInk)
+            .transition(.opacity)
         }
     }
 

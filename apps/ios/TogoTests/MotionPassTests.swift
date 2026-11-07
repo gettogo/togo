@@ -60,10 +60,11 @@ import UIKit
             #expect(Motion.animation(role, reduce: false) != nil, "\(role)")
         }
         // Text and dimming land at once; movement cross-fades.
-        for role in [MotionRole.fade, .dim, .listen] {
+        for role in [MotionRole.fade, .dim, .listen, .emphasis, .ambient] {
             #expect(Motion.animation(role, reduce: true) == nil, "\(role)")
         }
-        for role in [MotionRole.tabSettle, .dropIn, .collapse, .shrinkIntoTab, .rowGrow, .paneFlow, .sidebar, .chrome] {
+        for role in [MotionRole.tabSettle, .dropIn, .collapse, .shrinkIntoTab, .rowGrow, .paneFlow, .sidebar, .chrome,
+                     .respond, .resize, .reveal, .conceal, .progress] {
             #expect(Motion.animation(role, reduce: true) != nil, "\(role)")
         }
     }
@@ -80,7 +81,9 @@ import UIKit
             case .easeInOut:
                 #expect(timing.cubicTimingParameters?.animationCurve == .easeInOut, "\(role)")
             }
-            #expect(Motion.nominalDuration(role) > 0 && Motion.nominalDuration(role) <= 1, "\(role)")
+            // `ambient` names a loop's period, not a transition's length.
+            let longest = role == .ambient ? 4.0 : 1.0
+            #expect(Motion.nominalDuration(role) > 0 && Motion.nominalDuration(role) <= longest, "\(role)")
         }
         #expect(Motion.nominalDuration(.fade) == 0.2)
         #expect(Motion.nominalDuration(.dim) == 0.6)

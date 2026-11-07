@@ -137,6 +137,11 @@ targets:
     platform: watchOS
     sources:
       - path: TogoWatch
+      # The app's motion roles and choreography, so the Watch moves the way the phone does.
+      # Motion.swift itself holds UIKit animators watchOS lacks; TogoWatch/WatchMotion.swift
+      # stands in for the part the Watch needs.
+      - path: Togo/Design/MotionTokens.swift
+      - path: Togo/Design/MotionChoreography.swift
     dependencies:
       - package: TogoPush
       - target: TogoWatchWidgets

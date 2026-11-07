@@ -43,6 +43,10 @@ struct RosterLine: View {
         }
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // A machine going away or connecting greys its lines on `respond`; the words inside a
+        // line otherwise update in place (design-language §3).
+        .motion(.respond, value: stale)
+        .motion(.respond, value: connecting)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenLabel)

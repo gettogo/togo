@@ -1,5 +1,6 @@
 import SwiftUI
 import TogoKit
+import UIKit
 
 /// A form of typed fields: toggles, choices, text, numbers and secrets. Each change commits
 /// on its own by running the field's action with `{"value": v}`; the control shows the new
@@ -44,7 +45,8 @@ struct SettingsPrimitive: View {
         Task {
             let result = await actions.perform(action, target: field.id, args: SettingsLogic.commitArgs(value), context: context)
             if result == nil || result?.result == .failed || result?.result == .fallback {
-                pending[field.id] = nil
+                // The control goes back to the confirmed value in place.
+                withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) { pending[field.id] = nil }
             }
         }
     }
@@ -109,7 +111,7 @@ struct SettingsFieldRow: View {
                     Text(help).font(.footnote).foregroundStyle(Color.togoMute)
                 }
             }
-            if running { ProgressView().controlSize(.small) }
+            RunningMark(running: running)
         }
     }
 }
@@ -127,7 +129,7 @@ private struct ChoiceList: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(field.label).font(.subheadline).foregroundStyle(Color.togoMute)
-                if running { ProgressView().controlSize(.small) }
+                RunningMark(running: running)
             }
             .padding(.bottom, 4)
             ForEach(field.options ?? []) { option in
@@ -180,7 +182,7 @@ private struct NumberField: View {
             HStack(spacing: 8) {
                 Text(field.label).foregroundStyle(Color.togoSnow)
                 Spacer(minLength: 8)
-                if running { ProgressView().controlSize(.small) }
+                RunningMark(running: running)
                 Text(verbatim: value == nil && draft == nil ? PrimitiveCopy.notSet : SettingsLogic.numberText(shown))
                     .font(.mono(.body))
                     .monospacedDigit()
@@ -201,6 +203,7 @@ private struct NumberField: View {
 
 /// Text that commits on Return or Save.
 private struct TextValueField: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let field: SettingsLogic.Field
     let value: String
     let editable: Bool
@@ -224,14 +227,19 @@ private struct TextValueField: View {
             } label: {
                 Text(field.label).foregroundStyle(Color.togoSnow)
             }
-            if running {
-                ProgressView().controlSize(.small)
-            } else if let draft, draft != value {
-                Button(PrimitiveCopy.save, action: save)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.togoSnow)
-                    .frame(minWidth: 44, minHeight: 44)
+            ZStack {
+                if running {
+                    ProgressView().controlSize(.small).transition(.opacity)
+                } else if let draft, draft != value {
+                    Button(PrimitiveCopy.save, action: save)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.togoSnow)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                }
             }
+            .motion(.respond, value: running)
+            .motion(.respond, value: draft != nil && draft != value)
         }
         .disabled(!editable)
         .onChange(of: value) { draft = nil }
@@ -247,6 +255,7 @@ private struct TextValueField: View {
 /// A secret: whether one is set, and a way to replace it. The field never holds or shows the
 /// stored value; what the user types leaves with the action and is cleared.
 private struct SecretField: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let field: SettingsLogic.Field
     let editable: Bool
     let running: Bool
@@ -259,18 +268,20 @@ private struct SecretField: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: field.isSet == true ? "key.fill" : "key")
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                     .foregroundStyle(Color.togoMute)
                     .accessibilityHidden(true)
                 Text(field.label).foregroundStyle(Color.togoSnow)
                 Spacer(minLength: 8)
-                if running { ProgressView().controlSize(.small) }
+                RunningMark(running: running)
                 Text(SettingsLogic.secretStatus(field))
                     .foregroundStyle(Color.togoMute)
                 if editable, !editing {
                     Button(field.isSet == true ? PrimitiveCopy.replace : PrimitiveCopy.set) {
-                        editing = true
+                        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { editing = true }
                         focused = true
                     }
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.togoSnow)
                     .frame(minWidth: 44, minHeight: 44)
@@ -278,6 +289,7 @@ private struct SecretField: View {
             }
             .accessibilityElement(children: .combine)
             if editing {
+                VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     SecureField(PrimitiveCopy.newValue, text: $entry, prompt: Text(field.placeholder ?? PrimitiveCopy.newValue))
                         .font(.mono(.body))
@@ -292,6 +304,8 @@ private struct SecretField: View {
                         .disabled(entry.isEmpty)
                 }
                 Text(PrimitiveCopy.secretFooter).font(.footnote).foregroundStyle(Color.togoMute)
+                }
+                .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .onDisappear { entry = "" }
@@ -305,7 +319,19 @@ private struct SecretField: View {
 
     private func close() {
         entry = ""
-        editing = false
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { editing = false }
         focused = false
+    }
+}
+
+/// A field's progress in a fixed slot beside it, so the control never shifts when it shows.
+private struct RunningMark: View {
+    let running: Bool
+
+    var body: some View {
+        ZStack {
+            if running { ProgressView().controlSize(.small).transition(.opacity) }
+        }
+        .slot(width: 20, key: running)
     }
 }

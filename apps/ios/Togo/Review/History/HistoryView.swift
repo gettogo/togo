@@ -17,6 +17,7 @@ struct HistoryView: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .phaseSwap(model.state)
             .background(Color.togoInk)
             .navigationTitle(HistoryCopy.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -78,9 +79,11 @@ struct HistoryView: View {
             } label: {
                 HStack {
                     Text(model.loadingMore ? HistoryCopy.loadingMore : HistoryCopy.showMore)
-                    if model.loadingMore { ProgressView() }
+                        .contentTransition(.interpolate)
+                    if model.loadingMore { ProgressView().transition(.opacity) }
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
+                .motion(.respond, value: model.loadingMore)
             }
             .buttonStyle(.secondary)
             .disabled(model.loadingMore)

@@ -126,6 +126,8 @@ struct SignInPromptView: View {
                 .buttonStyle(.primary)
                 .disabled(values.contains { $0.isEmpty })
         }
+        .resizesOnRows(error != nil)
+        .haptic(.error, trigger: error) { _, new in new != nil }
         .onAppear { focused = 0 }
     }
 

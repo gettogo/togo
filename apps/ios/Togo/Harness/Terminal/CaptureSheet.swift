@@ -55,7 +55,25 @@ struct CaptureSheet: View {
         .task(id: attempt) { await load() }
     }
 
-    @ViewBuilder private var content: some View {
+    /// Loading, failed and loaded crossfade in the sheet.
+    private var content: some View {
+        ZStack {
+            phaseView
+                .transition(.opacity)
+                .id(phaseKind)
+        }
+        .motion(.fade, value: phaseKind)
+    }
+
+    private var phaseKind: Int {
+        switch phase {
+        case .loading: 0
+        case .failed: 1
+        case .loaded: 2
+        }
+    }
+
+    @ViewBuilder private var phaseView: some View {
         switch phase {
         case .loading:
             ProgressView(TerminalSyncCopy.loading)

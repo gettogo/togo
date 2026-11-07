@@ -145,6 +145,7 @@ struct MachineForm: View {
                 }
                 if let error = importError ?? visibleError(.key) { FieldError(text: error) }
             }
+            .resizesOnRows((importError ?? visibleError(.key)) != nil)
             labelled(String(localized: "onboard.form.passphrase", defaultValue: "Passphrase, if the key has one")) {
                 SecureField("", text: $draft.passphrase)
                     .keptSecret()
@@ -201,6 +202,7 @@ struct MachineForm: View {
             if let error { FieldError(text: error) }
         }
         .padding(.vertical, 4)
+        .resizesOnRows(error != nil)
         // The separator would otherwise start at the error's text, past its symbol.
         .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
     }
@@ -233,6 +235,7 @@ struct MachineForm: View {
 }
 
 private struct FieldError: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let text: String
 
     var body: some View {
@@ -243,6 +246,7 @@ private struct FieldError: View {
         }
         .font(.footnote)
         .foregroundStyle(Color.togoSnow)
+        .transition(Motion.revealConceal(reduce: reduceMotion))
         .accessibilityLabel(String(localized: "onboard.form.errorPrefix", defaultValue: "Error: \(text)"))
     }
 }

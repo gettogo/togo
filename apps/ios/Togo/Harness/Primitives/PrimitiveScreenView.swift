@@ -5,6 +5,7 @@ import TogoKit
 /// not know. It redraws from the screen an action's result carries, says when the copy is
 /// stale, and always offers the terminal in the bar. The host supplies the navigation stack.
 struct PrimitiveScreenView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let screen: HarnessScreen
     let context: PrimitiveContext
     /// The screen an action's result carried, newer than `screen` until the host reads again.
@@ -15,8 +16,14 @@ struct PrimitiveScreenView: View {
         let shown = PrimitiveScreenLogic.newest(screen, latest)
         primitive(shown)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if shown.stale { staleLine(shown) }
+                if shown.stale {
+                    staleLine(shown)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
+                }
             }
+            // The stale line and the action bar arrive with the inset in one transaction.
+            .motion(.respond, value: shown.stale)
+            .motion(.respond, value: shown.actions.map(\.id))
             .navigationTitle(shown.title)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

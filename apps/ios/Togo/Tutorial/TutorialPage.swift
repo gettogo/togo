@@ -141,23 +141,28 @@ extension TutorialPoint where Detail == Text {
 /// Secondary detail for a page, folded away under "Learn more" so the page shows one idea.
 struct TutorialMore<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var expanded: Bool
+    /// Opens with the page growing and the points revealing; closes with the points concealing
+    /// before the page shrinks.
+    @State private var disclosure: Disclosure
     @ViewBuilder var content: Content
 
     init(expanded: Bool = false, @ViewBuilder content: () -> Content) {
-        _expanded = State(initialValue: expanded)
+        _disclosure = State(initialValue: Disclosure(open: expanded))
         self.content = content()
     }
+
+    private var expanded: Bool { disclosure.isOpen }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Button {
-                withAnimation(Motion.animation(.collapse, reduce: reduceMotion)) { expanded.toggle() }
+                Motion.toggle($disclosure, reduce: reduceMotion)
             } label: {
                 HStack(spacing: 6) {
                     Text(expanded
                         ? String(localized: "tutorial.more.hide", defaultValue: "Show less")
                         : String(localized: "tutorial.more.show", defaultValue: "Learn more"))
+                        .contentTransition(.interpolate)
                     Image(systemName: "chevron.down")
                         .font(.footnote.weight(.semibold))
                         .rotationEffect(.degrees(expanded ? 180 : 0))
@@ -167,13 +172,17 @@ struct TutorialMore<Content: View>: View {
                 .foregroundStyle(Color.togoSnow)
                 .frame(minHeight: 44)
                 .contentShape(.rect)
+                .motion(.respond, value: expanded)
             }
             .buttonStyle(.plain)
             .accessibilityValue(expanded
                 ? String(localized: "tutorial.more.expanded", defaultValue: "Expanded")
                 : String(localized: "tutorial.more.collapsed", defaultValue: "Collapsed"))
-            if expanded {
-                content.transition(.opacity)
+            if disclosure.open {
+                VStack(alignment: .leading, spacing: 20) {
+                    content
+                }
+                .disclosed(disclosure)
             }
         }
     }
@@ -225,6 +234,9 @@ struct ConnectionDiagram: View {
 
     private var complete: Bool { shown || !animated || reduceMotion }
 
+    /// The entrance waits this long, so it starts once the page has settled.
+    static let entranceDelay = 0.25
+
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             phone
@@ -239,10 +251,11 @@ struct ConnectionDiagram: View {
             localized: "tutorial.welcome.diagram",
             defaultValue: "This device connects over SSH or Mosh to your machine, where agents run inside tmux."
         ))
-        .task {
+        .onAppear {
             guard animated, !reduceMotion, !shown else { return }
-            try? await Task.sleep(for: .milliseconds(250))
-            withAnimation(Motion.animation(.dropIn, reduce: reduceMotion)) { shown = true }
+            // A first-run entrance: a beat after the page settles, the link draws in and the
+            // agents reveal one after another (30 ms apart, 150 ms at most).
+            withAnimation(Motion.animation(.progress, reduce: reduceMotion)?.delay(Self.entranceDelay)) { shown = true }
         }
     }
 
@@ -293,8 +306,13 @@ struct ConnectionDiagram: View {
                         .padding(.vertical, 3)
                         .background(Color.togoGrouped, in: .rect(cornerRadius: 4))
                         .opacity(complete ? 1 : 0)
-                        .offset(y: complete || reduceMotion ? 0 : 6)
-                        .animation(Motion.animation(.dropIn, reduce: reduceMotion)?.delay(Double(index) * 0.12), value: complete)
+                        .offset(y: complete ? 0 : Motion.revealRise(reduce: reduceMotion))
+                        // Each agent reveals on its own beat of the entrance's transaction.
+                        .transaction(value: complete) { transaction in
+                            guard transaction.animation != nil else { return }
+                            transaction.animation = Motion.animation(.reveal, reduce: reduceMotion)?
+                                .delay(Self.entranceDelay + Motion.revealDelay + Motion.staggerDelay(index))
+                        }
                 }
             }
             .padding(8)

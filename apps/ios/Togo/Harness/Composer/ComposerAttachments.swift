@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import TogoKit
 import UIKit
 
@@ -82,19 +83,28 @@ import UIKit
                 continue
             }
             let id = UUID()
-            items.append(Item(id: id, preview: prepared.preview, state: .uploading, encoded: prepared.encoded))
+            let item = Item(id: id, preview: prepared.preview, state: .uploading, encoded: prepared.encoded)
+            // The chip arrives and the composer's glass grows in one transaction.
+            withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { items.append(item) }
             uploads.append(Task { await self.deliver(id) })
         }
         for upload in uploads { await upload.value }
     }
 
     func remove(_ id: UUID) {
-        items.removeAll { $0.id == id }
+        withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { items.removeAll { $0.id == id } }
+    }
+
+    private static var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
+
+    /// A chip's state (uploading, ready, failed) crossfades in place.
+    private func setState(_ state: Item.State, at index: Int) {
+        withAnimation(Motion.animation(.respond, reduce: Self.reduceMotion)) { items[index].state = state }
     }
 
     func retry(_ id: UUID) async {
         guard let at = items.firstIndex(where: { $0.id == id }), case .failed = items[at].state else { return }
-        items[at].state = .uploading
+        setState(.uploading, at: at)
         await deliver(id)
     }
 
@@ -111,12 +121,12 @@ import UIKit
         do {
             let path = try await upload(fileName(encoded.fileExtension, index: items.firstIndex { $0.id == id } ?? 0), encoded.data)
             guard let at = items.firstIndex(where: { $0.id == id }) else { return }
-            items[at].state = .ready(path: path)
+            setState(.ready(path: path), at: at)
             // The chat shows the sent picture from here, without fetching it back.
             ChatImageLoader.shared.put(item.preview, path: path)
         } catch {
             guard let at = items.firstIndex(where: { $0.id == id }) else { return }
-            items[at].state = .failed(ServiceErrors.message(error))
+            setState(.failed(ServiceErrors.message(error)), at: at)
         }
     }
 

@@ -10,6 +10,7 @@ struct RequestDetailView: View {
     var position = 1
     var count = 1
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if let request = store.request(requestId) {
@@ -32,8 +33,11 @@ struct RequestDetailView: View {
                             .foregroundStyle(.secondary)
                             // trunc-ok: "1 of 3"
                             .lineLimit(1)
+                            .contentTransition(reduceMotion ? .identity : .numericText(value: Double(count)))
+                            .transition(.opacity)
                     }
                 }
+                .motion(.respond, value: count)
                 Text(request.title)
                     .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
@@ -68,6 +72,7 @@ struct RequestDetailView: View {
 }
 
 private struct AnswerButtons: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: WatchStore
     let request: PendingRequest
     let done: () -> Void
@@ -75,6 +80,9 @@ private struct AnswerButtons: View {
     private var outcome: WatchStore.Outcome? { store.outcome(request.requestId) }
     /// Off for a moment after the request shows; see `WatchHome.armDelay`.
     @State private var armed = false
+    /// The state on screen. It follows the store's in one transaction, so the buttons give way
+    /// to the result, and a failure line arrives, with the screen around them moving too.
+    @State private var shown: WatchStore.RequestState?
     private var canApprove: Bool { WatchStore.canApprove(request) }
 
     var body: some View {
@@ -84,7 +92,7 @@ private struct AnswerButtons: View {
             let _ = store.revision
             let state = store.state(of: request.requestId, at: timeline.date)
             VStack(spacing: 6) {
-                switch state {
+                switch shown ?? state {
                 case .approved:
                     result(WatchCopy.approved, systemImage: "checkmark")
                 case .denied:
@@ -96,10 +104,10 @@ private struct AnswerButtons: View {
                 case .expired:
                     result(WatchCopy.expired, systemImage: "clock")
                 case .open, .sending, .failed, .notSetUp:
-                    buttons(state)
+                    buttons(shown ?? state)
                 }
             }
-            .animation(.snappy, value: state)
+            .onChange(of: state, initial: true) { _, new in follow(new) }
         }
         .task {
             try? await Task.sleep(for: WatchHome.armDelay)
@@ -121,16 +129,30 @@ private struct AnswerButtons: View {
         }
     }
 
+    /// A result presents (`dropIn`); a change among the buttons' own states, such as sending or
+    /// a failure line, responds in place.
+    private func follow(_ new: WatchStore.RequestState) {
+        guard let old = shown else {
+            shown = new
+            return
+        }
+        guard old != new else { return }
+        let role: MotionRole = new.isResult && !old.isResult ? .dropIn : .respond
+        withAnimation(Motion.animation(role, reduce: reduceMotion)) { shown = new }
+    }
+
     @ViewBuilder private func buttons(_ state: WatchStore.RequestState) -> some View {
         let sending = state == .sending
         if state == .failed {
             Text(WatchCopy.sendFailed)
                 .font(.footnote)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         } else if state == .notSetUp {
             Text(WatchCopy.notSetUp(machine: request.host.map { PromptText.clean($0, maxLines: 1) }))
                 .font(.footnote)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
         Button {
             guard armed else { return }
@@ -144,6 +166,7 @@ private struct AnswerButtons: View {
         .buttonBorderShape(.capsule)
         .tint(.togoAccent)
         .disabled(!canApprove || sending)
+        .transition(Motion.swap(reduce: reduceMotion))
         if !canApprove {
             Text(WatchCopy.answerOnPhone)
                 .font(.footnote)
@@ -160,6 +183,7 @@ private struct AnswerButtons: View {
         .buttonStyle(.plain)
         .frame(minHeight: 36)
         .disabled(sending)
+        .transition(Motion.swap(reduce: reduceMotion))
     }
 
     private func result(_ title: String, systemImage: String) -> some View {
@@ -167,7 +191,17 @@ private struct AnswerButtons: View {
             .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(.quaternary, in: .capsule)
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            .transition(Motion.swap(reduce: reduceMotion))
+    }
+}
+
+private extension WatchStore.RequestState {
+    /// The request is settled and its result line takes the buttons' place.
+    var isResult: Bool {
+        switch self {
+        case .approved, .denied, .answered, .answeredElsewhere, .expired: true
+        case .open, .sending, .failed, .notSetUp: false
+        }
     }
 }
 

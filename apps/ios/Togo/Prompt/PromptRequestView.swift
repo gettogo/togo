@@ -5,6 +5,7 @@ import SwiftUI
 struct PromptRequestView: View {
     @Environment(\.loopsPaused) private var loopsPaused
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: PromptBarModel
     let request: PromptRequest
     let position: Int
@@ -13,6 +14,19 @@ struct PromptRequestView: View {
     @FocusState private var replyFocused: Bool
     @State private var showingAll = false
     @State private var showingMore = false
+    /// Where the answer stands on screen. It follows `request.state` (the network) through the
+    /// swap choreography: the answers conceal, then the bar resizes as the outcome line
+    /// reveals (motion spec §2.3).
+    @State private var shownState: Mirrored<PromptRequestState>
+
+    init(model: PromptBarModel, request: PromptRequest, position: Int, count: Int, replying: Bool) {
+        self.model = model
+        self.request = request
+        self.position = position
+        self.count = count
+        self.replying = replying
+        _shownState = State(initialValue: Mirrored(request.state))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: model.compact ? 6 : 10) {
@@ -26,7 +40,10 @@ struct PromptRequestView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             if replying {
-                if request.state == .withdrawn { stateLine(PromptCopy.withdrawn, failure: false) }
+                if shownState.value == .withdrawn {
+                    stateLine(PromptCopy.withdrawn, failure: false)
+                        .settling(shownState)
+                }
                 replyLine
             } else {
                 if let command = request.command, !command.isEmpty {
@@ -42,7 +59,8 @@ struct PromptRequestView: View {
                         .foregroundStyle(Color.togoSnow)
                         .frame(minHeight: 44)
                 }
-                outcome
+                Group { outcome }
+                    .settling(shownState)
             }
         }
         .padding(.horizontal, 16)
@@ -59,6 +77,12 @@ struct PromptRequestView: View {
                 options: request.more.map { AnswerOption(id: $0.id, label: $0.label) }
             ) { model.answer(.option($0.id), to: request.id) }
         }
+        .onChange(of: request.state) { _, new in
+            Motion.settle(
+                $shownState, to: new, small: PromptOutcomeMotion.isSmall(from: shownState.value, to: new),
+                reduce: reduceMotion
+            )
+        }
         .haptic(.approve, trigger: request.state) { _, new in new == .done(.approved) }
         .haptic(.deny, trigger: request.state) { _, new in new == .done(.denied) }
         .haptic(.error, trigger: request.state) { _, new in if case .failed = new { true } else { false } }
@@ -68,7 +92,7 @@ struct PromptRequestView: View {
 
     /// The answers, or where the answer stands once one is on its way or back.
     @ViewBuilder private var outcome: some View {
-        switch request.state {
+        switch shownState.value {
         case .open:
             answers
         case .failed(let message):
@@ -113,11 +137,14 @@ struct PromptRequestView: View {
             if let queue {
                 Text(queue)
                     .font(.system(.caption2, design: .monospaced))
-                    .monospacedDigit()
                     .foregroundStyle(Color.togoMute)
                     .fixedSize()
+                    .rollingNumber(Double(position))
+                    .transition(.opacity)
             }
         }
+        // The queue count appears and rolls on `respond`; the bar's height does not change.
+        .motion(.respond, value: queue)
         .contentShape(.rect)
         .onTapGesture { if !request.sessionID.isEmpty { model.onOpen(request) } }
         .accessibilityElement(children: .ignore)
@@ -194,6 +221,17 @@ struct PromptRequestView: View {
     }
 }
 
+/// Which outcome changes are a swap in place rather than a resize: an answer on its way only
+/// dims the answers, so open ↔ sending is one `respond` transaction (spec §2.3, rule 3).
+enum PromptOutcomeMotion {
+    static func isSmall(from old: PromptRequestState, to new: PromptRequestState) -> Bool {
+        switch (old, new) {
+        case (.open, .sending), (.sending, .open): true
+        default: false
+        }
+    }
+}
+
 /// The `>` that leads every line the user types into.
 struct PromptChevron: View {
     var body: some View {
@@ -245,11 +283,14 @@ struct PromptCommandWell: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(command)
             if fullHeight > shownHeight + 1 {
+                // Known from the first layout, so it is there from the first frame; a later
+                // change (rotation, text size) reveals rather than pops.
                 Button(PromptCopy.showAll, action: onShowAll)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoSnow)
                     .frame(minHeight: 44)
                     .contentShape(.rect)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
         .task(id: command) {

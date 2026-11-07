@@ -216,7 +216,8 @@ struct SignInBrowser: View {
             ZStack {
                 WebViewBox(view: model.view)
                     .ignoresSafeArea(edges: .bottom)
-                overlay
+                // Reaching → signed in covers the page in turn, crossfading (spec §2.3).
+                overlay.phaseSwap(model.phase)
             }
             .background(Color.togoInk)
             .navigationTitle(model.host)

@@ -11,8 +11,13 @@ struct DiffScreen: View {
     @AppStorage("review.diff.mode") private var storedMode: DiffMode = .split
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var width: CGFloat = 0
     @State private var draft: DiffModel.CommentDraft?
+    /// The write banner and the hunk bar as drawn: each comes and goes in a `resize`
+    /// transaction, so the code below moves with it.
+    @State private var messageShown = LiveMirror<DiffModel.Message?>()
+    @State private var readyShown = LiveMirror<Bool>()
 
     /// `onOpen` shows another review screen, such as an image the diff cannot draw.
     init(model: DiffModel, onOpen: ((ReviewRoute) -> Void)? = nil) {
@@ -26,6 +31,7 @@ struct DiffScreen: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .phaseSwap(model.state)
             .background(Color.togoInk)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .safeAreaInset(edge: .top, spacing: 0) { banner }
@@ -55,7 +61,8 @@ struct DiffScreen: View {
             .onAppear { model.mode = storedMode }
             .onChange(of: model.mode) { storedMode = model.mode }
             .onChange(of: showsSplit, initial: true) { model.showsSplit = showsSplit }
-            .motion(.fade, value: model.message)
+            .mirrors(model.message, into: $messageShown)
+            .mirrors(model.state == .ready, into: $readyShown)
             .haptic(.done, trigger: model.successes)
             .haptic(.discard, trigger: model.discards)
             .haptic(.error, trigger: model.message, when: { $0 != nil })
@@ -87,13 +94,13 @@ struct DiffScreen: View {
     // MARK: Banner
 
     @ViewBuilder private var banner: some View {
-        if let message = model.message {
+        if let message = messageShown.read(model.message) {
             WriteBanner(message: message) {
                 Task { await model.retry() }
             } dismiss: {
                 model.dismissMessage()
             }
-            .transition(.opacity)
+            .transition(Motion.revealConceal(reduce: reduceMotion))
         }
     }
 
@@ -125,7 +132,7 @@ struct DiffScreen: View {
                 Label(DiffCopy.options, systemImage: "slider.horizontal.3")
             }
         }
-        if model.state == .ready {
+        if readyShown.read(model.state == .ready) {
             ToolbarItemGroup(placement: .bottomBar) {
                 Button(DiffCopy.previousHunk, systemImage: "chevron.up") { model.previousHunk() }
                     .disabled(!model.canGoToPreviousHunk)

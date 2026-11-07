@@ -67,13 +67,17 @@ struct WaitingComplicationView: View {
     /// A lit beacon with the count when something waits, an unlit ring when clear.
     private var beacon: some View {
         ZStack {
+            // The system animates between entries: the beacon lights or goes out, the count rolls.
             if entry.count > 0 {
                 Circle().fill(Color.togoAccent)
+                    .transition(.opacity)
                 Text(entry.count, format: .number)
                     .font(.system(.caption, design: .monospaced).weight(.semibold))
                     .foregroundStyle(Color.black)
+                    .contentTransition(.numericText(value: Double(entry.count)))
             } else {
                 Circle().strokeBorder(Color.secondary, lineWidth: 2)
+                    .transition(.opacity)
             }
         }
         .widgetAccentable(entry.count > 0)
@@ -99,6 +103,7 @@ struct WaitingComplicationView: View {
             }
         case .accessoryInline:
             Text(Self.inline(entry.count))
+                .contentTransition(.interpolate)
         default:
             rectangular
         }
@@ -110,6 +115,7 @@ struct WaitingComplicationView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if entry.count == 0 {
                     Text(Self.allClear).font(.headline)
+                        .transition(.opacity)
                 } else {
                     // "04  Run npm test?"
                     HStack(spacing: 6) {
@@ -123,6 +129,7 @@ struct WaitingComplicationView: View {
                             .font(.headline).lineLimit(2).layoutPriority(1)
                     }
                     Text(Self.inline(entry.count)).font(.footnote).foregroundStyle(.secondary)
+                        .contentTransition(.numericText(value: Double(entry.count)))
                 }
             }
         }

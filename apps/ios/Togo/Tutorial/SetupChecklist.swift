@@ -128,11 +128,15 @@ extension SetupItem {
 /// The standard setup as a list to tick off. Each item opens to its exact steps for the machine
 /// kind picked at the top.
 struct SetupChecklist: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let ticked: Set<SetupItem>
     let detected: Set<SetupItem>
     let onToggle: (SetupItem) -> Void
     @State private var os: MachineOS = .macOS
+    /// The item whose steps are open, or closing.
     @State private var expanded: SetupItem?
+    /// How far its steps are open: they reveal as the card grows, and conceal before it shrinks.
+    @State private var steps: Disclosure
 
     init(
         ticked: Set<SetupItem>, detected: Set<SetupItem>, expanded: SetupItem? = nil, onToggle: @escaping (SetupItem) -> Void
@@ -141,6 +145,7 @@ struct SetupChecklist: View {
         self.detected = detected
         self.onToggle = onToggle
         _expanded = State(initialValue: expanded)
+        _steps = State(initialValue: Disclosure(open: expanded != nil))
     }
 
     var body: some View {
@@ -156,13 +161,28 @@ struct SetupChecklist: View {
                     }
                     SetupItemRow(
                         item: item, os: os, ticked: ticked.contains(item), detected: detected.contains(item),
-                        expanded: expanded == item,
+                        steps: expanded == item ? steps : Disclosure(),
                         onToggle: { onToggle(item) },
-                        onExpand: { expanded = expanded == item ? nil : item }
+                        onExpand: { expand(item) }
                     )
                 }
             }
             .background(Color.togoGrouped, in: .rect(cornerRadius: 16))
+            // Steps leaving never draw past the card as it shrinks.
+            .clipShape(.rect(cornerRadius: 16))
+        }
+    }
+
+    /// The open item closes the spec's way, content first; another item opens in one `resize`
+    /// while the steps it replaces conceal.
+    private func expand(_ item: SetupItem) {
+        if expanded == item {
+            Motion.toggle($steps, reduce: reduceMotion)
+            return
+        }
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
+            expanded = item
+            Motion.set($steps, open: true)
         }
     }
 }
@@ -174,9 +194,12 @@ private struct SetupItemRow: View {
     let os: MachineOS
     let ticked: Bool
     let detected: Bool
-    let expanded: Bool
+    /// Its steps: open, closing or closed.
+    let steps: Disclosure
     let onToggle: () -> Void
     let onExpand: () -> Void
+
+    private var expanded: Bool { steps.isOpen }
 
     var body: some View {
         let stacked = dynamicTypeSize.isAccessibilitySize
@@ -196,7 +219,7 @@ private struct SetupItemRow: View {
                 .padding(.leading, 6)
                 .padding(.trailing, 16)
             }
-            if expanded {
+            if steps.open {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(Array(item.steps(for: os).enumerated()), id: \.offset) { _, step in
                         SetupStepView(step: step)
@@ -205,10 +228,9 @@ private struct SetupItemRow: View {
                 .padding(.leading, stacked ? 16 : 56)
                 .padding(.trailing, 16)
                 .padding(.bottom, 16)
-                .transition(.opacity)
+                .disclosed(steps)
             }
         }
-        .motion(.fade, value: expanded)
     }
 
     private var tick: some View {
@@ -245,6 +267,7 @@ private struct SetupItemRow: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.togoMute)
                     .rotationEffect(.degrees(expanded ? 180 : 0))
+                    .motion(.respond, value: expanded)
             }
             .padding(.vertical, 12)
             .contentShape(.rect)

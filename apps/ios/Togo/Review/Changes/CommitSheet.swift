@@ -8,8 +8,12 @@ struct CommitSheet: View {
     static let subjectLimit = 72
 
     @Bindable var model: ChangesModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirmingAmend = false
     @FocusState private var messageFocused: Bool
+    /// The amend footer and the commit error as drawn: each arrives in a `resize` transaction.
+    @State private var amendShown = LiveMirror<Bool>()
+    @State private var errorShown = LiveMirror<String?>()
 
     var body: some View {
         NavigationStack {
@@ -36,6 +40,9 @@ struct CommitSheet: View {
         }
         .togoControls()
         .interactiveDismissDisabled(model.isWorking)
+        .mirrors(model.amend, into: $amendShown)
+        .mirrors(model.commitError, into: $errorShown)
+        .haptic(.error, trigger: model.commitError) { _, new in new != nil }
     }
 
     private var firstLineLength: Int {
@@ -76,7 +83,7 @@ struct CommitSheet: View {
                 .disabled(model.lastCommit == nil)
                 .listRowBackground(Color.togoGrouped)
         } footer: {
-            if model.amend {
+            if amendShown.read(model.amend) {
                 VStack(alignment: .leading, spacing: 6) {
                     if let replaces = model.amendReplaces {
                         Text(replaces)
@@ -88,6 +95,7 @@ struct CommitSheet: View {
                     }
                 }
                 .font(.footnote)
+                .transition(Motion.revealConceal(reduce: reduceMotion))
             }
         }
     }
@@ -100,7 +108,7 @@ struct CommitSheet: View {
                     .foregroundStyle(Color.togoSnow)
                     .listRowBackground(Color.togoGrouped)
             }
-            if let error = model.commitError {
+            if let error = errorShown.read(model.commitError) {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.subheadline)
                     .foregroundStyle(Color.togoSnow)
@@ -113,11 +121,19 @@ struct CommitSheet: View {
                     submit()
                 }
             } label: {
-                if model.isWorking {
-                    ProgressView().tint(Color.togoInk)
-                } else {
-                    Text(model.amend ? ChangesCopy.amendButton : ChangesCopy.commit)
+                // One slot: the spinner and the words crossfade, and the button keeps its size.
+                ZStack {
+                    if model.isWorking {
+                        ProgressView().tint(Color.togoInk)
+                            .transition(.opacity)
+                    } else {
+                        Text(model.amend ? ChangesCopy.amendButton : ChangesCopy.commit)
+                            .contentTransition(.interpolate)
+                            .transition(.opacity)
+                    }
                 }
+                .motion(.respond, value: model.isWorking)
+                .motion(.respond, value: model.amend)
             }
             .buttonStyle(.primary)
             .disabled(!model.canCommit)

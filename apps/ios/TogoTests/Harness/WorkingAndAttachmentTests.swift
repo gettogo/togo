@@ -29,15 +29,15 @@ import UIKit
 
     @Test func aSentPromptShowsTheRowBeforeTheHelperReportsWork() throws {
         let state = try #require(WorkingLogic.state(items: [], working: false, awaitingSince: t0, localSince: nil, now: t0 + 1))
-        #expect(state.since == t0)
+        #expect(state.clock.start == t0)
         #expect(state.step == nil)
-        #expect(WorkingCopy.line(since: state.since, now: t0 + 12) == "Working · 12s")
+        #expect(WorkingCopy.line(state, now: t0 + 12) == "Working · 12s")
     }
 
     @Test func theRunningTurnSetsTheClock() throws {
         let turn = item("turn", .turn(.init(state: .running, startedAt: WireDate(t0 - 30), endedAt: nil, steps: 2, filesChanged: 0)))
         let state = try #require(WorkingLogic.state(items: [turn], working: true, awaitingSince: t0, localSince: t0, now: t0 + 5))
-        #expect(state.since == t0 - 30)
+        #expect(state.clock.start == t0 - 30)
     }
 
     @Test func theNewestLiveStepNamesWhatHappens() {

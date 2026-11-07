@@ -19,12 +19,14 @@ struct WorkspaceView: View {
     @Bindable var store: AppStore
     let terminals: TerminalPool
 
-    @Namespace private var chipSpace
     @State private var status: String?
     @State private var finding = false
-    @State private var findText = ""
-    @State private var findMissed = false
-    @FocusState private var findFocused: Bool
+    @State private var findFocused = false
+    /// `showsStrip` as the rows follow it: a second tab's strip reveals in a `resize`
+    /// transaction, and the terminal under it lands once.
+    @State private var stripFollowed: Bool?
+    /// The session's bar items as the bar shows them (see `WorkspaceBarItems`).
+    @State private var barFollowed: WorkspaceBarItems?
     @State private var renameTarget: SessionRow?
     @State private var renameText = ""
     @State private var killTarget: WorkspaceTab?
@@ -58,6 +60,7 @@ struct WorkspaceView: View {
                         .opacity(chromeLayout.shown ? 1 : 0)
                         .allowsHitTesting(chromeLayout.shown)
                         .accessibilityHidden(!chromeLayout.shown)
+                        .transition(Motion.revealConceal(reduce: reduceMotion))
                 }
             }
             .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar })
@@ -98,8 +101,14 @@ struct WorkspaceView: View {
             .onChange(of: store.findRequests) {
                 guard let tab = store.focusedTab, terminals.handle(for: tab.id)?.search != nil else { return }
                 if zenLayout { zen.reveal() }
-                finding = true
-                findFocused = true
+                openFind()
+            }
+            .onChange(of: liveBar.key(tab: store.focusedTab?.id)) {
+                // An item arriving, leaving or changing face crossfades on `respond`.
+                withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { barFollowed = liveBar }
+            }
+            .onChange(of: showsStrip) { _, shows in
+                withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { stripFollowed = shows }
             }
             .alert(
                 renameTarget.map { ControlCenterCopy.renameTitle(SessionActions.label($0)) } ?? "",
@@ -132,10 +141,9 @@ struct WorkspaceView: View {
         }
     }
 
+    /// The panes land in their new arrangement at once and brighten into it (`WorkspacePanes`).
     private func openBeside(_ id: TabID) {
-        withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
-            store.openBeside(id)
-        }
+        store.openBeside(id)
     }
 
     /// The compose bar under the focused pane and, on a tabletop, the Keyboard button.
@@ -159,10 +167,12 @@ struct WorkspaceView: View {
     }
 
     /// The tab strip or find field has a place above the terminal, shown or emptied by zen.
-    private var rowsPlaced: Bool { showsStrip || finding }
+    private var rowsPlaced: Bool { stripShown || finding }
 
     /// One tab is already named in the title; the strip shows once there is a choice.
     private var showsStrip: Bool { store.workspace.tabs.count > 1 }
+
+    private var stripShown: Bool { stripFollowed ?? showsStrip }
 
     private var focusedRow: SessionRow? { store.focusedTab.flatMap { store.session(for: $0) } }
 
@@ -178,14 +188,15 @@ struct WorkspaceView: View {
     /// The tab strip and the find field, the only rows between the bar and the terminal.
     private var rows: some View {
         VStack(spacing: 0) {
-            if showsStrip {
+            if stripShown {
                 TabStrip(
                     chips: chips, selected: store.focusedTab?.id, beside: besideTab, canOpenBeside: panes.report.canSplit,
-                    namespace: chipSpace, onSelect: show, onOpenBeside: openBeside, onClose: { store.close($0) }
+                    onSelect: show, onOpenBeside: openBeside, onClose: { store.close($0) }
                 )
             }
             if finding {
-                findBar
+                WorkspaceFindBar(search: focusedSearch, focused: $findFocused, onDone: endFind)
+                    .transition(Motion.revealConceal(reduce: reduceMotion))
             }
             Rectangle()
                 .fill(Color.togoLine)
@@ -200,17 +211,26 @@ struct WorkspaceView: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if let tab = store.focusedTab {
             WorkspaceToolbar(
-                leading: leading, onLeading: leadingAction, runAgain: runAgain(tab),
+                leading: leading, onLeading: leadingAction, runAgain: bar.runAgain,
                 review: focusedRow.map { ReviewToolbarItems(store: store, row: $0, model: review) },
-                layer: store.layerItem,
-                // A compact width has the pill at the top of the chat instead.
-                mission: sizeClass == .regular ? store.missionItem : nil
+                layer: bar.layer, mission: bar.mission
             ) {
                 actions(for: tab, row: store.session(for: tab))
                     .onAppear { menuOpen = true }
                     .onDisappear { menuOpen = false }
             }
         }
+    }
+
+    private var bar: WorkspaceBarItems { barFollowed ?? liveBar }
+
+    /// The bar items the session has now.
+    private var liveBar: WorkspaceBarItems {
+        WorkspaceBarItems(
+            runAgain: store.focusedTab.flatMap(runAgain), layer: store.layerItem,
+            // A compact width has the pill at the top of the chat instead.
+            mission: sizeClass == .regular ? store.missionItem : nil
+        )
     }
 
     private func runAgain(_ tab: WorkspaceTab) -> WorkspaceRunAgain? {
@@ -272,10 +292,7 @@ struct WorkspaceView: View {
             Task { status = await store.copyLastLines(of: tab) }
         }
         if terminals.handle(for: tab.id)?.search != nil {
-            Button(WorkspaceCopy.find, systemImage: "magnifyingglass") {
-                finding = true
-                findFocused = true
-            }
+            Button(WorkspaceCopy.find, systemImage: "magnifyingglass", action: openFind)
         }
         if let links = terminals.handle(for: tab.id)?.links {
             Button(LinkCopy.linksOnScreen, systemImage: "link") {
@@ -336,52 +353,23 @@ struct WorkspaceView: View {
 
     // MARK: Find
 
-    private var findBar: some View {
-        HStack(spacing: 4) {
-            TextField(WorkspaceCopy.findPrompt, text: $findText)
-                .font(.body)
-                .foregroundStyle(Color.togoSnow)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .submitLabel(.search)
-                .focused($findFocused)
-                .onSubmit { find(backwards: false) }
-                .onChange(of: findText) { findMissed = false }
-            if findMissed {
-                Text(WorkspaceCopy.noMatches)
-                    .font(.footnote)
-                    .foregroundStyle(Color.togoMute)
-                    // trunc-ok: the fixed words "No matches"
-                    .lineLimit(1)
-            }
-            Button(WorkspaceCopy.findPrevious, systemImage: "chevron.up") { find(backwards: true) }
-                .labelStyle(.iconOnly)
-                .frame(minWidth: 44, minHeight: 44)
-            Button(WorkspaceCopy.findNext, systemImage: "chevron.down") { find(backwards: false) }
-                .labelStyle(.iconOnly)
-                .frame(minWidth: 44, minHeight: 44)
-            Button(WorkspaceCopy.findDone, action: endFind)
-                .font(.body.weight(.semibold))
-                .frame(minHeight: 44)
-        }
-        .foregroundStyle(Color.togoSnow)
-        .padding(.horizontal, 16)
+    private var focusedSearch: TerminalSearch? {
+        store.focusedTab.flatMap { terminals.handle(for: $0.id)?.search }
     }
 
-    private func find(backwards: Bool) {
-        guard !findText.isEmpty, let tab = store.focusedTab,
-              let search = terminals.handle(for: tab.id)?.search else { return }
-        findMissed = !search.find(findText, backwards)
+    /// The find row reveals above the terminal in a `resize` transaction.
+    private func openFind() {
+        findFocused = true
+        guard !finding else { return }
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { finding = true }
     }
 
+    /// Clears the marks and the field; the row conceals as the space above the terminal closes.
     private func endFind() {
         guard finding else { return }
-        if let tab = store.focusedTab {
-            terminals.handle(for: tab.id)?.search?.clear()
-        }
-        finding = false
-        findText = ""
-        findMissed = false
+        focusedSearch?.clear()
+        findFocused = false
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { finding = false }
     }
 
     // MARK: Shortcuts

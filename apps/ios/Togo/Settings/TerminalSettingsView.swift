@@ -4,6 +4,7 @@ import TogoTerminal
 import UniformTypeIdentifiers
 
 struct TerminalSettingsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let settings: AppSettings
     let fonts: [String]
     let update: (AppSettings) -> Void
@@ -29,6 +30,7 @@ struct TerminalSettingsView: View {
                 .onAppear { revealImportError(proxy) }
                 .onChange(of: importError) { revealImportError(proxy) }
         }
+        .haptic(.error, trigger: importError) { _, new in new != nil }
         .navigationTitle(settingsText("settings.terminal.title", "Terminal"))
         .navigationBarTitleDisplayMode(.inline)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item]) { result in
@@ -108,9 +110,11 @@ struct TerminalSettingsView: View {
     @ViewBuilder private var importFooter: some View {
         if let importError {
             Label(importError, systemImage: "exclamationmark.circle")
+                .transition(Motion.revealConceal(reduce: reduceMotion))
                 .foregroundStyle(Color.togoSnow)
         } else {
             Text(settingsText("settings.terminal.import.footer", "Reads iTerm2, Ghostty and Xresources theme files."))
+                .transition(Motion.revealConceal(reduce: reduceMotion))
         }
     }
 
@@ -158,10 +162,12 @@ struct TerminalSettingsView: View {
             changed.customThemes.removeAll { $0.id == theme.id }
             changed.customThemes.append(theme)
             changed.themeID = theme.id
-            importError = nil
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { importError = nil }
             update(changed)
         } catch {
-            importError = ThemeImport.message(for: error, filename: (try? result.get())?.lastPathComponent)
+            let message = ThemeImport.message(for: error, filename: (try? result.get())?.lastPathComponent)
+            // The error line arrives in a `resize` transaction, so the rows under it move with it.
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { importError = message }
         }
     }
 

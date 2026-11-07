@@ -14,6 +14,8 @@ struct LiveStatusText: View {
             .foregroundStyle(Self.color(status))
             // trunc-ok: a status word from a fixed short set
             .lineLimit(1)
+            // Between updates the system morphs one word into the next.
+            .contentTransition(.interpolate)
     }
 
     private static func color(_ status: LiveStatus) -> Color {
@@ -44,6 +46,7 @@ struct LiveLockScreenView: View {
             }
             if let command = LiveCopy.command(state.command) {
                 commandBlock(command)
+                    .transition(.opacity)
             }
         }
         .padding(.horizontal, 18)
@@ -69,6 +72,7 @@ struct LiveLockScreenView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
                     .layoutPriority(1)
+                    .transition(.opacity)
             }
         }
     }
@@ -85,6 +89,7 @@ struct LiveLockScreenView: View {
                     // trunc-ok: "3 waiting"
                     .lineLimit(1)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(state.waiting)))
+                    .transition(.opacity)
             }
         }
     }

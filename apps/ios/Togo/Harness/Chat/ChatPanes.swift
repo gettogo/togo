@@ -30,18 +30,26 @@ struct ChatPanes: View {
             // In book posture with one pane, the chat keeps to the leading page; the rest of the
             // pane stays ink so the terminal underneath does not show beside it.
             let page = geometry.chatFrame(of: pane) ?? rect
+            let shown = harness.shownLayer == .chat
             ZStack {
-                if harness.shownLayer == .chat {
+                // Kept alive under the terminal layer, only hidden, so its scroll position and
+                // folds are where they were when the chat comes back. Its loops hold still while
+                // it is away.
+                if harness.chatAvailable {
                     ChatView(store: harness, actions: store.chatActions(for: id))
                         .padding(.bottom, bottom)
                         .padding(.leading, max(0, page.minX - rect.minX))
                         .padding(.trailing, max(0, rect.maxX - page.maxX))
                         .background(Color.togoInk)
+                        .opacity(shown ? 1 : 0)
+                        .allowsHitTesting(shown)
+                        .accessibilityHidden(!shown)
+                        .environment(\.loopsPaused, !shown)
                         .transition(.opacity)
                         .simultaneousGesture(TapGesture().onEnded { store.focus(pane) })
                 }
             }
-            .motion(.fade, value: harness.shownLayer)
+            .motion(.fade, value: shown)
             // A subagent's own conversation, from a work step or a mission row.
             .subagentChat(store: harness, actions: store.chatActions(for: id))
             .frame(width: rect.width, height: max(0, rect.height - top))
@@ -74,10 +82,15 @@ struct LayerToolbarItem: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Button(title, systemImage: symbol) {
+            Button {
                 // The terminal under the chat must not keep the keyboard.
                 if layer == .terminal { Self.resignKeyboard() }
-                toggle()
+                // The symbol turns into the other layer's; the layers themselves cross-fade on
+                // their own role.
+                withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) { toggle() }
+            } label: {
+                Label(title, systemImage: symbol)
+                    .contentTransition(UIAccessibility.isReduceMotionEnabled ? .identity : .symbolEffect(.replace))
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
             .accessibilityHint(layer == .chat ? ChatCopy.showTerminalHint : ChatCopy.showChatHint)

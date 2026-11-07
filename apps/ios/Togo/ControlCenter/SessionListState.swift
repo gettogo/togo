@@ -89,7 +89,11 @@ struct RequestCollapse: ViewModifier {
         content.task(id: store.answeredCardIDs) {
             let ids = store.answeredCardIDs
             guard await store.holdAnswered(ids, hold: Self.outcomeHold) else { return }
-            withAnimation(Motion.animation(.collapse, reduce: reduceMotion)) {
+            // The hold is a model-level wait; the visual change is a choreography: the bar
+            // conceals the answered card before the next stage rises (`PromptBar.move`), and
+            // everything else that moves with it (a roster line's word, the bar's height)
+            // travels on `resize`.
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
                 store.dismissAnswered(ids)
             }
         }

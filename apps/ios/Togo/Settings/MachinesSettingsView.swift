@@ -54,10 +54,15 @@ struct MachinesSettingsView: View {
                     action: .init(settingsText("settings.machines.add", "Add a machine"), run: add)
                 )
                 .background(Color.togoInk)
+                .transition(.opacity)
             } else {
                 list
+                    .transition(.opacity)
             }
         }
+        // The empty state and the list swap on `fade` as the first machine arrives or the last
+        // leaves.
+        .motion(.fade, value: machines.isEmpty && removing.isEmpty)
         .navigationTitle(settingsText("settings.machines.title", "Machines"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -165,6 +170,8 @@ struct MachinesSettingsView: View {
             }
         }
         .groupedList()
+        // Machines and pending removals arriving or leaving move the list on `resize`.
+        .resizesOnRows([machines.map { "\($0.id)" }, removing.map { "\($0.id)" }])
     }
 }
 

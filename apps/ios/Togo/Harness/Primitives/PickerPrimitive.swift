@@ -9,6 +9,7 @@ import TogoKit
 /// action is also in the row's context menu and VoiceOver actions.
 struct PickerPrimitive: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let picker: HarnessScreen.Picker
     let context: PrimitiveContext
     @State private var model: PickerModel
@@ -37,8 +38,12 @@ struct PickerPrimitive: View {
             .sheet(item: $card) { item in
                 PickerItemCard(item: item, picker: picker, parent: actions, context: context)
             }
-            .motion(.collapse, value: model.collapsed)
-            .motion(.fade, value: model.picking)
+    }
+
+    /// Picking mode and group folds change the List in a `resize` transaction at the tap, never
+    /// through an implicit animation on the List.
+    private func setPicking(_ id: String?) {
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { model.picking = id }
     }
 
     @ViewBuilder private var content: some View {
@@ -64,6 +69,7 @@ struct PickerPrimitive: View {
                         if !itemActions.isEmpty { roleChips }
                         if let picking = model.picking, let ref = itemActions.first(where: { $0.id == picking }) {
                             pickBanner(ref)
+                                .transition(Motion.revealConceal(reduce: reduceMotion))
                         }
                         if hasChips { filterChips }
                     }
@@ -85,7 +91,10 @@ struct PickerPrimitive: View {
         }
         .groupedList()
         .overlay {
-            if groups.isEmpty { empty }
+            Group {
+                if groups.isEmpty { empty.transition(.opacity) }
+            }
+            .motion(.fade, value: groups.isEmpty)
         }
     }
 
@@ -152,7 +161,7 @@ struct PickerPrimitive: View {
     }
 
     private func assign(_ ref: HarnessActionRef, _ item: PickerModel.Item) {
-        model.picking = nil
+        setPicking(nil)
         Task { await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), context: context) }
     }
 
@@ -172,7 +181,7 @@ struct PickerPrimitive: View {
                         holder: PickerModel.holders(of: ref.id, in: picker.items).first?.title,
                         on: model.picking == ref.id
                     ) {
-                        model.picking = model.picking == ref.id ? nil : ref.id
+                        setPicking(model.picking == ref.id ? nil : ref.id)
                     }
                 }
             }
@@ -187,7 +196,7 @@ struct PickerPrimitive: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button(PrimitiveCopy.cancel) { model.picking = nil }
+            Button(PrimitiveCopy.cancel) { setPicking(nil) }
                 .buttonStyle(PrimitiveCapsuleStyle(role: .normal))
         }
         .padding(.leading, 14)
@@ -238,7 +247,7 @@ struct PickerPrimitive: View {
             .padding(.horizontal, 16)
         }
         .scrollIndicators(.hidden)
-        .motion(.fade, value: model.filterValues)
+        .motion(.respond, value: model.filterValues)
     }
 
     private var filterMenu: some View {
@@ -269,7 +278,7 @@ struct PickerPrimitive: View {
         let count = model.hasNarrowing ? group.items.count : group.total
         return Button {
             guard !usesSidebar, !model.isSearching else { return }
-            model.toggle(group)
+            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { model.toggle(group) }
         } label: {
             HStack(spacing: 8) {
                 Text(verbatim: group.name ?? PrimitiveCopy.other)
@@ -283,7 +292,7 @@ struct PickerPrimitive: View {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.togoMute)
-                        .rotationEffect(.degrees(model.isExpanded(group) ? 90 : 0))
+                        .rotationEffect(.degrees(model.isExpanded(group) && !reduceMotion ? 90 : 0))
                 }
             }
             .frame(minHeight: 32)

@@ -58,6 +58,28 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     }
 }
 
+/// The session's own bar items as the bar shows them. The workspace keeps them in step with the
+/// session: an item arriving or leaving as capabilities and state come in
+/// crossfades in a `respond` transaction instead of popping.
+struct WorkspaceBarItems {
+    var runAgain: WorkspaceRunAgain?
+    var layer: LayerToolbarItem?
+    var mission: MissionToolbarItem?
+
+    /// What the items look like, to tell a change worth animating from a new closure.
+    struct Key: Equatable {
+        var tab: TabID?
+        var running: Bool?
+        var layer: SessionLayer?
+        var mission: Bool
+    }
+
+    func key(tab: TabID?) -> Key {
+        Key(tab: tab, running: runAgain?.running, layer: layer?.layer, mission: mission != nil)
+    }
+
+}
+
 /// "Run again" once the session's agent stopped; while the helper starts it the item waits.
 struct WorkspaceRunAgain {
     var running: Bool

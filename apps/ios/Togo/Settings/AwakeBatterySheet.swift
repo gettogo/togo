@@ -5,6 +5,7 @@ struct AwakeBatterySheet: View {
     let name: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var copied = false
     @State private var copies = 0
 
@@ -27,9 +28,12 @@ struct AwakeBatterySheet: View {
                         copied = true
                         AccessibilityNotification.Announcement(AwakeCopy.copied).post()
                     } label: {
+                        // "Copied" crossfades in on `respond`, in a button that keeps its size.
                         Text(copied ? AwakeCopy.copied : settingsText("awake.sheet.copy", "Copy command"))
+                            .contentTransition(reduceMotion ? .opacity : .interpolate)
                     }
                     .buttonStyle(.primary(.full))
+                    .motion(.respond, value: copied)
                     Button(settingsText("awake.sheet.done", "Done")) { dismiss() }
                         .buttonStyle(.secondary(.full))
                 }
