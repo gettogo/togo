@@ -1,0 +1,48 @@
+{
+  "description": "A screen whose source fails with no cached copy is refused with reason fallback; the app opens the terminal. Harness deviation: the claude adapter's sessions source points at a missing directory. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.screen",
+    "params": {
+      "id": "s_abcdefghij",
+      "screen": "resume"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "error": {
+      "code": -32008,
+      "message": "refused",
+      "data": {
+        "reason": "fallback",
+        "detail": "source"
+      }
+    }
+  }
+}

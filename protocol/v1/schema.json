@@ -71,12 +71,22 @@
         { "if": { "properties": { "method": { "const": "local.notify" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalNotifyParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.openUrl" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalOpenUrlParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "browser.openOnMac" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/BrowserOpenOnMacParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.describe" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessSessionParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.open" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessOpenParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.close" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessSessionParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.history" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessHistoryParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.screen" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessScreenParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.action" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessActionParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.send" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessSendParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.interrupt" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessSessionParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.complete" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessCompleteParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness.locate" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessLocateParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.job" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalJobParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.shutdown" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalShutdownParams" } }, "required": ["params"] } }
       ]
     },
     "Notification": {
-      "description": "A JSON-RPC 2.0 notification (no id). The helper ignores notifications it receives. It sends one kind, `event`, and only to a connection that called events.subscribe.",
+      "description": "A JSON-RPC 2.0 notification (no id). The helper ignores notifications it receives. It sends `event` only to a connection that called events.subscribe, and `harness` (harness.v1) only to a connection that called harness.open for that session.",
       "type": "object",
       "properties": {
         "jsonrpc": { "const": "2.0" },
@@ -86,7 +96,8 @@
       "required": ["jsonrpc", "method"],
       "additionalProperties": false,
       "allOf": [
-        { "if": { "properties": { "method": { "const": "event" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/Event" } }, "required": ["params"] } }
+        { "if": { "properties": { "method": { "const": "event" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/Event" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "harness" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/HarnessNotification" } }, "required": ["params"] } }
       ]
     },
     "Response": {
@@ -115,7 +126,7 @@
       ]
     },
     "Error": {
-      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail, or for the methods that name one a fixed word: session.create args, program or not_installed; agents.check program; session.restore not_installed; session.sendText text; authkeys.remove key}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve; session.restore: the session's folder no longer exists), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (the target is not in a state that allows the call; data {reason, by?}. approval.answer: answered, prompt_gone or expired, with by \"desk\" | \"phone\" when reason is answered; git writes: a refusal with data GitConflictData, nothing changed except for reasons partial and raced; session.relaunch: running (the agent still runs); session.sendText: shell (the session is the plain shell, not an agent), ended (the agent exited, or a shell is back in the foreground of the agent's pane) or needs_you (an approval is pending); authkeys.remove: symlink, missing or not_regular (authorized_keys is a symlink, absent, or not a regular file)), -32007 \"not_managed\" (write call on an unmanaged session, including git.stage, git.unstage, git.discard and git.commit), -32008 \"refused\" (the helper will not do this until the user sets it up on the machine; data {reason: \"needs_admin_setup\"}). `data` is omitted when a code defines none.",
+      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail, or for the methods that name one a fixed word: session.create args, program or not_installed; agents.check program; session.restore not_installed; session.sendText text; authkeys.remove key}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve; session.restore: the session's folder no longer exists), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (the target is not in a state that allows the call; data {reason, by?}. approval.answer: answered, prompt_gone or expired, with by \"desk\" | \"phone\" when reason is answered; git writes: a refusal with data GitConflictData, nothing changed except for reasons partial and raced; session.relaunch: running (the agent still runs); session.sendText: shell (the session is the plain shell, not an agent), ended (the agent exited, or a shell is back in the foreground of the agent's pane) or needs_you (an approval is pending); authkeys.remove: symlink, missing or not_regular (authorized_keys is a symlink, absent, or not a regular file); harness.send: busy (mode now while the agent works)), -32007 \"not_managed\" (write call on an unmanaged session, including git.stage, git.unstage, git.discard and git.commit), -32008 \"refused\" (the helper will not do this until the user sets it up on the machine; data {reason: \"needs_admin_setup\"}; or, for harness.*, the session has no adapter, data {reason: \"no_adapter\"}, or the screen or action cannot be served and the app should show the terminal, data {reason: \"fallback\", detail: \"source\" | \"version\" | \"parse\"}). `data` is omitted when a code defines none.",
       "type": "object",
       "properties": {
         "code": { "type": "integer" },
@@ -181,7 +192,7 @@
                 "anyOf": [
                   {
                     "type": "object",
-                    "properties": { "reason": { "enum": ["answered", "prompt_gone", "expired", "running", "shell", "ended", "needs_you", "symlink", "missing", "not_regular"] }, "by": { "enum": ["desk", "phone"] } },
+                    "properties": { "reason": { "enum": ["answered", "prompt_gone", "expired", "running", "shell", "ended", "needs_you", "symlink", "missing", "not_regular", "busy"] }, "by": { "enum": ["desk", "phone"] } },
                     "required": ["reason"],
                     "additionalProperties": false
                   },
@@ -200,7 +211,7 @@
               "message": { "const": "refused" },
               "data": {
                 "type": "object",
-                "properties": { "reason": { "enum": ["needs_admin_setup"] } },
+                "properties": { "reason": { "enum": ["needs_admin_setup", "no_adapter", "fallback"] }, "detail": { "enum": ["source", "version", "parse"] } },
                 "required": ["reason"],
                 "additionalProperties": false
               }
@@ -250,7 +261,8 @@
         "meta": { "description": "Agent-reported model and usage, all null until an agent hook reports them.", "$ref": "#/$defs/SessionMeta" },
         "command": { "description": "launch.v1: the argv the session's agent was started with, program then args, for managed agent sessions; null for shell and unmanaged sessions. Absent from helpers without launch.v1.", "type": ["array", "null"], "items": { "type": "string" } },
         "exit": { "description": "lifecycle.v1: how the agent process ended while status is ended or failed, else null. Absent from helpers without lifecycle.v1.", "anyOf": [{ "$ref": "#/$defs/SessionExit" }, { "type": "null" }] },
-        "activityHistory": { "description": "Recent output volume of a managed session: at most 16 numbers in 0...1, oldest first, the last covering the current 30 second bucket. Each is the share of that bucket's seconds in which the session produced output. Optional: absent when the helper has seen no output yet or does not report it. Clients ignore it when absent.", "type": "array", "maxItems": 16, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+        "activityHistory": { "description": "Recent output volume of a managed session: at most 16 numbers in 0...1, oldest first, the last covering the current 30 second bucket. Each is the share of that bucket's seconds in which the session produced output. Optional: absent when the helper has seen no output yet or does not report it. Clients ignore it when absent.", "type": "array", "maxItems": 16, "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+        "mission": { "description": "harness.v1: the harness summary for a session an adapter serves; absent otherwise. Clients ignore it when absent.", "$ref": "#/$defs/MissionSummary" }
       },
       "required": ["id", "bib", "name", "agent", "cwd", "createdAt", "status", "activity", "attachedClients", "managed", "muted", "meta"],
       "additionalProperties": false,
@@ -326,7 +338,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -2209,6 +2221,703 @@
       ],
       "additionalProperties": false
     },
+    "HarnessSessionParams": {
+      "description": "harness.describe, harness.close and harness.interrupt.",
+      "type": "object",
+      "properties": { "id": { "$ref": "#/$defs/ManagedSessionId" } },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "HarnessChoice": {
+      "type": "object",
+      "properties": { "id": { "type": "string" }, "label": { "type": "string", "maxLength": 200 }, "detail": { "type": "string" } },
+      "required": ["id", "label"],
+      "additionalProperties": false
+    },
+    "HarnessAnchor": {
+      "description": "Where in the pane's output an item happened, for Show in terminal.",
+      "type": "object",
+      "properties": {
+        "epoch": { "description": "Names the pane's output stream; changes when the pane respawns or the tap restarts.", "type": "string" },
+        "bytes": { "description": "Output bytes the tap had seen in this epoch when the item arrived.", "type": "integer", "minimum": 0 },
+        "line": {
+          "description": "Absolute grid line of the cursor when the item arrived: history lines plus the cursor row.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "needle": { "description": "Up to 120 runes of text near the line, to confirm or search.", "type": "string", "maxLength": 480 }
+      },
+      "required": ["epoch", "bytes", "line"],
+      "additionalProperties": false
+    },
+    "HarnessQuestion": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "header": { "type": "string" },
+        "prompt": { "type": "string" },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/HarnessChoice" } },
+        "multi": { "type": "boolean" },
+        "allowText": { "type": "boolean" }
+      },
+      "required": ["id", "prompt", "options", "multi", "allowText"],
+      "additionalProperties": false
+    },
+    "HarnessFileChange": {
+      "type": "object",
+      "properties": { "path": { "type": "string" }, "added": { "type": "integer", "minimum": 0 }, "removed": { "type": "integer", "minimum": 0 } },
+      "required": ["path", "added", "removed"],
+      "additionalProperties": false
+    },
+    "HarnessText": {
+      "type": "object",
+      "properties": { "text": { "type": "string", "maxLength": 65536 }, "partial": { "type": "boolean" } },
+      "required": ["text", "partial"],
+      "additionalProperties": false
+    },
+    "HarnessItemUser": {
+      "type": "object",
+      "properties": { "text": { "type": "string" }, "queued": { "type": "boolean" }, "source": { "enum": ["phone", "desk", "unknown"] } },
+      "required": ["text", "queued", "source"],
+      "additionalProperties": false
+    },
+    "HarnessItemTool": {
+      "type": "object",
+      "properties": {
+        "callId": { "type": "string" },
+        "name": { "type": "string" },
+        "title": { "type": "string", "maxLength": 800 },
+        "category": { "enum": ["read", "edit", "write", "search", "shell", "web", "agent", "mcp", "other"] },
+        "subject": { "anyOf": [{ "$ref": "#/$defs/Subject" }, { "type": "null" }] },
+        "state": { "enum": ["running", "waiting", "ok", "failed", "denied", "cancelled", "interrupted", "idle", "pending", "active", "done", "skipped"] },
+        "startedAt": { "$ref": "#/$defs/Timestamp" },
+        "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] },
+        "output": { "description": "Tail of the tool's output, at most 4096 bytes, secrets removed.", "type": "string" },
+        "exitCode": { "type": ["integer", "null"] },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/HarnessFileChange" } }
+      },
+      "required": ["callId", "name", "title", "category", "state", "startedAt", "endedAt"],
+      "additionalProperties": false
+    },
+    "HarnessItemTurn": {
+      "type": "object",
+      "properties": {
+        "state": { "enum": ["running", "waiting", "ok", "failed", "denied", "cancelled", "interrupted", "idle", "pending", "active", "done", "skipped"] },
+        "startedAt": { "$ref": "#/$defs/Timestamp" },
+        "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] },
+        "steps": { "type": "integer", "minimum": 0 },
+        "filesChanged": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["state", "startedAt", "endedAt", "steps", "filesChanged"],
+      "additionalProperties": false
+    },
+    "HarnessItemApproval": {
+      "type": "object",
+      "properties": { "requestId": { "$ref": "#/$defs/RequestId" }, "resolved": { "enum": ["phone", "desk", "expired", "gone"] } },
+      "required": ["requestId"],
+      "additionalProperties": false
+    },
+    "HarnessItemQuestion": {
+      "type": "object",
+      "properties": {
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/HarnessQuestion" } },
+        "answered": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
+      },
+      "required": ["questions"],
+      "additionalProperties": false
+    },
+    "HarnessItemPlan": {
+      "type": "object",
+      "properties": { "done": { "type": "integer", "minimum": 0 }, "total": { "type": "integer", "minimum": 0 }, "current": { "type": "string" } },
+      "required": ["done", "total"],
+      "additionalProperties": false
+    },
+    "HarnessItemAgent": {
+      "type": "object",
+      "properties": {
+        "agentId": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "state": { "enum": ["running", "waiting", "ok", "failed", "denied", "cancelled", "interrupted", "idle", "pending", "active", "done", "skipped"] },
+        "startedAt": { "$ref": "#/$defs/Timestamp" },
+        "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] },
+        "summary": { "type": "string" }
+      },
+      "required": ["agentId", "name", "state", "startedAt", "endedAt"],
+      "additionalProperties": false
+    },
+    "HarnessItemBackground": {
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string" },
+        "kind": { "enum": ["shell", "server", "exec", "job"] },
+        "title": { "type": "string" },
+        "command": { "type": "string" },
+        "state": { "enum": ["running", "waiting", "ok", "failed", "denied", "cancelled", "interrupted", "idle", "pending", "active", "done", "skipped"] },
+        "startedAt": { "$ref": "#/$defs/Timestamp" },
+        "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] }
+      },
+      "required": ["jobId", "kind", "title", "state", "startedAt", "endedAt"],
+      "additionalProperties": false
+    },
+    "HarnessItemNotice": {
+      "type": "object",
+      "properties": {
+        "level": { "enum": ["info", "warning", "error"] },
+        "code": { "enum": ["compacted", "model", "mode", "rate_limit", "error", "resumed", "interrupted", "fallback"] },
+        "text": { "type": "string" }
+      },
+      "required": ["level", "code", "text"],
+      "additionalProperties": false
+    },
+    "HarnessItemShell": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" },
+        "cwd": { "type": "string" },
+        "state": { "enum": ["running", "waiting", "ok", "failed", "denied", "cancelled", "interrupted", "idle", "pending", "active", "done", "skipped"] },
+        "exitCode": { "type": ["integer", "null"] },
+        "startedAt": { "$ref": "#/$defs/Timestamp" },
+        "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] }
+      },
+      "required": ["command", "state", "exitCode", "startedAt", "endedAt"],
+      "additionalProperties": false
+    },
+    "HarnessItem": {
+      "description": "One conversation entry (harness.v1). id is stable: an update resends the item with the same id and a new seq, and the client replaces it. The body sits under the key named by kind; other body keys are absent. parent is the agent item whose own conversation holds this item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "seq": { "type": "integer", "minimum": 1 },
+        "turnId": { "type": "string" },
+        "parent": { "type": "string" },
+        "kind": { "enum": ["user", "assistant", "thinking", "tool", "turn", "approval", "question", "plan", "agent", "background", "notice", "shell"] },
+        "at": { "$ref": "#/$defs/Timestamp" },
+        "anchor": { "$ref": "#/$defs/HarnessAnchor" },
+        "user": { "$ref": "#/$defs/HarnessItemUser" },
+        "assistant": { "$ref": "#/$defs/HarnessText" },
+        "thinking": { "$ref": "#/$defs/HarnessText" },
+        "tool": { "$ref": "#/$defs/HarnessItemTool" },
+        "turn": { "$ref": "#/$defs/HarnessItemTurn" },
+        "approval": { "$ref": "#/$defs/HarnessItemApproval" },
+        "question": { "$ref": "#/$defs/HarnessItemQuestion" },
+        "plan": { "$ref": "#/$defs/HarnessItemPlan" },
+        "agent": { "$ref": "#/$defs/HarnessItemAgent" },
+        "background": { "$ref": "#/$defs/HarnessItemBackground" },
+        "notice": { "$ref": "#/$defs/HarnessItemNotice" },
+        "shell": { "$ref": "#/$defs/HarnessItemShell" }
+      },
+      "required": ["id", "seq", "kind", "at"],
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "user" } } }, "then": { "required": ["user"] } },
+        { "if": { "properties": { "kind": { "const": "assistant" } } }, "then": { "required": ["assistant"] } },
+        { "if": { "properties": { "kind": { "const": "thinking" } } }, "then": { "required": ["thinking"] } },
+        { "if": { "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["tool"] } },
+        { "if": { "properties": { "kind": { "const": "turn" } } }, "then": { "required": ["turn"] } },
+        { "if": { "properties": { "kind": { "const": "approval" } } }, "then": { "required": ["approval"] } },
+        { "if": { "properties": { "kind": { "const": "question" } } }, "then": { "required": ["question"] } },
+        { "if": { "properties": { "kind": { "const": "plan" } } }, "then": { "required": ["plan"] } },
+        { "if": { "properties": { "kind": { "const": "agent" } } }, "then": { "required": ["agent"] } },
+        { "if": { "properties": { "kind": { "const": "background" } } }, "then": { "required": ["background"] } },
+        { "if": { "properties": { "kind": { "const": "notice" } } }, "then": { "required": ["notice"] } },
+        { "if": { "properties": { "kind": { "const": "shell" } } }, "then": { "required": ["shell"] } }
+      ]
+    },
+    "HarnessActionRef": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "role": { "enum": ["normal", "primary", "destructive"] },
+        "confirm": { "type": "string" },
+        "args": { "type": "object", "maxProperties": 16 }
+      },
+      "required": ["id", "label", "role"],
+      "additionalProperties": false
+    },
+    "HarnessOpen": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["chat", "terminal", "diff", "url", "screen", "approval"] },
+        "ref": { "type": "string" }
+      },
+      "required": ["kind", "ref"],
+      "additionalProperties": false
+    },
+    "HarnessRow": {
+      "description": "A line in a mission control section or a live list.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "state": { "enum": ["running", "waiting", "ok", "failed", "denied", "cancelled", "interrupted", "idle", "pending", "active", "done", "skipped"] },
+        "startedAt": { "$ref": "#/$defs/Timestamp" },
+        "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tail": { "type": "array", "items": { "type": "string" }, "maxItems": 4 },
+        "open": { "$ref": "#/$defs/HarnessOpen" },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/HarnessRow" } }
+      },
+      "required": ["id", "title", "state"],
+      "additionalProperties": false
+    },
+    "HarnessMeter": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "resetsAt": { "$ref": "#/$defs/Timestamp" }
+      },
+      "required": ["id", "label", "percent"],
+      "additionalProperties": false
+    },
+    "HarnessFact": {
+      "type": "object",
+      "properties": { "label": { "type": "string" }, "value": { "type": "string" } },
+      "required": ["label", "value"],
+      "additionalProperties": false
+    },
+    "HarnessStatus": {
+      "description": "The Status primitive and the mission control status section.",
+      "type": "object",
+      "properties": {
+        "model": { "type": "string" },
+        "mode": { "type": "string" },
+        "effort": { "type": "string" },
+        "contextPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "costUsd": { "type": "number", "minimum": 0 },
+        "meters": { "type": "array", "items": { "$ref": "#/$defs/HarnessMeter" } },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/HarnessFact" } },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "MissionSummary": {
+      "description": "Session.mission (harness.v1): the activity pill and roster line.",
+      "type": "object",
+      "properties": {
+        "needsYou": { "type": "integer", "minimum": 0 },
+        "agents": { "type": "integer", "minimum": 0 },
+        "background": { "type": "integer", "minimum": 0 },
+        "plan": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": { "done": { "type": "integer", "minimum": 0 }, "total": { "type": "integer", "minimum": 0 } },
+              "required": ["done", "total"],
+              "additionalProperties": false
+            },
+            { "type": "null" }
+          ]
+        },
+        "working": { "type": "boolean" }
+      },
+      "required": ["needsYou", "agents", "background", "plan", "working"],
+      "additionalProperties": false
+    },
+    "HarnessSection": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["needs", "agents", "background", "plan", "changes", "ports", "status"] },
+        "rows": { "type": "array", "items": { "$ref": "#/$defs/HarnessRow" } },
+        "status": { "$ref": "#/$defs/HarnessStatus" }
+      },
+      "required": ["kind", "rows"],
+      "additionalProperties": false
+    },
+    "HarnessMission": {
+      "description": "Mission control snapshot. sections holds only the sections the harness supports, in the fixed order needs, agents, background, plan, changes, ports, status.",
+      "type": "object",
+      "properties": {
+        "rev": { "type": "integer", "minimum": 0 },
+        "summary": { "$ref": "#/$defs/MissionSummary" },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/HarnessSection" } }
+      },
+      "required": ["rev", "summary", "sections"],
+      "additionalProperties": false
+    },
+    "HarnessOp": {
+      "type": "object",
+      "properties": {
+        "op": { "enum": ["upsert", "remove", "replace", "status", "summary"] },
+        "section": { "enum": ["needs", "agents", "background", "plan", "changes", "ports", "status"] },
+        "id": { "type": "string" },
+        "row": { "$ref": "#/$defs/HarnessRow" },
+        "rows": { "type": "array", "items": { "$ref": "#/$defs/HarnessRow" } },
+        "status": { "$ref": "#/$defs/HarnessStatus" },
+        "summary": { "$ref": "#/$defs/MissionSummary" }
+      },
+      "required": ["op"],
+      "additionalProperties": false
+    },
+    "HarnessDelta": {
+      "description": "Moves a mission from rev-1 to rev. A client holding any other rev calls harness.open again.",
+      "type": "object",
+      "properties": { "rev": { "type": "integer", "minimum": 1 }, "ops": { "type": "array", "items": { "$ref": "#/$defs/HarnessOp" } } },
+      "required": ["rev", "ops"],
+      "additionalProperties": false
+    },
+    "HarnessPickerItem": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "badge": { "type": "string" },
+        "group": { "type": "string" },
+        "disabled": { "type": "boolean" },
+        "facets": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["id", "title"],
+      "additionalProperties": false
+    },
+    "HarnessFilter": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "kind": { "enum": ["toggle", "choice"] },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/HarnessChoice" } },
+        "default": { "type": "string" }
+      },
+      "required": ["id", "label", "kind"],
+      "additionalProperties": false
+    },
+    "HarnessPicker": {
+      "type": "object",
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessPickerItem" } },
+        "selected": { "type": "string" },
+        "searchable": { "type": "boolean" },
+        "filters": { "type": "array", "items": { "$ref": "#/$defs/HarnessFilter" } },
+        "onSelect": { "type": "string" },
+        "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } }
+      },
+      "required": ["items", "searchable", "onSelect"],
+      "additionalProperties": false
+    },
+    "HarnessField": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "help": { "type": "string" },
+        "kind": { "enum": ["toggle", "choice", "text", "number", "secret"] },
+        "value": { "description": "The current value; always null for secret fields, whose isSet says whether one exists." },
+        "isSet": { "type": "boolean" },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/HarnessChoice" } },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "placeholder": { "type": "string" },
+        "readOnly": { "type": "boolean" },
+        "action": { "type": "string" }
+      },
+      "required": ["id", "label", "kind", "value"],
+      "additionalProperties": false,
+      "allOf": [{ "if": { "properties": { "kind": { "const": "secret" } } }, "then": { "properties": { "value": { "type": "null" } } } }]
+    },
+    "HarnessSettings": {
+      "type": "object",
+      "properties": {
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": { "title": { "type": "string" }, "footer": { "type": "string" }, "fields": { "type": "array", "items": { "$ref": "#/$defs/HarnessField" } } },
+            "required": ["fields"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["sections"],
+      "additionalProperties": false
+    },
+    "HarnessCheckItem": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "state": { "enum": ["pending", "active", "done", "skipped"] },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/HarnessCheckItem" } }
+      },
+      "required": ["id", "text", "state"],
+      "additionalProperties": false
+    },
+    "HarnessChecklist": {
+      "type": "object",
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessCheckItem" } },
+        "done": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["items", "done", "total"],
+      "additionalProperties": false
+    },
+    "HarnessLiveList": {
+      "type": "object",
+      "properties": { "rows": { "type": "array", "items": { "$ref": "#/$defs/HarnessRow" } }, "refreshSeconds": { "type": "integer", "minimum": 0 } },
+      "required": ["rows", "refreshSeconds"],
+      "additionalProperties": false
+    },
+    "HarnessDetail": {
+      "type": "object",
+      "properties": {
+        "subtitle": { "type": "string" },
+        "body": {
+          "type": "object",
+          "properties": {
+            "kind": { "enum": ["markdown", "diff", "kv", "text"] },
+            "text": { "type": "string" },
+            "kv": { "type": "array", "items": { "$ref": "#/$defs/HarnessFact" } }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } }
+      },
+      "required": ["body", "actions"],
+      "additionalProperties": false
+    },
+    "HarnessConfirm": {
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" },
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/HarnessQuestion" } },
+        "destructive": { "type": "boolean" },
+        "submit": { "type": "string" }
+      },
+      "required": ["questions", "destructive", "submit"],
+      "additionalProperties": false
+    },
+    "HarnessScreen": {
+      "description": "harness.screen result: one of the seven primitives, filled by the adapter. Exactly the key named by primitive is set. stale is true when the source failed and this is the last good copy.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "primitive": { "enum": ["picker", "settings", "checklist", "liveList", "detail", "confirm", "status"] },
+        "title": { "type": "string" },
+        "fetchedAt": { "$ref": "#/$defs/Timestamp" },
+        "stale": { "type": "boolean" },
+        "picker": { "$ref": "#/$defs/HarnessPicker" },
+        "settings": { "$ref": "#/$defs/HarnessSettings" },
+        "checklist": { "$ref": "#/$defs/HarnessChecklist" },
+        "liveList": { "$ref": "#/$defs/HarnessLiveList" },
+        "detail": { "$ref": "#/$defs/HarnessDetail" },
+        "confirm": { "$ref": "#/$defs/HarnessConfirm" },
+        "status": { "$ref": "#/$defs/HarnessStatus" },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } }
+      },
+      "required": ["id", "primitive", "title", "fetchedAt", "stale", "actions"],
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "primitive": { "const": "picker" } } }, "then": { "required": ["picker"] } },
+        { "if": { "properties": { "primitive": { "const": "settings" } } }, "then": { "required": ["settings"] } },
+        { "if": { "properties": { "primitive": { "const": "checklist" } } }, "then": { "required": ["checklist"] } },
+        { "if": { "properties": { "primitive": { "const": "liveList" } } }, "then": { "required": ["liveList"] } },
+        { "if": { "properties": { "primitive": { "const": "detail" } } }, "then": { "required": ["detail"] } },
+        { "if": { "properties": { "primitive": { "const": "confirm" } } }, "then": { "required": ["confirm"] } },
+        { "if": { "properties": { "primitive": { "const": "status" } } }, "then": { "required": ["status"] } }
+      ]
+    },
+    "HarnessDescribeResult": {
+      "description": "harness.describe result. adapter is null when no adapter serves the session; the app then shows the terminal only.",
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "harnessVersion": { "type": "string" },
+                "revision": { "type": "integer", "minimum": 1 }
+              },
+              "required": ["id", "name", "harnessVersion", "revision"],
+              "additionalProperties": false
+            },
+            { "type": "null" }
+          ]
+        },
+        "capabilities": {
+          "description": "Session capabilities: chat, chat.stream, chat.history, chat.anchors, send.api, send.queue, interrupt, commands, files, mode, model, effort, needs.approvals, needs.questions, agents, background, plan, changes, ports, status, status.usage, status.context, resume, compact, mcp, settings. Clients ignore unknown values.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "screens": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "primitive": { "enum": ["picker", "settings", "checklist", "liveList", "detail", "confirm", "status"] },
+              "title": { "type": "string" },
+              "section": { "type": "string" }
+            },
+            "required": ["id", "primitive", "title", "section"],
+            "additionalProperties": false
+          }
+        },
+        "modes": { "type": "array", "items": { "$ref": "#/$defs/HarnessChoice" } },
+        "mode": { "type": "string" },
+        "degraded": {
+          "description": "Capabilities the adapter declares whose sources failed or whose version gate refused this harness version.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["adapter", "capabilities", "screens", "modes", "mode", "degraded"],
+      "additionalProperties": false
+    },
+    "HarnessOpenParams": {
+      "description": "harness.open. after is the client's cursor (0 for none); limit caps the items returned, newest kept (default 200).",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/ManagedSessionId" },
+        "after": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "HarnessOpenResult": {
+      "description": "harness.open result. The response is written before any harness notification for the session on this connection; the client drops notified items with seq <= cursor. more is true when older items exist (harness.history). A different epoch than the client held means its items are void.",
+      "type": "object",
+      "properties": {
+        "epoch": { "type": "string" },
+        "cursor": { "type": "integer", "minimum": 0 },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } },
+        "more": { "type": "boolean" },
+        "mission": { "$ref": "#/$defs/HarnessMission" }
+      },
+      "required": ["epoch", "cursor", "items", "more", "mission"],
+      "additionalProperties": false
+    },
+    "HarnessHistoryParams": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/ManagedSessionId" },
+        "before": { "type": "integer", "minimum": 1 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+      },
+      "required": ["id", "before"],
+      "additionalProperties": false
+    },
+    "HarnessPage": {
+      "type": "object",
+      "properties": { "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } }, "more": { "type": "boolean" } },
+      "required": ["items", "more"],
+      "additionalProperties": false
+    },
+    "HarnessScreenParams": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/ManagedSessionId" },
+        "screen": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
+        "query": { "type": "object", "maxProperties": 8, "additionalProperties": { "type": "string", "maxLength": 1024 } }
+      },
+      "required": ["id", "screen"],
+      "additionalProperties": false
+    },
+    "HarnessActionParams": {
+      "description": "harness.action. target names the item or row acted on. Built-in actions: answer (args.answers maps question id to option ids or text), set_mode (args.id), interrupt, stop (target).",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/ManagedSessionId" },
+        "action": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
+        "target": { "type": "string", "maxLength": 512 },
+        "args": { "type": "object", "maxProperties": 16 }
+      },
+      "required": ["id", "action"],
+      "additionalProperties": false
+    },
+    "HarnessActionResult": {
+      "description": "applied: the harness confirmed it. typed: a documented command was typed and not yet confirmed. fallback: no route works; open the terminal.",
+      "type": "object",
+      "properties": {
+        "result": { "enum": ["applied", "typed", "relaunched", "queued", "failed", "fallback"] },
+        "message": { "type": "string" },
+        "screen": { "$ref": "#/$defs/HarnessScreen" }
+      },
+      "required": ["result"],
+      "additionalProperties": false
+    },
+    "HarnessSendParams": {
+      "description": "harness.send. queue (default) types now when the agent is idle, else holds the prompt until the turn ends; now is refused with -32006 reason busy while it works.",
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/ManagedSessionId" },
+        "text": { "description": "Same rules as session.sendText text.", "type": "string", "minLength": 1 },
+        "mode": { "enum": ["now", "queue"] }
+      },
+      "required": ["id", "text"],
+      "additionalProperties": false
+    },
+    "HarnessSendResult": { "type": "object", "properties": { "item": { "$ref": "#/$defs/HarnessItem" } }, "required": ["item"], "additionalProperties": false },
+    "HarnessCompleteParams": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/ManagedSessionId" },
+        "kind": { "enum": ["command", "file"] },
+        "query": { "type": "string", "maxLength": 1024 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 50 }
+      },
+      "required": ["id", "kind", "query"],
+      "additionalProperties": false
+    },
+    "HarnessCompleteResult": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "insert": { "type": "string" },
+              "title": { "type": "string" },
+              "detail": { "type": "string" },
+              "hint": { "type": "string" },
+              "screen": { "type": "string" }
+            },
+            "required": ["insert", "title"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["items"],
+      "additionalProperties": false
+    },
+    "HarnessLocateParams": {
+      "type": "object",
+      "properties": { "id": { "$ref": "#/$defs/ManagedSessionId" }, "anchor": { "$ref": "#/$defs/HarnessAnchor" } },
+      "required": ["id", "anchor"],
+      "additionalProperties": false
+    },
+    "HarnessLocation": {
+      "type": "object",
+      "properties": { "found": { "type": "boolean" }, "linesFromBottom": { "type": "integer", "minimum": 0 }, "needle": { "type": "string" } },
+      "required": ["found", "linesFromBottom"],
+      "additionalProperties": false
+    },
+    "HarnessNotification": {
+      "description": "params of the `harness` notification (harness.v1), sent only to a connection that called harness.open for the session, until harness.close or the connection ends. items: new or updated items, seq increasing. mission: one delta. reset: the client must call harness.open again (adapter changed, epoch changed, or the connection fell behind).",
+      "type": "object",
+      "properties": {
+        "sessionId": { "$ref": "#/$defs/ManagedSessionId" },
+        "kind": { "enum": ["items", "mission", "reset"] },
+        "ts": { "$ref": "#/$defs/Timestamp" },
+        "epoch": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } },
+        "mission": { "$ref": "#/$defs/HarnessDelta" },
+        "reason": { "enum": ["adapter", "epoch", "overflow"] }
+      },
+      "required": ["sessionId", "kind", "ts", "epoch"],
+      "additionalProperties": false
+    },
     "PushPlaintext": {
       "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting. allowText, optional and only on needs_you, is true when the approval takes a typed answer (the phone offers Reply); the answer itself still travels only over SSH.",
       "type": "object",
@@ -2697,6 +3406,16 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "notify.set" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/NotifySettings" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "authkeys.remove" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AuthkeysRemoveResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "browser.openOnMac" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.describe" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessDescribeResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.open" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessOpenResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.close" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.history" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessPage" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.screen" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessScreen" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.action" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessActionResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.send" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessSendResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.interrupt" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessActionResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.complete" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessCompleteResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "harness.locate" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HarnessLocation" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "local.openUrl" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/LocalOpenUrlResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "host.info" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HostInfo" } } } } } }
       ]

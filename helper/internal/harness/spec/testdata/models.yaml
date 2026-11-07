@@ -1,0 +1,49 @@
+# A small adapter: one model picker filled from a CLI, applied by typing a
+# documented slash command and verified through the status line feed.
+adapter: sample
+name: Sample agent
+revision: 1
+match:
+  agents: [sample]
+  commands: [sample]
+harness:
+  version: [sample, --version]
+  pattern: 'sample/(\S+)'
+  range: ">=1.0 <2"
+capabilities: [model, status]
+feeds:
+  status:
+    statusline:
+      fields: [model.id]
+    mapper: sample.status
+    stability: documented
+sources:
+  models:
+    cli:
+      argv: [sample, models, --json]
+    select: '.models[]'
+    cache: 10m
+    timeout: 5s
+    stability: documented
+    redact: ['.apiKey']
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map:
+      item.id: '.selector'
+      item.title: '.name'
+      item.group: '.provider'
+    filters:
+      - { id: provider, label: Provider, kind: choice, field: provider }
+    on_select: switch_model
+actions:
+  switch_model:
+    label: Use model
+    type: { text: '/model {{.id}}', submit: true, when_idle: true }
+    verify: { source: status, equals: '{{.id}}', within: 5s }
+    stability: documented-command

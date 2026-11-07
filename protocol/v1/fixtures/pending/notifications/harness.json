@@ -1,0 +1,106 @@
+{
+  "description": "Examples of the harness notification: an item update, a mission delta, and a reset after the pane respawned.",
+  "notifications": [
+    {
+      "jsonrpc": "2.0",
+      "method": "harness",
+      "params": {
+        "sessionId": "s_abcdefghij",
+        "kind": "items",
+        "ts": "2026-11-03T12:00:04Z",
+        "epoch": "e1",
+        "items": [
+          {
+            "id": "toolu_01",
+            "seq": 2,
+            "turnId": "u1",
+            "kind": "tool",
+            "at": "2026-11-03T12:00:04Z",
+            "anchor": {
+              "epoch": "e1",
+              "bytes": 2210,
+              "line": 19,
+              "needle": "Bash(go test ./internal/clock/...)"
+            },
+            "tool": {
+              "callId": "toolu_01",
+              "name": "Bash",
+              "title": "go test ./internal/clock/...",
+              "category": "shell",
+              "subject": {
+                "kind": "command",
+                "text": "go test ./internal/clock/..."
+              },
+              "state": "running",
+              "startedAt": "2026-11-03T12:00:04Z",
+              "endedAt": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "harness",
+      "params": {
+        "sessionId": "s_abcdefghij",
+        "kind": "mission",
+        "ts": "2026-11-03T12:00:04Z",
+        "epoch": "e1",
+        "mission": {
+          "rev": 2,
+          "ops": [
+            {
+              "op": "upsert",
+              "section": "background",
+              "row": {
+                "id": "bash_7",
+                "title": "npm run dev",
+                "state": "running",
+                "startedAt": "2026-11-03T12:00:04Z",
+                "tail": [
+                  "ready on http://localhost:5173"
+                ],
+                "open": {
+                  "kind": "terminal",
+                  "ref": "bash_7"
+                },
+                "actions": [
+                  {
+                    "id": "stop",
+                    "label": "Stop",
+                    "role": "destructive"
+                  }
+                ]
+              }
+            },
+            {
+              "op": "summary",
+              "summary": {
+                "needsYou": 0,
+                "agents": 0,
+                "background": 1,
+                "plan": {
+                  "done": 1,
+                  "total": 2
+                },
+                "working": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "harness",
+      "params": {
+        "sessionId": "s_abcdefghij",
+        "kind": "reset",
+        "ts": "2026-11-03T12:00:41Z",
+        "epoch": "e2",
+        "reason": "epoch"
+      }
+    }
+  ]
+}

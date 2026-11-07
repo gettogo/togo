@@ -1,0 +1,76 @@
+{
+  "description": "The model picker lists the aliases Claude Code documents, with the current one selected. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.screen",
+    "params": {
+      "id": "s_abcdefghij",
+      "screen": "model"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "id": "model",
+      "primitive": "picker",
+      "title": "Model",
+      "fetchedAt": "2026-11-03T12:00:00Z",
+      "stale": false,
+      "picker": {
+        "items": [
+          {
+            "id": "opus",
+            "title": "Opus",
+            "subtitle": "Most capable"
+          },
+          {
+            "id": "sonnet",
+            "title": "Sonnet",
+            "subtitle": "Fast and capable"
+          },
+          {
+            "id": "haiku",
+            "title": "Haiku",
+            "subtitle": "Fastest"
+          },
+          {
+            "id": "opus[1m]",
+            "title": "Opus",
+            "subtitle": "1M context",
+            "badge": "1M"
+          }
+        ],
+        "selected": "opus",
+        "searchable": false,
+        "onSelect": "set_model"
+      },
+      "actions": []
+    }
+  }
+}

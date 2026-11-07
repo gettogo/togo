@@ -18,7 +18,26 @@ struct FixtureTests {
 
     /// Pending exchanges the app handles before any helper serves them still
     /// round-trip through the app's types.
-    static let appPendingFixtures: Set<String> = ["approval.list-subject.json", "push.pair-watch.json"]
+    static let appPendingFixtures: Set<String> = [
+        "approval.list-subject.json", "push.pair-watch.json",
+        "harness.action-answer.json",
+        "harness.action-typed.json",
+        "harness.close.json",
+        "harness.complete-command.json",
+        "harness.complete-file.json",
+        "harness.describe-claude.json",
+        "harness.describe.json",
+        "harness.history.json",
+        "harness.interrupt.json",
+        "harness.locate.json",
+        "harness.open-no-adapter.json",
+        "harness.open.json",
+        "harness.screen-fallback.json",
+        "harness.screen-model.json",
+        "harness.screen-secret.json",
+        "harness.send-busy.json",
+        "harness.send-queued.json",
+    ]
 
     @Test func pendingFixturesValidate() throws {
         let pending = Self.fixturesDirectory.appending(path: "pending", directoryHint: .isDirectory)
@@ -194,6 +213,16 @@ struct FixtureTests {
         case .awakeStatus: (EmptyParams.self, AwakeStatus.self)
         case .awakeSet: (AwakeSetParams.self, AwakeStatus.self)
         case .browserOpenOnMac: (BrowserOpenParams.self, EmptyResult.self)
+        case .harnessDescribe: (SessionIDParams.self, HarnessDescriptor.self)
+        case .harnessOpen: (HarnessOpenParams.self, HarnessOpenResult.self)
+        case .harnessClose: (SessionIDParams.self, EmptyResult.self)
+        case .harnessHistory: (HarnessHistoryParams.self, HarnessPage.self)
+        case .harnessScreen: (HarnessScreenParams.self, HarnessScreen.self)
+        case .harnessAction: (HarnessActionParams.self, HarnessActionResult.self)
+        case .harnessSend: (HarnessSendParams.self, HarnessSendResult.self)
+        case .harnessInterrupt: (SessionIDParams.self, HarnessActionResult.self)
+        case .harnessComplete: (HarnessCompleteParams.self, HarnessCompleteResult.self)
+        case .harnessLocate: (HarnessLocateParams.self, HarnessLocation.self)
         }
     }
 

@@ -85,13 +85,17 @@ import TogoKit
     /// What the review screens read and write. Previews and tests pass fixtures; the app passes
     /// the live services once they exist.
     let reviewServices: any ReviewServices
+    /// What the native harness layers read and run. Without live services every session shows
+    /// the terminal only.
+    let harnessServices: any HarnessServices
 
     init(
         services: any AppServices, controlCenter: ControlCenterState = .init(), firstRun: Bool = false,
-        reviewServices: (any ReviewServices)? = nil
+        reviewServices: (any ReviewServices)? = nil, harnessServices: (any HarnessServices)? = nil
     ) {
         self.services = services
         self.reviewServices = reviewServices ?? Self.defaultReviewServices()
+        self.harnessServices = harnessServices ?? NoHarnessServices()
         self.controlCenter = controlCenter
         self.firstRun = firstRun
     }

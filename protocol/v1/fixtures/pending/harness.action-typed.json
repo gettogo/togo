@@ -1,0 +1,47 @@
+{
+  "description": "Choosing a model types the documented /model command while Claude is idle; the status line has not confirmed it inside the verify window, so the result is typed. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.action",
+    "params": {
+      "id": "s_abcdefghij",
+      "action": "set_model",
+      "args": {
+        "id": "sonnet"
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "result": "typed",
+      "message": "Sent /model sonnet"
+    }
+  }
+}

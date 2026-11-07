@@ -129,6 +129,8 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
     public var activityHistory: [Double] = [] {
         didSet { activityHistory = Self.normalized(activityHistory) }
     }
+    /// harness.v1: the activity pill and roster summary; nil when no adapter serves the session.
+    public var mission: MissionSummary? = nil
     /// Whether the helper sent `command` and `exit` (as null or a value), so a session
     /// encodes back the way it arrived. Never part of equality.
     private var launchKeys = KeyPresence()
@@ -164,7 +166,7 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, bib, name, agent, cwd, createdAt, status, activity, attachedClients, managed, muted, meta
-        case command, exit, activityHistory
+        case command, exit, activityHistory, mission
     }
 
     public init(from decoder: any Decoder) throws {
@@ -185,6 +187,7 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         command = try container.decodeIfPresent([String].self, forKey: .command)
         exit = try container.decodeIfPresent(SessionExit.self, forKey: .exit)
         activityHistory = Self.normalized(try container.decodeIfPresent([Double].self, forKey: .activityHistory) ?? [])
+        mission = try container.decodeIfPresent(MissionSummary.self, forKey: .mission)
         launchKeys = KeyPresence(present: container.contains(.command) || container.contains(.exit))
     }
 
@@ -210,6 +213,7 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         if !activityHistory.isEmpty {
             try container.encode(activityHistory, forKey: .activityHistory)
         }
+        try container.encodeIfPresent(mission, forKey: .mission)
     }
 }
 

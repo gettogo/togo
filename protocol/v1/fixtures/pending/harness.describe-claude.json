@@ -1,0 +1,125 @@
+{
+  "description": "A Claude Code session is served by the claude adapter. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.describe",
+    "params": {
+      "id": "s_abcdefghij"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "adapter": {
+        "id": "claude",
+        "name": "Claude Code",
+        "harnessVersion": "2.1.319",
+        "revision": 1
+      },
+      "capabilities": [
+        "chat",
+        "chat.anchors",
+        "chat.history",
+        "send.queue",
+        "interrupt",
+        "commands",
+        "files",
+        "mode",
+        "model",
+        "effort",
+        "needs.approvals",
+        "needs.questions",
+        "agents",
+        "background",
+        "plan",
+        "changes",
+        "ports",
+        "status",
+        "status.usage",
+        "status.context",
+        "resume",
+        "compact"
+      ],
+      "screens": [
+        {
+          "id": "model",
+          "primitive": "picker",
+          "title": "Model",
+          "section": "composer"
+        },
+        {
+          "id": "effort",
+          "primitive": "settings",
+          "title": "Effort",
+          "section": "composer"
+        },
+        {
+          "id": "resume",
+          "primitive": "picker",
+          "title": "Resume",
+          "section": "more"
+        },
+        {
+          "id": "plan",
+          "primitive": "checklist",
+          "title": "Plan",
+          "section": "plan"
+        },
+        {
+          "id": "usage",
+          "primitive": "status",
+          "title": "Usage",
+          "section": "status"
+        },
+        {
+          "id": "compact",
+          "primitive": "confirm",
+          "title": "Compact",
+          "section": "status"
+        }
+      ],
+      "modes": [
+        {
+          "id": "default",
+          "label": "Ask"
+        },
+        {
+          "id": "acceptEdits",
+          "label": "Auto edit"
+        },
+        {
+          "id": "plan",
+          "label": "Plan"
+        }
+      ],
+      "mode": "default",
+      "degraded": []
+    }
+  }
+}

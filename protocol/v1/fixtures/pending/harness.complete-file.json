@@ -1,0 +1,50 @@
+{
+  "description": "The @ menu lists files under the session cwd, matched by path.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.complete",
+    "params": {
+      "id": "s_abcdefghij",
+      "kind": "file",
+      "query": "pars"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "items": [
+        {
+          "insert": "@internal/clock/parse.go ",
+          "title": "parse.go",
+          "detail": "internal/clock"
+        }
+      ]
+    }
+  }
+}

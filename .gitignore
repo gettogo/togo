@@ -2,6 +2,7 @@
 *.xcuserstate
 xcuserdata/
 DerivedData/
+DerivedData-*/
 .build/
 *.p8
 .env*

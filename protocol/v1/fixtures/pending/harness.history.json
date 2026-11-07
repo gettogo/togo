@@ -1,0 +1,64 @@
+{
+  "description": "Paging before seq 3 returns the older items. Harness deviation: a fake `claude` on PATH prints version 2.1.319 and idles; the claude adapter's transcript feed reads testdata/claude/transcript-basic.jsonl, and the anchor marker reports epoch \"e1\" with fixed offsets.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "claude",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.history",
+    "params": {
+      "id": "s_abcdefghij",
+      "before": 3,
+      "limit": 50
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "items": [
+        {
+          "id": "u1",
+          "seq": 1,
+          "turnId": "u1",
+          "kind": "user",
+          "at": "2026-11-03T12:00:00Z",
+          "anchor": {
+            "epoch": "e1",
+            "bytes": 1200,
+            "line": 14,
+            "needle": "> fix the failing date test"
+          },
+          "user": {
+            "text": "fix the failing date test",
+            "queued": false,
+            "source": "phone"
+          }
+        }
+      ],
+      "more": false
+    }
+  }
+}

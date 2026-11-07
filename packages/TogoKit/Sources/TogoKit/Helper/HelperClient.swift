@@ -22,6 +22,7 @@ public actor HelperClient {
     private let outboxSink: AsyncStream<OutgoingFrame>.Continuation
     private let eventSink: AsyncStream<EventGate.Tagged>.Continuation
     private let eventGate = EventGate()
+    private let harnessSink: AsyncStream<HarnessNotification>.Continuation
 
     /// Events after the latest `subscribe` snapshot, in seq order. Single consumer.
     /// An event is checked against the newest snapshot when it is read, so after a
@@ -31,6 +32,9 @@ public actor HelperClient {
     /// client closes.
     public nonisolated let notifications: AsyncStream<EventEnvelope>
 
+    /// `harness` notifications for opened sessions; see `HelperClient+Harness.swift`.
+    public nonisolated let harnessNotifications: AsyncStream<HarnessNotification>
+
     public init(channel: any ExecChannel, callTimeout: Duration = .seconds(10)) {
         self.channel = channel
         self.callTimeout = callTimeout
@@ -38,6 +42,7 @@ public actor HelperClient {
         let (events, eventSink) = AsyncStream<EventGate.Tagged>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.eventSink = eventSink
         notifications = eventGate.filtered(events)
+        (harnessNotifications, harnessSink) = Self.makeHarnessStream()
     }
 
     deinit {
@@ -45,6 +50,7 @@ public actor HelperClient {
         writer?.cancel()
         outboxSink.finish()
         eventSink.finish()
+        harnessSink.finish()
     }
 
     public func hello(client: ClientInfo) async throws -> HelloResult {
@@ -410,6 +416,7 @@ public actor HelperClient {
         }
         if envelope.id == nil {
             if envelope.method == "event" { deliverEvent(frame) }
+            if envelope.method == "harness", let note = Self.harnessNotification(frame) { harnessSink.yield(note) }
             return
         }
         // A response to an expired call finds no entry and is dropped.
@@ -450,6 +457,7 @@ public actor HelperClient {
         writer?.cancel()
         outboxSink.finish()
         eventSink.finish()
+        harnessSink.finish()
         let calls = pending.values
         pending.removeAll()
         for call in calls {

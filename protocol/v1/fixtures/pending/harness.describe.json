@@ -1,0 +1,47 @@
+{
+  "description": "A shell session has no adapter, so it shows the terminal only.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "harness.describe",
+    "params": {
+      "id": "s_abcdefghij"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "adapter": null,
+      "capabilities": [],
+      "screens": [],
+      "modes": [],
+      "mode": "",
+      "degraded": []
+    }
+  }
+}

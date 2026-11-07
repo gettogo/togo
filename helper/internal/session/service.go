@@ -78,6 +78,9 @@ type Session struct {
 	// the process that set it.
 	Muted bool             `json:"muted"`
 	Meta  wire.SessionMeta `json:"meta"`
+	// Mission is the harness summary (harness.v1), set by the daemon for
+	// sessions an adapter serves.
+	Mission *wire.MissionSummary `json:"mission,omitempty"`
 	// Command is the agent's argv; nil for the shell and unmanaged sessions.
 	Command []string `json:"command"`
 	// Exit is how the agent ended while Status is ended or failed, else nil.
