@@ -1,0 +1,167 @@
+# omp (oh-my-pi). rpc mode is a separate process, so the live TUI is read
+# through its session JSONL and the CLI's JSON output, and changed by typing
+# its documented slash commands, or with `omp config set` for new sessions.
+# Checked against omp 18.16.0.
+adapter: omp
+name: omp
+revision: 1
+match: { agents: [omp], commands: [omp] }
+harness: { version: [omp, --version], pattern: 'omp/(\S+)', range: ">=18.10 <19" }
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
+  agents, background, plan, changes, ports, status, compact, settings]
+feeds:
+  session:          # newest session file for this folder; header {type: session, version: 3}
+    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true }
+    mapper: omp.session
+    stability: documented
+  subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl
+    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*/*.jsonl', follow: true }
+    mapper: omp.session
+    stability: internal
+  config:           # model roles for the picker's role chips
+    file: { path: '~/.omp/agent/config.yml', format: text, follow: true }
+    mapper: omp.config
+    stability: documented
+sources:
+  models:
+    cli: { argv: [omp, models, ls, --json] }
+    select: '[.models[] | select(.kind == "chat")]'
+    cache: 10m
+    timeout: 10s
+    stability: documented
+  commands:
+    rpc: { method: get_available_commands, child: [omp, --mode, rpc, --no-session, --no-extensions], framing: typed }
+    cache: 1h
+    timeout: 12s
+    stability: documented
+  settings:
+    cli: { argv: [omp, config, list, --json] }
+    cache: 1m
+    timeout: 8s
+    stability: documented
+  jobs:
+    cli: { argv: [omp, ps, --json] }
+    select: '[.[] | .daemons[]?]'
+    cache: 5s
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map:
+      item.id: .selector
+      item.title: .name
+      item.group: .provider
+      item.subtitle: '{{.contextWindow | tokens}} context'
+      item.badge: '{{if .reasoning}}reasoning{{end}}'
+      selected: $state.model
+    filters:
+      - { id: provider, label: Provider, kind: choice, field: provider }
+      - { id: reasoning, label: Reasoning, kind: toggle, field: reasoning }
+      # A facet named after a role action is "true" on the model that holds the role.
+      - { id: set_role_default, label: Default, kind: toggle, field: 'selector == $state.role_model_default' }
+      - { id: set_role_smol, label: Smol, kind: toggle, field: 'selector == $state.role_model_smol' }
+      - { id: set_role_slow, label: Slow, kind: toggle, field: 'selector == $state.role_model_slow' }
+      - { id: set_role_plan, label: Plan, kind: toggle, field: 'selector == $state.role_model_plan' }
+    on_select: switch_model
+    actions: [set_role_default, set_role_smol, set_role_slow, set_role_plan]
+  effort:
+    primitive: settings
+    title: Effort
+    section: composer
+    capability: effort
+    fields:
+      - { id: effort, label: Effort, kind: choice, value: $state.effort, options: [off, minimal, low, medium, high, xhigh, max, auto], action: set_effort }
+  compaction:
+    primitive: settings
+    title: Compaction
+    section: status
+    capability: compact
+    source: settings
+    fields:
+      - { id: enabled, label: Compact automatically, kind: toggle, value: '.["compaction.enabled"].value', action: set_compaction_enabled }
+      - { id: threshold, label: Threshold percent, kind: number, value: '.["compaction.thresholdPercent"].value', action: set_compaction_threshold, help: '-1 uses the reserve based default' }
+    actions: [snapcompact]
+  jobs:
+    primitive: liveList
+    title: Jobs
+    section: background
+    capability: background
+    source: jobs
+actions:
+  switch_model:
+    label: Use model
+    type: { text: '/switch {{.id}}', submit: true, when_idle: true }
+    verify: { source: session, select: .model, equals: '{{.id}}', within: 5s }
+    stability: documented-command
+  set_role_default:
+    label: Default
+    confirm: Use this model by default in new omp sessions?
+    branch:
+      - when: '{{.state.roles_without_default}}'
+        cli: { argv: [omp, config, set, modelRoles, '{{.state.roles_without_default}}"default":{{printf "%s%s" .id (.state.role_level_default | default "") | json}}}'] }
+    verify: { source: config, select: .role_model_default, equals: '{{.id}}', within: 3s }
+    stability: documented
+  set_role_smol:
+    label: Smol
+    confirm: Use this model for the smol role?
+    branch:
+      - when: '{{.state.roles_without_smol}}'
+        cli: { argv: [omp, config, set, modelRoles, '{{.state.roles_without_smol}}"smol":{{printf "%s%s" .id (.state.role_level_smol | default "") | json}}}'] }
+    verify: { source: config, select: .role_model_smol, equals: '{{.id}}', within: 3s }
+    stability: documented
+  set_role_slow:
+    label: Slow
+    confirm: Use this model for the slow role?
+    branch:
+      - when: '{{.state.roles_without_slow}}'
+        cli: { argv: [omp, config, set, modelRoles, '{{.state.roles_without_slow}}"slow":{{printf "%s%s" .id (.state.role_level_slow | default "") | json}}}'] }
+    verify: { source: config, select: .role_model_slow, equals: '{{.id}}', within: 3s }
+    stability: documented
+  set_role_plan:
+    label: Plan
+    confirm: Use this model for the plan role?
+    branch:
+      - when: '{{.state.roles_without_plan}}'
+        cli: { argv: [omp, config, set, modelRoles, '{{.state.roles_without_plan}}"plan":{{printf "%s%s" .id (.state.role_level_plan | default "") | json}}}'] }
+    verify: { source: config, select: .role_model_plan, equals: '{{.id}}', within: 3s }
+    stability: documented
+  set_effort:
+    type: { text: '/effort {{.value}}', submit: true, when_idle: true }
+    verify: { source: session, select: .effort, equals: '{{.value}}', within: 5s }
+    stability: documented-command
+  set_compaction_enabled:
+    cli: { argv: [omp, config, set, compaction.enabled, '{{.value}}'] }
+    stability: documented
+  set_compaction_threshold:
+    cli: { argv: [omp, config, set, compaction.thresholdPercent, '{{.value}}'] }
+    stability: documented
+  snapcompact:
+    label: Snapcompact
+    confirm: Compact with snapcompact now?
+    type: { text: '/compact snapcompact', submit: true, when_idle: true }
+    stability: documented-command
+  compact:
+    label: Compact
+    confirm: Compact the session now?
+    type: { text: '/compact', submit: true, when_idle: true }
+    stability: documented-command
+  resume:
+    relaunch: { argv: [omp, --resume, '{{.id}}'] }
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+  stop:
+    role: destructive
+    cli: { argv: [omp, ps, stop, '{{.target}}'] }
+    stability: documented
+commands:
+  source: commands
+  select: '[.commands[] | {name: .name, detail: .description, hint: .input.hint}]'
+mission:
+  background: { source: jobs, refresh: 10s, map: { item.id: .name, item.title: .name, item.subtitle: '.command // .status // empty' } }

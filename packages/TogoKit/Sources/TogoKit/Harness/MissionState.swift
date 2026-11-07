@@ -11,17 +11,58 @@ public struct MissionState: Sendable {
 
     public init() {}
 
+    public var summary: MissionSummary { mission?.summary ?? MissionSummary() }
+
     public mutating func load(_ mission: HarnessMission) {
         self.mission = mission
     }
 
     public mutating func apply(_ delta: HarnessDelta) -> HarnessApply {
-        guard mission != nil else { return .early }
-        return .reopen
+        guard var held = mission else { return .early }
+        if delta.rev <= held.rev { return .ignored }
+        if delta.rev != held.rev + 1 { return .reopen }
+        for op in delta.ops {
+            Self.apply(op, to: &held)
+        }
+        held.rev = delta.rev
+        mission = held
+        return .applied
     }
 
     /// The section of `kind`, when the harness supports it.
     public func section(_ kind: MissionSectionKind) -> HarnessSection? {
         mission?.sections.first { $0.kind == kind }
+    }
+
+    private static func apply(_ op: HarnessDelta.Op, to mission: inout HarnessMission) {
+        switch op.op {
+        case .summary:
+            if let summary = op.summary { mission.summary = summary }
+        case .status:
+            guard let status = op.status,
+                  let at = mission.sections.firstIndex(where: { $0.kind == .status }) else { return }
+            mission.sections[at].status = status
+        case .upsert:
+            guard let row = op.row, let at = sectionIndex(op, in: mission) else { return }
+            if let existing = mission.sections[at].rows.firstIndex(where: { $0.id == row.id }) {
+                mission.sections[at].rows[existing] = row
+            } else {
+                mission.sections[at].rows.append(row)
+            }
+        case .remove:
+            guard let id = op.id ?? op.row?.id, let at = sectionIndex(op, in: mission) else { return }
+            mission.sections[at].rows.removeAll { $0.id == id }
+        case .replace:
+            guard let at = sectionIndex(op, in: mission) else { return }
+            mission.sections[at].rows = op.rows ?? []
+        default:
+            // An op this build does not know changes nothing.
+            return
+        }
+    }
+
+    private static func sectionIndex(_ op: HarnessDelta.Op, in mission: HarnessMission) -> Int? {
+        guard let kind = op.section else { return nil }
+        return mission.sections.firstIndex { $0.kind == kind }
     }
 }

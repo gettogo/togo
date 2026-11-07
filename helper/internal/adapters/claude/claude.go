@@ -5,7 +5,8 @@
 // SessionEnd) and the status line
 // reference (code.claude.com/docs/en/statusline: model.display_name,
 // context_window.used_percentage, cost.total_cost_usd). Only the fields the
-// helper uses are read; the raw payload never leaves this package.
+// helper uses are read into the HookEvent; Forward adds the redacted raw
+// payload for the harness adapter's feeds.
 package claude
 
 import (
@@ -109,6 +110,9 @@ func Map(event string, stdin []byte, env map[string]string) (wire.HookEvent, Out
 		}
 	case "Stop":
 		ev.Event, ev.Data.Message = local.EventStop, clean(p.LastAssistant, maxMessage)
+	case "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "TaskCreated", "TaskCompleted":
+		// Only the harness adapter reads these.
+		ev.Event = local.EventHarness
 	case "SessionStart":
 		ev.Event, ev.Data.Model = local.EventStart, model(p.Model)
 	case Statusline:

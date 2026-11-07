@@ -63,3 +63,10 @@ func TestParseRejectsHugeFile(t *testing.T) {
 		t.Fatal("accepted an oversized file")
 	}
 }
+
+func TestParseAcceptsUnverified(t *testing.T) {
+	b := strings.Replace(string(sample(t)), "stability: documented-command", "stability: unverified", 1)
+	if _, err := Parse([]byte(b)); err != nil {
+		t.Fatal(err)
+	}
+}

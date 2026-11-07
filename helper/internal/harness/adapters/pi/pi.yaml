@@ -1,0 +1,98 @@
+# Pi (pi-mono coding agent) 0.73. Sessions are JSONL v3 under
+# ~/.pi/agent/sessions/--<cwd with / as ->--/<timestamp>_<uuid>.jsonl (docs/session-format.md,
+# session-manager.js), read live by the shared pisession mapper. Pi has no subagents, plan
+# mode or background jobs by design. Its RPC mode is a separate process, so the live TUI is
+# changed by typing its slash commands (slash-commands.js) or relaunching with flags.
+# Nothing here could be exercised end to end: Pi needs a provider login to run a turn.
+adapter: pi
+name: Pi
+revision: 1
+match: { agents: [pi], commands: [pi] }
+harness: { version: [pi, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.73 <0.80" }
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
+  changes, status, resume, compact]
+feeds:
+  session:
+    jsonl: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', follow: true }
+    mapper: pi.session
+    stability: documented
+sources:
+  # `pi --list-models` prints a table: provider, model, context, max-out, thinking, images.
+  models:
+    cli: { argv: [pi, --list-models, --offline], format: text }
+    select: '[split("\n")[1:][] | select(length > 0) | [splits(" +")] | {id: (.[0] + "/" + .[1]), provider: .[0], name: .[1], context: .[2], thinking: (.[4] == "yes")}]'
+    cache: 10m
+    timeout: 10s
+    stability: documented
+  sessions:
+    file: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', format: jsonl }
+    select: '[.[] | {id: (.head.id // .name), title: ([.tail[] | select(.type == "session_info") | .name] | last // .name), updated: .mtime}]'
+    cache: 30s
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map: { item.id: .id, item.title: .name, item.group: .provider, item.subtitle: '{{.context}} context', selected: $state.model }
+    filters: [{ id: provider, label: Provider, kind: choice, field: provider }]
+    on_select: set_model
+  effort:
+    primitive: settings
+    title: Thinking
+    section: composer
+    capability: effort
+    fields:
+      - { id: thinking, label: Thinking, kind: choice, value: $state.effort, options: [off, minimal, low, medium, high, xhigh], action: set_effort }
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: .title, item.subtitle: '{{.updated | ago}}' }
+    on_select: resume
+  compact:
+    primitive: confirm
+    title: Compact
+    section: status
+    capability: compact
+    submit: compact
+actions:
+  # An exact provider/id applies at once; anything else opens Pi's picker,
+  # so the change is checked against the session's model_change entry.
+  set_model:
+    label: Use model
+    type: { text: '/model {{.id}}', submit: true, when_idle: true }
+    verify: { source: session, select: .model, equals: '{{.id}}', within: 5s }
+    stability: unverified
+  set_effort:
+    label: Set thinking
+    confirm: Restart Pi with this thinking level? The session continues.
+    relaunch: { argv: [pi, --thinking, '{{.value}}', --continue] }
+    stability: documented
+  compact:
+    confirm: Compact the session now?
+    type: { text: '/compact', submit: true, when_idle: true }
+    stability: unverified
+  resume:
+    relaunch: { argv: [pi, --session, '{{.id}}'] }
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+commands:
+  static:
+    - { name: model, detail: Select model, screen: model }
+    - { name: compact, detail: Manually compact the session context }
+    - { name: resume, detail: Resume a different session, screen: resume }
+    - { name: new, detail: Start a new session }
+    - { name: name, detail: Set session display name }
+    - { name: session, detail: Show session info and stats }
+    - { name: tree, detail: Navigate session tree }
+    - { name: fork, detail: Create a new fork from a previous user message }
+    - { name: settings, detail: Open settings menu }

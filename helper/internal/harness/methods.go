@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/api"
@@ -62,7 +63,16 @@ func Methods(e Engine) map[string]api.Method {
 			if p.After < 0 {
 				return nil, invalid("after must not be negative")
 			}
-			return wrap(e.Open(ctx, ConnSubscriber(rpc.ConnFrom(ctx)), p.ID, p.After, clampLimit(p.Limit)))
+			sub := ConnSubscriber(rpc.ConnFrom(ctx))
+			res, err := e.Open(ctx, sub, p.ID, p.After, clampLimit(p.Limit))
+			if err != nil {
+				return nil, mapErr(err)
+			}
+			out := openResponse{OpenResult: res}
+			if r, ok := e.(Releaser); ok {
+				out.release = func() { r.Release(sub, p.ID) }
+			}
+			return out, nil
 		},
 		MethodClose: func(ctx context.Context, raw json.RawMessage) (any, error) {
 			var p struct {
@@ -114,6 +124,10 @@ func Methods(e Engine) map[string]api.Method {
 			}
 			if utf8.RuneCountInString(p.Target) > maxIDRunes {
 				return nil, invalid("target is too long")
+			}
+			if p.Target != "" && !targetRE.MatchString(p.Target) {
+				// Targets reach argv and request bodies: ids only.
+				return nil, invalid("target is not an id")
 			}
 			return wrap(e.Act(ctx, p))
 		},
@@ -208,6 +222,10 @@ func checkQuery(q map[string]string) error {
 	return nil
 }
 
+// targetRE is what an action target may hold: item, row and request ids.
+// A leading "-" is refused so a target never reads as a flag.
+var targetRE = regexp.MustCompile(`^[A-Za-z0-9_.:][A-Za-z0-9_.:-]*$`)
+
 func clampLimit(n int) int {
 	switch {
 	case n <= 0:
@@ -246,6 +264,27 @@ func mapErr(err error) error {
 		return invalid("unknown action")
 	}
 	return err
+}
+
+// Releaser is implemented by engines that hold a subscriber's
+// notifications until its harness.open response is written.
+type Releaser interface {
+	Release(sub Subscriber, session string)
+}
+
+// openResponse encodes an OpenResult and, while rpc holds the connection's
+// write lock for the response, lets the session's notifications flow, so
+// none reaches the wire ahead of the response.
+type openResponse struct {
+	OpenResult
+	release func()
+}
+
+func (o openResponse) MarshalJSON() ([]byte, error) {
+	if o.release != nil {
+		o.release()
+	}
+	return json.Marshal(o.OpenResult)
 }
 
 // ConnSubscriber adapts an rpc.Conn to Subscriber. A nil conn (a call that

@@ -36,6 +36,9 @@ const (
 	// EventUsageLimit is EventFailure on a rate or usage limit. The hook
 	// params have no field for the reason, so it travels as its own name.
 	EventUsageLimit = "usage_limit"
+	// EventHarness only carries a raw payload to the harness adapter; it
+	// changes no session state.
+	EventHarness = "harness"
 )
 
 const (
@@ -77,6 +80,13 @@ type Handlers struct {
 	// Clock and NewJobID default to time.Now and wire.NewJobID.
 	Clock    func() time.Time
 	NewJobID func() string
+	// Harness, when set, receives every hook of a managed session with the
+	// agent's raw payload (nil from helpers that do not forward it), after
+	// the hook's own effects.
+	Harness func(sessionID string, ev wire.HookForward)
+	// Agents, when set, names each session's agent, so a hook that fired
+	// inside a session started for another agent is dropped (Foreign).
+	Agents *AgentCache
 
 	mu   sync.Mutex
 	meta map[string]wire.SessionMeta
@@ -126,11 +136,12 @@ func managedID(id *string) (string, error) {
 }
 
 func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
-	var ev wire.HookEvent
-	if err := decode(raw, &ev); err != nil {
+	var fwd wire.HookForward
+	if err := decode(raw, &fwd); err != nil {
 		return nil, err
 	}
-	if ev.Agent != "claude" && ev.Agent != "codex" {
+	ev := fwd.HookEvent
+	if !HookAgents[ev.Agent] {
 		return nil, invalid("unknown agent")
 	}
 	id, err := managedID(ev.SessionID)
@@ -139,12 +150,26 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	switch ev.Event {
 	case EventPrompt, EventTool, EventToolDone, EventPermission, EventAttention,
-		EventNotify, EventStop, EventStart, EventMeta, EventEnd, EventFailure, EventUsageLimit:
+		EventNotify, EventStop, EventStart, EventMeta, EventEnd, EventFailure, EventUsageLimit, EventHarness:
 	default:
 		return nil, invalid("unknown hook event")
 	}
 	if id == "" {
 		// Nothing to attribute the event to; the hook is a no-op.
+		return struct{}{}, nil
+	}
+	if h.Agents != nil && Foreign(h.Agents.Agent(ctx, id), ev.Agent) {
+		// Another harness ran this agent's hook file; its events belong to
+		// that harness's own hooks, so this copy is dropped.
+		return struct{}{}, nil
+	}
+	if len(fwd.Payload) > wire.MaxHookPayload || (len(fwd.Payload) > 0 && !json.Valid(fwd.Payload)) || len(fwd.Hook) > 64 {
+		fwd.Payload, fwd.Hook = nil, ""
+	}
+	if h.Harness != nil {
+		defer h.Harness(id, fwd)
+	}
+	if ev.Event == EventHarness {
 		return struct{}{}, nil
 	}
 	// The exit detail is cleaned from the text as sent: clip drops the
@@ -413,13 +438,6 @@ func (h *Handlers) job(_ context.Context, raw json.RawMessage) (any, error) {
 	// Published under h.mu so a job's events keep their order.
 	h.Pub.Publish(wire.EventJob, nil, wire.JobEvent{Job: j})
 	return wire.JobResult{JobID: j.JobID}, nil
-}
-
-func agentTitle(agent string) string {
-	if agent == "codex" {
-		return "Codex"
-	}
-	return "Claude"
 }
 
 func firstNonEmpty(a, b string) string {

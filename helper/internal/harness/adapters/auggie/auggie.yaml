@@ -1,0 +1,89 @@
+# Auggie (Augment CLI) 0.37. No attach protocol for the TUI (`--acp` and `--mcp` are separate
+# modes) and no live transcript file. The conversation comes from its documented hooks
+# (~/.augment/settings.json), forwarded by `togo hook auggie <event>` once the owner opts in;
+# payloads were read from the 0.37 bundle: conversation_id, user_prompt, tool_name,
+# tool_input, tool_output, tool_error, file_changes, agent_stop_cause. Hooks can deny but not
+# allow, so approvals stay on the terminal. Session and model lists need a login, so they
+# and the hook feed are unverified.
+adapter: auggie
+name: Auggie
+revision: 1
+match: { agents: [auggie], commands: [auggie] }
+harness: { version: [auggie, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.37 <0.50" }
+capabilities: [chat, chat.anchors, send.queue, interrupt, commands, mode, model, effort, changes, status, resume]
+feeds:
+  hooks:
+    hook: { events: [SessionStart, PromptSubmit, PreToolUse, PostToolUse, Notification, Stop, SessionEnd] }
+    mapper: auggie.hooks
+    stability: unverified
+sources:
+  sessions:
+    cli: { argv: [auggie, session, list, --json, --limit, '50'] }
+    cache: 30s
+    stability: unverified
+  models:
+    cli: { argv: [auggie, model, list, --json] }
+    cache: 10m
+    timeout: 10s
+    stability: unverified
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map: { item.id: .id, item.title: '{{.name | default .id}}', selected: $state.model }
+    on_select: set_model
+  effort:
+    primitive: settings
+    title: Reasoning
+    section: composer
+    capability: effort
+    fields:
+      - { id: effort, label: Reasoning effort, kind: choice, value: $state.effort, options: [low, medium, high], action: set_effort }
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .sessionId, item.title: '{{.title | default .firstUserMessage | truncate 60}}', item.subtitle: '{{.modified | ago}}' }
+    on_select: resume
+actions:
+  set_model:
+    confirm: Restart Auggie with this model? The session continues.
+    relaunch: { argv: [auggie, -m, '{{.id}}', --continue] }
+    stability: documented
+  set_effort:
+    confirm: Restart Auggie with this effort? The session continues.
+    relaunch: { argv: [auggie, --reasoning-effort, '{{.value}}', --continue] }
+    stability: documented
+  # /ask and /plan toggle their mode; with neither on, Auggie codes.
+  set_mode:
+    branch:
+      - { when: '{{eq .id "ask"}}', type: { text: '/ask', submit: true, when_idle: true } }
+      - { when: '{{eq .id "plan"}}', type: { text: '/plan', submit: true, when_idle: true } }
+    stability: unverified
+  resume:
+    relaunch: { argv: [auggie, --resume, '{{.id}}'] }
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+modes:
+  choices: [{ id: ask, label: Ask }, { id: plan, label: Plan }]
+  set: set_mode
+commands:
+  static:
+    - { name: model, detail: Select the model, screen: model }
+    - { name: ask, detail: Toggle ask mode }
+    - { name: plan, detail: Toggle plan mode }
+    - { name: agents, detail: Browse subagents }
+    - { name: task, detail: Task manager }
+    - { name: diffs, detail: File changes this session }
+    - { name: context, detail: Context usage }
+    - { name: stats, detail: Session statistics }
+    - { name: sessions, detail: Resume a session, screen: resume }

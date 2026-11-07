@@ -143,9 +143,16 @@ func shellOutput(t *testing.T, c *Components) {
 // which runs its profile first.
 func waitAgentGone(t *testing.T, svc *session.Service, id string) {
 	t.Helper()
+	// Gone must hold for a few polls: the pane reads gone for a moment
+	// before the agent starts, and while the login shell's profile runs.
+	settled := 0
 	for deadline := time.Now().Add(10 * time.Second); ; {
 		if gone, err := svc.AgentGone(context.Background(), id); err == nil && gone {
-			return
+			if settled++; settled >= 5 {
+				return
+			}
+		} else {
+			settled = 0
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("the pane never settled at the shell")

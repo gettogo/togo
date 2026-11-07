@@ -20,23 +20,7 @@ struct FixtureTests {
     /// round-trip through the app's types.
     static let appPendingFixtures: Set<String> = [
         "approval.list-subject.json", "push.pair-watch.json",
-        "harness.action-answer.json",
-        "harness.action-typed.json",
-        "harness.close.json",
-        "harness.complete-command.json",
-        "harness.complete-file.json",
-        "harness.describe-claude.json",
-        "harness.describe.json",
-        "harness.history.json",
-        "harness.interrupt.json",
-        "harness.locate.json",
-        "harness.open-no-adapter.json",
-        "harness.open.json",
-        "harness.screen-fallback.json",
-        "harness.screen-model.json",
         "harness.screen-secret.json",
-        "harness.send-busy.json",
-        "harness.send-queued.json",
     ]
 
     @Test func pendingFixturesValidate() throws {

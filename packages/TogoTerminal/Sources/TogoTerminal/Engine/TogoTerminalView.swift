@@ -194,13 +194,15 @@ final class TogoTerminalView: TerminalView {
     /// Something asked for the keyboard while focus was refused, such as the terminal
     /// appearing before its session connected. The keyboard comes up once it may.
     var wantsFocus = false
+    /// Another layer covers the terminal, so it may not take the keyboard until uncovered.
+    var covered = false
 
     override var canBecomeFirstResponder: Bool {
-        acceptsFocus && super.canBecomeFirstResponder
+        acceptsFocus && !covered && super.canBecomeFirstResponder
     }
 
     override func becomeFirstResponder() -> Bool {
-        guard acceptsFocus else {
+        guard acceptsFocus, !covered else {
             wantsFocus = true
             return false
         }

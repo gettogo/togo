@@ -61,7 +61,8 @@ struct SnapshotMapper {
             id: session.id, hostID: hostID, bib: session.bib, name: session.name, agent: session.agent,
             agentName: agentName, status: session.status, activity: session.activity, cwd: session.cwd,
             muted: session.muted, managed: session.managed, meta: session.meta, statusSince: since,
-            exit: session.status.isFinished ? session.exit : nil, activityHistory: session.activityHistory
+            exit: session.status.isFinished ? session.exit : nil, activityHistory: session.activityHistory,
+            mission: session.mission
         )
     }
 

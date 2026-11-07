@@ -133,6 +133,9 @@ func TestRestoreKeepsIDBibNameArgv(t *testing.T) {
 	if env := tmuxOut(t, s.Tmux, "show-environment", "-t", "="+created.ID, "TOGO_SESSION"); env != "TOGO_SESSION="+created.ID {
 		t.Errorf("environment %q", env)
 	}
+	if env := tmuxOut(t, s.Tmux, "show-environment", "-t", "="+created.ID, "TOGO_AGENT"); env != "TOGO_AGENT=claude" {
+		t.Errorf("agent environment %q", env)
+	}
 	if left := mustRestorable(t, s); len(left) != 0 {
 		t.Fatalf("still restorable: %q", ids(left))
 	}

@@ -277,3 +277,33 @@ extension AppStore {
         workspace.tabs.contains { $0.id == id }
     }
 }
+
+/// Each tab's layer: the chat where an adapter serves the session, the terminal otherwise.
+/// The terminal stays attached under the chat, so switching never reconnects.
+extension AppStore {
+    var harnessTabs: HarnessTabs {
+        HarnessTabsRegistry.shared.tabs(for: self)
+    }
+
+    func harness(for id: TabID) -> HarnessSessionStore? {
+        harnessTabs.store(for: id)
+    }
+
+    /// The layer the tab shows now.
+    func layer(for id: TabID) -> SessionLayer {
+        harness(for: id)?.shownLayer ?? .terminal
+    }
+
+    /// Flips the focused tab between chat and terminal, when it has both.
+    func toggleLayer() {
+        guard let id = focusedTab?.id, let store = harness(for: id), store.chatAvailable else { return }
+        store.layer = store.layer == .chat ? .terminal : .chat
+    }
+
+    /// Starts and stops the tabs' harness stores to match the open tabs.
+    func syncHarness() {
+        harnessTabs.sync(tabs: workspace.tabs.map(\.id)) { [weak self] hostID in
+            self?.machine(for: hostID)?.capabilities
+        }
+    }
+}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/adapters/claude"
+	"github.com/gettogo/togo/helper/internal/local"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/sockd"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -32,6 +33,10 @@ const (
 // hookAdapter reduces one agent hook invocation to a HookEvent. text is
 // printed to stdout (the status line); errors never quote the payload.
 type hookAdapter func(ctx context.Context, event string, payload []byte, env map[string]string) (ev wire.HookEvent, text string, err error)
+
+// payloadAgents are the hookAdapters agents whose raw payload is
+// forwarded with the summary, for their harness adapter's hook feed.
+var payloadAgents = map[string]bool{"claude": true, "codex": true}
 
 // hookAdapters maps the agent argument of `togo hook` to its adapter. Other
 // agents add themselves from their own file's init.
@@ -69,8 +74,16 @@ func runHook(ctx context.Context, args []string, env map[string]string, stdin io
 	}
 	agent, event := pos[0], pos[1]
 	adapt, ok := hookAdapters[agent]
-	if !ok {
+	fwd, forwards := forwardAdapters[agent]
+	if !ok && !forwards {
 		log("hook: unknown agent")
+		return exitOK
+	}
+	if owner := env["TOGO_AGENT"]; local.Foreign(owner, agent) {
+		// Another harness ran this agent's hook file (Copilot runs
+		// .claude/settings*.json hooks). Print nothing, so that harness
+		// keeps its own behaviour, and report nothing.
+		log("hook %s %s: session runs %s, ignored", agent, clipLog(event), clipLog(owner))
 		return exitOK
 	}
 	payload, err := readBounded(stdin, claude.MaxPayload, hookStdinWait)
@@ -78,7 +91,27 @@ func runHook(ctx context.Context, args []string, env map[string]string, stdin io
 		log("hook %s %s: %v", agent, clipLog(event), err)
 		return exitOK
 	}
-	ev, text, err := adapt(ctx, event, payload, env)
+	var (
+		ev       wire.HookEvent
+		text     string
+		params   any
+		blocks   = agent == "claude" && event == "PermissionRequest"
+		decision = claude.Decision
+	)
+	if forwards {
+		var f wire.HookForward
+		f, err = fwd.reduce(event, payload, env)
+		ev, params = f.HookEvent, f
+		blocks, decision = fwd.blocks(event), fwd.decision
+	} else {
+		ev, text, err = adapt(ctx, event, payload, env)
+		params = ev
+		if payloadAgents[agent] {
+			// The harness feeds read the agent's own payload, redacted
+			// here; the summary fields still drive status and push.
+			params = claude.Forward(ev, event, payload)
+		}
+	}
 	if err != nil {
 		log("hook %s %s: %v", agent, clipLog(event), err)
 		return exitOK
@@ -91,8 +124,8 @@ func runHook(ctx context.Context, args []string, env map[string]string, stdin io
 		log("hook %s %s: %v", agent, event, err)
 		return exitOK
 	}
-	if agent == "claude" && event == "PermissionRequest" && (block || env["TOGO_HOOK_BLOCK"] == "1") {
-		hookBlock(ctx, sock, ev, stdout, log)
+	if blocks && (block || env["TOGO_HOOK_BLOCK"] == "1") {
+		hookBlock(ctx, sock, agent, ev, decision, stdout, log)
 		return exitOK
 	}
 	if ev.SessionID == nil {
@@ -101,28 +134,28 @@ func runHook(ctx context.Context, args []string, env map[string]string, stdin io
 	}
 	callCtx, cancel := context.WithTimeout(ctx, hookCallTimeout)
 	defer cancel()
-	if err := localCall(callCtx, sock, wire.MethodLocalHook, ev, nil); err != nil {
+	if err := localCall(callCtx, sock, wire.MethodLocalHook, params, nil); err != nil {
 		log("hook %s %s: %v", agent, event, err)
 	}
 	return exitOK
 }
 
-// hookBlock asks the user through the daemon and prints Claude Code's
-// PermissionRequest decision. Timeout, an unknown answer or a missing
-// daemon print nothing, so Claude shows its own prompt.
-func hookBlock(ctx context.Context, sock string, ev wire.HookEvent, stdout io.Writer, log func(string, ...any)) {
+// hookBlock asks the user through the daemon and prints the agent's
+// permission decision. Timeout, an unknown answer or a missing daemon print
+// nothing, so the agent shows its own prompt.
+func hookBlock(ctx context.Context, sock, agent string, ev wire.HookEvent, decision func(string) []byte, stdout io.Writer, log func(string, ...any)) {
 	ctx, cancel := context.WithTimeout(ctx, hookAskSeconds*time.Second+hookAskSlack)
 	defer cancel()
 	var res wire.AskResult
 	if err := localCall(ctx, sock, wire.MethodLocalAsk, claude.AskFor(ev, hookAskSeconds), &res); err != nil {
-		log("hook claude PermissionRequest: %v", err)
+		log("hook %s PermissionRequest: %v", agent, err)
 		return
 	}
 	if res.Decision == nil {
-		log("hook claude PermissionRequest: no answer before timeout")
+		log("hook %s PermissionRequest: no answer before timeout", agent)
 		return
 	}
-	if out := claude.Decision(*res.Decision); out != nil {
+	if out := decision(*res.Decision); out != nil {
 		fmt.Fprintln(stdout, string(out))
 	}
 }

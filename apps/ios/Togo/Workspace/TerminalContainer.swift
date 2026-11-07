@@ -18,6 +18,12 @@ final class TerminalContainer: UIViewController {
     /// When the container's size last changed, to tell an animation's frames from a single change.
     private var lastResize: ContinuousClock.Instant?
     private var lastBounds: CGSize = .zero
+    /// The line "Show in terminal" landed on, over the terminal.
+    private let band = JumpBandView()
+    private var highlight = JumpHighlight()
+    /// Another layer covers the terminal, as the chat does: it takes no touches and VoiceOver
+    /// passes it by.
+    private(set) var covered = false
 
     /// A container can be put on screen without appearing, as when a pager page that held
     /// something else starts showing a terminal, so it also attaches when its view reaches a
@@ -47,7 +53,51 @@ final class TerminalContainer: UIViewController {
         }
     }
 
+    /// The chat covers the terminal or no longer does.
+    func setCovered(_ on: Bool) {
+        guard on != covered else { return }
+        covered = on
+        view.isUserInteractionEnabled = !on
+        view.accessibilityElementsHidden = on
+        if on { clearBand() }
+    }
+
+    /// Marks `rect` (in this view's coordinates) for a moment, then lets it go: a fade, or
+    /// under Reduce Motion a plain removal.
+    func showBand(_ rect: CGRect) {
+        guard !rect.isNull, rect.height > 0 else { return }
+        if band.superview !== view { view.addSubview(band) }
+        view.bringSubviewToFront(band)
+        band.layer.removeAllAnimations()
+        band.frame = rect.intersection(view.bounds)
+        band.alpha = 1
+        let token = highlight.show()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: JumpHighlight.hold)
+            self?.endBand(token)
+        }
+    }
+
+    private func endBand(_ token: Int) {
+        guard highlight.end(token) else { return }
+        let reduce = UIAccessibility.isReduceMotionEnabled
+        let band = self.band
+        if JumpHighlight.fades(reduceMotion: reduce), let animator = Motion.animator(.dim, reduce: reduce, animations: { band.alpha = 0 }) {
+            animator.addCompletion { _ in if band.alpha == 0 { band.removeFromSuperview() } }
+            animator.startAnimation()
+        } else {
+            band.removeFromSuperview()
+        }
+    }
+
+    private func clearBand() {
+        highlight.clear()
+        band.layer.removeAllAnimations()
+        band.removeFromSuperview()
+    }
+
     func release() {
+        clearBand()
         if let wanted, wanted.parent === self {
             Self.detach(wanted)
         }
@@ -108,7 +158,7 @@ final class TerminalContainer: UIViewController {
         let holding = holdsForTransition()
         child.view.autoresizingMask = holding ? [] : [.flexibleWidth, .flexibleHeight]
         if holding { hold(child) } else { child.view.frame = view.bounds }
-        view.addSubview(child.view)
+        view.insertSubview(child.view, at: 0)
         child.didMove(toParent: self)
         // A hold another container put on it ends here, with a fit to this one.
         if !holding {

@@ -1,0 +1,69 @@
+# Aider 0.86. No structured channel: no JSON output, hooks, server or ACP. The chat is appended
+# as markdown to ./.aider.chat.history.md, which no runner reads yet, so the chat stays in the
+# terminal; approvals are line prompts the existing prompt detector answers. Writes: documented
+# slash commands with arguments.
+adapter: aider
+name: Aider
+revision: 1
+match: { agents: [aider], commands: [aider] }
+harness: { version: [aider, --version], pattern: 'aider (\d+\.\d+\.\d+)', range: ">=0.86 <0.90" }
+capabilities: [interrupt, commands, files, mode, model, changes, ports]
+sources:
+  models:           # aliases aider documents for --model and /model
+    static:
+      - { id: sonnet, label: Claude Sonnet }
+      - { id: opus, label: Claude Opus }
+      - { id: haiku, label: Claude Haiku }
+      - { id: gpt-4o, label: GPT-4o }
+      - { id: deepseek, label: DeepSeek }
+      - { id: gemini, label: Gemini }
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map: { item.id: .id, item.title: .label }
+    on_select: set_model
+actions:
+  set_model:
+    label: Use model
+    type: { text: '/model {{.id}}', submit: true, when_idle: true }
+    stability: documented-command
+  set_mode:
+    label: Mode
+    type: { text: '/chat-mode {{.id}}', submit: true, when_idle: true }
+    stability: documented-command
+  undo:
+    label: Undo last commit
+    role: destructive
+    confirm: Undo the last aider commit?
+    type: { text: '/undo', submit: true, when_idle: true }
+    stability: documented-command
+  interrupt:
+    keys: { keys: [C-c] }
+    stability: documented
+modes:
+  choices:
+    - { id: code, label: Code }
+    - { id: architect, label: Architect }
+    - { id: ask, label: Ask }
+    - { id: help, label: Help }
+  set: set_mode
+commands:
+  static:
+    - { name: add, hint: '<file>', detail: Add files to the chat }
+    - { name: drop, hint: '<file>', detail: Remove files from the chat }
+    - { name: model, hint: '<model>', detail: Switch the main model, screen: model }
+    - { name: chat-mode, hint: '<mode>', detail: Switch chat mode }
+    - { name: architect, detail: Architect mode for one message }
+    - { name: ask, detail: Ask without editing }
+    - { name: diff, detail: Diff since the last message }
+    - { name: undo, detail: Undo the last aider commit }
+    - { name: tokens, detail: Context token report }
+    - { name: clear, detail: Clear the chat history }
+    - { name: run, hint: '<command>', detail: Run a shell command }
+    - { name: test, hint: '<command>', detail: Run tests and fix failures }

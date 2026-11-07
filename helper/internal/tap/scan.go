@@ -32,6 +32,10 @@ const (
 	// content is never inspected, so a BEL inside is not a bell.
 	stString
 	stStringEsc
+	// stCSI skips a control sequence's parameters to its final byte, and
+	// stEscInter an escape's intermediate bytes, so neither reads as text.
+	stCSI
+	stEscInter
 )
 
 // Scanner extracts bell and notification signals from terminal output. State
@@ -41,6 +45,8 @@ type Scanner struct {
 	st       state
 	body     []byte
 	overflow bool
+	// shell follows OSC 133 prompt marks into command blocks.
+	shell shellBlock
 }
 
 // Feed consumes p and returns the signals completed by it. A BEL that
@@ -55,15 +61,39 @@ func (s *Scanner) Feed(p []byte) []wire.Signal {
 				out = append(out, wire.Signal{Kind: wire.SignalBell})
 			case esc:
 				s.st = stEsc
+			default:
+				s.shell.text(b)
 			}
 		case stEsc:
-			switch b {
-			case ']':
+			switch {
+			case b == '[':
+				s.st = stCSI
+				s.shell.csiStart()
+			case b == ']':
 				s.startOSC()
-			case 'P', 'X', '^', '_':
+			case b == 'P' || b == 'X' || b == '^' || b == '_':
 				s.st = stString
-			case esc:
+			case b == esc:
+			case b >= 0x20 && b <= 0x2f:
+				s.st = stEscInter
 			default:
+				s.st = stGround
+			}
+		case stCSI, stEscInter:
+			switch {
+			case b == esc:
+				s.st = stEsc
+			case b == can || b == sub:
+				s.st = stGround
+			case b == bel:
+				// C0 controls act inside a control sequence.
+				out = append(out, wire.Signal{Kind: wire.SignalBell})
+			case s.st == stCSI && b >= 0x40 && b <= 0x7e:
+				s.st = stGround
+				s.shell.csi(b)
+			case s.st == stCSI:
+				s.shell.csiParam(b)
+			case s.st == stEscInter && b >= 0x30 && b <= 0x7e:
 				s.st = stGround
 			}
 		case stOSC:
@@ -128,7 +158,8 @@ func (s *Scanner) addBody(b byte) {
 	}
 	if len(s.body) >= maxOSCBody {
 		s.overflow = true
-		s.body = s.body[:0]
+		// The head stays, so a prompt mark with long parameters still counts.
+		s.body = s.body[:markHead]
 		return
 	}
 	s.body = append(s.body, b)
@@ -138,12 +169,12 @@ func (s *Scanner) finishOSC(out []wire.Signal) []wire.Signal {
 	body, overflow := string(s.body), s.overflow
 	s.reset()
 	if overflow {
-		return out
+		return s.shell.truncatedOSC(body, out)
 	}
 	if sig, ok := parseOSC(body); ok {
 		out = append(out, sig)
 	}
-	return out
+	return s.shell.osc(body, out)
 }
 
 // parseOSC turns an OSC body into a signal. OSC 9 is the iTerm2 notification;

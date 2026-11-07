@@ -1,0 +1,16 @@
+data: {"id":"evt_1b40fec35001zb4tJvHTL1vIa3","type":"server.connected","properties":{}}
+
+data: {"id":"evt_1b40fec75001HVgoH5t5kdIULh","type":"indexing.status","properties":{"status":{"state":"In Progress","message":"Indexing is initializing.","processedFiles":0,"totalFiles":0,"percent":0}}}
+
+data: {"id":"evt_1b40fec780014IaDLtIw7V2Vti","type":"indexing.status","properties":{"status":{"state":"Disabled","message":"Indexing disabled.","processedFiles":0,"totalFiles":0,"percent":0}}}
+
+data: {"id":"evt_1b40fee16001JWpy3NkaVuP9EK","type":"session.created","properties":{"sessionID":"ses_e4bf011f2ffeibDoj0CVGRD9Pl","info":{"id":"ses_e4bf011f2ffeibDoj0CVGRD9Pl","slug":"cosmic-river","projectID":"global","directory":"/Users/user/proj","path":"Users/user/proj","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"title":"spike","version":"7.8.27","time":{"created":1794022305295,"updated":1794022305295}}}}
+
+data: {"type":"sync","syncEvent":{"id":"evt_1b40fee16001JWpy3NkaVuP9EK","type":"session.created.1","seq":0,"aggregateID":"ses_e4bf011f2ffeibDoj0CVGRD9Pl","data":{"sessionID":"ses_e4bf011f2ffeibDoj0CVGRD9Pl","info":{"id":"ses_e4bf011f2ffeibDoj0CVGRD9Pl","slug":"cosmic-river","projectID":"global","directory":"/Users/user/proj","path":"Users/user/proj","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"title":"spike","version":"7.8.27","time":{"created":1794022305295,"updated":1794022305295}}}},"id":"evt_1b40fee16001JWpy3NkaVuP9EK"}
+
+data: {"id":"evt_1b40fee7f001Wfg6EppUi7V7C8","type":"session.status","properties":{"sessionID":"ses_e4bf011f2ffeibDoj0CVGRD9Pl","status":{"type":"idle"}}}
+
+data: {"id":"evt_1b40fee85001vxZxwQHwfuo8cU","type":"session.idle","properties":{"sessionID":"ses_e4bf011f2ffeibDoj0CVGRD9Pl"}}
+
+data: {"id":"evt_1b40fee85002SgX8osbBHYQX8t","type":"session.drain.interrupted","properties":{"sessionID":"ses_e4bf011f2ffeibDoj0CVGRD9Pl"}}
+

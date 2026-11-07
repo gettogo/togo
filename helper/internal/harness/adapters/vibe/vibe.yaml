@@ -1,0 +1,82 @@
+# Mistral Vibe 3.1. No attach protocol for the TUI (`vibe-acp` and `vibe-app-server` are separate
+# stdio processes). Reads: the message journal ~/.vibe/logs/session/<dir>/messages.jsonl and its
+# meta.json (layout from Vibe's source; no live session was made, it needs an API key) and hooks
+# that use Vibe's claude_code protocol (pre_tool, post_tool, post_agent; payload unverified).
+# Writes: built-in agents are the modes and change by relaunch with --continue; /compact typed.
+adapter: vibe
+name: Mistral Vibe
+revision: 1
+match: { agents: [vibe], commands: [vibe] }
+harness: { version: [vibe, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=3.1 <4" }
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode,
+  needs.approvals, changes, ports, status, resume, compact]
+feeds:
+  hooks:            # not installed by Togo: Vibe reads claude_code hooks from Claude-format plugins
+    hook: { events: [PreToolUse, PostToolUse, Stop] }
+    mapper: vibe.hooks
+    stability: experimental
+  session:          # path: the newest journal whose meta.json works in this folder
+    jsonl: { path: '{{.state.transcript_path}}', follow: true }
+    mapper: vibe.session
+    stability: internal
+sources:
+  sessions:
+    file: { glob: '~/.vibe/logs/session/*/meta.json', format: json }
+    select: '[.[] | .head[0] as $m | select(($m.environment.working_directory // "") == $state.cwd or ($m.origin_directory // "") == $state.cwd) | {id: $m.session_id, title: $m.title, updated: .mtime}]'
+    cache: 30s
+    stability: internal
+  config:
+    file: { path: '~/.vibe/config.toml', format: toml }
+    select: '{default_agent: (.default_agent // "accept-edits"), active_model: .active_model}'
+    stability: documented
+screens:
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: '{{.title | default .id | truncate 60}}', item.subtitle: '{{.updated | ago}}' }
+    on_select: resume
+  compact:
+    primitive: confirm
+    title: Compact
+    section: status
+    capability: compact
+    submit: compact
+actions:
+  set_mode:
+    label: Agent
+    confirm: Restart Vibe with this agent? The session continues.
+    relaunch: { argv: [vibe, --agent, '{{.id}}', --continue] }
+    stability: documented
+  compact:
+    label: Compact
+    confirm: Compact the conversation now?
+    type: { text: '/compact', submit: true, when_idle: true }
+    stability: documented-command
+  resume:
+    label: Resume
+    relaunch: { argv: [vibe, --resume, '{{.id}}'] }
+    stability: documented
+  answer:
+    builtin: approval_answer
+    stability: experimental
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+modes:
+  choices:
+    - { id: ask, label: Ask }
+    - { id: accept-edits, label: Auto edit }
+    - { id: smart-approve, label: Smart }
+    - { id: auto-approve, label: YOLO }
+  current: config
+  select: .default_agent
+  set: set_mode
+commands:
+  static:
+    - { name: compact, detail: Summarise the conversation }
+    - { name: config, detail: Settings }
+    - { name: resume, detail: Resume a session, screen: resume }

@@ -29,6 +29,10 @@ struct RosterView: View {
     @State private var renameTarget: SessionRow?
     @State private var keys = SidebarKeyboard()
     @State private var searching = false
+    /// The session whose mission control a long-press opened.
+    @State private var missionTarget: RosterMissionTarget?
+    /// Where that mission control handed off to, acted on once its sheet has gone.
+    @State private var missionExit: (tab: TabID, exit: RosterMissionExit)?
     @FocusState private var listFocused: Bool
 
     var body: some View {
@@ -44,6 +48,13 @@ struct RosterView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
+            .environment(\.openSessionMission, OpenSessionMission { missionTarget = RosterMissionTarget(tab: $0) })
+            .sheet(item: $missionTarget, onDismiss: leaveMission) { target in
+                RosterMissionSheet(app: store, tab: target.tab) { exit in
+                    missionExit = exit.map { (target.tab, $0) }
+                    missionTarget = nil
+                }
+            }
     }
 
     private var hasNoMachines: Bool {
@@ -195,6 +206,21 @@ struct RosterView: View {
         keys.cursor = TabID(hostID: row.hostID, sessionID: row.id)
         withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
             store.showFromSidebar(row, transport: transport)
+        }
+    }
+
+    /// After a roster mission sheet closes: the review for a diff or preview, or the session's
+    /// chat.
+    private func leaveMission() {
+        guard let handoff = missionExit else { return }
+        missionExit = nil
+        let tab = handoff.tab
+        switch handoff.exit {
+        case .external(let target):
+            store.followMissionTarget(target, from: tab)
+        case .chat:
+            guard let row = store.roster.lines.first(where: { $0.id == tab })?.row else { return }
+            open(row, transport: nil)
         }
     }
 

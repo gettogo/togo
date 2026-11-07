@@ -124,11 +124,12 @@ func (s *Service) Restore(ctx context.Context, id string, resume bool) (Session,
 				return err
 			}
 		}
+		run := launch.WithEndpoint(e.Agent, id)
 		err = s.Tmux.NewSession(ctx, tmux.NewSessionOpts{
 			Name: id, Dir: dir, Cols: defaultCols, Rows: defaultRows,
-			Command: launchWrapper(s.shell(), s.TogoPath, launch),
+			Command: launchWrapper(s.shell(), s.TogoPath, run),
 			Options: options,
-			Env:     s.sessionEnv(id, bib),
+			Env:     withEnv(s.sessionEnv(id, bib, e.Agent), run.Env),
 		})
 		if err != nil {
 			return err

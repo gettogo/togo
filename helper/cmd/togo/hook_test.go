@@ -264,3 +264,39 @@ func TestCodexAdapterRegistered(t *testing.T) {
 		t.Fatalf("calls %+v", calls)
 	}
 }
+
+// Claude and Codex hooks carry their redacted payload and hook name, so the
+// harness feeds see more than the summary.
+func TestHookForwardsPayload(t *testing.T) {
+	cases := []struct {
+		agent, event string
+		payload      []byte
+		want         []string
+	}{
+		{"claude", "PreToolUse", fixtureBytes(t, "pre_tool_use.json"), []string{`"hook":"PreToolUse"`, `"tool_use_id":"toolu_01ABC123"`}},
+		{"claude", "SubagentStart", []byte(`{"session_id":"a","cwd":"/w","agent_id":"ag1","agent_type":"Explore"}`), []string{`"hook":"SubagentStart"`, `"agent_id":"ag1"`}},
+		{"claude", "statusline", fixtureBytes(t, "statusline.json"), []string{`"hook":"statusline"`, `"payload":{`}},
+		{"codex", "Stop", []byte(`{"session_id":"x","cwd":"/tmp","hook_event_name":"Stop","last_assistant_message":"ok","turn_id":"t1"}`), []string{`"hook":"Stop"`, `"turn_id":"t1"`}},
+	}
+	for _, c := range cases {
+		home, sock := tapHome(t)
+		d := startFakeDaemon(t, sock, func(string, json.RawMessage) (any, int) { return map[string]any{}, 0 })
+		env := map[string]string{"TOGO_HOME": home, "TOGO_SESSION": "s_aaaaaaaaaa", "TOGO_AGENT": c.agent}
+		if code, _, _ := runWith(t, env, c.payload, "hook", c.agent, c.event); code != 0 {
+			t.Fatalf("%s %s: code %d", c.agent, c.event, code)
+		}
+		calls := d.recorded()
+		if len(calls) != 1 {
+			t.Fatalf("%s %s: calls %+v", c.agent, c.event, calls)
+		}
+		p := string(calls[0].Params)
+		for _, w := range c.want {
+			if !strings.Contains(p, w) {
+				t.Errorf("%s %s: missing %s in %s", c.agent, c.event, w, p)
+			}
+		}
+		if strings.Contains(p, "SECRETSECRET") {
+			t.Errorf("%s %s: secret forwarded", c.agent, c.event)
+		}
+	}
+}

@@ -231,7 +231,9 @@ func TestFixtures(t *testing.T) {
 	}
 	for _, path := range paths {
 		name := filepath.Base(path)
-		if fixtureNeedsFake[name] {
+		// harness.* fixtures run in the engine's own fixture test, over a
+		// fake harness.
+		if fixtureNeedsFake[name] || strings.HasPrefix(name, "harness.") {
 			continue
 		}
 		t.Run(strings.TrimSuffix(name, ".json"), func(t *testing.T) {

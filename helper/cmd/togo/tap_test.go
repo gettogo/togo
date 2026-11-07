@@ -105,3 +105,23 @@ func TestTapSendsSignalsToDaemon(t *testing.T) {
 		t.Fatalf("kinds %v", kinds)
 	}
 }
+
+// The tap publishes how many output bytes it has seen, for anchors.
+func TestTapCountsBytes(t *testing.T) {
+	home, _ := tapHome(t)
+	data := bytes.Repeat([]byte("abc\n"), 5000)
+	if code := runTap(context.Background(), []string{"s_abcdefghij"}, map[string]string{"TOGO_HOME": home}, bytes.NewReader(data), io.Discard); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+	b, err := os.ReadFile(filepath.Join(home, "run", "tap", "s_abcdefghij.off"))
+	if err != nil || len(b) != 16 {
+		t.Fatalf("counter file %x %v", b, err)
+	}
+	var total uint64
+	for _, c := range b[8:] {
+		total = total<<8 | uint64(c)
+	}
+	if total != uint64(len(data)) {
+		t.Fatalf("total %d, want %d", total, len(data))
+	}
+}

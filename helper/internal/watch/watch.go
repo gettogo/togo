@@ -72,6 +72,7 @@ type Config struct {
 	Pub     wire.Publisher
 	// Activity, when set, hears every output signal.
 	Activity ActivitySink
+	Shell    func(id string, body []byte) // when set, takes OSC 133 shell marks
 }
 
 // Watcher supervises taps and reacts to their signals.
@@ -400,6 +401,9 @@ func (w *Watcher) Signal(ctx context.Context, sig wire.Signal) error {
 		return err
 	} else if !managed {
 		return &session.InvalidParamsError{Msg: "signals are accepted for managed sessions only"}
+	}
+	if sig.Kind == tap.SignalShell {
+		return w.shellMark(sig)
 	}
 	e := w.entry(sig.SessionID)
 	e.mu.Lock()

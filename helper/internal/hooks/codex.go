@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 )
 
-// codexEvents are the events the Codex adapter maps: prompt, permission and
-// stop.
-var codexEvents = []string{"UserPromptSubmit", "PermissionRequest", "Stop"}
+// codexEvents are the events the Codex adapter maps: session start,
+// prompt, tool start and end, permission and stop. The tool events feed the
+// native chat while the app-server is not connected.
+var codexEvents = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop"}
 
 // codexEdits edits hooks.json and config.toml, where the [features] hooks
 // flag turns on loading of hooks.json.

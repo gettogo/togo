@@ -1,0 +1,9 @@
+# OpenHands CLI (SDK 1.21). Terminal-only: the README says the project is no longer maintained,
+# and the conversation files under ~/.openhands/conversations were never seen (no session was
+# created). `openhands acp` and `--headless --json` host their own runs.
+adapter: openhands
+name: OpenHands
+revision: 1
+match: { agents: [openhands], commands: [openhands] }
+harness: { version: [openhands, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.21 <2" }
+capabilities: []

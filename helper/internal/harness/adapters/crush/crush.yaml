@@ -1,0 +1,53 @@
+# Crush (Charm) 0.100. Crush has a client and server mode: `crush server -H <host>` serves an
+# HTTP API (OpenAPI at /v1/docs/openapi.json) and its /v1/workspaces/{id}/events SSE stream,
+# and a second client can join the TUI's workspace. Checked on 0.100.0 with a scratch data
+# folder: a second client got the workspace's session and client_session events, and the
+# TUI reports the session it shows. But the TUI only joins a server when started with
+# CRUSH_CLIENT_SERVER=1; on tcp:// it needs the server running first, and on unix:// it
+# starts a detached server that outlives it. Togo's launch adds neither an environment
+# variable nor a server, and its unix endpoint does not speak HTTP, so this file is the
+# fallback: it lists the folder's sessions (`crush session list --json`, which reads the
+# project's .crush database) and applies changes by relaunching. The chat stays in the
+# terminal.
+adapter: crush
+name: Crush
+revision: 1
+match: { agents: [crush], commands: [crush] }
+harness: { version: [crush, --version], pattern: 'v(\d+\.\d+\.\d+)', range: ">=0.100 <0.110" }
+capabilities: [interrupt, commands, mode, resume]
+sources:
+  sessions:
+    cli: { argv: [crush, session, list, --json, --cwd, '{{.cwd}}'] }
+    select: 'sort_by(.modified) | reverse'
+    cache: 30s
+    stability: documented
+screens:
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .uuid, item.title: '{{.title | default .id | truncate 60}}', item.subtitle: '{{.modified | ago}}' }
+    on_select: resume
+actions:
+  resume:
+    relaunch: { argv: [crush, --session, '{{.id}}'] }
+    stability: documented
+  set_mode:
+    label: Mode
+    confirm: Restart Crush in this mode? The session continues.
+    branch:
+      - { when: '{{eq .id "yolo"}}', relaunch: { argv: [crush, --yolo, --continue] } }
+      - { relaunch: { argv: [crush, --continue] } }
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+modes:
+  choices: [{ id: default, label: Ask }, { id: yolo, label: Skip prompts }]
+  set: set_mode
+commands:
+  static:
+    - { name: sessions, detail: Switch session, screen: resume }

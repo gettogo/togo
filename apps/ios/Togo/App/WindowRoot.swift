@@ -30,6 +30,8 @@ struct WindowRoot: View {
         .onAppear(perform: makeStore)
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { composition.activate(window) }
+            // The window's harness feeds stop in the background, from any screen.
+            store?.harnessTabs.setActive(phase != .background)
         }
         .onOpenURL { url in
             if let link = DeepLink(url: url) { composition.open(link) }

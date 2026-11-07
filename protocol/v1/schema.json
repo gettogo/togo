@@ -1860,7 +1860,7 @@
       "additionalProperties": false
     },
     "LocalSignalParams": {
-      "description": "local.signal -> {}. Sent by `togo tap` for a bell, an OSC 9 or OSC 777 notification, or the first output after quiet, and by the launch wrapper with kind exit and the agent's exit status in code (0-255, required for exit and allowed only with it). local.* methods are served only by the daemon, on connections it accepts on its unix socket from the same user; `serve --stdio` proxies to that socket, so its connections get them too. The in-process server that `serve --stdio` falls back to without a daemon does not serve them.",
+      "description": "local.signal -> {}. Sent by `togo tap` for a bell, an OSC 9 or OSC 777 notification, the first output after quiet, or a shell command mark (kind osc133: title is the mark, C or D, body the mark as JSON, code the command's exit status when the shell reported one), and by the launch wrapper with kind exit and the agent's exit status in code (0-255, required for exit and allowed only with it). local.* methods are served only by the daemon, on connections it accepts on its unix socket from the same user; `serve --stdio` proxies to that socket, so its connections get them too. The in-process server that `serve --stdio` falls back to without a daemon does not serve them.",
       "type": "object",
       "properties": {
         "sessionId": {
@@ -1872,7 +1872,8 @@
             "osc9",
             "osc777",
             "output",
-            "exit"
+            "exit",
+            "osc133"
           ]
         },
         "title": {
@@ -1894,17 +1895,34 @@
       "additionalProperties": false,
       "if": { "properties": { "kind": { "const": "exit" } } },
       "then": { "properties": { "code": true }, "required": ["code"] },
-      "else": { "properties": { "code": false } }
+      "else": {
+        "if": { "properties": { "kind": { "const": "osc133" } } },
+        "then": { "properties": { "code": true } },
+        "else": { "properties": { "code": false } }
+      }
     },
     "LocalHookParams": {
-      "description": "local.hook -> {}. One agent hook invocation, reduced by the adapter; the raw payload is never forwarded.",
+      "description": "local.hook -> {}. One agent hook invocation, reduced by the adapter. hook (the agent's own event name, or statusline) and payload (the agent's hook payload, redacted in the hook process, at most 256 KiB) are optional and only feed the session's harness adapter; event harness reaches the adapter alone and changes no status. Helpers that predate them send neither.",
       "type": "object",
       "properties": {
         "agent": {
           "enum": [
             "claude",
-            "codex"
+            "codex",
+            "qwen",
+            "droid",
+            "vibe",
+            "copilot",
+            "auggie",
+            "gemini"
           ]
+        },
+        "hook": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "payload": {
+          "type": "object"
         },
         "event": {
           "type": "string",
@@ -2378,7 +2396,8 @@
         "state": { "enum": ["running", "waiting", "ok", "failed", "denied", "cancelled", "interrupted", "idle", "pending", "active", "done", "skipped"] },
         "exitCode": { "type": ["integer", "null"] },
         "startedAt": { "$ref": "#/$defs/Timestamp" },
-        "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] }
+        "endedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] },
+        "output": { "type": "string", "maxLength": 4096, "description": "Tail of what the command printed, plain text, at most 4 KiB. Set once the block finished." }
       },
       "required": ["command", "state", "exitCode", "startedAt", "endedAt"],
       "additionalProperties": false
@@ -2410,18 +2429,18 @@
       "required": ["id", "seq", "kind", "at"],
       "additionalProperties": false,
       "allOf": [
-        { "if": { "properties": { "kind": { "const": "user" } } }, "then": { "required": ["user"] } },
-        { "if": { "properties": { "kind": { "const": "assistant" } } }, "then": { "required": ["assistant"] } },
-        { "if": { "properties": { "kind": { "const": "thinking" } } }, "then": { "required": ["thinking"] } },
-        { "if": { "properties": { "kind": { "const": "tool" } } }, "then": { "required": ["tool"] } },
-        { "if": { "properties": { "kind": { "const": "turn" } } }, "then": { "required": ["turn"] } },
-        { "if": { "properties": { "kind": { "const": "approval" } } }, "then": { "required": ["approval"] } },
-        { "if": { "properties": { "kind": { "const": "question" } } }, "then": { "required": ["question"] } },
-        { "if": { "properties": { "kind": { "const": "plan" } } }, "then": { "required": ["plan"] } },
-        { "if": { "properties": { "kind": { "const": "agent" } } }, "then": { "required": ["agent"] } },
-        { "if": { "properties": { "kind": { "const": "background" } } }, "then": { "required": ["background"] } },
-        { "if": { "properties": { "kind": { "const": "notice" } } }, "then": { "required": ["notice"] } },
-        { "if": { "properties": { "kind": { "const": "shell" } } }, "then": { "required": ["shell"] } }
+        { "if": { "properties": { "kind": { "const": "user" } } }, "then": { "properties": { "user": true }, "required": ["user"] } },
+        { "if": { "properties": { "kind": { "const": "assistant" } } }, "then": { "properties": { "assistant": true }, "required": ["assistant"] } },
+        { "if": { "properties": { "kind": { "const": "thinking" } } }, "then": { "properties": { "thinking": true }, "required": ["thinking"] } },
+        { "if": { "properties": { "kind": { "const": "tool" } } }, "then": { "properties": { "tool": true }, "required": ["tool"] } },
+        { "if": { "properties": { "kind": { "const": "turn" } } }, "then": { "properties": { "turn": true }, "required": ["turn"] } },
+        { "if": { "properties": { "kind": { "const": "approval" } } }, "then": { "properties": { "approval": true }, "required": ["approval"] } },
+        { "if": { "properties": { "kind": { "const": "question" } } }, "then": { "properties": { "question": true }, "required": ["question"] } },
+        { "if": { "properties": { "kind": { "const": "plan" } } }, "then": { "properties": { "plan": true }, "required": ["plan"] } },
+        { "if": { "properties": { "kind": { "const": "agent" } } }, "then": { "properties": { "agent": true }, "required": ["agent"] } },
+        { "if": { "properties": { "kind": { "const": "background" } } }, "then": { "properties": { "background": true }, "required": ["background"] } },
+        { "if": { "properties": { "kind": { "const": "notice" } } }, "then": { "properties": { "notice": true }, "required": ["notice"] } },
+        { "if": { "properties": { "kind": { "const": "shell" } } }, "then": { "properties": { "shell": true }, "required": ["shell"] } }
       ]
     },
     "HarnessActionRef": {
@@ -2714,13 +2733,13 @@
       "required": ["id", "primitive", "title", "fetchedAt", "stale", "actions"],
       "additionalProperties": false,
       "allOf": [
-        { "if": { "properties": { "primitive": { "const": "picker" } } }, "then": { "required": ["picker"] } },
-        { "if": { "properties": { "primitive": { "const": "settings" } } }, "then": { "required": ["settings"] } },
-        { "if": { "properties": { "primitive": { "const": "checklist" } } }, "then": { "required": ["checklist"] } },
-        { "if": { "properties": { "primitive": { "const": "liveList" } } }, "then": { "required": ["liveList"] } },
-        { "if": { "properties": { "primitive": { "const": "detail" } } }, "then": { "required": ["detail"] } },
-        { "if": { "properties": { "primitive": { "const": "confirm" } } }, "then": { "required": ["confirm"] } },
-        { "if": { "properties": { "primitive": { "const": "status" } } }, "then": { "required": ["status"] } }
+        { "if": { "properties": { "primitive": { "const": "picker" } } }, "then": { "properties": { "picker": true }, "required": ["picker"] } },
+        { "if": { "properties": { "primitive": { "const": "settings" } } }, "then": { "properties": { "settings": true }, "required": ["settings"] } },
+        { "if": { "properties": { "primitive": { "const": "checklist" } } }, "then": { "properties": { "checklist": true }, "required": ["checklist"] } },
+        { "if": { "properties": { "primitive": { "const": "liveList" } } }, "then": { "properties": { "liveList": true }, "required": ["liveList"] } },
+        { "if": { "properties": { "primitive": { "const": "detail" } } }, "then": { "properties": { "detail": true }, "required": ["detail"] } },
+        { "if": { "properties": { "primitive": { "const": "confirm" } } }, "then": { "properties": { "confirm": true }, "required": ["confirm"] } },
+        { "if": { "properties": { "primitive": { "const": "status" } } }, "then": { "properties": { "status": true }, "required": ["status"] } }
       ]
     },
     "HarnessDescribeResult": {

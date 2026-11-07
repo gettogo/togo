@@ -1,0 +1,149 @@
+# OpenCode. Togo starts the TUI with `--port N`; the TUI serves its HTTP API and the
+# /event stream on 127.0.0.1:N, so reads and writes are structured and live. Checked on
+# OpenCode 1.18.20 (`opencode serve`, same API): /event, /config/providers, /session,
+# /session/{id}/todo|children|diff, /question, /permission and their replies.
+adapter: opencode
+name: OpenCode
+revision: 1
+match: { agents: [opencode], commands: [opencode] }
+harness: { version: [opencode, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.18 <2" }
+endpoint: { kind: http, launch_args: [--port, '{{.port}}'], health: /path, password_env: OPENCODE_SERVER_PASSWORD, username: opencode }
+capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
+  files, mode, model, needs.approvals, needs.questions, agents, plan, changes, ports, status,
+  status.context, resume, compact, mcp, settings]
+feeds:
+  events:
+    sse: { path: /event }
+    mapper: opencode.events
+    stability: documented
+sources:
+  sessions:
+    http: { path: /session }
+    select: '[.[] | select(.parentID == null)] | sort_by(-.time.updated)'
+    cache: 30s
+    stability: documented
+  # /config/providers returns provider keys in plain text (`key`, `options.apiKey`,
+  # `options.headers`). The http runner strips them before anything else reads the
+  # answer and lists the stripped names in `_set`; these paths remove them again.
+  models:
+    http: { path: /config/providers }
+    redact: ['.providers[].key', '.providers[].options.apiKey', '.providers[].options.headers']
+    # An item id is the ModelRef the session model switch takes, as compact
+    # JSON with sorted keys; the mapper reports the current one as model_ref.
+    select: '[.providers[] | .id as $p | .name as $pn | .models[] | {id: ({id: .id, providerID: $p} | tojson), name: .name, provider: $p, providerName: $pn}]'
+    cache: 5m
+    stability: documented
+  providers:
+    http: { path: /config/providers }
+    redact: ['.providers[].key', '.providers[].options.apiKey', '.providers[].options.headers']
+    select: '[.providers[] | {id: .id, name: .name, keySet: ((((._set // []) | index("key")) != null) or (((.options._set // []) | index("apiKey")) != null))}]'
+    cache: 5m
+    stability: documented
+  agents:
+    http: { path: /agent }
+    select: '[.[] | select(.mode != "subagent")]'
+    cache: 5m
+    stability: documented
+  commands:
+    http: { path: /command }
+    cache: 5m
+    stability: documented
+  todo:
+    http: { path: '/session/{{.state.harness_session}}/todo' }
+    stability: documented
+  children:
+    http: { path: '/session/{{.state.harness_session}}/children' }
+    stability: documented
+  diff:
+    http: { path: '/session/{{.state.harness_session}}/diff' }
+    stability: documented
+  mcp:
+    http: { path: /mcp }
+    select: '[to_entries[] | {id: .key, title: .key, state: .value.status}]'
+    cache: 30s
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map: { item.id: .id, item.title: .name, item.group: .providerName, selected: $state.model_ref }
+    filters: [{ id: provider, label: Provider, kind: choice, field: provider }]
+    on_select: set_model
+  providers:
+    primitive: settings
+    title: Providers
+    section: more
+    capability: settings
+    source: providers
+    fields:
+      # A secret field never carries a value; keySet only says one exists.
+      - { id: key, label: API key, kind: secret, value: .keySet, action: set_provider_key }
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: .title, item.subtitle: '{{.time.updated | ago}}' }
+    on_select: resume
+  mcp:
+    primitive: liveList
+    title: MCP servers
+    section: more
+    capability: mcp
+    source: mcp
+actions:
+  # These switch the live session (checked: no config file is written). The
+  # TUI keeps its own choice for prompts typed at the desk.
+  set_model:
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/model', body: '{"model": {{.id | object}}}' }
+    stability: experimental
+  set_mode:
+    http: { method: POST, path: '/api/session/{{.state.harness_session}}/agent', body: '{"agent": {{.id | json}}}' }
+    stability: experimental
+  set_provider_key:
+    http: { method: PUT, path: '/auth/{{.target}}', body: '{"type": "api", "key": {{.value | json}}}' }
+    stability: documented
+  send:
+    http: { method: POST, path: '/session/{{.state.harness_session}}/prompt_async', body: '{"parts": [{"type": "text", "text": {{.text | json}}}]}' }
+    stability: documented
+  resume:
+    http: { method: POST, path: /tui/select-session, body: '{"sessionID": {{.id | json}}}' }
+    stability: documented
+  compact:
+    confirm: Compact the session now?
+    http: { method: POST, path: '/session/{{.state.harness_session}}/summarize', body: '{"providerID": {{.state.provider | json}}, "modelID": {{.state.model_id | json}}}' }
+    stability: documented
+  interrupt:
+    http: { method: POST, path: '/session/{{.state.harness_session}}/abort' }
+    stability: documented
+  # Questions and permissions both arrive as question items. A permission's
+  # item id starts with per_, its one question is "0" and its options are
+  # once, always and reject; a question's ids are "0", "1"... in order and its
+  # option ids are the option labels OpenCode expects back.
+  answer:
+    branch:
+      - when: '{{if eq (slice .target 0 4) "per_"}}true{{end}}'
+        http: { method: POST, path: '/permission/{{.target}}/reply', body: '{"reply": {{index (index .answers "0") 0 | json}}}' }
+      - http: { method: POST, path: '/question/{{.target}}/reply', body: '{"answers": [{{index .answers "0" | json}}{{with index .answers "1"}}, {{json .}}{{end}}{{with index .answers "2"}}, {{json .}}{{end}}{{with index .answers "3"}}, {{json .}}{{end}}]}' }
+    stability: documented
+  stop:
+    role: destructive
+    http: { method: POST, path: '/session/{{.target}}/abort' }
+    stability: documented
+modes:
+  choices: [{ id: build, label: Build }, { id: plan, label: Plan }]
+  current: agents
+  select: $state.mode
+  set: set_mode
+commands:
+  source: commands
+  select: '[.[] | {name: .name, detail: .description}]'
+mission:
+  plan: { source: todo }
+  agents: { source: children }

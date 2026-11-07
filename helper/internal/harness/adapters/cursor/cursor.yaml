@@ -1,0 +1,10 @@
+# Cursor CLI (cursor-agent / agent). Terminal-only until the owner updates: the installed
+# 2025.10.02 build has no `acp` or `models` command, and the docs do not confirm the CLI runs
+# ~/.cursor/hooks.json. The gate refuses builds older than 2026.1; a later revision of this file
+# adds hooks, plan files and typed /model once they are checked on a current build.
+adapter: cursor
+name: Cursor CLI
+revision: 1
+match: { agents: [cursor], commands: [cursor-agent, agent] }
+harness: { version: [cursor-agent, --version], pattern: '^(\d{4}\.\d+\.\d+)', range: ">=2026.1.0 <2027" }
+capabilities: []

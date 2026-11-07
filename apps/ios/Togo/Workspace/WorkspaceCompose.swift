@@ -120,8 +120,8 @@ extension ComposeModel {
     }
 }
 
-/// The compose bar under the tab on screen while it is open. Each tab's draft lives in the
-/// store until it is sent or the tab closes.
+/// The compose bar under the tab on screen while it is open, or the smart command line under a
+/// tab showing its chat. Each tab's draft lives in the store until it is sent or the tab closes.
 struct WorkspaceComposeBar: View {
     @Environment(\.windowID) private var window
     let store: AppStore
@@ -130,8 +130,12 @@ struct WorkspaceComposeBar: View {
 
     var body: some View {
         Group {
-            // Text goes only to a terminal this window shows.
-            if let tab = store.composeTab, store.composing == tab.id, terminals.shows(tab.id, in: window),
+            // A tab showing its chat has the smart command line instead, always at its foot.
+            if let tab = store.composeTab, store.layer(for: tab.id) == .chat,
+               let model = store.harnessTabs.composer(for: tab.id) {
+                SmartCommandLine(model: model)
+                    .id(tab.id)
+            } else if let tab = store.composeTab, store.composing == tab.id, terminals.shows(tab.id, in: window),
                let handle = terminals.handle(for: tab.id) {
                 // With two panes on screen the bar says which one it writes to.
                 ComposeBar(model: model(for: tab, handle: handle), focusOnAppear: true, target: store.composeTarget)

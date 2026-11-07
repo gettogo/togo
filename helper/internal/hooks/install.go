@@ -1,4 +1,5 @@
-// Package hooks adds and removes the entries that make Claude Code and Codex
+// Package hooks adds and removes the entries that make Claude Code, Codex and,
+// when named, Qwen Code, Droid and Copilot CLI
 // report events to "togo hook <agent> <event>". It only ever touches entries
 // whose command ends in "hook <agent> <event>", keeps every other key and
 // hook in the agent's config, and refuses to write a file it cannot parse.
@@ -29,7 +30,10 @@ var Agents = []string{Claude, Codex}
 const (
 	StatusInstalled = "installed"
 	StatusAbsent    = "absent"
-	StatusNoAgent   = "no-agent"
+	// StatusOutdated: some of togo's entries are there, not all the
+	// current version installs. Running install again adds the rest.
+	StatusOutdated = "outdated"
+	StatusNoAgent  = "no-agent"
 )
 
 const backupSuffix = ".togo-backup"
@@ -41,9 +45,14 @@ type Options struct {
 	Binary    string // absolute path of the togo executable
 	ClaudeDir string // $CLAUDE_CONFIG_DIR or ~/.claude
 	CodexDir  string // $CODEX_HOME or ~/.codex
-	Cwd       string // project directory for Local
-	Local     bool   // Claude: edit ./.claude/settings.local.json instead
-	Block     bool   // Claude: also hook PermissionRequest
+	// QwenDir, FactoryDir and CopilotDir are ~/.qwen, ~/.factory and
+	// ~/.copilot, for the Optional agents.
+	QwenDir    string
+	FactoryDir string
+	CopilotDir string
+	Cwd        string // project directory for Local
+	Local      bool   // Claude: edit ./.claude/settings.local.json instead
+	Block      bool   // Claude: also hook PermissionRequest
 }
 
 // Result is the outcome for one agent. State is "installed", "unchanged",
@@ -66,12 +75,15 @@ func Uninstall(o Options, agents []string) []Result {
 	return each(agents, func(agent string) Result { return uninstall(o, agent) })
 }
 
-// Status reports "installed", "absent" or "no-agent" per agent. Claude counts
+// Status reports "installed", "outdated", "absent" or "no-agent" per agent. Claude counts
 // as installed when every base event has a togo entry.
 func Status(o Options) map[string]string {
 	out := map[string]string{}
 	for _, agent := range Agents {
 		out[agent] = status(o, agent)
+	}
+	for _, agent := range Optional {
+		out[agent] = optionalStatus(o, agent)
 	}
 	return out
 }
@@ -136,6 +148,12 @@ func editsFor(o Options, agent string, add bool) ([]edit, string, error) {
 		return claudeEdits(o, add)
 	case Codex:
 		return codexEdits(o, add)
+	case Qwen:
+		return qwenEdits(o, add)
+	case Droid:
+		return droidEdits(o, add)
+	case Copilot:
+		return copilotEdits(o, add)
 	}
 	return nil, "", fmt.Errorf("unknown agent %q", agent)
 }
@@ -422,10 +440,23 @@ func status(o Options, agent string) string {
 	if err != nil {
 		return StatusAbsent
 	}
+	return coverage(have, events)
+}
+
+// coverage is installed when every event has a togo entry, outdated when
+// only some do, and absent when none do.
+func coverage(have map[string]bool, events []string) string {
+	n := 0
 	for _, ev := range events {
-		if !have[ev] {
-			return StatusAbsent
+		if have[ev] {
+			n++
 		}
 	}
-	return StatusInstalled
+	switch n {
+	case len(events):
+		return StatusInstalled
+	case 0:
+		return StatusAbsent
+	}
+	return StatusOutdated
 }

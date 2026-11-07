@@ -56,6 +56,15 @@ func runTap(ctx context.Context, args []string, env map[string]string, stdin io.
 		tapSend(sendCtx, sock, queue)
 	}()
 
+	// The byte counter lets anchors say where in the pane's output an item
+	// happened; without it they still work by line and text.
+	counter, err := tap.NewCounter(filepath.Dir(filepath.Dir(sock)), id)
+	if err != nil {
+		counter = nil
+	} else {
+		defer counter.Close()
+	}
+
 	var sc tap.Scanner
 	var lastOutput time.Time
 	enqueue := func(s wire.Signal) {
@@ -69,6 +78,9 @@ func runTap(ctx context.Context, args []string, env map[string]string, stdin io.
 	for {
 		n, err := stdin.Read(buf)
 		if n > 0 {
+			if counter != nil {
+				counter.Add(n)
+			}
 			for _, s := range sc.Feed(buf[:n]) {
 				enqueue(s)
 			}

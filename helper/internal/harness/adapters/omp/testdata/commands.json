@@ -1,0 +1,86 @@
+{
+ "commands": [
+  {
+   "name": "model",
+   "aliases": [
+    "models"
+   ],
+   "description": "Show current model selection",
+   "source": "builtin"
+  },
+  {
+   "name": "switch",
+   "description": "Switch model for this session only",
+   "input": {
+    "hint": "[model]"
+   },
+   "source": "builtin"
+  },
+  {
+   "name": "effort",
+   "description": "Set or show reasoning effort (thinking level, intelligence)",
+   "input": {
+    "hint": "[level]"
+   },
+   "subcommands": [
+    {
+     "name": "off",
+     "description": "No reasoning"
+    },
+    {
+     "name": "minimal",
+     "description": "Very brief reasoning (~1k tokens)"
+    },
+    {
+     "name": "low",
+     "description": "Light reasoning (~2k tokens)"
+    },
+    {
+     "name": "medium",
+     "description": "Moderate reasoning (~8k tokens)"
+    },
+    {
+     "name": "high",
+     "description": "Deep reasoning (~16k tokens)"
+    },
+    {
+     "name": "xhigh",
+     "description": "Extended reasoning (~32k tokens)"
+    },
+    {
+     "name": "max",
+     "description": "Maximum reasoning the model supports"
+    },
+    {
+     "name": "auto",
+     "description": "Auto-detect per prompt"
+    }
+   ],
+   "source": "builtin"
+  },
+  {
+   "name": "compact",
+   "description": "Compact the conversation",
+   "input": {
+    "hint": "[soft|remote|snapcompact] [focus]"
+   },
+   "subcommands": [
+    {
+     "name": "soft",
+     "description": "Summarize locally with the active model (skip server compaction)",
+     "usage": "[focus]"
+    },
+    {
+     "name": "remote",
+     "description": "Summarize via OpenAI-compatible server compaction, then fall back to a local summary",
+     "usage": "[focus]"
+    },
+    {
+     "name": "snapcompact",
+     "description": "Archive history onto dense bitmap images the model reads back (no LLM call)"
+    }
+   ],
+   "source": "builtin"
+  }
+ ]
+}

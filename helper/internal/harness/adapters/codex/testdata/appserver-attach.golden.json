@@ -1,0 +1,262 @@
+{
+ "items": [
+  {
+   "id": "01a1b3df-a2f7-7491-92a4-6946177297de",
+   "seq": 0,
+   "turnId": "01a1b3df-a2f7-7491-92a4-6946177297de",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:00Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-07T02:39:00Z",
+    "endedAt": "2026-11-07T02:39:00Z",
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "01a1b3df-d90c-7692-abdb-9447f4e3bc7d",
+   "seq": 0,
+   "turnId": "01a1b3df-d90c-7692-abdb-9447f4e3bc7d",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:14Z",
+   "turn": {
+    "state": "running",
+    "startedAt": "2026-11-07T02:39:14Z",
+    "endedAt": null,
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "02cfd9bf-4b40-4f17-837e-6fc25da762fb",
+   "seq": 0,
+   "turnId": "01a1b3df-d90c-7692-abdb-9447f4e3bc7d",
+   "kind": "tool",
+   "at": "2026-11-07T02:39:14.195Z",
+   "tool": {
+    "callId": "02cfd9bf-4b40-4f17-837e-6fc25da762fb",
+    "name": "shell",
+    "title": "echo togo-spike-two",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "echo togo-spike-two"
+    },
+    "state": "running",
+    "startedAt": "2026-11-07T02:39:14.195Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "02cfd9bf-4b40-4f17-837e-6fc25da762fb",
+   "seq": 0,
+   "turnId": "01a1b3df-d90c-7692-abdb-9447f4e3bc7d",
+   "kind": "tool",
+   "at": "2026-11-07T02:39:14.195Z",
+   "tool": {
+    "callId": "02cfd9bf-4b40-4f17-837e-6fc25da762fb",
+    "name": "shell",
+    "title": "echo togo-spike-two",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "echo togo-spike-two"
+    },
+    "state": "running",
+    "startedAt": "2026-11-07T02:39:14.195Z",
+    "endedAt": null,
+    "output": "togo-spike-two\n"
+   }
+  },
+  {
+   "id": "02cfd9bf-4b40-4f17-837e-6fc25da762fb",
+   "seq": 0,
+   "turnId": "01a1b3df-d90c-7692-abdb-9447f4e3bc7d",
+   "kind": "tool",
+   "at": "2026-11-07T02:39:14.195Z",
+   "tool": {
+    "callId": "02cfd9bf-4b40-4f17-837e-6fc25da762fb",
+    "name": "shell",
+    "title": "echo togo-spike-two",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "echo togo-spike-two"
+    },
+    "state": "ok",
+    "startedAt": "2026-11-07T02:39:14.195Z",
+    "endedAt": "2026-11-07T02:39:14.231Z",
+    "output": "togo-spike-two\n",
+    "exitCode": 0
+   }
+  },
+  {
+   "id": "01a1b3df-d90c-7692-abdb-9447f4e3bc7d",
+   "seq": 0,
+   "turnId": "01a1b3df-d90c-7692-abdb-9447f4e3bc7d",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:14Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-07T02:39:14Z",
+    "endedAt": "2026-11-07T02:39:14Z",
+    "steps": 1,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "seq": 0,
+   "turnId": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:16Z",
+   "turn": {
+    "state": "running",
+    "startedAt": "2026-11-07T02:39:16Z",
+    "endedAt": null,
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "01a1b3df-e4b5-7712-924f-59fe8c3828f3",
+   "seq": 0,
+   "turnId": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "kind": "user",
+   "at": "2026-11-07T02:39:17.173Z",
+   "user": {
+    "text": "say ok",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "01a1b3df-e4b5-7712-924f-59fe8c3828f3",
+   "seq": 0,
+   "turnId": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "kind": "user",
+   "at": "2026-11-07T02:39:17.173Z",
+   "user": {
+    "text": "say ok",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "error-01a1b3df-e3e5-7783-913c-d46805e6408e-1793966401800",
+   "seq": 0,
+   "turnId": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "kind": "notice",
+   "at": "2026-11-06T12:00:01.8Z",
+   "notice": {
+    "level": "error",
+    "code": "error",
+    "text": "Your access token could not be refreshed. Please log out and sign in again."
+   }
+  },
+  {
+   "id": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "seq": 0,
+   "turnId": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:16Z",
+   "turn": {
+    "state": "failed",
+    "startedAt": "2026-11-07T02:39:16Z",
+    "endedAt": "2026-11-07T02:39:17Z",
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "01a1b3e0-469c-79e1-8997-e274907135f8",
+   "seq": 0,
+   "turnId": "01a1b3e0-469c-79e1-8997-e274907135f8",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:42Z",
+   "turn": {
+    "state": "running",
+    "startedAt": "2026-11-07T02:39:42Z",
+    "endedAt": null,
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "406d555b-0360-4776-8d30-7262e32fd42c",
+   "seq": 0,
+   "turnId": "01a1b3e0-469c-79e1-8997-e274907135f8",
+   "kind": "tool",
+   "at": "2026-11-07T02:39:42.24Z",
+   "tool": {
+    "callId": "406d555b-0360-4776-8d30-7262e32fd42c",
+    "name": "shell",
+    "title": "sleep 6; echo togo-spike-three",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "sleep 6; echo togo-spike-three"
+    },
+    "state": "running",
+    "startedAt": "2026-11-07T02:39:42.24Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "406d555b-0360-4776-8d30-7262e32fd42c",
+   "seq": 0,
+   "turnId": "01a1b3e0-469c-79e1-8997-e274907135f8",
+   "kind": "tool",
+   "at": "2026-11-07T02:39:42.24Z",
+   "tool": {
+    "callId": "406d555b-0360-4776-8d30-7262e32fd42c",
+    "name": "shell",
+    "title": "sleep 6; echo togo-spike-three",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "sleep 6; echo togo-spike-three"
+    },
+    "state": "failed",
+    "startedAt": "2026-11-07T02:39:42.24Z",
+    "endedAt": "2026-11-07T02:39:44.193Z",
+    "output": "command aborted by user",
+    "exitCode": -1
+   }
+  },
+  {
+   "id": "01a1b3e0-469c-79e1-8997-e274907135f8",
+   "seq": 0,
+   "turnId": "01a1b3e0-469c-79e1-8997-e274907135f8",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:42Z",
+   "turn": {
+    "state": "interrupted",
+    "startedAt": "2026-11-07T02:39:42Z",
+    "endedAt": "2026-11-07T02:39:44Z",
+    "steps": 1,
+    "filesChanged": 0
+   }
+  }
+ ],
+ "ops": [
+  {
+   "op": "status",
+   "status": {
+    "model": "gpt-6.1-sol",
+    "mode": "Ask",
+    "effort": "low"
+   }
+  }
+ ],
+ "state": {
+  "effort": "low",
+  "harness_session": "01a1b3df-6415-7362-9b2c-925f6dde129a",
+  "idle": "true",
+  "mode": "untrusted",
+  "model": "gpt-6.1-sol",
+  "turn": "01a1b3e0-469c-79e1-8997-e274907135f8",
+  "working": "false"
+ }
+}

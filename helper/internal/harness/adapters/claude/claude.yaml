@@ -1,0 +1,155 @@
+# Claude Code. No attach protocol: read hooks, the status line and the transcript JSONL;
+# apply by typing documented slash commands with arguments, by relaunching with flags, or
+# through the existing approval path. Mode changes press Shift+Tab one step at a time and
+# read the mode back from the screen after every press.
+adapter: claude
+name: Claude Code
+revision: 1
+match: { agents: [claude], commands: [claude] }
+harness: { version: [claude, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=2.1.250 <3" }
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode, model,
+  effort, needs.approvals, needs.questions, agents, background, plan, changes, ports, status,
+  status.usage, status.context, resume, compact]
+feeds:
+  hooks:            # forwarded by `togo hook claude <event>`, redacted, with the raw payload
+    hook:
+      events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest,
+        Notification, Stop, StopFailure, SubagentStart, SubagentStop, PreCompact, PostCompact,
+        TaskCreated, TaskCompleted, SessionEnd]
+    mapper: claude.hooks
+    stability: documented
+  transcript:       # path learned from SessionStart.transcript_path
+    jsonl: { path: '{{.state.transcript_path}}', follow: true }
+    mapper: claude.transcript
+    stability: internal
+  subagents:        # one file per subagent next to the transcript
+    jsonl: { glob: '{{.state.transcript_dir}}/subagents/agent-*.jsonl', follow: true }
+    mapper: claude.transcript
+    stability: internal
+  status:
+    statusline:
+      fields: [model.id, model.display_name, effort.level, context_window.used_percentage,
+        cost.total_cost_usd, rate_limits.five_hour, rate_limits.seven_day]
+    mapper: claude.statusline
+    stability: documented
+sources:
+  models:
+    static:
+      - { id: opus, label: Opus, detail: Most capable }
+      - { id: sonnet, label: Sonnet, detail: Fast and capable }
+      - { id: haiku, label: Haiku, detail: Fastest }
+      - { id: 'opus[1m]', label: Opus, detail: 1M context, badge: 1M }
+    stability: documented
+  efforts:
+    static: [low, medium, high, max]
+    stability: documented
+  sessions:
+    file: { glob: '~/.claude/projects/{{.cwd_key}}/*.jsonl', format: jsonl }
+    select: '[.[] | {id: .name, title: (([.tail[] | select(.type=="ai-title") | .aiTitle] | last) // ([.tail[] | select(.type=="last-prompt") | .lastPrompt] | last) // .name), updated: .mtime, branch: ([.tail[] | .gitBranch | select(.)] | last)}]'
+    cache: 30s
+    stability: internal
+  running:
+    cli: { argv: [claude, agents, --json] }
+    cache: 5s
+    timeout: 5s
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    map: { item.id: .id, item.title: .label, item.subtitle: .detail, item.badge: .badge, selected: $state.model }
+    on_select: set_model
+  effort:
+    primitive: settings
+    title: Effort
+    section: composer
+    capability: effort
+    fields:
+      - { id: effort, label: Effort, kind: choice, value: $state.effort, options: [low, medium, high, max], action: set_effort }
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: .title, item.subtitle: '{{.updated | ago}}{{if .branch}} · {{.branch}}{{end}}' }
+    on_select: resume
+  plan:
+    primitive: checklist
+    title: Plan
+    section: plan
+    capability: plan
+  usage:
+    primitive: status
+    title: Usage
+    section: status
+    capability: status.usage
+    source: status
+    actions: [compact]
+  compact:
+    primitive: confirm
+    title: Compact
+    section: status
+    capability: compact
+    submit: compact
+actions:
+  set_model:
+    label: Use model
+    type: { text: '/model {{.id}}', submit: true, when_idle: true }
+    verify: { source: status, select: $state.model, equals: '{{.id}}', within: 5s }
+    stability: documented-command
+  set_effort:
+    label: Set effort
+    type: { text: '/effort {{.value}}', submit: true, when_idle: true }
+    verify: { source: status, select: $state.effort, equals: '{{.value}}', within: 5s }
+    stability: documented-command
+  set_mode:         # Shift+Tab is the documented mode cycle; each press is read back from the screen
+    label: Mode
+    keys: { keys: [BTab], cycle: true, max: 4 }
+    verify: { source: hooks, select: $state.mode, equals: '{{.id}}', within: 3s }
+    stability: documented
+  resume:
+    label: Resume
+    branch:
+      - { when: '{{.state.idle}}', type: { text: '/resume {{.id}}', submit: true, when_idle: true } }
+      - { relaunch: { argv: [claude, --resume, '{{.id}}'] } }
+    verify: { source: hooks, select: $state.harness_session, equals: '{{.id}}', within: 10s }
+    stability: documented
+  compact:
+    label: Compact
+    confirm: Compact the conversation now?
+    type: { text: '/compact {{.focus}}', submit: true, when_idle: true }
+    stability: documented-command
+  answer:
+    builtin: approval_answer   # questions and approvals answer through approvals.v1
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+  stop:
+    label: Stop
+    role: destructive
+    cli: { argv: [claude, stop, '{{.target}}'] }
+    stability: documented
+modes:
+  choices:
+    - { id: default, label: Ask }
+    - { id: acceptEdits, label: Auto edit }
+    - { id: plan, label: Plan }
+  current: hooks
+  select: $state.mode
+  set: set_mode
+commands:
+  static:
+    - { name: model, hint: '[model]', detail: Set the AI model, screen: model }
+    - { name: effort, hint: '[level]', detail: Set reasoning effort, screen: effort }
+    - { name: compact, hint: '[instructions]', detail: Summarise the conversation }
+    - { name: resume, hint: '[session]', detail: Resume a conversation, screen: resume }
+    - { name: clear, detail: Start a new conversation }
+    - { name: review, detail: Review a pull request }
+mission:
+  background: { source: running, refresh: 10s }

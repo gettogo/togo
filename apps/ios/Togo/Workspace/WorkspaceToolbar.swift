@@ -4,13 +4,18 @@ import TogoKit
 /// The workspace's bar items, in the navigation bar its stack supplies, so on an iPhone Duo they
 /// move into the vertical bar beside the status bar and the terminal keeps the whole height.
 /// Every item has a symbol and a title: the symbol shows in the bar, the title in overflow and
-/// to VoiceOver. Order: the way back first, then the session's buttons, its menu last.
+/// to VoiceOver. Order: the way back first, then the session's buttons (the layer switch
+/// leading them), its menu last.
 struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     let leading: WorkspaceLeading
     let onLeading: () -> Void
     /// "Run again", shown once the session's agent stopped.
     let runAgain: WorkspaceRunAgain?
     let review: ReviewToolbarItems?
+    /// "Terminal" or "Chat", for a session an adapter serves.
+    let layer: LayerToolbarItem?
+    /// Mission control beside the chat, on a regular width.
+    var mission: MissionToolbarItem? = nil
     @ViewBuilder let actions: () -> Actions
 
     var body: some ToolbarContent {
@@ -24,6 +29,12 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
                 Button(LifecycleCopy.runAgain, systemImage: "arrow.clockwise", action: runAgain.run)
                     .disabled(runAgain.running)
             }
+        }
+        if let layer {
+            layer
+        }
+        if let mission {
+            mission
         }
         if let review {
             review

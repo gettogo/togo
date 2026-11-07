@@ -206,6 +206,7 @@ struct RosterSection: View {
         }
         .contextMenu {
             SessionMenu(row: row, actions: actions, etAvailable: etAvailable, perform: perform) {
+                RosterMissionMenuButton(line: line)
                 if draggable {
                     OpenInWindowButton(tab: id)
                 }

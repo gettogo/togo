@@ -60,6 +60,8 @@ func TestBoundaryValidation(t *testing.T) {
 		"open after":        {MethodOpen, `{"id":"` + sid + `","after":-1}`},
 		"anchor needle":     {MethodLocate, `{"id":"` + sid + `","anchor":{"epoch":"e","bytes":0,"line":0,"needle":"` + strings.Repeat("x", MaxNeedle+1) + `"}}`},
 		"params not object": {MethodDescribe, `[1]`},
+		"target as flag":    {MethodAction, `{"id":"` + sid + `","action":"stop","target":"--force"}`},
+		"target with space": {MethodAction, `{"id":"` + sid + `","action":"stop","target":"a b"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := call(t, Nop{}, c[0], c[1])

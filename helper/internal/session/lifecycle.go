@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
 
 	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/fsx"
@@ -45,6 +47,10 @@ func (s *Service) Relaunch(ctx context.Context, id string) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
+	launch = launch.WithEndpoint(sess.Agent, id)
+	if err := s.setRunEnv(ctx, id, launch.Env); err != nil {
+		return Session{}, notFoundOr(err, id)
+	}
 	if err := s.Tmux.RespawnPane(ctx, "="+id+":", dir, launchWrapper(s.shell(), s.TogoPath, launch)); err != nil {
 		return Session{}, notFoundOr(err, id)
 	}
@@ -53,6 +59,52 @@ func (s *Service) Relaunch(ctx context.Context, id string) (Session, error) {
 		s.remember(entryFor(sess))
 	}
 	return sess, err
+}
+
+// RelaunchWith restarts a managed session's agent in its pane with argv,
+// stopping the run in progress: a harness adapter uses it to change a flag
+// the agent reads only at start (a model) or to resume a conversation.
+// argv[0] must be the program the session runs, named by its base name or
+// by the stored path; the arguments are checked as session.create checks
+// them. The session's stored argv is kept, so a later Relaunch or restore
+// starts the agent as the user created it.
+func (s *Service) RelaunchWith(ctx context.Context, id string, argv []string) error {
+	if err := requireManaged(id); err != nil {
+		return err
+	}
+	if len(argv) == 0 {
+		return &InvalidParamsError{Reason: wire.ReasonArgs, Msg: "the command is empty"}
+	}
+	sess, err := s.find(ctx, id)
+	if err != nil {
+		return err
+	}
+	stored := sess.Command
+	if stored == nil {
+		if a, ok := agents.Lookup(sess.Agent); ok && a.Command != "" {
+			stored = []string{a.Command}
+		}
+	}
+	if len(stored) == 0 || filepath.Base(argv[0]) != filepath.Base(stored[0]) || (filepath.IsAbs(argv[0]) && argv[0] != stored[0]) {
+		return &InvalidParamsError{Reason: wire.ReasonProgram, Msg: "only the session's own program can be restarted"}
+	}
+	run := append([]string{stored[0]}, argv[1:]...)
+	launch, err := s.relaunchCommand(ctx, Session{Agent: sess.Agent, Command: run})
+	if err != nil {
+		return err
+	}
+	dir, err := fsx.ValidateDir(sess.Cwd)
+	if err != nil {
+		return err
+	}
+	launch = launch.WithEndpoint(sess.Agent, id)
+	if err := s.setRunEnv(ctx, id, launch.Env); err != nil {
+		return notFoundOr(err, id)
+	}
+	if err := s.Tmux.RespawnPane(ctx, "="+id+":", dir, launchWrapper(s.shell(), s.TogoPath, launch)); err != nil {
+		return notFoundOr(err, id)
+	}
+	return nil
 }
 
 // relaunchCommand returns the validated Launch for sess.
@@ -78,4 +130,23 @@ func (s *Service) relaunchCommand(ctx context.Context, sess Session) (Launch, er
 		return Launch{}, &InvalidParamsError{Reason: wire.ReasonProgram, Msg: "the stored program does not match the session's agent"}
 	}
 	return launch, nil
+}
+
+// setRunEnv puts a run's extra environment (an endpoint's server password)
+// into the session's environment, which a respawned pane starts with.
+func (s *Service) setRunEnv(ctx context.Context, id string, env map[string]string) error {
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		if err := s.Tmux.SetEnvironment(ctx, id, k, env[k]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// withEnv returns base with extra added.
+func withEnv(base, extra map[string]string) map[string]string {
+	for k, v := range extra {
+		base[k] = v
+	}
+	return base
 }

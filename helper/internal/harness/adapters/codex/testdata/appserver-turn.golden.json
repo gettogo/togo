@@ -1,0 +1,619 @@
+{
+ "items": [
+  {
+   "id": "u-old",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a1",
+   "kind": "user",
+   "at": "2026-11-06T21:20:00Z",
+   "user": {
+    "text": "read main.go",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "call_old",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a1",
+   "kind": "tool",
+   "at": "2026-11-06T21:20:00Z",
+   "tool": {
+    "callId": "call_old",
+    "name": "shell",
+    "title": "Read main.go",
+    "category": "read",
+    "subject": {
+     "kind": "file",
+     "text": "main.go"
+    },
+    "state": "ok",
+    "startedAt": "2026-11-06T21:20:00Z",
+    "endedAt": "2026-11-06T21:20:10Z",
+    "output": "package main\n",
+    "exitCode": 0
+   }
+  },
+  {
+   "id": "msg_old",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a1",
+   "kind": "assistant",
+   "at": "2026-11-06T21:20:00Z",
+   "assistant": {
+    "text": "It is a hello world.",
+    "partial": false
+   }
+  },
+  {
+   "id": "019a0000-0000-7000-8000-0000000000a1",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a1",
+   "kind": "turn",
+   "at": "2026-11-06T21:20:00Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T21:20:00Z",
+    "endedAt": "2026-11-06T21:20:10Z",
+    "steps": 1,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "019a0000-0000-7000-8000-0000000000a2",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "turn",
+   "at": "2026-11-06T21:21:40Z",
+   "turn": {
+    "state": "running",
+    "startedAt": "2026-11-06T21:21:40Z",
+    "endedAt": null,
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "u-new",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "user",
+   "at": "2026-11-06T21:21:40Z",
+   "user": {
+    "text": "fix the failing test",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "u-new",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "user",
+   "at": "2026-11-06T21:21:40Z",
+   "user": {
+    "text": "fix the failing test",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "rs_1",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "thinking",
+   "at": "2026-11-06T21:21:40.1Z",
+   "thinking": {
+    "text": "Checking",
+    "partial": true
+   }
+  },
+  {
+   "id": "rs_1",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "thinking",
+   "at": "2026-11-06T21:21:40.1Z",
+   "thinking": {
+    "text": "Checking tests",
+    "partial": false
+   }
+  },
+  {
+   "id": "msg_1",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "assistant",
+   "at": "2026-11-06T21:21:40.4Z",
+   "assistant": {
+    "text": "Look",
+    "partial": true
+   }
+  },
+  {
+   "id": "msg_1",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "assistant",
+   "at": "2026-11-06T21:21:40.4Z",
+   "assistant": {
+    "text": "Looking at the tests.",
+    "partial": false
+   }
+  },
+  {
+   "id": "call_test",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "tool",
+   "at": "2026-11-06T21:21:40.7Z",
+   "tool": {
+    "callId": "call_test",
+    "name": "shell",
+    "title": "go test ./...",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "go test ./..."
+    },
+    "state": "running",
+    "startedAt": "2026-11-06T21:21:40.7Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "call_test",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "tool",
+   "at": "2026-11-06T21:21:40.7Z",
+   "tool": {
+    "callId": "call_test",
+    "name": "shell",
+    "title": "go test ./...",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "go test ./..."
+    },
+    "state": "running",
+    "startedAt": "2026-11-06T21:21:40.7Z",
+    "endedAt": null,
+    "output": "--- FAIL: TestAdd\n"
+   }
+  },
+  {
+   "id": "call_test",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "tool",
+   "at": "2026-11-06T21:21:40.7Z",
+   "tool": {
+    "callId": "call_test",
+    "name": "shell",
+    "title": "go test ./...",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "go test ./..."
+    },
+    "state": "failed",
+    "startedAt": "2026-11-06T21:21:40.7Z",
+    "endedAt": "2026-11-06T21:21:41.6Z",
+    "output": "--- FAIL: TestAdd\nFAIL\n",
+    "exitCode": 1
+   }
+  },
+  {
+   "id": "call_patch",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "tool",
+   "at": "2026-11-06T21:21:41.7Z",
+   "tool": {
+    "callId": "call_patch",
+    "name": "apply_patch",
+    "title": "Edit add.go",
+    "category": "edit",
+    "subject": {
+     "kind": "file",
+     "text": "/Users/me/proj/add.go"
+    },
+    "state": "running",
+    "startedAt": "2026-11-06T21:21:41.7Z",
+    "endedAt": null,
+    "files": [
+     {
+      "path": "add.go",
+      "added": 1,
+      "removed": 1
+     }
+    ]
+   }
+  },
+  {
+   "id": "call_patch",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "tool",
+   "at": "2026-11-06T21:21:41.7Z",
+   "tool": {
+    "callId": "call_patch",
+    "name": "apply_patch",
+    "title": "Edit add.go",
+    "category": "edit",
+    "subject": {
+     "kind": "file",
+     "text": "/Users/me/proj/add.go"
+    },
+    "state": "waiting",
+    "startedAt": "2026-11-06T21:21:41.7Z",
+    "endedAt": null,
+    "files": [
+     {
+      "path": "add.go",
+      "added": 1,
+      "removed": 1
+     }
+    ]
+   }
+  },
+  {
+   "id": "call_patch",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "tool",
+   "at": "2026-11-06T21:21:41.7Z",
+   "tool": {
+    "callId": "call_patch",
+    "name": "apply_patch",
+    "title": "Edit add.go",
+    "category": "edit",
+    "subject": {
+     "kind": "file",
+     "text": "/Users/me/proj/add.go"
+    },
+    "state": "ok",
+    "startedAt": "2026-11-06T21:21:41.7Z",
+    "endedAt": "2026-11-06T21:21:42Z",
+    "files": [
+     {
+      "path": "add.go",
+      "added": 1,
+      "removed": 1
+     }
+    ]
+   }
+  },
+  {
+   "id": "plan-019a0000-0000-7000-8000-0000000000a2",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "plan",
+   "at": "2026-11-06T12:00:02Z",
+   "plan": {
+    "done": 1,
+    "total": 3,
+    "current": "Fix Add"
+   }
+  },
+  {
+   "id": "rq-4",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "question",
+   "at": "2026-11-06T12:00:02.4Z",
+   "question": {
+    "questions": [
+     {
+      "id": "scope",
+      "header": "Scope",
+      "prompt": "Fix only Add or the whole file?",
+      "options": [
+       {
+        "id": "Only Add",
+        "label": "Only Add",
+        "detail": "Smallest change"
+       },
+       {
+        "id": "Whole file",
+        "label": "Whole file",
+        "detail": "Tidy everything"
+       }
+      ],
+      "multi": false,
+      "allowText": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "rq-4",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "question",
+   "at": "2026-11-06T12:00:02.4Z",
+   "question": {
+    "questions": [
+     {
+      "id": "scope",
+      "header": "Scope",
+      "prompt": "Fix only Add or the whole file?",
+      "options": [
+       {
+        "id": "Only Add",
+        "label": "Only Add",
+        "detail": "Smallest change"
+       },
+       {
+        "id": "Whole file",
+        "label": "Whole file",
+        "detail": "Tidy everything"
+       }
+      ],
+      "multi": false,
+      "allowText": true
+     }
+    ],
+    "answered": {
+     "scope": []
+    }
+   }
+  },
+  {
+   "id": "agent-019a0000-0000-7000-8000-000000000002",
+   "seq": 0,
+   "kind": "agent",
+   "at": "2026-11-06T12:00:02.6Z",
+   "agent": {
+    "agentId": "019a0000-0000-7000-8000-000000000002",
+    "name": "Check the other packages",
+    "state": "running",
+    "startedAt": "2026-11-06T12:00:02.6Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "agent-019a0000-0000-7000-8000-000000000002",
+   "seq": 0,
+   "kind": "agent",
+   "at": "2026-11-06T12:00:02.7Z",
+   "agent": {
+    "agentId": "019a0000-0000-7000-8000-000000000002",
+    "name": "Scout",
+    "role": "explorer",
+    "state": "running",
+    "startedAt": "2026-11-06T12:00:02.7Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "019a0000-0000-7000-8000-0000000000b1",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000b1",
+   "parent": "agent-019a0000-0000-7000-8000-000000000002",
+   "kind": "turn",
+   "at": "2026-11-06T21:21:43Z",
+   "turn": {
+    "state": "running",
+    "startedAt": "2026-11-06T21:21:43Z",
+    "endedAt": null,
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "msg_child",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000b1",
+   "parent": "agent-019a0000-0000-7000-8000-000000000002",
+   "kind": "assistant",
+   "at": "2026-11-06T12:00:02.9Z",
+   "assistant": {
+    "text": "No other copies.",
+    "partial": false
+   }
+  },
+  {
+   "id": "019a0000-0000-7000-8000-0000000000a2",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "turn",
+   "at": "2026-11-06T21:21:40Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T21:21:40Z",
+    "endedAt": "2026-11-06T21:21:44Z",
+    "steps": 2,
+    "filesChanged": 2
+   }
+  },
+  {
+   "id": "model-2026-11-06T12:00:03.2Z",
+   "seq": 0,
+   "kind": "notice",
+   "at": "2026-11-06T12:00:03.2Z",
+   "notice": {
+    "level": "info",
+    "code": "model",
+    "text": "Model changed to gpt-5.5-mini"
+   }
+  },
+  {
+   "id": "error-019a0000-0000-7000-8000-0000000000a2-1793966403300",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "notice",
+   "at": "2026-11-06T12:00:03.3Z",
+   "notice": {
+    "level": "error",
+    "code": "rate_limit",
+    "text": "Rate limit reached"
+   }
+  }
+ ],
+ "ops": [
+  {
+   "op": "status",
+   "status": {
+    "model": "gpt-5.5",
+    "mode": "Auto",
+    "effort": "medium"
+   }
+  },
+  {
+   "op": "replace",
+   "section": "plan",
+   "rows": [
+    {
+     "id": "step-1",
+     "title": "Run the tests",
+     "state": "done"
+    },
+    {
+     "id": "step-2",
+     "title": "Fix Add",
+     "state": "active"
+    },
+    {
+     "id": "step-3",
+     "title": "Run the tests again",
+     "state": "pending"
+    }
+   ]
+  },
+  {
+   "op": "replace",
+   "section": "changes",
+   "rows": [
+    {
+     "id": "add.go",
+     "title": "add.go",
+     "subtitle": "+1 -1",
+     "state": "ok",
+     "open": {
+      "kind": "diff",
+      "ref": "add.go"
+     }
+    },
+    {
+     "id": "new.go",
+     "title": "new.go",
+     "subtitle": "+2 -0",
+     "state": "ok",
+     "open": {
+      "kind": "diff",
+      "ref": "new.go"
+     }
+    }
+   ]
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "gpt-5.5",
+    "mode": "Auto",
+    "effort": "medium",
+    "contextPercent": 25
+   }
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "gpt-5.5",
+    "mode": "Auto",
+    "effort": "medium",
+    "contextPercent": 25,
+    "meters": [
+     {
+      "id": "primary",
+      "label": "5 hour limit",
+      "percent": 42,
+      "resetsAt": "2026-11-07T00:06:40Z"
+     },
+     {
+      "id": "secondary",
+      "label": "Weekly limit",
+      "percent": 7,
+      "resetsAt": "2026-11-12T16:13:20Z"
+     }
+    ]
+   }
+  },
+  {
+   "op": "upsert",
+   "section": "needs",
+   "row": {
+    "id": "rq-4",
+    "title": "Scope",
+    "subtitle": "Fix only Add or the whole file?",
+    "state": "waiting",
+    "startedAt": "2026-11-06T12:00:02.4Z",
+    "actions": [
+     {
+      "id": "answer",
+      "label": "Answer",
+      "role": "primary"
+     }
+    ]
+   }
+  },
+  {
+   "op": "remove",
+   "section": "needs",
+   "id": "rq-4"
+  },
+  {
+   "op": "upsert",
+   "section": "agents",
+   "row": {
+    "id": "019a0000-0000-7000-8000-000000000002",
+    "title": "Check the other packages",
+    "state": "running",
+    "startedAt": "2026-11-06T12:00:02.6Z",
+    "open": {
+     "kind": "chat",
+     "ref": "agent-019a0000-0000-7000-8000-000000000002"
+    }
+   }
+  },
+  {
+   "op": "upsert",
+   "section": "agents",
+   "row": {
+    "id": "019a0000-0000-7000-8000-000000000002",
+    "title": "Scout",
+    "subtitle": "explorer",
+    "state": "running",
+    "startedAt": "2026-11-06T12:00:02.7Z",
+    "open": {
+     "kind": "chat",
+     "ref": "agent-019a0000-0000-7000-8000-000000000002"
+    }
+   }
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "gpt-5.5-mini",
+    "mode": "Full access",
+    "effort": "high",
+    "contextPercent": 25,
+    "meters": [
+     {
+      "id": "primary",
+      "label": "5 hour limit",
+      "percent": 42,
+      "resetsAt": "2026-11-07T00:06:40Z"
+     },
+     {
+      "id": "secondary",
+      "label": "Weekly limit",
+      "percent": 7,
+      "resetsAt": "2026-11-12T16:13:20Z"
+     }
+    ]
+   }
+  }
+ ]
+}

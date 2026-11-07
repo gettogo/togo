@@ -12,8 +12,11 @@ import (
 )
 
 // claudeBase are the events installed without --block. Notification carries
-// the permission prompt when PermissionRequest is not hooked.
-var claudeBase = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "StopFailure", "SessionEnd"}
+// the permission prompt when PermissionRequest is not hooked. The events
+// after SessionEnd only feed the native chat and mission control: they
+// change no session status.
+var claudeBase = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "StopFailure", "SessionEnd",
+	"PostToolUseFailure", "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "TaskCreated", "TaskCompleted"}
 
 const permissionRequest = "PermissionRequest"
 

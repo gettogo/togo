@@ -1,0 +1,70 @@
+# Factory Droid 1.5. No attach protocol for the TUI (`droid daemon` and `droid exec
+# --output-format acp|stream-jsonrpc` host their own sessions). Reads: Claude-shaped hooks
+# (documented; not yet seen live, the owner has not logged in), which also draw the chat.
+# Writes: typed slash commands that take arguments (`/compress`, `/resume <id>`); the model has
+# no typed argument form and the interactive CLI no --model flag, so it stays in the terminal.
+# The session folder layout is unverified.
+adapter: droid
+name: Droid
+revision: 1
+match: { agents: [droid], commands: [droid] }
+harness: { version: [droid, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=1.5 <2" }
+capabilities: [chat, chat.anchors, send.queue, interrupt, commands, files, needs.approvals, agents,
+  changes, ports, status, resume, compact]
+feeds:
+  hooks:            # `togo hook droid <event>` in ~/.factory/hooks.json (installed only by `togo hooks install --agent droid`)
+    hook:
+      events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop,
+        SubagentStop, PreCompact, SessionEnd]
+    mapper: droid.hooks
+    stability: documented
+sources:
+  sessions:         # layout unverified: one folder per project, one JSONL per session
+    file: { glob: '~/.factory/sessions/*/*.jsonl', format: jsonl }
+    select: '[.[] | select((.head[0].cwd // "") == $state.cwd or (.head[0].cwd // "") == "") | {id: .name, title: (.head[0].title // null), updated: .mtime}]'
+    cache: 30s
+    stability: internal
+screens:
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: '{{.title | default .id | truncate 60}}', item.subtitle: '{{.updated | ago}}' }
+    on_select: resume
+  compact:
+    primitive: confirm
+    title: Compress
+    section: status
+    capability: compact
+    submit: compact
+actions:
+  compact:
+    label: Compress
+    confirm: Compress the session now?
+    type: { text: '/compress', submit: true, when_idle: true }
+    stability: documented-command
+  resume:
+    label: Resume
+    branch:
+      - { when: '{{.state.idle}}', type: { text: '/resume {{.id}}', submit: true, when_idle: true } }
+      - { relaunch: { argv: [droid, --resume, '{{.id}}'] } }
+    verify: { source: hooks, select: .session_id, equals: '{{.id}}', within: 10s }
+    stability: documented-command
+  answer:
+    builtin: approval_answer
+    stability: experimental
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+commands:
+  static:
+    - { name: model, detail: Open the model selector }
+    - { name: compress, detail: Compress the session }
+    - { name: resume, hint: '[id]', detail: Resume a session, screen: resume }
+    - { name: context, detail: Context window usage }
+    - { name: cost, detail: Token usage and cost }
+    - { name: droids, detail: Custom droids (subagents) }
+    - { name: review, detail: Review current changes }

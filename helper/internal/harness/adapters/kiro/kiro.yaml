@@ -1,0 +1,9 @@
+# Kiro CLI (Amazon Q Developer CLI lineage). Unverified and terminal-only: not installed (the
+# macOS installer is an app bundle), so the documented `chat --list-sessions`, `--list-models`
+# and `settings` outputs were never seen.
+adapter: kiro
+name: Kiro CLI
+revision: 1
+match: { agents: [kiro], commands: [kiro-cli] }
+harness: { version: [kiro-cli, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.0 <3" }
+capabilities: []

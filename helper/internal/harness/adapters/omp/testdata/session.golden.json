@@ -1,0 +1,757 @@
+{
+ "items": [
+  {
+   "id": "e003",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "user",
+   "at": "2026-11-06T10:00:01Z",
+   "user": {
+    "text": "Fix the failing parser test",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "turn-e003",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": "2026-11-06T10:00:22Z",
+    "steps": 4,
+    "filesChanged": 1
+   }
+  },
+  {
+   "id": "e004-thinking",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "thinking",
+   "at": "2026-11-06T10:00:03Z",
+   "thinking": {
+    "text": "Read the test first.",
+    "partial": false
+   }
+  },
+  {
+   "id": "call_read_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:03Z",
+   "tool": {
+    "callId": "call_read_1",
+    "name": "read",
+    "title": "Read parser/parse_test.go",
+    "category": "read",
+    "subject": {
+     "kind": "file",
+     "text": "parser/parse_test.go"
+    },
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:03Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "turn-e003",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": "2026-11-06T10:00:22Z",
+    "steps": 4,
+    "filesChanged": 1
+   }
+  },
+  {
+   "id": "e004",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "assistant",
+   "at": "2026-11-06T10:00:03Z",
+   "assistant": {
+    "text": "Reading the test.",
+    "partial": false
+   }
+  },
+  {
+   "id": "call_read_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:03Z",
+   "tool": {
+    "callId": "call_read_1",
+    "name": "read",
+    "title": "Read parser/parse_test.go",
+    "category": "read",
+    "subject": {
+     "kind": "file",
+     "text": "parser/parse_test.go"
+    },
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:03Z",
+    "endedAt": "2026-11-06T10:00:03.5Z",
+    "output": "package parser\n\nfunc TestParse(t *testing.T) {}"
+   }
+  },
+  {
+   "id": "call_edit_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:05Z",
+   "tool": {
+    "callId": "call_edit_1",
+    "name": "edit",
+    "title": "Edit parser/parse.go",
+    "category": "edit",
+    "subject": {
+     "kind": "file",
+     "text": "parser/parse.go"
+    },
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:05Z",
+    "endedAt": null,
+    "files": [
+     {
+      "path": "parser/parse.go",
+      "added": 0,
+      "removed": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "turn-e003",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": "2026-11-06T10:00:22Z",
+    "steps": 4,
+    "filesChanged": 1
+   }
+  },
+  {
+   "id": "call_todo_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:05Z",
+   "tool": {
+    "callId": "call_todo_1",
+    "name": "todo_write",
+    "title": "Update the plan",
+    "category": "other",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:05Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "turn-e003",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": "2026-11-06T10:00:22Z",
+    "steps": 4,
+    "filesChanged": 1
+   }
+  },
+  {
+   "id": "plan-call_todo_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "plan",
+   "at": "2026-11-06T10:00:05Z",
+   "plan": {
+    "done": 1,
+    "total": 3,
+    "current": "Run the tests"
+   }
+  },
+  {
+   "id": "call_edit_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:05Z",
+   "tool": {
+    "callId": "call_edit_1",
+    "name": "edit",
+    "title": "Edit parser/parse.go",
+    "category": "edit",
+    "subject": {
+     "kind": "file",
+     "text": "parser/parse.go"
+    },
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:05Z",
+    "endedAt": "2026-11-06T10:00:05.4Z",
+    "output": "Edited parser/parse.go",
+    "files": [
+     {
+      "path": "parser/parse.go",
+      "added": 0,
+      "removed": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "call_todo_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:05Z",
+   "tool": {
+    "callId": "call_todo_1",
+    "name": "todo_write",
+    "title": "Update the plan",
+    "category": "other",
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:05Z",
+    "endedAt": "2026-11-06T10:00:05.5Z",
+    "output": "3 todos"
+   }
+  },
+  {
+   "id": "call_task_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:06Z",
+   "tool": {
+    "callId": "call_task_1",
+    "name": "task",
+    "title": "Run explore",
+    "category": "agent",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "turn-e003",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": "2026-11-06T10:00:22Z",
+    "steps": 4,
+    "filesChanged": 1
+   }
+  },
+  {
+   "id": "agent-FindCallers",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "agent",
+   "at": "2026-11-06T10:00:06Z",
+   "agent": {
+    "agentId": "FindCallers",
+    "name": "Find callers of Parse",
+    "role": "explore",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "agent-CheckDocs",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "agent",
+   "at": "2026-11-06T10:00:06Z",
+   "agent": {
+    "agentId": "CheckDocs",
+    "name": "Check the docs",
+    "role": "explore",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "agent-FindCallers",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "agent",
+   "at": "2026-11-06T10:00:06Z",
+   "agent": {
+    "agentId": "FindCallers",
+    "name": "Find callers of Parse",
+    "role": "explore",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "s001",
+   "seq": 0,
+   "parent": "agent-FindCallers",
+   "kind": "user",
+   "at": "2026-11-06T10:00:07Z",
+   "user": {
+    "text": "List every caller of Parse.",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "sub_grep_1",
+   "seq": 0,
+   "parent": "agent-FindCallers",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:09Z",
+   "tool": {
+    "callId": "sub_grep_1",
+    "name": "grep",
+    "title": "Search Parse\\(",
+    "category": "search",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:09Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "sub_grep_1",
+   "seq": 0,
+   "parent": "agent-FindCallers",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:09Z",
+   "tool": {
+    "callId": "sub_grep_1",
+    "name": "grep",
+    "title": "Search Parse\\(",
+    "category": "search",
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:09Z",
+    "endedAt": "2026-11-06T10:00:10Z",
+    "output": "main.go:12\nlexer.go:40"
+   }
+  },
+  {
+   "id": "s004",
+   "seq": 0,
+   "parent": "agent-FindCallers",
+   "kind": "assistant",
+   "at": "2026-11-06T10:00:12Z",
+   "assistant": {
+    "text": "Parse is called from main.go and lexer.go",
+    "partial": false
+   }
+  },
+  {
+   "id": "call_task_1",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:06Z",
+   "tool": {
+    "callId": "call_task_1",
+    "name": "task",
+    "title": "Run explore",
+    "category": "agent",
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "endedAt": "2026-11-06T10:00:20Z",
+    "output": "2 tasks finished"
+   }
+  },
+  {
+   "id": "agent-FindCallers",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "agent",
+   "at": "2026-11-06T10:00:06Z",
+   "agent": {
+    "agentId": "FindCallers",
+    "name": "Find callers of Parse",
+    "role": "explore",
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "endedAt": "2026-11-06T10:00:20Z",
+    "summary": "Parse is called from main.go and lexer.go"
+   }
+  },
+  {
+   "id": "agent-CheckDocs",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "agent",
+   "at": "2026-11-06T10:00:06Z",
+   "agent": {
+    "agentId": "CheckDocs",
+    "name": "Check the docs",
+    "role": "explore",
+    "state": "failed",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "endedAt": "2026-11-06T10:00:20Z",
+    "summary": "docs/parser.md does not exist"
+   }
+  },
+  {
+   "id": "e011",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "assistant",
+   "at": "2026-11-06T10:00:22Z",
+   "assistant": {
+    "text": "Fixed. The test passes now.",
+    "partial": false
+   }
+  },
+  {
+   "id": "turn-e003",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": "2026-11-06T10:00:22Z",
+    "steps": 4,
+    "filesChanged": 1
+   }
+  },
+  {
+   "id": "e012",
+   "seq": 0,
+   "kind": "tool",
+   "at": "2026-11-06T10:01:00Z",
+   "tool": {
+    "callId": "e012",
+    "name": "bash",
+    "title": "Run go test ./parser/",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "go test ./parser/"
+    },
+    "state": "ok",
+    "startedAt": "2026-11-06T10:01:00Z",
+    "endedAt": "2026-11-06T10:01:00Z",
+    "output": "ok  \tparser\t0.01s",
+    "exitCode": 0
+   }
+  },
+  {
+   "id": "model-e013",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "notice",
+   "at": "2026-11-06T10:01:10Z",
+   "notice": {
+    "level": "info",
+    "code": "model",
+    "text": "Model moonshot/kimi-k3"
+   }
+  },
+  {
+   "id": "compaction-e015",
+   "seq": 0,
+   "turnId": "turn-e003",
+   "kind": "notice",
+   "at": "2026-11-06T10:01:20Z",
+   "notice": {
+    "level": "info",
+    "code": "compacted",
+    "text": "Compacted with snapcompact, 120k to 31k tokens"
+   }
+  },
+  {
+   "id": "e016",
+   "seq": 0,
+   "turnId": "turn-e016",
+   "kind": "user",
+   "at": "2026-11-06T10:02:00Z",
+   "user": {
+    "text": "Now add a benchmark",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "turn-e016",
+   "seq": 0,
+   "turnId": "turn-e016",
+   "kind": "turn",
+   "at": "2026-11-06T10:02:00Z",
+   "turn": {
+    "state": "interrupted",
+    "startedAt": "2026-11-06T10:02:00Z",
+    "endedAt": "2026-11-06T10:02:05Z",
+    "steps": 1,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "call_bash_2",
+   "seq": 0,
+   "turnId": "turn-e016",
+   "kind": "tool",
+   "at": "2026-11-06T10:02:05Z",
+   "tool": {
+    "callId": "call_bash_2",
+    "name": "bash",
+    "title": "Run go test -bench . ./parser/",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "go test -bench . ./parser/"
+    },
+    "state": "running",
+    "startedAt": "2026-11-06T10:02:05Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "turn-e016",
+   "seq": 0,
+   "turnId": "turn-e016",
+   "kind": "turn",
+   "at": "2026-11-06T10:02:00Z",
+   "turn": {
+    "state": "interrupted",
+    "startedAt": "2026-11-06T10:02:00Z",
+    "endedAt": "2026-11-06T10:02:05Z",
+    "steps": 1,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "call_bash_2",
+   "seq": 0,
+   "turnId": "turn-e016",
+   "kind": "tool",
+   "at": "2026-11-06T10:02:05Z",
+   "tool": {
+    "callId": "call_bash_2",
+    "name": "bash",
+    "title": "Run go test -bench . ./parser/",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "go test -bench . ./parser/"
+    },
+    "state": "interrupted",
+    "startedAt": "2026-11-06T10:02:05Z",
+    "endedAt": "2026-11-06T10:02:05Z"
+   }
+  },
+  {
+   "id": "turn-e016",
+   "seq": 0,
+   "turnId": "turn-e016",
+   "kind": "turn",
+   "at": "2026-11-06T10:02:00Z",
+   "turn": {
+    "state": "interrupted",
+    "startedAt": "2026-11-06T10:02:00Z",
+    "endedAt": "2026-11-06T10:02:05Z",
+    "steps": 1,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "e017-interrupted",
+   "seq": 0,
+   "turnId": "turn-e016",
+   "kind": "notice",
+   "at": "2026-11-06T10:02:05Z",
+   "notice": {
+    "level": "info",
+    "code": "interrupted",
+    "text": "Interrupted"
+   }
+  }
+ ],
+ "ops": [
+  {
+   "op": "status",
+   "status": {
+    "model": "llama.cpp/qwen3.8-27b"
+   }
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "llama.cpp/qwen3.8-27b",
+    "effort": "medium",
+    "costUsd": 0.0012,
+    "facts": [
+     {
+      "label": "Last request",
+      "value": "1200 in, 800 cached, 40 out"
+     }
+    ]
+   }
+  },
+  {
+   "op": "replace",
+   "section": "plan",
+   "rows": [
+    {
+     "id": "todo-1",
+     "title": "Fix parse",
+     "state": "done"
+    },
+    {
+     "id": "todo-2",
+     "title": "Run the tests",
+     "state": "active"
+    },
+    {
+     "id": "todo-3",
+     "title": "Write a note",
+     "state": "pending"
+    }
+   ]
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "llama.cpp/qwen3.8-27b",
+    "effort": "medium",
+    "costUsd": 0.0027,
+    "facts": [
+     {
+      "label": "Last request",
+      "value": "1500 in, 1000 cached, 60 out"
+     }
+    ]
+   }
+  },
+  {
+   "op": "upsert",
+   "section": "agents",
+   "row": {
+    "id": "agent-FindCallers",
+    "title": "Find callers of Parse",
+    "subtitle": "explore",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "open": {
+     "kind": "chat",
+     "ref": "agent-FindCallers"
+    }
+   }
+  },
+  {
+   "op": "upsert",
+   "section": "agents",
+   "row": {
+    "id": "agent-CheckDocs",
+    "title": "Check the docs",
+    "subtitle": "explore",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "open": {
+     "kind": "chat",
+     "ref": "agent-CheckDocs"
+    }
+   }
+  },
+  {
+   "op": "upsert",
+   "section": "agents",
+   "row": {
+    "id": "agent-FindCallers",
+    "title": "Find callers of Parse",
+    "subtitle": "explore",
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "open": {
+     "kind": "chat",
+     "ref": "agent-FindCallers"
+    }
+   }
+  },
+  {
+   "op": "upsert",
+   "section": "agents",
+   "row": {
+    "id": "agent-FindCallers",
+    "title": "Find callers of Parse",
+    "subtitle": "explore",
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "tail": [
+     "Parse is called from main.go and lexer.go"
+    ],
+    "open": {
+     "kind": "chat",
+     "ref": "agent-FindCallers"
+    }
+   }
+  },
+  {
+   "op": "upsert",
+   "section": "agents",
+   "row": {
+    "id": "agent-CheckDocs",
+    "title": "Check the docs",
+    "subtitle": "explore",
+    "state": "failed",
+    "startedAt": "2026-11-06T10:00:06Z",
+    "tail": [
+     "docs/parser.md does not exist"
+    ],
+    "open": {
+     "kind": "chat",
+     "ref": "agent-CheckDocs"
+    }
+   }
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "llama.cpp/qwen3.8-27b",
+    "effort": "medium",
+    "costUsd": 0.0036,
+    "facts": [
+     {
+      "label": "Last request",
+      "value": "1800 in, 1500 cached, 12 out"
+     }
+    ]
+   }
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "moonshot/kimi-k3",
+    "effort": "medium",
+    "costUsd": 0.0036,
+    "facts": [
+     {
+      "label": "Last request",
+      "value": "1800 in, 1500 cached, 12 out"
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,317 @@
+{
+ "providers": [
+  {
+   "id": "moonshotai",
+   "name": "Moonshot AI",
+   "source": "env",
+   "env": [
+    "MOONSHOT_API_KEY"
+   ],
+   "key": "moonshot-secret-value",
+   "options": {},
+   "models": {
+    "kimi-k3.1-pro-highspeed": {
+     "id": "kimi-k3.1-pro-highspeed",
+     "providerID": "moonshotai",
+     "api": {
+      "id": "kimi-k3.1-pro-highspeed",
+      "url": "https://api.moonshot.ai/v1",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "Kimi K3.1 Pro Highspeed",
+     "family": "kimi-k3",
+     "capabilities": {
+      "temperature": false,
+      "reasoning": true,
+      "attachment": true,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": true,
+       "video": true,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": {
+       "field": "reasoning_content"
+      }
+     },
+     "cost": {
+      "input": 4,
+      "output": 20,
+      "cache": {
+       "read": 0.2,
+       "write": 4
+      }
+     },
+     "limit": {
+      "context": 1048576,
+      "output": 1048576
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "2026-10-23",
+     "variants": {
+      "low": {
+       "reasoningEffort": "low"
+      },
+      "high": {
+       "reasoningEffort": "high"
+      },
+      "max": {
+       "reasoningEffort": "max"
+      }
+     }
+    },
+    "kimi-k3.1-pro": {
+     "id": "kimi-k3.1-pro",
+     "providerID": "moonshotai",
+     "api": {
+      "id": "kimi-k3.1-pro",
+      "url": "https://api.moonshot.ai/v1",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "Kimi K3.1 Pro",
+     "family": "kimi-k3",
+     "capabilities": {
+      "temperature": false,
+      "reasoning": true,
+      "attachment": true,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": true,
+       "video": true,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": {
+       "field": "reasoning_content"
+      }
+     },
+     "cost": {
+      "input": 2,
+      "output": 10,
+      "cache": {
+       "read": 0.2,
+       "write": 2
+      }
+     },
+     "limit": {
+      "context": 1048576,
+      "output": 1048576
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "2026-10-23",
+     "variants": {
+      "low": {
+       "reasoningEffort": "low"
+      },
+      "high": {
+       "reasoningEffort": "high"
+      },
+      "max": {
+       "reasoningEffort": "max"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "local",
+   "name": "Local 5090 (llama-swap)",
+   "source": "config",
+   "env": [],
+   "options": {
+    "apiKey": "local-secret",
+    "baseURL": "http://192.0.2.10:8080/v1"
+   },
+   "models": {
+    "coder-dense": {
+     "id": "coder-dense",
+     "providerID": "local",
+     "api": {
+      "id": "coder-dense",
+      "url": "",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "Qwen3.8-27B (alias coder-dense)",
+     "family": "",
+     "capabilities": {
+      "temperature": false,
+      "reasoning": false,
+      "attachment": false,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": false
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 65536,
+      "output": 16384
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "",
+     "variants": {}
+    },
+    "coder-fast": {
+     "id": "coder-fast",
+     "providerID": "local",
+     "api": {
+      "id": "coder-fast",
+      "url": "",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "Qwen3.8-27B (alias coder-fast)",
+     "family": "",
+     "capabilities": {
+      "temperature": false,
+      "reasoning": false,
+      "attachment": false,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": false
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 65536,
+      "output": 16384
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "",
+     "variants": {}
+    }
+   }
+  },
+  {
+   "id": "togofake",
+   "name": "Togo Fake",
+   "source": "config",
+   "env": [],
+   "options": {
+    "baseURL": "http://127.0.0.1:9/v1",
+    "apiKey": "sk-test-0123456789abcdef",
+    "headers": {
+     "Authorization": "Bearer sk-togofake-hdr-0123456789abcdef"
+    }
+   },
+   "models": {
+    "fake-1": {
+     "id": "fake-1",
+     "providerID": "togofake",
+     "api": {
+      "id": "fake-1",
+      "url": "",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "Fake One",
+     "family": "",
+     "capabilities": {
+      "temperature": false,
+      "reasoning": false,
+      "attachment": false,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": false
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 0,
+      "output": 0
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "",
+     "variants": {}
+    }
+   }
+  }
+ ],
+ "default": {
+  "moonshotai": "kimi-k3.1-pro-highspeed",
+  "local": "qwen3.8-27b",
+  "togofake": "fake-1"
+ }
+}

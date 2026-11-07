@@ -4,6 +4,7 @@ import UIKit
 
 /// Where the user spends most of their time: the selected session's terminal edge to edge
 /// on an opaque canvas, or two sessions side by side once the user puts one beside the other.
+/// A session an adapter serves shows its chat over the terminal, which stays attached under it.
 /// The way back, the session's name and its actions are in the navigation bar of the stack
 /// around it, so on an iPhone Duo they sit in the vertical bar beside the status bar and the
 /// terminal starts at the top edge. Only the tab strip, with more than one tab, and the find
@@ -14,6 +15,7 @@ struct WorkspaceView: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.windowID) private var window
     @Environment(\.machineTools) private var machineTools
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Bindable var store: AppStore
     let terminals: TerminalPool
 
@@ -42,7 +44,9 @@ struct WorkspaceView: View {
     }
 
     var body: some View {
-        WorkspacePanes(store: store, terminals: terminals, window: window) { _, _ in EmptyView() }
+        WorkspacePanes(store: store, terminals: terminals, window: window) { geometry, insets in
+            ChatPanes(store: store, geometry: geometry, insets: insets)
+        }
             .onPreferenceChange(PanesReport.Key.self) { report in
                 MainActor.assumeIsolated { if panes.report != report { panes.report = report } }
             }
@@ -67,6 +71,7 @@ struct WorkspaceView: View {
             // In zen the bar stays while find or the session menu is open.
             .onChange(of: finding || menuOpen) { _, held in zen.pin(held && zenLayout) }
             .modifier(ReviewCounts(model: review, store: store, row: focusedRow))
+            .modifier(HarnessSync(store: store, status: $status))
             .onChange(of: status) { _, line in
                 if let line { AccessibilityNotification.Announcement(line).post() }
             }
@@ -76,6 +81,8 @@ struct WorkspaceView: View {
                     .modifier(PaneColumns(state: panes) { [store] in $0.geometry.composeFrame(focused: store.workspace.focused) })
             }
             .background(Color.togoInk)
+            // The pill and the bar item open it: a sheet on a phone, an inspector when wide.
+            .modifier(FocusedMissionControl(app: store))
             .background { shortcuts }
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
@@ -194,7 +201,10 @@ struct WorkspaceView: View {
         if let tab = store.focusedTab {
             WorkspaceToolbar(
                 leading: leading, onLeading: leadingAction, runAgain: runAgain(tab),
-                review: focusedRow.map { ReviewToolbarItems(store: store, row: $0, model: review) }
+                review: focusedRow.map { ReviewToolbarItems(store: store, row: $0, model: review) },
+                layer: store.layerItem,
+                // A compact width has the pill at the top of the chat instead.
+                mission: sizeClass == .regular ? store.missionItem : nil
             ) {
                 actions(for: tab, row: store.session(for: tab))
                     .onAppear { menuOpen = true }

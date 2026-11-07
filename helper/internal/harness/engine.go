@@ -79,7 +79,10 @@ type Env struct {
 	// Endpoint is the live harness's API address the helper arranged: an
 	// OpenCode --port URL, a Codex app-server unix socket path.
 	Endpoint string
-	Vars     map[string]string
+	// Auth is the Authorization header value for an http endpoint that
+	// takes a password, else "".
+	Auth string
+	Vars map[string]string
 }
 
 // SourceSpec is the part of an adapter's source declaration a runner

@@ -129,6 +129,7 @@ func TestLifecycleFixtures(t *testing.T) {
 				code := 0
 				if name == "session.relaunch" {
 					code = 1
+					waitFile(t, filepath.Join(home, "ran"))
 				}
 				reportExit(t, c, "s_abcdefghij", code)
 				waitAgentGone(t, svc, "s_abcdefghij")
@@ -314,5 +315,19 @@ func TestWrapperExitReportCounts(t *testing.T) {
 				t.Fatalf("exit %q %+v, want failed 3", status, exit)
 			}
 		})
+	}
+}
+
+// waitFile waits until the fixture agent has left its mark.
+func waitFile(t *testing.T, path string) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the agent never ran")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

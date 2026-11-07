@@ -50,6 +50,12 @@ import UIKit
         hosts[id]
     }
 
+    /// The store of a window, for what a terminal there needs from its tab: the layer over it,
+    /// a jump to a line, the machine to read history from.
+    func appStore(in window: WindowID) -> AppStore? {
+        store(of: window)
+    }
+
     /// True when the tab's terminal should be on screen in `window`. A terminal no window
     /// holds yet is drawn only where a single window lists it, never in two at once.
     func shows(_ id: TabID, in window: WindowID) -> Bool {
@@ -289,13 +295,34 @@ struct TerminalSlot: View {
     @Environment(\.windowID) private var window
     let tab: TabID
     let terminals: TerminalPool
+    /// "Show in terminal" landed on a line the phone does not hold.
+    @State private var capture: CaptureRequest?
 
     var body: some View {
         if let handle = terminals.handle(for: tab) {
             if terminals.shows(tab, in: window) {
+                let store = terminals.appStore(in: window)
+                let harness = store?.harness(for: tab)
+                let covered = harness?.shownLayer == .chat
                 // The size SwiftUI gives the slot, so every change to it fits the grid again.
                 GeometryReader { proxy in
-                    TabTerminalView(handle: handle, fit: proxy.size)
+                    TabTerminalView(
+                        handle: handle, fit: proxy.size, covered: covered,
+                        jump: covered ? nil : harness?.pendingJump.flatMap { $0.sessionID == tab.sessionID ? $0 : nil },
+                        onJump: { jump, landed in
+                            if harness?.pendingJump == jump { harness?.pendingJump = nil }
+                            if !landed {
+                                capture = CaptureRequest(hostID: tab.hostID, sessionID: tab.sessionID, needle: jump.needle)
+                            }
+                        }
+                    )
+                }
+                // Under the chat the terminal is out of reach: VoiceOver passes it by.
+                .accessibilityHidden(covered)
+                .sheet(item: $capture) { request in
+                    if let services = store?.services {
+                        CaptureSheet(request: request, services: services)
+                    }
                 }
             } else {
                 ElsewhereNotice { terminals.show(tab, in: window) }
@@ -311,6 +338,20 @@ struct TabTerminalView: UIViewControllerRepresentable {
     let handle: TerminalHandle
     /// The space the terminal has; a new one fits its grid again.
     var fit: CGSize = .zero
+    /// The chat covers the terminal: it takes no touches, no keyboard and no VoiceOver focus.
+    var covered = false
+    /// A line to scroll to and mark, once.
+    var jump: TerminalJump?
+    /// The jump was handled: `landed` false when the phone does not hold the line.
+    var onJump: (TerminalJump, _ landed: Bool) -> Void = { _, _ in }
+
+    final class Coordinator {
+        var handled: TerminalJump?
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     func makeUIViewController(context: Context) -> TerminalContainer {
         TerminalContainer()
@@ -318,10 +359,27 @@ struct TabTerminalView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ container: TerminalContainer, context: Context) {
         container.show(handle.engineView)
+        container.setCovered(covered)
+        handle.engine?.isCovered = covered
         container.refit(for: fit)
+        guard let jump, context.coordinator.handled != jump else {
+            if jump == nil { context.coordinator.handled = nil }
+            return
+        }
+        context.coordinator.handled = jump
+        let engine = handle.engine
+        let onJump = self.onJump
+        // After this pass, so the terminal is laid out and on screen as the chat fades away.
+        Task { @MainActor [weak container] in
+            guard let container, let engine else {
+                onJump(jump, false)
+                return
+            }
+            onJump(jump, TerminalJumper.perform(jump, engine: engine, container: container))
+        }
     }
 
-    static func dismantleUIViewController(_ container: TerminalContainer, coordinator: ()) {
+    static func dismantleUIViewController(_ container: TerminalContainer, coordinator: Coordinator) {
         container.release()
     }
 }

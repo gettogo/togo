@@ -113,6 +113,16 @@ struct PaneGeometry: Equatable {
         return leadingPage
     }
 
+    /// Where a pane's chat column and mission pill go: the pane itself, or the leading page of
+    /// a book when one pane spans both pages, so no prompt, button or pill sits on the fold. The
+    /// same page the compose bar keeps to.
+    func chatFrame(of pane: Pane) -> CGRect? {
+        guard let frame = frame(of: pane) else { return nil }
+        guard !showsTwoPanes, let leadingPage else { return frame }
+        let page = frame.intersection(leadingPage)
+        return page.isNull || page.width <= 0 ? frame : page
+    }
+
     /// The columns the header and tab strip keep to: the leading page of a book. Nil leaves
     /// them the full width.
     func chromeFrame() -> CGRect? {

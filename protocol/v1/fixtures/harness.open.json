@@ -55,7 +55,7 @@
           "user": {
             "text": "fix the failing date test",
             "queued": false,
-            "source": "phone"
+            "source": "unknown"
           }
         },
         {
@@ -152,7 +152,7 @@
       ],
       "more": false,
       "mission": {
-        "rev": 4,
+        "rev": 8,
         "summary": {
           "needsYou": 0,
           "agents": 0,
@@ -230,7 +230,8 @@
                 {
                   "id": "compact",
                   "label": "Compact",
-                  "role": "normal"
+                  "role": "normal",
+                  "confirm": "Compact the conversation now?"
                 }
               ]
             }

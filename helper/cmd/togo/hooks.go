@@ -17,7 +17,10 @@ func init() {
 	register("hooks", func(_ context.Context, args []string, env map[string]string, _ io.Reader, stdout, stderr io.Writer) int {
 		return runHooks(args, env, stdout, stderr)
 	})
-	addUsage("  hooks install|uninstall|status [--agent claude|codex|all] [--local] [--block] [--json]\n                                                add or remove agent hook entries")
+	addUsage("  hooks install|uninstall|status [--agent claude|codex|qwen|droid|copilot|all] [--local] [--block] [--json]\n" +
+		"                                                add or remove agent hook entries. install is safe to run\n" +
+		"                                                again: it adds the events a newer togo hooks and keeps\n" +
+		"                                                the rest. Run it after updating togo when status says outdated")
 }
 
 // hookOptions resolves the agent config roots from the environment the same
@@ -50,9 +53,13 @@ func hookOptions(env map[string]string, local, block bool) (hooks.Options, error
 		Binary:    exe,
 		ClaudeDir: pick("CLAUDE_CONFIG_DIR", ".claude"),
 		CodexDir:  pick("CODEX_HOME", ".codex"),
-		Cwd:       cwd,
-		Local:     local,
-		Block:     block,
+		// Only an explicit --agent qwen, droid or copilot writes these.
+		QwenDir:    filepath.Join(home, ".qwen"),
+		FactoryDir: filepath.Join(home, ".factory"),
+		CopilotDir: pick("COPILOT_HOME", ".copilot"),
+		Cwd:        cwd,
+		Local:      local,
+		Block:      block,
 	}, nil
 }
 
@@ -62,7 +69,7 @@ func runHooks(args []string, env map[string]string, stdout, stderr io.Writer) in
 	}
 	action := args[0]
 	fs := newFlagSet("hooks " + action)
-	agent := fs.String("agent", "all", "claude, codex or all")
+	agent := fs.String("agent", "all", "claude, codex or all; qwen, droid or copilot only when named")
 	local := fs.Bool("local", false, "edit ./.claude/settings.local.json (Claude only)")
 	block := fs.Bool("block", false, "also hook PermissionRequest so the phone can answer")
 	asJSON := fs.Bool("json", false, "print status as JSON")
@@ -75,12 +82,12 @@ func runHooks(args []string, env map[string]string, stdout, stderr io.Writer) in
 	}
 	agents := hooks.Agents
 	if *agent != "all" {
-		if !slices.Contains(hooks.Agents, *agent) {
+		if !hooks.Known(*agent) {
 			return usageError(stderr, fmt.Errorf("unknown agent %q", *agent))
 		}
 		agents = []string{*agent}
 	}
-	if *local && *agent == hooks.Codex {
+	if *local && *agent != "all" && *agent != hooks.Claude {
 		return usageError(stderr, fmt.Errorf("--local applies to Claude only"))
 	}
 	if *local && *agent == "all" {
@@ -107,8 +114,13 @@ func printHookStatus(st map[string]string, asJSON bool, stdout, stderr io.Writer
 		}
 		return exitOK
 	}
-	for _, a := range hooks.Agents {
+	outdated := false
+	for _, a := range append(slices.Clone(hooks.Agents), hooks.Optional...) {
 		fmt.Fprintf(stdout, "%s: %s\n", a, st[a])
+		outdated = outdated || st[a] == hooks.StatusOutdated
+	}
+	if outdated {
+		fmt.Fprintln(stdout, "run togo hooks install (with the same --agent, --local and --block) to add the missing events")
 	}
 	return exitOK
 }

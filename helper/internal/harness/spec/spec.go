@@ -66,6 +66,13 @@ type Endpoint struct {
 	// Health is a path (http) or method (unix JSON-RPC) that answers when
 	// the endpoint is ready.
 	Health string `yaml:"health"`
+	// PasswordEnv names the environment variable the harness reads its
+	// server password from (OpenCode: OPENCODE_SERVER_PASSWORD). The helper
+	// sets it to a fresh random value for each start and sends it with
+	// HTTP Basic auth as Username, so no other local process can drive the
+	// harness through the port. Only names ending in _PASSWORD are taken.
+	PasswordEnv string `yaml:"password_env"`
+	Username    string `yaml:"username"`
 }
 
 // Stability tags. Sources and actions must carry one.
@@ -74,6 +81,10 @@ const (
 	StableExperimental      = "experimental"
 	StableInternal          = "internal"
 	StableDocumentedCommand = "documented-command"
+	// StableUnverified marks a route written from the harness's help,
+	// docs or binary but never exercised, usually because it needs a
+	// login. It behaves like experimental.
+	StableUnverified = "unverified"
 )
 
 // Feed is a streaming input for the conversation and mission control. One
@@ -163,7 +174,18 @@ type RPC struct {
 	Notifications []string `yaml:"notifications"`
 	// Child, when set, is a one-shot process speaking the RPC on stdio.
 	Child []string `yaml:"child"`
+	// Framing is how a child frames its messages: jsonrpc (JSON-RPC 2.0,
+	// the default) or typed ({"type": method, "id": n} commands answered
+	// by {"type": "response", "id": n, "success", "data"}, as omp's rpc
+	// mode speaks).
+	Framing string `yaml:"framing"`
 }
+
+// RPC framings.
+const (
+	FramingJSONRPC = "jsonrpc"
+	FramingTyped   = "typed"
+)
 
 // Hook streams the agent's hook events, which the togo hook command
 // forwards to the daemon.

@@ -11,7 +11,7 @@ extension SwiftTermEngine {
             terminalView.acceptsFocus = newValue
             if !newValue {
                 _ = terminalView.resignFirstResponder()
-            } else if terminalView.wantsFocus {
+            } else if terminalView.wantsFocus, !terminalView.covered {
                 terminalView.wantsFocus = false
                 if terminalView.window != nil { _ = terminalView.becomeFirstResponder() }
             }

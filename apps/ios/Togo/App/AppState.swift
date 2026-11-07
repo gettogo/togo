@@ -54,6 +54,8 @@ struct SessionRow: Identifiable, Equatable, Sendable {
     var exit: SessionExit? = nil
     /// Recent output volume, 0...1 oldest first, up to 16 values; empty when unknown.
     var activityHistory: [Double] = []
+    /// The session's mission summary as the helper reports it, for every session, open or not.
+    var mission: MissionSummary? = nil
 }
 
 extension SessionStatus {

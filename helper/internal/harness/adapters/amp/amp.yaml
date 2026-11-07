@@ -1,0 +1,9 @@
+# Amp (Sourcegraph). Terminal-only: threads live on ampcode.com and every thread command needs a
+# login (not done); there is no ACP, local server or hook file for the TUI. The file names the
+# harness so sessions show it, and gates on the installed build.
+adapter: amp
+name: Amp
+revision: 1
+match: { agents: [amp], commands: [amp] }
+harness: { version: [amp, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.0.1790000000 <0.1" }
+capabilities: []

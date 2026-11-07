@@ -1,0 +1,129 @@
+import SwiftUI
+import TogoKit
+import UIKit
+
+/// The chat layer over each pane whose tab shows it. The terminal stays attached underneath,
+/// so switching layers never reconnects. Drawn in the panes' own layout pass, so it sits on the
+/// pane from the first frame and keeps clear of a pane's header, the compose bar and the
+/// keyboard (`insets.bottom`).
+struct ChatPanes: View {
+    let store: AppStore
+    let geometry: PaneGeometry
+    let insets: EdgeInsets
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                pane(.primary, height: proxy.size.height)
+                if geometry.secondary != nil {
+                    pane(.secondary, height: proxy.size.height)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func pane(_ pane: Pane, height: CGFloat) -> some View {
+        let id = pane == .primary ? store.workspace.selected : store.workspace.secondary
+        if let id, let harness = store.harness(for: id), let rect = geometry.frame(of: pane) {
+            let top = geometry.showsTwoPanes ? PaneGeometry.headerHeight : 0
+            let bottom = max(0, rect.maxY - (height - insets.bottom))
+            // In book posture with one pane, the chat keeps to the leading page; the rest of the
+            // pane stays ink so the terminal underneath does not show beside it.
+            let page = geometry.chatFrame(of: pane) ?? rect
+            ZStack {
+                if harness.shownLayer == .chat {
+                    ChatView(store: harness, actions: store.chatActions(for: id))
+                        .padding(.bottom, bottom)
+                        .padding(.leading, max(0, page.minX - rect.minX))
+                        .padding(.trailing, max(0, rect.maxX - page.maxX))
+                        .background(Color.togoInk)
+                        .transition(.opacity)
+                        .simultaneousGesture(TapGesture().onEnded { store.focus(pane) })
+                }
+            }
+            .motion(.fade, value: harness.shownLayer)
+            // A subagent's own conversation, from a work step or a mission row.
+            .subagentChat(store: harness, actions: store.chatActions(for: id))
+            .frame(width: rect.width, height: max(0, rect.height - top))
+            .offset(x: rect.minX, y: rect.minY + top)
+        }
+    }
+}
+
+extension AppStore {
+    /// What the chat, mission control and subagent chats of `id`'s session do with approvals,
+    /// questions and quotes: answer through the request cards, quote into that tab's composer.
+    func chatActions(for id: TabID) -> ChatActions {
+        let store = self
+        return ChatActions(
+            card: { requestID in store.controlCenter.requests.first { $0.id == requestID } },
+            answer: { requestID, decision in Task { await store.answer(requestID, decision) } },
+            quote: { text in
+                guard let model = store.harnessTabs.composer(for: id) else { return }
+                model.draft = model.draft.isEmpty ? text : model.draft + "\n" + text
+            }
+        )
+    }
+}
+
+/// The bar item that flips the focused tab between chat and terminal. A symbol and a title,
+/// so it can stand in a vertical bar.
+struct LayerToolbarItem: ToolbarContent {
+    let layer: SessionLayer
+    let toggle: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(title, systemImage: symbol) {
+                // The terminal under the chat must not keep the keyboard.
+                if layer == .terminal { Self.resignKeyboard() }
+                toggle()
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+            .accessibilityHint(layer == .chat ? ChatCopy.showTerminalHint : ChatCopy.showChatHint)
+        }
+    }
+
+    /// The item names where it goes: "Terminal" from the chat, "Chat" from the terminal.
+    private var title: String { layer == .chat ? ChatCopy.terminal : ChatCopy.chat }
+
+    private var symbol: String { layer == .chat ? "terminal" : "bubble.left.and.text.bubble.right" }
+
+    static func resignKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+/// Keeps the tabs' harness stores in step with the open tabs and their machines, and says so in
+/// the title when the focused tab's chat fell back to the terminal. `WindowRoot` stops the
+/// stores in the background, whichever screen is up.
+struct HarnessSync: ViewModifier {
+    let store: AppStore
+    @Binding var status: String?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: key, initial: true) { store.syncHarness() }
+            .onChange(of: store.focusedTab.flatMap { store.harness(for: $0.id) }?.fallback) { _, line in
+                if let line { status = line }
+            }
+    }
+
+    /// What decides which stores run: each tab, and whether its machine is listed and serves
+    /// harness.v1.
+    private var key: [String] {
+        store.workspace.tabs.map { tab in
+            let caps = store.machine(for: tab.hostID)?.capabilities
+            let state = caps.map { $0.contains(Capability.harness) ? "harness" : "listed" } ?? "unlisted"
+            return "\(tab.hostID.uuidString)/\(tab.sessionID)/\(state)"
+        }
+    }
+}
+
+extension AppStore {
+    /// The bar item for the focused tab, when its session has a chat to switch to.
+    var layerItem: LayerToolbarItem? {
+        guard let tab = focusedTab, let harness = harness(for: tab.id), harness.chatAvailable else { return nil }
+        return LayerToolbarItem(layer: harness.shownLayer) { [weak self] in self?.toggleLayer() }
+    }
+}

@@ -1,0 +1,97 @@
+# Gemini CLI. No live structured channel: hooks and the chat file for reads;
+# typed commands, settings.json writes and a relaunch with flags for writes.
+# Checked against Gemini CLI 0.30.0 (signed out: paths, flags, hook payloads
+# and the chat file format come from the installed package and older chats).
+adapter: gemini
+name: Gemini CLI
+revision: 1
+match: { agents: [gemini], commands: [gemini] }
+harness: { version: [gemini, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=0.30 <0.40" }
+capabilities: [chat, chat.anchors, send.queue, interrupt, commands, files, model, needs.approvals,
+  plan, changes, ports, status, compact, settings]
+feeds:
+  hooks:
+    hook: { events: [SessionStart, BeforeAgent, AfterAgent, PreCompress, SessionEnd] }
+    mapper: gemini.hooks
+    stability: documented
+  chat:             # rewritten whole on each message; the mapper diffs by message id
+    file: { glob: '{{.state.chat_glob}}', format: json, follow: true }
+    mapper: gemini.chat
+    stability: internal
+sources:
+  models:
+    static:
+      - { id: auto, label: Auto, group: Auto }
+      - { id: gemini-3.1-pro-preview, label: Gemini 3.1 Pro Preview, group: Gemini 3 }
+      - { id: gemini-3-pro-preview, label: Gemini 3 Pro Preview, group: Gemini 3 }
+      - { id: gemini-3-flash-preview, label: Gemini 3 Flash Preview, group: Gemini 3 }
+      - { id: gemini-2.5-pro, label: Gemini 2.5 Pro, group: Gemini 2.5 }
+      - { id: gemini-2.5-flash, label: Gemini 2.5 Flash, group: Gemini 2.5 }
+      - { id: gemini-2.5-flash-lite, label: Gemini 2.5 Flash Lite, group: Gemini 2.5 }
+    stability: documented
+  settings:
+    file: { path: '~/.gemini/settings.json', format: json }
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    map: { item.id: .id, item.title: .label, item.group: .group, selected: $state.model }
+    on_select: set_model
+    actions: [set_default_model]
+  settings:
+    primitive: settings
+    title: Gemini settings
+    section: more
+    capability: settings
+    source: settings
+    fields:
+      - { id: model, label: Default model, kind: choice, value: '.model.name // "auto"', options: [auto, gemini-3.1-pro-preview, gemini-3-pro-preview, gemini-3-flash-preview, gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite], action: set_default_model_value }
+      - { id: approval, label: Default approval mode, kind: choice, value: '.general.defaultApprovalMode // "default"', options: [default, auto_edit, plan], action: set_approval_mode }
+      - { id: compression, label: Compression threshold, kind: number, value: '.model.compressionThreshold // 0.5', action: set_compression_threshold, help: 'Share of the context at which Gemini compresses; applies after a restart' }
+actions:
+  set_model:
+    label: Use model
+    confirm: Restart Gemini with this model? The conversation resumes.
+    branch:
+      - when: '{{.state.harness_session}}'
+        relaunch: { argv: [gemini, -m, '{{.id}}', --resume, '{{.state.harness_session}}'] }
+      - relaunch: { argv: [gemini, -m, '{{.id}}', --resume, latest] }
+    stability: documented
+  set_default_model:
+    label: Make default
+    confirm: Use this model for new Gemini sessions?
+    write: { path: '~/.gemini/settings.json', format: json, key: model.name, value: '{{.id}}' }
+    verify: { source: settings, select: .model.name, equals: '{{.id}}', within: 2s }
+    stability: documented
+  set_default_model_value:
+    write: { path: '~/.gemini/settings.json', format: json, key: model.name, value: '{{.value}}' }
+    stability: documented
+  set_approval_mode:
+    write: { path: '~/.gemini/settings.json', format: json, key: general.defaultApprovalMode, value: '{{.value}}' }
+    stability: documented
+  set_compression_threshold:
+    write: { path: '~/.gemini/settings.json', format: json, key: model.compressionThreshold, value: '{{.value}}' }
+    stability: documented
+  compact:
+    label: Compress
+    confirm: Compress the conversation now?
+    type: { text: '/compress', submit: true, when_idle: true }
+    stability: documented-command
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+commands:
+  static:
+    - { name: model, detail: Choose the model, screen: model }
+    - { name: compress, detail: Summarise the conversation }
+    - { name: stats, detail: Session statistics }
+    - { name: memory, hint: '[show|add|refresh]', detail: Manage GEMINI.md memory }
+    - { name: tools, detail: List the available tools }
+    - { name: mcp, detail: List MCP servers and tools }
+    - { name: settings, detail: Open the settings dialog }
+    - { name: resume, detail: Browse earlier chats }
+    - { name: clear, detail: Clear the screen and start a new chat }

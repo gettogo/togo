@@ -1,0 +1,23 @@
+# Plain shells. A shell with shell integration (FinalTerm / OSC 133 prompt marks, as the
+# iTerm2, kitty, WezTerm, Ghostty and VS Code integrations and fish 4 send) gets each command
+# as a block: its command line, status and output, anchored in the pane. The tap reads the
+# marks from the pane's output and forwards them as osc133 events.
+#
+# The command block view is opt-in: this file leaves `chat` out, so a shell shows the terminal
+# exactly as before. To turn the blocks on, copy this file to $TOGO_HOME/adapters/shell.yaml
+# and add `chat` to capabilities.
+adapter: shell
+name: Shell
+revision: 1
+match: { agents: [shell] }
+capabilities: [chat.anchors, interrupt]
+feeds:
+  marks:
+    hook: { events: [osc133] }
+    mapper: shell.marks
+    stability: documented
+actions:
+  interrupt:
+    label: Interrupt
+    keys: { keys: [C-c] }
+    stability: documented

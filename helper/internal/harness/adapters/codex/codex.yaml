@@ -1,0 +1,130 @@
+# Codex CLI through its app-server. Togo starts `codex app-server --listen unix://SOCK`
+# and the TUI with `--remote unix://SOCK`; the helper joins the same server as a
+# second client (WebSocket frames over the unix socket), follows every loaded
+# thread with thread/resume and receives the same turn and item notifications as
+# the TUI. Checked on Codex 0.144.1: a second client's thread/resume on a running
+# thread rejoins it (same id, no fork), its turn/interrupt stops the TUI's turn,
+# and turn/start overrides from it reach the TUI as thread/settings/updated.
+adapter: codex
+name: Codex
+revision: 1
+match: { agents: [codex], commands: [codex] }
+harness: { version: [codex, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=0.144 <0.150" }
+endpoint:
+  kind: unix
+  server: [codex, app-server, --listen, 'unix://{{.socket}}']
+  launch_args: [--remote, 'unix://{{.socket}}']
+  health: initialize
+capabilities: [chat, chat.stream, chat.anchors, chat.history, send.queue, interrupt, commands, files,
+  mode, model, effort, needs.approvals, needs.questions, agents, plan, changes, ports, status,
+  status.usage, status.context, resume, compact]
+feeds:
+  appserver:
+    rpc:
+      method: thread/resume
+      params: { threadId: '{{.state.harness_session}}' }
+      notifications: [thread/status/changed, thread/settings/updated, thread/tokenUsage/updated,
+        thread/compacted, turn/started, turn/completed, turn/plan/updated, turn/diff/updated,
+        item/started, item/completed, item/agentMessage/delta, item/reasoning/summaryTextDelta,
+        item/commandExecution/outputDelta, account/rateLimits/updated, serverRequest/resolved,
+        model/rerouted, error]
+    mapper: codex.appserver
+    stability: experimental
+  hooks:
+    hook: { events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop] }
+    mapper: codex.hooks
+    stability: documented
+sources:
+  models:
+    rpc: { method: model/list }
+    select: '[.data[] | select(.hidden | not)]'
+    cache: 10m
+    stability: experimental
+  efforts:
+    rpc: { method: model/list }
+    select: '[.data[] | select(.id == $state.model) | .supportedReasoningEfforts[]]'
+    cache: 10m
+    stability: experimental
+  threads:
+    rpc: { method: thread/list, params: { cwd: '{{.cwd}}' } }
+    select: '[.data[] | select(.parentThreadId == null)]'
+    cache: 30s
+    stability: experimental
+  limits:
+    rpc: { method: account/rateLimits/read }
+    select: '.rateLimits'
+    cache: 60s
+    stability: experimental
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    map: { item.id: .id, item.title: .displayName, item.subtitle: .description, selected: $state.model }
+    on_select: set_model
+  effort:
+    primitive: picker
+    title: Effort
+    section: composer
+    capability: effort
+    source: efforts
+    map: { item.id: .reasoningEffort, item.title: .reasoningEffort, item.subtitle: .description, selected: $state.effort }
+    on_select: set_effort
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: threads
+    search: true
+    map: { item.id: .id, item.title: '{{.name | default .preview | truncate 60}}', item.subtitle: '{{.updatedAt | ago}}' }
+    on_select: resume
+  usage:
+    primitive: status
+    title: Usage
+    section: status
+    capability: status.usage
+    source: limits
+actions:
+  # Codex has no live setter for a running thread: model, effort and approval
+  # policy change through turn/start overrides only. These write the default in
+  # config.toml, which the next thread and a relaunch pick up.
+  set_model:
+    label: Use model
+    rpc: { method: config/value/write, params: { keyPath: model, value: '{{.id}}', mergeStrategy: replace } }
+    stability: experimental
+  set_effort:
+    rpc: { method: config/value/write, params: { keyPath: model_reasoning_effort, value: '{{.id}}', mergeStrategy: replace } }
+    stability: experimental
+  set_mode:
+    rpc: { method: config/value/write, params: { keyPath: approval_policy, value: '{{.id}}', mergeStrategy: replace } }
+    stability: experimental
+  resume:
+    relaunch: { argv: [codex, resume, '{{.id}}'] }
+    stability: documented
+  compact:
+    confirm: Compact the thread now?
+    rpc: { method: thread/compact/start, params: { threadId: '{{.state.harness_session}}' } }
+    stability: experimental
+  interrupt:
+    rpc: { method: turn/interrupt, params: { threadId: '{{.state.harness_session}}', turnId: '{{.state.turn}}' } }
+    stability: experimental
+  answer:
+    builtin: rpc_reply          # answers the pending server request named by target
+    stability: experimental
+modes:
+  choices:
+    - { id: untrusted, label: Ask }
+    - { id: on-request, label: Auto }
+    - { id: never, label: Full access }
+  select: $state.mode
+  set: set_mode
+commands:
+  static:
+    - { name: model, detail: Choose model and effort, screen: model }
+    - { name: compact, detail: Summarise the thread }
+    - { name: review, detail: Review current changes }
+    - { name: diff, detail: Show the git diff }
+    - { name: status, detail: Session and usage, screen: usage }

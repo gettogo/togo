@@ -1,0 +1,6 @@
+{"type":"title","v":1,"title":"","updatedAt":"2026-11-06T10:00:06.500Z","pad":"   "}
+{"type":"session","version":3,"id":"5ad1e0c3b2","timestamp":"2026-11-06T10:00:06.500Z","cwd":"/Users/dev/project","parentSession":"/Users/dev/.omp/agent/sessions/-project/2026-11-06T10-00-00-000Z_0b7c1f2a9e.jsonl"}
+{"type":"message","id":"s001","parentId":null,"timestamp":"2026-11-06T10:00:07.000Z","message":{"role":"user","content":"List every caller of Parse.","timestamp":1794045607000}}
+{"type":"message","id":"s002","parentId":"s001","timestamp":"2026-11-06T10:00:09.000Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"sub_grep_1","name":"grep","arguments":{"pattern":"Parse\\("}}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"toolUse","timestamp":1794045609000}}
+{"type":"message","id":"s003","parentId":"s002","timestamp":"2026-11-06T10:00:10.000Z","message":{"role":"toolResult","toolCallId":"sub_grep_1","toolName":"grep","content":[{"type":"text","text":"main.go:12\nlexer.go:40"}],"isError":false,"timestamp":1794045610000}}
+{"type":"message","id":"s004","parentId":"s003","timestamp":"2026-11-06T10:00:12.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Parse is called from main.go and lexer.go"}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"stop","timestamp":1794045612000}}

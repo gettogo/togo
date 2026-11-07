@@ -289,6 +289,12 @@ func (h *Hub) decorateLocked(sessions []session.Session) []session.Session {
 		}
 		s.Meta = st.meta
 		s.ActivityHistory = h.activity.History(s.ID, h.clock())
+		s.Mission = nil
+		if h.mission != nil {
+			if m, ok := h.mission(s.ID); ok {
+				s.Mission = &m
+			}
+		}
 	}
 	return out
 }
@@ -364,4 +370,29 @@ func (h *Hub) setMuted(ctx context.Context, id string, muted bool) (session.Sess
 	st.muted, st.known = muted, true
 	h.mu.Unlock()
 	return h.PublishSession(sess), nil
+}
+
+// SetMission installs the reader for Session.mission. Call it before the
+// hub publishes; the reader must not call back into the hub.
+func (h *Hub) SetMission(fn func(id string) (wire.MissionSummary, bool)) {
+	h.mu.Lock()
+	h.mission = fn
+	h.mu.Unlock()
+}
+
+// MissionChanged publishes the session again because its harness summary
+// changed. The harness engine debounces calls to once a second per session.
+func (h *Hub) MissionChanged(id string) {
+	go h.publishSession(id)
+}
+
+// Status is the status hooks and output last set for a session, or "" when
+// none was set.
+func (h *Hub) Status(id string) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if st, ok := h.sessions[id]; ok {
+		return st.status
+	}
+	return ""
 }

@@ -1,0 +1,220 @@
+{
+ "items": [
+  {
+   "id": "u1",
+   "seq": 0,
+   "turnId": "turn-u1",
+   "kind": "user",
+   "at": "2026-11-06T10:00:01Z",
+   "user": {
+    "text": "Summarise @README.md",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "g1-thinking",
+   "seq": 0,
+   "turnId": "turn-u1",
+   "kind": "thinking",
+   "at": "2026-11-06T10:00:04Z",
+   "thinking": {
+    "text": "**Reading the file**\nI will read the README first.",
+    "partial": false
+   }
+  },
+  {
+   "id": "read_file_1",
+   "seq": 0,
+   "turnId": "turn-u1",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:04Z",
+   "tool": {
+    "callId": "read_file_1",
+    "name": "read_file",
+    "title": "Read README.md",
+    "category": "read",
+    "subject": {
+     "kind": "file",
+     "text": "README.md"
+    },
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:04Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "turn-u1",
+   "seq": 0,
+   "turnId": "turn-u1",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "running",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": null,
+    "steps": 1,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "read_file_1",
+   "seq": 0,
+   "turnId": "turn-u1",
+   "kind": "tool",
+   "at": "2026-11-06T10:00:05Z",
+   "tool": {
+    "callId": "read_file_1",
+    "name": "read_file",
+    "title": "Read README.md",
+    "category": "read",
+    "subject": {
+     "kind": "file",
+     "text": "README.md"
+    },
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:05Z",
+    "endedAt": "2026-11-06T10:00:05Z",
+    "output": "# Project\nA parser."
+   }
+  },
+  {
+   "id": "g2",
+   "seq": 0,
+   "turnId": "turn-u1",
+   "kind": "assistant",
+   "at": "2026-11-06T10:00:09Z",
+   "assistant": {
+    "text": "The README describes a parser.",
+    "partial": false
+   }
+  },
+  {
+   "id": "turn-u1",
+   "seq": 0,
+   "turnId": "turn-u1",
+   "kind": "turn",
+   "at": "2026-11-06T10:00:01Z",
+   "turn": {
+    "state": "ok",
+    "startedAt": "2026-11-06T10:00:01Z",
+    "endedAt": "2026-11-06T10:00:09Z",
+    "steps": 1,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "u2",
+   "seq": 0,
+   "turnId": "turn-u2",
+   "kind": "user",
+   "at": "2026-11-06T10:01:00Z",
+   "user": {
+    "text": "Plan and run the tests",
+    "queued": false,
+    "source": "unknown"
+   }
+  },
+  {
+   "id": "write_todos_1",
+   "seq": 0,
+   "turnId": "turn-u2",
+   "kind": "tool",
+   "at": "2026-11-06T10:01:05Z",
+   "tool": {
+    "callId": "write_todos_1",
+    "name": "write_todos",
+    "title": "Update the plan",
+    "category": "other",
+    "state": "ok",
+    "startedAt": "2026-11-06T10:01:05Z",
+    "endedAt": "2026-11-06T10:01:05Z"
+   }
+  },
+  {
+   "id": "plan-write_todos_1",
+   "seq": 0,
+   "turnId": "turn-u2",
+   "kind": "plan",
+   "at": "2026-11-06T10:01:05Z",
+   "plan": {
+    "done": 0,
+    "total": 2,
+    "current": "Run the tests"
+   }
+  },
+  {
+   "id": "shell_1",
+   "seq": 0,
+   "turnId": "turn-u2",
+   "kind": "tool",
+   "at": "2026-11-06T10:01:08Z",
+   "tool": {
+    "callId": "shell_1",
+    "name": "run_shell_command",
+    "title": "Run go test ./...",
+    "category": "shell",
+    "subject": {
+     "kind": "command",
+     "text": "go test ./..."
+    },
+    "state": "failed",
+    "startedAt": "2026-11-06T10:01:08Z",
+    "endedAt": "2026-11-06T10:01:08Z",
+    "output": "FAIL parser"
+   }
+  },
+  {
+   "id": "e1",
+   "seq": 0,
+   "turnId": "turn-u2",
+   "kind": "notice",
+   "at": "2026-11-06T10:01:09Z",
+   "notice": {
+    "level": "error",
+    "code": "error",
+    "text": "Quota exceeded for this model"
+   }
+  },
+  {
+   "id": "turn-u2",
+   "seq": 0,
+   "turnId": "turn-u2",
+   "kind": "turn",
+   "at": "2026-11-06T10:01:00Z",
+   "turn": {
+    "state": "failed",
+    "startedAt": "2026-11-06T10:01:00Z",
+    "endedAt": "2026-11-06T10:01:09Z",
+    "steps": 2,
+    "filesChanged": 0
+   }
+  }
+ ],
+ "ops": [
+  {
+   "op": "status",
+   "status": {
+    "model": "gemini-2.5-flash",
+    "facts": [
+     {
+      "label": "Last request",
+      "value": "7043 in, 0 cached, 63 out"
+     }
+    ]
+   }
+  },
+  {
+   "op": "status",
+   "status": {
+    "model": "gemini-2.5-flash",
+    "facts": [
+     {
+      "label": "Last request",
+      "value": "7400 in, 7000 cached, 20 out"
+     }
+    ]
+   }
+  }
+ ]
+}

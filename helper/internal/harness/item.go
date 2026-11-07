@@ -246,6 +246,9 @@ type ShellBody struct {
 	ExitCode *int       `json:"exitCode"`
 	Started  time.Time  `json:"startedAt"`
 	Ended    *time.Time `json:"endedAt"`
+	// Output is the tail of what the command printed, at most
+	// MaxToolOutput bytes of plain text, once the block finished.
+	Output string `json:"output,omitempty"`
 }
 
 // Choice is a labelled option, used by questions, pickers and settings.

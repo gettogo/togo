@@ -21,6 +21,8 @@ import (
 	"github.com/gettogo/togo/helper/internal/browser"
 	"github.com/gettogo/togo/helper/internal/fsread"
 	"github.com/gettogo/togo/helper/internal/gitx"
+	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/hostinfo"
 	"github.com/gettogo/togo/helper/internal/hub"
 	"github.com/gettogo/togo/helper/internal/local"
@@ -49,11 +51,12 @@ var Capabilities = []string{
 	wire.CapLaunch,
 	wire.CapLifecycle,
 	wire.CapRestore,
+	harness.Capability,
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read
 // loop because they block.
-var Concurrent = append(append([]string{}, local.Concurrent...), browser.Concurrent...)
+var Concurrent = append(append(append([]string{}, local.Concurrent...), browser.Concurrent...), harness.Concurrent...)
 
 // ComposeOptions configures Compose.
 type ComposeOptions struct {
@@ -86,6 +89,7 @@ type Components struct {
 	Notify    *notify.Store
 	Will      *push.WillKeeper
 	Browser   *browser.Service
+	Harness   *engine.Engine
 
 	logf       func(format string, args ...any)
 	followups  chan string
@@ -114,6 +118,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	w, err := watch.New(watch.Config{
 		Tmux: svc.Tmux, Sessions: svc, TogoPath: o.TogoPath, Home: o.Home,
 		Status: c.Hub, Activity: c.Hub, Prompts: c.Approvals, Pub: pub,
+		Shell: deliverShell,
 	})
 	if err != nil {
 		return nil, err
@@ -158,6 +163,13 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		svc.Manifest.Logf = logf
 	}
 	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach}
+	c.Local.Agents = &local.AgentCache{Lookup: func(ctx context.Context, id string) string {
+		sess, err := svc.Resolve(ctx, id)
+		if err != nil {
+			return ""
+		}
+		return sess.Agent
+	}}
 	c.Browser = &browser.Service{Pub: c.Hub, Attached: func() bool { return c.Hub.ForegroundSubscribers() > 0 }}
 	if o.TogoPath != "" && o.Home != "" {
 		dir := browser.ShimDir(o.Home)
@@ -168,6 +180,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		}
 	}
 	git := gitx.Git{}
+	c.Harness = newHarness(c, svc, &git, o)
 
 	ext := map[string]api.Method{}
 	for _, m := range []map[string]api.Method{
@@ -190,6 +203,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		{wire.MethodSessionRelaunch: c.Hub.SessionRelaunch},
 		{wire.MethodSessionRestorable: api.Restorable(svc), wire.MethodSessionDismiss: api.Dismiss(svc)},
 		{wire.MethodSessionRestore: api.Restore(svc, c.restored)},
+		harness.Methods(c.Harness),
 	} {
 		for name := range m {
 			if _, dup := ext[name]; dup {

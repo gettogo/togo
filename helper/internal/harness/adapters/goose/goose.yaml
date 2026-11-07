@@ -1,0 +1,59 @@
+# Goose 1.57 (block/goose). No attach protocol for the TUI (`goose acp` and `goose serve` host
+# their own sessions) and no hooks. Sessions: `goose session list --format json --working_dir`
+# (flags checked on 1.57; the JSON fields were not seen, the owner has no sessions yet).
+# Writes: documented in-TUI commands with arguments (`/mode`, `/model`), relaunch with
+# `session --resume --session-id`. The current mode is not readable, so the chip shows choices
+# without a selection.
+adapter: goose
+name: Goose
+revision: 1
+match: { agents: [goose], commands: [goose] }
+harness: { version: [goose, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.57 <2" }
+capabilities: [interrupt, commands, mode, model, changes, ports, resume]
+sources:
+  sessions:
+    cli: { argv: [goose, session, list, --format, json, --working_dir, '{{.cwd}}', --limit, '50'] }
+    select: '[.[] | {id: .id, title: (.name // .description // .id), updated: (.updated_at // .modified // null)}]'
+    cache: 30s
+    timeout: 10s
+    stability: documented
+screens:
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: '{{.title | truncate 60}}', item.subtitle: '{{.updated | ago}}' }
+    on_select: resume
+actions:
+  set_mode:
+    label: Mode
+    type: { text: '/mode {{.id}}', submit: true, when_idle: true }
+    stability: documented-command
+  set_model:
+    label: Use model
+    type: { text: '/model {{.id}}', submit: true, when_idle: true }
+    stability: documented-command
+  resume:
+    label: Resume
+    relaunch: { argv: [goose, session, --resume, --session-id, '{{.id}}'] }
+    stability: documented
+  interrupt:
+    keys: { keys: [C-c] }
+    stability: documented
+modes:
+  choices:
+    - { id: approve, label: Ask }
+    - { id: smart_approve, label: Smart }
+    - { id: auto, label: Auto }
+    - { id: chat, label: Chat only }
+  set: set_mode
+commands:
+  static:
+    - { name: mode, hint: '<auto|approve|smart_approve|chat>', detail: Set the goose mode }
+    - { name: model, hint: '[name]', detail: Show or switch the model }
+    - { name: compact, detail: Compact the conversation }
+    - { name: prompts, detail: List extension prompts }
+    - { name: skills, detail: List or enable skills }

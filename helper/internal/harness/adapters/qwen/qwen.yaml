@@ -1,0 +1,104 @@
+# Qwen Code. No attach protocol for the TUI: read the chat log Qwen Code appends per session
+# (live) and, once the owner installs them, its Claude-shaped hooks; apply by typing documented
+# slash commands with arguments, by relaunching with flags, or through the approval path.
+# Checked on 0.22.3: hook payload fields, permission_mode values, the PermissionRequest answer
+# shape, `sessions list --json` fields, the chat log records and the todo file.
+adapter: qwen
+name: Qwen Code
+revision: 1
+match: { agents: [qwen], commands: [qwen] }
+harness: { version: [qwen, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.21 <0.30" }
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode,
+  needs.approvals, agents, plan, changes, ports, status, resume, compact]
+feeds:
+  hooks:            # `togo hook qwen <event>` in ~/.qwen/settings.json (installed only by `togo hooks install --agent qwen`)
+    hook:
+      events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure,
+        PermissionRequest, Notification, Stop, StopFailure, SubagentStart, SubagentStop,
+        PreCompact, PostCompact, TodoCreated, TodoCompleted, SessionEnd]
+    mapper: qwen.hooks
+    stability: documented
+  transcript:       # path from the hooks, or the newest chat log of this folder
+    jsonl: { path: '{{.state.transcript_path}}', follow: true }
+    mapper: qwen.transcript
+    stability: internal
+sources:
+  sessions:         # JSON lines: sessionId, startTime, mtime (ms), prompt, customTitle, cwd
+    cli: { argv: [qwen, sessions, list, --json, --limit, '50'], format: jsonl }
+    cache: 30s
+    timeout: 10s
+    stability: documented
+  running:
+    cli: { argv: [qwen, sessions, ps, --json], format: jsonl }
+    cache: 5s
+    timeout: 10s
+    stability: documented
+  todos:            # {todos: [{id, content, status}], sessionId}
+    file: { path: '~/.qwen/todos/{{.state.harness_session}}.json', format: json }
+    select: .todos
+    stability: internal
+screens:
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .sessionId, item.title: '{{.customTitle | default .prompt | default .sessionId | truncate 60}}', item.subtitle: '{{.mtime | ago}}' }
+    on_select: resume
+  plan:
+    primitive: checklist
+    title: Todos
+    section: plan
+    capability: plan
+    source: todos
+  compact:
+    primitive: confirm
+    title: Compress
+    section: status
+    capability: compact
+    submit: compact
+actions:
+  set_mode:         # /approval-mode takes plan|default|auto-edit|auto|yolo; hooks report auto_edit
+    label: Mode
+    branch:
+      - { when: '{{eq .id "auto_edit"}}', type: { text: '/approval-mode auto-edit', submit: true, when_idle: true } }
+      - { type: { text: '/approval-mode {{.id}}', submit: true, when_idle: true } }
+    verify: { source: hooks, select: .permission_mode, equals: '{{.id}}', within: 5s }
+    stability: documented-command
+  compact:
+    label: Compress
+    confirm: Compress the conversation now?
+    type: { text: '/compress', submit: true, when_idle: true }
+    stability: documented-command
+  resume:
+    label: Resume
+    relaunch: { argv: [qwen, --resume, '{{.id}}'] }
+    stability: documented
+  answer:
+    builtin: approval_answer
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+modes:
+  choices:
+    - { id: default, label: Ask }
+    - { id: auto_edit, label: Auto edit }
+    - { id: plan, label: Plan }
+    - { id: auto, label: Auto }
+    - { id: yolo, label: YOLO }
+  current: hooks
+  select: .permission_mode
+  set: set_mode
+commands:
+  static:
+    - { name: approval-mode, hint: '<mode>', detail: Set the approval mode }
+    - { name: compress, detail: Summarise the conversation }
+    - { name: resume, detail: Resume a session, screen: resume }
+    - { name: stats, detail: Session statistics }
+    - { name: memory, hint: '[show|add|refresh]', detail: Manage QWEN.md memory }
+    - { name: agents, detail: Manage subagents }
+mission:
+  plan: { source: todos }

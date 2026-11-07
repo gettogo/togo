@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -23,6 +24,7 @@ var primitives = map[string]bool{
 
 var stabilities = map[string]bool{
 	StableDocumented: true, StableExperimental: true, StableInternal: true, StableDocumentedCommand: true,
+	StableUnverified: true,
 }
 
 // Parse reads one adapter file. Unknown keys are errors, so a typo never
@@ -45,6 +47,9 @@ func Parse(b []byte) (*Adapter, error) {
 
 // Validate checks the references and the one-kind rules. It does not run
 // anything or compile templates and jq; the engine does that on load.
+// passwordEnvRE is the environment name an endpoint password may use.
+var passwordEnvRE = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,40}_PASSWORD$`)
+
 func (a *Adapter) Validate() error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
@@ -57,6 +62,14 @@ func (a *Adapter) Validate() error {
 	}
 	if len(a.Match.Agents) == 0 && len(a.Match.Commands) == 0 {
 		bad("match: needs agents or commands")
+	}
+	if ep := a.Endpoint; ep != nil && ep.PasswordEnv != "" {
+		if ep.Kind != EndpointHTTP || !passwordEnvRE.MatchString(ep.PasswordEnv) {
+			bad("endpoint.password_env: %q is not an http endpoint's NAME_PASSWORD", ep.PasswordEnv)
+		}
+		if ep.Username == "" || strings.ContainsAny(ep.Username, ":\r\n") {
+			bad("endpoint.username: needed with password_env, without colons")
+		}
 	}
 	for _, name := range sortedKeys(a.Feeds) {
 		f := a.Feeds[name]
@@ -85,6 +98,9 @@ func (a *Adapter) Validate() error {
 			}
 		} else {
 			checkRoutes(bad, where, &act.Routes)
+		}
+		if act.Verify == nil && act.cycles() {
+			bad("%s: a key cycle needs verify", where)
 		}
 		if v := act.Verify; v != nil && v.Source != "" && !a.hasSource(v.Source) {
 			bad("%s.verify: unknown source %q", where, v.Source)
@@ -137,6 +153,12 @@ func checkSource(bad func(string, ...any), where string, s *Source) {
 		bad("%s: hook and sse stream; declare them under feeds", where)
 	}
 	checkStability(bad, where, s.Stability)
+	if r := s.RPC; r != nil && r.Framing != "" && r.Framing != FramingJSONRPC && r.Framing != FramingTyped {
+		bad("%s.rpc: framing %q is not jsonrpc or typed", where, r.Framing)
+	}
+	if r := s.RPC; r != nil && r.Framing == FramingTyped && len(r.Child) == 0 {
+		bad("%s.rpc: typed framing needs a child", where)
+	}
 	if s.Fallback != nil {
 		if s.Fallback.Fallback != nil {
 			bad("%s.fallback: fallbacks do not nest", where)
@@ -165,12 +187,15 @@ func checkRoutes(bad func(string, ...any), where string, r *Routes) {
 		if k.Cycle && (k.Max < 1 || k.Max > 8) {
 			bad("%s.keys: cycle needs max 1-8", where)
 		}
+		if !k.Cycle && slices.Contains(k.Keys, "BTab") {
+			bad("%s.keys: BTab only cycles, with max and verify", where)
+		}
 	}
 }
 
 func checkStability(bad func(string, ...any), where, s string) {
 	if !stabilities[s] {
-		bad("%s: stability %q is not one of documented, documented-command, experimental, internal", where, s)
+		bad("%s: stability %q is not one of documented, documented-command, experimental, internal, unverified", where, s)
 	}
 }
 
@@ -214,4 +239,17 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// cycles reports whether any route of the action cycles keys.
+func (a *Action) cycles() bool {
+	if a.Keys != nil && a.Keys.Cycle {
+		return true
+	}
+	for _, br := range a.Branch {
+		if br.Keys != nil && br.Keys.Cycle {
+			return true
+		}
+	}
+	return false
 }

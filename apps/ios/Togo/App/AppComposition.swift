@@ -30,6 +30,8 @@ import TogoMosh
     /// Links that arrived before any window had a store, such as an intent that launched the app.
     @ObservationIgnored private var waitingLinks: [DeepLink] = []
     private let reviewServices: (any ReviewServices)?
+    /// Nil when the app runs on fake services: every session shows the terminal only.
+    private let harnessServices: (any HarnessServices)?
     @ObservationIgnored private var windows: [(id: WindowID, store: AppStore, run: Task<Void, Never>)] = []
     @ObservationIgnored private var started = false
     #if DEBUG
@@ -148,6 +150,15 @@ import TogoMosh
         )
         self.review = review
         reviewServices = review
+        // Each open session's feed runs its own helper on the machine's existing connection.
+        harnessServices = LiveHarnessServices(
+            channels: helpers,
+            records: { [weak services] in services?.hostRecord($0) },
+            openFeed: { record in
+                let connection = try await helpers.connection(for: record)
+                return try await connection.openExec(LiveHarnessServices.serveCommand(for: record))
+            }
+        )
         let machineTools = LiveMachineTools(
             channels: helpers, records: { [weak services] in services?.hostRecord($0) },
             prompter: { [weak services] in services?.userPrompter($0) }
@@ -193,6 +204,7 @@ import TogoMosh
         self.machineTools = machineTools
         self.agentLibrary = agentLibrary
         self.reviewServices = reviewServices
+        harnessServices = nil
         self.onboarding = onboarding
         self.tutorial = tutorial
         live = nil
@@ -223,7 +235,7 @@ import TogoMosh
     /// A store for a new window, with the tabs it had when the system last saved it.
     func makeStore(window: WindowID, restoring saved: WindowRestoration?) -> AppStore {
         if let existing = windows.first(where: { $0.id == window }) { return existing.store }
-        let store = AppStore(services: services, reviewServices: reviewServices)
+        let store = AppStore(services: services, reviewServices: reviewServices, harnessServices: harnessServices)
         if let saved { store.restore(saved) }
         let run = Task { await store.run() }
         windows.append((window, store, run))
@@ -248,6 +260,7 @@ import TogoMosh
         guard let index = windows.firstIndex(where: { $0.id == window }) else { return }
         let gone = windows.remove(at: index)
         gone.run.cancel()
+        HarnessTabsRegistry.shared.release(gone.store)
         terminals.release(window: window)
         if activeStore === gone.store { activeStore = windows.last?.store }
     }

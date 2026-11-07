@@ -19,6 +19,9 @@ struct RosterModel: Equatable {
         var row: SessionRow
         /// A request from this session waits for an answer, or the agent says it needs the user.
         var needsYou: Bool
+        /// The session's mission summary where a harness serves it: agents, background jobs,
+        /// plan progress and what needs the user.
+        var mission: MissionSummary? = nil
 
         /// The status the line shows: "Needs you" wins over whatever the agent last reported.
         var status: SessionStatus { needsYou ? .needsYou : row.status }
@@ -39,7 +42,11 @@ struct RosterModel: Equatable {
     static let empty = RosterModel(groups: [], waiting: 0, tally: Tally())
 
     /// `requests` count while they are open or on their way; an answered one has left the bar.
-    static func make(machines: [MachineSection], requests: [RequestCard]) -> RosterModel {
+    /// `missions` holds the sessions' mission summaries; one with something that needs the user
+    /// marks its line as needing you, so the headline counts it.
+    static func make(
+        machines: [MachineSection], requests: [RequestCard], missions: [TabID: MissionSummary] = [:]
+    ) -> RosterModel {
         let pending = requests.filter(\.isPending)
         let asking = Set(pending.compactMap(\.tabID))
         var tally = Tally()
@@ -47,7 +54,12 @@ struct RosterModel: Equatable {
         let groups = machines.map { machine in
             Group(machine: machine, lines: machine.sessions.map { row in
                 let id = TabID(hostID: row.hostID, sessionID: row.id)
-                let line = Line(row: row, needsYou: asking.contains(id) || row.status == .needsYou)
+                // An open tab's store is live; the snapshot covers every other session.
+                let mission = missions[id] ?? row.mission
+                let asks = (mission?.needsYou ?? 0) > 0
+                let line = Line(
+                    row: row, needsYou: asking.contains(id) || row.status == .needsYou || asks, mission: mission
+                )
                 if line.needsYou {
                     needing.insert(id)
                 } else {
@@ -102,7 +114,16 @@ extension RequestCard {
 extension AppStore {
     /// The roster as this window shows it.
     var roster: RosterModel {
-        RosterModel.make(machines: listMachines, requests: controlCenter.requests)
+        RosterModel.make(machines: listMachines, requests: controlCenter.requests, missions: missions)
+    }
+
+    /// Mission summaries of the sessions this window has open, read live from their stores.
+    var missions: [TabID: MissionSummary] {
+        var out: [TabID: MissionSummary] = [:]
+        for (id, store) in harnessTabs.stores where store.mission.mission != nil {
+            out[id] = store.mission.summary
+        }
+        return out
     }
 }
 

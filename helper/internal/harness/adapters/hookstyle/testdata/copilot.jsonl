@@ -1,0 +1,10 @@
+{"event":"sessionStart","payload":{"timestamp":1788000000000,"cwd":"/HOME/proj","source":"new","initialPrompt":""}}
+{"event":"userPromptSubmitted","payload":{"timestamp":1788000001000,"cwd":"/HOME/proj","prompt":"list the files"}}
+{"event":"preToolUse","payload":{"timestamp":1788000002000,"cwd":"/HOME/proj","toolName":"bash","toolArgs":"{\"command\":\"ls -la\",\"description\":\"list\"}"}}
+{"event":"permissionRequest","payload":{"timestamp":1788000002500,"cwd":"/HOME/proj","toolName":"bash","toolArgs":"{\"command\":\"ls -la\"}"}}
+{"event":"postToolUse","payload":{"timestamp":1788000003000,"cwd":"/HOME/proj","toolName":"bash","toolArgs":"{\"command\":\"ls -la\"}","toolResult":{"resultType":"success","textResultForLlm":"main.go\ngo.mod"}}}
+{"event":"preToolUse","payload":{"timestamp":1788000004000,"cwd":"/HOME/proj","toolName":"view","toolArgs":"{\"path\":\"/HOME/proj/main.go\"}"}}
+{"event":"postToolUse","payload":{"timestamp":1788000005000,"cwd":"/HOME/proj","toolName":"view","toolResult":{"resultType":"failure","textResultForLlm":"permission denied"}}}
+{"event":"errorOccurred","payload":{"timestamp":1788000006000,"cwd":"/HOME/proj","error":{"message":"network timeout","name":"Error","stack":"REDACTED"}}}
+{"event":"agentStop","payload":{"timestamp":1788000007000,"cwd":"/HOME/proj"}}
+{"event":"sessionEnd","payload":{"timestamp":1788000008000,"cwd":"/HOME/proj","reason":"user_exit"}}

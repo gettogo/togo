@@ -308,18 +308,21 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
         public var exitCode: Int?
         public var startedAt: WireDate
         public var endedAt: WireDate?
+        /// Tail of what the command printed, plain text, once the block finished.
+        public var output: String?
 
         public init(command: String, cwd: String? = nil, state: HarnessState, exitCode: Int?, startedAt: WireDate,
-                    endedAt: WireDate?) {
+                    endedAt: WireDate?, output: String? = nil) {
             self.command = command
             self.cwd = cwd
             self.state = state
             self.exitCode = exitCode
             self.startedAt = startedAt
             self.endedAt = endedAt
+            self.output = output
         }
 
-        private enum CodingKeys: String, CodingKey { case command, cwd, state, exitCode, startedAt, endedAt }
+        private enum CodingKeys: String, CodingKey { case command, cwd, state, exitCode, startedAt, endedAt, output }
 
         public func encode(to encoder: any Encoder) throws {
             var c = encoder.container(keyedBy: CodingKeys.self)
@@ -329,6 +332,7 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
             try c.encode(exitCode, forKey: .exitCode)
             try c.encode(startedAt, forKey: .startedAt)
             try c.encode(endedAt, forKey: .endedAt)
+            try c.encodeIfPresent(output, forKey: .output)
         }
     }
 

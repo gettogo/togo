@@ -50,6 +50,9 @@ var programName = regexp.MustCompile(wire.ProgramNamePattern)
 type Launch struct {
 	Program string
 	Args    []string
+	// Env is extra environment for this run only (an endpoint's server
+	// password); it is never stored with the session.
+	Env map[string]string
 }
 
 // Argv returns the program followed by its arguments, or nil for the plain
@@ -248,11 +251,59 @@ func decodeArgv(v string) ([]string, error) {
 }
 
 // sessionEnv is the environment tmux gives a new session's pane.
-func (s *Service) sessionEnv(id, bib string) map[string]string {
+// TOGO_AGENT names the agent the session was started for, so a hook can
+// tell when it fires inside another agent: Copilot CLI also runs the hooks
+// in .claude/settings*.json.
+func (s *Service) sessionEnv(id, bib, agent string) map[string]string {
 	env := map[string]string{"TOGO_SESSION": id, "TOGO_BIB": bib}
+	if agent != "" {
+		env["TOGO_AGENT"] = agent
+	}
+	for k, v := range agentEnv[agent] {
+		env[k] = v
+	}
 	if s.ShimDir != "" {
 		env["TOGO_SHIM"] = s.ShimDir
 		env["BROWSER"] = filepath.Join(s.ShimDir, "togo-browser")
 	}
 	return env
+}
+
+// agentEnv is extra environment some agents need for the live harness
+// view. Crush's TUI joins its client-server mode, which a second client
+// can follow, only with CRUSH_CLIENT_SERVER=1. Fixed here, never read from
+// adapter files.
+var agentEnv = map[string]map[string]string{
+	"crush": {"CRUSH_CLIENT_SERVER": "1"},
+}
+
+// EndpointArgs, when set, returns arguments a harness adapter adds to an
+// agent's argv for one run, such as the port or socket the helper picked
+// for the live harness API. They are not stored with the session's argv:
+// every start asks again. The daemon sets it once at start.
+var EndpointArgs func(agentID, sessionID string) []string
+
+// EndpointEnv, when set, returns the environment that goes with the
+// endpoint arguments EndpointArgs just picked. The daemon sets it once at
+// start.
+var EndpointEnv func(sessionID string) map[string]string
+
+// WithEndpoint returns l with the endpoint arguments for this run
+// appended. The plain shell gets none.
+func (l Launch) WithEndpoint(agentID, sessionID string) Launch {
+	if l.Program == "" || EndpointArgs == nil {
+		return l
+	}
+	extra := EndpointArgs(agentID, sessionID)
+	if len(extra) == 0 {
+		return l
+	}
+	if validateArgs(append(slices.Clone(l.Args), extra...)) != nil {
+		return l
+	}
+	l.Args = append(slices.Clone(l.Args), extra...)
+	if EndpointEnv != nil {
+		l.Env = EndpointEnv(sessionID)
+	}
+	return l
 }

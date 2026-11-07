@@ -1,0 +1,93 @@
+# Kimi Code 2.x. No attach protocol for the TUI (`kimi acp` is stdio, `kimi web` a separate
+# server), so reads come from the main agent's wire log and writes go through relaunch
+# flags and typed commands. Checked on 2.0.2 against the owner's sessions (protocol 1.4
+# and 1.5): sessions live in ~/.kimi-code/sessions/wd_<name>_<sha256(cwd)[:12]>/, and
+# `kimi session list --json --cwd` lists them. Subagents and background tasks are read
+# from the main log (Agent calls, task ids, completion notices), not their own files.
+adapter: kimi
+name: Kimi Code
+revision: 1
+match: { agents: [kimi], commands: [kimi] }
+harness: { version: [kimi, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=2.0 <3" }
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode, model,
+  agents, background, plan, changes, status, resume, compact]
+feeds:
+  wire:
+    jsonl: { glob: '~/.kimi-code/sessions/wd_*_{{slice (sha256 .cwd) 0 12}}/session_*/agents/main/wire.jsonl', follow: true }
+    mapper: kimi.wire
+    stability: internal
+sources:
+  sessions:
+    cli: { argv: [kimi, session, list, --json, --limit, '50', --cwd, '{{.cwd}}'] }
+    cache: 30s
+    stability: documented
+  # The config also holds provider keys; only model names are selected, and
+  # the engine strips secret-named keys before the select runs.
+  models:
+    file: { path: '~/.kimi-code/config.toml', format: toml }
+    select: '[.models // {} | to_entries[] | {id: .key, name: (.value.display_name // .key), context: .value.max_context_size}]'
+    cache: 1m
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map: { item.id: .id, item.title: .name, item.subtitle: '{{.context | tokens}} context', selected: $state.model }
+    on_select: set_model
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: '{{.title | truncate 60}}', item.subtitle: '{{.updatedAt | ago}}' }
+    on_select: resume
+  compact:
+    primitive: confirm
+    title: Compact
+    section: status
+    capability: compact
+    submit: compact
+actions:
+  set_model:
+    label: Use model
+    confirm: Restart Kimi with this model? The conversation continues.
+    relaunch: { argv: [kimi, -m, '{{.id}}', --continue] }
+    stability: documented
+  set_mode:
+    label: Mode
+    confirm: Restart Kimi in this mode? The conversation continues.
+    branch:
+      - { when: '{{eq .id "plan"}}', relaunch: { argv: [kimi, --plan, --continue] } }
+      - { when: '{{eq .id "yolo"}}', relaunch: { argv: [kimi, --yolo, --continue] } }
+      - { when: '{{eq .id "auto"}}', relaunch: { argv: [kimi, --auto, --continue] } }
+      - { relaunch: { argv: [kimi, --continue] } }
+    stability: documented
+  compact:
+    confirm: Compact the conversation now?
+    type: { text: '/compact', submit: true, when_idle: true }
+    stability: unverified
+  resume:
+    relaunch: { argv: [kimi, --session, '{{.id}}'] }
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: documented
+modes:
+  choices:
+    - { id: default, label: Ask }
+    - { id: yolo, label: Ask when needed }
+    - { id: auto, label: Never ask }
+    - { id: plan, label: Plan }
+  select: $state.mode
+  set: set_mode
+commands:
+  static:
+    - { name: compact, detail: Summarise the conversation }
+    - { name: model, detail: Choose the model, screen: model }
+    - { name: sessions, detail: Resume a session, screen: resume }

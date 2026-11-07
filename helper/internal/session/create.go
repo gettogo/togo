@@ -100,14 +100,15 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 		}
 		id = s.newID()
 		options[optionBib] = bib
+		run := launch.WithEndpoint(a.ID, id)
 		err = s.Tmux.NewSession(ctx, tmux.NewSessionOpts{
 			Name:    id,
 			Dir:     dir,
 			Cols:    cols,
 			Rows:    rows,
-			Command: launchWrapper(s.shell(), s.TogoPath, launch),
+			Command: launchWrapper(s.shell(), s.TogoPath, run),
 			Options: options,
-			Env:     s.sessionEnv(id, bib),
+			Env:     withEnv(s.sessionEnv(id, bib, a.ID), run.Env),
 		})
 		if err == nil {
 			s.remember(ManifestEntry{ID: id, Bib: bib, Name: name, Agent: a.ID, Cwd: dir, Command: launch.Argv(), CreatedAt: created})

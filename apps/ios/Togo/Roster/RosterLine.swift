@@ -2,7 +2,8 @@ import SwiftUI
 import TogoKit
 
 /// One session on one line: the mono bib, the name with its agent in mute, the status on the
-/// right, and under the name the agent's last action in mono with its activity at the end.
+/// right, under the name its mission (model, context, agents, background jobs and plan) when a
+/// harness reports one, and the agent's last action in mono with its activity at the end.
 /// `stale` lines belong to a machine that is away; they keep their place but read as old.
 struct RosterLine: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -35,6 +36,7 @@ struct RosterLine: View {
                         status
                     }
                 }
+                RosterMissionLine(meta: row.meta, mission: line.mission, stale: stale)
                 lastAction
             }
         }
@@ -105,6 +107,8 @@ struct RosterLine: View {
     private var spokenLabel: String {
         var parts = [row.bib, displayName, showsAgent ? row.agentName : nil]
         parts.append(StatusWord.label(line.status, exit: row.exit))
+        let mission = RosterMission.spoken(meta: row.meta, mission: line.mission)
+        if !mission.isEmpty { parts.append(mission) }
         if row.muted { parts.append(ControlCenterCopy.muted) }
         return parts.compactMap { $0 }.joined(separator: ", ")
     }

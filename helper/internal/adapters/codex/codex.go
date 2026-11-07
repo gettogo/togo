@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/local"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
@@ -129,8 +130,9 @@ func firstNonEmpty(a, b string) string {
 	return b
 }
 
-// Map converts one payload. event is the Codex hook name (UserPromptSubmit,
-// PermissionRequest, Stop) or "notify" for the legacy notify argument.
+// Map converts one payload. event is the Codex hook name (SessionStart,
+// UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop) or
+// "notify" for the legacy notify argument.
 func (a *Adapter) Map(event string, stdin io.Reader, env map[string]string) (wire.HookEvent, error) {
 	name, ok := normalize(event)
 	if !ok {
@@ -162,6 +164,8 @@ func (a *Adapter) Map(event string, stdin io.Reader, env map[string]string) (wir
 	ev.Data.Model = p.Model
 	ev.Data.AgentSessionID = agentID
 	switch name {
+	case local.EventTool, local.EventToolDone:
+		ev.Data.Tool = truncate(p.ToolName, 64)
 	case "permission":
 		ev.Data.Tool = truncate(p.ToolName, 64)
 		ev.Data.Command = truncate(p.ToolInput.Command, maxCommandRune)
@@ -192,6 +196,12 @@ func normalize(event string) (string, bool) {
 		return "permission", true
 	case "stop":
 		return "stop", true
+	case "sessionstart":
+		return local.EventStart, true
+	case "pretooluse":
+		return local.EventTool, true
+	case "posttooluse":
+		return local.EventToolDone, true
 	case "notify":
 		return "notify", true
 	}

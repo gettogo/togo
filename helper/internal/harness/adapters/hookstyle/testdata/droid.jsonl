@@ -1,0 +1,5 @@
+{"event":"SessionStart","payload":{"session_id":"dr-0001","transcript_path":"/HOME/.factory/sessions/-HOME-proj/dr-0001.jsonl","cwd":"/HOME/proj","permission_mode":"default","hook_event_name":"SessionStart","source":"startup"}}
+{"event":"UserPromptSubmit","payload":{"session_id":"dr-0001","transcript_path":"/HOME/.factory/sessions/-HOME-proj/dr-0001.jsonl","cwd":"/HOME/proj","permission_mode":"default","hook_event_name":"UserPromptSubmit","prompt":"fix the typo"}}
+{"event":"PreToolUse","payload":{"session_id":"dr-0001","cwd":"/HOME/proj","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"/HOME/proj/README.md","old_str":"teh","new_str":"the"}}}
+{"event":"PostToolUse","payload":{"session_id":"dr-0001","cwd":"/HOME/proj","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"/HOME/proj/README.md"},"tool_response":{"success":true}}}
+{"event":"Stop","payload":{"session_id":"dr-0001","cwd":"/HOME/proj","permission_mode":"default","hook_event_name":"Stop","stop_hook_active":false}}

@@ -1,0 +1,78 @@
+# Cline CLI 3.x. No documented attach for the TUI (the hub daemon's protocol is undocumented,
+# `--acp` is a separate stdio agent). Sessions: `cline history --json` (documented; not run, the
+# owner's 3.0.62 hangs on --help and --version). Writes: relaunch with --id, -m, --thinking and
+# --plan. Hooks (~/.cline/hooks/) are not read: their payload was not seen. The gate reads
+# `cline version` with a timeout; a hanging build keeps the session terminal-only.
+adapter: cline
+name: Cline
+revision: 1
+match: { agents: [cline], commands: [cline] }
+harness: { version: [cline, version], pattern: '(\d+\.\d+\.\d+)', range: ">=3.0 <4" }
+capabilities: [interrupt, commands, mode, model, effort, changes, ports, resume, mcp]
+sources:
+  sessions:
+    cli: { argv: [cline, history, --json, --limit, '50'] }
+    select: '[(.sessions? // .)[] | {id: .id, title: (.title // .prompt // .task // .id), updated: (.updatedAt // .updated_at // .ts // null)}]'
+    cache: 30s
+    timeout: 10s
+    stability: experimental
+  mcp:
+    cli: { argv: [cline, config, mcp, --json] }
+    redact: ['.. | .env? // empty']
+    cache: 1m
+    timeout: 10s
+    stability: experimental
+screens:
+  resume:
+    primitive: picker
+    title: Resume
+    section: more
+    capability: resume
+    source: sessions
+    search: true
+    map: { item.id: .id, item.title: '{{.title | truncate 60}}', item.subtitle: '{{.updated | ago}}' }
+    on_select: resume
+  mcp:
+    primitive: liveList
+    title: MCP servers
+    section: more
+    capability: mcp
+    source: mcp
+  effort:
+    primitive: settings
+    title: Thinking
+    section: composer
+    capability: effort
+    fields:
+      - { id: thinking, label: Thinking, kind: choice, options: [none, low, medium, high, xhigh], action: set_effort }
+actions:
+  set_model:
+    label: Use model
+    confirm: Restart Cline with this model? The conversation is resumed.
+    relaunch: { argv: [cline, -i, -m, '{{.id}}', --id, '{{.state.harness_session}}'] }
+    stability: documented
+  set_effort:
+    label: Set thinking
+    confirm: Restart Cline with this thinking level? The conversation is resumed.
+    relaunch: { argv: [cline, -i, --thinking, '{{.value}}', --id, '{{.state.harness_session}}'] }
+    stability: documented
+  set_mode:
+    label: Mode
+    confirm: Restart Cline in this mode? The conversation is resumed.
+    branch:
+      - { when: '{{eq .id "plan"}}', relaunch: { argv: [cline, -i, --plan, --id, '{{.state.harness_session}}'] } }
+      - { relaunch: { argv: [cline, -i, --id, '{{.state.harness_session}}'] } }
+    stability: documented
+  resume:
+    label: Resume
+    relaunch: { argv: [cline, -i, --id, '{{.id}}'] }
+    stability: documented
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: experimental
+modes:
+  choices: [{ id: act, label: Act }, { id: plan, label: Plan }]
+  set: set_mode
+commands:
+  static:
+    - { name: resume, detail: Resume a session, screen: resume }

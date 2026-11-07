@@ -50,6 +50,9 @@ type Hub struct {
 	sessions  map[string]*sessionState
 	activity  *activity.Tracker
 	approvals map[string]wire.Approval
+	// mission reads a session's harness summary (Session.mission); nil
+	// leaves it out.
+	mission func(id string) (wire.MissionSummary, bool)
 }
 
 // New returns a Hub over svc. clock stamps events; nil means time.Now.

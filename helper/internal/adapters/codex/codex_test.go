@@ -101,7 +101,7 @@ func TestMalformedAndUnsupportedInputRejected(t *testing.T) {
 		"not json":      {"Stop", "{{{"},
 		"array":         {"Stop", "[]"},
 		"empty":         {"Stop", ""},
-		"unknown event": {"PreToolUse", "{}"},
+		"unknown event": {"SubagentStart", "{}"},
 		"notify type":   {"notify", `{"type":"other"}`},
 		"oversize":      {"Stop", `{"cwd":"` + strings.Repeat("a", 2<<20) + `"}`},
 	} {
@@ -162,5 +162,19 @@ func TestPermissionSubjectKindFromTool(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestToolAndStartEvents(t *testing.T) {
+	a := &Adapter{}
+	env := map[string]string{"TOGO_SESSION": "s_abcdefghij"}
+	for event, want := range map[string]string{"SessionStart": "start", "PreToolUse": "tool", "PostToolUse": "tool_done"} {
+		ev, err := a.Map(event, strings.NewReader(`{"session_id":"x","cwd":"/w","tool_name":"shell"}`), env)
+		if err != nil || ev.Event != want {
+			t.Fatalf("%s: %+v %v", event, ev, err)
+		}
+		if want != "start" && ev.Data.Tool != "shell" {
+			t.Errorf("%s: tool %q", event, ev.Data.Tool)
+		}
 	}
 }
