@@ -3,8 +3,8 @@ import Testing
 import TogoKit
 @testable import Togo
 
-/// The regular-width shell, sidebar beside the detail, across the sizes that show it, and the
-/// sheets it presents, floating over it.
+/// The regular-width shell, the roster column beside the terminal column, across the sizes that
+/// show it, and the sheets it presents, floating over it.
 @MainActor
 struct ShellSnapshotTests {
     private static let shellSizes: [ScreenSize] = [.duoOpen, .duoBook, .iPadPro13Landscape, .iPadHalf]
@@ -50,7 +50,7 @@ struct ShellSnapshotTests {
         assertScreen(named: "shell-3", sizes: Self.shellSizes) { window(machines: 3) }
     }
 
-    /// With the sidebar hidden, the empty detail offers it back and centres on the whole window.
+    /// With the roster hidden, the empty detail offers it back and centres on the whole window.
     @Test func emptyDetailSidebarHidden() {
         assertScreen(named: "shell-hidden", sizes: [.duoOpen, .duoBook, .iPadPro13Landscape]) {
             window(machines: 2, sidebarShown: false)
@@ -60,7 +60,14 @@ struct ShellSnapshotTests {
     /// A trailing system bar of 84 pt doesn't pull the empty detail off centre.
     @Test func emptyDetailIgnoresASideBar() {
         assertScreen(named: "empty-detail", sizes: [.duoFolded]) {
-            EmptyDetail(run: { _ in })
+            RosterEmptyDetail()
+        }
+    }
+
+    /// Something waits: the empty detail says so, and the bar at its foot holds the request.
+    @Test func emptyDetailWithARequest() {
+        assertScreen(named: "empty-detail-waiting", sizes: [.duoFolded]) {
+            RosterEmptyDetail(waiting: true)
         }
     }
 

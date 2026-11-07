@@ -122,7 +122,7 @@ struct DiffScreen: View {
                     }
                 }
             } label: {
-                Label(DiffCopy.options, systemImage: "ellipsis")
+                Label(DiffCopy.options, systemImage: "slider.horizontal.3")
             }
         }
         if model.state == .ready {
@@ -136,7 +136,7 @@ struct DiffScreen: View {
         if let action = model.actions.first(where: { $0 != .discard }) {
             ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
-                Button(action == .stage ? DiffCopy.stage : DiffCopy.unstage) {
+                Button(action == .stage ? DiffCopy.stage : DiffCopy.unstage, systemImage: action == .stage ? "plus.circle" : "minus.circle") {
                     Task { await model.perform(action) }
                 }
                 .disabled(model.busy)

@@ -1,0 +1,8 @@
+Aider v0.86.1
+Main model: anthropic/claude-sonnet-4-5 with diff edit format
+
+> run the tests
+
+go test ./...
+
+Run shell command? (Y)es/(N)o/(D)on't ask again [Yes]: 

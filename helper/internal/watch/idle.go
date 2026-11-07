@@ -27,6 +27,26 @@ type sessionState struct {
 	// a loop can cost.
 	lastInspect, lastNotify time.Time
 	notifyTitle, notifyBody string
+
+	// agent is the session's agent id from the listing; it picks how
+	// output is read (see busy.go).
+	agent string
+	// attachedAt is when the tap was attached; output soon after is the
+	// program starting up, not work.
+	attachedAt time.Time
+	// geom is the pane size and client count last seen with output, and
+	// quietUntil ends the redraw window a change of it opens.
+	geom       string
+	quietUntil time.Time
+	// burstStart is when the current run of output began.
+	burstStart time.Time
+	// promptCheck asks for a prompt check once output that did not mark
+	// the session working falls silent.
+	promptCheck bool
+	// lastBusyCheck is when the screen was last read for the agent's
+	// working indicator; busyMisses counts reads in a row without it.
+	lastBusyCheck time.Time
+	busyMisses    int
 }
 
 // outputSeen records an output burst and reports whether the session just

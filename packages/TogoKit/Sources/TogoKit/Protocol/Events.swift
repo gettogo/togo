@@ -355,6 +355,9 @@ public enum HelperEvent: Hashable, Sendable {
     case job(Job)
     /// The machine's keep-awake state changed (awake.v1). Belongs to no session.
     case awake(AwakeStatus)
+    /// An agent asked to open a web page (browser.v1). `url` is an http or https URL the
+    /// helper checked; the app checks it again before showing anything.
+    case browserOpen(url: String)
     /// A kind this client does not know, from a newer helper. Its seq still counts.
     case unknown(kind: String)
 }
@@ -375,7 +378,7 @@ public struct EventEnvelope: Codable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case seq, ts, kind, sessionId
-        case session, approval, requestId, resolution, title, body, level, job, awake
+        case session, approval, requestId, resolution, title, body, level, job, awake, url
     }
 
     public init(from decoder: any Decoder) throws {
@@ -406,6 +409,8 @@ public struct EventEnvelope: Codable, Hashable, Sendable {
             event = .job(try container.decode(Job.self, forKey: .job))
         case "awake":
             event = .awake(try container.decode(AwakeStatus.self, forKey: .awake))
+        case "browser.open":
+            event = .browserOpen(url: try container.decode(String.self, forKey: .url))
         default:
             event = .unknown(kind: kind)
         }
@@ -440,6 +445,9 @@ public struct EventEnvelope: Codable, Hashable, Sendable {
         case .awake(let status):
             try container.encode("awake", forKey: .kind)
             try container.encode(status, forKey: .awake)
+        case .browserOpen(let url):
+            try container.encode("browser.open", forKey: .kind)
+            try container.encode(url, forKey: .url)
         case .unknown(let kind):
             // The kind's own fields were not decoded, so only the header survives.
             try container.encode(kind, forKey: .kind)

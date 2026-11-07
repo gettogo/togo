@@ -1,0 +1,14 @@
+> run the tests
+
+╭──────────────────────────────────────────────────────────────╮
+│ ?  Shell go test ./... [current working directory ~/proj]    │
+│                                                              │
+│ go test ./...                                                │
+│                                                              │
+│ Allow execution of: 'go'?                                    │
+│                                                              │
+│ ● 1. Yes, allow once                                         │
+│   2. Yes, allow always ...                                   │
+│   3. No, suggest changes (esc)                               │
+│                                                              │
+╰──────────────────────────────────────────────────────────────╯

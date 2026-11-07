@@ -117,7 +117,7 @@ private func store<Value>(
                 .appending(path: "helper/internal/agents/agents.go"),
             encoding: .utf8
         )
-        let entry = /\{ID: "([a-z0-9]+)", Name: "[^"]*", Command: "([^"]+)"/
+        let entry = /\{ID: "([a-z0-9-]+)", Name: "[^"]*", Command: "([^"]+)"/
         let helper = Dictionary(uniqueKeysWithValues: source.matches(of: entry).map { (String($0.1), String($0.2)) })
         #expect(helper.count >= 4)
         #expect(AgentPreset.registryCommands == helper)
@@ -125,5 +125,22 @@ private func store<Value>(
             #expect(AgentPreset(name: id, agent: id).command == command)
         }
         #expect(kimi.command == "kimi")
+    }
+
+    /// The app names every registry agent as the helper does and knows no agent it lacks.
+    @Test func catalogNamesMatchTheHelper() throws {
+        let source = try String(
+            contentsOf: URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appending(path: "helper/internal/agents/agents.go"),
+            encoding: .utf8
+        )
+        let entry = /\{ID: "([a-z0-9-]+)", Name: "([^"]*)"/
+        let helper = source.matches(of: entry).map { "\($0.1)=\($0.2)" }
+        #expect(helper.count >= 20)
+        #expect(AgentCatalog.entries.map { "\($0.id)=\($0.name)" } == helper)
+        #expect(AgentCatalog.mark("shell") == .symbol("terminal"))
+        #expect(AgentCatalog.mark(AgentPreset.custom) == .symbol("terminal"))
+        #expect(AgentCatalog.mark("newagent") == .monogram("Ne"))
     }
 }

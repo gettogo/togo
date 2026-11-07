@@ -111,24 +111,21 @@ private struct AgentPresetRow: View {
 
 /// How presets read on screen.
 enum AgentPresetText {
-    /// The agents the helper knows by id, in the order the editor offers them.
-    static let registry: [(id: String, name: String)] = [
-        ("claude", "Claude Code"), ("codex", "Codex"), ("omp", "OMP"), ("opencode", "OpenCode"),
-    ]
+    /// The agents the helper knows by id, in its registry order. The shell takes no flags, so
+    /// no preset runs it.
+    static let registry: [(id: String, name: String)] = AgentCatalog.entries
+        .filter { !$0.command.isEmpty }
+        .map { ($0.id, $0.name) }
+
+    /// `registry` with the user's favorites first, then recent agents, then the rest by name.
+    static func ordered(favorites: [String], recent: [String]) -> [(id: String, name: String)] {
+        AgentOrder.sorted(registry, id: { $0.id }, name: { $0.name }, favorites: favorites, recent: recent)
+    }
 
     /// The program and its flags as one line, quoted only where a word needs it.
     static func commandLine(_ preset: AgentPreset) -> String {
         ([preset.command].filter { !$0.isEmpty } + [ArgsParser.join(preset.args)].filter { !$0.isEmpty })
             .joined(separator: " ")
-    }
-
-    static func symbol(for agent: String) -> String {
-        switch agent {
-        case "claude": "asterisk"
-        case "codex": "curlybraces"
-        case "omp": "cube"
-        default: "terminal"
-        }
     }
 }
 

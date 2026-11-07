@@ -24,6 +24,22 @@ struct ComponentsSnapshotTests {
         assertScreen(gallery, named: "status-words")
     }
 
+    @Test func rosterStatusAllStates() {
+        let gallery = VStack(alignment: .leading, spacing: 16) {
+            RosterStatus(status: .needsYou)
+            RosterStatus(status: .working, animated: true)
+            RosterStatus(status: .working)
+            RosterStatus(status: .done)
+            RosterStatus(connecting: "Connecting")
+            RosterStatus(status: .idle)
+            RosterStatus(status: .ended)
+            RosterStatus(status: .failed)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        assertScreen(gallery, named: "roster-status")
+    }
+
     @Test(arguments: StateView.Kind.allCases)
     func stateViewKinds(kind: StateView.Kind) {
         let copy: (title: String, message: String, action: String?) = switch kind {

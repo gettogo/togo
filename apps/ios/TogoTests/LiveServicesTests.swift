@@ -17,7 +17,8 @@ import struct TogoPush.Pairing
     }
 
     private func services(
-        watches: Watches, helpers: NoHelper = NoHelper(), remote: MemoryBackend? = nil, syncOn: Bool = true,
+        watches: Watches, helpers: NoHelper = NoHelper(), local: MemoryBackend = MemoryBackend(),
+        remote: MemoryBackend? = nil, syncOn: Bool = true,
         forgotPasswords: ForgottenPasswords? = nil, reported: @escaping (HostID, Set<String>) -> Void = { _, _ in }
     ) -> LiveServices {
         let now = self.now
@@ -25,7 +26,7 @@ import struct TogoPush.Pairing
         syncSwitch.set(syncOn)
         return LiveServices(
             hostRecords: SyncedRecordStore(
-                prefix: "host.", local: MemoryBackend(), remote: remote, deviceID: "a", clock: { now }, syncEnabled: syncOn
+                prefix: "host.", local: local, remote: remote, deviceID: "a", clock: { now }, syncEnabled: syncOn
             ),
             settingsRecords: SyncedRecordStore(
                 prefix: "settings.", local: MemoryBackend(), remote: remote, deviceID: "a", clock: { now }, syncEnabled: syncOn
@@ -54,6 +55,33 @@ import struct TogoPush.Pairing
         for _ in 0..<200 where !condition() {
             try? await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    /// A tab restored at launch asks for its terminal while `start()` is still deferred; its
+    /// machine is listed from this device, so it waits instead of failing as unknown.
+    @Test func aTerminalAskedForBeforeTheStoresLoadWaitsForItsMachine() async throws {
+        let local = MemoryBackend()
+        let earlier = services(watches: Watches(), local: local)
+        await earlier.start()
+        try await earlier.saveHost(record(Samples.studio, "Studio"))
+        let services = services(watches: Watches(), local: local)
+        services.showLocalHosts()
+        #expect(services.hosts.map(\.id) == [Samples.studio])
+        let arrived = Mutex<[HostID]>([])
+        services.onMachineArrived = { id in arrived.withLock { $0.append(id) } }
+        let waiting = services.terminal(hostID: Samples.studio, sessionID: "s1", transport: nil, userStarted: true)
+        let missing = services.terminal(hostID: Samples.build, sessionID: "s2", transport: nil, userStarted: true)
+        var phases = waiting.phases.makeAsyncIterator()
+        #expect(await phases.next() == .connecting)
+
+        await services.start()
+        #expect(arrived.withLock { $0 } == [Samples.studio])
+        var missingPhases = missing.phases.makeAsyncIterator()
+        #expect(await missingPhases.next() == .connecting)
+        #expect(await missingPhases.next() == .failed(LiveServiceError.unknownMachine.localizedDescription))
+        let late = services.terminal(hostID: Samples.build, sessionID: "s3", transport: nil, userStarted: true)
+        var latePhases = late.phases.makeAsyncIterator()
+        #expect(await latePhases.next() == .failed(LiveServiceError.unknownMachine.localizedDescription))
     }
 
     @Test func snapshotMapping() async throws {

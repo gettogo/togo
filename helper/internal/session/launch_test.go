@@ -104,7 +104,7 @@ func TestLaunchRejectsBadProgram(t *testing.T) {
 		"../x", "-rf", "bin/claude", sub, link, plain, "/usr/bin/../bin/true", "relative",
 		"/" + strings.Repeat("a", wire.MaxProgramPath), "/tmp/a\nb", "na\x00me", "",
 	} {
-		_, _, err := session.ValidateLaunch(wire.AgentCustom, prog, nil, path)
+		_, _, err := session.ValidateLaunch(wire.AgentCustom, prog, nil, path, nil)
 		if prog == "relative" {
 			// A bare name that matches the pattern but is not on PATH.
 			if r := reason(t, err); r != wire.ReasonNotInstalled {
@@ -116,29 +116,29 @@ func TestLaunchRejectsBadProgram(t *testing.T) {
 			t.Errorf("program %q: reason %q, want %q", prog, r, wire.ReasonProgram)
 		}
 	}
-	if _, _, err := session.ValidateLaunch(wire.AgentCustom, "nosuchprogram", nil, path); reason(t, err) != wire.ReasonNotInstalled {
+	if _, _, err := session.ValidateLaunch(wire.AgentCustom, "nosuchprogram", nil, path, nil); reason(t, err) != wire.ReasonNotInstalled {
 		t.Errorf("unknown bare name: reason %q, want not_installed", reason(t, err))
 	}
-	if _, _, err := session.ValidateLaunch("claude", "", nil, path); reason(t, err) != wire.ReasonNotInstalled {
+	if _, _, err := session.ValidateLaunch("claude", "", nil, path, nil); reason(t, err) != wire.ReasonNotInstalled {
 		t.Errorf("claude absent from PATH: reason %q, want not_installed", reason(t, err))
 	}
 }
 
 func TestLaunchAcceptsGoodPrograms(t *testing.T) {
 	path := fakeBin(t, "aider", "claude")
-	a, l, err := session.ValidateLaunch(wire.AgentCustom, "aider", []string{"--yes"}, path)
+	a, l, err := session.ValidateLaunch(wire.AgentCustom, "aider", []string{"--yes"}, path, nil)
 	if err != nil || a.ID != wire.AgentCustom || !reflect.DeepEqual(l.Argv(), []string{"aider", "--yes"}) {
 		t.Fatalf("custom aider = %+v %+v %v", a, l, err)
 	}
 	abs := echoProgram(t)
-	if _, l, err := session.ValidateLaunch(wire.AgentCustom, abs, nil, ""); err != nil || !reflect.DeepEqual(l.Argv(), []string{abs}) {
+	if _, l, err := session.ValidateLaunch(wire.AgentCustom, abs, nil, "", nil); err != nil || !reflect.DeepEqual(l.Argv(), []string{abs}) {
 		t.Fatalf("absolute program = %+v %v", l, err)
 	}
-	a, l, err = session.ValidateLaunch("claude", "", []string{"--dangerously-skip-permissions"}, path)
+	a, l, err = session.ValidateLaunch("claude", "", []string{"--dangerously-skip-permissions"}, path, nil)
 	if err != nil || a.ID != "claude" || !reflect.DeepEqual(l.Argv(), []string{"claude", "--dangerously-skip-permissions"}) {
 		t.Fatalf("claude = %+v %+v %v", a, l, err)
 	}
-	a, l, err = session.ValidateLaunch("", "", nil, "")
+	a, l, err = session.ValidateLaunch("", "", nil, "", nil)
 	if err != nil || a.ID != "shell" || l.Argv() != nil {
 		t.Fatalf("default = %+v %+v %v", a, l, err)
 	}
@@ -166,40 +166,40 @@ func TestLaunchRejectsBadArgs(t *testing.T) {
 		"empty":        {""},
 		"16385 total":  total,
 	} {
-		if _, _, err := session.ValidateLaunch("claude", "", args, path); reason(t, err) != wire.ReasonArgs {
+		if _, _, err := session.ValidateLaunch("claude", "", args, path, nil); reason(t, err) != wire.ReasonArgs {
 			t.Errorf("%s: reason %q, want args", name, reason(t, err))
 		}
 	}
-	if _, _, err := session.ValidateLaunch("shell", "", []string{"-x"}, path); reason(t, err) != wire.ReasonArgs {
+	if _, _, err := session.ValidateLaunch("shell", "", []string{"-x"}, path, nil); reason(t, err) != wire.ReasonArgs {
 		t.Errorf("shell with args: reason %q, want args", reason(t, err))
 	}
-	if _, _, err := session.ValidateLaunch("", "", []string{"-x"}, path); reason(t, err) != wire.ReasonArgs {
+	if _, _, err := session.ValidateLaunch("", "", []string{"-x"}, path, nil); reason(t, err) != wire.ReasonArgs {
 		t.Errorf("default shell with args: reason %q, want args", reason(t, err))
 	}
-	if _, _, err := session.ValidateLaunch("claude", "", total[:4], path); err != nil {
+	if _, _, err := session.ValidateLaunch("claude", "", total[:4], path, nil); err != nil {
 		t.Errorf("16384 bytes in total: %v", err)
 	}
-	if _, _, err := session.ValidateLaunch("claude", "", many[:wire.MaxArgs], path); err != nil {
+	if _, _, err := session.ValidateLaunch("claude", "", many[:wire.MaxArgs], path, nil); err != nil {
 		t.Errorf("64 entries: %v", err)
 	}
 }
 
 func TestProgramOnlyForCustom(t *testing.T) {
 	path := fakeBin(t, "claude", "aider")
-	if _, _, err := session.ValidateLaunch("claude", "aider", nil, path); reason(t, err) != wire.ReasonProgram {
+	if _, _, err := session.ValidateLaunch("claude", "aider", nil, path, nil); reason(t, err) != wire.ReasonProgram {
 		t.Errorf("program with claude: reason %q, want program", reason(t, err))
 	}
-	if _, _, err := session.ValidateLaunch("shell", "aider", nil, path); reason(t, err) != wire.ReasonProgram {
+	if _, _, err := session.ValidateLaunch("shell", "aider", nil, path, nil); reason(t, err) != wire.ReasonProgram {
 		t.Errorf("program with shell: reason %q, want program", reason(t, err))
 	}
-	if _, _, err := session.ValidateLaunch(wire.AgentCustom, "", nil, path); reason(t, err) != wire.ReasonProgram {
+	if _, _, err := session.ValidateLaunch(wire.AgentCustom, "", nil, path, nil); reason(t, err) != wire.ReasonProgram {
 		t.Errorf("custom without program: reason %q, want program", reason(t, err))
 	}
 }
 
 func TestWrapperForEachShell(t *testing.T) {
-	const posix = `t=$1; shift; "$@"; s=$?; [ -n "$t" ] && "$t" session-exit "$s" 2>/dev/null; exec "${SHELL:-/bin/sh}" -l`
-	const fish = `set -l t $argv[1]; command $argv[2..-1]; set -l s $status; test -n "$t"; and $t session-exit $s 2>/dev/null; exec $SHELL -l`
+	const posix = `t=$1; shift; [ -n "$TOGO_SHIM" ] && PATH="$TOGO_SHIM:$PATH"; "$@"; s=$?; [ -n "$t" ] && "$t" session-exit "$s" 2>/dev/null; exec "${SHELL:-/bin/sh}" -l`
+	const fish = `set -l t $argv[1]; test -n "$TOGO_SHIM"; and set -gx PATH $TOGO_SHIM $PATH; command $argv[2..-1]; set -l s $status; test -n "$t"; and $t session-exit $s 2>/dev/null; exec $SHELL -l`
 	if session.PosixWrapper != posix || session.FishWrapper != fish {
 		t.Fatalf("wrapper text changed:\n%s\n%s", session.PosixWrapper, session.FishWrapper)
 	}
@@ -458,5 +458,53 @@ func TestListIgnoresTamperedArgv(t *testing.T) {
 		if len(logged) != 1 || !strings.Contains(logged[0], session.OptionArgv) || strings.Contains(logged[0], "../x") {
 			t.Errorf("%.40q: logged %q, want one line naming the option without its value", v, logged)
 		}
+	}
+}
+
+// An agent found only in the install folders is launched by absolute path,
+// since the login shell would not find it by name.
+func TestValidateLaunchOffPathAgentUsesAbsolutePath(t *testing.T) {
+	dir := realpath(t, t.TempDir())
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, l, err := session.ValidateLaunch("claude", "", []string{"--x"}, "/usr/bin:/bin", []string{dir})
+	if err != nil || !reflect.DeepEqual(l.Argv(), []string{filepath.Join(dir, "claude"), "--x"}) {
+		t.Fatalf("ValidateLaunch = %v, %v; want the absolute path", l.Argv(), err)
+	}
+	_, l, err = session.ValidateLaunch("claude", "", nil, dir, []string{dir})
+	if err != nil || !reflect.DeepEqual(l.Argv(), []string{"claude"}) {
+		t.Fatalf("on PATH: %v, %v; want the bare name", l.Argv(), err)
+	}
+}
+
+// TestShimDirReachesTheSession gives a session BROWSER and TOGO_SHIM, and the
+// wrapper puts the shim directory first on the agent's PATH.
+func TestShimDirReachesTheSession(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s := newService(t)
+	s.Shell = "/bin/sh"
+	dir := realpath(t, t.TempDir())
+	shim := filepath.Join(dir, "shim")
+	s.ShimDir = shim
+	out := filepath.Join(dir, "path")
+	c := mustCreate(t, s, session.CreateOpts{Agent: wire.AgentCustom, Program: "/bin/sh", Args: []string{"-c", `printf '%s' "$PATH" > ` + out}, Cwd: dir})
+	for k, want := range map[string]string{"TOGO_SHIM": shim, "BROWSER": filepath.Join(shim, "togo-browser")} {
+		if env := tmuxOut(t, s.Tmux, "show-environment", "-t", "="+c.ID, k); env != k+"="+want {
+			t.Errorf("session env %s = %q, want %q", k, env, k+"="+want)
+		}
+	}
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		b, err := os.ReadFile(out)
+		if err == nil && len(b) > 0 {
+			if !strings.HasPrefix(string(b), shim+":") {
+				t.Fatalf("agent PATH = %q, want %s first", b, shim)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("agent never wrote its PATH: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

@@ -65,7 +65,7 @@ struct TutorialFlow: View {
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button(String(localized: "tutorial.skip", defaultValue: "Skip")) {
+            Button(String(localized: "tutorial.skip", defaultValue: "Skip"), systemImage: "forward.end") {
                 model.skip()
                 onClose(.closed)
             }

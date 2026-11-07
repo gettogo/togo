@@ -15,7 +15,9 @@ public enum KeyEncoder {
         case .tab:
             return altPrefixed(mods.contains(.shift) ? csi("Z") : [0x09], mods)
         case .enter:
-            return altPrefixed([0x0D], mods)
+            // Legacy xterm has no Shift-Enter. ESC CR (Meta-Enter) is the newline Claude Code and
+            // its /terminal-setup use; a bare LF would submit in readline.
+            return altPrefixed([0x0D], mods.contains(.shift) ? mods.union(.alt) : mods)
         case .backspace:
             return altPrefixed([mods.contains(.ctrl) ? 0x08 : 0x7F], mods)
         case .up: return cursorKey("A", mods, applicationCursor)

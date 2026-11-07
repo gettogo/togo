@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"time"
 
+	"github.com/gettogo/togo/helper/internal/activity"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -209,6 +211,36 @@ func (h *Hub) Muted(id string) bool {
 	return st.muted
 }
 
+// RecordOutput notes that the session just produced output, for its
+// activity history.
+func (h *Hub) RecordOutput(id string) { h.activity.Record(id, h.clock()) }
+
+// RunActivity republishes the sessions whose activity history moved each
+// time a bucket rolls over, while an app is in the foreground to see it, so
+// the bars keep moving while a session works and fall away after it stops.
+func (h *Hub) RunActivity(ctx context.Context) {
+	for {
+		now := h.clock()
+		next := now.Truncate(activity.BucketSpan).Add(activity.BucketSpan)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(next.Sub(now)):
+		}
+		h.publishRolling(h.clock())
+	}
+}
+
+func (h *Hub) publishRolling(now time.Time) {
+	ids := h.activity.Rolling(now)
+	if h.ForegroundSubscribers() == 0 {
+		return
+	}
+	for _, id := range ids {
+		h.publishSession(id)
+	}
+}
+
 // Decorate fills status, activity, muted and meta from the hub's state.
 func (h *Hub) Decorate(sessions []session.Session) []session.Session {
 	h.mu.Lock()
@@ -256,6 +288,7 @@ func (h *Hub) decorateLocked(sessions []session.Session) []session.Session {
 			s.Status, s.Exit = statusNeedsYou, nil
 		}
 		s.Meta = st.meta
+		s.ActivityHistory = h.activity.History(s.ID, h.clock())
 	}
 	return out
 }
@@ -287,6 +320,7 @@ func (h *Hub) trackLocked(ev wire.Event) {
 	}
 	if ev.Kind == wire.EventSessionRemoved && ev.SessionID != nil {
 		delete(h.sessions, *ev.SessionID)
+		h.activity.Forget(*ev.SessionID)
 	}
 }
 

@@ -5,6 +5,9 @@ import TogoPush
 enum WatchCopy {
     static let waiting = String(localized: "watch.waiting.title", defaultValue: "Waiting")
     static let nothingWaiting = String(localized: "watch.waiting.empty", defaultValue: "Nothing is waiting on you")
+    static let allClear = String(localized: "watch.allClear", defaultValue: "All clear")
+    static let yes = String(localized: "watch.yes", defaultValue: "Yes")
+    static let no = String(localized: "watch.no", defaultValue: "No")
     static let approve = String(localized: "watch.approve", defaultValue: "Approve")
     static let deny = String(localized: "watch.deny", defaultValue: "Deny")
     static let approved = String(localized: "watch.approved", defaultValue: "Approved")
@@ -32,6 +35,11 @@ enum WatchCopy {
     static let noSessions = String(
         localized: "watch.sessions.empty", defaultValue: "Open Togo on iPhone to see your sessions"
     )
+
+    /// "1 of 3", when several requests wait.
+    static func position(_ position: Int, of count: Int) -> String {
+        String(localized: "watch.position", defaultValue: "\(position) of \(count)")
+    }
 
     /// The phone has not given this Watch a pairing for the machine yet.
     static func notSetUp(machine: String?) -> String {

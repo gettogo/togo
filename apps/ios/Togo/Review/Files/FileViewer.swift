@@ -28,7 +28,7 @@ struct FileViewer: View {
                             Toggle(FilesCopy.wrap, isOn: $model.wrap)
                                 .disabled(typeSize.isAccessibilitySize)
                         } label: {
-                            Label(FilesCopy.options, systemImage: "ellipsis")
+                            Label(FilesCopy.options, systemImage: "slider.horizontal.3")
                         }
                     }
                 }
@@ -101,11 +101,12 @@ private struct FindBar: ViewModifier {
                         ToolbarItemGroup(placement: .bottomBar) {
                             Button(FilesCopy.previousMatch, systemImage: "chevron.up") { model.previous() }
                                 .disabled(model.matches.isEmpty)
-                            Text(verbatim: position)
-                                .font(.footnote.monospacedDigit())
-                                .foregroundStyle(Color.togoMute)
+                                .accessibilityValue(position)
+                            // The count rides on the symbol as a badge so the bar keeps only icon items.
                             Button(FilesCopy.nextMatch, systemImage: "chevron.down") { model.next() }
+                                .badge(model.matches.count)
                                 .disabled(model.matches.isEmpty)
+                                .accessibilityValue(position)
                         }
                     }
                 }

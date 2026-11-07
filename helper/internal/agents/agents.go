@@ -18,12 +18,31 @@ type Agent struct {
 // Registry lists the agents in the order clients show them. Commands stay
 // constant literals: they are the first argv entry of every session that
 // runs the agent. Resume follows the user's own arguments, so it must be
-// accepted there: codex takes its global flags before a subcommand.
+// accepted there: codex and amp take their global flags before a
+// subcommand. An agent whose resume needs a subcommand that takes no
+// global flags before it, or a session id, has none.
 var Registry = []Agent{
 	{ID: "claude", Name: "Claude Code", Command: "claude", Resume: []string{"--continue"}},
 	{ID: "omp", Name: "OMP", Command: "omp"},
 	{ID: "codex", Name: "Codex", Command: "codex", Resume: []string{"resume", "--last"}},
 	{ID: "opencode", Name: "OpenCode", Command: "opencode"},
+	{ID: "gemini", Name: "Gemini CLI", Command: "gemini", Resume: []string{"--resume", "latest"}},
+	{ID: "copilot", Name: "Copilot CLI", Command: "copilot", Resume: []string{"--continue"}},
+	{ID: "cursor", Name: "Cursor CLI", Command: "cursor-agent", Resume: []string{"--resume"}},
+	{ID: "qwen", Name: "Qwen Code", Command: "qwen", Resume: []string{"--continue"}},
+	{ID: "aider", Name: "Aider", Command: "aider", Resume: []string{"--restore-chat-history"}},
+	{ID: "amp", Name: "Amp", Command: "amp"},
+	{ID: "auggie", Name: "Auggie", Command: "auggie", Resume: []string{"--continue"}},
+	{ID: "cline", Name: "Cline", Command: "cline"},
+	{ID: "crush", Name: "Crush", Command: "crush", Resume: []string{"--continue"}},
+	{ID: "droid", Name: "Droid", Command: "droid", Resume: []string{"--resume"}},
+	{ID: "goose", Name: "Goose", Command: "goose"},
+	{ID: "kilo", Name: "Kilo Code", Command: "kilo"},
+	{ID: "kimi", Name: "Kimi Code", Command: "kimi", Resume: []string{"--continue"}},
+	{ID: "kiro", Name: "Kiro CLI", Command: "kiro-cli"},
+	{ID: "openhands", Name: "OpenHands", Command: "openhands"},
+	{ID: "pi", Name: "Pi", Command: "pi", Resume: []string{"--continue"}},
+	{ID: "vibe", Name: "Mistral Vibe", Command: "vibe", Resume: []string{"--continue"}},
 	{ID: "shell", Name: "Shell"},
 }
 
@@ -37,22 +56,58 @@ func Lookup(id string) (Agent, bool) {
 	return Agent{}, false
 }
 
+// FallbackDirs are where package managers and installers put command line
+// tools, searched after the login PATH when it does not name a program
+// (the helper may run under launchd or a bare ssh command). home is the
+// user's home directory; when empty, only the system directories remain.
+func FallbackDirs(home string) []string {
+	var dirs []string
+	if home != "" {
+		for _, d := range []string{
+			".local/bin", "bin", ".claude/local", ".bun/bin", ".npm-global/bin",
+			".volta/bin", ".cargo/bin", "go/bin", ".opencode/bin", ".amp/bin",
+		} {
+			dirs = append(dirs, filepath.Join(home, d))
+		}
+	}
+	dirs = append(dirs,
+		"/opt/homebrew/bin", "/usr/local/bin",
+		"/home/linuxbrew/.linuxbrew/bin", "/nix/var/nix/profiles/default/bin",
+	)
+	if home != "" {
+		dirs = append(dirs, filepath.Join(home, ".nix-profile", "bin"))
+	}
+	return dirs
+}
+
 // Installed reports whether a's command is an executable file in one of the
-// absolute directories of path. The shell is always installed.
-func Installed(a Agent, path string) bool {
+// absolute directories of path or of fallbacks. The shell is always
+// installed.
+func Installed(a Agent, path string, fallbacks []string) bool {
 	if a.Command == "" {
 		return true
 	}
-	_, ok := Find(a.Command, path)
+	_, _, ok := Find(a.Command, path, fallbacks)
 	return ok
 }
 
 // Find returns the first regular executable file named name in the
-// absolute directories of path. Relative PATH entries are ignored: they
-// depend on the helper's working directory, not the one the session will
-// start in. name must be a bare file name.
-func Find(name, path string) (string, bool) {
-	for _, dir := range filepath.SplitList(path) {
+// absolute directories of path, then of fallbacks. offPath reports a hit in
+// fallbacks. Relative entries are ignored: they depend on the helper's
+// working directory, not the one the session will start in. name must be a
+// bare file name.
+func Find(name, path string, fallbacks []string) (found string, offPath, ok bool) {
+	if p, ok := findIn(name, filepath.SplitList(path)); ok {
+		return p, false, true
+	}
+	if p, ok := findIn(name, fallbacks); ok {
+		return p, true, true
+	}
+	return "", false, false
+}
+
+func findIn(name string, dirs []string) (string, bool) {
+	for _, dir := range dirs {
 		if !filepath.IsAbs(dir) {
 			continue
 		}

@@ -39,4 +39,5 @@ public enum Method: String, Sendable {
     case hostInfo = "host.info"
     case awakeStatus = "awake.status"
     case awakeSet = "awake.set"
+    case browserOpenOnMac = "browser.openOnMac"
 }

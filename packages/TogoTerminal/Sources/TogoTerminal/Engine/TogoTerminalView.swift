@@ -1,6 +1,7 @@
 internal import SwiftTerm
 import Synchronization
 import UIKit
+import Accessibility
 
 /// SwiftTerm's view with Togo's one-finger scroll routing.
 ///
@@ -37,16 +38,131 @@ final class TogoTerminalView: TerminalView {
     /// Kept from the parser thread: an app hid the cursor (DECTCEM), so its row means nothing.
     let cursorHidden = Atomic(false)
 
+    /// Bytes for a held Backspace while a modifier is latched (Alt-Backspace deletes a word).
+    var latchedBackspace: (() -> [UInt8]?)?
+    /// The keyboard trackpad moved this many rows; negative is up.
+    var onFloatingRows: ((Int) -> Void)?
+    var floatingRowHeight: (() -> CGFloat)?
+    var floatingRows = FloatingCursorRows()
+    var floatingPin: FloatingPin?
+
     private let wheelPan = UIPanGestureRecognizer()
     private var selectionThroughLineEnd = false
 
     override init(frame: CGRect, font: UIFont?, options: TerminalOptions) {
         chordRepeater = ChordRepeater()
         super.init(frame: frame, font: font, options: options)
+        _ = Self.installFloatingCursor
         chordRepeater.send = { [weak self] bytes in self?.send(data: bytes[...]) }
         wheelPan.maximumNumberOfTouches = 1
         wheelPan.addTarget(self, action: #selector(handleWheelPan(_:)))
         addGestureRecognizer(wheelPan)
+        // The grid is sized from the bounds alone. An inset adjusted for a safe area or bar
+        // would shift the content sideways and push the last columns past the edge.
+        contentInsetAdjustmentBehavior = .never
+        alwaysBounceHorizontal = false
+        for name in [
+            UIAccessibility.reduceMotionStatusDidChangeNotification, UIApplication.willEnterForegroundNotification,
+            AccessibilitySettings.prefersNonBlinkingTextInsertionIndicatorDidChangeNotification,
+        ] {
+            NotificationCenter.default.addObserver(self, selector: #selector(caretEnvironmentChanged), name: name, object: nil)
+        }
+    }
+
+    /// Whether the cursor may blink at all; the engine sets it from the terminal settings.
+    var cursorBlinkRequested = true
+    /// The cursor's shape, always a steady style; how it blinks is decided by `refreshCaret`.
+    var cursorShape: CursorStyle = .steadyBlock {
+        didSet { refreshCaret() }
+    }
+    /// True while the step is drawn here on SwiftTerm's caret view. When that view cannot be
+    /// found, SwiftTerm's own blinking style is used instead, so the cursor never goes missing.
+    private let ownsBlink = Mutex(true)
+    private static let blinkKey = "togo.caretBlink"
+    private static let caretClassName = "CaretView"
+
+    /// SwiftTerm draws the cursor hollow while this view is not first responder. Its own blink
+    /// is a slow fade, so the engine keeps the cursor steady and the step is added here: solid
+    /// snow on a one second hard step while focused, solid and still under Reduce Motion or
+    /// "Prefer Non-Blinking Cursor". SwiftTerm has no public hook for its caret, so the view is
+    /// found by class name; if it is missing, the cursor falls back to SwiftTerm's own blink.
+    func refreshCaret() {
+        // Re-assigning makes SwiftTerm redraw the caret for the current focus and clear its animations.
+        caretViewTracksFocus = true
+        let caret = subviews.first { String(describing: type(of: $0)) == Self.caretClassName }
+        let wantsBlink = CursorPolicy.blinks(
+            requested: cursorBlinkRequested, focused: true,
+            reduceMotion: UIAccessibility.isReduceMotionEnabled,
+            prefersNonBlinking: AccessibilitySettings.prefersNonBlinkingTextInsertionIndicator)
+        guard let caret else {
+            ownsBlink.withLock { $0 = false }
+            setCursorStyle(wantsBlink ? Self.blinking(cursorShape) : cursorShape)
+            return
+        }
+        ownsBlink.withLock { $0 = true }
+        setCursorStyle(cursorShape)
+        caret.layer.removeAnimation(forKey: Self.blinkKey)
+        caret.layer.opacity = 1
+        guard wantsBlink, isFirstResponder, window != nil else { return }
+        let step = CAKeyframeAnimation(keyPath: "opacity")
+        step.values = [1, 0]
+        // Discrete keyframes take one more time than values: on at 0, off at 0.5, to the end at 1.
+        step.keyTimes = [0, 0.5, 1]
+        step.calculationMode = .discrete
+        step.duration = CursorPolicy.period
+        step.repeatCount = .infinity
+        caret.layer.add(step, forKey: Self.blinkKey)
+    }
+
+    @objc private func caretEnvironmentChanged() {
+        DispatchQueue.main.async { [weak self] in self?.refreshCaret() }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        DispatchQueue.main.async { [weak self] in self?.refreshCaret() }
+    }
+
+    /// SwiftTerm rebuilds or restyles its caret on font and size changes, which drops the step;
+    /// put it back when it should be running and is not.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard isFirstResponder, window != nil, ownsBlink.withLock({ $0 }),
+              let caret = subviews.first(where: { String(describing: type(of: $0)) == Self.caretClassName }),
+              caret.layer.animation(forKey: Self.blinkKey) == nil,
+              CursorPolicy.blinks(
+                  requested: cursorBlinkRequested, focused: true,
+                  reduceMotion: UIAccessibility.isReduceMotionEnabled,
+                  prefersNonBlinking: AccessibilitySettings.prefersNonBlinkingTextInsertionIndicator)
+        else { return }
+        refreshCaret()
+    }
+
+    /// Remote programs may ask for a blinking cursor; blinking is decided by `refreshCaret`.
+    nonisolated override func cursorStyleChanged(source: Terminal, newStyle: CursorStyle) {
+        let steady = Self.steady(newStyle)
+        let owns = ownsBlink.withLock { $0 }
+        super.cursorStyleChanged(source: source, newStyle: owns ? steady : newStyle)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.cursorShape != steady else { return }
+            self.cursorShape = steady
+        }
+    }
+
+    nonisolated static func steady(_ style: CursorStyle) -> CursorStyle {
+        switch style {
+        case .blinkBlock, .steadyBlock: .steadyBlock
+        case .blinkUnderline, .steadyUnderline: .steadyUnderline
+        case .blinkBar, .steadyBar: .steadyBar
+        }
+    }
+
+    static func blinking(_ style: CursorStyle) -> CursorStyle {
+        switch style {
+        case .blinkBlock, .steadyBlock: .blinkBlock
+        case .blinkUnderline, .steadyUnderline: .blinkUnderline
+        case .blinkBar, .steadyBar: .blinkBar
+        }
     }
 
     /// VoiceOver focus decides when it is on a terminal, so a split has one focused pane.
@@ -72,14 +188,62 @@ final class TogoTerminalView: TerminalView {
         super.showCursor(source: source)
     }
 
+    /// False while the session is not connected: nothing can be typed there, so a tap or an
+    /// appearance must not raise the keyboard for it.
+    var acceptsFocus = true
+    /// Something asked for the keyboard while focus was refused, such as the terminal
+    /// appearing before its session connected. The keyboard comes up once it may.
+    var wantsFocus = false
+
+    override var canBecomeFirstResponder: Bool {
+        acceptsFocus && super.canBecomeFirstResponder
+    }
+
     override func becomeFirstResponder() -> Bool {
-        defer { onFocusChange?() }
+        guard acceptsFocus else {
+            wantsFocus = true
+            return false
+        }
+        wantsFocus = false
+        defer {
+            refreshCaret()
+            onFocusChange?()
+            TerminalFocus.changed(self)
+        }
         return super.becomeFirstResponder()
     }
 
     override func deleteBackward() {
         onUserInput?()
+        if markedTextRange == nil, let bytes = latchedBackspace?() {
+            send(data: bytes[...])
+            return
+        }
         super.deleteBackward()
+    }
+
+    /// The far side always has something Backspace can delete. SwiftTerm answers from its own
+    /// input buffer, empty at most prompts, and the system keyboard repeats a held delete key
+    /// only while this is true.
+    override var hasText: Bool { true }
+
+    // Typing goes to a program, not prose: no inline completions, Writing Tools or math results.
+    @objc var inlinePredictionType: UITextInlinePredictionType { .no }
+    @objc var mathExpressionCompletionType: UITextMathExpressionCompletionType { .no }
+    @objc var writingToolsBehavior: UIWritingToolsBehavior { .none }
+
+    override var contentOffset: CGPoint {
+        get { super.contentOffset }
+        set { super.contentOffset = pinnedOffset(for: newValue) }
+    }
+
+    override func setContentOffset(_ offset: CGPoint, animated: Bool) {
+        super.setContentOffset(pinnedOffset(for: offset), animated: animated)
+    }
+
+    override func scrollRectToVisible(_ rect: CGRect, animated: Bool) {
+        guard floatingPin == nil else { return }
+        super.scrollRectToVisible(rect, animated: animated)
     }
 
     required init?(coder: NSCoder) {
@@ -176,7 +340,11 @@ final class TogoTerminalView: TerminalView {
     /// A key released after focus moves never reaches this view, so the repeat ends here.
     override func resignFirstResponder() -> Bool {
         chordRepeater.stop()
-        defer { onFocusChange?() }
+        defer {
+            refreshCaret()
+            onFocusChange?()
+            TerminalFocus.changed(self)
+        }
         return super.resignFirstResponder()
     }
 

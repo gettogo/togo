@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/activity"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -47,6 +48,7 @@ type Hub struct {
 	subs      map[*rpc.Conn]*subscriber
 	consumers []func(wire.Event)
 	sessions  map[string]*sessionState
+	activity  *activity.Tracker
 	approvals map[string]wire.Approval
 }
 
@@ -60,6 +62,7 @@ func New(svc *session.Service, clock func() time.Time) *Hub {
 		clock:     clock,
 		subs:      map[*rpc.Conn]*subscriber{},
 		sessions:  map[string]*sessionState{},
+		activity:  activity.New(),
 		approvals: map[string]wire.Approval{},
 	}
 }

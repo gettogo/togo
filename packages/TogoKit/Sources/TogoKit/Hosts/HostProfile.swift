@@ -53,6 +53,11 @@ public struct HostProfile: Codable, Hashable, Sendable, Identifiable {
     public var moshServerPath: String? = nil
     public var moshPorts: PortRange? = nil
     public var etAvailable = false
+    /// Every address the machine is known to answer on. Always holds the saved address as a
+    /// manual route; the helper's report fills in the rest after each connect.
+    public var routes: [HostRoute]
+    /// The route the last successful connection used, tried first next time.
+    public var lastRoute: String?
 
     public init(
         id: UUID,
@@ -63,7 +68,9 @@ public struct HostProfile: Codable, Hashable, Sendable, Identifiable {
         transport: TransportPreference = .auto,
         moshServerPath: String? = nil,
         moshPorts: PortRange? = nil,
-        etAvailable: Bool = false
+        etAvailable: Bool = false,
+        routes: [HostRoute]? = nil,
+        lastRoute: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -74,10 +81,12 @@ public struct HostProfile: Codable, Hashable, Sendable, Identifiable {
         self.moshServerPath = moshServerPath
         self.moshPorts = moshPorts
         self.etAvailable = etAvailable
+        self.routes = routes ?? [.manual(endpoint.host)]
+        self.lastRoute = lastRoute
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, endpoint, jumps, auth, transport, moshServerPath, moshPorts, etAvailable
+        case id, name, endpoint, jumps, auth, transport, moshServerPath, moshPorts, etAvailable, routes, lastRoute
     }
 
     // Profiles saved by an older build lack newer keys; those take the defaults.
@@ -92,5 +101,8 @@ public struct HostProfile: Codable, Hashable, Sendable, Identifiable {
         moshServerPath = try container.decodeIfPresent(String.self, forKey: .moshServerPath)
         moshPorts = try container.decodeIfPresent(PortRange.self, forKey: .moshPorts)
         etAvailable = try container.decodeIfPresent(Bool.self, forKey: .etAvailable) ?? false
+        // A profile from before routes held one address: it becomes the first manual route.
+        routes = try container.decodeIfPresent([HostRoute].self, forKey: .routes) ?? [.manual(endpoint.host)]
+        lastRoute = try container.decodeIfPresent(String.self, forKey: .lastRoute)
     }
 }

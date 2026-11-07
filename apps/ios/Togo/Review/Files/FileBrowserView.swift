@@ -24,7 +24,7 @@ struct FileBrowserView: View {
                     Menu {
                         Toggle(FilesCopy.hidden, isOn: $model.showsHidden)
                     } label: {
-                        Label(FilesCopy.options, systemImage: "ellipsis")
+                        Label(FilesCopy.options, systemImage: "slider.horizontal.3")
                     }
                 }
             }

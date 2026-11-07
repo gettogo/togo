@@ -128,7 +128,7 @@ func (s *Service) Restore(ctx context.Context, id string, resume bool) (Session,
 			Name: id, Dir: dir, Cols: defaultCols, Rows: defaultRows,
 			Command: launchWrapper(s.shell(), s.TogoPath, launch),
 			Options: options,
-			Env:     map[string]string{"TOGO_SESSION": id, "TOGO_BIB": bib},
+			Env:     s.sessionEnv(id, bib),
 		})
 		if err != nil {
 			return err
@@ -181,7 +181,7 @@ func (s *Service) restorableEntry(ctx context.Context, id string) (ManifestEntry
 // otherwise the recorded command runs unchanged.
 func (s *Service) restoreCommand(ctx context.Context, e ManifestEntry, resume bool) (Launch, error) {
 	if e.Command == nil {
-		_, launch, err := ValidateLaunch(e.Agent, "", nil, s.loginPath(ctx))
+		_, launch, err := ValidateLaunch(e.Agent, "", nil, s.loginPath(ctx), s.fallbackDirs())
 		return launch, err
 	}
 	launch, err := s.relaunchCommand(ctx, Session{Agent: e.Agent, Command: e.Command})

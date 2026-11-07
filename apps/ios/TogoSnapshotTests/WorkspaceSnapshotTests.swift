@@ -37,7 +37,7 @@ struct WorkspaceSnapshotTests {
     /// Builds a fresh store, pool and engine on every call, so each appearance renders its own.
     private func screen(
         tabs: [String] = ["s-04"], selected: String = "s-04", link: LinkPhase = mosh, requests: [RequestCard] = [],
-        reachability: Reachability = .online, noteShown: Bool = false, shownElsewhere: Bool = false
+        reachability: Reachability = .online, shownElsewhere: Bool = false
     ) -> some View {
         let services = FakeAppServices(hosts: Self.hosts)
         services.terminalPhases = []
@@ -60,7 +60,7 @@ struct WorkspaceSnapshotTests {
             store.setLink(id == selected ? link : Self.mosh, for: TabID(hostID: Self.macbook, sessionID: id))
         }
         // RootView sets this tint for the whole app.
-        return WorkspaceView(store: store, terminals: terminals, noteShown: noteShown)
+        return WorkspaceView(store: store, terminals: terminals)
             .tint(Color.togoSnow)
     }
 
@@ -127,7 +127,7 @@ struct WorkspaceSnapshotTests {
 
     @Test func fallbackNoteShown() {
         assertScreen(named: "fallback-note") {
-            screen(link: .live(transport: "SSH", note: "mosh-server not found on mini"), noteShown: true)
+            screen(link: .live(transport: "SSH", note: "mosh-server not found on mini"))
         }
     }
 

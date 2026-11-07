@@ -30,8 +30,13 @@ import TogoKit
     /// What a link asked the next new-session sheet to start with. The sheet that reads it
     /// takes it, so it is not observed.
     @ObservationIgnored var newSessionPrefill: NewSessionPrefill?
+    /// Bumped by ⌘T; the prompt bar opens its start line when it changes, or the new-session
+    /// sheet comes up where the bar is busy.
+    var startRequests = 0
     /// Bumped by ⌘F; the workspace opens its find bar when it changes.
     var findRequests = 0
+    /// A rename or end-session dialog is up, so keys typed belong to it.
+    var dialogOpen = false
     /// Bumped when a stage, unstage, discard or commit in the review goes through, so the
     /// workspace header counts the changes again.
     var reviewWrites = 0
@@ -44,8 +49,8 @@ import TogoKit
     @ObservationIgnored var openReview: ReviewSession?
     /// Compose text per tab. Cleared when it is sent and when the tab closes.
     var drafts: [TabID: String] = [:]
-    /// The board of every session, shown over the workspace.
-    var boardShown = false
+    /// Monitor mode: the roster full screen as a status display, over the workspace.
+    var monitorShown = false
     /// The workspace with its chrome hidden.
     var zen = false
     /// Both panes are on screen. The workspace sets it from its arrangement; while false the
@@ -110,8 +115,11 @@ import TogoKit
         let narrowed = !needle.isEmpty || filter != .all
         return controlCenter.machines.compactMap { machine in
             var machine = machine
+            // A search for the machine's name keeps all of its sessions.
+            let name = services.hosts.first { $0.id == machine.id }?.name ?? machine.name
+            let machineMatches = !needle.isEmpty && name.localizedStandardContains(needle)
             machine.sessions = machine.sessions.filter { row in
-                filter.admits(row.status) && (needle.isEmpty || Self.matches(row, needle))
+                filter.admits(row.status) && (needle.isEmpty || machineMatches || Self.matches(row, needle))
             }
             return narrowed && machine.sessions.isEmpty ? nil : machine
         }
@@ -149,6 +157,7 @@ import TogoKit
         }
         controlCenter.archived = (controlCenter.archived.filter { $0.hostID != snapshot.hostID } + archived)
             .sorted { $0.statusSince > $1.statusSince }
+        rememberLabels(snapshot.sessions, on: snapshot.hostID)
         switch snapshot.reachability {
         case .online:
             closeEndedTabs(on: snapshot.hostID, listed: Set(snapshot.sessions.map(\.id)))
@@ -247,7 +256,8 @@ import TogoKit
             let row = session(hostID: hostID, id: sessionID)
             workspace.tabs.append(WorkspaceTab(
                 hostID: hostID, sessionID: sessionID, bib: row?.bib,
-                title: row.map(\.name) ?? sessionID, link: .connecting, transport: transport
+                title: row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? sessionID, link: .connecting,
+                transport: transport, agent: row?.agentName
             ))
         }
         if id == workspace.secondary {

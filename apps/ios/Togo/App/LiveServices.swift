@@ -43,6 +43,11 @@ import UIKit
     @ObservationIgnored var onMachineRemoved: (HostID) -> Void = { _ in }
     /// A machine's address or credentials changed. Its terminals reconnect with the new ones.
     @ObservationIgnored var onMachineChanged: (HostID) -> Void = { _ in }
+    /// A machine a terminal waited for is loaded. Its tabs attach again, now with its record.
+    @ObservationIgnored var onMachineArrived: (HostID) -> Void = { _ in }
+    /// True once `start()` has read the stored machines; until then a missing one is not unknown.
+    @ObservationIgnored var recordsLoaded = false
+    @ObservationIgnored var pendingTerminals: [HostID: [UUID: AsyncStream<LinkPhase>.Continuation]] = [:]
     /// Every machine view as it is published, for readers that serve the whole app.
     @ObservationIgnored var onPublish: (HostViewSnapshot) -> Void = { _ in }
     /// Runs when the app goes to the background, before the helper connections close: port
@@ -60,7 +65,7 @@ import UIKit
     @ObservationIgnored private(set) var watches: [HostID: any HostWatch] = [:]
     @ObservationIgnored private var feeds: [HostID: Task<Void, Never>] = [:]
     @ObservationIgnored private(set) var latest: [HostID: HostSnapshot] = [:]
-    @ObservationIgnored private var mapper = SnapshotMapper()
+    @ObservationIgnored private(set) var mapper = SnapshotMapper()
     @ObservationIgnored private var agentsRequested: Set<HostID> = []
     @ObservationIgnored private var terminals: [ObjectIdentifier: LiveTerminal] = [:]
     @ObservationIgnored private(set) var foreground = true
@@ -252,11 +257,7 @@ import UIKit
     }
 
     func terminal(hostID: HostID, sessionID: String, transport: TransportPreference?, userStarted: Bool) -> TerminalHandle {
-        guard let record = records[hostID] else {
-            let (phases, sink) = AsyncStream.makeStream(of: LinkPhase.self)
-            sink.yield(.failed(LiveServiceError.unknownMachine.localizedDescription))
-            return TerminalHandle(engineView: UIViewController(), phases: phases, onStop: { sink.finish() })
-        }
+        guard let record = records[hostID] else { return awaitingMachine(hostID) }
         let preference = transport ?? (record.profile.transport == .auto ? settings.transport : record.profile.transport)
         let prompter = AttachPrompter(
             prompts: attachPrompts, hostID: hostID, machine: record.profile.name,
@@ -341,8 +342,8 @@ import UIKit
     private func reconcile(_ all: [HostRecord]) {
         let incoming = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         let removed = records.keys.filter { incoming[$0] == nil }
-        // A new wake target is no reason to reconnect.
-        let changed = records.keys.filter { incoming[$0] != nil && incoming[$0]?.withoutWake != records[$0]?.withoutWake }
+        // A new wake target or route is no reason to reconnect.
+        let changed = records.keys.filter { incoming[$0] != nil && incoming[$0]?.withoutLearned != records[$0]?.withoutLearned }
         let rewoken = records.keys.filter { incoming[$0] != nil && incoming[$0]?.wake != records[$0]?.wake && !changed.contains($0) }
         // A removed machine's channel and saved password stay until its helper is told to stop pushing.
         let paired = deps.pairing?.pairedOrPairing ?? []
@@ -351,6 +352,7 @@ import UIKit
             stopWatching(id, dropChannel: !unpairing.contains(id))
         }
         records = incoming
+        shareRoutes(all, removed: removed)
         hosts = all.map(Self.view(of:))
         for record in all where watches[record.id] == nil {
             startWatching(record)
@@ -365,6 +367,7 @@ import UIKit
         for id in rewoken {
             if let snapshot = latest[id], let record = records[id] { publish(snapshot, record: record) }
         }
+        settlePendingTerminals()
     }
 
     private func startWatching(_ record: HostRecord) {
@@ -403,6 +406,8 @@ import UIKit
         deps.diagnostics.reached(snapshot, record: record)
         publish(snapshot, record: record)
         learnWake(from: snapshot, record: record)
+        learnRoutes(from: snapshot, record: record)
+        askToOpen(from: snapshot)
         if snapshot.reach == .online, !record.noHelper {
             pair(record, capabilities: snapshot.capabilities)
             if foreground, unreported.remove(record.id) != nil {

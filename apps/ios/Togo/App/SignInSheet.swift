@@ -26,13 +26,20 @@ import TogoKit
         self.finish = finish
     }
 
+    /// The least time the signing-in state stays up, so a refusal that comes back at once still
+    /// reads as a fresh attempt rather than a button that did nothing.
+    static let minimumAttempt: Duration = .milliseconds(700)
+
     func run() async {
         phase = .connecting
+        let started = ContinuousClock.now
         let prompter = SheetPrompter { [weak self] prompt in await self?.ask(prompt) }
         do {
             try await services.signIn(hostID: hostID, prompter: prompter)
             finish()
         } catch {
+            let shown = ContinuousClock.now - started
+            if shown < Self.minimumAttempt { try? await Task.sleep(for: Self.minimumAttempt - shown) }
             guard !Task.isCancelled else { return }
             phase = .failed(ServiceErrors.message(error))
         }
@@ -85,7 +92,7 @@ struct SignInSheet: View {
             SignInPhaseView(machine: model.machine, phase: model.phase, onSubmit: model.submit) { attempt += 1 }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "onboard.cancel", defaultValue: "Cancel")) { dismiss() }
+                        Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) { dismiss() }
                     }
                 }
         }

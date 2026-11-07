@@ -18,6 +18,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/authkeys"
 	"github.com/gettogo/togo/helper/internal/awake"
+	"github.com/gettogo/togo/helper/internal/browser"
 	"github.com/gettogo/togo/helper/internal/fsread"
 	"github.com/gettogo/togo/helper/internal/gitx"
 	"github.com/gettogo/togo/helper/internal/hostinfo"
@@ -40,6 +41,7 @@ var Capabilities = []string{
 	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1",
 	"gitwrite.v1",
 	awake.Capability,
+	browser.Capability,
 	notify.Capability,
 	hostinfo.Capability,
 	wire.CapAuthkeys,
@@ -51,7 +53,7 @@ var Capabilities = []string{
 
 // Concurrent lists the methods the daemon runs off the connection's read
 // loop because they block.
-var Concurrent = local.Concurrent
+var Concurrent = append(append([]string{}, local.Concurrent...), browser.Concurrent...)
 
 // ComposeOptions configures Compose.
 type ComposeOptions struct {
@@ -83,6 +85,7 @@ type Components struct {
 	Awake     *awake.Manager
 	Notify    *notify.Store
 	Will      *push.WillKeeper
+	Browser   *browser.Service
 
 	logf       func(format string, args ...any)
 	followups  chan string
@@ -110,7 +113,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	c.Approvals = approval.New(approval.Config{Tmux: svc.Tmux, Pub: c.Hub})
 	w, err := watch.New(watch.Config{
 		Tmux: svc.Tmux, Sessions: svc, TogoPath: o.TogoPath, Home: o.Home,
-		Status: c.Hub, Prompts: c.Approvals, Pub: pub,
+		Status: c.Hub, Activity: c.Hub, Prompts: c.Approvals, Pub: pub,
 	})
 	if err != nil {
 		return nil, err
@@ -155,6 +158,15 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		svc.Manifest.Logf = logf
 	}
 	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach}
+	c.Browser = &browser.Service{Pub: c.Hub, Attached: func() bool { return c.Hub.ForegroundSubscribers() > 0 }}
+	if o.TogoPath != "" && o.Home != "" {
+		dir := browser.ShimDir(o.Home)
+		if err := browser.WriteShims(dir, o.TogoPath); err != nil {
+			logf("daemon: browser shims: %v", err)
+		} else {
+			svc.ShimDir = dir
+		}
+	}
 	git := gitx.Git{}
 
 	ext := map[string]api.Method{}
@@ -163,6 +175,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		c.Approvals.Methods(),
 		c.Watch.Methods(),
 		c.Local.Methods(),
+		c.Browser.Methods(),
 		c.Push.Methods(),
 		(&gitx.Service{Sessions: svc, Git: git}).Methods(),
 		(&fsread.Service{Sessions: svc, Git: git}).Methods(),
@@ -238,6 +251,7 @@ func (c *Components) Run(ctx context.Context) {
 	wg.Go(func() { c.runFollowups(ctx) })
 	wg.Go(func() { c.Awake.Run(ctx) })
 	wg.Go(func() { c.Will.Run(ctx) })
+	wg.Go(func() { c.Hub.RunActivity(ctx) })
 	wg.Wait()
 }
 

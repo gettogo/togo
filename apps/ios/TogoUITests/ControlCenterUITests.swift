@@ -20,6 +20,24 @@ extension XCUIApplication {
         )).firstMatch
     }
 
+    /// The roster's one toolbar menu: New session, Show, Monitor, Settings, Add machine, Archive.
+    var rosterMenu: XCUIElement { buttons["roster.more"] }
+
+    /// Opens the roster's menu and picks `label` from it.
+    func pickFromRosterMenu(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(rosterMenu.waitForExistence(timeout: 10), "The roster never loaded", file: file, line: line)
+        rosterMenu.tap()
+        let item = buttons.matching(identifier: label).allElementsBoundByIndex.last { $0.exists && $0.isHittable }
+            ?? buttons[label]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "The roster's menu has no \(label)", file: file, line: line)
+        item.tap()
+    }
+
+    /// The prompt bar arms a new request's answers about half a second after it shows.
+    func waitForAnswersToArm() {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.7))
+    }
+
     /// The button with this label that is on screen, for labels a dialog shares with a swipe action.
     func visibleButton(_ label: String) -> XCUIElement? {
         buttons.matching(identifier: label).allElementsBoundByIndex.last { $0.exists && $0.isHittable }
@@ -114,14 +132,16 @@ extension XCTestCase {
         let app = launchTogo()
         let row = app.row("01", "api")
         XCTAssertTrue(row.waitForExistence(timeout: 10))
-        XCTAssertEqual(row.label, "01, api, Working, in ~/src/api")
+        XCTAssertEqual(row.label, "01, api, Claude Code, Working")
         XCTAssertEqual(row.value as? String, "Editing routes.ts")
 
-        let card = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Run npm test?")).firstMatch
-        XCTAssertTrue(card.exists)
-        XCTAssertTrue(card.label.contains("04"))
-        XCTAssertTrue(card.label.contains("Studio"))
-        audit(app, glass: ["New session"])
+        // The request waits in the prompt bar: its context line reads bib, session and machine.
+        XCTAssertTrue(app.staticTexts["Run npm test?"].waitForExistence(timeout: 5))
+        let context = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND label CONTAINS %@", "04, ", "Studio"
+        )).firstMatch
+        XCTAssertTrue(context.exists, "The bar does not say whose request it is")
+        audit(app, glass: ["Yes", "No", "Reply", "More", "roster.more"])
     }
 
     func testRequestAnswersMeetTheMinimumSize() {
@@ -136,6 +156,7 @@ extension XCTestCase {
         let app = launchTogo()
         let yes = app.buttons["Yes"]
         XCTAssertTrue(yes.waitForExistence(timeout: 10))
+        app.waitForAnswersToArm()
         yes.tap()
         let title = app.staticTexts["Run npm test?"]
         XCTAssertTrue(title.waitForNonExistence(timeout: 5))
@@ -197,9 +218,7 @@ extension XCTestCase {
 
     func testSettingsPassesTheAudit() {
         let app = launchTogo()
-        let settings = app.buttons["Settings"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 10))
-        settings.tap()
+        app.pickFromRosterMenu("Settings")
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         audit(app)
     }

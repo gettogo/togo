@@ -127,9 +127,21 @@ func (h *harness) signal(t *testing.T, kind, title string) {
 	}
 }
 
+// work sends output sustained long enough to mark a program without a
+// working indicator busy: three tap signals a second apart.
+func (h *harness) work(t *testing.T) {
+	t.Helper()
+	for i := range 3 {
+		if i > 0 {
+			h.advance(time.Second)
+		}
+		h.signal(t, wire.SignalOutput, "")
+	}
+}
+
 func TestOutputThenSilenceRunsDetectOnce(t *testing.T) {
 	h := newHarness(t)
-	h.signal(t, wire.SignalOutput, "")
+	h.work(t)
 	h.advance(5 * time.Second)
 	h.w.Tick(context.Background())
 	if h.captures != 0 {
@@ -163,7 +175,7 @@ func TestSilenceWithPromptCallsPromptSeen(t *testing.T) {
 
 func TestSilenceWithoutPromptPublishesDone(t *testing.T) {
 	h := newHarness(t)
-	h.signal(t, wire.SignalOutput, "")
+	h.work(t)
 	h.advance(7 * time.Second)
 	h.w.Tick(context.Background())
 	if len(h.events) != 1 || h.events[0].Level != wire.LevelDone || h.events[0].Title != "api" {
@@ -396,7 +408,7 @@ func TestSetIdleChangesDoneDelay(t *testing.T) {
 	t.Setenv("TOGO_IDLE_SECONDS", "")
 	h := newHarness(t)
 	h.w.SetIdle(15 * time.Second)
-	h.signal(t, wire.SignalOutput, "")
+	h.work(t)
 	h.advance(7 * time.Second)
 	h.w.Tick(context.Background())
 	if len(h.events) != 0 {
@@ -415,5 +427,20 @@ func TestSetIdleYieldsToEnv(t *testing.T) {
 	h.w.SetIdle(15 * time.Second)
 	if got := h.w.idleWindow(); got != 6*time.Second {
 		t.Fatalf("idle = %v", got)
+	}
+}
+
+type activityRecorder struct{ ids []string }
+
+func (a *activityRecorder) RecordOutput(id string) { a.ids = append(a.ids, id) }
+
+func TestOutputSignalFeedsActivity(t *testing.T) {
+	h := newHarness(t)
+	rec := &activityRecorder{}
+	h.w.cfg.Activity = rec
+	h.signal(t, wire.SignalOutput, "")
+	h.signal(t, wire.SignalBell, "")
+	if len(rec.ids) != 1 || rec.ids[0] != sid {
+		t.Fatalf("recorded = %v", rec.ids)
 	}
 }

@@ -56,10 +56,13 @@ enum PaneLayout {
         hasSecondary && size.width - sidebarIdealWidth < 2 * minimumPaneWidth + hairline
     }
 
-    /// Book posture: the sidebar takes the leading page exactly.
-    static func sidebarWidth(fold: FoldInfo) -> CGFloat? {
-        guard fold.posture == .book, let division = fold.division else { return nil }
-        return division.minX
+    /// The roster column beside the terminal: narrow on a foldable, a little wider on iPad. It
+    /// never follows the fold, so nothing sits on the hinge but the terminal.
+    static let rosterWidthFoldable: CGFloat = 290
+    static let rosterWidthTablet: CGFloat = 320
+
+    static func rosterWidth(fold: FoldInfo) -> CGFloat {
+        fold.division != nil || fold.inactiveDivision != nil ? rosterWidthFoldable : rosterWidthTablet
     }
 
     /// The nearest of `fractions` that keeps both panes at or above the minimum width. When

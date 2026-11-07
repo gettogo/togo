@@ -15,7 +15,12 @@ public struct SystemBiometricEvaluator: BiometricEvaluator {
 }
 
 /// One evaluated `LAContext` shared by the resume lock and key signing, so one unlock
-/// covers both and a reconnect inside the reuse window shows no prompt at all.
+/// covers both and a reconnect while the context lives shows no prompt at all.
+///
+/// The context never borrows the lock-screen unlock (`touchIDAuthenticationAllowableReuseDuration`):
+/// that satisfies `evaluatePolicy` without a prompt, but the Secure Enclave refuses it for
+/// keychain items protected by user presence, so every read failed with `errSecAuthFailed`
+/// and no prompt ever appeared. Each new context asks for a real unlock.
 ///
 /// The context is dropped when the device locks (`expire()`) and after
 /// `backgroundLimit` seconds in the background. The background check also runs inside
@@ -30,18 +35,16 @@ public actor BiometricSession {
     }
 
     private let evaluator: any BiometricEvaluator
-    private let reuse: TimeInterval
     private let now: @Sendable () -> Date
     private let expiry = Mutex(Expiry())
     private var evaluated: LAContext?
     private var pending: Task<LAContext, any Error>?
 
     public init(
-        evaluator: any BiometricEvaluator = SystemBiometricEvaluator(), reuse: TimeInterval = 300,
+        evaluator: any BiometricEvaluator = SystemBiometricEvaluator(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.evaluator = evaluator
-        self.reuse = reuse
         self.now = now
     }
 
@@ -71,10 +74,8 @@ public actor BiometricSession {
         // Concurrent callers (resume lock and a reconnect) wait on one prompt, not two.
         if let pending { return try await pending.value }
         let evaluator = self.evaluator
-        let reuse = self.reuse
         let task = Task<LAContext, any Error> {
             let context = LAContext()
-            context.touchIDAuthenticationAllowableReuseDuration = reuse
             try await evaluator.evaluate(context, reason: reason)
             return context
         }

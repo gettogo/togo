@@ -48,6 +48,11 @@ type PromptSink interface {
 	SessionGone(ctx context.Context, sessionID string)
 }
 
+// ActivitySink is told when a session produces output.
+type ActivitySink interface {
+	RecordOutput(id string)
+}
+
 // Config wires a Watcher.
 type Config struct {
 	Tmux     *tmux.Client
@@ -65,6 +70,8 @@ type Config struct {
 	Status  StatusSink
 	Prompts PromptSink
 	Pub     wire.Publisher
+	// Activity, when set, hears every output signal.
+	Activity ActivitySink
 }
 
 // Watcher supervises taps and reacts to their signals.
@@ -86,6 +93,9 @@ type Watcher struct {
 	armed func(context.Context) (map[string]string, error)
 	// agentGone checks the pane before an exit report counts.
 	agentGone func(context.Context, string) (bool, error)
+	// geometry reports the pane size and attached clients; nil skips the
+	// redraw check.
+	geometry func(context.Context, string) (string, error)
 	// settledGone checks the pane for an agent gone without a report: gone,
 	// in a pane that did not just start.
 	settledGone func(context.Context, string) (bool, error)
@@ -130,6 +140,9 @@ func New(cfg Config) (*Watcher, error) {
 	}
 	w.piped = cfg.Tmux.PipedSessions
 	w.armed = cfg.Tmux.TapCommands
+	w.geometry = func(ctx context.Context, id string) (string, error) {
+		return cfg.Tmux.PaneGeometry(ctx, "="+id+":")
+	}
 	w.agentGone = w.paneGone
 	w.settledGone = w.paneSettledGone
 	w.pruneRecord = cfg.Sessions.Settle
@@ -237,15 +250,16 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 		live[s.ID] = true
 		e := w.entry(s.ID)
 		e.mu.Lock()
+		e.agent = s.Agent
 		if e.attached && piped != nil && !piped[s.ID] {
 			e.attached = false
 		}
 		if !e.attached && piped[s.ID] && armed[s.ID] != "" && armed[s.ID] == w.tapCommand(s.ID) {
-			e.attached = true
+			e.attached, e.attachedAt = true, w.now()
 			e.screenCheck = true
 		}
 		if !e.attached && w.attach(ctx, s.ID) == nil {
-			e.attached = true
+			e.attached, e.attachedAt = true, w.now()
 			e.screenCheck = true
 		}
 		if scan <= startScans {
@@ -355,11 +369,20 @@ func (w *Watcher) Tick(ctx context.Context) {
 			// Silence after the agent ended or failed is not a done:
 			// neither for output its hooks saw before the exit, nor for
 			// output from the shell the pane fell back to.
-			e.awaitingIdle, e.working = false, false
+			e.awaitingIdle, e.working, e.promptCheck = false, false, false
 		case e.silent(now, idle):
 			e.awaitingIdle = false
 			e.screenCheck = false
 			w.settle(ctx, id, e)
+		case w.turnOver(ctx, id, e, now):
+			e.awaitingIdle = false
+			e.screenCheck = false
+			w.settle(ctx, id, e)
+		case e.promptCheck && !e.awaitingIdle && now.Sub(e.lastOutput) >= idle:
+			e.promptCheck = false
+			if p, ok, err := w.inspect(ctx, id); err == nil && ok {
+				w.promptSeen(ctx, id, e, p)
+			}
 		// Output since the attach leaves the screen to the idle check.
 		case e.screenCheck && !e.awaitingIdle:
 			e.screenCheck = false
@@ -368,26 +391,6 @@ func (w *Watcher) Tick(ctx context.Context) {
 			}
 		}
 		e.mu.Unlock()
-	}
-}
-
-// settle runs after silence: a prompt on screen is reported, otherwise the
-// session is idle and its owner is told it is done.
-func (w *Watcher) settle(ctx context.Context, id string, e *entry) {
-	e.working = false
-	p, ok, err := w.inspect(ctx, id)
-	switch {
-	case err != nil && e.prompt != "":
-		// The prompt may still be up; look again on the next tick.
-		e.awaitingIdle = true
-	case err != nil:
-		w.setStatus(id, statusIdle)
-	case ok:
-		w.promptSeen(ctx, id, e, p)
-	default:
-		w.clearPrompt(ctx, id, e)
-		w.setStatus(id, statusIdle)
-		w.notify(id, wire.LevelDone, w.sessionName(ctx, id), "")
 	}
 }
 
@@ -413,26 +416,6 @@ func (w *Watcher) Signal(ctx context.Context, sig wire.Signal) error {
 		return &session.InvalidParamsError{Msg: "unknown signal kind"}
 	}
 	return nil
-}
-
-func (w *Watcher) output(ctx context.Context, id string, e *entry) {
-	if w.Ended(id) {
-		return
-	}
-	if e.prompt != "" {
-		p, ok, err := w.inspect(ctx, id)
-		if err != nil {
-			e.lastOutput, e.awaitingIdle = w.now(), true
-			return
-		}
-		if ok && p.Fingerprint == e.prompt {
-			return
-		}
-		w.clearPrompt(ctx, id, e)
-	}
-	if e.outputSeen(w.now()) {
-		w.setStatus(id, statusWorking)
-	}
 }
 
 func (w *Watcher) attention(ctx context.Context, sig wire.Signal, e *entry) {

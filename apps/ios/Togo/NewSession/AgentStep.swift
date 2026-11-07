@@ -3,6 +3,8 @@ import TogoKit
 
 struct AgentStep: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsMissing = false
     let model: NewSessionModel
     let onStart: () async -> Void
 
@@ -31,28 +33,89 @@ struct AgentStep: View {
             RetryButton { Task { await model.loadAgents() } }
         case .loaded:
             VStack(spacing: 0) {
-                ForEach(model.offeredAgents, id: \.id) { agent in
-                    ChoiceRow(
-                        symbol: AgentPresetText.symbol(for: agent.id), title: Text(verbatim: agent.name),
-                        selected: agent.installed && agent.id == model.selectedRegistryID,
-                        enabled: agent.installed,
-                        action: { model.choose(agent: agent.id) }
-                    ) {
-                        if !agent.installed {
-                            Text(verbatim: NewSessionCopy.notInstalled(on: model.machineName))
-                        }
-                    }
+                ForEach(model.installedAgents, id: \.id) { agent in
+                    agentRow(agent)
                 }
                 ForEach(model.presets) { preset in
                     presetRow(preset)
+                }
+                if !model.missingAgents.isEmpty {
+                    missingToggle
+                    if showsMissing {
+                        ForEach(model.missingAgents, id: \.id) { agent in
+                            agentRow(agent)
+                        }
+                    }
                 }
             }
         }
     }
 
+    /// A registry agent with its star. The star sits beside the row, not in it, so starring
+    /// never chooses the agent.
+    private func agentRow(_ agent: AgentInfo) -> some View {
+        HStack(spacing: 0) {
+            ChoiceRow(
+                symbol: "terminal", agent: agent.id, title: Text(verbatim: agent.name),
+                selected: agent.installed && agent.id == model.selectedRegistryID,
+                enabled: agent.installed,
+                action: { model.choose(agent: agent.id) }
+            ) {
+                if !agent.installed {
+                    Text(verbatim: NewSessionCopy.notInstalled(on: model.machineName))
+                }
+            }
+            if agent.id != "shell" { star(agent) }
+        }
+        .overlay(alignment: .bottom) { Color.togoLine.frame(height: 1) }
+    }
+
+    private func star(_ agent: AgentInfo) -> some View {
+        let on = model.isFavorite(agent.id)
+        return Button {
+            withAnimation(Motion.animation(.confirm, reduce: reduceMotion)) { model.toggleFavorite(agent.id) }
+        } label: {
+            Image(systemName: on ? "star.fill" : "star")
+                .font(.body)
+                .foregroundStyle(on ? Color.togoSnow : Color.togoMute)
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(on ? NewSessionCopy.removeFavorite : NewSessionCopy.addFavorite)
+        .accessibilityValue(Text(verbatim: agent.name))
+    }
+
+    /// Agents the machine lacks stay folded away, so the list is the ones that can start.
+    private var missingToggle: some View {
+        Button {
+            withAnimation(Motion.animation(.collapse, reduce: reduceMotion)) { showsMissing.toggle() }
+        } label: {
+            HStack(spacing: 8) {
+                Text(NewSessionCopy.notInstalledHeading)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
+                Text(verbatim: NewSessionCopy.notInstalledCount(model.missingAgents.count))
+                    .font(.system(.subheadline, design: .monospaced))
+                    .foregroundStyle(Color.togoMute)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.togoMute)
+                    .rotationEffect(.degrees(showsMissing ? 90 : 0))
+            }
+            .frame(minHeight: 44)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(showsMissing ? NewSessionCopy.expanded : NewSessionCopy.collapsed)
+        .padding(.top, 8)
+    }
+
     private func presetRow(_ preset: AgentPreset) -> some View {
         ChoiceRow(
-            symbol: AgentPresetText.symbol(for: preset.agent), title: Text(verbatim: preset.name),
+            symbol: "terminal", agent: preset.agent, title: Text(verbatim: preset.name),
             selected: preset.id == model.selectedPreset?.id,
             enabled: model.canUse(preset),
             action: { model.choose(preset: preset) }

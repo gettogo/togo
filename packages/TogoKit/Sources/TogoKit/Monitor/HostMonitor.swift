@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import LocalAuthentication
 
 /// Keeps one machine's sessions and approvals current over a live `SessionSource`.
 ///
@@ -192,7 +193,7 @@ public actor HostMonitor {
             do { try await clock.sleep(for: delay) } catch { return }
             guard isCurrent(run) else { return }
             guard isForeground else { break }
-            if !isOffline { setReach(.connecting) }
+            if !isAway { setReach(.connecting) }
             let backgroundingsAtStart = backgroundings
             do {
                 let connected = try await connect()
@@ -218,7 +219,7 @@ public actor HostMonitor {
                 }
                 failures += 1
                 if failures >= Self.failuresBeforeOffline {
-                    setReach(.offline(failure.error.localizedDescription))
+                    setReach(Self.awayReach(for: failure.error))
                 }
             }
         }
@@ -351,6 +352,9 @@ public actor HostMonitor {
             return .failed(error.localizedDescription)
         case KeyError.missing:
             return .keyMissing
+        // The keychain or Face ID would not unlock the key or password; only the user can.
+        case is SecretStoreError, is LAError:
+            return .authNeeded
         default:
             break
         }
@@ -475,8 +479,25 @@ public actor HostMonitor {
 
     // MARK: - Publishing
 
-    private var isOffline: Bool {
-        if case .offline = state.reach { true } else { false }
+    /// Offline or failed while still retrying: each attempt keeps that word rather than
+    /// flashing back to connecting.
+    private var isAway: Bool {
+        switch state.reach {
+        case .offline, .failed: true
+        default: false
+        }
+    }
+
+    /// Offline only when the machine itself did not answer. A machine that answers but whose
+    /// helper does not, as while it restarts, reads as failed with the reason, and the
+    /// attempts go on.
+    static func awayReach(for error: any Error) -> HostSnapshot.Reach {
+        switch error {
+        case SSHError.unreachable, SSHError.timeout:
+            .offline(error.localizedDescription)
+        default:
+            .failed(error.localizedDescription)
+        }
     }
 
     private func setReach(_ reach: HostSnapshot.Reach) {

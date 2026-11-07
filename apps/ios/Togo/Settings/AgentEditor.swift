@@ -14,6 +14,7 @@ enum AgentCheckState: Equatable {
 struct AgentEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.machineTools) private var tools
+    @Environment(\.agentLibrary) private var library
     @State private var draft: AgentPreset
     @State private var flags: String
     @State private var checks: [HostID: AgentCheckState]
@@ -34,6 +35,11 @@ struct AgentEditor: View {
         self.save = save
     }
 
+    /// The agents to pick from, favorites first.
+    private var registry: [(id: String, name: String)] {
+        AgentPresetText.ordered(favorites: library?.favorites ?? [], recent: library?.recentAgents ?? [])
+    }
+
     /// The machines a check can reach without failing or asking to sign in.
     static func checkable(_ machines: [SettingsMachine]) -> [SettingsMachine] {
         machines.filter(\.checksAgents)
@@ -50,7 +56,7 @@ struct AgentEditor: View {
             .groupedRows()
             Section {
                 Picker(settingsText("settings.agents.agent", "Agent"), selection: $draft.agent) {
-                    ForEach(AgentPresetText.registry, id: \.id) { entry in
+                    ForEach(registry, id: \.id) { entry in
                         Text(verbatim: entry.name).tag(entry.id)
                     }
                     Text(settingsText("settings.agents.otherProgram", "Other program")).tag(AgentPreset.custom)
@@ -94,7 +100,7 @@ struct AgentEditor: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button(settingsText("settings.agents.save", "Save")) {
+                Button(settingsText("settings.agents.save", "Save"), systemImage: "checkmark", role: .confirm) {
                     guard let preset = finished else { return }
                     save(preset)
                     dismiss()

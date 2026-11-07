@@ -9,7 +9,9 @@ public enum MoshFactory {
     ) async throws -> MoshTransport {
         let command = MoshBootstrap.command(argv: argv, serverPath: profile.moshServerPath, ports: profile.moshPorts)
         let reply = try await connection.run(command, timeout: .seconds(10))
-        let host = await connection.remoteAddress ?? profile.endpoint.host
+        let reached = await connection.remoteAddress
+        let route = await connection.route
+        let host = reached ?? route ?? profile.endpoint.host
         let endpoint = try MoshBootstrap.parse(stdout: reply.stdout, stderr: reply.stderr, status: reply.status, host: host)
         return MoshTransport(endpoint: endpoint, cols: cols, rows: rows)
     }

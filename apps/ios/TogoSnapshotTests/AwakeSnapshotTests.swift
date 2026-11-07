@@ -80,8 +80,8 @@ struct AwakeSnapshotTests {
         )
         section.awake = status(mode: .plugged, held: true, reason: .active)
         assertScreen(named: "awake-heading") {
-            List { MachineSectionView(machine: section, now: Samples.now, perform: { _ in }) }
-                .groupedList()
+            List { RosterSection(group: RosterModel.make(machines: [section], requests: []).groups[0], now: Samples.now, perform: { _ in }) }
+                .listStyle(.plain)
                 .togoControls()
         }
     }

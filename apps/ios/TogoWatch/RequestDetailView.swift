@@ -2,39 +2,50 @@ import SwiftUI
 import TogoPush
 import WatchKit
 
-/// One request: the question, what it is about, the machine, and Approve and Deny.
+/// One request filling the screen: beacon, mono bib and agent, the question, the command in
+/// a mono well, Yes and No, and Reply where the Watch can send it.
 struct RequestDetailView: View {
     let store: WatchStore
     let requestId: String
+    var position = 1
+    var count = 1
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         if let request = store.request(requestId) {
             content(request)
         } else {
-            ContentUnavailableView(WatchCopy.nothingWaiting, systemImage: "checkmark.circle")
+            AllClearFallback()
         }
     }
 
     private func content(_ request: PendingRequest) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                RequestHeader(request: request)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    BeaconDot(lit: true)
+                    RequestHeader(request: request)
+                    Spacer(minLength: 4)
+                    if let counter = WatchHome.counter(position: position, count: count) {
+                        Text(counter)
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
                 Text(request.title)
                     .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
-                if let subject = request.subject, subject.isValid {
-                    Text(PromptText.clean(subject.text))
+                if let command = WatchHome.commandText(request) {
+                    Text(command)
                         .font(.system(.footnote, design: .monospaced))
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                if let host = request.host, !host.isEmpty {
-                    Label(PromptText.clean(host, maxLines: 1), systemImage: "desktopcomputer")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(Color.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 AnswerButtons(store: store, request: request, done: dismissSoon)
-                    .padding(.top, 4)
+                    .padding(.top, 2)
                 if store.canReply(request.requestId) {
                     ReplyLink(
                         store: store, target: .answer(hostId: request.hostId, requestId: request.requestId),
@@ -61,6 +72,8 @@ private struct AnswerButtons: View {
     let done: () -> Void
 
     private var outcome: WatchStore.Outcome? { store.outcome(request.requestId) }
+    /// Off for a moment after the request shows; see `WatchHome.armDelay`.
+    @State private var armed = false
     private var canApprove: Bool { WatchStore.canApprove(request) }
 
     var body: some View {
@@ -86,6 +99,10 @@ private struct AnswerButtons: View {
                 }
             }
             .animation(.snappy, value: state)
+        }
+        .task {
+            try? await Task.sleep(for: WatchHome.armDelay)
+            armed = true
         }
         .onChange(of: outcome) { _, new in
             switch new {
@@ -115,13 +132,15 @@ private struct AnswerButtons: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         Button {
+            guard armed else { return }
             Task { await store.answer(request.requestId, "approve") }
         } label: {
-            Text(WatchCopy.approve)
+            Text(WatchCopy.yes)
                 .frame(maxWidth: .infinity)
                 .foregroundStyle(canApprove ? Color.black : Color.secondary)
         }
         .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.capsule)
         .tint(.togoAccent)
         .disabled(!canApprove || sending)
         if !canApprove {
@@ -130,12 +149,15 @@ private struct AnswerButtons: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        Button(role: .destructive) {
+        Button {
+            guard armed else { return }
             Task { await store.answer(request.requestId, "deny") }
         } label: {
-            Text(WatchCopy.deny)
+            Text(WatchCopy.no)
                 .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.plain)
+        .frame(minHeight: 36)
         .disabled(sending)
     }
 
@@ -148,7 +170,41 @@ private struct AnswerButtons: View {
     }
 }
 
+/// What shows when a request was answered and nothing else waits.
+private struct AllClearFallback: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            BeaconDot(lit: false)
+            Text(WatchCopy.allClear)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 extension Color {
-    /// The approve color. The Watch is always dark, so this is the accent's dark value.
+    /// The beacon blue. The Watch is always dark, so this is the accent's dark value.
     static let togoAccent = Color(red: 0x9F / 255, green: 0xD0 / 255, blue: 0xF5 / 255)
+}
+
+/// "04 Claude Code": the bib in mono, then the agent.
+struct RequestHeader: View {
+    let request: PendingRequest
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let bib = request.bib, !bib.isEmpty {
+                Text(PromptText.clean(bib, maxLines: 1))
+                    .font(.system(.footnote, design: .monospaced))
+                    .lineLimit(1)
+            }
+            if let agent = request.agent, !agent.isEmpty {
+                Text(AgentName.display(agent))
+                    .font(.footnote)
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(.secondary)
+    }
 }

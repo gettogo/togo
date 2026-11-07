@@ -255,6 +255,7 @@ struct EventsCodingTests {
         case .notify: "notify"
         case .job: "job"
         case .awake: "awake"
+        case .browserOpen: "browser.open"
         case .unknown(let kind): kind
         }
     }

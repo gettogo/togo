@@ -24,12 +24,15 @@ const optionArgv = "@togo_argv"
 // The wrapper scripts run the agent and then report its exit status to the
 // daemon. They are constant: the helper path and the agent argv reach them
 // only as positional parameters, so no input is ever read as shell text.
+// Both wrappers put $TOGO_SHIM first on PATH after the login shell set
+// PATH up, so the agent's open and xdg-open are the shims that send web
+// pages to the phone.
 // In posixWrapper $0 is the literal "togo", $1 the helper path (empty to
 // skip the report) and the rest the agent argv; fishWrapper gets the same
 // list without $0. Both end in a login shell so the pane stays usable.
 const (
-	posixWrapper = `t=$1; shift; "$@"; s=$?; [ -n "$t" ] && "$t" session-exit "$s" 2>/dev/null; exec "${SHELL:-/bin/sh}" -l`
-	fishWrapper  = `set -l t $argv[1]; command $argv[2..-1]; set -l s $status; test -n "$t"; and $t session-exit $s 2>/dev/null; exec $SHELL -l`
+	posixWrapper = `t=$1; shift; [ -n "$TOGO_SHIM" ] && PATH="$TOGO_SHIM:$PATH"; "$@"; s=$?; [ -n "$t" ] && "$t" session-exit "$s" 2>/dev/null; exec "${SHELL:-/bin/sh}" -l`
+	fishWrapper  = `set -l t $argv[1]; test -n "$TOGO_SHIM"; and set -gx PATH $TOGO_SHIM $PATH; command $argv[2..-1]; set -l s $status; test -n "$t"; and $t session-exit $s 2>/dev/null; exec $SHELL -l`
 )
 
 // posixShells take -lic and treat the first argument after the script as
@@ -59,12 +62,14 @@ func (l Launch) Argv() []string {
 }
 
 // ValidateLaunch checks a session.create agent, program and args against
-// the protocol limits and finds the program on loginPath. It returns the
+// the protocol limits and finds the program on loginPath, then in fallbacks
+// (see agents.FallbackDirs). A program found only in fallbacks is launched by
+// its absolute path, since the login shell would not find it by name. It returns the
 // agent the session runs (a made-up entry for wire.AgentCustom, named after
 // the program) and its Launch. Rejections are *InvalidParamsError with
 // Reason wire.ReasonArgs, wire.ReasonProgram or wire.ReasonNotInstalled;
 // an unknown agent id has no Reason.
-func ValidateLaunch(agentID, program string, args []string, loginPath string) (agents.Agent, Launch, error) {
+func ValidateLaunch(agentID, program string, args []string, loginPath string, fallbacks []string) (agents.Agent, Launch, error) {
 	if agentID == "" {
 		agentID = "shell"
 	}
@@ -89,12 +94,18 @@ func ValidateLaunch(agentID, program string, args []string, loginPath string) (a
 		return agents.Agent{}, Launch{}, err
 	}
 	if agentID == wire.AgentCustom {
-		if _, err := findProgram(program, loginPath, true); err != nil {
+		if _, err := findProgram(program, loginPath, fallbacks, true); err != nil {
 			return agents.Agent{}, Launch{}, err
 		}
 		a = agents.Agent{ID: wire.AgentCustom, Name: programDisplayName(program), Command: program}
-	} else if !agents.Installed(a, loginPath) {
-		return fail(wire.ReasonNotInstalled, fmt.Sprintf("agent %q is not installed", a.ID))
+	} else if a.Command != "" {
+		p, off, ok := agents.Find(a.Command, loginPath, fallbacks)
+		if !ok {
+			return fail(wire.ReasonNotInstalled, fmt.Sprintf("agent %q is not installed", a.ID))
+		}
+		if off {
+			return a, Launch{Program: p, Args: slices.Clone(args)}, nil
+		}
 	}
 	if a.Command == "" {
 		return a, Launch{}, nil
@@ -136,7 +147,7 @@ func validateArgs(args []string) error {
 // be named that way, or an absolute path to something other than a regular
 // executable file, is wire.ReasonProgram. A program that is simply absent
 // is wire.ReasonNotInstalled when missingIsError, else "" and nil.
-func findProgram(program, loginPath string, missingIsError bool) (string, error) {
+func findProgram(program, loginPath string, fallbacks []string, missingIsError bool) (string, error) {
 	notInstalled := func() (string, error) {
 		if !missingIsError {
 			return "", nil
@@ -144,7 +155,7 @@ func findProgram(program, loginPath string, missingIsError bool) (string, error)
 		return "", &InvalidParamsError{Reason: wire.ReasonNotInstalled, Msg: "the program is not installed"}
 	}
 	if programName.MatchString(program) {
-		if p, ok := agents.Find(program, loginPath); ok {
+		if p, _, ok := agents.Find(program, loginPath, fallbacks); ok {
 			return p, nil
 		}
 		return notInstalled()
@@ -234,4 +245,14 @@ func decodeArgv(v string) ([]string, error) {
 		return nil, err
 	}
 	return argv, nil
+}
+
+// sessionEnv is the environment tmux gives a new session's pane.
+func (s *Service) sessionEnv(id, bib string) map[string]string {
+	env := map[string]string{"TOGO_SESSION": id, "TOGO_BIB": bib}
+	if s.ShimDir != "" {
+		env["TOGO_SHIM"] = s.ShimDir
+		env["BROWSER"] = filepath.Join(s.ShimDir, "togo-browser")
+	}
+	return env
 }

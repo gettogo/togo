@@ -14,6 +14,7 @@ struct HelperCheckView: View {
     let onUseWithoutHelper: () -> Void
 
     @State private var copied = false
+    @State private var phoneOnTailnet = PhoneTailnet.isConnected()
 
     var body: some View {
         if case .present(let version) = report.helper {
@@ -36,6 +37,11 @@ struct HelperCheckView: View {
                     text: String(localized: "onboard.helper.version", defaultValue: "Togo helper \(version)"), ready: true
                 )
                 machineLines
+            }
+            if let away = AwayFromHome(
+                machineOnTailnet: report.routes.map { _ in report.machineOnTailnet }, phoneOnTailnet: phoneOnTailnet
+            ) {
+                AwayFromHomeNote(machine: machine, state: away)
             }
             notes
         } actions: {

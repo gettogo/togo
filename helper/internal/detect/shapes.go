@@ -23,9 +23,17 @@ const (
 
 const cursorRunes = "❯›>▶➤→"
 
+// numberedCursorRunes also mark the chosen line of a numbered menu. Gemini
+// CLI and Qwen Code draw a radio dot ("● 1. Allow once"); the dot is not a
+// cursor elsewhere, since agents also use it as a bullet for their output.
+const numberedCursorRunes = cursorRunes + "●"
+
 var (
-	ynToken    = regexp.MustCompile(`(?i)[\[(]\s*(y|yes)\s*/\s*(n|no)\s*[\])]\s*[:?]?\s*$`)
-	numbered   = regexp.MustCompile(`^\s*([` + cursorRunes + `]\s*)?(\d{1,2})[.)]\s+(\S.*)$`)
+	ynToken = regexp.MustCompile(`(?i)[\[(]\s*(y|yes)\s*/\s*(n|no)\s*[\])]\s*[:?]?\s*$`)
+	// aiderYN is Aider's line-mode question: "(Y)es/(N)o [Yes]:", with
+	// "/(A)ll/(S)kip all" or "/(D)on't ask again" before the default.
+	aiderYN    = regexp.MustCompile(`\(Y\)es/\(N\)o(/\([A-Z]\)[^/\[]*)*\s*\[(Yes|No)\]:\s*$`)
+	numbered   = regexp.MustCompile(`^\s*([` + numberedCursorRunes + `]\s*)?(\d{1,2})[.)]\s+(\S.*)$`)
 	cursorLine = regexp.MustCompile(`^(\s*)[` + cursorRunes + `]\s+(\S.*)$`)
 	shortcut   = regexp.MustCompile(`(?i)\s+\((esc|[a-z0-9])\)$`)
 	headerRe   = regexp.MustCompile(`(?i)^(do you want|would you like|allow|approve|run|permission|proceed|confirm|apply)\b`)
@@ -43,6 +51,9 @@ var (
 func matchConfirm(lines []string) (Prompt, bool) {
 	last := lines[len(lines)-1]
 	loc := ynToken.FindStringIndex(last)
+	if loc == nil {
+		loc = aiderYN.FindStringIndex(last)
+	}
 	if loc == nil {
 		return Prompt{}, false
 	}
@@ -294,7 +305,7 @@ func splitShortcut(label string) (string, string) {
 var plainApprove = map[string]bool{
 	"yes": true, "allow": true, "approve": true, "run": true,
 	"yes, proceed": true, "allow once": true, "approve once": true,
-	"run once": true, "yes, once": true,
+	"run once": true, "yes, once": true, "yes, allow once": true,
 }
 
 func roleOf(label string) string {

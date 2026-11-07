@@ -8,7 +8,9 @@ public struct AgentPreset: Codable, Hashable, Sendable, Identifiable {
     /// Where presets live in a `SyncedRecordStore`, one record per preset id.
     public static let storePrefix = "preset."
     /// The program the helper's registry runs for each agent id, as in its agents registry.
-    public static let registryCommands = ["claude": "claude", "omp": "omp", "codex": "codex", "opencode": "opencode"]
+    public static let registryCommands = Dictionary(
+        uniqueKeysWithValues: AgentCatalog.entries.filter { !$0.command.isEmpty }.map { ($0.id, $0.command) }
+    )
 
     public var id: UUID
     public var name: String

@@ -65,7 +65,7 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
-	a, launch, err := ValidateLaunch(o.Agent, o.Program, o.Args, s.loginPath(ctx))
+	a, launch, err := ValidateLaunch(o.Agent, o.Program, o.Args, s.loginPath(ctx), s.fallbackDirs())
 	if err != nil {
 		return Session{}, err
 	}
@@ -107,7 +107,7 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 			Rows:    rows,
 			Command: launchWrapper(s.shell(), s.TogoPath, launch),
 			Options: options,
-			Env:     map[string]string{"TOGO_SESSION": id, "TOGO_BIB": bib},
+			Env:     s.sessionEnv(id, bib),
 		})
 		if err == nil {
 			s.remember(ManifestEntry{ID: id, Bib: bib, Name: name, Agent: a.ID, Cwd: dir, Command: launch.Argv(), CreatedAt: created})

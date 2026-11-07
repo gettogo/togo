@@ -212,10 +212,20 @@ func (a *API) agentsList(ctx context.Context) any {
 		ID        string `json:"id"`
 		Name      string `json:"name"`
 		Installed bool   `json:"installed"`
+		Path      string `json:"path,omitempty"`
+		OffPath   bool   `json:"offPath,omitempty"`
+	}
+	var fallbacks []string
+	if a.Sessions.Home != "" {
+		fallbacks = agents.FallbackDirs(a.Sessions.Home)
 	}
 	list := make([]entry, 0, len(agents.Registry))
 	for _, ag := range agents.Registry {
-		list = append(list, entry{ag.ID, ag.Name, agents.Installed(ag, path)})
+		e := entry{ID: ag.ID, Name: ag.Name, Installed: true}
+		if ag.Command != "" {
+			e.Path, e.OffPath, e.Installed = agents.Find(ag.Command, path, fallbacks)
+		}
+		list = append(list, e)
 	}
 	return map[string]any{"agents": list}
 }

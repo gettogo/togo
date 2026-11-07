@@ -241,6 +241,9 @@ import UIKit
             hostID: tab.hostID, sessionID: tab.sessionID, transport: tab.transport, userStarted: userStarted
         )
         handle.onFontSize = { [weak services] size in services?.settings.fontSize = size }
+        let origin = LinkCenter.Origin(hostID: tab.hostID, sessionID: tab.sessionID)
+        handle.onOpenURL = { LinkCenter.shared.open($0, from: origin) }
+        handle.onShowLinks = { [weak handle] in LinkCenter.shared.showLinks(handle?.links?() ?? [], from: origin) }
         let stream = handle.phases
         let feed = Task { [weak self] in
             for await phase in stream {
@@ -290,7 +293,10 @@ struct TerminalSlot: View {
     var body: some View {
         if let handle = terminals.handle(for: tab) {
             if terminals.shows(tab, in: window) {
-                TabTerminalView(handle: handle)
+                // The size SwiftUI gives the slot, so every change to it fits the grid again.
+                GeometryReader { proxy in
+                    TabTerminalView(handle: handle, fit: proxy.size)
+                }
             } else {
                 ElsewhereNotice { terminals.show(tab, in: window) }
             }
@@ -303,6 +309,8 @@ struct TerminalSlot: View {
 /// and leaves when that container is dismantled.
 struct TabTerminalView: UIViewControllerRepresentable {
     let handle: TerminalHandle
+    /// The space the terminal has; a new one fits its grid again.
+    var fit: CGSize = .zero
 
     func makeUIViewController(context: Context) -> TerminalContainer {
         TerminalContainer()
@@ -310,71 +318,10 @@ struct TabTerminalView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ container: TerminalContainer, context: Context) {
         container.show(handle.engineView)
+        container.refit(for: fit)
     }
 
     static func dismantleUIViewController(_ container: TerminalContainer, coordinator: ()) {
         container.release()
-    }
-}
-
-final class TerminalContainer: UIViewController {
-    private var wanted: UIViewController?
-
-    /// A container can be put on screen without appearing, as when a pager page that held
-    /// something else starts showing a terminal, so it also attaches when its view reaches a
-    /// window.
-    override func loadView() {
-        let view = WindowView()
-        view.onWindow = { [weak self] in self?.attach() }
-        self.view = view
-    }
-
-    private final class WindowView: UIView {
-        var onWindow: () -> Void = {}
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            if window != nil { onWindow() }
-        }
-    }
-
-    func show(_ child: UIViewController) {
-        if let wanted, wanted !== child {
-            release()
-        }
-        wanted = child
-        if viewIfLoaded?.window != nil {
-            attach()
-        }
-    }
-
-    func release() {
-        if let wanted, wanted.parent === self {
-            Self.detach(wanted)
-        }
-        wanted = nil
-    }
-
-    override func viewIsAppearing(_ animated: Bool) {
-        super.viewIsAppearing(animated)
-        attach()
-    }
-
-    private func attach() {
-        guard let child = wanted, child.parent !== self else { return }
-        if child.parent != nil {
-            Self.detach(child)
-        }
-        addChild(child)
-        child.view.frame = view.bounds
-        child.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(child.view)
-        child.didMove(toParent: self)
-    }
-
-    private static func detach(_ child: UIViewController) {
-        child.willMove(toParent: nil)
-        child.view.removeFromSuperview()
-        child.removeFromParent()
     }
 }

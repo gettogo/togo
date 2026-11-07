@@ -1,5 +1,5 @@
 {
-  "description": "Network interfaces a phone needs to wake this machine with a magic packet. Harness deviation: the interface seam returns en0 with MAC 02:00:00:00:00:01 and IPv4 192.168.1.20, and the machine reports wake on LAN enabled.",
+  "description": "Network interfaces a phone needs to wake this machine with a magic packet, and the routes it can reach the machine by. Harness deviation: the interface seam returns en0 with MAC 02:00:00:00:00:01, IPv4 192.168.1.20 and link-local fe80::1, the machine reports wake on LAN enabled, its mDNS name is studio.local and Tailscale runs as studio.tail1234.ts.net with 100.101.102.103 and fd7a:115c:a1e0::1.",
   "setup": [
     {
       "jsonrpc": "2.0",
@@ -34,7 +34,30 @@
           ]
         }
       ],
-      "wakeOnLan": true
+      "wakeOnLan": true,
+      "routes": [
+        {
+          "kind": "mdns",
+          "host": "studio.local"
+        },
+        {
+          "kind": "lan",
+          "host": "192.168.1.20",
+          "interface": "en0"
+        },
+        {
+          "kind": "tailscale",
+          "host": "studio.tail1234.ts.net"
+        },
+        {
+          "kind": "tailscale",
+          "host": "100.101.102.103"
+        },
+        {
+          "kind": "tailscale",
+          "host": "fd7a:115c:a1e0::1"
+        }
+      ]
     }
   }
 }

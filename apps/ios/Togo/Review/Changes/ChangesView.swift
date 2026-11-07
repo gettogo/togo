@@ -132,7 +132,7 @@ struct ChangesView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "checklist")
                         .font(.body)
                         .foregroundStyle(Color.togoSnow)
                         .frame(minWidth: 44, minHeight: 44)

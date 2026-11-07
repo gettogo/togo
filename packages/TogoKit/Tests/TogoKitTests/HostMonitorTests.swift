@@ -265,6 +265,37 @@ struct HostMonitorTests {
         await monitor.stop()
     }
 
+    /// A machine that answers but whose helper does not, as while the helper restarts, is not
+    /// offline: it reads as failed with the reason and the attempts go on until it is back.
+    @Test func reachableButNotAnsweringIsNotOffline() async throws {
+        let source = FakeSource(snapshots: [EventSnapshot(seq: 0, sessions: [F.session("s1")], approvals: [])])
+        let factory = ScriptedFactory([
+            .fail(HelperError.closed), .fail(HelperError.closed), .fail(HelperError.closed), .source(source),
+        ])
+        let clock = ManualClock()
+        let monitor = F.monitor(factory, clock: clock)
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { factory.calls == 1 })
+        #expect(await clock.runSleep(.milliseconds(500)))
+        #expect(await eventually { factory.calls == 2 })
+        #expect(await clock.runSleep(.seconds(1)))
+        #expect(await eventually { log.reach == .failed(HelperError.closed.localizedDescription) })
+        #expect(await clock.runSleep(.seconds(8)))
+        #expect(await eventually { log.reach == .online && log.sessionIDs == ["s1"] })
+        await monitor.stop()
+    }
+
+    @Test func lockedKeychainAsksForSignIn() async throws {
+        let factory = ScriptedFactory([.fail(SecretStoreError(status: -25308))])
+        let monitor = F.monitor(factory, clock: ManualClock())
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.reach == .authNeeded })
+        #expect(factory.calls == 1)
+        await monitor.stop()
+    }
+
     @Test func authNeededStopsRetrying() async throws {
         let source = FakeSource(snapshots: [EventSnapshot(seq: 0, sessions: [F.session("s1")], approvals: [])])
         let factory = ScriptedFactory([.fail(SSHError.authFailed(tried: ["publickey"])), .source(source)])

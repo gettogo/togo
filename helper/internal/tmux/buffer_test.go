@@ -131,3 +131,18 @@ func TestPaneCommand(t *testing.T) {
 		t.Fatalf("PaneCommand of a missing session = %v, want ErrNoSession", err)
 	}
 }
+
+func TestPaneGeometry(t *testing.T) {
+	c := tmuxtest.New(t)
+	ctx := context.Background()
+	if err := c.NewSession(ctx, tmux.NewSessionOpts{Name: "s_abcdefghij", Command: []string{"/bin/cat"}}); err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	g, err := c.PaneGeometry(ctx, "=s_abcdefghij:")
+	if err != nil || !strings.Contains(g, "x") || !strings.HasSuffix(g, "/0") {
+		t.Fatalf("PaneGeometry = %q, %v, want WxH/0", g, err)
+	}
+	if _, err := c.PaneGeometry(ctx, "=s_zzzzzzzzzz:"); !errors.Is(err, tmux.ErrNoSession) {
+		t.Fatalf("PaneGeometry of a missing session = %v, want ErrNoSession", err)
+	}
+}

@@ -9,10 +9,19 @@ public protocol SecretStore: Sendable {
     func delete(_ account: String) throws
 }
 
-public struct SecretStoreError: Error, Equatable {
+/// A keychain call that failed. The status is the error code, so diagnostics name the
+/// actual keychain answer rather than one code for every failure.
+public struct SecretStoreError: Error, Equatable, CustomNSError, LocalizedError {
     public var status: Int32
 
     public init(status: Int32) {
         self.status = status
+    }
+
+    public static var errorDomain: String { "TogoKit.SecretStoreError" }
+    public var errorCode: Int { Int(status) }
+
+    public var errorDescription: String? {
+        "Togo could not unlock the saved key or password on this device. Sign in again to unlock it."
     }
 }

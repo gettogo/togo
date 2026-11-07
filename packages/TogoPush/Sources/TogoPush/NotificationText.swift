@@ -54,7 +54,14 @@ public enum NotificationActionID {
 
 /// How an agent's name reads in a notification.
 public enum AgentName {
-    private static let names = ["claude": "Claude Code", "codex": "Codex", "omp": "OMP", "opencode": "OpenCode"]
+    /// The helper registry's names (TogoKit `AgentCatalog` holds the same list).
+    private static let names = [
+        "claude": "Claude Code", "omp": "OMP", "codex": "Codex", "opencode": "OpenCode",
+        "gemini": "Gemini CLI", "copilot": "Copilot CLI", "cursor": "Cursor CLI", "qwen": "Qwen Code",
+        "aider": "Aider", "amp": "Amp", "auggie": "Auggie", "cline": "Cline", "crush": "Crush",
+        "droid": "Droid", "goose": "Goose", "kilo": "Kilo Code", "kimi": "Kimi Code", "kiro": "Kiro CLI",
+        "openhands": "OpenHands", "pi": "Pi", "vibe": "Mistral Vibe",
+    ]
 
     public static func display(_ agent: String) -> String {
         if let known = names[agent.lowercased()] { return known }

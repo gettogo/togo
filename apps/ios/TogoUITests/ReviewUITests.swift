@@ -204,7 +204,7 @@ import XCTest
         file: StaticString = #filePath, line: UInt = #line
     ) {
         add(XCTAttachment(screenshot: settledScreenshot(app)))
-        let overWorkspace = isPad && ["Sessions", "Settings"].contains { name in
+        let overWorkspace = isPad && ["Sessions", "roster.more"].contains { name in
             let button = app.buttons[name]
             return button.exists && !button.isHittable
         }
@@ -283,7 +283,7 @@ import XCTest
         _ app: XCUIApplication, bib: String, name: String, count: Int, largeType: Bool = false
     ) {
         let row = app.row(bib, name)
-        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 10), "The control center never loaded")
+        XCTAssertTrue(app.rosterMenu.waitForExistence(timeout: 10), "The roster never loaded")
         XCTAssertTrue(reveal(row, in: app), "The control center has no session \(bib)")
         row.tap()
 

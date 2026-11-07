@@ -9,9 +9,9 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandMenu(String(localized: "cmd.menu", defaultValue: "Sessions")) {
-            Button(String(localized: "cmd.controlCenter", defaultValue: "Control Center")) { store?.showControlCenter() }
+            Button(String(localized: "cmd.search", defaultValue: "Search Sessions")) { store?.showControlCenter() }
                 .keyboardShortcut("k", modifiers: .command)
-            Button(String(localized: "cmd.newSession", defaultValue: "New Session")) { store?.startNewSession() }
+            Button(String(localized: "cmd.newSession", defaultValue: "New session")) { store?.requestStart() }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled((store?.services.hosts.isEmpty ?? true) || reviewOpen)
             // Closing a tab detaches; the session keeps running on its machine. Over the review,
@@ -51,7 +51,7 @@ struct AppCommands: Commands {
         Button(hidden ? AppCommandCopy.showSidebar : AppCommandCopy.hideSidebar) { store?.toggleSidebar() }
             .keyboardShortcut("s", modifiers: [.command, .control])
             .disabled(!inline)
-        Toggle(BoardCopy.toggle, isOn: Binding(get: { store?.boardShown ?? false }, set: { _ in store?.toggleBoard() }))
+        Toggle(MonitorCopy.toggle, isOn: Binding(get: { store?.monitorShown ?? false }, set: { _ in store?.toggleMonitor() }))
             .keyboardShortcut("b", modifiers: [.command, .control])
             .disabled(store == nil || reviewOpen)
         Toggle(String(localized: "cmd.zenMode", defaultValue: "Zen Mode"), isOn: Binding(get: { store?.zen ?? false }, set: { _ in store?.toggleZen() }))
@@ -80,10 +80,10 @@ struct AppCommands: Commands {
 
     private var reviewOpen: Bool { store?.reviewing != nil }
 
-    /// Zen needs the workspace on screen, not open behind the board.
+    /// Zen needs the workspace on screen, not open behind the monitor.
     private var zenAvailable: Bool {
         guard let store else { return false }
-        return store.zen || (store.workspaceOpen && !store.workspaceBehindBoard)
+        return store.zen || (store.workspaceOpen && !store.workspaceBehindMonitor)
     }
 }
 
@@ -103,20 +103,26 @@ extension FocusedValues {
 }
 
 extension AppStore {
-    /// ⌘K. Beside the sidebar it shows the sidebar and puts the cursor in its search; in a
-    /// compact window it goes back to the sessions list. Tabs stay attached either way.
+    /// ⌘K: the roster's search. Beside the terminal it shows the roster column; in a compact
+    /// window it goes back to the roster. Tabs stay attached either way.
     func showControlCenter() {
         if workspaceInline {
             sidebar.hidden = false
-            sidebar.searchRequests += 1
-            return
+        } else {
+            workspaceOpen = false
+            sheet = nil
+            path = []
         }
-        workspaceOpen = false
-        sheet = nil
-        path = []
+        sidebar.searchRequests += 1
     }
 
-    /// ⌘T: the new session sheet, aimed at the machine of the tab on screen.
+    /// ⌘T: the prompt bar's start line where the bar shows it, else the new-session sheet.
+    func requestStart() {
+        guard !services.hosts.isEmpty, reviewing == nil else { return }
+        startRequests += 1
+    }
+
+    /// The new session sheet, aimed at the machine of the tab on screen.
     func startNewSession() {
         guard !services.hosts.isEmpty, reviewing == nil else { return }
         showSheet(.newSession(workspaceOpen ? focusedTab?.hostID : nil))
@@ -128,7 +134,7 @@ extension AppStore {
         selectTab(number: number)
         workspaceOpen = true
         if workspaceInline {
-            boardShown = false
+            monitorShown = false
             path = []
         }
     }
@@ -146,7 +152,7 @@ extension AppStore {
 
     /// ⌘\ needs a window wide enough for two panes and a second tab to put beside the first.
     var canToggleSplit: Bool {
-        workspaceInline && !workspaceBehindBoard && reviewing == nil && (panesFit || workspace.secondary != nil) && (workspace.secondary != nil || workspace.tabs.count > 1)
+        workspaceInline && !workspaceBehindMonitor && reviewing == nil && (panesFit || workspace.secondary != nil) && (workspace.secondary != nil || workspace.tabs.count > 1)
     }
 
     /// ⌘\: closes the second pane, or opens the tab after the focused one beside it. The only

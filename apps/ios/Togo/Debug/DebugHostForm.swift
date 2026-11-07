@@ -79,9 +79,9 @@ struct DebugHostForm: View {
         }
         .navigationTitle(existing == nil ? "New host" : "Edit host")
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark", role: .cancel) { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { Task { await save() } }.disabled(saving || address.isEmpty || user.isEmpty)
+                Button("Save", systemImage: "checkmark", role: .confirm) { Task { await save() } }.disabled(saving || address.isEmpty || user.isEmpty)
             }
         }
     }

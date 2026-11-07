@@ -102,22 +102,67 @@ final class SnapshotHostKeyValidator: NIOSSHClientServerAuthenticationDelegate, 
     }
 
     let trusted: [String]
+    /// Set while racing routes: only the first route whose key matches goes on to sign in.
+    private let gate: (gate: RouteGate, token: Int)?
     private let presentedKey = Mutex<Presented?>(nil)
+    private let lostRace = Mutex(false)
 
-    init(trusted: [String]) {
+    init(trusted: [String], gate: RouteGate? = nil, token: Int = 0) {
         self.trusted = trusted
+        self.gate = gate.map { ($0, token) }
     }
 
     var presented: Presented? { presentedKey.withLock { $0 } }
 
+    /// The key matched, but another route had already won.
+    var lost: Bool { lostRace.withLock { $0 } }
+
     func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
         let presented = Presented(keyType: PublicKeyLine.keyType(of: hostKey), fingerprint: PublicKeyLine.fingerprint(for: hostKey))
         presentedKey.withLock { $0 = presented }
-        if trusted.contains(presented.fingerprint) {
+        let decision = gate.map { $0.gate.admit(presented.fingerprint, pinned: trusted, token: $0.token) }
+            ?? (trusted.contains(presented.fingerprint) ? .accept : .mismatch)
+        switch decision {
+        case .accept:
             validationCompletePromise.succeed(())
-        } else {
+        case .mismatch:
             validationCompletePromise.fail(UntrustedHostKey())
+        case .lost:
+            lostRace.withLock { $0 = true }
+            validationCompletePromise.fail(RouteRace.Lost())
         }
+    }
+}
+
+/// Lets exactly one raced route past the host key check. A key that is not pinned is a
+/// mismatch on every route, whoever has won, and that route never signs in; a pinned key
+/// admits the first route to show it and turns every later one away, so only one route ever
+/// signs in or asks a question.
+public final class RouteGate: Sendable {
+    public enum Decision: Equatable, Sendable {
+        case accept, mismatch, lost
+    }
+
+    private let owner = Mutex<Int?>(nil)
+    private let admitted = Mutex(false)
+
+    public init() {}
+
+    /// Whether any route has shown the pinned key, even one that failed afterwards.
+    public var sawPinnedKey: Bool { admitted.withLock { $0 } }
+
+    public func admit(_ fingerprint: String, pinned: [String], token: Int) -> Decision {
+        guard pinned.contains(fingerprint) else { return .mismatch }
+        admitted.withLock { $0 = true }
+        return owner.withLock { owner in
+            if owner == nil { owner = token }
+            return owner == token ? .accept : .lost
+        }
+    }
+
+    /// The winner's link died before it signed in, so a route still on its way may win.
+    public func release(_ token: Int) {
+        owner.withLock { if $0 == token { $0 = nil } }
     }
 }
 

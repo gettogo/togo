@@ -37,7 +37,7 @@ import UIKit
     private var readScreen: TerminalScreen?
     private var cursorLineCache: (value: String?, age: () -> Duration)?
     private let bridge = DelegateBridge()
-    private var settings: TerminalSettings
+    private(set) var settings: TerminalSettings
     private var scrollRouter = ScrollRouter()
     private var modifyKeys = ModifyKeysScanner()
 
@@ -53,6 +53,8 @@ import UIKit
         options.cursorStyle = Self.cursorStyle(for: settings)
         options.enableOsc8Hyperlinks = true
         terminalView = TogoTerminalView(frame: .zero, font: Self.font(for: settings), options: options)
+        terminalView.cursorBlinkRequested = settings.cursorBlinks
+        terminalView.cursorShape = Self.cursorStyle(for: settings)
         self.settings = settings
         let dimensions = terminalView.terminalDimensions
         size = (dimensions.cols, dimensions.rows)
@@ -72,6 +74,12 @@ import UIKit
         terminalView.onCopy = { [weak self] text in self?.onClipboardWrite(text) }
         terminalView.extendedKeyMode = { [weak self] in self?.modifyKeys.mode ?? .legacy }
         terminalView.cursorLine = { [weak self] in self?.cursorLine() }
+        terminalView.floatingRowHeight = { [weak self] in self?.cellSize.height ?? 0 }
+        terminalView.onFloatingRows = { [weak self] rows in
+            guard let self else { return }
+            let key = KeyStroke(rows < 0 ? .up : .down)
+            write(Array(repeating: bytes(for: key), count: abs(rows)).flatMap { $0 })
+        }
         outputFeed.screen = { [weak self] in self?.readScreen ?? self?.liveScreen() }
         outputFeed.voiceOverRunning = { UIAccessibility.isVoiceOverRunning }
         outputFeed.focused = { [weak self] in self?.terminalView.hasFocus ?? false }
@@ -96,8 +104,7 @@ import UIKit
     }
 
     public func send(_ key: KeyStroke) {
-        let applicationCursor = terminalView.terminalInputStateSnapshot()?.applicationCursor ?? false
-        write(KeyEncoder.encode(key, applicationCursor: applicationCursor, mode: extendedKeyMode))
+        write(bytes(for: key))
     }
 
     /// Kitty flags win over `modifyOtherKeys` when a remote has set both.
@@ -129,7 +136,8 @@ import UIKit
         if settings.scrollback != previous.scrollback {
             terminalView.changeScrollback(settings.scrollback)
         }
-        terminalView.setCursorStyle(Self.cursorStyle(for: settings))
+        terminalView.cursorBlinkRequested = settings.cursorBlinks
+        terminalView.cursorShape = Self.cursorStyle(for: settings)
         terminalView.optionAsMetaKey = settings.optionAsMeta
         outputFeed.enabled = settings.readNewOutput
     }
@@ -192,13 +200,20 @@ import UIKit
         didSet {
             terminalView.latchedInput = latch.map { latch in
                 // Longer input (autocorrect, dictation) goes to SwiftTerm untouched.
-                { [weak latch] text in
-                    guard let latch, latch.isActive, text.count == 1 else { return nil }
-                    return latch.apply(to: Array(text.utf8))
+                { [weak latch, weak self] text in
+                    guard let self, let stroke = latch?.stroke(forTyped: text) else { return nil }
+                    return bytes(for: stroke)
+                }
+            }
+            terminalView.latchedBackspace = latch.map { latch in
+                { [weak latch, weak self] in
+                    guard let self, let latch, latch.isActive else { return nil }
+                    return bytes(for: latch.consume(KeyStroke(.backspace)))
                 }
             }
         }
     }
+
 
     public var inputAccessory: UIView? {
         get { terminalView.inputAccessoryView }
@@ -348,18 +363,10 @@ import UIKit
 
     var chordRepeater: ChordRepeater { terminalView.chordRepeater }
 
-    /// Typed text, sent as if keyed: never bracketed, unlike `paste`.
-    func sendText(_ text: String) {
-        write(Array(text.utf8))
-    }
-
-    func endEditing() {
-        _ = terminalView.resignFirstResponder()
-    }
 
     /// SwiftTerm's input queue keeps engine writes ordered with keyboard and IME input.
     /// Every engine write is the user's: key bar keys, pastes, gestures and typed text.
-    private func write(_ bytes: [UInt8]) {
+    func write(_ bytes: [UInt8]) {
         guard !bytes.isEmpty else { return }
         outputFeed.noteInput()
         terminalView.send(data: bytes[...])
@@ -400,7 +407,7 @@ import UIKit
 
     // MARK: Conversions
 
-    private static func font(for settings: TerminalSettings) -> UIFont {
+    static func font(for settings: TerminalSettings) -> UIFont {
         if let name = settings.fontName, let font = UIFont(name: name, size: settings.fontSize) {
             return font
         }
@@ -409,12 +416,10 @@ import UIKit
 
     private static func cursorStyle(for settings: TerminalSettings) -> CursorStyle {
         switch (settings.cursor, settings.cursorBlinks) {
-        case (.block, true): .blinkBlock
-        case (.block, false): .steadyBlock
-        case (.underline, true): .blinkUnderline
-        case (.underline, false): .steadyUnderline
-        case (.bar, true): .blinkBar
-        case (.bar, false): .steadyBar
+        // Always steady: the terminal view adds its own one second step while it has focus.
+        case (.block, _): .steadyBlock
+        case (.underline, _): .steadyUnderline
+        case (.bar, _): .steadyBar
         }
     }
 
@@ -479,62 +484,5 @@ private struct RowSource: @unchecked Sendable {
 
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {
         engine?.screenChanged()
-    }
-}
-
-extension SwiftTermEngine: GestureTarget {
-    var gestureView: UIView { terminalView }
-    var tracksMouse: Bool { mouseReporting }
-    var hasKeyboardFocus: Bool { terminalView.isFirstResponder }
-    var fontSize: CGFloat { terminalView.font.pointSize }
-
-    func setFontSize(_ size: CGFloat) {
-        var next = settings
-        next.fontSize = size
-        apply(next)
-    }
-
-    /// The advance of "W", the glyph SwiftTerm sizes its cells by.
-    func charWidth(forFontSize size: CGFloat) -> CGFloat {
-        var next = settings
-        next.fontSize = size
-        let font = Self.font(for: next) as CTFont
-        var character: UniChar = 0x57
-        var glyph: CGGlyph = 0
-        guard CTFontGetGlyphsForCharacters(font, &character, &glyph, 1) else { return size * 0.6 }
-        var advance = CGSize.zero
-        CTFontGetAdvancesForGlyphs(font, .horizontal, &glyph, &advance, 1)
-        return advance.width
-    }
-
-    func sendBytes(_ bytes: [UInt8]) {
-        write(bytes)
-    }
-
-    var scrollPan: UIGestureRecognizer { terminalView.panGestureRecognizer }
-
-    var mouseTracking: MouseTracking {
-        switch terminalView.terminalInputStateSnapshot()?.mouseMode ?? .off {
-        case .off: .off
-        case .x10: .presses
-        case .vt200: .clicks
-        case .buttonEventTracking: .drags
-        case .anyEvent: .anyMotion
-        }
-    }
-
-    /// SwiftTerm encodes whatever it is handed, whatever the mode, so the mode is checked here.
-    func sendMouse(button: Int, release: Bool, motion: Bool, at cell: GridCell) {
-        guard mouseTracking.reports(release: release, motion: motion) else { return }
-        terminalView.sendMouseEvent(button: button, release: release, motion: motion, col: cell.col, row: cell.row)
-    }
-
-    func open(_ url: URL) {
-        guard LinkPolicy.allows(url) else { return }
-        onOpenURL(url)
-    }
-
-    func copyToClipboard(_ text: String) {
-        onClipboardWrite(text)
     }
 }

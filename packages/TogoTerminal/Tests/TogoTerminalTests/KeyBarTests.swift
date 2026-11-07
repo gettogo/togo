@@ -141,15 +141,34 @@ import UIKit
         #expect((bar.intrinsicContentSize.height == 0) == !connected)
     }
 
-    @Test func barTargetsAreAtLeast44Points() {
+    @Test func slimKeysFillTheRowHeightAndAMinimumWidth() {
         let h = EngineHarness()
         let bar = KeyBarView(config: .claude, engine: h.engine)
         bar.frame = CGRect(x: 0, y: 0, width: 390, height: KeyBarView.rowHeight)
         bar.layoutIfNeeded()
         for item in KeyBarConfig.claude.items {
             let size = bar.button(for: item)?.bounds.size ?? .zero
-            #expect(size.width >= 44 && size.height >= 44, "\(item.title) is \(size)")
+            #expect(size.width >= KeyBarView.minimumKeyWidth && size.height >= KeyBarView.rowHeight, "\(item.title) is \(size)")
         }
+    }
+
+    @Test func keysThatFitShareTheWidth() {
+        let pages = KeyRowLayout.pages(widths: [40, 60, 50], available: 300, spacing: 4)
+        #expect(pages.count == 1)
+        let total = pages[0].reduce(0) { $0 + $1.width } + 8
+        #expect(abs(total - 300) < 0.001)
+    }
+
+    @Test func keysThatDoNotFitPageInWholeKeysThatFillEachPage() {
+        let widths: [CGFloat] = [60, 60, 60, 60, 60, 60, 60]
+        let pages = KeyRowLayout.pages(widths: widths, available: 200, spacing: 4)
+        #expect(pages.count == 3)
+        #expect(pages.flatMap { $0.map(\.index) } == Array(0..<7))
+        for page in pages.dropLast() {
+            let total = page.reduce(0) { $0 + $1.width } + 4 * CGFloat(page.count - 1)
+            #expect(abs(total - 200) < 0.001)
+        }
+        #expect(pages.last?.first?.width ?? 0 <= 60 * KeyRowLayout.maximumStretch)
     }
 
     @Test func latchLocksThroughAccessibilityActions() throws {

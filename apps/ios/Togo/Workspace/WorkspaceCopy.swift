@@ -56,6 +56,10 @@ enum WorkspaceCopy {
     )
     static let tryAgain = String(localized: "ws.overlay.tryAgain", defaultValue: "Try again")
     static let signInAgain = String(localized: "ws.overlay.signInAgain", defaultValue: "Sign in again")
+    static let machineGone = String(
+        localized: "ws.overlay.machineGone", defaultValue: "This machine is no longer in Togo. Add it again to open its sessions."
+    )
+    static let addMachine = String(localized: "ws.overlay.addMachine", defaultValue: "Add machine")
 
     static func signInUnfinished(_ machine: String) -> String {
         String(localized: "ws.overlay.signInUnfinished", defaultValue: "\(machine) asked a question to finish signing in.")

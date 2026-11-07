@@ -167,7 +167,7 @@ struct DiagnosticsPreview: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(settingsText("diagnostics.done", "Done")) { dismiss() }
+                    Button(settingsText("diagnostics.done", "Done"), systemImage: "checkmark", role: .confirm) { dismiss() }
                 }
             }
         }

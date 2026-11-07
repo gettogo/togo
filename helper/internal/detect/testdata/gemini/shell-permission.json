@@ -1,0 +1,36 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "permission",
+  "title": "Allow execution of: 'go'?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes, allow once",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, allow always ...",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "No, suggest changes",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "Escape"
+    ]
+  }
+}

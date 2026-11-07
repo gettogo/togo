@@ -9,6 +9,7 @@ struct WaitingEntry: TimelineEntry {
     var count: Int
     var oldestBib: String?
     var oldestAgent: String?
+    var oldestTitle: String?
 
     static func make(_ requests: [PendingRequest], at date: Date) -> WaitingEntry {
         let waiting = RequestLifetime.waiting(requests, now: date)
@@ -16,14 +17,15 @@ struct WaitingEntry: TimelineEntry {
         return WaitingEntry(
             date: date, count: waiting.count,
             oldestBib: oldest?.bib.map { PromptText.clean($0, maxLines: 1) }.flatMap { $0.isEmpty ? nil : $0 },
-            oldestAgent: oldest?.agent.map(AgentName.display)
+            oldestAgent: oldest?.agent.map(AgentName.display),
+            oldestTitle: oldest.map { PromptText.clean($0.title, maxLines: 1) }.flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 }
 
 struct WaitingProvider: TimelineProvider {
     func placeholder(in context: Context) -> WaitingEntry {
-        WaitingEntry(date: .now, count: 1, oldestBib: "04", oldestAgent: "Claude Code")
+        WaitingEntry(date: .now, count: 1, oldestBib: "04", oldestAgent: "Claude Code", oldestTitle: "Run npm test?")
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WaitingEntry) -> Void) {
@@ -62,24 +64,39 @@ struct WaitingComplicationView: View {
     let entry: WaitingEntry
     @Environment(\.widgetFamily) private var family
 
-    private var countStyle: Color { entry.count > 0 ? .togoAccent : .secondary }
+    /// A lit beacon with the count when something waits, an unlit ring when clear.
+    private var beacon: some View {
+        ZStack {
+            if entry.count > 0 {
+                Circle().fill(Color.togoAccent)
+                Text(entry.count, format: .number)
+                    .font(.system(.caption, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(Color.black)
+            } else {
+                Circle().strokeBorder(Color.secondary, lineWidth: 2)
+            }
+        }
+        .widgetAccentable(entry.count > 0)
+    }
 
     var body: some View {
         switch family {
         case .accessoryCircular:
             ZStack {
                 AccessoryWidgetBackground()
-                Text(entry.count, format: .number)
-                    .font(.system(.title2, design: .rounded).weight(.semibold))
-                    .foregroundStyle(countStyle)
-                    .widgetAccentable()
+                beacon.padding(6)
             }
         case .accessoryCorner:
-            Image(systemName: "terminal")
-                .font(.title3)
-                .widgetLabel {
-                    Text(Self.inline(entry.count))
+            Group {
+                if let bib = entry.oldestBib, entry.count > 0 {
+                    Text(bib).font(.system(.title3, design: .monospaced).weight(.semibold))
+                } else {
+                    Circle().strokeBorder(Color.secondary, lineWidth: 2).frame(width: 18, height: 18)
                 }
+            }
+            .widgetLabel {
+                Text(Self.inline(entry.count))
+            }
         case .accessoryInline:
             Text(Self.inline(entry.count))
         default:
@@ -88,28 +105,28 @@ struct WaitingComplicationView: View {
     }
 
     private var rectangular: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(entry.count, format: .number)
-                .font(.system(.title3, design: .rounded).weight(.semibold))
-                .foregroundStyle(countStyle)
-                .widgetAccentable()
-            Text(Self.inline(entry.count))
-                .font(.headline)
-            if let oldestBib = entry.oldestBib ?? entry.oldestAgent {
-                HStack(spacing: 4) {
-                    if entry.oldestBib != nil {
-                        Text(oldestBib).font(.system(.footnote, design: .monospaced))
-                            .lineLimit(1).truncationMode(.middle)
+        HStack(alignment: .top, spacing: 8) {
+            beacon.frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                if entry.count == 0 {
+                    Text(Self.allClear).font(.headline)
+                } else {
+                    // "04  Run npm test?"
+                    HStack(spacing: 6) {
+                        if let bib = entry.oldestBib {
+                            Text(bib).font(.system(.headline, design: .monospaced)).lineLimit(1)
+                        }
+                        Text(entry.oldestTitle ?? entry.oldestAgent ?? Self.inline(entry.count))
+                            .font(.headline).lineLimit(2).layoutPriority(1)
                     }
-                    if let agent = entry.oldestAgent {
-                        Text(agent).font(.footnote).lineLimit(1).layoutPriority(1)
-                    }
+                    Text(Self.inline(entry.count)).font(.footnote).foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    static let allClear = String(localized: "watch.allClear", defaultValue: "All clear")
 
     /// "2 waiting", or "Nothing waiting".
     static func inline(_ count: Int) -> String {

@@ -59,21 +59,10 @@ private struct SessionRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text(PromptText.clean(session.bib, maxLines: 1))
-                    .font(.system(.footnote, design: .monospaced).weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(PromptText.clean(session.agentName, maxLines: 1))
-                    .font(.footnote)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(.secondary)
-            Text(WatchCopy.status(session))
-                .font(.body)
+            RosterLine(line: WatchHome.lines([session])[0])
             if let activity = session.activity, !activity.isEmpty {
                 Text(PromptText.clean(activity, maxLines: 1))
-                    .font(.footnote)
+                    .font(.system(.footnote, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }

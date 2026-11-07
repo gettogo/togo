@@ -24,7 +24,7 @@ struct CommitSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(ChangesCopy.cancel) { model.isCommitSheetOpen = false }
+                    Button(ChangesCopy.cancel, systemImage: "xmark", role: .cancel) { model.isCommitSheetOpen = false }
                 }
             }
             .confirmationDialog(ChangesCopy.amendQuestion, isPresented: $confirmingAmend, titleVisibility: .visible) {

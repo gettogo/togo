@@ -131,7 +131,8 @@ struct PaneView: View {
 
     private func page(_ tab: WorkspaceTab) -> some View {
         let overlay = ConnectingOverlay.Kind(
-            link: tab.link, machine: store.machine(for: tab.hostID), name: store.machineName(for: tab.hostID)
+            link: tab.link, machine: store.machine(for: tab.hostID), name: store.machineName(for: tab.hostID),
+            listed: !store.services.hostsLoaded || store.services.hosts.contains { $0.id == tab.hostID }
         )
         let isShown = tab.id == self.tab?.id
         let reconnecting = tab.link.isReconnecting
@@ -147,12 +148,8 @@ struct PaneView: View {
                     .id(tab.id)
                     .opacity(Self.terminalOpacity(for: tab.link))
             }
-            if let overlay {
-                ConnectingOverlay(kind: overlay) { retry(tab) }
-                    .transition(.opacity)
-            }
+            ConnectingOverlayHost(kind: overlay, addMachine: { store.showSheet(.addMachine) }) { retry(tab) }
         }
-        .motion(.fade, value: overlay)
         .motion(Self.dimRole, value: reconnecting)
         .haptic(.connect, trigger: tab.link.isLive) { $0 && isShown }
     }

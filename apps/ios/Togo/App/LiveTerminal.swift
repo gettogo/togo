@@ -68,14 +68,23 @@ import UIKit
         engine.onPasteImage = { [weak handle] in handle?.onPasteImage($0) }
         handle.paste = { [weak engine] in engine?.paste($0) }
         handle.pressEnter = { [weak engine] in engine?.send(KeyStroke(.enter)) }
+        engine.onOpenURL = { [weak handle] in handle?.onOpenURL($0) }
+        handle.links = { [weak engine] in engine?.linksOnScreen() ?? [] }
         let gestures = controller.terminal.gestures
         gestures.onSwipeSession = { [weak handle] in handle?.onSwipe($0 == .left ? 1 : -1) }
         gestures.onEdgeSwipe = { [weak handle] in handle?.onEdgeSwipe() }
         gestures.onFontSize = { [weak handle] in handle?.onFontSize(Double($0)) }
-        feed = Task {
+        gestures.onShowLinks = { [weak handle] in handle?.onShowLinks() }
+        // Nothing can be typed until the link is live, so the keyboard waits for it.
+        engine.acceptsFocus = false
+        feed = Task { [weak engine] in
+            var wasLive = false
             for await state in link.states {
                 onState(state)
-                sink.yield(Self.phase(state, asked: wasAsked()))
+                let phase = Self.phase(state, asked: wasAsked(), wasLive: wasLive)
+                if case .live = state { wasLive = true }
+                if let accepts = Self.acceptsFocus(phase) { engine?.acceptsFocus = accepts }
+                sink.yield(phase)
             }
         }
         // A long burst of output is summed up in numbers: how it paced, never what it said.
@@ -107,6 +116,7 @@ import UIKit
         let bar = KeyBarView(config: keyBarConfig, engine: engine)
         bar.onCompose = { [weak handle] in handle?.onCompose() }
         bar.onDictate = { [weak handle] in handle?.onDictate() }
+        bar.onHaptic = { Haptic($0).play() }
         bar.hidesCompose = handle.hidesComposeKeys
         handle.onHidesComposeKeys = { [weak bar] in bar?.hidesCompose = $0 }
     }
@@ -145,8 +155,21 @@ import UIKit
         )
     }
 
-    static func phase(_ state: LinkState, asked: Bool = false) -> LinkPhase {
+    /// Whether the terminal may hold the keyboard in `phase`: yes while live, no once the
+    /// link is down for good or not yet up. A reconnect leaves the keyboard where it was.
+    static func acceptsFocus(_ phase: LinkPhase) -> Bool? {
+        switch phase {
+        case .live, .roaming: true
+        case .waking, .connecting, .failed, .signedOut: false
+        case .reconnecting: nil
+        }
+    }
+
+    /// Retries before the link was ever live read as connecting: there is no screen yet to
+    /// keep readable, so the paws keep walking toward the first one.
+    static func phase(_ state: LinkState, asked: Bool = false, wasLive: Bool = true) -> LinkPhase {
         switch state {
+        case .reconnecting where !wasLive: .connecting
         case .failed where asked: .signedOut
         case .waking(let host): .waking(host)
         case .connecting: .connecting
@@ -166,7 +189,7 @@ import UIKit
 
 /// Holds the terminal controller and gives the engine the dark or light build of the theme
 /// that matches the appearance, now and whenever it changes.
-final class ThemedTerminalController: UIViewController {
+final class ThemedTerminalController: UIViewController, TerminalRefitting {
     let terminal: TerminalViewController
     var choice: ThemeChoice {
         didSet { applyTheme() }
@@ -195,6 +218,24 @@ final class ThemedTerminalController: UIViewController {
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         applyTheme()
+    }
+
+    /// Set outright rather than left to the autoresizing mask, which only adds the change in
+    /// size to whatever frame the terminal had when it moved here.
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if terminal.view.frame != view.bounds { terminal.view.frame = view.bounds }
+    }
+
+    func refit() {
+        guard isViewLoaded else { return }
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        terminal.refit()
+    }
+
+    func holdFit(_ on: Bool) {
+        terminal.holdsFit = on
     }
 
     private func applyTheme() {

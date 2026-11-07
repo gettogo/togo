@@ -7,9 +7,7 @@ import XCTest
 
     func testNewSessionOpensInTheWorkspace() {
         let app = launchTogo()
-        let plus = app.buttons["New session"]
-        XCTAssertTrue(plus.waitForExistence(timeout: 10))
-        plus.tap()
+        app.pickFromRosterMenu("New session")
 
         let studio = app.buttons["Studio"]
         XCTAssertTrue(studio.waitForExistence(timeout: 5))
@@ -43,9 +41,7 @@ import XCTest
     /// Every step can close the sheet, not only the first.
     func testAgentStepCloses() {
         let app = launchTogo()
-        let plus = app.buttons.matching(identifier: "New session").allElementsBoundByIndex.first { $0.isHittable }
-        XCTAssertNotNil(plus)
-        plus?.tap()
+        app.pickFromRosterMenu("New session")
         let studio = app.buttons["Studio"]
         XCTAssertTrue(studio.waitForExistence(timeout: 5))
         studio.tap()
@@ -64,9 +60,7 @@ import XCTest
     /// Runs on every size: phone, iPad, and iPhone Duo open, where the sidebar shell is up.
     func testFolderStepListsFolders() {
         let app = launchTogo()
-        let plus = app.buttons.matching(identifier: "New session").allElementsBoundByIndex.first { $0.isHittable }
-        XCTAssertNotNil(plus)
-        plus?.tap()
+        app.pickFromRosterMenu("New session")
 
         let studio = app.buttons["Studio"]
         XCTAssertTrue(studio.waitForExistence(timeout: 5))
@@ -82,9 +76,7 @@ import XCTest
     /// With one machine there is nothing to choose, so the sheet opens on the folder step.
     func testFolderStepListsFoldersForTheOnlyMachine() {
         let app = launchTogo(arguments: ["-ui-one-machine"])
-        let plus = app.buttons.matching(identifier: "New session").allElementsBoundByIndex.first { $0.isHittable }
-        XCTAssertNotNil(plus)
-        plus?.tap()
+        app.pickFromRosterMenu("New session")
 
         XCTAssertTrue(app.navigationBars["Folder"].waitForExistence(timeout: 5), "The folder step has its title")
         XCTAssertTrue(app.buttons["~/src/app"].waitForExistence(timeout: 5), "The folder step lists recent folders")

@@ -53,7 +53,7 @@ struct SidebarSnapshotTests {
         }
     }
 
-    /// The user opened a second pane and showed the sidebar again.
+    /// The user opened a second pane and showed the roster again.
     @Test func sidebarBesideTwoPanes() {
         assertScreen(named: "sidebar-two-panes", sizes: [.iPadPro13], precision: 0.99, perceptualPrecision: 0.95) {
             window(tabs: [Self.one, Self.four], beside: Self.four, sidebarShown: true)
@@ -66,7 +66,7 @@ struct SidebarSnapshotTests {
         }
     }
 
-    /// Too narrow for a sidebar: the sessions list, with the workspace as a cover.
+    /// Too narrow for a column: the roster full screen, with the workspace as a cover.
     @Test func narrowWindowShowsTheList() {
         assertScreen(named: "sidebar-narrow", sizes: [.iPadNarrow]) {
             window(tabs: [Self.four], open: false)

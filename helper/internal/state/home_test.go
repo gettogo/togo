@@ -75,8 +75,8 @@ func TestLoginPathIgnoresProfileNoise(t *testing.T) {
 func TestLoginPathFallsBackToProcessPath(t *testing.T) {
 	t.Setenv("PATH", "/proc/bin")
 	got, ok := loginPath(context.Background(), "/nonexistent/shell")
-	if got != "/proc/bin" || !ok {
-		t.Fatalf("loginPath with a missing shell = %q, %v; want the process PATH %q, cacheable", got, ok, "/proc/bin")
+	if got != "/proc/bin" || ok {
+		t.Fatalf("loginPath with a missing shell = %q, %v; want the process PATH %q, not from the shell", got, ok, "/proc/bin")
 	}
 }
 
@@ -107,10 +107,12 @@ func writeShell(t *testing.T, script string) string {
 func resetLoginPath(t *testing.T) {
 	loginPathMu.Lock()
 	loginPathCached = ""
+	loginPathFailedAt = time.Time{}
 	loginPathMu.Unlock()
 	t.Cleanup(func() {
 		loginPathMu.Lock()
 		loginPathCached = ""
+		loginPathFailedAt = time.Time{}
 		loginPathMu.Unlock()
 	})
 }
@@ -133,12 +135,16 @@ eval "$2"
 }
 
 // A shell that hangs (a prompt in .zshrc waiting for input, a slow network
-// mount) must cost the timeout once, not on every call.
-func TestLoginPathCachesTimeoutFallback(t *testing.T) {
+// mount) must not leave the process PATH cached for the daemon's lifetime:
+// the timeout result is used for now and the shell is asked again later.
+func TestLoginPathDoesNotCacheTimeout(t *testing.T) {
 	resetLoginPath(t)
 	old := loginPathTimeout
 	loginPathTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { loginPathTimeout = old })
+	now := time.Now()
+	loginPathNow = func() time.Time { return now }
+	t.Cleanup(func() { loginPathNow = time.Now })
 	t.Setenv("PATH", "/proc/bin")
 	// sleep is a child of the shell and keeps stdout open after the shell
 	// is killed, which must not stretch the wait.
@@ -152,8 +158,26 @@ func TestLoginPathCachesTimeoutFallback(t *testing.T) {
 		t.Fatalf("LoginPath with a hung shell took %v, want about the timeout", waited)
 	}
 	t.Setenv("SHELL", fakeShell(t))
+	// Inside the retry window the shell is not asked again.
 	if got := LoginPath(context.Background()); got != "/proc/bin" {
-		t.Fatalf("LoginPath after a timeout = %q, want the cached fallback", got)
+		t.Fatalf("LoginPath inside the retry window = %q, want the process PATH", got)
+	}
+	now = now.Add(loginPathRetry + time.Second)
+	if got := LoginPath(context.Background()); got != "/login/bin:/usr/bin" {
+		t.Fatalf("LoginPath after the retry window = %q, want the login PATH", got)
+	}
+	t.Setenv("SHELL", "/nonexistent/shell")
+	if got := LoginPath(context.Background()); got != "/login/bin:/usr/bin" {
+		t.Fatalf("LoginPath after a good read = %q, want it cached", got)
+	}
+}
+
+func TestLoginPathReportsSource(t *testing.T) {
+	resetLoginPath(t)
+	t.Setenv("PATH", "/proc/bin")
+	t.Setenv("SHELL", fakeShell(t))
+	if _, fromShell := LoginPathSource(context.Background()); !fromShell {
+		t.Fatal("source = fallback, want the login shell")
 	}
 }
 

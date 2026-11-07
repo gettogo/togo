@@ -1,0 +1,10 @@
+{
+  "Version": "1.80.0",
+  "BackendState": "Stopped",
+  "TailscaleIPs": null,
+  "Self": {
+    "HostName": "studio",
+    "DNSName": "studio.tail1234.ts.net.",
+    "TailscaleIPs": ["100.101.102.103"]
+  }
+}

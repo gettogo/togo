@@ -11,10 +11,12 @@ public struct HelperReport: Sendable, Equatable {
     public var os: String?
     /// The login was handled by Tailscale SSH rather than an OpenSSH server.
     public var tailscaleSSH: Bool
+    /// The routes the helper reported; nil without a helper new enough to say.
+    public var routes: [HostRoute]?
 
     public init(
         helper: HelperPresence, path: String? = nil, tmux: String? = nil, mosh: Bool = false, os: String? = nil,
-        tailscaleSSH: Bool = false
+        tailscaleSSH: Bool = false, routes: [HostRoute]? = nil
     ) {
         self.helper = helper
         self.path = path
@@ -22,6 +24,12 @@ public struct HelperReport: Sendable, Equatable {
         self.mosh = mosh
         self.os = os
         self.tailscaleSSH = tailscaleSSH
+        self.routes = routes
+    }
+
+    /// Whether the helper said the machine is on a tailnet.
+    public var machineOnTailnet: Bool {
+        routes?.contains { $0.kind == .tailscale } ?? false
     }
 
     /// The helper needs tmux 3.2 or newer, the same floor `togo doctor` checks.
@@ -97,7 +105,20 @@ public enum HelperProbe {
 
     public static func run(on connection: SSHConnection) async throws -> HelperReport {
         let result = try await connection.run(command, timeout: .seconds(15))
-        return parse(String(decoding: result.stdout, as: UTF8.self))
+        var report = parse(String(decoding: result.stdout, as: UTF8.self))
+        if case .present = report.helper, let path = report.path {
+            report.routes = await routes(on: connection, helperPath: path)
+        }
+        return report
+    }
+
+    /// The routes the helper at `helperPath` reports, or nil when it cannot say.
+    static func routes(on connection: SSHConnection, helperPath: String) async -> [HostRoute]? {
+        guard let channel = try? await connection.openExec(shellQuote([helperPath, "serve", "--stdio"])) else { return nil }
+        let helper = HelperClient(channel: channel)
+        defer { Task { await helper.close() } }
+        guard (try? await helper.hello(client: SessionAttach.client)) != nil else { return nil }
+        return (try? await helper.hostInfo())?.hostRoutes
     }
 
     /// `togo version` prints "togo 0.3.0 (darwin/arm64)".

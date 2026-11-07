@@ -12,6 +12,7 @@ public enum KeyAction: Hashable, Codable, Sendable {
     case steps([KeyStep])
     case ctrlLatch
     case altLatch
+    case shiftLatch
     case paste
     case hideKeyboard
     case dpad

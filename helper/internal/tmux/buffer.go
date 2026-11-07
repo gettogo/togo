@@ -76,3 +76,19 @@ func noSession(err error) error {
 	}
 	return err
 }
+
+// PaneGeometry returns the size of the active pane at target and the number
+// of clients attached to its session, as "WxH/clients". A change means a
+// client attached, detached or resized, which makes the program redraw.
+func (c *Client) PaneGeometry(ctx context.Context, target string) (string, error) {
+	out, err := c.run(ctx, "list-panes", "-t", target, "-F", "#{pane_active}\x1f#{pane_width}x#{pane_height}/#{session_attached}")
+	if err != nil {
+		return "", noSession(err)
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		if g, ok := strings.CutPrefix(line, "1\x1f"); ok {
+			return g, nil
+		}
+	}
+	return "", fmt.Errorf("tmux: no active pane in %s", target)
+}

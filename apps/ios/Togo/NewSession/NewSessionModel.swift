@@ -96,14 +96,27 @@ enum Load<T: Equatable>: Equatable {
     var machineName: String { machine?.name ?? NewSessionCopy.thisMachine }
     var helperMissing: Bool { machine?.helperMissing ?? false }
 
-    /// Installed agents first, then the ones missing from the machine. Shell is always offered.
-    var offeredAgents: [AgentInfo] {
+    /// Installed agents first, then the ones missing from the machine, each part in
+    /// `AgentOrder`. Shell is always offered.
+    var offeredAgents: [AgentInfo] { installedAgents + missingAgents }
+
+    /// The agents the machine can start: favorites, then recent ones, then the rest by name.
+    var installedAgents: [AgentInfo] { orderedAgents.filter(\.installed) }
+
+    /// The agents the machine lacks, shown on request.
+    var missingAgents: [AgentInfo] { orderedAgents.filter { !$0.installed } }
+
+    private var orderedAgents: [AgentInfo] {
         guard case .loaded(var list) = agents else { return [] }
         if !list.contains(where: { $0.id == "shell" }) {
             list.append(AgentInfo(id: "shell", name: "Shell", installed: true))
         }
-        return list.filter(\.installed) + list.filter { !$0.installed }
+        return AgentOrder.sorted(list, favorites: library.favorites, recent: library.recentAgents)
     }
+
+    func isFavorite(_ agent: String) -> Bool { library.isFavorite(agent) }
+
+    func toggleFavorite(_ agent: String) { library.toggleFavorite(agent) }
 
     var selectedAgent: AgentInfo? {
         offeredAgents.first { $0.id == agentID && $0.installed } ?? offeredAgents.first { $0.installed }
@@ -295,7 +308,9 @@ enum Load<T: Equatable>: Equatable {
         creating = true
         createError = nil
         do {
+            let started = selectedPreset?.agent ?? selectedAgent?.id
             let row = try await services.create(hostID: hostID, params: params())
+            if let started, started != AgentPreset.custom { library.used(started) }
             await rememberChoice(hostID: hostID)
             open(row.hostID, row.id)
             // Stays set: the sheet is about to close and must not accept a second start.

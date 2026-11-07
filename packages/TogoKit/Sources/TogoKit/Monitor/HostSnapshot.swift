@@ -34,6 +34,11 @@ public struct HostSnapshot: Sendable, Equatable {
     public var awake: AwakeStatus?
     /// The machine's interfaces for Wake-on-LAN; nil until read or when it has no `hostinfo.v1`.
     public var hostInfo: HostInfo?
+    /// Web pages agents asked to open while this device watched, oldest first and bounded.
+    /// Each has its own id, so a reader shows each page once across snapshots.
+    public var browserOpens: [BrowserOpen] = []
+
+    public static let browserOpenLimit = 8
 
     public init(
         hostID: UUID, reach: Reach = .connecting, helper: HelperPresence = .unknown, sessions: [Session] = [],
@@ -70,6 +75,11 @@ public struct HostSnapshot: Sendable, Equatable {
             if closed.count > Self.closedLimit { closed.removeFirst(closed.count - Self.closedLimit) }
         case .awake(let status):
             awake = status
+        case .browserOpen(let url):
+            browserOpens.append(BrowserOpen(sessionID: envelope.sessionId, url: url, at: envelope.ts))
+            if browserOpens.count > Self.browserOpenLimit {
+                browserOpens.removeFirst(browserOpens.count - Self.browserOpenLimit)
+            }
         case .notify, .job, .unknown:
             break
         }
@@ -85,6 +95,22 @@ public struct HostSnapshot: Sendable, Equatable {
 
     mutating func removeApproval(_ requestId: String) {
         approvals.removeAll { $0.requestId == requestId }
+    }
+}
+
+/// A web page an agent asked to open on its machine.
+public struct BrowserOpen: Sendable, Equatable, Identifiable {
+    public var id = UUID()
+    /// The session whose agent asked, when the helper knows it.
+    public var sessionID: String?
+    public var url: String
+    /// When the helper published the request.
+    public var at: Date
+
+    public init(sessionID: String?, url: String, at: Date) {
+        self.sessionID = sessionID
+        self.url = url
+        self.at = at
     }
 }
 

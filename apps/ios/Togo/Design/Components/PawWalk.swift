@@ -8,9 +8,17 @@ struct PawWalk: View {
     @ScaledMetric(relativeTo: .body) private var width: CGFloat = 26
     @State private var lit = 0
     var word: String?
+    var ending: Ending
 
-    init(_ word: String? = nil) {
+    /// How the walk stands: still going, arrived (all four paws lit) or stopped on the paw it
+    /// reached because the link failed.
+    enum Ending: Equatable {
+        case walking, arrived, failed
+    }
+
+    init(_ word: String? = nil, ending: Ending = .walking) {
         self.word = word
+        self.ending = ending
     }
 
     /// Paw centres from `brand/togo-mark-tiny.svg`, relative to the trail's bounding box.
@@ -33,8 +41,8 @@ struct PawWalk: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(word ?? String(localized: "Loading"))
-        .task(id: reduceMotion || paused) {
-            guard !reduceMotion, !paused else { return }
+        .task(id: reduceMotion || paused || ending != .walking) {
+            guard !reduceMotion, !paused, ending == .walking else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.step)
                 withAnimation(Motion.animation(.pawStep, reduce: reduceMotion)) { lit = (lit + 1) % Self.paws.count }
@@ -59,7 +67,9 @@ struct PawWalk: View {
     }
 
     private func color(for index: Int) -> Color {
+        if ending == .arrived { return .togoSnow }
         if reduceMotion { return .togoMute }
+        if ending == .failed { return index <= lit ? .togoSnow : .togoMuteDim }
         return index == lit ? .togoSnow : .togoMuteDim
     }
 }

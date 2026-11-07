@@ -80,7 +80,8 @@ import TogoMosh
             launches: SyncedRecordStore<FolderLaunch>(
                 prefix: FolderLaunchMemory.storePrefix, local: backend(), remote: remote(), deviceID: deviceID,
                 clock: { Date() }, syncEnabled: syncSwitch.isOn
-            )
+            ),
+            defaults: isolated ? nil : .standard
         )
         let push = isolated ? nil : AppPush.make()
         self.push = push
@@ -152,6 +153,11 @@ import TogoMosh
             prompter: { [weak services] in services?.userPrompter($0) }
         )
         self.machineTools = machineTools
+        LinkCenter.shared.forwarding = ReviewLinkForwarding(review: review)
+        LinkCenter.shared.openOnMac = { [weak machineTools] hostID, url in
+            let link = url.absoluteString
+            try await machineTools?.call(hostID) { try await $0.openOnMac(url: link) }
+        }
         services.beforeDroppingHelpers = { [weak review] in await review?.settle() }
         tutorial = TutorialModel()
         onboarding = LiveOnboardingServices(keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys)
@@ -164,6 +170,8 @@ import TogoMosh
             Task { await signedIn.discard(id) }
             self?.terminals.restartTabs(on: id)
         }
+        // A tab restored before the stored machines were read attaches once they are.
+        services.onMachineArrived = { [weak self] id in self?.terminals.restartTabs(on: id) }
         // Replies from the Watch: a saved password or key signs in, nothing asks.
         let quietTools = LiveMachineTools(
             channels: helpers, records: { [weak services] in services?.hostRecord($0) },

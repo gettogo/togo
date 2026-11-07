@@ -39,6 +39,8 @@ var fixtureNeedsFake = map[string]bool{
 	"awake.set-needs-admin.json":    true,
 	"awake.set.json":                true,
 	"awake.status.json":             true,
+	"browser.openOnMac-bad.json":    true,
+	"browser.openOnMac.json":        true,
 	"host.info.json":                true,
 	"notify.get.json":               true,
 	"notify.set-bad.json":           true,
@@ -347,5 +349,53 @@ func TestAgentsListUsesRequestContext(t *testing.T) {
 	}
 	if !claudeInstalled(context.Background()) {
 		t.Fatal("agents.list did not find claude on the login PATH")
+	}
+}
+
+// An agent installed outside the login PATH is reported installed with its
+// path and offPath, and one on the PATH has no offPath.
+func TestAgentsListFindsOffPathAgents(t *testing.T) {
+	home := t.TempDir()
+	local := filepath.Join(home, ".local", "bin")
+	onPath := t.TempDir()
+	for dir, name := range map[string]string{local: "claude", onPath: "codex"} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := &api.API{Sessions: &session.Service{Path: "/usr/bin:/bin:" + onPath, Home: home}}
+	res, rerr := a.Handle(context.Background(), "agents.list", nil)
+	if rerr != nil {
+		t.Fatalf("agents.list: %+v", rerr)
+	}
+	var got struct {
+		Agents []struct {
+			ID        string `json:"id"`
+			Installed bool   `json:"installed"`
+			Path      string `json:"path"`
+			OffPath   bool   `json:"offPath"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal([]byte(toJSON(res)), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, ag := range got.Agents {
+		switch ag.ID {
+		case "claude":
+			if !ag.Installed || !ag.OffPath || ag.Path != filepath.Join(local, "claude") {
+				t.Errorf("claude = %+v, want installed off-path at %s", ag, local)
+			}
+		case "codex":
+			if !ag.Installed || ag.OffPath || ag.Path != filepath.Join(onPath, "codex") {
+				t.Errorf("codex = %+v, want installed on the PATH", ag)
+			}
+		case "omp":
+			if ag.Installed || ag.Path != "" {
+				t.Errorf("omp = %+v, want not installed", ag)
+			}
+		}
 	}
 }

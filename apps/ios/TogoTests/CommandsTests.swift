@@ -37,7 +37,8 @@ import TogoTerminal
         #expect(!store.workspaceOpen)
         #expect(store.path.isEmpty)
         #expect(store.sheet == nil)
-        #expect(store.sidebar.searchRequests == requests + 1)
+        // The roster's search comes up there too.
+        #expect(store.sidebar.searchRequests == requests + 2)
     }
 
     @Test func splitToggleOpensNextTabBeside() {

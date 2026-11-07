@@ -85,29 +85,52 @@ public struct HostInterface: Codable, Hashable, Sendable {
     }
 }
 
-/// What a phone needs to wake this machine with a magic packet.
+/// One address the helper says the machine answers on. `kind` is mdns, lan or tailscale.
+public struct HostInfoRoute: Codable, Hashable, Sendable {
+    public var kind: String
+    public var host: String
+    public var interface: String?
+
+    public init(kind: String, host: String, interface: String? = nil) {
+        self.kind = kind
+        self.host = host
+        self.interface = interface
+    }
+}
+
+/// What a phone needs to wake this machine with a magic packet, and to reach it.
 public struct HostInfo: Codable, Hashable, Sendable {
     public var interfaces: [HostInterface]
     /// Whether the machine reports wake on LAN as enabled; nil when it cannot tell.
     public var wakeOnLan: Bool?
+    /// Nil from a helper older than routes.
+    public var routes: [HostInfoRoute]?
 
-    public init(interfaces: [HostInterface], wakeOnLan: Bool? = nil) {
+    public init(interfaces: [HostInterface], wakeOnLan: Bool? = nil, routes: [HostInfoRoute]? = nil) {
         self.interfaces = interfaces
         self.wakeOnLan = wakeOnLan
+        self.routes = routes
     }
 
-    private enum CodingKeys: String, CodingKey { case interfaces, wakeOnLan }
+    private enum CodingKeys: String, CodingKey { case interfaces, wakeOnLan, routes }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         interfaces = try container.decode([HostInterface].self, forKey: .interfaces)
         wakeOnLan = try container.decodeIfPresent(Bool.self, forKey: .wakeOnLan)
+        routes = try container.decodeIfPresent([HostInfoRoute].self, forKey: .routes)
+    }
+
+    /// The routes as the phone stores them; nil when the helper did not report any.
+    public var hostRoutes: [HostRoute]? {
+        routes.map { $0.compactMap(HostRoute.init(reported:)) }
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(interfaces, forKey: .interfaces)
         try container.encode(wakeOnLan, forKey: .wakeOnLan)
+        try container.encodeIfPresent(routes, forKey: .routes)
     }
 }
 

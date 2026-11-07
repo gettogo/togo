@@ -69,6 +69,8 @@
         { "if": { "properties": { "method": { "const": "local.hook" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalHookParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.ask" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalAskParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.notify" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalNotifyParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "local.openUrl" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalOpenUrlParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "browser.openOnMac" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/BrowserOpenOnMacParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.job" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalJobParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "local.shutdown" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/LocalShutdownParams" } }, "required": ["params"] } }
       ]
@@ -247,7 +249,8 @@
         "muted": { "description": "Pushes for this session are suppressed (session.setMute). False by default; always false for unmanaged sessions.", "type": "boolean" },
         "meta": { "description": "Agent-reported model and usage, all null until an agent hook reports them.", "$ref": "#/$defs/SessionMeta" },
         "command": { "description": "launch.v1: the argv the session's agent was started with, program then args, for managed agent sessions; null for shell and unmanaged sessions. Absent from helpers without launch.v1.", "type": ["array", "null"], "items": { "type": "string" } },
-        "exit": { "description": "lifecycle.v1: how the agent process ended while status is ended or failed, else null. Absent from helpers without lifecycle.v1.", "anyOf": [{ "$ref": "#/$defs/SessionExit" }, { "type": "null" }] }
+        "exit": { "description": "lifecycle.v1: how the agent process ended while status is ended or failed, else null. Absent from helpers without lifecycle.v1.", "anyOf": [{ "$ref": "#/$defs/SessionExit" }, { "type": "null" }] },
+        "activityHistory": { "description": "Recent output volume of a managed session: at most 16 numbers in 0...1, oldest first, the last covering the current 30 second bucket. Each is the share of that bucket's seconds in which the session produced output. Optional: absent when the helper has seen no output yet or does not report it. Clients ignore it when absent.", "type": "array", "maxItems": 16, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
       },
       "required": ["id", "bib", "name", "agent", "cwd", "createdAt", "status", "activity", "attachedClients", "managed", "muted", "meta"],
       "additionalProperties": false,
@@ -323,7 +326,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -488,7 +491,7 @@
       "additionalProperties": false
     },
     "HostInfo": {
-      "description": "host.info (hostinfo.v1): what a phone needs to wake this machine. interfaces: up, non-loopback interfaces with a hardware address, each with its lowercase MAC and IPv4 addresses. wakeOnLan: the machine reports wake on LAN enabled, false when disabled, null when unknown.",
+      "description": "host.info (hostinfo.v1): what a phone needs to wake and reach this machine. interfaces: up, non-loopback interfaces with a hardware address, each with its lowercase MAC and IPv4 addresses. wakeOnLan: the machine reports wake on LAN enabled, false when disabled, null when unknown. routes: see the property.",
       "type": "object",
       "properties": {
         "interfaces": {
@@ -504,7 +507,21 @@
             "additionalProperties": false
           }
         },
-        "wakeOnLan": { "type": ["boolean", "null"] }
+        "wakeOnLan": { "type": ["boolean", "null"] },
+        "routes": {
+          "description": "Addresses a phone can try to reach this machine by, best for a local network first: kind mdns is the .local name, kind lan a private IPv4 or routable IPv6 address of interface, kind tailscale the MagicDNS name then the tailnet addresses (only while Tailscale is connected). Never link-local addresses. Older helpers omit it.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": { "enum": ["mdns", "lan", "tailscale"] },
+              "host": { "type": "string", "minLength": 1 },
+              "interface": { "type": "string", "minLength": 1 }
+            },
+            "required": ["kind", "host"],
+            "additionalProperties": false
+          }
+        }
       },
       "required": ["interfaces", "wakeOnLan"],
       "additionalProperties": false
@@ -568,13 +585,15 @@
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "name": { "description": "Display name, e.g. \"Claude Code\".", "type": "string" },
-        "installed": { "description": "Command found on the user's login-shell PATH. Always true for shell.", "type": "boolean" }
+        "installed": { "description": "Command found on the user's login-shell PATH or in the common install folders. Always true for shell.", "type": "boolean" },
+        "path": { "description": "Absolute path of the command when installed. Absent for shell.", "type": "string" },
+        "offPath": { "description": "True when the command was found only in an install folder, not on the login-shell PATH; sessions then launch it by this path. Absent otherwise.", "type": "boolean" }
       },
       "required": ["id", "name", "installed"],
       "additionalProperties": false
     },
     "AgentsListResult": {
-      "description": "agents.list. Order in v1: claude (Claude Code), omp (OMP), codex (Codex), opencode (OpenCode), shell (Shell).",
+      "description": "agents.list. Order in v1: claude (Claude Code), omp (OMP), codex (Codex), opencode (OpenCode), gemini (Gemini CLI), copilot (Copilot CLI), cursor (Cursor CLI), qwen (Qwen Code), aider (Aider), amp (Amp), auggie (Auggie), cline (Cline), crush (Crush), droid (Droid), goose (Goose), kilo (Kilo Code), kimi (Kimi Code), kiro (Kiro CLI), openhands (OpenHands), pi (Pi), vibe (Mistral Vibe), shell (Shell). Clients show ids they do not know by name, so the list may grow within v1.",
       "type": "object",
       "properties": {
         "agents": { "type": "array", "items": { "$ref": "#/$defs/Agent" } }
@@ -912,7 +931,7 @@
       "additionalProperties": false
     },
     "Event": {
-      "description": "params of the `event` notification. The kind-specific fields sit beside the header fields. seq is strictly increasing per daemon and starts at 1. Every subscriber receives every event (no per-connection filtering), so a seq gap always means lost events and the client must call events.subscribe again. The helper writes the events.subscribe response before any event for that subscription; a client drops every event with seq <= the response seq. sessionId equals session.id for kind session, is non-null for session.removed and approval.open/closed of a session, and is null for events that belong to no session (notify and job without a session, and awake, which a helper with awake.v1 sends whenever its awake status changes).",
+      "description": "params of the `event` notification. The kind-specific fields sit beside the header fields. seq is strictly increasing per daemon and starts at 1. Every subscriber receives every event (no per-connection filtering), so a seq gap always means lost events and the client must call events.subscribe again. The helper writes the events.subscribe response before any event for that subscription; a client drops every event with seq <= the response seq. sessionId equals session.id for kind session, is non-null for session.removed and approval.open/closed of a session, and is null for events that belong to no session (notify and job without a session, and awake, which a helper with awake.v1 sends whenever its awake status changes). browser.open (browser.v1) says an agent asked to open a web page: url is an http or https URL the helper validated; sessionId names the managed session whose agent asked, or is null. It is sent only while an app is subscribed in the foreground; with none, the helper opens the page on the machine instead.",
       "type": "object",
       "properties": {
         "seq": {
@@ -930,7 +949,8 @@
             "approval.closed",
             "notify",
             "job",
-            "awake"
+            "awake",
+            "browser.open"
           ]
         },
         "sessionId": {
@@ -1097,6 +1117,25 @@
             },
             "required": [
               "awake"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "browser.open"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "$ref": "#/$defs/WebUrl"
+              }
+            },
+            "required": [
+              "url"
             ]
           }
         }
@@ -1999,6 +2038,46 @@
       ],
       "additionalProperties": false
     },
+    "WebUrl": {
+      "description": "An absolute http or https URL with a host, at most 4096 bytes of printable ASCII (no spaces). The helper rejects anything else with -32602.",
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 4096,
+      "pattern": "^[hH][tT][tT][pP][sS]?://[!-~]+$"
+    },
+    "BrowserOpenOnMacParams": {
+      "description": "browser.openOnMac (browser.v1) -> {}. Opens url in the machine's default browser, as the user asked from the phone. The app sends only a WebUrl; the helper checks it again and answers anything else, such as a file URL, with -32602 and opens nothing.",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "minLength": 1, "maxLength": 8192 }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    },
+    "LocalOpenUrlParams": {
+      "description": "local.openUrl, sent by `togo open-url`, which the open, xdg-open and BROWSER shims of a managed session run. The helper publishes a browser.open event when an app is subscribed in the foreground, waiting a few seconds for one to attach.",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "anyOf": [
+            { "$ref": "#/$defs/ManagedSessionId" },
+            { "type": "null" }
+          ]
+        },
+        "url": { "$ref": "#/$defs/WebUrl" }
+      },
+      "required": ["sessionId", "url"],
+      "additionalProperties": false
+    },
+    "LocalOpenUrlResult": {
+      "description": "local.openUrl result. delivered false means no app took the page, so the caller opens it on the machine.",
+      "type": "object",
+      "properties": {
+        "delivered": { "type": "boolean" }
+      },
+      "required": ["delivered"],
+      "additionalProperties": false
+    },
     "LocalNotifyParams": {
       "description": "local.notify. strict makes `togo notify` exit non-zero when nothing was delivered.",
       "type": "object",
@@ -2617,6 +2696,8 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "notify.get" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/NotifySettings" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "notify.set" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/NotifySettings" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "authkeys.remove" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/AuthkeysRemoveResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "browser.openOnMac" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/EmptyResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "local.openUrl" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/LocalOpenUrlResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "host.info" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/HostInfo" } } } } } }
       ]
     }

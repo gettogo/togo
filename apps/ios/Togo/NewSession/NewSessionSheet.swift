@@ -130,6 +130,8 @@ struct ChoiceRow<Detail: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 30
     let symbol: String
+    /// An agent id: the row shows the agent's mark in place of `symbol`.
+    var agent: String?
     let title: Text
     var selected = false
     var chevron = false
@@ -152,7 +154,7 @@ struct ChoiceRow<Detail: View>: View {
 
     private var content: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: symbol)
+            icon
                 .font(dynamicTypeSize.isAccessibilitySize ? .body : .title3)
                 .frame(width: iconWidth, alignment: .leading)
                 .accessibilityHidden(true)
@@ -179,6 +181,16 @@ struct ChoiceRow<Detail: View>: View {
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { Color.togoLine.frame(height: 1) }
+    }
+}
+
+extension ChoiceRow {
+    @ViewBuilder fileprivate var icon: some View {
+        if let agent {
+            AgentGlyph(agent: agent)
+        } else {
+            Image(systemName: symbol)
+        }
     }
 }
 

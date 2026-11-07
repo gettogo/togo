@@ -1,0 +1,30 @@
+{
+  "source": "synthetic",
+  "agentVersion": null,
+  "match": true,
+  "kind": "confirm",
+  "title": "Run shell command?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ]
+  }
+}

@@ -134,6 +134,13 @@ extension AppServices {
     /// Text into the session as a paste, and the Enter key, for the compose bar.
     var paste: (String) -> Void = { _ in }
     var pressEnter: () -> Void = {}
+    /// A web link the user tapped or chose in the terminal, already checked as http or https.
+    var onOpenURL: (URL) -> Void = { _ in }
+    /// "Links on screen" from a link's long-press menu.
+    var onShowLinks: () -> Void = {}
+    /// Every web link on screen and in recent scrollback, newest first. Nil when the engine
+    /// cannot read its rows.
+    var links: (() -> [URL])?
     private let onStop: @MainActor () -> Void
 
     init(

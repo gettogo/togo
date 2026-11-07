@@ -51,7 +51,7 @@ private struct WebPreview: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(PortsCopy.done) { dismiss() }
+                    Button(PortsCopy.done, systemImage: "checkmark", role: .confirm) { dismiss() }
                 }
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button(PortsCopy.back, systemImage: "chevron.backward") {
@@ -64,7 +64,6 @@ private struct WebPreview: View {
                         page?.view.goForward()
                     }
                     .disabled(page?.canGoForward != true)
-                    Spacer()
                     Button(PortsCopy.reload, systemImage: "arrow.clockwise", action: reload)
                 }
             }

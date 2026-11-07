@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/fsx"
@@ -69,11 +70,11 @@ func (s *Service) relaunchCommand(ctx context.Context, sess Session) (Launch, er
 	if sess.Agent == wire.AgentCustom {
 		program = argv[0]
 	}
-	_, launch, err := ValidateLaunch(sess.Agent, program, argv[1:], s.loginPath(ctx))
+	_, launch, err := ValidateLaunch(sess.Agent, program, argv[1:], s.loginPath(ctx), s.fallbackDirs())
 	if err != nil {
 		return Launch{}, err
 	}
-	if launch.Program != argv[0] {
+	if launch.Program != argv[0] && !(filepath.IsAbs(argv[0]) && sess.Agent != wire.AgentCustom && filepath.Base(argv[0]) == filepath.Base(launch.Program)) {
 		return Launch{}, &InvalidParamsError{Reason: wire.ReasonProgram, Msg: "the stored program does not match the session's agent"}
 	}
 	return launch, nil

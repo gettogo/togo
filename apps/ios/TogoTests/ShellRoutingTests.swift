@@ -3,7 +3,7 @@ import Testing
 import TogoKit
 @testable import Togo
 
-/// Where a window's taps and keys land in the sidebar shell, and in the compact stack.
+/// Where a window's taps and keys land beside the roster, and in the compact stack.
 @MainActor struct ShellRoutingTests {
     private let one = TabID(hostID: Samples.studio, sessionID: "s-01")
     private let four = TabID(hostID: Samples.studio, sessionID: "s-04")
@@ -27,19 +27,6 @@ import TogoKit
         #expect(store.path.isEmpty)
         #expect(store.workspace.selected == one)
         #expect(store.workspaceOpen)
-    }
-
-    @Test func boardCardClearsTheDetailStack() {
-        let store = store()
-        store.open(hostID: one.hostID, sessionID: one.sessionID)
-        store.path = [.archive]
-        store.openFromBoard(row(four))
-        #expect(store.path.isEmpty)
-
-        store.path = [.archive]
-        store.panesFit = true
-        store.openBesideFromBoard(row(one))
-        #expect(store.path.isEmpty)
     }
 
     @Test func tabShortcutClearsTheDetailStack() {
@@ -103,8 +90,8 @@ import TogoKit
         #expect(!store.workspaceOnScreen)
         store.open(hostID: one.hostID, sessionID: one.sessionID)
         #expect(store.workspaceOnScreen)
-        // The board covers the open workspace, so the root presents for it.
-        store.boardShown = true
+        // The monitor covers the open workspace, so the root presents for it.
+        store.monitorShown = true
         #expect(!store.workspaceOnScreen)
 
         let compact = self.store(inline: false)
@@ -112,48 +99,16 @@ import TogoKit
         #expect(compact.workspaceOnScreen)
     }
 
-    // MARK: Sidebar selection
+    // MARK: Showing a session by id
 
-    @Test func sidebarSelectionFollowsTheDetail() {
+    @Test func showingASessionRowShowsIt() {
         let store = store()
-        #expect(store.sidebarSelection == nil)
-        store.open(hostID: one.hostID, sessionID: one.sessionID)
-        #expect(store.sidebarSelection == .session(one))
-        store.boardShown = true
-        #expect(store.sidebarSelection == .board)
-    }
-
-    @Test func selectingTheBoardRowShowsTheBoard() {
-        let store = store()
+        store.monitorShown = true
         store.path = [.archive]
-        store.sidebarSelection = .board
-        #expect(store.boardShown)
-        #expect(store.path.isEmpty)
-    }
-
-    @Test func selectingASessionRowShowsIt() {
-        let store = store()
-        store.boardShown = true
-        store.path = [.archive]
-        store.sidebarSelection = .session(four)
-        #expect(!store.boardShown)
+        store.showSession(four)
+        #expect(!store.monitorShown)
         #expect(store.path.isEmpty)
         #expect(store.workspace.selected == four)
         #expect(store.workspaceOpen)
-    }
-
-    // MARK: Empty detail and the new-session zoom
-
-    @Test func emptyDetailOffersAMachineWhenThereIsNone() {
-        #expect(store().emptyDetailAction == .newSession)
-        #expect(store(hosts: []).emptyDetailAction == .addMachine)
-    }
-
-    @Test func newSessionZoomsOnlyFromAVisibleButton() {
-        let store = store()
-        #expect(store.newSessionZooms)
-        store.sidebar.hidden = true
-        #expect(!store.newSessionZooms)
-        #expect(self.store(inline: false).newSessionZooms)
     }
 }

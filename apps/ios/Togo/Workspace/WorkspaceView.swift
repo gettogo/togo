@@ -3,9 +3,12 @@ import TogoKit
 import UIKit
 
 /// Where the user spends most of their time: the selected session's terminal edge to edge
-/// on an opaque canvas, or two sessions side by side once the user puts one beside the other,
-/// the header and tab strip above, and requests from other sessions dropping in above the key
-/// bar. On a Duo held as a tabletop the terminal stays above the fold and the rest sits below.
+/// on an opaque canvas, or two sessions side by side once the user puts one beside the other.
+/// The way back, the session's name and its actions are in the navigation bar of the stack
+/// around it, so on an iPhone Duo they sit in the vertical bar beside the status bar and the
+/// terminal starts at the top edge. Only the tab strip, with more than one tab, and the find
+/// field while it is open sit above the terminal. Requests wait in the prompt bar its presenter puts at its
+/// foot. On a Duo held as a tabletop the terminal stays above the fold and the rest sits below.
 struct WorkspaceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
@@ -15,7 +18,6 @@ struct WorkspaceView: View {
     let terminals: TerminalPool
 
     @Namespace private var chipSpace
-    @State private var noteShown: Bool
     @State private var status: String?
     @State private var finding = false
     @State private var findText = ""
@@ -28,45 +30,33 @@ struct WorkspaceView: View {
     @State private var zen: ZenChrome
     /// `store.zen` as the layout follows it, changed with animations off.
     @State private var zenLayout = false
+    /// The session menu is open, so zen keeps the bar up under it.
+    @State private var menuOpen = false
+    @State private var review: ReviewHeaderModel
 
-    init(store: AppStore, terminals: TerminalPool, noteShown: Bool = false, zen: ZenChrome? = nil) {
+    init(store: AppStore, terminals: TerminalPool, zen: ZenChrome? = nil) {
         self.store = store
         self.terminals = terminals
-        _noteShown = State(initialValue: noteShown)
         _zen = State(initialValue: zen ?? ZenChrome())
+        _review = State(initialValue: ReviewHeaderModel(services: store.reviewServices))
     }
 
     var body: some View {
-        WorkspacePanes(store: store, terminals: terminals, window: window) { geometry, insets in
-            requests(in: geometry, insets: insets)
-        }
+        WorkspacePanes(store: store, terminals: terminals, window: window) { _, _ in EmptyView() }
             .onPreferenceChange(PanesReport.Key.self) { report in
                 MainActor.assumeIsolated { if panes.report != report { panes.report = report } }
             }
-            // The tip anchors behind the chrome so its popover never changes the chrome's layout.
-            // In zen mode the chrome leaves the inset, with animations off so the terminal is
-            // resized once, and comes back over the terminal for a moment from the strip along the
-            // top edge. The chrome is only ever in one of the two places.
+            // The rows above the terminal keep to the page before the fold in book posture. In
+            // zen they keep their place, only emptied, so the terminal is never resized by them.
             .safeAreaInset(edge: .top, spacing: 0) {
-                if chromeLayout.inset {
-                    chrome.background { Color.clear.tutorialTip(.workspace) }
-                        .modifier(LeadingPageOnly())
+                if rowsPlaced {
+                    rows.modifier(LeadingPageOnly())
+                        .opacity(chromeLayout.shown ? 1 : 0)
+                        .allowsHitTesting(chromeLayout.shown)
+                        .accessibilityHidden(!chromeLayout.shown)
                 }
             }
-            .overlay(alignment: .top) {
-                ZStack(alignment: .top) {
-                    if chromeLayout.overlay {
-                        // Using the chrome keeps it up for another three seconds.
-                        chrome.modifier(LeadingPageOnly())
-                            .simultaneousGesture(TapGesture().onEnded { zen.reveal() })
-                            // Under Reduce Motion the chrome fades in place instead of sliding.
-                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-                    } else if chromeLayout.revealStrip {
-                        ZenRevealStrip { zen.reveal() }
-                    }
-                }
-                .motion(.chrome, value: chromeLayout.overlay)
-            }
+            .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar })
             .onChange(of: store.zen, initial: true) { _, on in
                 if !on { zen.hide() }
                 terminals.zenChanged(on, in: window)
@@ -74,10 +64,15 @@ struct WorkspaceView: View {
                 transaction.disablesAnimations = true
                 withTransaction(transaction) { zenLayout = on }
             }
-            // In zen the chrome stays while find is open, so the field taking the keyboard is on screen.
-            .onChange(of: finding) { _, open in zen.pin(open && zenLayout) }
+            // In zen the bar stays while find or the session menu is open.
+            .onChange(of: finding || menuOpen) { _, held in zen.pin(held && zenLayout) }
+            .modifier(ReviewCounts(model: review, store: store, row: focusedRow))
+            .onChange(of: status) { _, line in
+                if let line { AccessibilityNotification.Announcement(line).post() }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
+                    .background { Color.clear.tutorialTip(.workspace, arrowEdge: .bottom) }
                     .modifier(PaneColumns(state: panes) { [store] in $0.geometry.composeFrame(focused: store.workspace.focused) })
             }
             .background(Color.togoInk)
@@ -90,7 +85,6 @@ struct WorkspaceView: View {
                 status = nil
                 // The Compose key in the other pane moves focus to it with its bar open.
                 if store.composing != id { store.composing = nil }
-                noteShown = false
                 endFind()
             }
             .haptic(.tabSettle, trigger: PaneTabs(store.workspace), change: PaneTabs.settles)
@@ -120,7 +114,6 @@ struct WorkspaceView: View {
             }
             .coordinateSpace(.named(PaneGeometry.space))
             .readsFold()
-            .verticalBarsOff()
     }
 
     // MARK: Panes
@@ -158,15 +151,32 @@ struct WorkspaceView: View {
         WorkspaceChrome(zen: zenLayout, revealed: zen.revealed)
     }
 
-    private var chrome: some View {
+    /// The tab strip or find field has a place above the terminal, shown or emptied by zen.
+    private var rowsPlaced: Bool { showsStrip || finding }
+
+    /// One tab is already named in the title; the strip shows once there is a choice.
+    private var showsStrip: Bool { store.workspace.tabs.count > 1 }
+
+    private var focusedRow: SessionRow? { store.focusedTab.flatMap { store.session(for: $0) } }
+
+    private var title: WorkspaceTitle? {
+        guard let tab = store.focusedTab else { return nil }
+        let row = store.session(for: tab)
+        return WorkspaceTitle(
+            tab: tab, row: row, machine: store.machine(for: tab.hostID)?.name,
+            message: status ?? store.workspace.ended ?? row.flatMap { LifecycleCopy.line(status: $0.status, exit: $0.exit) }
+        )
+    }
+
+    /// The tab strip and the find field, the only rows between the bar and the terminal.
+    private var rows: some View {
         VStack(spacing: 0) {
-            if let tab = store.focusedTab {
-                header(tab)
+            if showsStrip {
+                TabStrip(
+                    chips: chips, selected: store.focusedTab?.id, beside: besideTab, canOpenBeside: panes.report.canSplit,
+                    namespace: chipSpace, onSelect: show, onOpenBeside: openBeside, onClose: { store.close($0) }
+                )
             }
-            TabStrip(
-                chips: chips, selected: store.focusedTab?.id, beside: besideTab, canOpenBeside: panes.report.canSplit,
-                namespace: chipSpace, onSelect: show, onOpenBeside: openBeside, onClose: { store.close($0) }
-            )
             if finding {
                 findBar
             }
@@ -175,38 +185,35 @@ struct WorkspaceView: View {
                 .frame(height: 1 / displayScale)
         }
         .background(Color.togoInk)
-        // Like the system bars, the chrome stops growing at the third accessibility size so the
+        // Like the system bars, the rows stop growing at the third accessibility size so the
         // terminal keeps most of the screen.
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
-    private func header(_ tab: WorkspaceTab) -> some View {
-        let row = store.session(for: tab)
-        let name = row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? tab.title
-        return WorkspaceHeader(
-            bib: row?.bib ?? tab.bib, title: name, link: tab.link,
-            status: status ?? store.workspace.ended ?? row.flatMap { LifecycleCopy.line(status: $0.status, exit: $0.exit) },
-            noteShown: $noteShown,
-            onBack: leadingAction, leading: leading,
-            accessories: {
-                if let row {
-                    if SessionActions.actions(for: row, on: store.machine(for: tab.hostID)).allows(.runAgain) {
-                        RunAgainButton(running: store.relaunching.contains(tab.id)) {
-                            Task { await store.runAgain(row, tools: machineTools) }
-                        }
-                    }
-                    ReviewHeaderButtons(store: store, row: row)
-                        .id(tab.id)
-                }
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if let tab = store.focusedTab {
+            WorkspaceToolbar(
+                leading: leading, onLeading: leadingAction, runAgain: runAgain(tab),
+                review: focusedRow.map { ReviewToolbarItems(store: store, row: $0, model: review) }
+            ) {
+                actions(for: tab, row: store.session(for: tab))
+                    .onAppear { menuOpen = true }
+                    .onDisappear { menuOpen = false }
             }
-        ) {
-            actions(for: tab, row: row)
+        }
+    }
+
+    private func runAgain(_ tab: WorkspaceTab) -> WorkspaceRunAgain? {
+        guard let row = store.session(for: tab),
+              SessionActions.actions(for: row, on: store.machine(for: tab.hostID)).allows(.runAgain) else { return nil }
+        return .init(running: store.relaunching.contains(tab.id)) {
+            Task { await store.runAgain(row, tools: machineTools) }
         }
     }
 
     /// Back to the sessions list over a compact window. Beside the sidebar there is no list to go
     /// back to; with the sidebar hidden, the button shows it again.
-    private var leading: WorkspaceHeaderLeading {
+    private var leading: WorkspaceLeading {
         guard store.workspaceInline else { return .back }
         return store.sidebar.isHidden ? .showSidebar : .none
     }
@@ -233,6 +240,16 @@ struct WorkspaceView: View {
     }
 
     @ViewBuilder private func actions(for tab: WorkspaceTab, row: SessionRow?) -> some View {
+        // The name and status, which the title says unless a vertical bar took it off screen,
+        // and why the link fell back from the transport asked for.
+        if let title {
+            Section {
+                Text(title.subtitle)
+                if let fallback = title.fallback { Text(fallback) }
+            } header: {
+                Text(title.title)
+            }
+        }
         let etAvailable = store.services.hosts.first { $0.id == tab.hostID }?.etAvailable ?? false
         ConnectWithMenu(etAvailable: etAvailable) { transport in
             store.open(hostID: tab.hostID, sessionID: tab.sessionID, transport: transport)
@@ -248,6 +265,11 @@ struct WorkspaceView: View {
             Button(WorkspaceCopy.find, systemImage: "magnifyingglass") {
                 finding = true
                 findFocused = true
+            }
+        }
+        if let links = terminals.handle(for: tab.id)?.links {
+            Button(LinkCopy.linksOnScreen, systemImage: "link") {
+                LinkCenter.shared.showLinks(links(), from: .init(hostID: tab.hostID, sessionID: tab.sessionID))
             }
         }
         if let row {
@@ -351,41 +373,7 @@ struct WorkspaceView: View {
         findMissed = false
     }
 
-    // MARK: Requests and shortcuts
-
-    /// Cards over the focused pane, clear of the fold, above the bars and the keyboard; on a
-    /// tabletop they sit in the deck under the fold.
-    @ViewBuilder private func requests(in geometry: PaneGeometry, insets: EdgeInsets) -> some View {
-        if let deck = geometry.deck {
-            TabletopDeck { incoming }
-                .frame(width: deck.width, height: max(0, deck.height - insets.bottom))
-                .offset(x: deck.minX, y: deck.minY)
-        } else {
-            let rect = geometry.requestsFrame(focused: store.workspace.focused)
-            incoming
-                .frame(maxWidth: 560)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-                .frame(width: rect.width, height: max(0, rect.height - insets.bottom), alignment: .bottom)
-                .offset(x: rect.minX, y: rect.minY)
-        }
-    }
-
-    private var incoming: some View {
-        IncomingRequests(
-            cards: store.incomingRequests, failures: store.answerFailures,
-            chipIDs: Set(store.workspace.tabs.map(\.id)), namespace: chipSpace,
-            machineName: store.machineName(for:),
-            onOpen: { card in
-                guard let sessionID = card.sessionID else { return }
-                withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
-                    store.openInFocusedPane(hostID: card.hostID, sessionID: sessionID)
-                }
-            },
-            onAnswer: { card, decision in Task { await store.answer(card.id, decision) } },
-            onMore: { store.workspaceOpen = false }
-        )
-    }
+    // MARK: Shortcuts
 
     /// ⌘1 to ⌘9 while the terminal does not have focus. With focus the terminal claims the
     /// keys first and passes them up through `TerminalHandle.onShortcut`.
@@ -404,17 +392,6 @@ struct WorkspaceView: View {
 
     private func presented<T>(_ target: Binding<T?>) -> Binding<Bool> {
         Binding { target.wrappedValue != nil } set: { if !$0 { target.wrappedValue = nil } }
-    }
-}
-
-private extension View {
-    /// The workspace is immersive: on a Duo the system's vertical bars give way to the terminal.
-    @ViewBuilder func verticalBarsOff() -> some View {
-        if #available(iOS 27.1, *) {
-            toolbarVerticalBehavior(.disabled)
-        } else {
-            self
-        }
     }
 }
 

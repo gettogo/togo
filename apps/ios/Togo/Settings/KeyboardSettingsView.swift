@@ -86,7 +86,7 @@ struct KeyboardSettingsView: View {
         .groupedList()
         .navigationTitle(settingsText("settings.keyboard.title", "Key bar"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { EditButton() }
+        .toolbar { editItem }
         .confirmationDialog(
             settingsText("settings.keyboard.replace.title", "Replace your keys?"),
             isPresented: Binding { replacing != nil } set: { if !$0 { replacing = nil } },
@@ -177,7 +177,21 @@ private struct KeyBarItemRow: View {
             KeySequence.format(steps) == item.title ? nil : KeySequence.format(steps)
         case .ctrlLatch: settingsText("settings.keyboard.latch.ctrl", "Holds Ctrl for the next key")
         case .altLatch: settingsText("settings.keyboard.latch.alt", "Holds Alt (Option) for the next key")
+        case .shiftLatch: settingsText("settings.keyboard.latch.shift", "Holds Shift for the next key")
         case .paste, .hideKeyboard, .dpad, .compose, .dictate: nil
+        }
+    }
+}
+
+extension KeyboardSettingsView {
+    /// Edit turns into Done, text either way, so on an iPhone Duo it stays in a horizontal bar
+    /// rather than jumping between axes.
+    @ToolbarContentBuilder var editItem: some ToolbarContent {
+        if #available(iOS 27.1, *) {
+            ToolbarItem(placement: .primaryAction) { EditButton() }
+                .axisBehavior(.horizontalOnly)
+        } else {
+            ToolbarItem(placement: .primaryAction) { EditButton() }
         }
     }
 }

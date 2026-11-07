@@ -1,27 +1,24 @@
 import Observation
 import SwiftUI
 
-/// Where the workspace's chrome goes: above the terminal, over it for a moment in zen mode, or
-/// nowhere. In zen the terminal keeps its full height whether or not the chrome shows.
+/// What the workspace's chrome shows. The bar and the rows under it keep their place in every
+/// mode, so zen never changes the terminal's frame and the grid is never refitted for it: zen
+/// only empties them, leaving one bar item that brings the rest back for a moment.
 struct WorkspaceChrome: Equatable {
-    /// The header and tab strip sit above the terminal, which is laid out below them.
-    var inset: Bool
-    /// The header and tab strip lie over the top of the terminal without resizing it.
-    var overlay: Bool
-    /// A strip along the top edge that shows the chrome when tapped.
-    var revealStrip: Bool
+    /// The bar's items and the rows above the terminal are on screen.
+    var shown: Bool
+    /// The bar holds only "Show controls".
+    var revealItem: Bool
 
     init(zen: Bool, revealed: Bool) {
-        inset = !zen
-        overlay = zen && revealed
-        revealStrip = zen && !revealed
+        shown = !zen || revealed
+        revealItem = zen && !revealed
     }
 }
 
-/// The chrome shown for a moment in zen mode, after a tap on the strip along the top edge.
+/// The chrome shown for a moment in zen mode, after a tap on "Show controls".
 @MainActor @Observable final class ZenChrome {
     static let revealDuration: Duration = .seconds(3)
-    static let stripHeight: CGFloat = 44
 
     private(set) var revealed = false
     /// Held on screen, such as while its find field is open. Letting go starts the three seconds.
@@ -74,32 +71,15 @@ extension AppStore {
     /// ⌃⌘F and "Zen mode" in the workspace menu. Hides the header, tab strip and compose bar of
     /// this window's workspace; a draft stays where it was.
     func toggleZen() {
-        guard zen || (workspaceOpen && !workspaceBehindBoard) else { return }
+        guard zen || (workspaceOpen && !workspaceBehindMonitor) else { return }
         zen.toggle()
         if zen { composing = nil }
     }
 }
 
 extension AppStore {
-    /// The board is the regular-width detail, so the workspace is open but not on screen.
-    var workspaceBehindBoard: Bool {
-        boardShown && workspaceInline
-    }
-}
-
-/// The strip along the top edge in zen mode: invisible, 44 pt tall, the chrome on a tap.
-struct ZenRevealStrip: View {
-    let reveal: () -> Void
-
-    var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: ZenChrome.stripHeight)
-            .contentShape(.rect)
-            .onTapGesture(perform: reveal)
-            .accessibilityElement()
-            .accessibilityLabel(ZenCopy.showControls)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { reveal() }
+    /// Monitor mode fills a regular-width window, so the workspace is open but not on screen.
+    var workspaceBehindMonitor: Bool {
+        monitorShown && workspaceInline
     }
 }

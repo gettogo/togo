@@ -55,6 +55,15 @@ struct MachineDraft: Hashable, Sendable {
     var jump = ""
     /// The wake target the machine reported; kept as is when the machine is edited.
     var wake: WakeTarget?
+    /// The stored machine's routes when editing; empty for a new machine.
+    var routes: [HostRoute] = []
+    var lastRoute: String?
+    /// The address the stored machine was saved under, to tell a changed address apart.
+    var savedAddress: String?
+    /// The stored machine's id when editing.
+    var machineID: UUID?
+    /// A route typed into the details, not added yet.
+    var newRoute = ""
 
     init() {}
 
@@ -135,12 +144,11 @@ struct MachineDraft: Hashable, Sendable {
             auth = .password
         }
         let jumps = jump.trimmingCharacters(in: .whitespaces).isEmpty ? [] : Self.endpoint(jump).map { [$0] } ?? []
+        let host = address.trimmingCharacters(in: .whitespaces)
         return HostProfile(
             id: id, name: trimmedName,
-            endpoint: HostEndpoint(
-                host: address.trimmingCharacters(in: .whitespaces), port: port, user: user.trimmingCharacters(in: .whitespaces)
-            ),
-            jumps: jumps, auth: auth
+            endpoint: HostEndpoint(host: host, port: port, user: user.trimmingCharacters(in: .whitespaces)),
+            jumps: jumps, auth: auth, routes: Self.routes(routes, saved: savedAddress, address: host), lastRoute: lastRoute
         )
     }
 

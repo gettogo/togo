@@ -88,7 +88,7 @@ func (x *exitSink) want(t *testing.T, status, reason string, code int) {
 
 func TestExitNonZeroIsFailedNotDone(t *testing.T) {
 	x := newExitHarness(t)
-	x.signal(t, wire.SignalOutput, "")
+	x.work(t)
 	x.exitWith(t, 1)
 	x.want(t, wire.StatusFailed, wire.ExitReasonExit, 1)
 	x.idleWindows(3)
@@ -129,7 +129,7 @@ func TestExitWithoutCodeRejected(t *testing.T) {
 
 func TestShellOutputAfterExitSendsNoDone(t *testing.T) {
 	x := newExitHarness(t)
-	x.signal(t, wire.SignalOutput, "")
+	x.work(t)
 	x.exitWith(t, 0)
 	before := len(x.statuses)
 	for range 3 {
@@ -161,7 +161,7 @@ func TestBellAfterExitStillNotifies(t *testing.T) {
 func TestExitIgnoredWhileAgentRuns(t *testing.T) {
 	x := newExitHarness(t)
 	x.w.agentGone = func(context.Context, string) (bool, error) { return false, nil }
-	x.signal(t, wire.SignalOutput, "")
+	x.work(t)
 	x.exitWith(t, 1)
 	if x.sets != 0 {
 		t.Fatalf("recorded %q while the agent runs", x.status)
@@ -285,7 +285,7 @@ func TestSpoofedExitIgnoredOnRealPane(t *testing.T) {
 // waiting for its idle check. The silence that follows is not a done.
 func TestHookFailureAfterOutputSendsNoDone(t *testing.T) {
 	x := newExitHarness(t)
-	x.signal(t, wire.SignalOutput, "")
+	x.work(t)
 	before := len(x.statuses)
 	// Recorded the way the hook handler records it, not through Signal.
 	x.SetExit(sid, wire.StatusFailed, &wire.SessionExit{Reason: wire.ExitReasonUsageLimit})

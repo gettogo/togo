@@ -43,6 +43,31 @@ struct LaunchMark: View {
     }
 }
 
+/// The mark at rest with its beacon out: chevron and paws in mute, the beacon an unlit ring.
+/// For empty states and "All clear", where nothing waits on the user. Decoration only.
+struct UnlitMark: View {
+    @ScaledMetric(relativeTo: .largeTitle) private var side: CGFloat = 44
+
+    var body: some View {
+        let unit = side / MarkGeometry.viewBox
+        ZStack {
+            MarkPart(path: MarkGeometry.chevron)
+                .stroke(
+                    Color.togoMute,
+                    style: StrokeStyle(lineWidth: MarkGeometry.chevronWidth * unit, lineCap: .round, lineJoin: .round)
+                )
+            ForEach(MarkGeometry.paws.indices, id: \.self) { index in
+                MarkPart(path: MarkGeometry.paw(index))
+                    .fill(Color.togoMute)
+            }
+            MarkPart(path: MarkGeometry.beacon)
+                .stroke(Color.togoMute, lineWidth: max(1, 1.6 * unit))
+        }
+        .frame(width: side, height: side)
+        .accessibilityHidden(true)
+    }
+}
+
 /// One part of the mark in the SVG's 64-unit box, scaled to whatever frame it is given.
 private struct MarkPart: Shape {
     let path: Path

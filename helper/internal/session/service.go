@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/agents"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,6 +82,10 @@ type Session struct {
 	Command []string `json:"command"`
 	// Exit is how the agent ended while Status is ended or failed, else nil.
 	Exit *wire.SessionExit `json:"exit"`
+	// ActivityHistory is the recent output volume of a managed session, 16
+	// values in 0...1, oldest first, each covering 30 seconds; the hub
+	// fills it. Omitted when unknown.
+	ActivityHistory []float64 `json:"activityHistory,omitempty"`
 	// SavedExit is the exit stored in the session's @togo_exit option. It
 	// is not sent: the hub, which owns the exit, reads it after a restart.
 	SavedExit *SavedExit `json:"-"`
@@ -109,8 +114,14 @@ type Service struct {
 	Shell string
 	// Path is searched for agent commands; empty means state.LoginPath.
 	Path string
+	// Home is the user's home directory. With it, agents missing from Path
+	// are also looked up in agents.FallbackDirs(Home).
+	Home string
 	// TogoPath is the helper a session runs to report its agent's exit.
 	TogoPath string
+	// ShimDir holds the open, xdg-open and BROWSER shims that send web pages
+	// to the phone. Empty leaves a session's BROWSER and PATH alone.
+	ShimDir string
 	// Logf receives problems with stored session state. Nil discards them.
 	Logf func(format string, args ...any)
 	// NewID and Now are test seams; nil means a random id and time.Now.
@@ -124,14 +135,12 @@ type Service struct {
 
 // TmuxFallbacks are where package managers and systems install tmux, for
 // when the login PATH does not name it either. home is the user's home
-// directory; when empty, the per-user Nix profile is left out.
+// directory; when empty, the per-user folders are left out.
 func TmuxFallbacks(home string) []string {
-	list := []string{
-		"/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux", "/bin/tmux",
-		"/home/linuxbrew/.linuxbrew/bin/tmux", "/nix/var/nix/profiles/default/bin/tmux",
-	}
-	if home != "" {
-		list = append(list, filepath.Join(home, ".nix-profile", "bin", "tmux"))
+	dirs := append(agents.FallbackDirs(home), "/usr/bin", "/bin")
+	list := make([]string, len(dirs))
+	for i, d := range dirs {
+		list[i] = filepath.Join(d, "tmux")
 	}
 	return list
 }
@@ -156,6 +165,7 @@ func NewService(ctx context.Context, home string) (*Service, error) {
 		Manifest: &Manifest{Path: filepath.Join(home, "sessions.json")},
 		LockFile: filepath.Join(home, "run", "bib.lock"),
 		Shell:    cmp.Or(os.Getenv("SHELL"), "/bin/sh"),
+		Home:     userHome,
 	}, nil
 }
 

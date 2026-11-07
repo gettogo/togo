@@ -12,6 +12,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/rpc"
+	"github.com/gettogo/togo/helper/internal/tailnet"
 )
 
 const fixturesDir = "../../../protocol/v1/fixtures"
@@ -157,7 +158,13 @@ func TestFixtures(t *testing.T) {
 		t.Fatal(err)
 	}
 	ifs, addrs := fakeIfaces(net.Interface{Name: "en0", Flags: net.FlagUp, HardwareAddr: mac("02:00:00:00:00:01")})
-	s := &Service{Interfaces: ifs, Addrs: addrs, Womp: func() (*bool, error) { return ptr(true), nil }}
+	s := &Service{
+		Interfaces: ifs, Addrs: addrs, Womp: func() (*bool, error) { return ptr(true), nil },
+		LocalName: func(context.Context) string { return "studio.local" },
+		Tailscale: func(context.Context) tailnet.Status {
+			return tailnet.Status{Running: true, DNSName: "studio.tail1234.ts.net", IPs: []string{"100.101.102.103", "fd7a:115c:a1e0::1"}}
+		},
+	}
 	a := &api.API{Ext: s.Methods()}
 	var in bytes.Buffer
 	for _, req := range append(append([]json.RawMessage{}, fx.Setup...), fx.Request) {

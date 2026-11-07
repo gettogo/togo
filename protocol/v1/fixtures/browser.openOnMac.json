@@ -1,0 +1,31 @@
+{
+  "description": "The phone asks the machine to open a page an agent wanted. Harness deviation: the opener is a fake that records the URL instead of running open.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "browser.openOnMac",
+    "params": {
+      "url": "https://claude.ai/oauth/authorize?code=true&state=abc"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {}
+  }
+}

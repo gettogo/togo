@@ -59,12 +59,11 @@ struct AnnotateView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "compose.annotate.cancel", defaultValue: "Cancel"), action: onCancel)
+                    Button(String(localized: "compose.annotate.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel, action: onCancel)
                         .foregroundStyle(Color.togoSnow)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(ComposeCopy.send) { onSend(canvas.render(over: image)) }
-                        .fontWeight(.semibold)
+                    Button(ComposeCopy.send, systemImage: "arrow.up") { onSend(canvas.render(over: image)) }
                         .foregroundStyle(Color.togoSnow)
                 }
                 ToolbarItemGroup(placement: .bottomBar) {

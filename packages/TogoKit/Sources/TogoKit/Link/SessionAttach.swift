@@ -58,10 +58,13 @@ public enum SessionAttach {
         argv: @escaping @Sendable (SSHConnection) async throws -> [String]
     ) -> LinkConnect {
         { cols, rows, onWaking in
+            // Any route answering is enough: the connection races them all next.
             let probe = profile.jumps.first ?? profile.endpoint
+            let hosts = profile.jumps.isEmpty ? await RouteBook.shared.candidates(for: profile) : [probe.host]
             try await WakeProbe.reach(
-                host: probe.host, port: probe.port, clock: SystemClock(), onWaking: onWaking,
-                attempt: { await WakeProbe.tcpConnect(host: probe.host, port: probe.port, timeout: .seconds(2)) }
+                host: profile.jumps.isEmpty ? profile.name : probe.host, port: probe.port, clock: SystemClock(),
+                onWaking: onWaking,
+                attempt: { await WakeProbe.anyReachable(hosts: hosts, port: probe.port, timeout: .seconds(2)) }
             )
             let connection = env.connection(for: profile)
             do {

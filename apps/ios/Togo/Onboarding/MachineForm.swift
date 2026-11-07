@@ -35,6 +35,10 @@ struct MachineForm: View {
             }
             .groupedRows()
 
+            if draft.machineID != nil {
+                MachineRoutesSection(draft: $draft)
+            }
+
             Section {
                 SymbolPicker(selection: $draft.symbol)
             } header: {
@@ -109,7 +113,7 @@ struct MachineForm: View {
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(String(localized: "onboard.form.connect", defaultValue: "Connect"), action: onConnect)
+                Button(String(localized: "onboard.form.connect", defaultValue: "Connect"), systemImage: "checkmark", role: .confirm, action: onConnect)
             }
         }
         .fileImporter(isPresented: $choosingKeyFile, allowedContentTypes: [.data, .plainText]) { result in

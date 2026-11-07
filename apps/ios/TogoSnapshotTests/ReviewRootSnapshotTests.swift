@@ -16,49 +16,6 @@ struct ReviewRootSnapshotTests {
         )
     }
 
-    // MARK: Header
-
-    /// The workspace header with the review buttons read from a status of `count` files.
-    private func header(changes count: Int, ports: Bool = true) async -> some View {
-        var status = ReviewFixtures.status
-        status.files = (0..<count).map { ReviewFixtures.file("src/file\($0).ts", ".", "M") }
-        let services = FakeReviewServices(status: status)
-        if !ports { services.portList = [] }
-        var state = Samples.controlCenter
-        state.machines[0].capabilities = Self.capabilities
-        let store = AppStore(services: FakeAppServices(), controlCenter: state, reviewServices: services)
-        let row = state.machines[0].sessions[0]
-        let model = ReviewHeaderModel(services: services)
-        await model.select(store.reviewSubject(for: row))
-        return VStack(spacing: 0) {
-            WorkspaceHeader(
-                bib: row.bib, title: row.name, link: .live(transport: "Mosh", note: nil), status: nil,
-                noteShown: .constant(false), onBack: {},
-                accessories: { ReviewHeaderButtons(store: store, row: row, model: model) }
-            ) {
-                Button("Copy") {}
-            }
-            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-            Spacer()
-        }
-        .tint(Color.togoSnow)
-    }
-
-    @Test func headerWithoutChanges() async {
-        let view = await header(changes: 0, ports: false)
-        assertScreen(view, named: "header-0")
-    }
-
-    @Test func headerOneChange() async {
-        let view = await header(changes: 1, ports: false)
-        assertScreen(view, named: "header-1")
-    }
-
-    @Test func headerTwelveChangesAndPreview() async {
-        let view = await header(changes: 12)
-        assertScreen(view, named: "header-12")
-    }
-
     // MARK: Root
 
     @Test func rootOnIPhone() {

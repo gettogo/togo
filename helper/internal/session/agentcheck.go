@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 
+	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/state"
 )
 
@@ -12,7 +13,7 @@ import (
 // that could never be launched is an *InvalidParamsError with Reason
 // wire.ReasonProgram.
 func (s *Service) CheckProgram(ctx context.Context, program string) (path string, installed bool, err error) {
-	path, err = findProgram(program, s.loginPath(ctx), false)
+	path, err = findProgram(program, s.loginPath(ctx), s.fallbackDirs(), false)
 	if err != nil {
 		return "", false, err
 	}
@@ -24,4 +25,13 @@ func (s *Service) loginPath(ctx context.Context) string {
 		return s.Path
 	}
 	return state.LoginPath(ctx)
+}
+
+// fallbackDirs are the install folders searched after the login PATH. A
+// Service without a Home searches none.
+func (s *Service) fallbackDirs() []string {
+	if s.Home == "" {
+		return nil
+	}
+	return agents.FallbackDirs(s.Home)
 }

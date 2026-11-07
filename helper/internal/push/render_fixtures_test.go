@@ -15,6 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/detect"
 	"github.com/gettogo/togo/helper/internal/tmux"
@@ -238,9 +239,10 @@ func oneLine(s string) string {
 }
 
 func agentDisplay(agent string) string {
-	names := map[string]string{"claude": "Claude Code", "codex": "Codex", "omp": "OMP", "opencode": "OpenCode"}
-	if n, ok := names[strings.ToLower(agent)]; ok {
-		return n
+	// The app names every registry agent as the registry does (TogoPush
+	// AgentName mirrors it).
+	if a, ok := agents.Lookup(strings.ToLower(agent)); ok && a.Command != "" {
+		return a.Name
 	}
 	a := oneLine(agent)
 	if a == "" {

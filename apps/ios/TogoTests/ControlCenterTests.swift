@@ -22,7 +22,7 @@ import TogoKit
 
         await store.answer("r1", .approve)
         #expect(store.controlCenter.requests.map(\.phase) == [.done(.answeredElsewhere)])
-        #expect(RequestCardView.outcomeLabel(.answeredElsewhere) == "Answered at the desk")
+        #expect(RequestCard.Outcome.answeredElsewhere.prompt.label == "Answered at the desk")
         #expect(store.notice == nil)
 
         await store.answer("r1", .deny)
@@ -134,12 +134,12 @@ import TogoKit
     @Test func offlineCaptionCountsMinutesSinceLastSeen() {
         let now = Samples.now
         let offline = Reachability.offline(since: now, reason: "Asleep")
-        #expect(MachineSectionView.caption(offline, helper: .present(version: "0.3.0", live: true),
-                                           lastSeen: now.addingTimeInterval(-720), now: now) == "Offline, seen 12 min ago")
-        #expect(MachineSectionView.caption(.waking, helper: .checking, lastSeen: nil, now: now) == "Waking")
-        #expect(MachineSectionView.caption(.online, helper: .missing, lastSeen: now, now: now) == "No helper")
-        #expect(MachineSectionView.caption(.online, helper: .present(version: "0.3.0", live: true),
-                                           lastSeen: now, now: now) == nil)
+        #expect(RosterSection.caption(offline, helper: .present(version: "0.3.0", live: true),
+                                      lastSeen: now.addingTimeInterval(-720), now: now) == "Offline, seen 12 min ago")
+        #expect(RosterSection.caption(.waking, helper: .checking, lastSeen: nil, now: now) == "Waking")
+        #expect(RosterSection.caption(.online, helper: .missing, lastSeen: now, now: now) == "No helper")
+        #expect(RosterSection.caption(.online, helper: .present(version: "0.3.0", live: true),
+                                      lastSeen: now, now: now) == nil)
     }
 
     @Test func approveIsTheApprovingOptionAndTheRestGoUnderMore() {
@@ -149,7 +149,7 @@ import TogoKit
             ApprovalOption(n: 2, label: "Yes, and don't ask again", role: .approveAlways),
             ApprovalOption(n: 3, label: "No, and tell Claude what to do", role: .deny),
         ]
-        let choices = RequestCardView.Choices(card.options)
+        let choices = RequestChoices(card.options)
         #expect(choices.approve?.n == 1)
         #expect(choices.deny?.n == 3)
         #expect(choices.more.map(\.n) == [2])

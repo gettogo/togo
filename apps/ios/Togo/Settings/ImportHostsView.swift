@@ -24,11 +24,11 @@ struct ImportHostsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(settingsText("import.hosts.cancel", "Cancel")) { dismiss() }
+                Button(settingsText("import.hosts.cancel", "Cancel"), systemImage: "xmark", role: .cancel) { dismiss() }
             }
             if model.reviewed {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(importTitle) {
+                    Button(importTitle, systemImage: "checkmark", role: .confirm) {
                         Task {
                             await model.importTicked()
                             if model.finished, let count = model.imported {

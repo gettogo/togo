@@ -84,6 +84,7 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 			if err != nil {
 				return nil, err
 			}
+			state.WarmLoginPath(ctx, logger.Printf)
 			c, err := daemon.Compose(h, daemon.ComposeOptions{Home: home, TogoPath: tapPath, Awake: &hostAwake, Logf: logger.Printf})
 			if err != nil {
 				return nil, err

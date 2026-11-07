@@ -71,7 +71,7 @@ import Testing
         battery.level = 0.19
         monitor.batteryChanged()
         #expect(!timer.isIdleTimerDisabled)
-        #expect(monitor.note == BoardCopy.lowBattery)
+        #expect(monitor.note == MonitorCopy.lowBattery)
 
         // Plugged in, it comes back on its own.
         battery.isPluggedIn = true

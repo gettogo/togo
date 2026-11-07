@@ -27,9 +27,9 @@ import Testing
         #expect(await sent(h, KeyStroke(.escape)) == "\(esc)[27u")
     }
 
-    @Test func shiftEnterIsCarriageReturnWithoutExtendedKeys() async {
+    @Test func shiftEnterIsMetaEnterWithoutExtendedKeys() async {
         let h = EngineHarness()
-        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\r")
+        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\(esc)\r")
     }
 
     @Test func modifyOtherKeysSurvivesSplitFeeds() async {
@@ -44,9 +44,9 @@ import Testing
         let h = EngineHarness()
         h.feed("\(esc)[>4;2m")
         h.feed("\(esc)[>4m")
-        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\r")
+        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\(esc)\r")
         h.feed("\(esc)[>4;2m\(esc)c")
-        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\r")
+        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\(esc)\r")
     }
 
     @Test func kittyPopRestoresLegacyKeys() async {
@@ -55,7 +55,7 @@ import Testing
         _ = await waitUntil { h.engine.extendedKeyMode == .kitty }
         h.feed("\(esc)[<u")
         #expect(await waitUntil { h.engine.extendedKeyMode == .legacy })
-        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\r")
+        #expect(await sent(h, KeyStroke(.enter, .shift)) == "\(esc)\r")
     }
 
     @Test func shiftedPrintableStaysText() {

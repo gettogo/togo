@@ -282,6 +282,7 @@ func TestRoleOfFailsClosed(t *testing.T) {
 		"Run":                               wire.RoleApprove,
 		"Yes, proceed":                      wire.RoleApprove,
 		"Allow once":                        wire.RoleApprove,
+		"Yes, allow once":                   wire.RoleApprove,
 		"Yes, and don't ask again for git":  wire.RoleApproveAlways,
 		"Don't ask again":                   wire.RoleApproveAlways,
 		"Yes, remember this decision":       wire.RoleApproveAlways,

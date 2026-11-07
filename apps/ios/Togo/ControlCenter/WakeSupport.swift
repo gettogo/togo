@@ -53,10 +53,13 @@ enum WakeLearning {
 }
 
 extension HostRecord {
-    /// The record as the monitor sees it: a changed wake target does not restart a connection.
-    var withoutWake: HostRecord {
+    /// The record as the monitor sees it: a changed wake target or route list does not restart
+    /// a connection. Routes reach running connections through the route book instead.
+    var withoutLearned: HostRecord {
         var copy = self
         copy.wake = nil
+        copy.profile.routes = []
+        copy.profile.lastRoute = nil
         return copy
     }
 }

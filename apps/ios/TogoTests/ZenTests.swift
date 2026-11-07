@@ -32,11 +32,11 @@ import UIKit
         #expect(store.incomingRequests == requests)
 
         let hidden = WorkspaceChrome(zen: true, revealed: false)
-        #expect(!hidden.inset && !hidden.overlay && hidden.revealStrip)
+        #expect(!hidden.shown && hidden.revealItem)
         let revealed = WorkspaceChrome(zen: true, revealed: true)
-        #expect(!revealed.inset && revealed.overlay && !revealed.revealStrip)
+        #expect(revealed.shown && !revealed.revealItem)
         let normal = WorkspaceChrome(zen: false, revealed: false)
-        #expect(normal.inset && !normal.overlay && !normal.revealStrip)
+        #expect(normal.shown && !normal.revealItem)
 
         // Zen belongs to the workspace: with it closed there is nothing to hide.
         store.toggleZen()
@@ -58,7 +58,6 @@ import UIKit
         #expect(reveal.revealed)
         for _ in 0..<100 where wake == nil { await Task.yield() }
         #expect(asked == [.seconds(3)])
-        #expect(ZenChrome.stripHeight == 44)
 
         wake?.resume()
         for _ in 0..<100 where reveal.revealed { await Task.yield() }
@@ -70,7 +69,7 @@ import UIKit
         #expect(!reveal.revealed)
     }
 
-    @Test func zenResizesOnce() throws {
+    @Test func zenNeverResizes() throws {
         let store = store()
         let pool = TerminalPool()
         let zen = ZenChrome()
@@ -81,16 +80,17 @@ import UIKit
         var sizes = [before]
         store.toggleZen()
         host.settle { if let size = host.terminalSize(of: one), sizes.last != size { sizes.append(size) } }
-        let after = try #require(host.terminalSize(of: one))
-        #expect(after.height > before.height)
-        #expect(after.width == before.width)
-        #expect(sizes == [before, after])
+        #expect(sizes == [before])
 
-        // Showing the chrome from the top edge lays it over the terminal without resizing it.
+        // Showing the controls for a moment fills the same places without resizing it.
         zen.reveal()
         host.settle { if let size = host.terminalSize(of: one), sizes.last != size { sizes.append(size) } }
         #expect(zen.revealed)
-        #expect(sizes == [before, after])
+
+        // Leaving zen does not resize it either.
+        store.toggleZen()
+        host.settle { if let size = host.terminalSize(of: one), sizes.last != size { sizes.append(size) } }
+        #expect(sizes == [before])
     }
 
     /// In zen the compose bar stays shut: the key bar's Compose key does nothing until zen ends.

@@ -5,7 +5,12 @@ import UIKit
 /// Installs itself as the engine's input accessory and its latch as the engine's latch, so a
 /// latched Ctrl applies to the next key typed on the system keyboard as well as on the bar.
 @MainActor public final class KeyBarView: UIInputView {
-    static let rowHeight: CGFloat = 48
+    /// Slim, so the terminal keeps its rows while the keyboard is up. Each key fills the row's
+    /// height as a target and draws a little inside it.
+    static let rowHeight: CGFloat = 36
+    static let keySpacing: CGFloat = 4
+    static let rowInset: CGFloat = 6
+    static let minimumKeyWidth: CGFloat = 36
 
     let config: KeyBarConfig
     let latch = ModifierLatch()
@@ -22,20 +27,33 @@ import UIKit
     }
 
     private weak var engine: SwiftTermEngine?
-    private let stack = UIStackView()
+    private let scroll = UIScrollView()
+    /// The keys in order, the pad among them where the first arrow is.
+    private var keys: [UIView] = []
     private let dpad = DPadView()
     private var buttons: [UUID: UIButton] = [:]
-    private let haptics = UISelectionFeedbackGenerator()
+    /// Played through the host's haptics, so the app keeps one place that vibrates.
+    public var onHaptic: ((KeyHaptic) -> Void)?
+    /// Held arrows, Tab, Back Tab and Backspace repeat like the system keyboard.
+    let repeater = ChordRepeater(timing: KeyRepeatTiming.delay(beforeRepeat:))
+    static let lockPressDuration: TimeInterval = 0.45
 
     public init(config: KeyBarConfig, engine: SwiftTermEngine) {
         self.config = config
         self.engine = engine
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.rowHeight), inputViewStyle: .keyboard)
+        // A plain input view: the keyboard style draws a black backdrop behind the row on
+        // current systems. The row takes the terminal's own background instead, so the bar
+        // reads as the terminal's last strip above the keyboard.
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.rowHeight), inputViewStyle: .default)
         allowsSelfSizing = true
+        autoresizingMask = [.flexibleWidth]
+        backgroundColor = engine.backgroundColor
         // Past this size the words no longer fit a bar that shares the screen with a terminal.
         maximumContentSizeCategory = .accessibilityMedium
         buildRow()
         latch.onChange = { [weak self] in self?.refreshLatchButtons() }
+        latch.softShift = SystemKeyboardShift.live
+        repeater.send = { [weak engine] bytes in engine?.write(bytes) }
         presence.onChange = { [weak self] _ in self?.refreshVisibility() }
         dpad.onStroke = { [weak self] in self?.send($0) }
         engine.latch = latch
@@ -53,6 +71,54 @@ import UIKit
         return CGSize(width: UIView.noIntrinsicMetric, height: height)
     }
 
+    /// The theme can change while the keyboard is up.
+    public override func layoutSubviews() {
+        super.layoutSubviews()
+        if let color = engine?.backgroundColor, backgroundColor != color { backgroundColor = color }
+        layoutKeys()
+    }
+
+    /// Keys that fit the width share it out, every key a little wider. Keys that do not are
+    /// cut into pages of whole keys, each page filling the width, and the row pages between
+    /// them, so a key is never left half on screen when the row comes to rest.
+    private func layoutKeys() {
+        scroll.frame = bounds
+        let shown = keys.filter { !$0.isHidden }
+        let natural = shown.map(naturalWidth)
+        let pages = KeyRowLayout.pages(
+            widths: natural, available: bounds.width - Self.rowInset * 2, spacing: Self.keySpacing
+        )
+        for (index, page) in pages.enumerated() {
+            var x = CGFloat(index) * bounds.width + Self.rowInset
+            for slot in page {
+                let key = shown[slot.index]
+                let height = key === dpad ? DPadView.side * 3 : min(bounds.height, Self.rowHeight)
+                key.frame = CGRect(x: x, y: (bounds.height - height) / 2, width: slot.width, height: height)
+                x += slot.width + Self.keySpacing
+            }
+        }
+        let width = bounds.width * CGFloat(max(1, pages.count))
+        if scroll.contentSize.width != width || scroll.contentSize.height != bounds.height {
+            scroll.contentSize = CGSize(width: width, height: bounds.height)
+        }
+        scroll.isPagingEnabled = pages.count > 1
+        scroll.alwaysBounceHorizontal = pages.count > 1
+        // A rotation or fold can leave the row between pages; land on the nearest whole one.
+        if pages.count > 1, bounds.width > 0, !scroll.isDragging, !scroll.isDecelerating {
+            let page = (scroll.contentOffset.x / bounds.width).rounded()
+            let x = min(max(0, page), CGFloat(pages.count - 1)) * bounds.width
+            if scroll.contentOffset.x != x { scroll.contentOffset.x = x }
+        } else if pages.count <= 1, scroll.contentOffset.x != 0 {
+            scroll.contentOffset.x = 0
+        }
+    }
+
+    private func naturalWidth(_ key: UIView) -> CGFloat {
+        if key === dpad { return DPadView.side * 3 }
+        let size = key.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: bounds.height))
+        return max(Self.minimumKeyWidth, ceil(size.width))
+    }
+
     func perform(_ item: KeyBarItem) {
         guard let engine else { return }
         switch item.action {
@@ -62,12 +128,10 @@ import UIKit
             } else {
                 engine.run(steps)
             }
-        case .ctrlLatch:
-            latch.tapCtrl()
-            haptics.selectionChanged()
-        case .altLatch:
-            latch.tapAlt()
-            haptics.selectionChanged()
+        case .ctrlLatch, .altLatch, .shiftLatch:
+            guard let modifier = Self.modifier(for: item.action) else { return }
+            latch.tap(modifier)
+            onHaptic?(latch.state(of: modifier) == .locked ? .lock : .modifier)
         case .paste:
             engine.pasteFromClipboard()
         case .hideKeyboard:
@@ -90,37 +154,80 @@ import UIKit
         engine?.send(latch.consume(stroke))
     }
 
+    static func modifier(for action: KeyAction) -> KeyModifiers? {
+        switch action {
+        case .ctrlLatch: .ctrl
+        case .altLatch: .alt
+        case .shiftLatch: .shift
+        default: nil
+        }
+    }
+
+    /// A key that repeats while held: a lone cursor, Tab or delete key, whatever its modifiers.
+    static func repeatingStroke(_ item: KeyBarItem) -> KeyStroke? {
+        guard case .steps(let steps) = item.action, steps.count == 1, case .stroke(let stroke) = steps[0] else {
+            return nil
+        }
+        let repeating: [TerminalKey] = [.up, .down, .left, .right, .tab, .backspace, .delete, .pageUp, .pageDown]
+        return repeating.contains(stroke.key) ? stroke : nil
+    }
+
+    /// Sends the key at touch down, as the system keyboard does, and repeats it until the
+    /// finger lifts. The first press takes any latched modifiers; the repeats send the same.
+    func press(_ item: KeyBarItem, stroke: KeyStroke, isHeld: @escaping @MainActor () -> Bool) {
+        guard let engine else { return }
+        let bytes = engine.bytes(for: latch.consume(stroke))
+        engine.write(bytes)
+        onHaptic?(.key)
+        repeater.start(key: item.id.hashValue, bytes: bytes, isHeld: isHeld)
+    }
+
+    private func addActions(for item: KeyBarItem, to button: UIButton) {
+        if let stroke = Self.repeatingStroke(item) {
+            button.addAction(UIAction { [weak self, weak button] _ in
+                self?.press(item, stroke: stroke, isHeld: { button?.isTracking ?? false })
+            }, for: .touchDown)
+            button.addAction(UIAction { [weak self] _ in self?.repeater.stop() },
+                             for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            return
+        }
+        button.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            if case .steps = item.action { onHaptic?(.key) }
+            perform(item)
+        }, for: .touchUpInside)
+        guard let modifier = Self.modifier(for: item.action) else { return }
+        let hold = UILongPressGestureRecognizer(target: self, action: #selector(lockHeld(_:)))
+        hold.minimumPressDuration = Self.lockPressDuration
+        hold.name = String(modifier.rawValue)
+        button.addGestureRecognizer(hold)
+    }
+
+    /// A long press on a modifier locks it, the quicker way for a run of chords.
+    @objc private func lockHeld(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, let raw = gesture.name.flatMap(Int.init) else { return }
+        latch.lock(KeyModifiers(rawValue: raw))
+        onHaptic?(.lock)
+    }
+
     private func buildRow() {
-        let scroll = UIScrollView()
         scroll.showsHorizontalScrollIndicator = false
-        scroll.alwaysBounceHorizontal = true
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .horizontal
-        stack.alignment = .center
-        stack.spacing = 4
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        scroll.backgroundColor = .clear
+        scroll.contentInsetAdjustmentBehavior = .never
+        scroll.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(scroll)
-        scroll.addSubview(stack)
-        NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 8),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -8),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-            stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
-        ])
         for item in config.items {
-            let button = KeyBarButton.make(title: item.title, symbol: item.symbol)
-            button.addAction(UIAction { [weak self] _ in self?.perform(item) }, for: .touchUpInside)
+            let button = KeyBarButton.make(title: item.title, symbol: item.symbol, slim: true)
+            button.accessibilityLabel = KeyBarButton.spokenTitle(item.title)
+            addActions(for: item, to: button)
             buttons[item.id] = button
-            stack.addArrangedSubview(button)
+            keys.append(button)
+            scroll.addSubview(button)
             addLockActions(for: item, to: button)
         }
         if let firstArrow = config.items.firstIndex(where: isArrow) {
-            stack.insertArrangedSubview(dpad, at: firstArrow)
+            keys.insert(dpad, at: firstArrow)
+            scroll.addSubview(dpad)
         }
         dpad.isHidden = true
         refreshLatchButtons()
@@ -129,12 +236,8 @@ import UIKit
     /// Locking takes two quick taps, which VoiceOver, Switch Control and Voice Control cannot
     /// produce, so lock and unlock are also offered as named actions.
     private func addLockActions(for item: KeyBarItem, to button: UIButton) {
-        let set: (ModifierLatch.State) -> Void
-        switch item.action {
-        case .ctrlLatch: set = { [weak self] in self?.latch.ctrl = $0 }
-        case .altLatch: set = { [weak self] in self?.latch.alt = $0 }
-        default: return
-        }
+        guard let modifier = Self.modifier(for: item.action) else { return }
+        let set: (ModifierLatch.State) -> Void = { [weak self] in self?.latch.set(modifier, $0) }
         button.accessibilityCustomActions = [
             UIAccessibilityCustomAction(name: "Lock") { _ in set(.locked); return true },
             UIAccessibilityCustomAction(name: "Unlock") { _ in set(.off); return true },
@@ -154,12 +257,14 @@ import UIKit
             buttons[item.id]?.isHidden = isShowingDPad
         }
         invalidateIntrinsicContentSize()
+        setNeedsLayout()
     }
 
     private func refreshComposeKeys() {
         for item in config.items where item.action == .compose || item.action == .dictate {
             buttons[item.id]?.isHidden = hidesCompose
         }
+        setNeedsLayout()
     }
 
     private func refreshVisibility() {
@@ -169,63 +274,18 @@ import UIKit
 
     private func refreshLatchButtons() {
         for item in config.items {
-            let state: ModifierLatch.State
-            switch item.action {
-            case .ctrlLatch: state = latch.ctrl
-            case .altLatch: state = latch.alt
-            default: continue
-            }
-            buttons[item.id].map { KeyBarButton.show(state, on: $0) }
+            guard let modifier = Self.modifier(for: item.action) else { continue }
+            buttons[item.id].map { KeyBarButton.show(latch.state(of: modifier), on: $0) }
         }
     }
 }
 
-@MainActor enum KeyBarButton {
-    static func make(title: String, symbol: String?) -> UIButton {
-        var configuration = UIButton.Configuration.gray()
-        configuration.cornerStyle = .medium
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
-        if let symbol {
-            configuration.image = UIImage(systemName: symbol)
-            configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .callout)
-        } else {
-            configuration.title = title
-            configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-                var attributes = attributes
-                attributes.font = UIFont.preferredFont(forTextStyle: .callout)
-                return attributes
-            }
-        }
-        let button = UIButton(configuration: configuration)
-        button.accessibilityLabel = title
-        button.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-        ])
-        return button
-    }
-
-    /// Armed is tinted; locked is filled, so the two read apart without colour alone.
-    static func show(_ state: ModifierLatch.State, on button: UIButton) {
-        let title = button.configuration?.title
-        var configuration: UIButton.Configuration = switch state {
-        case .off: .gray()
-        case .once: .tinted()
-        case .locked: .filled()
-        }
-        configuration.cornerStyle = .medium
-        configuration.contentInsets = button.configuration?.contentInsets ?? .zero
-        configuration.title = title
-        configuration.image = button.configuration?.image
-        configuration.preferredSymbolConfigurationForImage = button.configuration?.preferredSymbolConfigurationForImage
-        configuration.titleTextAttributesTransformer = button.configuration?.titleTextAttributesTransformer
-        button.configuration = configuration
-        button.isSelected = state != .off
-        button.accessibilityValue = switch state {
-        case .off: "Off"
-        case .once: "On for next key"
-        case .locked: "Locked"
-        }
-    }
+/// What a key bar press feels like; the host plays it.
+public enum KeyHaptic: Sendable {
+    /// A modifier armed or released.
+    case modifier
+    /// A modifier locked.
+    case lock
+    /// A terminal key such as Esc, ^C, Tab or an arrow. Repeats are silent.
+    case key
 }

@@ -219,7 +219,7 @@ struct ShortcutBuilderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button(settingsText("settings.builder.add", "Add")) {
+                Button(settingsText("settings.builder.add", "Add"), systemImage: "checkmark", role: .confirm) {
                     if let item = draft.item {
                         onAdd(item)
                         dismiss()

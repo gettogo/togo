@@ -165,7 +165,7 @@ extension View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "onboard.cancel", defaultValue: "Cancel")) { prompts?.cancel(question.id) }
+                            Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) { prompts?.cancel(question.id) }
                         }
                     }
             }

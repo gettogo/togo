@@ -1,0 +1,11 @@
+{
+  "Version": "1.80.0",
+  "BackendState": "Running",
+  "TailscaleIPs": ["100.101.102.103", "fd7a:115c:a1e0::1"],
+  "Self": {
+    "HostName": "studio",
+    "DNSName": "studio.tail1234.ts.net.",
+    "TailscaleIPs": ["100.101.102.103", "fd7a:115c:a1e0::1"]
+  },
+  "MagicDNSSuffix": "tail1234.ts.net"
+}

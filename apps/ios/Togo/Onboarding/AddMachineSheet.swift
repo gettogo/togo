@@ -63,7 +63,7 @@ struct AddMachineSheet: View {
 
     private var cancel: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(String(localized: "onboard.cancel", defaultValue: "Cancel")) { dismiss() }
+            Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) { dismiss() }
         }
     }
 }

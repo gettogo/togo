@@ -21,12 +21,14 @@ struct WakeSnapshotTests {
     private func page(_ machine: MachineSection, note: String? = nil) -> some View {
         NavigationStack {
             List {
-                MachineSectionView(machine: machine, now: Self.now, wakeEnabled: true, wakeNote: note) { _ in }
+                RosterSection(
+                    group: RosterModel.make(machines: [machine], requests: []).groups[0], now: Self.now,
+                    wakeEnabled: true, wakeNote: note
+                ) { _ in }
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Color.togoInk)
-            .navigationTitle("Togo")
             .navigationBarTitleDisplayMode(.inline)
         }
         .togoControls()

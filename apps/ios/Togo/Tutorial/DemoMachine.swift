@@ -103,7 +103,7 @@ import UIKit
         _ cwd: String, _ since: Date
     ) -> SessionRow {
         SessionRow(
-            id: "demo-\(bib ?? name)", hostID: id, bib: bib, name: name, agent: agentName.lowercased(),
+            id: "demo-\(bib ?? name)", hostID: id, bib: bib, name: name, agent: AgentCatalog.entries.first { $0.name == agentName }?.id ?? agentName.lowercased(),
             agentName: agentName, status: status, activity: activity, cwd: cwd, muted: false,
             managed: bib != nil, meta: SessionMeta(), statusSince: since
         )
@@ -125,10 +125,10 @@ struct DemoControlCenter: View {
 
     var body: some View {
         NavigationStack(path: $store.path) {
-            ControlCenterView(store: store, now: now)
+            RosterView(store: store, now: now)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button(String(localized: "tutorial.demo.done", defaultValue: "Done"), action: onDone)
+                        Button(String(localized: "tutorial.demo.done", defaultValue: "Done"), systemImage: "checkmark", role: .confirm, action: onDone)
                             .foregroundStyle(Color.togoSnow)
                     }
                 }
@@ -141,7 +141,7 @@ struct DemoControlCenter: View {
                 unavailable
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "tutorial.demo.close", defaultValue: "Close")) { store.sheet = nil }
+                            Button(String(localized: "tutorial.demo.close", defaultValue: "Close"), systemImage: "xmark", role: .close) { store.sheet = nil }
                         }
                     }
             }
@@ -152,7 +152,7 @@ struct DemoControlCenter: View {
                 unavailable
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "tutorial.demo.close", defaultValue: "Close")) { store.workspaceOpen = false }
+                            Button(String(localized: "tutorial.demo.close", defaultValue: "Close"), systemImage: "xmark", role: .close) { store.workspaceOpen = false }
                         }
                     }
             }

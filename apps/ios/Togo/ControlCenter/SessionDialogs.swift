@@ -33,6 +33,7 @@ struct SessionDialogs: ViewModifier {
             .onChange(of: rename) { _, row in
                 if let row { name = row.name }
             }
+            .onChange(of: kill != nil || rename != nil) { _, open in store.dialogOpen = open }
     }
 
     private func presented<T>(_ target: Binding<T?>) -> Binding<Bool> {

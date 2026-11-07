@@ -3,7 +3,6 @@ import TogoKit
 
 /// Every sentence the control center shows, keyed under `cc.` in the string catalog.
 enum ControlCenterCopy {
-    static let title = String(localized: "cc.title", defaultValue: "Togo")
     static let newSession = String(localized: "cc.newSession", defaultValue: "New session")
     static let settings = String(localized: "cc.settings", defaultValue: "Settings")
     static let waitingOnYou = String(localized: "cc.waitingOnYou", defaultValue: "Waiting on you")

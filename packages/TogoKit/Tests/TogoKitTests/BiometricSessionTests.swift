@@ -1,4 +1,5 @@
 import Foundation
+import Security
 @preconcurrency import LocalAuthentication
 import Synchronization
 import Testing
@@ -19,6 +20,21 @@ final class CountingEvaluator: BiometricEvaluator {
 }
 
 struct BiometricSessionTests {
+    /// A lock-screen unlock satisfies the policy without a prompt but not the keychain, so a
+    /// context must never borrow it.
+    @Test func contextNeverBorrowsTheLockScreenUnlock() async throws {
+        let session = BiometricSession(evaluator: CountingEvaluator())
+        let context = try await session.context(reason: "a")
+        #expect(context.touchIDAuthenticationAllowableReuseDuration == 0)
+    }
+
+    @Test func keychainRefusalsAskAgainButMissingOrBrokenItemsDoNot() {
+        #expect(SSHConnection.isUnlockRefusal(SecretStoreError(status: errSecAuthFailed)))
+        #expect(SSHConnection.isUnlockRefusal(SecretStoreError(status: errSecInteractionNotAllowed)))
+        #expect(!SSHConnection.isUnlockRefusal(SecretStoreError(status: errSecItemNotFound)))
+        #expect(!SSHConnection.isUnlockRefusal(SecretStoreError(status: errSecMissingEntitlement)))
+    }
+
     @Test func biometricEvaluatedOnce() async throws {
         let evaluator = CountingEvaluator()
         let session = BiometricSession(evaluator: evaluator)

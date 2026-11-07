@@ -103,9 +103,10 @@ struct LaunchFrame: Equatable {
     var inkOpacity: Double { 1 - handoff }
 
     /// The mark itself: it fades with the ink unless it is moving into a place of its own on the
-    /// first screen. Under Reduce Motion it never moves, so it always fades.
-    func markOpacity(movesToTarget: Bool) -> Double {
-        movesToTarget && !reduceMotion ? 1 : 1 - handoff
+    /// first screen. A target that only marks where the mark goes, like the roster's headline,
+    /// takes it shrinking and fading. Under Reduce Motion it never moves, so it always fades.
+    func markOpacity(movesToTarget: Bool, fades: Bool = false) -> Double {
+        movesToTarget && !reduceMotion && !fades ? 1 : 1 - handoff
     }
 
     /// Up and back down over one segment: 0 at both ends, 1 in the middle.
@@ -194,6 +195,8 @@ struct LaunchOverlay: View {
     let ready: Bool
     /// Where the first screen draws the mark itself, if it does; the mark moves there.
     var target: CGRect?
+    /// The target only marks a place, so the mark fades as it gets there.
+    var targetFades = false
     let onFinish: () -> Void
     @State private var clock = ClockBox()
 
@@ -203,7 +206,7 @@ struct LaunchOverlay: View {
                 at: context.date, active: scenePhase == .active, ready: ready, reduceMotion: reduceMotion
             )
             let finished = clock.value.finished(reduceMotion: reduceMotion)
-            LaunchOverlayFrame(frame: LaunchFrame(time: time, reduceMotion: reduceMotion), target: target)
+            LaunchOverlayFrame(frame: LaunchFrame(time: time, reduceMotion: reduceMotion), target: target, targetFades: targetFades)
                 .onChange(of: finished) { _, done in
                     if done { onFinish() }
                 }
@@ -222,6 +225,7 @@ struct LaunchOverlay: View {
 struct LaunchOverlayFrame: View {
     let frame: LaunchFrame
     var target: CGRect?
+    var targetFades = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -243,7 +247,7 @@ struct LaunchOverlayFrame: View {
                     x: centre.x + (destination.midX - centre.x) * t,
                     y: centre.y + (destination.midY - centre.y) * t
                 )
-                .opacity(frame.markOpacity(movesToTarget: moving))
+                .opacity(frame.markOpacity(movesToTarget: moving, fades: targetFades))
             }
         }
         .ignoresSafeArea()
@@ -277,22 +281,49 @@ struct LaunchTargetKey: PreferenceKey {
     }
 }
 
+/// Whether the launch target only marks a place, so the mark fades into it.
+struct LaunchTargetFadesKey: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 extension View {
-    /// Marks this view as the place the launch mark moves into on its way out.
-    func launchTarget() -> some View {
+    /// Marks this view as the place the launch mark moves into on its way out. With `fades` the
+    /// mark shrinks towards it and fades, for a screen that does not draw the mark itself.
+    func launchTarget(fades: Bool = false) -> some View {
         anchorPreference(key: LaunchTargetKey.self, value: .bounds) { $0 }
+            .preference(key: LaunchTargetFadesKey.self, value: fades)
     }
 
     /// The launch over this view while `shown`; it removes itself by setting `shown` to false.
     func launchOverlay(shown: Binding<Bool>, ready: Bool) -> some View {
-        overlayPreferenceValue(LaunchTargetKey.self) { anchor in
-            if shown.wrappedValue {
-                GeometryReader { proxy in
-                    LaunchOverlay(ready: ready, target: anchor.map { proxy[$0] }) { shown.wrappedValue = false }
-                }
-                .ignoresSafeArea()
+        modifier(LaunchOverlayHost(shown: shown, ready: ready))
+    }
+}
+
+private struct LaunchOverlayHost: ViewModifier {
+    @Binding var shown: Bool
+    let ready: Bool
+    @State private var targetFades = false
+
+    func body(content: Content) -> some View {
+        content
+            .onPreferenceChange(LaunchTargetFadesKey.self) { fades in
+                MainActor.assumeIsolated { targetFades = fades }
             }
-        }
+            .overlayPreferenceValue(LaunchTargetKey.self) { anchor in
+                if shown {
+                    GeometryReader { proxy in
+                        LaunchOverlay(ready: ready, target: anchor.map { proxy[$0] }, targetFades: targetFades) {
+                            shown = false
+                        }
+                    }
+                    .ignoresSafeArea()
+                }
+            }
     }
 }
 

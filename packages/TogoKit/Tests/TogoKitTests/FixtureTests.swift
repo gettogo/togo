@@ -193,6 +193,7 @@ struct FixtureTests {
         case .hostInfo: (EmptyParams.self, HostInfo.self)
         case .awakeStatus: (EmptyParams.self, AwakeStatus.self)
         case .awakeSet: (AwakeSetParams.self, AwakeStatus.self)
+        case .browserOpenOnMac: (BrowserOpenParams.self, EmptyResult.self)
         }
     }
 

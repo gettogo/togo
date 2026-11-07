@@ -47,6 +47,91 @@
           "installed": false
         },
         {
+          "id": "gemini",
+          "name": "Gemini CLI",
+          "installed": false
+        },
+        {
+          "id": "copilot",
+          "name": "Copilot CLI",
+          "installed": false
+        },
+        {
+          "id": "cursor",
+          "name": "Cursor CLI",
+          "installed": false
+        },
+        {
+          "id": "qwen",
+          "name": "Qwen Code",
+          "installed": false
+        },
+        {
+          "id": "aider",
+          "name": "Aider",
+          "installed": false
+        },
+        {
+          "id": "amp",
+          "name": "Amp",
+          "installed": false
+        },
+        {
+          "id": "auggie",
+          "name": "Auggie",
+          "installed": false
+        },
+        {
+          "id": "cline",
+          "name": "Cline",
+          "installed": false
+        },
+        {
+          "id": "crush",
+          "name": "Crush",
+          "installed": false
+        },
+        {
+          "id": "droid",
+          "name": "Droid",
+          "installed": false
+        },
+        {
+          "id": "goose",
+          "name": "Goose",
+          "installed": false
+        },
+        {
+          "id": "kilo",
+          "name": "Kilo Code",
+          "installed": false
+        },
+        {
+          "id": "kimi",
+          "name": "Kimi Code",
+          "installed": false
+        },
+        {
+          "id": "kiro",
+          "name": "Kiro CLI",
+          "installed": false
+        },
+        {
+          "id": "openhands",
+          "name": "OpenHands",
+          "installed": false
+        },
+        {
+          "id": "pi",
+          "name": "Pi",
+          "installed": false
+        },
+        {
+          "id": "vibe",
+          "name": "Mistral Vibe",
+          "installed": false
+        },
+        {
           "id": "shell",
           "name": "Shell",
           "installed": true

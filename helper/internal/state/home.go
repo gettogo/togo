@@ -66,8 +66,9 @@ func WriteFile(path string, data []byte) error {
 }
 
 var (
-	loginPathMu     sync.Mutex
-	loginPathCached string
+	loginPathMu       sync.Mutex
+	loginPathCached   string
+	loginPathFailedAt time.Time
 )
 
 // loginPathMarker frames the PATH value in the shell's output, so text that
@@ -77,31 +78,68 @@ const loginPathMarker = "\x1eTOGO_PATH="
 
 // loginPathTimeout bounds the shell lookup. A variable so tests can shorten
 // it.
-var loginPathTimeout = 2 * time.Second
+var loginPathTimeout = 5 * time.Second
+
+// loginPathRetry is how long after a failed shell lookup the next call may
+// ask the shell again.
+const loginPathRetry = 30 * time.Second
+
+// loginPathNow is a test seam for the retry window.
+var loginPathNow = time.Now
 
 // LoginPath returns PATH as the user's interactive login shell sets it, the
 // same "$SHELL -lic" agents are launched with. The helper may run under
 // launchd or a bare ssh command with a minimal PATH, so agent and tmux
-// lookups use this instead. The result is cached for the process, including
-// the process PATH used when the shell fails or hangs past the timeout. Only
-// a fallback caused by the caller's ctx ending is retried on the next call.
+// lookups use this instead. Only a PATH actually read from the shell is
+// cached for the process. When the shell fails or hangs past the timeout the
+// process PATH is returned without caching, and the shell is asked again
+// once loginPathRetry has passed.
 func LoginPath(ctx context.Context) string {
-	loginPathMu.Lock()
-	defer loginPathMu.Unlock()
-	if loginPathCached != "" {
-		return loginPathCached
-	}
-	p, cacheable := loginPath(ctx, cmp.Or(os.Getenv("SHELL"), "/bin/sh"))
-	if cacheable {
-		loginPathCached = p
-	}
+	p, _ := LoginPathSource(ctx)
 	return p
 }
 
+// LoginPathSource is LoginPath that also reports whether the PATH came from
+// the login shell (true) or is the process PATH fallback (false).
+func LoginPathSource(ctx context.Context) (path string, fromShell bool) {
+	loginPathMu.Lock()
+	defer loginPathMu.Unlock()
+	if loginPathCached != "" {
+		return loginPathCached, true
+	}
+	if !loginPathFailedAt.IsZero() && loginPathNow().Sub(loginPathFailedAt) < loginPathRetry {
+		return os.Getenv("PATH"), false
+	}
+	p, ok := loginPath(ctx, cmp.Or(os.Getenv("SHELL"), "/bin/sh"))
+	if ok {
+		loginPathCached = p
+		return p, true
+	}
+	if ctx.Err() == nil {
+		loginPathFailedAt = loginPathNow()
+	}
+	return p, false
+}
+
+// WarmLoginPath reads the login PATH in the background so the first agent
+// lookup does not wait for the shell, and reports which source won.
+func WarmLoginPath(ctx context.Context, logf func(format string, args ...any)) {
+	go func() {
+		_, fromShell := LoginPathSource(ctx)
+		if logf == nil {
+			return
+		}
+		if fromShell {
+			logf("login PATH read from the login shell")
+		} else {
+			logf("login shell gave no PATH in time; using the process PATH and common install folders, will retry")
+		}
+	}()
+}
+
 // loginPath asks shell for its interactive login PATH, falling back to the
-// process PATH. cacheable is false when the fallback came from the caller's
-// ctx ending rather than from the shell itself.
-func loginPath(ctx context.Context, shell string) (path string, cacheable bool) {
+// process PATH. fromShell is false for the fallback.
+func loginPath(ctx context.Context, shell string) (path string, fromShell bool) {
 	tctx, cancel := context.WithTimeout(ctx, loginPathTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(tctx, shell, "-lic", `printf '\036TOGO_PATH=%s\036' "$PATH"`)
@@ -121,5 +159,5 @@ func loginPath(ctx context.Context, shell string) (path string, cacheable bool) 
 			}
 		}
 	}
-	return os.Getenv("PATH"), ctx.Err() == nil
+	return os.Getenv("PATH"), false
 }

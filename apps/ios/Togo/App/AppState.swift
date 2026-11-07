@@ -52,6 +52,8 @@ struct SessionRow: Identifiable, Equatable, Sendable {
     var statusSince: Date
     /// How the agent stopped while `status` is `ended` or `failed`.
     var exit: SessionExit? = nil
+    /// Recent output volume, 0...1 oldest first, up to 16 values; empty when unknown.
+    var activityHistory: [Double] = []
 }
 
 extension SessionStatus {
@@ -143,6 +145,8 @@ struct WorkspaceTab: Identifiable, Equatable, Sendable {
     var link: LinkPhase
     /// Set when the user picked a transport for this tab; nil follows the machine's preference.
     var transport: TransportPreference? = nil
+    /// The agent's name as last listed, so the header still names it while the machine is away.
+    var agent: String? = nil
 }
 
 enum LinkPhase: Equatable, Sendable {

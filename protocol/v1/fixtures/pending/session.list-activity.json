@@ -1,0 +1,79 @@
+{
+  "description": "Pending: a session that produced output in the last eight minutes carries activityHistory, 16 values in 0...1, oldest first, one per 30 seconds; the harness cannot drive output through the tap before the request yet. A session with no recorded output omits the field.",
+  "setup": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "hello",
+      "params": {
+        "protocol": 1,
+        "client": {
+          "name": "togo-test",
+          "version": "0.0.0-test"
+        },
+        "capabilities": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "session.create",
+      "params": {
+        "agent": "shell",
+        "cwd": "~/proj"
+      }
+    }
+  ],
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "session.list",
+    "params": {}
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "sessions": [
+        {
+          "id": "s_abcdefghij",
+          "bib": "01",
+          "name": "Shell",
+          "agent": "shell",
+          "cwd": "<home>/proj",
+          "createdAt": "2026-11-03T12:00:00Z",
+          "status": "idle",
+          "activity": null,
+          "attachedClients": 0,
+          "managed": true,
+          "muted": false,
+          "meta": {
+            "model": null,
+            "contextPercent": null,
+            "costUsd": null
+          },
+          "command": null,
+          "exit": null,
+          "activityHistory": [
+            0,
+            0,
+            0,
+            0.1,
+            0.4,
+            0.9,
+            1,
+            0.3,
+            0,
+            0,
+            0,
+            0.2,
+            0.6,
+            1,
+            0.7,
+            0.1
+          ]
+        }
+      ]
+    }
+  }
+}

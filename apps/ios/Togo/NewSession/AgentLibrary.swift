@@ -4,25 +4,38 @@ import SwiftUI
 import TogoKit
 
 /// The user's agent presets and the preset each folder last started with. Both sync through
-/// iCloud like machines do, and follow the same sync switch.
+/// iCloud like machines do, and follow the same sync switch. Favorite and recently started
+/// agents stay on this device.
 @MainActor @Observable final class AgentLibrary {
     private(set) var presets: [AgentPreset]
+    /// Starred agent ids, in the order they were starred.
+    private(set) var favorites: [String]
+    /// Agent ids started from this device, newest first.
+    private(set) var recentAgents: [String]
 
     @ObservationIgnored private let records: SyncedRecordStore<AgentPreset>
     @ObservationIgnored private let launches: SyncedRecordStore<FolderLaunch>
     @ObservationIgnored private let memory: FolderLaunchMemory
+    /// Where favorites and recent agents are kept; nil keeps them in memory.
+    @ObservationIgnored private let defaults: UserDefaults?
     @ObservationIgnored private var listener: Task<Void, Never>?
     /// The first read of the stored presets; every later start waits for it.
     @ObservationIgnored private var firstLoad: Task<Void, Never>?
 
+    static let favoritesKey = "agents.favorites"
+    static let recentKey = "agents.recent"
+
     init(
         presets records: SyncedRecordStore<AgentPreset>, launches: SyncedRecordStore<FolderLaunch>,
-        loaded: [AgentPreset] = []
+        loaded: [AgentPreset] = [], defaults: UserDefaults? = nil
     ) {
         self.records = records
         self.launches = launches
+        self.defaults = defaults
         memory = FolderLaunchMemory(store: launches)
         presets = Self.ordered(loaded)
+        favorites = AgentOrder.ids(from: defaults?.object(forKey: Self.favoritesKey))
+        recentAgents = AgentOrder.ids(from: defaults?.object(forKey: Self.recentKey))
     }
 
     /// A library kept in memory, already holding `presets`: for previews, tests and views
@@ -80,6 +93,19 @@ import TogoKit
 
     func remember(_ id: UUID?, host: HostID, cwd: String) async {
         await memory.remember(id, host: host, cwd: cwd)
+    }
+
+    func isFavorite(_ agent: String) -> Bool { favorites.contains(agent) }
+
+    func toggleFavorite(_ agent: String) {
+        favorites = AgentOrder.toggled(agent, in: favorites)
+        defaults?.set(favorites, forKey: Self.favoritesKey)
+    }
+
+    /// Records a start, so the agent rises among the ones that are not favorites.
+    func used(_ agent: String) {
+        recentAgents = AgentOrder.used(agent, in: recentAgents)
+        defaults?.set(recentAgents, forKey: Self.recentKey)
     }
 
     func setSyncEnabled(_ on: Bool) async {

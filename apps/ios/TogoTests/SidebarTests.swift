@@ -19,15 +19,16 @@ import TogoKit
         Samples.controlCenter.machines.flatMap(\.sessions)
     }
 
-    /// The sidebar is the only list on screen in a regular window; an answered card still
-    /// collapses after it showed its outcome.
-    @Test func answeredCardsLeaveTheSidebar() async {
+    /// The roster carries the collapse, so an answered request still leaves after the bar
+    /// showed its outcome.
+    @Test func answeredRequestsLeave() async {
         let store = store()
         await store.answer("r1", .approve)
         #expect(store.answeredCardIDs == ["r1"])
         await store.collapseAnswered(store.answeredCardIDs, hold: .zero)
         #expect(store.controlCenter.requests.isEmpty)
-        #expect(store.listRequests.isEmpty)
+        // What still counts is only the sessions that report needing the user themselves.
+        #expect(store.roster.waiting == rows.filter { $0.status == .needsYou }.count)
     }
 
     /// ⌘K opened the search; closing it, by Escape or Cancel, hands focus back to the terminal.
@@ -78,27 +79,21 @@ import TogoKit
         #expect(keys.rowToEnd(in: rows, machines: machines) == nil)
     }
 
-    /// A filter chosen in a compact window shows in the sidebar, which can change it back, and
-    /// cards follow it in both lists.
-    @Test func filterIsSharedAndVisible() {
+    /// A narrowed store lists only the machines with matching sessions.
+    @Test func filterNarrowsTheMachines() {
         let store = store()
         store.filter = .working
         #expect(store.listNarrowed)
-        #expect(store.listRequests.isEmpty)
         #expect(store.listMachines.map(\.id) == [Samples.studio])
-        #expect(!store.archiveShown)
-        store.filter = .needsYou
-        #expect(store.listRequests.map(\.id) == ["r1"])
         store.filter = .all
         #expect(store.listMachines.map(\.id) == [Samples.studio, Samples.build])
     }
 
-    @Test func archiveIsReachableBesideTheSidebar() {
+    @Test func archiveIsReachableBesideTheTerminal() {
         var state = Samples.controlCenter
         state.archived = [Samples.row(hostID: Samples.build, bib: "07", name: "old", status: .done, cwd: "/tmp")]
         let store = AppStore(services: FakeAppServices(hosts: Samples.hosts), controlCenter: state)
         store.setWorkspaceInline(true)
-        #expect(store.archiveShown)
         store.showArchive()
         #expect(store.path == [.archive])
     }

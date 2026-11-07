@@ -74,6 +74,8 @@ public struct GestureConfig: Equatable, Sendable {
     public var onEdgeSwipe: () -> Void = {}
     /// Called once per pinch, after the size settled and the engine took it.
     public var onFontSize: (CGFloat) -> Void = { _ in }
+    /// "Links on Screen" in a link's long-press menu.
+    public var onShowLinks: () -> Void = {}
 
     public var bindings: GestureConfig {
         didSet {
@@ -114,6 +116,7 @@ public struct GestureConfig: Equatable, Sendable {
             let menu = LinkMenu(view: target.gestureView)
             menu.open = { [weak target] in target?.open($0) }
             menu.copy = { [weak target] in target?.copyToClipboard($0) }
+            menu.showAll = { [weak self] in self?.onShowLinks() }
             linkMenu = menu
         }
         install()

@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import LocalAuthentication
 
 public enum LinkState: Sendable, Equatable {
     case waking(String)
@@ -10,6 +11,9 @@ public enum LinkState: Sendable, Equatable {
     /// The tmux session behind this link no longer exists; nothing will reconnect it.
     case ended
 }
+
+/// Whether the route an attachment uses still answers, asked after a network change.
+public typealias RouteCheck = @Sendable (Attachment) async -> Bool
 
 public typealias LinkConnect = @Sendable (
     _ cols: Int, _ rows: Int, _ onWaking: @escaping @Sendable (String) -> Void
@@ -25,7 +29,9 @@ public typealias LinkConnect = @Sendable (
 /// keystrokes itself while the network is out.
 ///
 /// A drop never ends the link by itself. Only the helper reporting that the tmux session
-/// is gone does, so a remote exit is answered with one more attach to find out.
+/// is gone does, so a remote exit is answered with one more attach to find out. The first
+/// attach retries the same way, unless the machine did not answer at all or the failure
+/// needs the user.
 public actor TerminalLink {
     static let backoff: [Duration] = [.zero, .milliseconds(500), .seconds(1), .seconds(2), .seconds(4), .seconds(8)]
     static let resizeQuiet: Duration = .milliseconds(100)
@@ -33,6 +39,8 @@ public actor TerminalLink {
     /// A link must stay live this long before a drop starts the backoff from zero again,
     /// so an attach that connects and then exits at once does not loop without waiting.
     static let stableLive: Duration = .seconds(10)
+    /// How long a new network gets to settle before the current route is checked.
+    static let routeSettle: Duration = .seconds(1)
     /// Output held for `read()` before the transport is made to wait.
     static let outputLimit = 1 << 20
 
@@ -41,6 +49,7 @@ public actor TerminalLink {
     private let connect: LinkConnect
     private let path: any NetworkPathSource
     private let clock: any LinkClock
+    private let routeAlive: RouteCheck
 
     private var size: (cols: Int, rows: Int)
     private var sentSize: (cols: Int, rows: Int)?
@@ -57,6 +66,7 @@ public actor TerminalLink {
     private var attempt: Task<Void, Never>?
     private var resizeTask: Task<Void, Never>?
     private var pathTask: Task<Void, Never>?
+    private var routeTask: Task<Void, Never>?
     private var generationTasks: [Task<Void, Never>] = []
 
     private var output: [Data] = []
@@ -66,11 +76,12 @@ public actor TerminalLink {
 
     public init(
         connect: @escaping LinkConnect, path: any NetworkPathSource, clock: any LinkClock = SystemClock(),
-        cols: Int, rows: Int
+        cols: Int, rows: Int, routeAlive: @escaping RouteCheck = TerminalLink.routeAnswers
     ) {
         self.connect = connect
         self.path = path
         self.clock = clock
+        self.routeAlive = routeAlive
         size = (cols, rows)
         (states, stateSink) = AsyncStream<LinkState>.makeStream()
     }
@@ -133,6 +144,7 @@ public actor TerminalLink {
         attempt = nil
         resizeTask?.cancel()
         pathTask?.cancel()
+        routeTask?.cancel()
         retire()
         reader?.resume(returning: nil)
         reader = nil
@@ -180,7 +192,7 @@ public actor TerminalLink {
                     stateSink.yield(.ended)
                     return
                 }
-                if number == 0 || Self.isPermanent(error) {
+                if Self.isPermanent(error) || (number == 0 && Self.isUnreachable(error)) {
                     attempt = nil
                     stateSink.yield(.failed(error.localizedDescription))
                     return
@@ -261,8 +273,22 @@ public actor TerminalLink {
         // unavailable, or Auto with every kind skipped.
         case is ConnectorError:
             true
+        // The keychain or Face ID refused the key or password: only the user can unlock it,
+        // and retrying on our own would only put the prompt up again and again.
+        case is SecretStoreError, is LAError:
+            true
         default:
             false
+        }
+    }
+
+    /// The machine did not answer at all, after the wake probe already waited for it. On the
+    /// first attach that is reported at once; a machine that answers but whose helper or
+    /// session is not ready yet is retried with backoff like a dropped link.
+    private static func isUnreachable(_ error: any Error) -> Bool {
+        switch error {
+        case SSHError.unreachable, SSHError.timeout: true
+        default: false
         }
     }
 
@@ -288,8 +314,34 @@ public actor TerminalLink {
         }
     }
 
+    /// SSH does not survive a new network, so it reconnects, racing every route again. Mosh
+    /// roams by itself while its route still answers; when the route is gone, such as a home
+    /// address after leaving home, it reconnects too and the race finds one that works.
     private func pathChanged() {
-        if current?.kind == .ssh { reconnect() }
+        guard let current else { return }
+        if current.kind == .ssh {
+            reconnect()
+            return
+        }
+        let tag = generation
+        routeTask?.cancel()
+        routeTask = Task { [clock, routeAlive] in
+            do { try await clock.sleep(for: Self.routeSettle) } catch { return }
+            let alive = await routeAlive(current)
+            self.routeChecked(alive: alive, generation: tag)
+        }
+    }
+
+    private func routeChecked(alive: Bool, generation tag: Int) {
+        guard tag == generation, !alive, !Task.isCancelled else { return }
+        reconnect()
+    }
+
+    /// The route answers when its SSH port takes a TCP handshake. An attachment that never
+    /// learned its address counts as alive, so nothing reconnects on a guess.
+    public static func routeAnswers(_ attachment: Attachment) async -> Bool {
+        guard let address = await attachment.connection.remoteAddress else { return true }
+        return await WakeProbe.tcpConnect(host: address, port: attachment.connection.port, timeout: .seconds(3))
     }
 
     private func flushResize() async {

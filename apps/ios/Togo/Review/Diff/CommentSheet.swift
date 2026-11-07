@@ -38,7 +38,7 @@ struct CommentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(DiffCopy.cancel) { dismiss() }
+                    Button(DiffCopy.cancel, systemImage: "xmark", role: .cancel) { dismiss() }
                 }
             }
         }

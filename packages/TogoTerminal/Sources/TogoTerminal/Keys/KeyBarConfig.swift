@@ -44,8 +44,10 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
 
     public static let standard = KeyBarConfig(items: [
         .keys("Esc", "Esc"),
+        .keys("^C", "C-c"),
         KeyBarItem(title: "Ctrl", action: .ctrlLatch),
         KeyBarItem(title: "Alt", action: .altLatch),
+        KeyBarItem(title: "Shift", symbol: "shift", action: .shiftLatch),
         .keys("Tab", "Tab"),
         .keys("Back Tab", "S-Tab"),
     ] + arrows + [compose, dictate, paste, hide])

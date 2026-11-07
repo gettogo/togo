@@ -16,25 +16,6 @@ import UIKit
         return card
     }
 
-    @Test func answeredCardTargetsItsTabChip() {
-        let answered = Self.card(.sending(.approve))
-        let intoChip = IncomingRequests.departure(of: answered, chipIDs: [Self.tab])
-        #expect(intoChip == .intoChip(Self.tab))
-        #expect(intoChip.role == .shrinkIntoTab)
-
-        let noChip = IncomingRequests.departure(of: answered, chipIDs: [])
-        #expect(noChip == .collapse)
-        #expect(noChip.role == .collapse)
-
-        let noSession = IncomingRequests.departure(of: Self.card(.sending(.deny), bib: nil), chipIDs: [Self.tab])
-        #expect(noSession == .collapse)
-
-        // A card that leaves because its own tab came on screen was never answered.
-        let unanswered = IncomingRequests.departure(of: Self.card(.open), chipIDs: [Self.tab])
-        #expect(unanswered == .fade)
-        #expect(unanswered.role == .fade)
-    }
-
     @Test func reconnectingDimsTerminal() {
         #expect(PaneView.terminalOpacity(for: .reconnecting(2)) == 0.55)
         for link: LinkPhase in [.live(transport: "mosh", note: nil), .connecting, .roaming] {

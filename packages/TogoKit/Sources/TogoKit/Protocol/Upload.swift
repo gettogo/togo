@@ -20,6 +20,8 @@ public enum Capability {
     public static let authkeys = "authkeys.v1"
     public static let hostInfo = "hostinfo.v1"
     public static let awake = "awake.v1"
+    /// The `browser.open` event and `browser.openOnMac`.
+    public static let browser = "browser.v1"
 }
 
 /// `fs.upload`: writes `data` as a file named `name` for the session.

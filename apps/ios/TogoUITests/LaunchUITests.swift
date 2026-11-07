@@ -20,7 +20,7 @@ import XCTest
             let app = coldLaunch()
             XCTAssertTrue(launchElement(app).waitForExistence(timeout: 3), "Cold launch \(attempt) shows no launch")
             XCTAssertTrue(launchElement(app).waitForNonExistence(timeout: 5), "The launch never goes away")
-            XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 5), "The sessions list is not there after the launch")
+            XCTAssertTrue(app.rosterMenu.waitForExistence(timeout: 5), "The roster is not there after the launch")
             app.terminate()
         }
     }

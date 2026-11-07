@@ -3,6 +3,7 @@ import Foundation
 @preconcurrency import LocalAuthentication
 import NIOCore
 @preconcurrency import NIOSSH
+import Security
 import Synchronization
 
 /// One authenticated SSH connection to a host profile, through its jump hosts.
@@ -11,18 +12,25 @@ import Synchronization
 /// the key is loaded with it, a password is read or asked for. The handshake then signs
 /// with an already-authorised key and never shows a prompt on the NIO event loop.
 public actor SSHConnection: TCPChannelOpener {
-    private let profile: HostProfile
+    let profile: HostProfile
     private let keys: KeychainKeyStore
     private let secrets: any SecretStore
     private let biometrics: BiometricSession
-    private let hostKeys: any HostKeyStore
+    let hostKeys: any HostKeyStore
     private let prompter: any ConnectionPrompter
     private let connectTimeout: Duration
     private let credentialFallback: Bool
+    let routeBook: RouteBook
 
-    private var clients: [SSHClient] = []
-    private var root: (any Channel)?
-    public private(set) var remoteAddress: String?
+    var clients: [SSHClient] = []
+    var root: (any Channel)?
+    /// The address the target hop reached, for Mosh's UDP flow.
+    public internal(set) var remoteAddress: String?
+    /// The route that won, as the machine's routes name it; nil through a jump host.
+    public internal(set) var route: String?
+
+    /// The SSH port, the same on every route.
+    public nonisolated var port: Int { profile.endpoint.port }
 
     /// With `credentialFallback` off, only the profile's own credential is offered: a refused
     /// key ends in `.authFailed` instead of a password or keyboard-interactive prompt. A key
@@ -31,7 +39,7 @@ public actor SSHConnection: TCPChannelOpener {
     public init(
         profile: HostProfile, keys: KeychainKeyStore, secrets: any SecretStore, biometrics: BiometricSession,
         hostKeys: any HostKeyStore, prompter: any ConnectionPrompter, connectTimeout: Duration = .seconds(8),
-        credentialFallback: Bool = true
+        credentialFallback: Bool = true, routeBook: RouteBook = .shared
     ) {
         self.profile = profile
         self.keys = keys
@@ -41,6 +49,7 @@ public actor SSHConnection: TCPChannelOpener {
         self.prompter = prompter
         self.connectTimeout = connectTimeout
         self.credentialFallback = credentialFallback
+        self.routeBook = routeBook
     }
 
     var isConnected: Bool { root?.isActive ?? false }
@@ -48,6 +57,11 @@ public actor SSHConnection: TCPChannelOpener {
     public func connect() async throws {
         guard root == nil else { return }
         var credentials = try await prepareCredentials()
+        if let routes = try await racedRoutes() {
+            try await connectRacing(routes, credentials: &credentials)
+            keepReplacedPassword(credentials)
+            return
+        }
         var parent: SSHClient?
         let hops = profile.jumps + [profile.endpoint]
         let autofill = PasswordAutofill()
@@ -65,6 +79,18 @@ public actor SSHConnection: TCPChannelOpener {
         } catch {
             await close()
             throw error
+        }
+        if profile.jumps.isEmpty {
+            route = profile.endpoint.host
+            await routeBook.recordUse(profile.endpoint.host, for: profile.id)
+        }
+        keepReplacedPassword(credentials)
+    }
+
+    /// The saved password could no longer be opened here; the one that just worked takes its place.
+    private func keepReplacedPassword(_ credentials: Credentials) {
+        if credentials.replacesSaved, let password = credentials.password {
+            try? secrets.set(Data(password.utf8), for: Self.passwordAccount(profile.id), requireUserPresence: true)
         }
     }
 
@@ -150,10 +176,12 @@ public actor SSHConnection: TCPChannelOpener {
 
     // MARK: Credentials
 
-    private struct Credentials: CustomStringConvertible {
+    struct Credentials: CustomStringConvertible {
         var key: NIOSSHPrivateKey?
         var password: String?
         var passwordWasSaved = false
+        /// The saved password exists but this device can no longer unlock it.
+        var replacesSaved = false
 
         var description: String { "Credentials(<redacted>)" }
     }
@@ -162,15 +190,45 @@ public actor SSHConnection: TCPChannelOpener {
         let reason = "Unlock your SSH key for \(profile.endpoint.host)"
         switch profile.auth {
         case .key(let id):
-            let context = try await authorise(reason: reason)
-            return Credentials(key: try keys.privateKey(id: id, context: context))
+            return Credentials(key: try await unlocking(reason: reason) { try keys.privateKey(id: id, context: $0) })
         case .password:
-            let context = try await authorise(reason: reason)
-            if let saved = try secrets.get(Self.passwordAccount(profile.id), context: context) {
+            let saved: Data?
+            do {
+                saved = try await unlocking(reason: reason) { try secrets.get(Self.passwordAccount(profile.id), context: $0) }
+            } catch let error as SecretStoreError {
+                // Unreadable even after a fresh unlock: ask for the password where someone can
+                // answer, and keep the keychain's answer where no one can.
+                let prompt = AuthPrompt.password(user: profile.endpoint.user, host: profile.endpoint.host)
+                guard case .secret(let password) = await prompter.answer(prompt) else { throw error }
+                return Credentials(password: password, replacesSaved: true)
+            }
+            if let saved {
                 return Credentials(password: String(decoding: saved, as: UTF8.self), passwordWasSaved: true)
             }
             return Credentials(password: try await askPassword())
         }
+    }
+
+    /// Reads the key or password with the shared unlock. A read that context could not unlock
+    /// drops it and asks once more for a fresh unlock, so the person sees a prompt rather than
+    /// the same refusal; a second refusal is reported, and the next attempt starts fresh too.
+    private func unlocking<T>(reason: String, _ read: (LAContext) throws -> T) async throws -> T {
+        var tries = 0
+        while true {
+            tries += 1
+            let context = try await authorise(reason: reason)
+            do {
+                return try read(context)
+            } catch let error as SecretStoreError {
+                await biometrics.invalidate()
+                guard tries < 2, Self.isUnlockRefusal(error) else { throw error }
+            }
+        }
+    }
+
+    /// The keychain wanted an unlock the context did not carry, as opposed to a broken item.
+    static func isUnlockRefusal(_ error: SecretStoreError) -> Bool {
+        [errSecAuthFailed, errSecInteractionNotAllowed, -25330].contains(error.status)
     }
 
     private func authorise(reason: String) async throws -> LAContext {
@@ -192,17 +250,19 @@ public actor SSHConnection: TCPChannelOpener {
 
     // MARK: Hops
 
-    private func connectHop(
+    /// `pinnedAs` checks the key against another address's pin, the machine's saved one, while
+    /// racing its other routes; such a hop never asks to trust a new key.
+    func connectHop(
         _ endpoint: HostEndpoint, via parent: SSHClient?, credentials: inout Credentials, mayAskPassword: Bool,
-        autofill: PasswordAutofill?
+        autofill: PasswordAutofill?, pinnedAs: String? = nil, gate: RouteGate? = nil, token: Int = 0
     ) async throws -> (SSHClient, any Channel) {
-        let hostID = HostKeyTrust.hostID(endpoint)
+        let hostID = pinnedAs ?? HostKeyTrust.hostID(endpoint)
         // Two passes at most: one to learn and trust a new host key, one to log in.
         var passes = 0
         while true {
             passes += 1
             let trusted = try await hostKeys.fingerprints(for: hostID)
-            let validator = SnapshotHostKeyValidator(trusted: trusted)
+            let validator = SnapshotHostKeyValidator(trusted: trusted, gate: gate, token: token)
             autofill?.load(credentials.password)
             let responder = KeyboardInteractiveResponder(prompter: prompter, autofill: autofill)
             let delegate = PreparedAuthDelegate(
@@ -213,10 +273,11 @@ public actor SSHConnection: TCPChannelOpener {
                 defer { responder.cancelPending() }
                 return try await handshake(endpoint, via: parent, validator: validator, delegate: delegate)
             } catch {
+                if validator.lost { throw RouteRace.Lost() }
                 if Task.isCancelled || delegate.keyboardInteractiveCancelled { throw SSHError.cancelled }
                 guard let presented = validator.presented else { throw Self.networkError(error) }
                 if !trusted.contains(presented.fingerprint) {
-                    if !trusted.isEmpty {
+                    if !trusted.isEmpty || gate != nil {
                         throw SSHError.hostKeyChanged(host: hostID, expected: trusted, presented: presented.fingerprint)
                     }
                     guard passes == 1, await prompter.trustNewHostKey(
@@ -237,7 +298,7 @@ public actor SSHConnection: TCPChannelOpener {
         }
     }
 
-    private func handshake(
+    func handshake(
         _ endpoint: HostEndpoint, via parent: SSHClient?,
         validator: SnapshotHostKeyValidator, delegate: PreparedAuthDelegate
     ) async throws -> (SSHClient, any Channel) {
@@ -262,7 +323,7 @@ public actor SSHConnection: TCPChannelOpener {
         return (client, channel)
     }
 
-    private static func networkError(_ error: any Error) -> SSHError {
+    static func networkError(_ error: any Error) -> SSHError {
         if let error = error as? SSHError { return error }
         if case ChannelError.connectTimeout = error { return .timeout }
         return .unreachable("The machine could not be reached. Check the address and your network")

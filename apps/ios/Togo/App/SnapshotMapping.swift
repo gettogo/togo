@@ -61,19 +61,15 @@ struct SnapshotMapper {
             id: session.id, hostID: hostID, bib: session.bib, name: session.name, agent: session.agent,
             agentName: agentName, status: session.status, activity: session.activity, cwd: session.cwd,
             muted: session.muted, managed: session.managed, meta: session.meta, statusSince: since,
-            exit: session.status.isFinished ? session.exit : nil
+            exit: session.status.isFinished ? session.exit : nil, activityHistory: session.activityHistory
         )
     }
 
     static func agentName(_ id: String, names: [String: String]) -> String {
         if let name = names[id] { return name }
-        switch id {
-        case "claude": return "Claude Code"
-        case "codex": return "Codex"
-        case "omp": return "OMP"
-        case "shell", "": return "Shell"
-        default: return id.prefix(1).uppercased() + id.dropFirst()
-        }
+        if id.isEmpty { return "Shell" }
+        if let known = AgentCatalog.name(id) { return known }
+        return id.prefix(1).uppercased() + id.dropFirst()
     }
 
     static func reachability(_ snapshot: HostSnapshot, now: Date) -> Reachability {

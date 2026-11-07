@@ -49,8 +49,7 @@ struct RootSheet: View {
                         store.open(hostID: hostID, sessionID: sessionID)
                     }
                 ).prefilled(hostID.flatMap { store.takeNewSessionPrefill(for: $0) }),
-                zoom: hostID == nil && store.newSessionZooms
-                    ? .init(sourceID: ControlCenterView.newSessionSourceID, namespace: zoom) : nil
+                zoom: nil
             )
         case .signIn(let id):
             SignInSheet(model: SignInModel(
@@ -102,6 +101,10 @@ extension AddMachineFlow {
         draft.user = profile.endpoint.user
         draft.symbol = HostSymbol(rawValue: record.symbol) ?? .laptop
         draft.wake = record.wake
+        draft.routes = profile.routes
+        draft.lastRoute = profile.lastRoute
+        draft.savedAddress = profile.endpoint.host
+        draft.machineID = record.id
         if let jump = profile.jumps.first {
             draft.jump = MachineDraft.jumpText(jump)
         }

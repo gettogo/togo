@@ -14,6 +14,13 @@ extension HelperClient {
         try await mapped { try await readyCall(.sessionRelaunch, SessionIDParams(id: id), needs: Capability.launch) }
     }
 
+    // MARK: - Browser
+
+    /// Opens a web page in the machine's default browser (browser.v1).
+    public func openOnMac(url: String) async throws {
+        let _: EmptyResult = try await readyCall(.browserOpenOnMac, BrowserOpenParams(url: url), needs: Capability.browser)
+    }
+
     // MARK: - Restore
 
     /// Sessions a host restart ended, newest first.
@@ -92,5 +99,14 @@ extension HelperClient {
         } catch HelperError.rpc(let error) where error.code == RPCErrorCode.refused {
             throw HelperError.refused(error.reason ?? "")
         }
+    }
+}
+
+/// `browser.openOnMac` params.
+public struct BrowserOpenParams: Codable, Hashable, Sendable {
+    public var url: String
+
+    public init(url: String) {
+        self.url = url
     }
 }

@@ -7,7 +7,6 @@ package doctor
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,7 +17,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/agents"
+	"github.com/gettogo/togo/helper/internal/hostinfo"
 	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/tailnet"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // Status is the outcome of one check.
@@ -56,6 +59,11 @@ type Env struct {
 	Run func(ctx context.Context, bin string, args ...string) (string, error)
 	// Awake reports how the machine is kept awake; nil leaves the line out.
 	Awake func(ctx context.Context) Check
+	// TailscaleApp is the app bundle's tailscale binary, tried after Path and
+	// Fallbacks; empty skips it.
+	TailscaleApp string
+	// Routes lists the addresses host.info reports; nil leaves the line out.
+	Routes func(ctx context.Context) []wire.HostRoute
 	// Login and User feed the linger line on Linux; a nil Login leaves it out.
 	Login LoginInfo
 	User  string
@@ -77,7 +85,7 @@ func DefaultFallbacks(home string) map[string][]string {
 	for _, p := range session.TmuxFallbacks(home) {
 		tmuxDirs = append(tmuxDirs, filepath.Dir(p))
 	}
-	return map[string][]string{
+	fb := map[string][]string{
 		"tmux": tmuxDirs,
 		"mosh-server": {
 			"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin",
@@ -89,6 +97,12 @@ func DefaultFallbacks(home string) map[string][]string {
 			"/Applications/Tailscale.app/Contents/MacOS",
 		},
 	}
+	for _, a := range agents.Registry {
+		if a.Command != "" {
+			fb[a.Command] = agents.FallbackDirs(home)
+		}
+	}
+	return fb
 }
 
 // DefaultEnv returns the production environment for the given login PATH.
@@ -100,6 +114,9 @@ func DefaultEnv(loginPath string) Env {
 		GOOS:      runtime.GOOS,
 		Fallbacks: DefaultFallbacks(home),
 		Run:       execRun,
+
+		TailscaleApp: tailnet.AppBinary,
+		Routes:       hostinfo.SystemRoutes,
 	}
 	if e.GOOS == "linux" {
 		e.Login, e.User = defaultLogin(e)
@@ -115,16 +132,18 @@ func execRun(ctx context.Context, bin string, args ...string) (string, error) {
 }
 
 // Run performs every check in a fixed order: tmux, mosh-server, etserver,
-// firewall, tailscale when it applies, then awake and linger.
+// agents, firewall, tailscale, routes, then awake and linger.
 func Run(ctx context.Context, e Env) []Check {
 	checks := []Check{
 		checkTmux(ctx, e),
 		checkMosh(ctx, e),
 		checkEternalTerminal(e),
-		checkFirewall(ctx, e),
 	}
-	if c, ok := checkTailscale(ctx, e); ok {
-		checks = append(checks, c)
+	checks = append(checks, checkAgents(e)...)
+	checks = append(checks, checkFirewall(ctx, e))
+	checks = append(checks, checkTailscale(ctx, e)...)
+	if e.Routes != nil {
+		checks = append(checks, checkRoutes(e.Routes(ctx)))
 	}
 	if e.Awake != nil {
 		checks = append(checks, e.Awake(ctx))
@@ -250,30 +269,29 @@ func checkFirewall(ctx context.Context, e Env) Check {
 	return c
 }
 
-func checkTailscale(ctx context.Context, e Env) (Check, bool) {
-	path, _, ok := find(e, "tailscale")
-	if !ok {
-		return Check{}, false
-	}
-	out, err := e.Run(ctx, path, "debug", "prefs")
-	if err != nil {
-		return Check{}, false
-	}
-	var prefs struct {
-		RunSSH bool
-	}
-	if json.Unmarshal([]byte(out), &prefs) != nil || !prefs.RunSSH {
-		return Check{}, false
-	}
-	return Check{
-		Name:   "tailscale",
-		Status: StatusNote,
-		Detail: "Tailscale SSH is on and can stall key logins; run tailscale set --ssh=false to use this machine's sshd",
-		Path:   path,
-	}, true
-}
-
 func firstLine(s string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
 	return strings.TrimSpace(line)
+}
+
+// checkAgents reports where each coding agent resolves. A missing agent is
+// a note, not a failure: nobody needs all of them.
+func checkAgents(e Env) []Check {
+	var checks []Check
+	for _, a := range agents.Registry {
+		if a.Command == "" {
+			continue
+		}
+		path, offPath, ok := find(e, a.Command)
+		if !ok {
+			checks = append(checks, Check{Name: a.Command, Status: StatusNote, Detail: a.Name + " not found on the login PATH or in common install folders"})
+			continue
+		}
+		c := Check{Name: a.Command, Status: StatusOK, Detail: a.Name + " found", Path: path}
+		if offPath {
+			c.Detail += "; found outside the login PATH; Togo launches it by full path"
+		}
+		checks = append(checks, c)
+	}
+	return checks
 }

@@ -20,6 +20,20 @@ public enum WakeProbe {
         throw SSHError.unreachable("\(host) did not answer for 30 s; it may be asleep")
     }
 
+    /// True as soon as any of `hosts` accepts a TCP handshake on `port`; the other probes stop.
+    public static func anyReachable(hosts: [String], port: Int, timeout: Duration) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            for host in hosts {
+                group.addTask { await tcpConnect(host: host, port: port, timeout: timeout) }
+            }
+            for await reached in group where reached {
+                group.cancelAll()
+                return true
+            }
+            return false
+        }
+    }
+
     public static func tcpConnect(host: String, port: Int, timeout: Duration) async -> Bool {
         guard let port = NWEndpoint.Port(rawValue: UInt16(clamping: port)) else { return false }
         let probe = TCPProbe(connection: NWConnection(host: NWEndpoint.Host(host), port: port, using: .tcp))
@@ -39,8 +53,20 @@ private final class TCPProbe: Sendable {
     }
 
     func run(timeout: Duration) async -> Bool {
+        await withTaskCancellationHandler {
+            await start(timeout: timeout)
+        } onCancel: {
+            finish(false)
+        }
+    }
+
+    private func start(timeout: Duration) async -> Bool {
         await withCheckedContinuation { continuation in
             self.continuation.withLock { $0 = continuation }
+            if Task.isCancelled {
+                finish(false)
+                return
+            }
             connection.stateUpdateHandler = { [self] state in
                 switch state {
                 case .ready: finish(true)

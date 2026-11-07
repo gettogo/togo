@@ -124,6 +124,11 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
     public var command: [String]? = nil
     /// lifecycle.v1: how the agent ended while `status` is `ended` or `failed`, else nil.
     public var exit: SessionExit? = nil
+    /// Recent output volume, oldest first: up to 16 values in 0...1, one per 30 seconds. Empty
+    /// means unknown (an older helper, or no output seen yet).
+    public var activityHistory: [Double] = [] {
+        didSet { activityHistory = Self.normalized(activityHistory) }
+    }
     /// Whether the helper sent `command` and `exit` (as null or a value), so a session
     /// encodes back the way it arrived. Never part of equality.
     private var launchKeys = KeyPresence()
@@ -131,7 +136,8 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
     public init(
         id: String, bib: String?, name: String, agent: String, cwd: String, createdAt: Date,
         status: SessionStatus, activity: String?, attachedClients: Int, managed: Bool,
-        muted: Bool = false, meta: SessionMeta = .init(), command: [String]? = nil, exit: SessionExit? = nil
+        muted: Bool = false, meta: SessionMeta = .init(), command: [String]? = nil, exit: SessionExit? = nil,
+        activityHistory: [Double] = []
     ) {
         self.id = id
         self.bib = bib
@@ -147,12 +153,18 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         self.meta = meta
         self.command = command
         self.exit = exit
+        self.activityHistory = Self.normalized(activityHistory)
         launchKeys = KeyPresence(present: command != nil || exit != nil)
+    }
+
+    /// The newest 16 values, each clamped to 0...1 (anything not a number counts as 0).
+    static func normalized(_ values: [Double]) -> [Double] {
+        values.suffix(16).map { $0.isNaN ? 0 : min(max($0, 0), 1) }
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, bib, name, agent, cwd, createdAt, status, activity, attachedClients, managed, muted, meta
-        case command, exit
+        case command, exit, activityHistory
     }
 
     public init(from decoder: any Decoder) throws {
@@ -172,6 +184,7 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         meta = try container.decodeIfPresent(SessionMeta.self, forKey: .meta) ?? .init()
         command = try container.decodeIfPresent([String].self, forKey: .command)
         exit = try container.decodeIfPresent(SessionExit.self, forKey: .exit)
+        activityHistory = Self.normalized(try container.decodeIfPresent([Double].self, forKey: .activityHistory) ?? [])
         launchKeys = KeyPresence(present: container.contains(.command) || container.contains(.exit))
     }
 
@@ -193,6 +206,9 @@ public struct Session: Codable, Hashable, Sendable, Identifiable {
         if launchKeys.present || command != nil || exit != nil {
             try container.encode(command, forKey: .command)
             try container.encode(exit, forKey: .exit)
+        }
+        if !activityHistory.isEmpty {
+            try container.encode(activityHistory, forKey: .activityHistory)
         }
     }
 }

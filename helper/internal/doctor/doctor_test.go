@@ -127,22 +127,6 @@ func TestDoctorFirewall(t *testing.T) {
 	}
 }
 
-func TestDoctorTailscaleSSH(t *testing.T) {
-	bin := t.TempDir()
-	stub(t, bin, "tailscale")
-	run := func(prefs string) []Check {
-		return Run(context.Background(), Env{Path: bin, GOOS: "linux", Run: fakeRun(map[string]string{"tailscale": prefs})})
-	}
-	if c := byName(t, run(`{"RunSSH":true}`), "tailscale"); c.Status != StatusNote {
-		t.Fatalf("tailscale = %+v", c)
-	}
-	for _, c := range run(`{"RunSSH":false}`) {
-		if c.Name == "tailscale" {
-			t.Fatal("tailscale check present with SSH off")
-		}
-	}
-}
-
 func TestDefaultFallbacksExpandHome(t *testing.T) {
 	fb := DefaultFallbacks("/h")
 	found := false
@@ -161,5 +145,27 @@ func TestDefaultFallbacksExpandHome(t *testing.T) {
 	}
 	if len(fb["tmux"]) == 0 {
 		t.Error("no tmux fallbacks")
+	}
+}
+
+func TestDoctorReportsAgents(t *testing.T) {
+	home := t.TempDir()
+	want := stub(t, filepath.Join(home, ".local", "bin"), "claude")
+	onPath := t.TempDir()
+	wantCodex := stub(t, onPath, "codex")
+	checks := Run(context.Background(), Env{
+		Path: onPath, GOOS: "linux", Home: home,
+		Fallbacks: map[string][]string{"claude": {filepath.Join(home, ".local", "bin")}},
+		Run:       fakeRun(nil),
+	})
+	c := byName(t, checks, "claude")
+	if c.Status != StatusOK || c.Path != want || !strings.Contains(c.Detail, "outside the login PATH") {
+		t.Errorf("claude = %+v", c)
+	}
+	if c := byName(t, checks, "codex"); c.Status != StatusOK || c.Path != wantCodex || strings.Contains(c.Detail, "outside") {
+		t.Errorf("codex = %+v", c)
+	}
+	if c := byName(t, checks, "opencode"); c.Status != StatusNote || c.Path != "" {
+		t.Errorf("opencode = %+v", c)
 	}
 }

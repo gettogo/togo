@@ -9,10 +9,21 @@ struct ConnectingOverlay: View {
         case failed(machine: String, reason: String)
         case offline(String)
         case signedOut(String)
+        /// The tab's machine is not among the saved ones: retrying cannot help, adding it can.
+        case gone(String)
+
+        /// The kinds that show the paws walking toward a live link.
+        var isWalking: Bool {
+            switch self {
+            case .connecting, .waking: true
+            default: false
+            }
+        }
 
         /// Nil while the terminal can be shown. A failure on a machine the monitor already
-        /// knows is away reads as offline, which tells the user what to do about it.
-        init?(link: LinkPhase, machine: MachineSection?, name: String? = nil) {
+        /// knows is away reads as offline, which tells the user what to do about it. One on a
+        /// machine no longer saved (`listed` false) offers to add it instead of trying again.
+        init?(link: LinkPhase, machine: MachineSection?, name: String? = nil, listed: Bool = true) {
             let name = machine?.name ?? name ?? ""
             switch link {
             case .connecting: self = .connecting(name)
@@ -20,7 +31,9 @@ struct ConnectingOverlay: View {
             case .live, .roaming, .reconnecting: return nil
             case .signedOut: self = .signedOut(name)
             case .failed(let reason):
-                if case .offline? = machine?.reachability {
+                if !listed {
+                    self = .gone(name)
+                } else if case .offline? = machine?.reachability {
                     self = .offline(name)
                 } else {
                     self = .failed(machine: name, reason: reason)
@@ -30,20 +43,25 @@ struct ConnectingOverlay: View {
     }
 
     let kind: Kind
+    /// The link just went live: all four paws are lit before the terminal shows.
+    var arrived = false
     let retry: () -> Void
+    var addMachine: () -> Void = {}
 
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.togoInk)
+            // Every touch on the cover is its own; none reaches the terminal underneath.
+            .contentShape(Rectangle())
     }
 
     @ViewBuilder private var content: some View {
         switch kind {
         case .connecting(let machine):
-            PawWalk(WorkspaceCopy.connectingTo(machine))
+            PawWalk(WorkspaceCopy.connectingTo(machine), ending: arrived ? .arrived : .walking)
         case .waking(let machine):
-            PawWalk(WorkspaceCopy.wakingMachine(machine))
+            PawWalk(WorkspaceCopy.wakingMachine(machine), ending: arrived ? .arrived : .walking)
         case .failed(let machine, let reason):
             StateView(
                 kind: .error, title: WorkspaceCopy.failed(machine), message: reason,
@@ -54,11 +72,50 @@ struct ConnectingOverlay: View {
                 kind: .error, title: WorkspaceCopy.failed(machine), message: WorkspaceCopy.signInUnfinished(machine),
                 action: .init(WorkspaceCopy.signInAgain, run: retry)
             )
+        case .gone(let machine):
+            StateView(
+                kind: .error, title: WorkspaceCopy.failed(machine), message: WorkspaceCopy.machineGone,
+                action: .init(WorkspaceCopy.addMachine, run: addMachine)
+            )
         case .offline(let machine):
             StateView(
                 kind: .offline, title: WorkspaceCopy.offline(machine), message: WorkspaceCopy.offlineMessage,
                 action: .init(WorkspaceCopy.tryAgain, run: retry)
             )
+        }
+    }
+}
+
+/// Shows the overlay for a tab and, when a walking link goes live, keeps it for one more step
+/// with every paw lit before the terminal underneath shows. A failure swaps to the error state
+/// at once.
+struct ConnectingOverlayHost: View {
+    let kind: ConnectingOverlay.Kind?
+    var addMachine: () -> Void = {}
+    let retry: () -> Void
+    @State private var arrivedKind: ConnectingOverlay.Kind?
+
+    var body: some View {
+        Group {
+            if let kind {
+                ConnectingOverlay(kind: kind, retry: retry, addMachine: addMachine)
+            } else if let arrivedKind {
+                ConnectingOverlay(kind: arrivedKind, arrived: true, retry: retry, addMachine: addMachine)
+            }
+        }
+        .transition(.opacity)
+        .motion(.fade, value: kind ?? arrivedKind)
+        .onChange(of: kind) { old, new in
+            guard new == nil, let old, old.isWalking else {
+                arrivedKind = nil
+                return
+            }
+            arrivedKind = old
+            AccessibilityNotification.Announcement(String(localized: "Connected")).post()
+            Task {
+                try? await Task.sleep(for: PawWalk.step)
+                arrivedKind = nil
+            }
         }
     }
 }

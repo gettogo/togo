@@ -231,6 +231,23 @@ type AuthkeysRemoveResult struct {
 type HostInfo struct {
 	Interfaces []HostInterface `json:"interfaces"`
 	WakeOnLAN  *bool           `json:"wakeOnLan"`
+	// Routes are the addresses a phone can try to reach this machine by.
+	Routes []HostRoute `json:"routes"`
+}
+
+// Route kinds in HostInfo.Routes.
+const (
+	RouteMDNS      = "mdns"
+	RouteLAN       = "lan"
+	RouteTailscale = "tailscale"
+)
+
+// HostRoute is one address the machine answers on: a LAN address of an
+// interface, its mDNS .local name, or its Tailscale MagicDNS name or address.
+type HostRoute struct {
+	Kind      string `json:"kind"`
+	Host      string `json:"host"`
+	Interface string `json:"interface,omitempty"`
 }
 
 // HostInterface is one network interface: lowercase MAC and IPv4 addresses.
@@ -240,11 +257,14 @@ type HostInterface struct {
 	IPv4 []string `json:"ipv4"`
 }
 
-// MarshalJSON writes nil Interfaces as [], which the schema requires.
+// MarshalJSON writes nil Interfaces and Routes as [], which the schema requires.
 func (h HostInfo) MarshalJSON() ([]byte, error) {
 	type plain HostInfo
 	if h.Interfaces == nil {
 		h.Interfaces = []HostInterface{}
+	}
+	if h.Routes == nil {
+		h.Routes = []HostRoute{}
 	}
 	return json.Marshal(plain(h))
 }

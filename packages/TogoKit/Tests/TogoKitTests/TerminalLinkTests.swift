@@ -316,6 +316,48 @@ struct TerminalLinkTests {
         await link.stop()
     }
 
+    /// The first attach to a machine that answers, but whose helper is restarting, retries
+    /// with backoff rather than giving up.
+    @Test func firstAttachRetriesWhileHelperIsBack() async throws {
+        let transport = FakeTransport()
+        let clock = TestClock()
+        let script = ScriptedConnect([
+            .fail(HelperError.closed), .fail(SSHError.channelClosed(exitStatus: 1)), .attach(transport, .ssh),
+        ])
+        let link = Self.link(script, clock: clock)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { log.liveCount == 1 })
+        #expect(log.reconnects == [.reconnecting(attempt: 1), .reconnecting(attempt: 2)])
+        #expect(!log.all.contains { if case .failed = $0 { true } else { false } })
+        await link.stop()
+    }
+
+    @Test func firstAttachToSilentMachineFails() async throws {
+        let script = ScriptedConnect([.fail(SSHError.unreachable("h did not answer")), .attach(FakeTransport(), .ssh)])
+        let link = Self.link(script)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { if case .failed = log.all.last { true } else { false } })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(script.sizes.count == 1)
+        await link.stop()
+    }
+
+    @Test func keychainRefusalStopsRetrying() async throws {
+        let first = FakeTransport()
+        let script = ScriptedConnect([.attach(first, .ssh), .fail(SecretStoreError(status: -25308)), .attach(FakeTransport(), .ssh)])
+        let link = Self.link(script)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { log.liveCount == 1 })
+        first.emit(.closed(.networkLost))
+        #expect(await eventually { if case .failed = log.all.last { true } else { false } })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(script.sizes.count == 2)
+        await link.stop()
+    }
+
     @Test func explicitMoshFailureSaysWhy() async throws {
         let script = ScriptedConnect([.fail(MoshBootstrapError.serverMissing("sh: mosh-server: not found"))])
         let link = Self.link(script)

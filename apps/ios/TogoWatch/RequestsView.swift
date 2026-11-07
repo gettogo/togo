@@ -1,61 +1,97 @@
 import SwiftUI
 import TogoPush
 
-/// Requests waiting on the user, oldest first.
+/// The first page: the oldest waiting request fills the screen; with none, "All clear"
+/// over the roster. Answering shows the next request.
 struct RequestsView: View {
+    let store: WatchStore
+    /// An answered request kept on the page for a moment, so its result shows.
+    @State private var held: String?
+
+    var body: some View {
+        Group {
+            switch WatchHome.page(for: store.requests, holding: held) {
+            case let .request(id, position, count):
+                RequestDetailView(store: store, requestId: id, position: position, count: count)
+                    .id(id)
+                    .transition(.opacity)
+            case .allClear:
+                AllClearView(store: store)
+            }
+        }
+        .onChange(of: store.requests.first?.requestId) { old, new in
+            let answered = old.map { store.outcome($0) == .approved || store.outcome($0) == .denied } ?? false
+            guard WatchHome.holds(previous: old, next: new, answeredHere: answered), let old else { return }
+            held = old
+            Task { @MainActor in
+                try? await Task.sleep(for: WatchHome.holdAfterAnswer)
+                if held == old { held = nil }
+            }
+        }
+    }
+}
+
+/// An unlit beacon ring and "All clear", then the roster.
+private struct AllClearView: View {
     let store: WatchStore
 
     var body: some View {
-        List {
-            ForEach(store.requests) { request in
-                NavigationLink(value: request.requestId) {
-                    RequestRow(request: request)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    BeaconDot(lit: false)
+                    Text(WatchCopy.allClear)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(Array(WatchHome.lines(store.sessions, limit: 4).enumerated()), id: \.offset) { _, line in
+                    RosterLine(line: line)
                 }
             }
-        }
-        .overlay {
-            if store.requests.isEmpty {
-                ContentUnavailableView(WatchCopy.nothingWaiting, systemImage: "checkmark.circle")
-            }
-        }
-        .animation(.default, value: store.requests.map(\.requestId))
-        .navigationTitle(WatchCopy.waiting)
-        .navigationDestination(for: String.self) { id in
-            RequestDetailView(store: store, requestId: id)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-struct RequestRow: View {
-    let request: PendingRequest
+/// The beacon: a filled dot while something waits, a hairline ring when clear.
+struct BeaconDot: View {
+    var lit: Bool
+    var size: CGFloat = 8
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            RequestHeader(request: request)
-            Text(request.title)
-                .font(.body)
-                .lineLimit(2)
+        Group {
+            if lit {
+                Circle().fill(Color.togoAccent)
+            } else {
+                Circle().strokeBorder(Color.secondary, lineWidth: 1)
+            }
         }
-        .padding(.vertical, 2)
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 
-/// "04 Claude Code": the bib in mono, then the agent.
-struct RequestHeader: View {
-    let request: PendingRequest
+/// "04  Claude Code  Needs you": mono bib, name, status word. Beacon blue only for "Needs you".
+struct RosterLine: View {
+    let line: WatchHome.Line
 
     var body: some View {
         HStack(spacing: 6) {
-            if let bib = request.bib, !bib.isEmpty {
-                Text(PromptText.clean(bib, maxLines: 1))
-                    .font(.system(.footnote, design: .monospaced).weight(.semibold))
-            }
-            if let agent = request.agent, !agent.isEmpty {
-                Text(AgentName.display(agent))
-                    .font(.footnote)
-                    .lineLimit(1)
-            }
+            Text(line.bib)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(line.name)
+                .font(.footnote)
+                .lineLimit(1)
+                .layoutPriority(1)
+            Spacer(minLength: 4)
+            Text(line.status)
+                .font(.footnote)
+                .foregroundStyle(line.needsYou ? Color.togoAccent : Color.secondary)
+                .lineLimit(1)
         }
-        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
     }
 }

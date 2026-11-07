@@ -45,6 +45,7 @@ struct ErrorTextTests {
         KeyError.badPassphrase,
         KeyError.unsupportedKeyType("ssh-dss"),
         KeyError.malformed,
+        SecretStoreError(status: -25308),
     ]
 
     @Test(arguments: errors.indices)

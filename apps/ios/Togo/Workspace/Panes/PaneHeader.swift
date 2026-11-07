@@ -32,7 +32,7 @@ struct PaneHeader: View {
                 Button(PanesCopy.closePane, systemImage: "xmark.square") { Self.closePane(pane, store: store) }
                 OpenInWindowButton(tab: tab.id)
             } label: {
-                Label(PanesCopy.paneMenu, systemImage: "ellipsis")
+                Label(PanesCopy.paneMenu, systemImage: "slider.horizontal.3")
                     .labelStyle(.iconOnly)
                     .font(.body.weight(.medium))
                     .foregroundStyle(Color.togoSnow)

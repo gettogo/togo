@@ -307,9 +307,12 @@ enum ConnectPhase: Equatable, Sendable {
     }
 
     func save(withHelper: Bool) async {
-        guard let profile, !saving else { return }
+        guard var profile, !saving else { return }
         var report: HelperReport?
         if case .helper(let found) = phase { report = found }
+        // Every address the helper reported joins the one typed, so the machine stays
+        // reachable when its home address changes or the phone leaves home.
+        if let reported = report?.routes { profile.routes = RoutePlan.refreshed(profile.routes, reported: reported) }
         let record = HostRecord(
             id: profile.id, profile: profile, symbol: draft.symbol.rawValue,
             helperPath: withHelper ? report?.path : nil, noHelper: !withHelper, wake: draft.wake
