@@ -13,10 +13,12 @@ public struct HelperReport: Sendable, Equatable {
     public var tailscaleSSH: Bool
     /// The routes the helper reported; nil without a helper new enough to say.
     public var routes: [HostRoute]?
+    /// etserver is on the machine, so Eternal Terminal can be offered.
+    public var et: Bool
 
     public init(
         helper: HelperPresence, path: String? = nil, tmux: String? = nil, mosh: Bool = false, os: String? = nil,
-        tailscaleSSH: Bool = false, routes: [HostRoute]? = nil
+        tailscaleSSH: Bool = false, routes: [HostRoute]? = nil, et: Bool = false
     ) {
         self.helper = helper
         self.path = path
@@ -25,6 +27,7 @@ public struct HelperReport: Sendable, Equatable {
         self.os = os
         self.tailscaleSSH = tailscaleSSH
         self.routes = routes
+        self.et = et
     }
 
     /// Whether the helper said the machine is on a tailnet.
@@ -60,6 +63,7 @@ public enum HelperProbe {
         #"if [ -n "$t" ]; then echo "togo.path=$t"; echo "togo.version=$("$t" version 2>/dev/null | head -n 1)"; fi"#,
         #"echo "tmux=$(tmux -V 2>/dev/null | head -n 1)""#,
         "if command -v mosh-server >/dev/null 2>&1; then echo mosh=yes; else echo mosh=no; fi",
+        "if command -v etserver >/dev/null 2>&1; then echo et=yes; else echo et=no; fi",
         #"echo "os=$(uname -s)""#,
         "p=$PPID",
         "n=0",
@@ -88,7 +92,8 @@ public enum HelperProbe {
             tmux: values["tmux"].flatMap(nonEmpty),
             mosh: values["mosh"] == "yes",
             os: values["os"].flatMap(nonEmpty),
-            tailscaleSSH: values["ssh"] == "tailscale"
+            tailscaleSSH: values["ssh"] == "tailscale",
+            et: values["et"] == "yes"
         )
     }
 

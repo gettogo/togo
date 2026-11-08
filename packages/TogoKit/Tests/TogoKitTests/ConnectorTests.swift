@@ -35,7 +35,7 @@ struct ConnectorTests {
         }
     }
 
-    @Test func autoOrderMoshEtSsh() async throws {
+    @Test func autoOrderMoshSsh() async throws {
         let calls = Calls()
         let connector = Connector(factories: [
             Self.factory(.ssh, calls: calls), Self.factory(.et, calls: calls), Self.factory(.mosh, calls: calls),
@@ -57,8 +57,26 @@ struct ConnectorTests {
         #expect(attachment.kind == .ssh)
         #expect(attachment.notes == [
             FallbackNote(kind: .mosh, reason: "Mosh isn't installed on h"),
-            FallbackNote(kind: .et, reason: "etserver not found on this machine"),
         ])
+    }
+
+    @Test func autoNeverSelectsEt() async throws {
+        let calls = Calls()
+        let connector = Connector(factories: [
+            Self.factory(.mosh, calls: calls, makeError: MoshBootstrapError.serverMissing("sh: not found")),
+            Self.factory(.et, calls: calls),
+            Self.factory(.ssh, calls: calls),
+        ])
+        let attachment = try await connector.attach(Self.request(Self.profile(etAvailable: true)))
+        #expect(attachment.kind == .ssh)
+        #expect(calls.all == [.mosh, .ssh])
+    }
+
+    @Test func explicitEtStillAttaches() async throws {
+        let calls = Calls()
+        let connector = Connector(factories: [Self.factory(.et, calls: calls), Self.factory(.ssh, calls: calls)])
+        let attachment = try await connector.attach(Self.request(Self.profile(transport: .et, etAvailable: true)))
+        #expect(attachment.kind == .et)
     }
 
     @Test func udpReplyFailureNamesAddress() async throws {
@@ -134,7 +152,7 @@ struct ConnectorTests {
             Self.factory(.et, calls: Calls(), unavailable: TransportFactory.etUnavailableReason),
         ])
         let profile = Self.profile(jumps: [HostEndpoint(host: "j", user: "u")], etAvailable: false)
-        await #expect(throws: ConnectorError.unavailable("etserver not found on this machine")) {
+        await #expect(throws: ConnectorError.unavailable("Mosh needs a direct route; this machine uses a jump host")) {
             _ = try await connector.attach(Self.request(profile))
         }
     }

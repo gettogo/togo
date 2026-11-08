@@ -11,10 +11,11 @@ public enum ConnectorError: Error, Equatable, LocalizedError {
     }
 }
 
-/// Picks the transport for an attach. Auto tries Mosh, then ET, then SSH and records
+/// Picks the transport for an attach. Auto tries Mosh, then SSH and records
 /// in words why each skipped kind was not used; an explicit choice never falls back.
 public actor Connector {
-    private static let autoOrder: [TransportKind] = [.mosh, .et, .ssh]
+    /// ET is opt-in per machine: its client crypto has not been audited yet, so Auto never picks it.
+    private static let autoOrder: [TransportKind] = [.mosh, .ssh]
     private let factories: [TransportFactory]
 
     public init(factories: [TransportFactory]) {

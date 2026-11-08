@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in the app, helper or relay does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Security problems go to a private advisory, not here. See SECURITY.md.
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where
+      options: [App on iPhone, App on iPad, Apple Watch, Helper, Relay, Install script, Website or docs]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: App version, output of `togo version`, iOS version, host OS.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of togo doctor
+      description: Remove hostnames, paths or anything else you would rather not share.
+      render: text

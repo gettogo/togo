@@ -3,6 +3,13 @@ import Testing
 import TogoKit
 
 struct HelperProbeTests {
+    @Test func probesEtserver() {
+        #expect(HelperProbe.script.contains("command -v etserver"))
+        #expect(HelperProbe.parse("et=yes\n").et)
+        #expect(!HelperProbe.parse("et=no\n").et)
+        #expect(!HelperProbe.parse("mosh=yes\n").et)
+    }
+
     @Test func parsesPresentHelper() {
         let output = """
         togo.path=/Users/sam/.togo/bin/togo

@@ -313,6 +313,8 @@ enum ConnectPhase: Equatable, Sendable {
         // Every address the helper reported joins the one typed, so the machine stays
         // reachable when its home address changes or the phone leaves home.
         if let reported = report?.routes { profile.routes = RoutePlan.refreshed(profile.routes, reported: reported) }
+        // ET is offered only for a machine whose probe found etserver.
+        profile.etAvailable = report?.et ?? false
         let record = HostRecord(
             id: profile.id, profile: profile, symbol: draft.symbol.rawValue,
             helperPath: withHelper ? report?.path : nil, noHelper: !withHelper, wake: draft.wake

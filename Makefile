@@ -1,6 +1,6 @@
 .PHONY: lint test build check-trailers relay-test lint-motion \
 	togokit-test ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-launch-perf ios-scroll-perf ios-snapshots ios-snapshots-record \
-	ios-release-check release-build release-test install-test tokens tokens-check togopush-test watch-test
+	ios-release-check release-build release-test install-test repo-docs-check tokens tokens-check togopush-test watch-test
 
 IOS_DIR := apps/ios
 IOS_PROJECT := $(IOS_DIR)/Togo.xcodeproj
@@ -133,3 +133,10 @@ tokens-check:
 relay-test:
 	scripts/relay-deploy-test.sh
 	cd relay && npm ci && npm test && npx tsc --noEmit
+
+# The fixture holds a dead link and an em dash, so the checker must reject it.
+repo-docs-check:
+	@out=$$(./scripts/check-repo-docs.sh scripts/testdata/repo-docs-bad 2>&1); \
+	if [ $$? -eq 0 ] || ! echo "$$out" | grep -q 'dead link' || ! echo "$$out" | grep -q 'em dash'; then \
+		echo "repo-docs-check: the checker accepted the bad fixture" >&2; exit 1; fi
+	./scripts/check-repo-docs.sh

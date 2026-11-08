@@ -28,7 +28,7 @@ import TogoMosh
         }
         env = SessionEnvironment(
             keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys,
-            prompter: DebugPrompter(), connector: Connector(factories: [mosh, .ssh])
+            prompter: DebugPrompter(), connector: Connector(factories: [mosh, ETFactory.factory, .ssh])
         )
     }
 

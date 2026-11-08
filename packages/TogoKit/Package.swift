@@ -12,11 +12,16 @@ let package = Package(
     dependencies: [
         // Citadel 0.12.1 and its swift-nio-ssh fork, vendored to add keyboard-interactive auth.
         .package(path: "../../vendor/Citadel"),
+        .package(url: "https://github.com/wiedymi/swift-et", exact: "0.1.7"),
     ],
     targets: [
         .target(
             name: "TogoKit",
-            dependencies: [.product(name: "Citadel", package: "Citadel")],
+            dependencies: [
+                .product(name: "Citadel", package: "Citadel"),
+                .product(name: "ETSession", package: "swift-et"),
+                .product(name: "ETBootstrap", package: "swift-et"),
+            ],
             resources: [.process("Resources/Localizable.xcstrings")],
             swiftSettings: [.treatAllWarnings(as: .error)]
         ),

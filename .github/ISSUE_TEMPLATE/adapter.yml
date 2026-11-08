@@ -1,0 +1,34 @@
+name: Agent support
+description: An agent whose prompts, status or chat view Togo misses or gets wrong.
+labels: [adapter]
+body:
+  - type: input
+    id: agent
+    attributes:
+      label: Agent and version
+    validations:
+      required: true
+  - type: dropdown
+    id: hooks
+    attributes:
+      label: Does the agent offer hooks or structured events?
+      options: ["Yes", "No", "Not sure"]
+    validations:
+      required: true
+  - type: textarea
+    id: missed
+    attributes:
+      label: What Togo misses
+      description: For example a permission prompt that sends no notification, a status that never updates, or a message missing from the chat view.
+    validations:
+      required: true
+  - type: textarea
+    id: screen
+    attributes:
+      label: The prompt as it appears in the terminal
+      description: Paste the text of the prompt. Remove anything private.
+      render: text
+  - type: input
+    id: docs
+    attributes:
+      label: Link to the agent's hook documentation, if any

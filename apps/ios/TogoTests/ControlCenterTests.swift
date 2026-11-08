@@ -134,6 +134,23 @@ import TogoKit
         #expect(ConnectWithMenu.transports(etAvailable: true) == [.auto, .ssh, .mosh, .et])
     }
 
+    @Test func etIsOfferedOnlyWhereEtserverWasFoundAndRouteIsDirect() {
+        func offered(etAvailable: Bool, jumps: [HostEndpoint] = []) -> [TransportPreference] {
+            let id = HostID()
+            let profile = HostProfile(
+                id: id, name: "Studio", endpoint: HostEndpoint(host: "studio.local", user: "sam"),
+                jumps: jumps, auth: .password, etAvailable: etAvailable
+            )
+            let view = LiveServices.view(of: HostRecord(id: id, profile: profile, symbol: "desktop"))
+            return ConnectWithMenu.transports(etAvailable: view.etAvailable)
+        }
+        let bastion = [HostEndpoint(host: "bastion", user: "sam")]
+        #expect(offered(etAvailable: true).contains(.et))
+        #expect(!offered(etAvailable: false).contains(.et))
+        #expect(!offered(etAvailable: true, jumps: bastion).contains(.et))
+        #expect(!offered(etAvailable: false, jumps: bastion).contains(.et))
+    }
+
     @Test func openWithTransportRecordsItOnTheTab() {
         let store = AppStore(services: services, controlCenter: Samples.controlCenter)
         store.open(hostID: Samples.studio, sessionID: "s-01", transport: .mosh)

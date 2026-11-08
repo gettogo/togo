@@ -63,7 +63,7 @@ import TogoMosh
         }
         let env = SessionEnvironment(
             keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys,
-            prompter: NoPrompts(), connector: Connector(factories: [mosh, .ssh])
+            prompter: NoPrompts(), connector: Connector(factories: [mosh, ETFactory.factory, .ssh])
         )
         let deviceID = Self.deviceID()
         let signedIn = SignedInConnections()

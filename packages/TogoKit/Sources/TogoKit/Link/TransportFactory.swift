@@ -53,8 +53,10 @@ public struct TransportFactory: Sendable {
         profile.jumps.isEmpty ? nil : "Mosh needs a direct route; this machine uses a jump host"
     }
 
+    /// ET dials etserver on the machine directly, so a jump host leaves it no route.
     public static func etUnavailableReason(_ profile: HostProfile) -> String? {
-        profile.etAvailable ? nil : "etserver not found on this machine"
+        guard profile.etAvailable else { return "etserver not found on this machine" }
+        return profile.jumps.isEmpty ? nil : "ET needs a direct route; this machine uses a jump host"
     }
 }
 

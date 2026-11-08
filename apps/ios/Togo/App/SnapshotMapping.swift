@@ -112,11 +112,12 @@ struct SnapshotMapper {
 }
 
 extension LiveServices {
-    /// What the app shows for a stored machine.
+    /// What the app shows for a stored machine. ET is offered only on a direct route, so a
+    /// machine behind a jump host never lists it.
     static func view(of record: HostRecord) -> HostRecordView {
         HostRecordView(
             id: record.id, name: record.profile.name, symbol: HostSymbol(rawValue: record.symbol) ?? .laptop,
-            address: record.profile.endpoint.host, etAvailable: record.profile.etAvailable
+            address: record.profile.endpoint.host, etAvailable: record.profile.etAvailable && record.profile.jumps.isEmpty
         )
     }
 }

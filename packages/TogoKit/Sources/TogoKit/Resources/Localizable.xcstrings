@@ -229,6 +229,9 @@
     "Togo could not unlock the saved key or password on this device. Sign in again to unlock it." : {
 
     },
+    "etterminal did not start on the machine. Check that Eternal Terminal is installed and etserver is running." : {
+
+    },
     "key" : {
 
     },

@@ -1,0 +1,14 @@
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you would like Togo to do, and the situation where you missed it.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Agents, hosts or devices involved, or how other tools handle it.
