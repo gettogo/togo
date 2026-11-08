@@ -7,7 +7,9 @@
 #
 # The helper is built from this tree into a temporary folder; ~/.togo/bin/togo is not touched.
 # Each agent gets its own TOGO_HOME and tmux server, so no session reaches the phone and the
-# owner's sessions are never seen. Agent config files are snapshotted first and put back.
+# owner's sessions are never seen. Agent config files are snapshotted first; one is put back
+# only when every change to it came during the suite's own run (current copy backed up first),
+# otherwise it is left and reported.
 #
 # Usage: scripts/check-conformance.sh [--only claude,omp] [--scenario model_switch,mode]
 #                                     [--jobs N] [--json results.json] [--keep]
@@ -23,7 +25,7 @@ while [ $# -gt 0 ]; do
         --jobs) jobs="$2"; shift 2 ;;
         --json) json="$2"; shift 2 ;;
         --keep) keep=1; shift ;;
-        -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done

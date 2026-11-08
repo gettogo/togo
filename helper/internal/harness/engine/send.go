@@ -240,6 +240,14 @@ const maxWalk = 20000
 
 var skipDirs = map[string]bool{".git": true, "node_modules": true, ".build": true, "DerivedData": true, "vendor": true, ".venv": true, "target": true, "dist": true}
 
+// junkFiles are files the OS leaves behind; nobody mentions them to an agent.
+var junkFiles = map[string]bool{".DS_Store": true, "Thumbs.db": true, "desktop.ini": true, "Icon\r": true}
+
+// isJunk reports whether a file is OS litter: a known name or an AppleDouble "._" file.
+func isJunk(name string) bool {
+	return junkFiles[name] || strings.HasPrefix(name, "._")
+}
+
 // completeFiles lists files under cwd whose path contains the query,
 // files whose name matches first.
 func completeFiles(ctx context.Context, cwd, query string, limit int) []harness.Completion {
@@ -264,7 +272,7 @@ func completeFiles(ctx context.Context, cwd, query string, limit int) []harness.
 			}
 			return nil
 		}
-		if d.Type()&os.ModeSymlink != 0 {
+		if d.Type()&os.ModeSymlink != 0 || isJunk(d.Name()) {
 			return nil
 		}
 		rel, _ := filepath.Rel(cwd, p)
@@ -281,7 +289,10 @@ func completeFiles(ctx context.Context, cwd, query string, limit int) []harness.
 		if hits[i].rank != hits[j].rank {
 			return hits[i].rank < hits[j].rank
 		}
-		return len(hits[i].rel) < len(hits[j].rel)
+		if len(hits[i].rel) != len(hits[j].rel) {
+			return len(hits[i].rel) < len(hits[j].rel)
+		}
+		return hits[i].rel < hits[j].rel
 	})
 	var out []harness.Completion
 	for _, h := range hits {

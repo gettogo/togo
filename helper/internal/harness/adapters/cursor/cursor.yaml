@@ -1,10 +1,70 @@
-# Cursor CLI (cursor-agent / agent). Terminal-only until the owner updates: the installed
-# 2025.10.02 build has no `acp` or `models` command, and the docs do not confirm the CLI runs
-# ~/.cursor/hooks.json. The gate refuses builds older than 2026.1; a later revision of this file
-# adds hooks, plan files and typed /model once they are checked on a current build.
+# Cursor CLI (cursor-agent / agent) 2026.11. No attach protocol for the TUI. Reads: its hooks
+# (~/.cursor/hooks.json, `{version: 1, hooks: {event: [{command}]}}`, run through a shell with the
+# payload on stdin), which draw the chat: beforeSubmitPrompt (the prompt), preToolUse /
+# postToolUse / postToolUseFailure (tool steps), afterAgentResponse (each reply) and stop
+# (completed, aborted or error). Payload keys were read from the 2026.11.05 bundle, not yet seen
+# live. The CLI's own chat store (~/.cursor/chats/<md5 of cwd>/<chat id>/store.db) is a SQLite
+# blob store of protobuf records, so Togo does not read it. Writes: the model as typed
+# `/model <id>` (`cursor-agent models` documents it: "use --model <id> (or /model <id> in
+# interactive mode) to switch"), else a relaunch with --model and --resume <chat id>. The
+# folder-trust question is answered from the screen (detect's trustOneTap).
 adapter: cursor
 name: Cursor CLI
 revision: 1
 match: { agents: [cursor], commands: [cursor-agent, agent] }
 harness: { version: [cursor-agent, --version], pattern: '^(\d{4}\.\d+\.\d+)', range: ">=2026.1.0 <2027" }
-capabilities: []
+# No status capability: the hooks carry token counts but no context window to fill one.
+capabilities: [chat, chat.anchors, send.queue, interrupt, commands, model, needs.approvals, agents]
+feeds:
+  hooks:            # `togo hook cursor <event>` in ~/.cursor/hooks.json (installed only by `togo hooks install`)
+    hook:
+      events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure,
+        AgentResponse, Stop, SubagentStart, SubagentStop, PreCompact, SessionEnd]
+    mapper: cursor.hooks
+    stability: unverified
+sources:
+  # `cursor-agent models` prints "Available models", then "<id> - <name>"
+  # lines; the current one ends "(current...)". Logged out it prints a
+  # sentence, so the list is empty.
+  models:
+    cli: { argv: [cursor-agent, models], format: text }
+    select: '[split("\n")[] | capture("^(?<id>[A-Za-z0-9][A-Za-z0-9._:/\\[\\]=,-]*) - (?<label>.+?)(?: \\((?<flags>[^)]*)\\))?$") | {id: .id, label: .label, detail: (.flags // null)}]'
+    cache: 10m
+    timeout: 15s
+    stability: documented
+screens:
+  model:
+    primitive: picker
+    title: Model
+    section: composer
+    capability: model
+    source: models
+    search: true
+    map: { item.id: .id, item.title: .label, item.subtitle: .detail, selected: $state.model }
+    on_select: set_model
+actions:
+  # Typed when idle; mid-turn, relaunch into the same chat on the new
+  # model, which needs the chat id a hook named.
+  set_model:
+    label: Use model
+    branch:
+      - { when: '{{.state.idle}}', type: { text: '/model {{.id}}', submit: true, when_idle: true } }
+      - { when: '{{.state.harness_session}}', relaunch: { argv: [cursor-agent, --model, '{{.id}}', --resume, '{{.state.harness_session}}'] } }
+    stability: documented-command
+  answer:
+    builtin: approval_answer
+    stability: experimental
+  interrupt:
+    keys: { keys: [Escape], until: idle, max: 2 }
+    stability: documented
+commands:
+  static:
+    - { name: model, hint: '[model]', detail: Select the model, kind: picker, screen: model }
+    - { name: resume, detail: Open recent chats and resume one, kind: terminal }
+    - { name: fork, detail: Fork the chat into a new session, kind: terminal }
+    - { name: rewind, detail: Jump back to a previous message, kind: terminal }
+    - { name: rename, detail: Rename the chat }
+    - { name: fast, detail: Toggle fast mode }
+    - { name: goal, detail: Start a durable goal }
+    - { name: btw, detail: Ask on the side }
+    - { name: config, detail: Configure CLI settings, kind: terminal }

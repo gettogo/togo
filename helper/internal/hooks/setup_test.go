@@ -16,7 +16,8 @@ func allEnv(t *testing.T) env {
 	e := optionalEnv(t)
 	root := filepath.Dir(e.o.ClaudeDir)
 	e.o.GeminiDir, e.o.AugmentDir = filepath.Join(root, "gemini"), filepath.Join(root, "augment")
-	for _, d := range []string{e.o.GeminiDir, e.o.AugmentDir} {
+	e.o.CursorDir, e.o.AmpDir = filepath.Join(root, "cursor"), filepath.Join(root, "amp")
+	for _, d := range []string{e.o.GeminiDir, e.o.AugmentDir, e.o.CursorDir, e.o.AmpDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -38,7 +39,7 @@ func TestEveryHarnessInstallIdempotentBackupRestore(t *testing.T) {
 	origs := map[string]string{}
 	for _, a := range Agents {
 		p := configOf(t, e, a)
-		if a == Copilot {
+		if a == Copilot || a == Amp {
 			continue // Togo's own file; nothing of the user's to keep
 		}
 		orig := "{\n  \"mine\": true,\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"say done\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"

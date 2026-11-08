@@ -99,6 +99,21 @@ import TogoKit
         #expect(other == .request(request("a"), position: 1, count: 1))
     }
 
+    /// While the chat's composer holds the keyboard, another session's request waits off screen
+    /// so it never covers the field or its @ menu; a reply already being typed stays.
+    @Test func aRequestWaitsWhileTheComposerTypes() {
+        let typing = PromptFeed.mode(
+            requests: [request("a")], current: .start, focused: four, composing: false, hasMachines: true,
+            chatShown: true, composerTyping: true
+        )
+        #expect(typing == .hidden)
+        let replying = PromptFeed.mode(
+            requests: [request("a")], current: .replying(request("a")), focused: four, composing: false,
+            hasMachines: true, chatShown: true, composerTyping: true
+        )
+        #expect(replying == .replying(request("a")))
+    }
+
     /// The bar leaves out a chat's own request only when the chat draws it (A1 C3); a chat with
     /// no store, or whose adapter does not show approvals, leaves it in the bar
     /// (`NeedsCardTests` covers the drawn case).

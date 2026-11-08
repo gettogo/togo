@@ -1,0 +1,7 @@
+{"event":"session.start","payload":{"thread":{"id":"T-0001"}}}
+{"event":"agent.start","payload":{"thread":{"id":"T-0001"},"message":"list the files","id":1}}
+{"event":"tool.result","payload":{"thread":{"id":"T-0001"},"toolUseID":"toolu_01","tool":"Bash","input":{"cmd":"ls","command":"ls"},"status":"done","output":{"output":"main.go\ngo.mod","exitCode":0}}}
+{"event":"tool.result","payload":{"thread":{"id":"T-0001"},"toolUseID":"toolu_02","tool":"Read","input":{"path":"/HOME/proj/missing.go"},"status":"error","error":"file not found"}}
+{"event":"agent.end","payload":{"thread":{"id":"T-0001"},"message":"list the files","id":1,"status":"done","last":"main.go and go.mod."}}
+{"event":"agent.start","payload":{"thread":{"id":"T-0001"},"message":"now delete them","id":3}}
+{"event":"agent.end","payload":{"thread":{"id":"T-0001"},"message":"now delete them","id":3,"status":"cancelled","last":""}}

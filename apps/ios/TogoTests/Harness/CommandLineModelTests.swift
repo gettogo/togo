@@ -162,6 +162,42 @@ import TogoKit
         #expect(items.map(\.title) == ["parse.go", "parse_test.go"])
     }
 
+    /// The @ menu always has a way out: its close control puts the menu away, takes back the
+    /// bare "@" that called it, and leaves a typed word alone; deleting the "@" closes it too.
+    @Test func theFileMenuClosesAndGivesBackTheDraft() async {
+        let model = make()
+        model.draft = "fix @"
+        await model.draftChanged()
+        #expect(model.menu != .none)
+        #expect(model.store.composerMenuOpen)
+        model.dismissMenu()
+        #expect(model.menu == .none)
+        #expect(model.draft == "fix ")
+        #expect(!model.store.composerMenuOpen)
+
+        model.draft = "fix @pars"
+        await model.draftChanged()
+        #expect(model.menu != .none)
+        model.dismissMenu()
+        #expect(model.menu == .none)
+        #expect(model.draft == "fix @pars")
+
+        model.draft = "@"
+        await model.draftChanged()
+        #expect(model.menu != .none)
+        model.draft = ""
+        await model.draftChanged()
+        #expect(model.menu == .none)
+    }
+
+    @Test func dismissingTakesOnlyABareAt() {
+        #expect(CommandLineLogic.dismissing("@") == "")
+        #expect(CommandLineLogic.dismissing("look at @") == "look at ")
+        #expect(CommandLineLogic.dismissing("look at @pa") == "look at @pa")
+        #expect(CommandLineLogic.dismissing("/mo") == "/mo")
+        #expect(CommandLineLogic.dismissing("mail me@") == "mail me@")
+    }
+
     // MARK: Completion
 
     /// A command from the menu does its job by kind: one that needs words puts itself in the

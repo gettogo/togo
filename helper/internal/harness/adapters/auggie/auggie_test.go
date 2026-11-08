@@ -86,3 +86,12 @@ func TestMalformed(t *testing.T) {
 		m.Map(harness.Record{Data: json.RawMessage(l)})
 	}
 }
+
+func TestInitialModeKnown(t *testing.T) {
+	if got := NewHooks(harness.Env{Argv: []string{"auggie"}}).State()["mode"]; got != "code" {
+		t.Errorf("mode = %q, want code", got)
+	}
+	if got := NewHooks(harness.Env{Argv: []string{"auggie", "--ask"}}).State()["mode"]; got != "ask" {
+		t.Errorf("mode with --ask = %q, want ask", got)
+	}
+}

@@ -11,7 +11,6 @@
     "requestId": "r_render0001",
     "ts": 1793871000000,
     "host": "studio",
-    "allowText": true,
     "options": []
   },
   "expect": {

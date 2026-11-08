@@ -1,20 +1,30 @@
-# Cline CLI 3.x. No documented attach for the TUI (the hub daemon's protocol is undocumented,
-# `--acp` is a separate stdio agent). Sessions: `cline history --json` (documented; not run, the
-# owner's 3.0.62 hangs on every invocation, `cline version` and `--version` included, even with
-# stdin closed, so the gate fails and the session stays terminal-only on that build). Writes:
-# resume relaunches with --id. Model, thinking and mode relaunches are not offered: they need
-# the session id, and nothing reads it (hooks under ~/.cline/hooks/ are not read: their payload
-# was not seen). There is no MCP list command.
+# Cline CLI 3.0.74. No documented attach for the TUI (the hub daemon's websocket protocol is
+# undocumented, `--acp` is a separate stdio agent). Reads: the session messages file
+# ~/.cline/data/sessions/<id>/<id>.messages.json, rewritten whole after each assistant message and
+# loop iteration, and its manifest <id>.json (cwd, start, model, mode); layout read from the
+# installed CLI's bundled source, no live session was made. The newest messages file whose
+# manifest works in this folder and started (or changed) since the session began is followed; a
+# `--id` launch follows that id. Writes: resume relaunches with --id; prompts are typed. Model,
+# thinking and mode relaunches are not offered yet. There is no MCP list command.
 adapter: cline
 name: Cline
 revision: 1
 match: { agents: [cline], commands: [cline] }
-harness: { version: [cline, version], pattern: '(\d+\.\d+\.\d+)', range: ">=3.0 <4" }
-capabilities: [interrupt, commands, changes, ports, resume]
+harness: { version: [cline, version], pattern: '(\d+\.\d+\.\d+)', range: ">=3.0.74 <4" }
+capabilities: [chat, send.queue, interrupt, commands, changes, ports, resume]
+feeds:
+  sessions:         # finds this session's file; the mapper checks the manifest next to it
+    file: { glob: '~/.cline/data/sessions/*/*.messages.json', format: json, follow: true }
+    mapper: cline.messages
+    stability: internal
+  messages:         # path: set by the mapper once it knows the session id
+    file: { path: '{{.state.transcript_path}}', format: json, follow: true }
+    mapper: cline.messages
+    stability: internal
 sources:
   sessions:
     cli: { argv: [cline, history, --json, --limit, '50'] }
-    select: '[(.sessions? // .)[] | {id: .id, title: (.title // .prompt // .task // .id), updated: (.updatedAt // .updated_at // .ts // null)}]'
+    select: '[(.sessions? // .)[] | {id: (.sessionId // .id), title: (.title // .prompt // .task // .sessionId // .id), updated: (.updatedAt // .updated_at // .ts // null)}]'
     cache: 30s
     timeout: 10s
     stability: experimental

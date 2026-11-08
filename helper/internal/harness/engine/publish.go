@@ -32,6 +32,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			continue
 		}
 		s.prepareLocked(&it, mark)
+		s.labelModelNoticeLocked(&it)
 		if it.Kind == harness.KindQuestion && it.Question != nil {
 			s.questionLocked(&it)
 		}
@@ -86,6 +87,9 @@ func (s *sess) decorateStatusLocked(st *harness.StatusBlock) {
 	if st.Model == "" {
 		st.Model = state["model"]
 	}
+	if st.Model != "" {
+		st.Model = s.modelLabelLocked(st.Model)
+	}
 	if len(st.Actions) == 0 {
 		// Status screens' actions, then the adapter's status.actions
 		// (compact on the context meter), once each.
@@ -121,7 +125,7 @@ func (s *sess) refreshStatusLocked() {
 	}
 	st := *sec.Status
 	st.Mode, st.Effort = "", ""
-	if st.Model == s.stateLocked()["model"] {
+	if m := s.stateLocked()["model"]; st.Model == m || (m != "" && st.Model == s.modelLabelLocked(m)) {
 		st.Model = ""
 	}
 	s.decorateStatusLocked(&st)

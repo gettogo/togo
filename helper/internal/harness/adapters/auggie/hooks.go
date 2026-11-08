@@ -31,7 +31,19 @@ type turn struct {
 
 // NewHooks returns a mapper for one session.
 func NewHooks(env harness.Env) *Hooks {
-	return &Hooks{env: env, state: map[string]string{"working": "false"}}
+	return &Hooks{env: env, state: map[string]string{"working": "false", "mode": initialMode(env.Argv)}}
+}
+
+// initialMode is the mode Auggie starts in: ask with --ask (-a), else code.
+// Its hooks never report the mode, so without this the chip read "Mode"
+// until the first change from the phone.
+func initialMode(argv []string) string {
+	for _, a := range argv {
+		if a == "--ask" || a == "-a" {
+			return "ask"
+		}
+	}
+	return "code"
 }
 
 func (h *Hooks) Name() string { return MapperHooks }

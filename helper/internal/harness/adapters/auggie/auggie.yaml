@@ -69,9 +69,12 @@ actions:
     branch:
       - { when: '{{.state.harness_session}}', relaunch: { argv: [auggie, --reasoning-effort, '{{.value}}', --resume, '{{.state.harness_session}}'] } }
     stability: documented
-  # /ask and /plan toggle their mode; with neither on, Auggie codes.
+  # /ask and /plan toggle their mode; with neither on, Auggie codes, so going
+  # back to code types the toggle of the mode that is on.
   set_mode:
     branch:
+      - { when: '{{and (eq .id "code") (eq .state.mode "ask")}}', type: { text: '/ask', submit: true, when_idle: true } }
+      - { when: '{{and (eq .id "code") (eq .state.mode "plan")}}', type: { text: '/plan', submit: true, when_idle: true } }
       - { when: '{{eq .id "ask"}}', type: { text: '/ask', submit: true, when_idle: true } }
       - { when: '{{eq .id "plan"}}', type: { text: '/plan', submit: true, when_idle: true } }
     stability: unverified
@@ -81,8 +84,11 @@ actions:
   interrupt:
     keys: { keys: [Escape] }
     stability: documented
+# The hooks report no mode: the auggie.hooks mapper starts it from the launch
+# flags (--ask, else code) and a switch from the phone keeps the new one.
 modes:
-  choices: [{ id: ask, label: Ask }, { id: plan, label: Plan }]
+  choices: [{ id: code, label: Code }, { id: ask, label: Ask }, { id: plan, label: Plan }]
+  select: $state.mode
   set: set_mode
 commands:
   static:

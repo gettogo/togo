@@ -86,12 +86,13 @@ private struct IslandGallery: View {
                 .background(.black, in: Circle())
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top) {
-                    IslandExpandedLeading(card: card(state, isStale: isStale))
-                    Spacer(minLength: 16)
+                // The header below the camera, as `belowIfTooWide` places it for a long title.
+                HStack(alignment: .center, spacing: 12) {
+                    IslandExpandedLeading(state: state, card: card(state, isStale: isStale), isStale: isStale)
                     IslandExpandedTrailing(state: state, isStale: isStale)
+                        .fixedSize()
                 }
-                IslandExpandedCenter(state: state, card: card(state, isStale: isStale), isStale: isStale)
+                .padding(.top, 30)
                 IslandExpandedBottom(
                     state: state, card: card(state, isStale: isStale), hostId: "h_x", link: nil, isStale: isStale
                 )

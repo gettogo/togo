@@ -96,7 +96,7 @@ import TogoKit
         )
         context.working = { working }
         context.agent = "Auggie"
-        context.note = notes
+        context.note = { text, _, undo in notes(text, undo) }
         context.runAfterTurn = { action, _, _, note in held(action, note) }
         return context
     }

@@ -191,6 +191,8 @@ func kindOf(k spec.Kinds) string {
 		return spec.KindHook
 	case k.Statusline != nil:
 		return spec.KindStatusline
+	case k.SQLite != nil:
+		return spec.KindSQLite
 	case k.Static != nil:
 		return spec.KindStatic
 	}
@@ -217,6 +219,8 @@ func rawOf(k spec.Kinds) ([]byte, error) {
 		v = k.Hook
 	case spec.KindStatusline:
 		v = k.Statusline
+	case spec.KindSQLite:
+		v = k.SQLite
 	case spec.KindStatic:
 		v = k.Static
 	}

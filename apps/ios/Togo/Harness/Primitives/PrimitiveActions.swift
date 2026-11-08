@@ -190,11 +190,12 @@ struct GatedChange {
                     _ = await self?.apply(reverse, undo: nil, context: context)
                 }
             }
-            note(PrimitiveCopy.restartedWith(change.value), back)
+            note(PrimitiveCopy.restartedWith(change.value), SessionNote.Echo(value: change.value), back)
         case .typed:
-            note(PrimitiveCopy.setWaiting(change.setting, change.value, agent: context.agent), nil)
+            note(PrimitiveCopy.setWaiting(change.setting, change.value, agent: context.agent),
+                 SessionNote.Echo(value: change.value, waiting: true), nil)
         case .applied, .queued:
-            note(PrimitiveCopy.setTo(change.setting, change.value), nil)
+            note(PrimitiveCopy.setTo(change.setting, change.value), SessionNote.Echo(value: change.value), nil)
         default:
             break
         }

@@ -109,6 +109,49 @@ import TogoKit
         #expect(ChatRowDedupe.apply(rows).map(\.id) == ["p", "w", "m"])
     }
 
+    // MARK: A model change, said once
+
+    private func modelNotice(_ id: String, seq: Int, _ text: String) -> ChatRow {
+        .notice(item(id, seq: seq, .notice(.init(level: "info", code: "model", text: text))))
+    }
+
+    private func phoneNote(_ text: String, after: String?, value: String, waiting: Bool = false) -> SessionNote {
+        SessionNote(id: "note", text: text, code: "model", after: after, at: t0,
+                    echo: SessionNote.Echo(value: value, waiting: waiting))
+    }
+
+    // Seen on the phone with omp: "Model Claude Sonnet 5" above the prompt, the reply, then the
+    // harness's "Model Claude Sonnet 5" again. The phone's line stays where it was made.
+    @Test func theHarnessNoticeOfAChangeThisPhoneMadeIsLeftOut() {
+        let rows: [ChatRow] = [
+            .prompt(prompt("p0", seq: 1)), .prompt(prompt("p1", seq: 3)),
+            modelNotice("m", seq: 5, "Model Claude Sonnet 5"),
+        ]
+        let note = phoneNote(PrimitiveCopy.setTo("Model", "Claude Sonnet 5"), after: "p0", value: "Claude Sonnet 5")
+        #expect(SessionNote.merge([note], into: rows).map(\.id) == ["p0", "note", "p1"])
+    }
+
+    @Test func aRestartLineAlsoStandsForTheHarnessNotice() {
+        let rows: [ChatRow] = [.prompt(prompt("p", seq: 1)), modelNotice("m", seq: 2, "Model: Sonnet")]
+        let note = phoneNote(PrimitiveCopy.restartedWith("Sonnet"), after: "p", value: "Sonnet")
+        #expect(SessionNote.merge([note], into: rows).map(\.id) == ["p", "note"])
+    }
+
+    @Test func aWaitingLineGivesWayToTheHarnessNotice() {
+        let rows: [ChatRow] = [.prompt(prompt("p", seq: 1)), modelNotice("m", seq: 2, "Model Sonnet")]
+        let note = phoneNote(PrimitiveCopy.setWaiting("Model", "Sonnet", agent: "omp"), after: "p", value: "Sonnet", waiting: true)
+        #expect(SessionNote.merge([note], into: rows).map(\.id) == ["p", "m"])
+    }
+
+    @Test func anEarlierOrDifferentModelNoticeStays() {
+        let rows: [ChatRow] = [
+            modelNotice("old", seq: 1, "Model Sonnet"), .prompt(prompt("p", seq: 2)),
+            modelNotice("other", seq: 3, "Model Opus"),
+        ]
+        let note = phoneNote(PrimitiveCopy.setTo("Model", "Sonnet"), after: "p", value: "Sonnet")
+        #expect(SessionNote.merge([note], into: rows).map(\.id) == ["old", "p", "note", "other"])
+    }
+
     // MARK: Mode memory
 
     @Test func theStatusLineWinsThenTheLastKnownMode() {

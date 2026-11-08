@@ -79,6 +79,8 @@ import UIKit
     private(set) var hasLoaded = false
     /// The composer's height under this tab's chat, measured where the composer is drawn.
     var composerClearance: CGFloat = 0
+    /// The composer's / or @ menu is up: a tap on the chat puts it away.
+    var composerMenuOpen = false
     /// A scroll the chat should make: to a needs card ("Go to request", the capsule).
     var scrollRequest: ChatScrollRequest?
     /// Bumped on every prompt this phone sends, so the chat scrolls to it.

@@ -71,6 +71,8 @@ var (
 	factoryDir = func(o Options) string { return o.FactoryDir }
 	copilotDir = func(o Options) string { return o.CopilotDir }
 	vibeDir    = func(o Options) string { return o.VibeDir }
+	cursorDir  = func(o Options) string { return o.CursorDir }
+	ampDir     = func(o Options) string { return o.AmpDir }
 )
 
 // Registry lists every harness Togo runs, in the order setup reports them.
@@ -96,8 +98,10 @@ var Registry = []Harness{
 	{ID: "goose", Name: "Goose", Command: "goose", Setup: SetupNone},
 	{ID: "aider", Name: "Aider", Command: "aider", Setup: SetupNone},
 	{ID: "cline", Name: "Cline", Command: "cline", Setup: SetupNone},
-	{ID: "amp", Name: "Amp", Command: "amp", Setup: SetupNone},
-	{ID: "cursor", Name: "Cursor CLI", Command: "cursor-agent", Setup: SetupNone},
+	{ID: Amp, Name: "Amp", Command: "amp", Setup: SetupHooks,
+		root: ampDir, config: in(ampDir, "plugins", "togo.ts"), events: ampEvents},
+	{ID: Cursor, Name: "Cursor CLI", Command: "cursor-agent", Setup: SetupHooks,
+		root: cursorDir, config: in(cursorDir, "hooks.json"), events: cursorEvents},
 	{ID: "kiro", Name: "Kiro CLI", Command: "kiro-cli", Setup: SetupNone},
 	{ID: "openhands", Name: "OpenHands", Command: "openhands", Setup: SetupNone},
 }
@@ -185,5 +189,9 @@ func DefaultOptions(getenv func(string) string, home, togoHome, binary string) O
 		FactoryDir: filepath.Join(home, ".factory"),
 		CopilotDir: pick("COPILOT_HOME", ".copilot"),
 		VibeDir:    pick("VIBE_HOME", ".vibe"),
+		// Cursor reads user hooks from ~/.cursor whatever CURSOR_CONFIG_DIR says.
+		CursorDir: filepath.Join(home, ".cursor"),
+		// Amp loads system plugins from ~/.config/amp/plugins.
+		AmpDir: filepath.Join(home, ".config", "amp"),
 	}
 }

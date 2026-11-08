@@ -49,7 +49,7 @@ import TogoKit
         )
         context.working = { working }
         context.settled = settled
-        context.note = { _, _ in }
+        context.note = { _, _, _ in }
         return context
     }
 

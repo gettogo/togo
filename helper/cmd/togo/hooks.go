@@ -20,7 +20,8 @@ func init() {
 	})
 	addUsage("  hooks install|uninstall|status [--agent <id>|all] [--local] [--block] [--no-statusline] [--json]\n" +
 		"                                                set up every installed harness that takes hooks (Claude Code,\n" +
-		"                                                Codex, Auggie, Droid, Copilot CLI) and\n" +
+		"                                                Codex, Auggie, Droid, Copilot CLI, Cursor CLI; Amp gets\n" +
+		"                                                Togo's plugin ~/.config/amp/plugins/togo.ts) and\n" +
 		"                                                chain Claude's status line. Each file is backed up once\n" +
 		"                                                (<file>.togo-backup) before its first change; install is safe\n" +
 		"                                                to run again, and uninstall puts every file back (and also\n" +

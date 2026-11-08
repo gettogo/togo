@@ -102,8 +102,8 @@ type Sender struct {
 	pausedUntil map[string]time.Time // device token -> relay 429 deadline
 	relayDown   map[string]time.Time // relay URL -> when it last failed every attempt
 	held        heldPushes
-	exits       map[string]string    // session id -> the exit last announced
-	requests    requestSeen          // needs_you pushed or closed, per request id
+	exits       map[string]string // session id -> the exit last announced
+	requests    requestSeen       // needs_you pushed or closed, per request id
 
 	liveMu  sync.Mutex
 	liveDev map[string]*deviceLive // device id -> its activity
@@ -259,6 +259,11 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 			// Nothing sent from a notification can answer it yet (a
 			// tabbed question, or a prompt not on screen yet): no buttons,
 			// so the phone says to open the app.
+			p.Options, p.AllowText = nil, false
+		}
+		if a.SignIn != nil {
+			// A sign-in step is answered in the app (a masked field or the
+			// sign-in page), never by typing a code into a notification.
 			p.Options, p.AllowText = nil, false
 		}
 		m.CollapseID = a.RequestID

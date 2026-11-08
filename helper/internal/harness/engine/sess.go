@@ -73,6 +73,8 @@ type sess struct {
 	// settingUpUntil is the end of a sign-in started here: until then the
 	// sources it changes are read again on each screen (see fetch).
 	settingUpUntil time.Time
+	// labels is what the model picker calls each model id (model_label.go).
+	labels modelLabels
 }
 
 type queued struct {
@@ -679,6 +681,19 @@ func (s *sess) agentExitedLocked() {
 	}
 }
 
+// closeIdleLocked publishes what IdleCloser mappers close once the session
+// went idle.
+func (s *sess) closeIdleLocked() {
+	now := s.e.cfg.Now()
+	for _, m := range s.mappers {
+		if c, ok := m.(harness.IdleCloser); ok {
+			if items := c.CloseIdle(now); len(items) > 0 {
+				s.publishLocked(items, nil)
+			}
+		}
+	}
+}
+
 func (s *sess) setWorkingLocked(w bool) {
 	was := s.working
 	s.working = w
@@ -686,6 +701,7 @@ func (s *sess) setWorkingLocked(w bool) {
 		s.missionDeltaLocked(d)
 	}
 	if was && !w {
+		s.closeIdleLocked()
 		s.afterTurnLocked()
 		s.e.turnEnded(s)
 		s.drainLocked()

@@ -9,9 +9,52 @@ struct CommandMenuPanel: View {
     @Environment(\.colorSchemeContrast) private var contrast
     let model: CommandLineModel
     let screenTitle: (String) -> String
+    @State private var contentHeight: CGFloat = CommandMenuPanel.cap
+
+    /// The most the list takes when the window has room.
+    static let cap: CGFloat = 280
 
     var body: some View {
         let items = model.menu.items
+        VStack(spacing: 0) {
+            header
+            list(items)
+        }
+        .background(Color.togoRaised, in: .rect(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(isFiles ? ComposerCopy.mention : ComposerCopy.commands)
+        .accessibilityIdentifier(isFiles ? "composer.menu.files" : "composer.menu.commands")
+    }
+
+    /// What the menu lists, and its close control: always a visible way back to the field.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text(isFiles ? ComposerCopy.mention : ComposerCopy.commands)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.togoMute)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+            Button(ComposerCopy.closeMenu, systemImage: "xmark") { model.dismissMenu() }
+                .labelStyle(.iconOnly)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(Color.togoMute)
+                .frame(width: 44, height: 36)
+                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityIdentifier("composer.menu.close")
+        }
+        .padding(.leading, 14)
+        .padding(.top, 2)
+    }
+
+    /// The rows at their own height up to a cap, and less when the window has less room
+    /// (the field keeps its place below); past what fits they scroll.
+    private func list(_ items: [HarnessCompletion]) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -50,17 +93,16 @@ struct CommandMenuPanel: View {
                 .padding(.vertical, 6)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: 280)
-            .fixedSize(horizontal: false, vertical: true)
+            // A swipe down on the list puts the keyboard away, and with it the menu.
+            .scrollDismissesKeyboard(.interactively)
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, height in
+                contentHeight = height
+            }
+            // Ideal: the rows, up to the cap. Minimum zero, so a short window squeezes the
+            // list rather than pushing the field off screen.
+            .frame(minHeight: 0, idealHeight: min(contentHeight, Self.cap), maxHeight: min(contentHeight, Self.cap))
             .onChange(of: model.highlight) { _, row in proxy.scrollTo(row) }
         }
-        .background(Color.togoRaised, in: .rect(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast))
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(isFiles ? ComposerCopy.mention : ComposerCopy.commands)
     }
 
     private var isFiles: Bool {

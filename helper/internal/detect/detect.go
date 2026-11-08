@@ -99,6 +99,20 @@ func Detect(screen string) (Prompt, bool) {
 	if !ok {
 		return Prompt{}, false
 	}
+	if EnterOpensLink(screen) {
+		// Enter would open a link outside the terminal: no option that
+		// presses it is offered, and with none left there is no prompt.
+		var kept []wire.Option
+		for _, o := range p.Options {
+			if !hasEnter(p.Keys[o.N]) {
+				kept = append(kept, o)
+			}
+		}
+		if len(p.Options) > 0 && len(kept) == 0 {
+			return Prompt{}, false
+		}
+		p.Options = kept
+	}
 	p.Title = truncate(p.Title, wire.MaxTitle)
 	if p.Detail != nil {
 		d := truncate(*p.Detail, wire.MaxDetail)
@@ -258,4 +272,15 @@ func KeysFor(screen, fingerprint, label string) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+// hasEnter reports a key list that presses Enter.
+func hasEnter(keys []string) bool {
+	for _, k := range keys {
+		switch strings.ToLower(k) {
+		case "enter", "c-m", "kpenter", "return", "\r", "\n":
+			return true
+		}
+	}
+	return false
 }

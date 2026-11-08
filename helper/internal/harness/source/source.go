@@ -42,6 +42,7 @@ func init() {
 	harness.RegisterRunner(Hook{kind: spec.KindHook})
 	harness.RegisterRunner(Hook{kind: spec.KindStatusline})
 	harness.RegisterRunner(Static{})
+	harness.RegisterRunner(SQLite{})
 }
 
 func home(env harness.Env) string {

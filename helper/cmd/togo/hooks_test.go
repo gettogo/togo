@@ -51,7 +51,7 @@ func TestHooksCommandInstallStatusUninstall(t *testing.T) {
 	if code, out := h.run("hooks", "install", "--agent", "claude"); code != 0 || !strings.Contains(out, "claude: installed") {
 		t.Fatalf("install: code=%d out=%q", code, out)
 	}
-	want := `{"auggie":"no-agent","claude":"installed","codex":"no-agent","copilot":"no-agent","droid":"no-agent"}`
+	want := `{"amp":"no-agent","auggie":"no-agent","claude":"installed","codex":"no-agent","copilot":"no-agent","cursor":"no-agent","droid":"no-agent"}`
 	if code, out := h.run("hooks", "status", "--json"); code != 0 || strings.TrimSpace(out) != want {
 		t.Fatalf("status: code=%d out=%q", code, out)
 	}
@@ -72,7 +72,7 @@ func TestHooksCommandInstallStatusUninstall(t *testing.T) {
 // One plain install sets up every installed harness and says so, one line
 // each; a second run writes nothing; uninstall puts every file back.
 func TestHooksInstallAllHarnesses(t *testing.T) {
-	h := newHooksHome(t, ".claude", ".codex", ".gemini", ".augment", ".factory", ".copilot")
+	h := newHooksHome(t, ".claude", ".codex", ".gemini", ".augment", ".factory", ".copilot", ".cursor", ".config/amp")
 	settings := filepath.Join(h.root, ".claude", "settings.json")
 	orig := "{\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"bash ~/.claude/line.sh\"\n  }\n}\n"
 	if err := os.WriteFile(settings, []byte(orig), 0o600); err != nil {

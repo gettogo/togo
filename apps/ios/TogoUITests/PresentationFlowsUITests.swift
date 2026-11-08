@@ -267,6 +267,35 @@ import XCTest
         expectClean()
     }
 
+    /// 9b. @ opens the file menu with the field still in view and a close control; closing it
+    /// returns to the composer as it was, and deleting the "@" closes it too (owner finding:
+    /// the menu once filled the screen with no way out).
+    func testMentionOpensAndDismissReturnsToComposer() {
+        launch(replay: "chat")
+        openChat()
+        guard let mention = visibleButton("Mention a file") else { return XCTFail("No Mention button") }
+        mention.tap()
+        let menu = element("composer.menu.files")
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "The file menu never opened")
+        let close = element("composer.menu.close")
+        XCTAssertTrue(waitFor("close", timeout: 5) { close.exists && close.isHittable }, "No visible close control")
+        XCTAssertTrue(composer.isHittable, "The field is hidden under the menu or the keyboard")
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(window.contains(menu.frame), "The menu runs off screen: \(menu.frame) in \(window)")
+        XCTAssertLessThanOrEqual(menu.frame.maxY, composer.frame.minY, "The menu covers the field")
+        close.tap()
+        XCTAssertTrue(menu.waitForNonExistence(timeout: 5), "Close left the menu up")
+        XCTAssertFalse((composer.value as? String ?? "").contains("@"), "Close did not take back the bare @")
+
+        // Typed "@" then deleted: the menu goes with it.
+        type("@")
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "Typing @ did not open the menu")
+        composer.typeText(XCUIKeyboardKey.delete.rawValue)
+        XCTAssertTrue(menu.waitForNonExistence(timeout: 5), "Deleting the @ left the menu up")
+        XCTAssertTrue(composer.isHittable)
+        expectClean()
+    }
+
     /// 10. The same request, two widths: a sheet on a compact width, an inspector beside the
     /// chat on a regular one (the policy keys on width, never the device).
     func testRegularWidthPicksInspector() {

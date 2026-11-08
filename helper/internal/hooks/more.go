@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,8 +30,95 @@ const copilotPermission = "permissionRequest"
 
 // droidEdits edits ~/.factory/hooks.json. Droid never waits for an answer
 // from a hook, so --block adds nothing.
+//
+// Droid reads hooks.json as a flat map of event name to matcher groups
+// ({"SessionStart": [{"hooks": [...]}]}), not Claude's {"hooks": {...}}:
+// a top-level "hooks" key is rejected as an unsupported event and nothing
+// in it runs. Earlier Togo builds wrote the nested shape, so every edit also
+// takes Togo's entries out of a nested "hooks" object, leaving any other
+// entries there for the user.
 func droidEdits(o Options, add bool) ([]edit, string, error) {
-	return claudeShapeEdits(o.Binary, o.FactoryDir, "hooks.json", Droid, droidEvents, "", false, add)
+	root := o.FactoryDir
+	if st, err := os.Stat(root); root == "" || err != nil || !st.IsDir() {
+		return nil, "", nil
+	}
+	s := spec{agent: Droid, binary: o.Binary, add: add, want: slices.Clone(droidEvents), all: slices.Clone(droidEvents)}
+	return []edit{{path: filepath.Join(root, "hooks.json"), transform: func(cur []byte) ([]byte, error) { return editFlatHooksJSON(cur, s) }}}, root, nil
+}
+
+// legacyHooksKey is the nested object earlier Togo builds wrote Droid's
+// hooks under.
+const legacyHooksKey = "hooks"
+
+// editFlatHooksJSON adds or removes togo's entries in a flat hooks document
+// (event names at top level). It returns cur unchanged when there is
+// nothing to do.
+func editFlatHooksJSON(cur []byte, s spec) ([]byte, error) {
+	top, err := parseObject(cur)
+	if err != nil {
+		return nil, err
+	}
+	unit := detectIndent(cur)
+	changed := false
+	if raw, ok := top.get(legacyHooksKey); ok && string(bytes.TrimSpace(raw)) != "null" {
+		nested, err := parseObject(raw)
+		if err != nil {
+			return nil, fmt.Errorf("hooks: %w", err)
+		}
+		// No event wants an entry here, but on install a handler the user
+		// edited by hand is still refused rather than dropped.
+		drop := s
+		drop.want = nil
+		c, err := editEvents(&nested, drop, unit+unit, unit)
+		if err != nil {
+			return nil, err
+		}
+		if c {
+			changed = true
+			if len(nested) == 0 {
+				top.del(legacyHooksKey)
+			} else {
+				top.set(legacyHooksKey, encodeObject(nested, unit, unit))
+			}
+		}
+	}
+	c, err := editEvents(&top, s, unit, unit)
+	if err != nil {
+		return nil, err
+	}
+	if !changed && !c {
+		return cur, nil
+	}
+	return append(encodeObject(top, "", unit), '\n'), nil
+}
+
+// flatOwnedEvents lists the events of a flat hooks document that have a
+// togo entry. Entries left in a legacy nested "hooks" object do not run,
+// so they do not count.
+func flatOwnedEvents(data []byte, agent string) (map[string]bool, error) {
+	top, err := parseObject(data)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, kv := range top {
+		if kv.key == legacyHooksKey {
+			continue
+		}
+		out[kv.key] = bytes.Contains(kv.val, []byte("hook "+agent))
+	}
+	return out, nil
+}
+
+// legacyDroidHooks reports whether data still holds togo entries in the
+// nested "hooks" object earlier builds wrote.
+func legacyDroidHooks(data []byte) bool {
+	top, err := parseObject(data)
+	if err != nil {
+		return false
+	}
+	raw, ok := top.get(legacyHooksKey)
+	return ok && bytes.Contains(raw, []byte("hook "+Droid))
 }
 
 func claudeShapeEdits(binary, root, file, agent string, events []string, blockEvent string, block, add bool) ([]edit, string, error) {

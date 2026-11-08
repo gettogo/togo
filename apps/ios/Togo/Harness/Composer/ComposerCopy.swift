@@ -8,6 +8,7 @@ enum ComposerCopy {
     static let stop = String(localized: "composer.stop", defaultValue: "Stop")
     static let commands = String(localized: "composer.commands", defaultValue: "Commands")
     static let mention = String(localized: "composer.mention", defaultValue: "Mention a file")
+    static let closeMenu = String(localized: "composer.closeMenu", defaultValue: "Close suggestions")
     static let queued = String(localized: "composer.queued", defaultValue: "Queued")
     static let cancelQueued = String(localized: "composer.cancelQueued", defaultValue: "Take back")
     static let favourite = String(localized: "composer.favourite", defaultValue: "Add to favourites")

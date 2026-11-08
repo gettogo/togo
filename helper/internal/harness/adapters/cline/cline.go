@@ -1,7 +1,7 @@
 // Package cline is the Cline CLI harness adapter: sessions from the
-// documented `cline history --json` and relaunch with --id, -m, --thinking
-// and --plan. The owner's 3.0.62 hangs on --help and --version, so nothing
-// here was run against it.
+// documented `cline history --json`, relaunch with --id, and the
+// cline.messages mapper, which reads the session messages file Cline 3.0
+// keeps under ~/.cline/data/sessions/<id>/.
 package cline
 
 import (
@@ -13,7 +13,10 @@ import (
 //go:embed cline.yaml
 var adapterFile []byte
 
-func init() { harness.RegisterAdapterFile("cline", adapterFile) }
+func init() {
+	harness.RegisterAdapterFile("cline", adapterFile)
+	harness.RegisterMapper(MapperMessages, func(env harness.Env) harness.Mapper { return newMessages(env) })
+}
 
 // AdapterFile returns the embedded adapter file.
 func AdapterFile() []byte { return adapterFile }

@@ -142,12 +142,21 @@ extension HarnessSessionStore {
 /// A line this phone adds to the chat after a change it made: "Effort high", "Restarted with
 /// Sonnet". It sits after the row that was last when it was made.
 struct SessionNote: Equatable, Sendable {
+    /// The change a note reports, for telling it apart from the harness's own notice of it.
+    struct Echo: Equatable, Sendable {
+        /// What it changed to, as the harness's model notice ends: "Claude Sonnet 5".
+        var value: String
+        /// The note said it was waiting for the harness ("…, waiting for omp").
+        var waiting = false
+    }
+
     var id: String
     var text: String
     var code: String
     /// The row it follows; nil puts it first.
     var after: String?
     var at: Date
+    var echo: Echo? = nil
 
     var item: HarnessItem {
         HarnessItem(id: id, seq: 0, at: WireDate(at), body: .notice(.init(level: "info", code: code, text: text)))
@@ -155,8 +164,9 @@ struct SessionNote: Equatable, Sendable {
 
     /// The feed's rows with each note after the row it follows; a note whose row is gone (a
     /// reopened feed) goes last, so it is never lost.
-    static func merge(_ notes: [SessionNote], into rows: [ChatRow]) -> [ChatRow] {
-        guard !notes.isEmpty else { return rows }
+    static func merge(_ notes: [SessionNote], into fed: [ChatRow]) -> [ChatRow] {
+        guard !notes.isEmpty else { return fed }
+        let (notes, rows) = once(notes, fed)
         var out: [ChatRow] = []
         let ids = Set(rows.map(\.id))
         let lead = notes.filter { $0.after == nil }
@@ -168,6 +178,36 @@ struct SessionNote: Equatable, Sendable {
         let orphans = notes.filter { note in note.after.map { !ids.contains($0) } ?? false }
         out.append(contentsOf: orphans.map { ChatRow.notice($0.item) })
         return out
+    }
+
+    /// A change this phone made that the harness reports too ("Model Claude Sonnet 5" from
+    /// both) shows once: the phone's line, where it was made, and the harness's notice after it
+    /// is left out. A line that said it was waiting gives way to the harness's, which confirms it.
+    /// Reopened, the phone's lines are gone and the harness's notice stands alone.
+    static func once(_ notes: [SessionNote], _ rows: [ChatRow]) -> ([SessionNote], [ChatRow]) {
+        guard notes.contains(where: { $0.echo != nil }) else { return (notes, rows) }
+        var index: [String: Int] = [:]
+        for (i, row) in rows.enumerated() where index[row.id] == nil { index[row.id] = i }
+        var kept: [SessionNote] = []
+        var hidden: Set<String> = []
+        for note in notes {
+            guard let echo = note.echo, !echo.value.isEmpty else { kept.append(note); continue }
+            var start = 0
+            if let after = note.after {
+                guard let i = index[after] else { kept.append(note); continue }
+                start = i + 1
+            }
+            let match = rows[start...].first { row in
+                guard !hidden.contains(row.id), case .notice(let item) = row,
+                      case .notice(let notice) = item.body else { return false }
+                return notice.code == "model" && notice.text.hasSuffix(echo.value)
+            }
+            guard let match else { kept.append(note); continue }
+            if echo.waiting { continue }
+            hidden.insert(match.id)
+            kept.append(note)
+        }
+        return (kept, hidden.isEmpty ? rows : rows.filter { !hidden.contains($0.id) })
     }
 }
 
@@ -196,8 +236,8 @@ struct DeferredAction {
 
 extension HarnessSessionStore {
     /// Adds a line to the chat after what shows now, and offers `undo` in the composer.
-    func note(_ text: String, code: String = "info", undo: SessionUndo? = nil) {
-        notes.append(SessionNote(id: "note-\(UUID().uuidString)", text: text, code: code, after: rows.last?.id, at: .now))
+    func note(_ text: String, code: String = "info", echo: SessionNote.Echo? = nil, undo: SessionUndo? = nil) {
+        notes.append(SessionNote(id: "note-\(UUID().uuidString)", text: text, code: code, after: rows.last?.id, at: .now, echo: echo))
         self.undo = undo
         refreshRows()
     }

@@ -110,21 +110,73 @@ struct IslandMinimal: View {
     }
 }
 
-/// Expanded leading: the agent's mark, where the compact one sits.
+/// Expanded leading: the header. The agent's mark sits centred beside the session's title and
+/// its state, "Needs you · Studio  +2 more", so the three read as one line of identity rather
+/// than a mark stranded in the corner above them. It hugs the camera's leading edge and drops
+/// below the camera when the title is too wide to fit beside it.
 struct IslandExpandedLeading: View {
+    let state: TogoActivityAttributes.ContentState
     let card: LiveCard
+    var isStale = false
+
+    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
 
     var body: some View {
-        LiveMark(agent: card.agentID)
-            .font(.title3)
-            .foregroundStyle(Color.togoSnow)
-            .padding(.leading, 4)
-            .environment(\.colorScheme, .dark)
-            .dynamicTypeSize(...LiveCopy.largestType)
+        HStack(alignment: .center, spacing: 10) {
+            LiveMark(agent: card.agentID)
+                .font(.title3)
+                .foregroundStyle(Color.togoSnow)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: card.title)
+                    .font(.headline)
+                    .foregroundStyle(Color.togoSnow)
+                    // trunc-ok: the Dynamic Island has a fixed width; the helper caps a session title at 64 characters and a tap opens the session
+                    .lineLimit(1)
+                    .privacySensitive()
+                statusLine
+            }
+        }
+        .padding(.leading, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .environment(\.colorScheme, .dark)
+        .dynamicTypeSize(...LiveCopy.largestType)
+    }
+
+    private var statusLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            LiveStatusText(status: status, font: .subheadline, reason: state.reason)
+                .layoutPriority(2)
+            if let step = card.step {
+                Text(verbatim: step)
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(Color.togoMute)
+                    // trunc-ok: a tool or step name, capped at 48 characters by the helper
+                    .lineLimit(1)
+                    .privacySensitive()
+            }
+            if let machine = card.machine {
+                Text(verbatim: "· \(machine)")
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
+                    // trunc-ok: the machine's name; it shows in full in the app
+                    .lineLimit(1)
+            }
+            if let more = card.moreText, status.showsCount {
+                Text(verbatim: more)
+                    .font(.footnote)
+                    .fontWeight(.medium)
+                    // accent-ok: "+3 more" counts further requests waiting for the user.
+                    .foregroundStyle(Color.togoAccentText)
+                    // trunc-ok: "+3 more"
+                    .lineLimit(1)
+                    .layoutPriority(1)
+            }
+        }
     }
 }
 
-/// Expanded trailing: the clock, where the compact one sits, at a fixed width.
+/// Expanded trailing: the clock at a fixed width, on the header's row against the camera's
+/// trailing edge.
 struct IslandExpandedTrailing: View {
     let state: TogoActivityAttributes.ContentState
     var isStale = false
@@ -140,58 +192,7 @@ struct IslandExpandedTrailing: View {
             }
         }
         .padding(.trailing, 4)
-        .environment(\.colorScheme, .dark)
-        .dynamicTypeSize(...LiveCopy.largestType)
-    }
-}
-
-/// Expanded center: the session's title over its state, "Needs you · Studio   +2 more".
-struct IslandExpandedCenter: View {
-    let state: TogoActivityAttributes.ContentState
-    let card: LiveCard
-    var isStale = false
-
-    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(verbatim: card.title)
-                .font(.headline)
-                .foregroundStyle(Color.togoSnow)
-                // trunc-ok: the Dynamic Island has a fixed width; the helper caps a session title at 64 characters and a tap opens the session
-                .lineLimit(1)
-                .privacySensitive()
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                LiveStatusText(status: status, font: .subheadline, reason: state.reason)
-                    .layoutPriority(2)
-                if let step = card.step {
-                    Text(verbatim: step)
-                        .font(.system(.footnote, design: .monospaced))
-                        .foregroundStyle(Color.togoMute)
-                        // trunc-ok: a tool or step name, capped at 48 characters by the helper
-                        .lineLimit(1)
-                        .privacySensitive()
-                }
-                if let machine = card.machine {
-                    Text(verbatim: "· \(machine)")
-                        .font(.footnote)
-                        .foregroundStyle(Color.togoMute)
-                        // trunc-ok: the machine's name; it shows in full in the app
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 6)
-                if let more = card.moreText, status.showsCount {
-                    Text(verbatim: more)
-                        .font(.footnote)
-                        .fontWeight(.medium)
-                        // accent-ok: "+3 more" counts further requests waiting for the user.
-                        .foregroundStyle(Color.togoAccentText)
-                        // trunc-ok: "+3 more"
-                        .lineLimit(1)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .center)
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...LiveCopy.largestType)
     }

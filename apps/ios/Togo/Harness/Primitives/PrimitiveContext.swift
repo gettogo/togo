@@ -27,8 +27,9 @@ struct PrimitiveContext {
     /// A pick or a setting landed: the host closes (a sheet, the palette). nil where the screen
     /// stays, as in mission control's pushes.
     var settled: (@MainActor () -> Void)? = nil
-    /// Leaves a line in the chat about a change, with Undo when one is offered.
-    var note: (@MainActor (_ text: String, _ undo: SessionUndo?) -> Void)? = nil
+    /// Leaves a line in the chat about a change, with Undo when one is offered. `echo` is the
+    /// change, so the harness's own notice of it does not show a second line.
+    var note: (@MainActor (_ text: String, _ echo: SessionNote.Echo?, _ undo: SessionUndo?) -> Void)? = nil
     /// The session the screen belongs to, where a store serves it.
     var subject: HarnessSubject? = nil
     /// Reads this screen again without showing it, for a sign-in watching the provider list.
@@ -70,7 +71,7 @@ extension PrimitiveContext {
         context.runAfterTurn = { action, target, args, note in
             store.runAfterTurn(action: action, target: target, args: args, note: note)
         }
-        context.note = { text, undo in store.note(text, code: "model", undo: undo) }
+        context.note = { text, echo, undo in store.note(text, code: "model", echo: echo, undo: undo) }
         context.subject = store.subject
         return context
     }

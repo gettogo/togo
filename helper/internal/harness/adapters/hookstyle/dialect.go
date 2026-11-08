@@ -1,7 +1,9 @@
 // Package hookstyle reads hook payloads shaped like Claude Code's, which
 // several harnesses share: Droid sends that shape as is,
-// Mistral Vibe sends it for hooks that use its claude_code protocol, and
-// Copilot CLI sends a camelCase variant with its own event names.
+// Mistral Vibe sends it for hooks that use its claude_code protocol,
+// Copilot CLI sends a camelCase variant with its own event names, and
+// Cursor CLI sends snake_case keys under its own event names, and Togo's
+// Amp plugin forwards Amp's plugin events.
 //
 // Normalize turns each dialect into Claude Code's event names and
 // snake_case keys. The Mapper reads normalized payloads into session state,
@@ -36,6 +38,9 @@ const (
 	// ErrorOccurred is Copilot's errorOccurred: an error the session may
 	// survive, so it is not StopFailure.
 	ErrorOccurred = "ErrorOccurred"
+	// AgentResponse is Cursor's afterAgentResponse: one finished assistant
+	// message, its text in last_assistant_message. A turn can have several.
+	AgentResponse = "AgentResponse"
 )
 
 // Approval answer shapes a blocking hook prints.
@@ -61,6 +66,16 @@ type Dialect struct {
 	// Modes maps the harness's permission_mode values to the adapter's
 	// mode ids where they differ.
 	Modes map[string]string
+	// Keys maps the harness's own payload keys to Claude Code's, on top of
+	// the shared camelCase aliases. A key already present wins.
+	Keys map[string]string
+	// StopStatus reads a Stop payload's status field: values listed here
+	// make it StopFailure ("failed") or an interrupted Stop
+	// ("interrupted").
+	StopStatus map[string]string
+	// Prep reshapes a payload whose fields do not map one to one (Amp's
+	// nested thread id) and may change the canonical event.
+	Prep func(canon string, obj map[string]json.RawMessage) string
 }
 
 // Dialects by agent id.
@@ -76,6 +91,25 @@ var dialects = map[string]Dialect{
 		"subagentStop": SubagentStop, "errorOccurred": ErrorOccurred, "preCompact": PreCompact,
 		"notification": Notification,
 	}},
+	// Cursor CLI 2026.11: ~/.cursor/hooks.json, read from the bundle
+	// (payloads carry conversation_id, session_id, generation_id, model,
+	// hook_event_name, workspace_roots, transcript_path). Its preToolUse
+	// can allow or deny, but it never asks for a permission itself, so
+	// approvals stay on the terminal.
+	"cursor": {Agent: "cursor", Events: map[string]string{
+		"sessionStart": SessionStart, "sessionEnd": SessionEnd, "beforeSubmitPrompt": UserPromptSubmit,
+		"preToolUse": PreToolUse, "postToolUse": PostToolUse, "postToolUseFailure": PostToolUseFailure,
+		"afterAgentResponse": AgentResponse, "stop": Stop, "subagentStart": SubagentStart,
+		"subagentStop": SubagentStop, "preCompact": PreCompact,
+	}, Keys: map[string]string{
+		"conversation_id": "session_id", "tool_output": "tool_response", "error_message": "error_details",
+		"text": "last_assistant_message", "subagent_id": "agent_id", "subagent_type": "agent_type",
+	}, StopStatus: map[string]string{"error": "failed", "aborted": "interrupted"}},
+	// Amp: events from Togo's own plugin, ~/.config/amp/plugins/togo.ts.
+	"amp": {Agent: "amp", Events: map[string]string{
+		"session.start": SessionStart, "agent.start": UserPromptSubmit, "tool.result": PostToolUse,
+		"agent.end": Stop,
+	}, Prep: ampPrep},
 }
 
 // For returns the dialect of an agent.
@@ -85,7 +119,7 @@ func For(agent string) (Dialect, bool) {
 }
 
 // Agents lists the agents with a dialect.
-func Agents() []string { return []string{"droid", "vibe", "copilot"} }
+func Agents() []string { return []string{"droid", "vibe", "copilot", "cursor", "amp"} }
 
 // Canonical returns the canonical name of one of the dialect's events.
 func (d Dialect) Canonical(event string) string {
@@ -132,6 +166,27 @@ func Normalize(d Dialect, event string, payload []byte) (string, json.RawMessage
 		return "", nil, ErrPayload
 	}
 	canon := d.Canonical(event)
+	if d.Prep != nil {
+		canon = d.Prep(canon, obj)
+	}
+	for from, to := range d.Keys {
+		if v, ok := obj[from]; ok {
+			delete(obj, from)
+			if _, has := obj[to]; !has {
+				obj[to] = v
+			}
+		}
+	}
+	if canon == Stop && d.StopStatus != nil {
+		var st string
+		_ = json.Unmarshal(obj["status"], &st)
+		switch d.StopStatus[st] {
+		case "failed":
+			canon = StopFailure
+		case "interrupted":
+			obj["stop_interrupted"] = json.RawMessage("true")
+		}
+	}
 	for from, to := range keyAliases {
 		v, ok := obj[from]
 		if !ok {

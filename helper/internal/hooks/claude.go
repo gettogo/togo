@@ -85,29 +85,9 @@ func editHooksJSON(cur []byte, s spec) ([]byte, error) {
 		}
 	}
 	unit := detectIndent(cur)
-	changed := false
-	for _, ev := range s.all {
-		raw, ok := hooksObj.get(ev)
-		var groups []json.RawMessage
-		if ok {
-			if err := json.Unmarshal(raw, &groups); err != nil {
-				return nil, fmt.Errorf("hooks.%s is not an array", ev)
-			}
-		}
-		want := s.add && slices.Contains(s.want, ev)
-		out, c, err := editEvent(groups, s.agent, hookCommand(s.binary, s.agent, ev), want, s.matchers[ev], s.add)
-		if err != nil {
-			return nil, fmt.Errorf("hooks.%s: %w", ev, err)
-		}
-		if !c {
-			continue
-		}
-		changed = true
-		if len(out) == 0 {
-			hooksObj.del(ev)
-			continue
-		}
-		hooksObj.set(ev, pretty(mustJSON(out), unit+unit, unit))
+	changed, err := editEvents(&hooksObj, s, unit+unit, unit)
+	if err != nil {
+		return nil, err
 	}
 	if len(hooksObj) == 0 {
 		if hasHooks && changed {
@@ -127,6 +107,36 @@ func editHooksJSON(cur []byte, s spec) ([]byte, error) {
 		return cur, nil
 	}
 	return append(encodeObject(top, "", unit), '\n'), nil
+}
+
+// editEvents applies s to every event s may touch in hooksObj, a map of
+// event name to matcher groups whose values sit at prefix.
+func editEvents(hooksObj *object, s spec, prefix, unit string) (bool, error) {
+	changed := false
+	for _, ev := range s.all {
+		raw, ok := hooksObj.get(ev)
+		var groups []json.RawMessage
+		if ok {
+			if err := json.Unmarshal(raw, &groups); err != nil {
+				return false, fmt.Errorf("hooks.%s is not an array", ev)
+			}
+		}
+		want := s.add && slices.Contains(s.want, ev)
+		out, c, err := editEvent(groups, s.agent, hookCommand(s.binary, s.agent, ev), want, s.matchers[ev], s.add)
+		if err != nil {
+			return false, fmt.Errorf("hooks.%s: %w", ev, err)
+		}
+		if !c {
+			continue
+		}
+		changed = true
+		if len(out) == 0 {
+			hooksObj.del(ev)
+			continue
+		}
+		hooksObj.set(ev, pretty(mustJSON(out), prefix, unit))
+	}
+	return changed, nil
 }
 
 // editEvent drops every togo handler in the event's groups and, when want,
@@ -232,6 +242,12 @@ func editGroup(g json.RawMessage, agent, cmd string, want, install bool) (json.R
 func ownedEvents(data []byte, agent string) (map[string]bool, error) {
 	if agent == Auggie {
 		return auggieOwnedEvents(data)
+	}
+	if agent == Amp {
+		return ampOwnedEvents(data), nil
+	}
+	if agent == Droid {
+		return flatOwnedEvents(data, agent)
 	}
 	top, err := parseObject(data)
 	if err != nil {

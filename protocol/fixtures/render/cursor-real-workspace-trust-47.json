@@ -1,0 +1,37 @@
+{
+  "name": "cursor/real-workspace-trust-47",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cursor",
+    "title": "Do you trust the contents of this directory?",
+    "body": "/private/tmp/workdir-01/-Users-ownr",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "file",
+      "text": "…/workdir-01/-Users-ownr"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Trust this workspace",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Quit",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cursor CLI",
+    "subtitle": "Do you trust the contents of this directory?",
+    "body": "…/workdir-01/-Users-ownr",
+    "category": "togo.request"
+  }
+}

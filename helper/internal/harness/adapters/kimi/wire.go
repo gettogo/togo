@@ -39,7 +39,7 @@ type turn struct {
 
 // NewWire returns a mapper for one session.
 func NewWire(env harness.Env) *Wire {
-	return &Wire{env: env, state: map[string]string{"working": "false"}, texts: map[string]*harness.Item{},
+	return &Wire{env: env, state: map[string]string{"working": "false", "mode": initialMode(env.Argv, defaultPlanMode())}, texts: map[string]*harness.Item{},
 		tools: map[string]harness.Item{}, tasks: map[string]harness.Item{}, byCall: map[string]string{},
 		open: map[string]harness.Item{}}
 }

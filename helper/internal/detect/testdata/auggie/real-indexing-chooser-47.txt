@@ -1,0 +1,40 @@
+─────────────────────────────────╯
+
+ Augment would like to index your workspace to
+ ╭───────────────────────────────────────────╮
+ │ 🔍 Workspace Indexing Permission          │
+ ╰───────────────────────────────────────────╯
+ deep understanding of your codebase structure,
+ patterns, and
+ dependencies—delivering precise assistance tha
+t scales with projects of
+ any size.
+
+ Your data always stays secure and private.
+
+ Learn More:
+ https://docs.augmentcode.com/setup-augment/wor
+kspace-indexing
+
+   Workspace: /private/tmp/workdir-01/-Users-j
+   amie-Dev-proj-xyz/54d95478-27a6-46b8-bfb6-6
+   df2b22da1b0/scratchpad/w-auggie
+
+ Choose an option:
+
+     [1] Always index this workspace - Unlock
+   full workspace understanding
+
+     [2] Never index this workspace - Use
+   basic assistance only
+
+     [3] Index this workspace for this session
+
+     [4] Skip indexing for this session
+
+
+ [↑↓] Navigate • [Enter] Confirm
+
+ Press 1/2/3/4 to select directly • Esc to
+ skip
+

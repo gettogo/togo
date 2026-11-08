@@ -1,0 +1,31 @@
+{
+  "agentVersion": "2026.11.05",
+  "keys": {
+    "1": [
+      "a"
+    ],
+    "2": [
+      "q"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Trust this workspace",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Quit",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "file",
+    "text": "/private/tmp/workdir-01/-Users-owner-Dev-proj-xyz/54d95478-27a6-46b8-bfb6-6df2b22da1b0/s"
+  },
+  "title": "Do you trust the contents of this directory?"
+}

@@ -1,9 +1,27 @@
-# Amp (Sourcegraph). Terminal-only: threads live on ampcode.com and every thread command needs a
-# login (not done); there is no ACP, local server or hook file for the TUI. The file names the
-# harness so sessions show it, and gates on the installed build.
+# Amp (Sourcegraph). Threads live on ampcode.com; the only local records are ~/.cache/amp/logs
+# (connection and agent-state lines, no message text), so there is no transcript to read and no
+# ACP or server for the TUI. Reads: Amp's plugin API (`amp plugins show-docs`). Togo's own
+# plugin, ~/.config/amp/plugins/togo.ts (written only by `togo hooks install`), forwards
+# session.start, agent.start (the prompt), tool.result (one finished tool call each) and
+# agent.end (status and the last reply) to `togo hook amp <event>`, which draws the chat. It
+# does not handle tool.call, whose handler must allow or reject, so approvals stay on Amp's
+# screen. Not yet seen live: unverified.
 adapter: amp
 name: Amp
 revision: 1
 match: { agents: [amp], commands: [amp] }
 harness: { version: [amp, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.0.1790000000 <0.1" }
-capabilities: []
+# No status, model or mode: the plugin events carry none of them.
+capabilities: [chat, chat.anchors, send.queue, interrupt, needs.approvals]
+feeds:
+  hooks:
+    hook: { events: [SessionStart, UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop] }
+    mapper: amp.hooks
+    stability: unverified
+actions:
+  answer:
+    builtin: approval_answer
+    stability: experimental
+  interrupt:
+    keys: { keys: [Escape] }
+    stability: unverified

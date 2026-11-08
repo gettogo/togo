@@ -23,7 +23,10 @@ import TogoKit
     static let debounce: Duration = .milliseconds(150)
 
     var draft = ""
-    private(set) var menu: Menu = .none
+    private(set) var menu: Menu = .none {
+        // The chat reads it: a tap on the conversation puts the menu away while it is up.
+        didSet { if (menu != .none) != store.composerMenuOpen { store.composerMenuOpen = menu != .none } }
+    }
     /// The menu row the keyboard is on.
     var highlight = 0
     /// A screen a completion opened, shown as a sheet.
@@ -184,6 +187,14 @@ import TogoKit
     func closeMenu() {
         menu = .none
         highlight = 0
+    }
+
+    /// The menu's close control (and a tap outside it): the menu goes, and a bare "@" that
+    /// called the file menu goes too, so the draft is as it was.
+    func dismissMenu() {
+        closeMenu()
+        let kept = CommandLineLogic.dismissing(draft)
+        if kept != draft { draft = kept }
     }
 
     /// Moves the keyboard's place in the menu, wrapping at either end.

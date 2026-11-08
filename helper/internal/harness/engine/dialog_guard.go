@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
@@ -29,6 +30,7 @@ func (e *Engine) screenClear(ctx context.Context, s *sess) error {
 		return nil
 	}
 	deadline := time.Now().Add(e.scaled(dialogWait))
+	dismissed := false
 	for {
 		screen, err := e.cfg.Screen(ctx, s.id)
 		if err != nil {
@@ -40,6 +42,21 @@ func (e *Engine) screenClear(ctx context.Context, s *sess) error {
 			s.dialog = ""
 			s.mu.Unlock()
 			return nil
+		}
+		if !dismissed && d.Prompt == nil && safeDismiss(d.Dismiss) && e.cfg.Typist != nil {
+			// A splash with a key that only closes it (Cline's "Press
+			// Enter to open, any other key to close"): close it, never
+			// with Enter, once, and look again.
+			dismissed = true
+			if err := e.cfg.Typist.Keys(ctx, s.id, d.Dismiss...); err == nil {
+				deadline = time.Now().Add(e.scaled(dialogWait))
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(e.scaled(verifyPoll)):
+				}
+				continue
+			}
 		}
 		e.dialogSeen(s, d)
 		if time.Now().After(deadline) {
@@ -94,4 +111,19 @@ func dialogResult(err error) (harness.ActionResult, error) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: fb.Detail}, nil
 	}
 	return harness.ActionResult{}, err
+}
+
+// safeDismiss reports keys that may close a dialog unasked: some, and none
+// of them Enter, which on a link splash opens the link.
+func safeDismiss(keys []string) bool {
+	if len(keys) == 0 {
+		return false
+	}
+	for _, k := range keys {
+		switch strings.ToLower(k) {
+		case "enter", "c-m", "kpenter", "return", "c-j", "space":
+			return false
+		}
+	}
+	return true
 }

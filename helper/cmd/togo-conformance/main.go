@@ -79,6 +79,7 @@ func realMain() int {
 	}
 	snapDir := filepath.Join(o.root, "snap")
 	if cleanup {
+		owned.load(snapDir)
 		finish(o.root, o.runID, loadSnapshot(snapDir))
 		return 0
 	}
@@ -110,6 +111,7 @@ func realMain() int {
 		teardown(o.root, o.runID)
 		return 2
 	}
+	owned.start(snapDir, snap)
 	fmt.Fprintf(os.Stderr, "run %s: %d harnesses, %d at a time: %s\n", o.runID, len(ids), o.jobs, strings.Join(ids, " "))
 	start := time.Now()
 	runners := runAll(ctx, &o, ids)
@@ -230,7 +232,14 @@ func runOne(ctx context.Context, o *options, r *runner) {
 	}
 	r.sb, r.start = sb, time.Now().Add(-2*time.Second)
 	r.marker = filepath.Base(sb.work)
-	defer func() { sb.killServer(); stopDaemon(sb.home) }()
+	defer func() {
+		sb.killServer()
+		stopDaemon(sb.home)
+		// Harnesses write their state as they exit; that write is still
+		// the run's own. Then the run stops counting (see owned.go).
+		time.Sleep(2 * time.Second)
+		owned.observe(r.id, false)
+	}()
 	hctx, cancel := context.WithTimeout(ctx, o.perAgent)
 	defer cancel()
 	c, err := dial(hctx, o.bin, sb.env(), r.onNotify)
@@ -239,6 +248,10 @@ func runOne(ctx context.Context, o *options, r *runner) {
 		return
 	}
 	defer c.close()
+	// Config changes count as the suite's only between its first call and
+	// the end of its run (see owned.go).
+	owned.observe(r.id, false)
+	c.before = func() { owned.observe(r.id, true) }
 	r.c = c
 	r.run(hctx)
 }

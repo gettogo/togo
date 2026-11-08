@@ -83,6 +83,12 @@ struct ChatView: View {
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollDismissesKeyboard(.interactively)
+        // While the composer's / or @ menu is up, a tap on the conversation puts the keyboard
+        // away, and the menu goes with it: a way out that needs no aim.
+        .simultaneousGesture(
+            TapGesture().onEnded { LayerToolbarItem.resignKeyboard() },
+            including: store.composerMenuOpen ? .all : .subviews
+        )
         .overlay {
             placeholder
                 // motion: state change — "Reading" gives way to the empty state in place, never a jump.

@@ -1,13 +1,21 @@
-# Aider 0.86. No structured channel: no JSON output, hooks, server or ACP. The chat is appended
-# as markdown to ./.aider.chat.history.md, which no runner reads yet, so the chat stays in the
-# terminal; approvals are line prompts the existing prompt detector answers. Writes: documented
-# slash commands with arguments.
+# Aider 0.86. No structured channel: no JSON output, hooks, server or ACP. Reads: the chat
+# history aider appends as markdown to .aider.chat.history.md at the git root (or the folder, or
+# --chat-history-file), tailed line by line; only what follows this run's "aider chat started"
+# header is mapped (format from io.py, 0.86). Prompts, replies (written whole when they finish),
+# edits, commits and shell runs show in the chat; the file has no turn end, so a turn closes at
+# the next prompt or when the pane goes idle. Approvals are line prompts the existing prompt
+# detector answers. Writes: typed prompts and documented slash commands with arguments.
 adapter: aider
 name: Aider
 revision: 1
 match: { agents: [aider], commands: [aider] }
 harness: { version: [aider, --version], pattern: 'aider (\d+\.\d+\.\d+)', range: ">=0.86 <0.90" }
-capabilities: [interrupt, commands, files, mode, model, changes, ports]
+capabilities: [chat, send.queue, interrupt, commands, files, mode, model, changes, ports]
+feeds:
+  history:          # path: worked out from the session folder and argv by the mapper
+    jsonl: { path: '{{.state.transcript_path}}', follow: true, format: lines }
+    mapper: aider.history
+    stability: internal
 sources:
   models:           # aliases aider documents for --model and /model
     static:

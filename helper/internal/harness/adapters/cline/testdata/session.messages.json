@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-08T03:38:03.002Z",
+  "agent": "lead",
+  "sessionId": "1794109072649_04an1",
+  "origin": {
+    "source": "cli",
+    "mode": "user",
+    "sessionId": "1794109072649_04an1",
+    "version": "3.0.74"
+  },
+  "messages": [
+    {
+      "id": "49316b56-e944-4748-ab52-8769755a3932",
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input mode=\"act\">Create a file named hi.txt containing the word hello, then reply with one word: done</user_input>"
+        }
+      ],
+      "ts": 1794109072771
+    },
+    {
+      "id": "msg_IGAKu7hT",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "The user wants me to create a file named `hi.txt` containing the word \"hello\", then reply with one word: \"done\".\n"
+        },
+        {
+          "type": "tool_use",
+          "id": "XbKL2sFUr4cpliYEMjpVUD81BJKlWR0j",
+          "name": "editor",
+          "input": {
+            "path": "/Users/me/proj/hi.txt",
+            "new_text": "hello"
+          }
+        }
+      ],
+      "ts": 1794109081820,
+      "modelInfo": {
+        "id": "coder-fast",
+        "provider": "openai-compatible"
+      },
+      "metrics": {
+        "inputTokens": 5930,
+        "outputTokens": 129,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    },
+    {
+      "id": "msg_qu6LDsAy",
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "XbKL2sFUr4cpliYEMjpVUD81BJKlWR0j",
+          "name": "editor",
+          "content": "{\"query\":\"edit:/Users/me/proj/hi.txt\",\"result\":\"File created successfully at: /Users/me/proj/hi.txt\",\"success\":true}"
+        }
+      ],
+      "ts": 1794109081834
+    },
+    {
+      "id": "msg_SGidtmv-",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "The user asked me to reply with one word: \"done\". Let me just do that.\n"
+        },
+        {
+          "type": "text",
+          "text": "done"
+        }
+      ],
+      "ts": 1794109082983,
+      "modelInfo": {
+        "id": "coder-fast",
+        "provider": "openai-compatible"
+      },
+      "metrics": {
+        "inputTokens": 6217,
+        "outputTokens": 24,
+        "cacheReadTokens": 6058,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

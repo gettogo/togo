@@ -1,0 +1,47 @@
+{
+  "name": "auggie/real-indexing-chooser",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "auggie",
+    "title": "Choose an option:",
+    "body": "https://docs.augmentcode.com/setup-augment/workspace-indexing",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "url",
+      "text": "https://docs.augmentcode.com/setup-augment/workspace-indexing"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Always index this workspace - Unlock full workspace understanding",
+        "role": "approve_always"
+      },
+      {
+        "n": 2,
+        "label": "Never index this workspace - Use basic assistance only",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "Index this workspace for this session",
+        "role": "approve_always"
+      },
+      {
+        "n": 4,
+        "label": "Skip indexing for this session",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Auggie",
+    "subtitle": "Choose an option:",
+    "body": "docs.augmentcode.com/setup-augment/workspace-indexing",
+    "category": "togo.request.deny"
+  }
+}

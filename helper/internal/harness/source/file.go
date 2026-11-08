@@ -224,7 +224,8 @@ func (f File) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, 
 	if err != nil {
 		return err
 	}
-	if f.format(fs) != "jsonl" {
+	lines := f.kind == spec.KindJSONL && fs.Format == FormatLines
+	if f.format(fs) != "jsonl" && !lines {
 		return watchWhole(ctx, s.Name, fs, f.format(fs), env, emit)
 	}
 	if fs.Path != "" {
@@ -232,7 +233,7 @@ func (f File) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, 
 		if err != nil {
 			return err
 		}
-		t := &tail{path: p, name: s.Name, replay: true}
+		t := &tail{path: p, name: s.Name, replay: true, lines: lines}
 		return pollLoop(ctx, func() error { return t.poll(emit) })
 	}
 	if fs.Exclusive {
@@ -295,8 +296,15 @@ func watchGlob(ctx context.Context, name, pattern string, env harness.Env, emit 
 	})
 }
 
+// FormatLines tails a text file (a followed jsonl block with a path):
+// each poll emits one record, a JSON array of the whole lines it read,
+// blank lines kept and a trailing CR dropped. Aider's markdown chat
+// history is read this way.
+const FormatLines = "lines"
+
 // tail follows one jsonl file by offset.
 type tail struct {
+	lines   bool
 	path    string
 	name    string
 	offset  int64
@@ -364,10 +372,14 @@ func (t *tail) poll(emit func(harness.Record)) error {
 			}
 			continue
 		}
-		recs = append(recs, Records(data[:i], 1<<30)...)
+		if t.lines {
+			recs = append(recs, lineRecord(data[:i]))
+		} else {
+			recs = append(recs, Records(data[:i], 1<<30)...)
+		}
 		t.pending = append([]byte(nil), data[i+1:]...)
 	}
-	if len(recs) > MaxRecords {
+	if len(recs) > MaxRecords && !t.lines {
 		recs = recs[len(recs)-MaxRecords:]
 	}
 	now := time.Now()
@@ -375,6 +387,17 @@ func (t *tail) poll(emit func(harness.Record)) error {
 		emit(harness.Record{Source: t.name, At: now, Data: r})
 	}
 	return nil
+}
+
+// lineRecord is one lines-format record: b split on newlines.
+func lineRecord(b []byte) json.RawMessage {
+	parts := bytes.Split(b, []byte("\n"))
+	out := make([]string, len(parts))
+	for i, p := range parts {
+		out[i] = string(bytes.TrimSuffix(p, []byte("\r")))
+	}
+	raw, _ := json.Marshal(out)
+	return raw
 }
 
 // watchWhole emits a json or toml file's document each time it changes.

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "session_id": "1794109072649_04an1",
+  "source": "cli",
+  "started_at": "2026-11-08T03:37:52.654Z",
+  "status": "completed",
+  "interactive": false,
+  "provider": "openai-compatible",
+  "model": "coder-fast",
+  "cwd": "/Users/me/proj",
+  "workspace_root": "/Users/me/proj",
+  "metadata": {
+    "mode": "act"
+  }
+}

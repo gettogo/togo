@@ -271,7 +271,7 @@ func checkStability(bad func(string, ...any), where, s string) {
 
 func (k *Kinds) count() int {
 	n := 0
-	for _, set := range []bool{k.CLI != nil, k.File != nil, k.JSONL != nil, k.HTTP != nil, k.SSE != nil, k.RPC != nil, k.Hook != nil, k.Statusline != nil, k.Static != nil} {
+	for _, set := range []bool{k.CLI != nil, k.File != nil, k.JSONL != nil, k.HTTP != nil, k.SSE != nil, k.RPC != nil, k.Hook != nil, k.Statusline != nil, k.SQLite != nil, k.Static != nil} {
 		if set {
 			n++
 		}

@@ -47,7 +47,7 @@ extension CommandLineModel {
         context.runAfterTurn = { action, target, args, note in
             store.runAfterTurn(action: action, target: target, args: args, note: note)
         }
-        context.note = { text, undo in store.note(text, code: "model", undo: undo) }
+        context.note = { text, echo, undo in store.note(text, code: "model", echo: echo, undo: undo) }
         return context
     }
 

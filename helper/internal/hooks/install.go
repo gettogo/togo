@@ -1,6 +1,7 @@
 // Package hooks adds and removes the entries that make each harness in the
-// Registry that takes hooks (Claude Code, Codex, Auggie, Droid and Copilot
-// CLI) report events to "togo hook <agent> <event>",
+// Registry that takes hooks (Claude Code, Codex, Auggie, Droid, Copilot
+// CLI, Cursor CLI, and Amp through Togo's own plugin) report events to
+// "togo hook <agent> <event>",
 // and chains Claude Code's status line. It only ever touches entries whose
 // command ends in "hook <agent> <event>", keeps every other key and hook in
 // the harness's config, backs a file up once before its first change, and
@@ -50,6 +51,8 @@ type Options struct {
 	FactoryDir string
 	CopilotDir string
 	VibeDir    string
+	CursorDir  string // ~/.cursor
+	AmpDir     string // ~/.config/amp
 	Cwd        string // project directory for Local
 	Local      bool   // Claude: edit ./.claude/settings.local.json instead
 	Block      bool   // also hook the approval event, so the phone can answer
@@ -166,6 +169,10 @@ func editsFor(o Options, agent string, add bool) ([]edit, string, error) {
 		return geminiEdits(o, add)
 	case Auggie:
 		return auggieEdits(o, add)
+	case Cursor:
+		return cursorEdits(o, add)
+	case Amp:
+		return ampEdits(o, add)
 	}
 	return nil, "", fmt.Errorf("unknown agent %q", agent)
 }
@@ -442,7 +449,13 @@ func status(o Options, agent string) string {
 	if err != nil {
 		return StatusAbsent
 	}
-	return coverage(have, events)
+	st := coverage(have, events)
+	// Droid entries an earlier build nested under "hooks" never run; a
+	// reinstall moves them, so they read as outdated rather than absent.
+	if agent == Droid && st == StatusAbsent && legacyDroidHooks(data) {
+		return StatusOutdated
+	}
+	return st
 }
 
 // coverage is installed when every event has a togo entry, outdated when

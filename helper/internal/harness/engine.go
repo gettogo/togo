@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 // Engine serves the harness.* methods for every session. One Engine runs in
@@ -121,6 +122,13 @@ type Mapper interface {
 	// $state in jq and .state in templates: model, mode, effort,
 	// harness_session, transcript_path, working ("true" or "false").
 	State() map[string]string
+}
+
+// IdleCloser is a mapper whose harness writes no turn end (Aider's chat
+// history has none): when the session goes idle, by the pane or the other
+// mappers, the engine asks it for the items that close the open turn.
+type IdleCloser interface {
+	CloseIdle(at time.Time) []Item
 }
 
 // MapperFactory builds a fresh mapper for one session.

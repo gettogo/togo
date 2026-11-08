@@ -247,3 +247,110 @@ func TestIdleNotificationIsNotNeedsYou(t *testing.T) {
 		}
 	}
 }
+
+// Cursor CLI 2026.11 payloads, shaped as the bundle builds them: replies
+// come from afterAgentResponse, a failed call from postToolUseFailure, and
+// an aborted stop ends the turn interrupted.
+func TestCursorHooks(t *testing.T) {
+	r, m := replay(t, "cursor", "cursor.jsonl", "s_cursor0001")
+	ts := tools(r)
+	if len(ts) != 2 {
+		t.Fatalf("tools %+v", ts)
+	}
+	if sh := ts[0]; sh.Title != "ls" || sh.Category != harness.ToolShell || sh.State != harness.StateOK || sh.Output != "main.go\ngo.mod" {
+		t.Fatalf("shell %+v", sh)
+	}
+	if rd := ts[1]; rd.Category != harness.ToolRead || rd.State != harness.StateFailed {
+		t.Fatalf("read %+v", rd)
+	}
+	var users, replies []string
+	turns := map[string]string{}
+	for _, x := range r.items {
+		switch {
+		case x.User != nil:
+			users = append(users, x.User.Text)
+		case x.Assistant != nil:
+			replies = append(replies, x.Assistant.Text)
+		case x.Turn != nil:
+			turns[x.ID] = x.Turn.State
+		}
+	}
+	if len(users) != 2 || users[0] != "list the files" || len(replies) != 1 || replies[0] != "There are two files: main.go and go.mod." {
+		t.Fatalf("users %q replies %q", users, replies)
+	}
+	var ok, interrupted int
+	for _, s := range turns {
+		switch s {
+		case harness.StateOK:
+			ok++
+		case harness.StateInterrupted:
+			interrupted++
+		}
+	}
+	if ok != 1 || interrupted != 1 {
+		t.Fatalf("turns %v", turns)
+	}
+	if st := m.State(); st["harness_session"] != "c7a1-0001" || st["model"] != "gpt-5" || st["working"] != "false" {
+		t.Fatalf("state %v", st)
+	}
+}
+
+func TestCursorStopError(t *testing.T) {
+	d, _ := For("cursor")
+	canon, _, err := Normalize(d, "stop", []byte(`{"conversation_id":"c1","status":"error"}`))
+	if err != nil || canon != StopFailure {
+		t.Fatalf("%s %v", canon, err)
+	}
+	f, err := Reduce(d, "afterAgentResponse", []byte(`{"conversation_id":"c1","text":"hi"}`), map[string]string{"TOGO_SESSION": "s_aaaaaaaaaa"})
+	if err != nil || f.Agent != "cursor" || f.Hook != AgentResponse || f.Event != local.EventHarness {
+		t.Fatalf("%+v %v", f, err)
+	}
+	if Blocks(d, PreToolUse) || Blocks(d, PermissionRequest) {
+		t.Fatal("cursor hooks never answer approvals")
+	}
+}
+
+// Events Togo's Amp plugin forwards, shaped as Amp's plugin API documents
+// them: each tool.result is a whole call, agent.end carries the last reply.
+func TestAmpPluginEvents(t *testing.T) {
+	r, m := replay(t, "amp", "amp.jsonl", "s_amp000001")
+	ts := tools(r)
+	if len(ts) != 2 {
+		t.Fatalf("tools %+v", ts)
+	}
+	if b := ts[0]; b.Title != "ls" || b.Category != harness.ToolShell || b.State != harness.StateOK {
+		t.Fatalf("bash %+v", b)
+	}
+	if rd := ts[1]; rd.Category != harness.ToolRead || rd.State != harness.StateFailed || rd.Output != "file not found" {
+		t.Fatalf("read %+v", rd)
+	}
+	var users, replies []string
+	states := map[string]string{}
+	for _, x := range r.items {
+		switch {
+		case x.User != nil:
+			users = append(users, x.User.Text)
+		case x.Assistant != nil:
+			replies = append(replies, x.Assistant.Text)
+		case x.Turn != nil:
+			states[x.ID] = x.Turn.State
+		}
+	}
+	if len(users) != 2 || len(replies) != 1 || replies[0] != "main.go and go.mod." {
+		t.Fatalf("users %q replies %q", users, replies)
+	}
+	n := map[string]int{}
+	for _, s := range states {
+		n[s]++
+	}
+	if n[harness.StateOK] != 1 || n[harness.StateInterrupted] != 1 {
+		t.Fatalf("turns %v", states)
+	}
+	if st := m.State(); st["harness_session"] != "T-0001" || st["working"] != "false" {
+		t.Fatalf("state %v", st)
+	}
+	d, _ := For("amp")
+	if c, _, _ := Normalize(d, "agent.end", []byte(`{"thread":{"id":"T-1"},"status":"error"}`)); c != StopFailure {
+		t.Fatalf("error end %s", c)
+	}
+}

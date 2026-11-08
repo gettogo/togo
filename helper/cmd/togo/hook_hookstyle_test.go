@@ -100,3 +100,29 @@ func TestCopilotBlockingAnswer(t *testing.T) {
 		t.Fatalf("%d asks, want 1", asks)
 	}
 }
+
+// Cursor's hooks forward through the cursor dialect and never block.
+func TestCursorHookForwards(t *testing.T) {
+	f, ok := forwardAdapters["cursor"]
+	if !ok || f.blocks("preToolUse") {
+		t.Fatal("cursor must forward and never block")
+	}
+	fw, err := f.reduce("beforeSubmitPrompt", []byte(`{"conversation_id":"c1","session_id":"c1","hook_event_name":"beforeSubmitPrompt","prompt":"hi"}`),
+		map[string]string{"TOGO_SESSION": "s_aaaaaaaaaa"})
+	if err != nil || fw.Agent != "cursor" || fw.Hook != "UserPromptSubmit" || len(fw.Payload) == 0 {
+		t.Fatalf("%+v %v", fw, err)
+	}
+}
+
+// Togo's Amp plugin forwards through the amp dialect and never blocks.
+func TestAmpHookForwards(t *testing.T) {
+	f, ok := forwardAdapters["amp"]
+	if !ok || f.blocks("tool.result") {
+		t.Fatal("amp must forward and never block")
+	}
+	fw, err := f.reduce("agent.start", []byte(`{"thread":{"id":"T-1"},"id":1,"message":"hi"}`),
+		map[string]string{"TOGO_SESSION": "s_aaaaaaaaaa"})
+	if err != nil || fw.Agent != "amp" || fw.Hook != "UserPromptSubmit" || fw.Data.AgentSessionID != "T-1" {
+		t.Fatalf("%+v %v", fw, err)
+	}
+}

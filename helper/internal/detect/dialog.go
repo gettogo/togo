@@ -27,6 +27,10 @@ type DialogInfo struct {
 	// Prompt is set when the dialog is also an answerable prompt (Detect
 	// recognised it): the approvals path can route it to the phone.
 	Prompt *Prompt
+	// Dismiss, when set, are keys that close the dialog without accepting
+	// anything: a splash whose Enter opens a link but whose other keys
+	// close it. Never Enter.
+	Dismiss []string
 }
 
 // dialogTitle matches the line naming a modal dialog.
@@ -51,6 +55,9 @@ func Dialog(screen string) (DialogInfo, bool) {
 	if p, ok := Detect(screen); ok {
 		title := p.Title
 		return DialogInfo{Title: title, Prompt: &p}, true
+	}
+	if d, ok := linkSplash(screen); ok {
+		return d, true
 	}
 	raw := window(screen)
 	lines := make([]string, len(raw))
@@ -138,3 +145,69 @@ func cleanTitle(l string) string {
 
 // trailingEsc is a dialog's close hint at the end of its title row.
 var trailingEsc = regexp.MustCompile(`(?i)\s{2,}(esc|\[esc\]|×|x)$`)
+
+// enterOpens is a key hint whose Enter opens something outside the
+// terminal: Cline 3.0.74's "Introducing Cline Desktop" splash reads
+// "Press Enter to open, any other key to close" under a link, and Enter
+// ran the system "open" on it. Read on two joined lines: a phone's 47
+// columns wrap the hint.
+var enterOpens = regexp.MustCompile(`(?i)\b(enter|return|↵|⏎)\b[^.;]{0,24}\bto (open|launch|visit)\b|` +
+	`\b(enter|return)\b[^.;]{0,40}\b(browser|link|url|website)\b`)
+
+// otherKeyCloses is the other half of such a hint: which key closes it.
+var otherKeyCloses = regexp.MustCompile(`(?i)\b(any other key|esc(ape)?|q)\b[^.;]{0,16}\b(to )?(close|dismiss|skip|exit)\b`)
+
+// splashTitle is the heading of a feature announcement splash.
+var splashTitle = regexp.MustCompile(`(?i)^(introducing|announcing|new:|what'?s new|meet)\b`)
+
+// EnterOpensLink reports a screen whose Enter key opens a link or app:
+// nothing may send Enter to it.
+func EnterOpensLink(screen string) bool {
+	lines := cleanLines(screen)
+	for i := range lines {
+		if enterOpens.MatchString(joinNext(lines, i)) {
+			return true
+		}
+	}
+	return false
+}
+
+// linkSplash finds a splash whose Enter opens a link and whose Escape
+// closes it, and offers Escape to dismiss it.
+func linkSplash(screen string) (DialogInfo, bool) {
+	lines := cleanLines(screen)
+	for i := len(lines) - 1; i >= 0; i-- {
+		hint := joinNext(lines, i)
+		if !enterOpens.MatchString(hint) {
+			continue
+		}
+		d := DialogInfo{Title: "a splash screen"}
+		for j := i - 1; j >= 0; j-- {
+			if splashTitle.MatchString(lines[j]) {
+				d.Title = truncate(cleanTitle(lines[j]), 120)
+				break
+			}
+		}
+		if otherKeyCloses.MatchString(hint) {
+			d.Dismiss = []string{"Escape"}
+		}
+		return d, true
+	}
+	return DialogInfo{}, false
+}
+
+func cleanLines(screen string) []string {
+	raw := window(screen)
+	lines := make([]string, len(raw))
+	for i, l := range raw {
+		lines[i] = strings.TrimSpace(unbox(l))
+	}
+	return lines
+}
+
+func joinNext(lines []string, i int) string {
+	if i+1 < len(lines) {
+		return lines[i] + " " + lines[i+1]
+	}
+	return lines[i]
+}

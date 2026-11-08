@@ -38,6 +38,15 @@ enum CommandLineLogic {
         return .file(String(word), at: draft.distance(from: draft.startIndex, to: at))
     }
 
+    /// The draft once the menu's close control is used: a bare "@" that called the file menu
+    /// goes with it; anything else typed stays.
+    static func dismissing(_ draft: String) -> String {
+        guard case let .file(query, at) = trigger(in: draft), query.isEmpty else { return draft }
+        var text = draft
+        text.remove(at: text.index(text.startIndex, offsetBy: at))
+        return text
+    }
+
     /// Completions that still match a longer query, best first: a title or insert starting with
     /// it, then one containing it, then a detail containing it. Order within a rank is kept.
     static func filter(_ items: [HarnessCompletion], query: String) -> [HarnessCompletion] {

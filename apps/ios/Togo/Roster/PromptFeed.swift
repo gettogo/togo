@@ -67,7 +67,8 @@ enum PromptFeed {
     /// the bar keeps only requests (from other sessions: the chat answers its own inline).
     static func mode(
         requests: [PromptRequest], current: PromptBarModel.Mode, focused: TabID?, composing: Bool, hasMachines: Bool,
-        terminalTyping: Bool = false, focusedConnected: Bool = true, chatShown: Bool = false
+        terminalTyping: Bool = false, focusedConnected: Bool = true, chatShown: Bool = false,
+        composerTyping: Bool = false
     ) -> PromptBarModel.Mode {
         guard hasMachines else { return .hidden }
         if case .replying(let writing) = current {
@@ -76,6 +77,9 @@ enum PromptFeed {
             if !requests.contains(where: { $0.id == writing.id }) { kept.state = .withdrawn }
             return .replying(kept)
         }
+        // The chat's composer holds the keyboard: another session's request waits off screen
+        // until the keyboard goes, rather than sitting over the field and its menu.
+        if composerTyping { return .hidden }
         if let first = requests.first {
             return .request(first, position: 1, count: requests.count)
         }

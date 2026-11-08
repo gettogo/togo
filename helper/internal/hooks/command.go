@@ -30,7 +30,7 @@ func bareHookCommand(binary, agent, event string) string {
 
 // shellHooks are the harnesses known to run a hook's command through sh,
 // so the guard's shell syntax works there.
-var shellHooks = map[string]bool{Claude: true, Copilot: true}
+var shellHooks = map[string]bool{Claude: true, Copilot: true, Cursor: true}
 
 const (
 	guardTrue     = " || true"

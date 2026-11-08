@@ -164,6 +164,7 @@ type Kinds struct {
 	RPC        *RPC        `yaml:"rpc"`
 	Hook       *Hook       `yaml:"hook"`
 	Statusline *Statusline `yaml:"statusline"`
+	SQLite     *SQLite     `yaml:"sqlite"`
 	// Static is data written in the file itself: fixed model aliases,
 	// mode lists, built-in commands.
 	Static any `yaml:"static"`
@@ -180,6 +181,7 @@ const (
 	KindHook       = "hook"
 	KindStatusline = "statusline"
 	KindStatic     = "static"
+	KindSQLite     = "sqlite"
 )
 
 // CLI runs a program with no shell. Argv elements are templates.
@@ -206,6 +208,21 @@ type File struct {
 	// folder): a file one session follows is never joined by another, and
 	// a new file goes first to a session still without one.
 	Exclusive bool `yaml:"exclusive"`
+}
+
+// SQLite reads a harness's own database read-only through the system
+// sqlite3 program (no write, no lock held between polls). Path is a template
+// confined like File's. Query binds :name for each Params entry (templates,
+// passed as text) and :cursor. As a feed it polls: with Cursor, :cursor is
+// the highest value of that numeric column seen so far (0 at first), so the
+// query returns only new or changed rows; a row, named by its Key column, is
+// emitted again only when it changed. As a source it returns the rows.
+type SQLite struct {
+	Path   string            `yaml:"path"`
+	Query  string            `yaml:"query"`
+	Params map[string]string `yaml:"params"`
+	Key    string            `yaml:"key"`
+	Cursor string            `yaml:"cursor"`
 }
 
 // HTTP calls the harness's endpoint. Path is a template; the base URL is

@@ -1,0 +1,47 @@
+{
+  "agentVersion": "0.37.0",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Always index this workspace - Unlock full workspace understanding",
+      "role": "approve_always"
+    },
+    {
+      "n": 2,
+      "label": "Never index this workspace - Use basic assistance only",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Index this workspace for this session",
+      "role": "approve_always"
+    },
+    {
+      "n": 4,
+      "label": "Skip indexing for this session",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "url",
+    "text": "https://docs.augmentcode.com/setup-augment/wor"
+  },
+  "title": "Choose an option:"
+}

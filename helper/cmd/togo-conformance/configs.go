@@ -136,11 +136,21 @@ func restore(entries []snapEntry, marker string) []string {
 			notes = append(notes, fmt.Sprintf("%s: removed %d entr(ies) naming the run's folders", short(e.Path), n))
 			continue
 		}
+		if mine, why := owned.ownChange(e.Path, sum(cur)); !mine {
+			notes = append(notes, fmt.Sprintf("left %s: changed outside the suite (%s); not restored", short(e.Path), why))
+			continue
+		}
 		orig, err := os.ReadFile(e.Copy)
 		if err != nil {
 			notes = append(notes, fmt.Sprintf("%s: changed, snapshot unreadable: %v", short(e.Path), err))
 			continue
 		}
+		bk, err := backup(e.Path, cur)
+		if err != nil {
+			notes = append(notes, fmt.Sprintf("%s: backup before restore failed (%v); not restored", short(e.Path), err))
+			continue
+		}
+		notes = append(notes, fmt.Sprintf("%s: current copy saved to %s", short(e.Path), short(bk)))
 		if err := writeAtomic(e.Path, orig); err != nil {
 			notes = append(notes, fmt.Sprintf("%s: restore failed: %v", short(e.Path), err))
 			continue

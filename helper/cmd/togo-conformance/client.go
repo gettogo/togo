@@ -46,6 +46,7 @@ type client struct {
 	pending map[int]chan frame
 	notify  func(method string, params json.RawMessage)
 	done    chan struct{}
+	before  func() // runs before every call (the suite's config ledger)
 }
 
 func dial(ctx context.Context, bin string, env []string, notify func(string, json.RawMessage)) (*client, error) {
@@ -114,6 +115,9 @@ var errClosed = errors.New("helper connection closed")
 
 // call sends method and decodes the result into out (when non-nil).
 func (c *client) call(ctx context.Context, method string, params, out any) error {
+	if c.before != nil {
+		c.before()
+	}
 	c.mu.Lock()
 	c.next++
 	id := c.next

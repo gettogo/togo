@@ -1,17 +1,45 @@
 # Goose 1.57 (block/goose). No attach protocol for the TUI (`goose acp` and `goose serve` host
-# their own sessions) and no hooks. Sessions: `goose session list --format json --working_dir`
-# (flags checked on 1.57; the JSON fields were not seen, the owner has no sessions yet).
+# their own sessions) and no hooks. Chat: Goose keeps every session in one sqlite database,
+# ~/.local/share/goose/sessions/sessions.db (WAL; tables sessions and messages, read from a
+# real 1.57 database). The helper polls it read-only through the system sqlite3: the
+# sessions feed picks the session working in this folder touched since Togo started it (the
+# TUI creates its row at launch), which gives the session id and its goose_mode; the chat
+# feed then follows that session's messages by row id. Goose stores a message once it is
+# whole, so replies show when they end and tool calls when asked, not token by token.
+# Messages with userVisible false (the per-turn <turn-context>) are skipped.
 # Writes: documented in-TUI commands with arguments (`/mode`, `/model`), relaunch with
-# `session --resume --session-id`. Goose keeps the mode in its own session database
-# (goose_mode, under a session id Togo does not learn) and shows it nowhere on screen, so
-# the chip shows the mode last picked from Togo once Goose took it; before that, none.
+# `session --resume --session-id`. Sessions: `goose session list --format json --working_dir`.
 adapter: goose
 name: Goose
 revision: 1
 match: { agents: [goose], commands: [goose] }
 harness: { version: [goose, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.57 <2" }
 # No model capability: nothing reads the current model and there is no model list.
-capabilities: [interrupt, commands, mode, changes, ports, resume, compact]
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, mode, changes,
+  ports, resume, compact]
+feeds:
+  session:          # sessions touched since this Togo session began; the mapper keeps this folder's
+    sqlite:
+      path: '~/.local/share/goose/sessions/sessions.db'
+      query: >-
+        select id, working_dir, goose_mode, name, created_at, updated_at from sessions
+        where session_type = 'user' and (created_at >= datetime(:created, '-1 minute')
+        or updated_at >= datetime(:created, '-1 minute'))
+      params: { created: '{{.created}}' }
+      key: id
+    mapper: goose.db
+    stability: internal
+  chat:
+    sqlite:
+      path: '~/.local/share/goose/sessions/sessions.db'
+      query: >-
+        select id, message_id, session_id, role, content_json, created_timestamp, metadata_json
+        from messages where session_id = :sid and id > :cursor order by id limit 200
+      params: { sid: '{{.state.harness_session}}' }
+      cursor: id
+      key: id
+    mapper: goose.db
+    stability: internal
 sources:
   sessions:
     cli: { argv: [goose, session, list, --format, json, --working_dir, '{{.cwd}}', --limit, '50'] }
@@ -51,6 +79,7 @@ actions:
     keys: { keys: [C-c] }
     stability: documented
 modes:
+  # The mapper reads the mode from the session row's goose_mode.
   choices:
     - { id: approve, label: Ask }
     - { id: smart_approve, label: Smart }

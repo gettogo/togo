@@ -110,6 +110,10 @@ type payload struct {
 	TaskID       string          `json:"task_id"`
 	TaskSubject  string          `json:"task_subject"`
 	TaskDesc     string          `json:"task_description"`
+	Interrupted  bool            `json:"stop_interrupted"`
+	// Once marks a tool hook that is the whole call (Amp's tool.result):
+	// it starts the call when no earlier hook did.
+	Once bool `json:"tool_once"`
 }
 
 // Map reads one payload.
@@ -153,6 +157,12 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		return []harness.Item{x, m.turnItem(harness.StateRunning, nil)}, nil
 	case PostToolUse, PostToolUseFailure:
+		if _, started := m.tools[m.callID(p, false)]; p.Once && !started {
+			if m.turn == "" {
+				m.begin(at)
+			}
+			m.toolStart(p, at)
+		}
 		x, ok := m.toolEnd(p, at, p.Event == PostToolUseFailure)
 		if !ok || !draw {
 			return nil, nil
@@ -170,7 +180,17 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		x.Tool = &b
 		m.tools[id] = x
 		return []harness.Item{x}, nil
+	case AgentResponse:
+		if !draw || m.turn == "" || p.LastMessage == "" {
+			return nil, nil
+		}
+		m.n++
+		return []harness.Item{{ID: m.turn + ":reply-" + strconv.Itoa(m.n), TurnID: m.turn, Kind: harness.KindAssistant, At: at,
+			Assistant: &harness.TextBody{Text: Clip(p.LastMessage)}}}, nil
 	case Stop, SessionEnd:
+		if p.Interrupted {
+			return m.end(p, at, draw, harness.StateInterrupted), nil
+		}
 		return m.end(p, at, draw, harness.StateOK), nil
 	case StopFailure:
 		code, text := harness.NoticeError, "The turn stopped on an error"

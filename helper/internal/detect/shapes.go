@@ -37,11 +37,24 @@ var (
 	numbered     = regexp.MustCompile(`^\s*([` + numberedCursorRunes + `]\s*)?(\d{1,2})[.)]\s+(\S.*)$`)
 	cursorLine   = regexp.MustCompile(`^(\s*)[` + cursorRunes + `]\s+(\S.*)$`)
 	shortcut     = regexp.MustCompile(`(?i)\s+\((esc|[a-z0-9])\)$`)
-	headerRe     = regexp.MustCompile(`(?i)^(do you want|would you like|allow|approve|run|permission|proceed|confirm|apply)\b`)
-	permRe       = regexp.MustCompile(`(?i)\b(allow|approve|permission|run|execute|proceed|edit|write|create|delete|apply|command|make this|make the following|edits?|changes?|patch)\b`)
-	denyRe       = regexp.MustCompile(`(?i)^(no|reject|deny|decline|cancel|abort|skip)\b`)
-	approveRe    = regexp.MustCompile(`(?i)^(yes|allow|always|approve|accept|run|proceed|continue|ok|okay|apply|confirm|trust|remember)\b`)
-	alwaysRe     = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|auto-accept|all edits|remember|permanent|in this project|for this project|globally|trust)`)
+	// leadShortcut is a key shown before the label: Cursor Agent's
+	// "▶ [a] Trust this workspace" / "[q] Quit".
+	leadShortcut = regexp.MustCompile(`^\[([a-z])\]\s+(\S.*)$`)
+	// bracketNum is a "[1] label" option: Auggie's workspace-indexing
+	// chooser, which draws no cursor glyph and selects on the digit.
+	bracketNum = regexp.MustCompile(`^\s*([` + cursorRunes + `]\s*)?\[(\d)\]\s+(\S.*)$`)
+	// selectHint is a footer that says the digits or Enter pick an option.
+	selectHint = regexp.MustCompile(`(?i)\b(select|confirm|choose)\b`)
+	// trustTitle is a folder trust question.
+	trustTitle = regexp.MustCompile(`(?i)\btrust\b`)
+	// trustGrant is the option that grants it.
+	quitRe     = regexp.MustCompile(`(?i)^(quit|exit)\b`)
+	trustGrant = regexp.MustCompile(`(?i)^(yes,? )?(i )?trust\b`)
+	headerRe   = regexp.MustCompile(`(?i)^(do you want|would you like|allow|approve|run|permission|proceed|confirm|apply|choose an option|select an option)\b`)
+	permRe     = regexp.MustCompile(`(?i)\b(allow|approve|permission|run|execute|proceed|edit|write|create|delete|apply|command|make this|make the following|edits?|changes?|patch)\b`)
+	denyRe     = regexp.MustCompile(`(?i)^(no|reject|deny|decline|cancel|abort|skip)\b`)
+	approveRe  = regexp.MustCompile(`(?i)^(yes|allow|always|approve|accept|run|proceed|continue|ok|okay|apply|confirm|trust|remember)\b`)
+	alwaysRe   = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|auto-accept|all edits|remember|permanent|in this project|for this project|globally|trust)`)
 )
 
 // matchConfirm recognises a line-mode y/n question on the last line, where
@@ -105,6 +118,9 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 	}
 	m, ok := findNumbered(lines)
 	if !ok {
+		m, ok = findBracketed(lines)
+	}
+	if !ok {
 		m, ok = findArrow(lines)
 	}
 	if !ok {
@@ -118,6 +134,12 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 		return Prompt{}, false
 	}
 	title := strings.TrimSpace(lines[h])
+	if h > 0 && wrappedHeader(lines[h-1], title) {
+		// A narrow pane wrapped the question: "Do you trust the contents
+		// of this" / "directory?" (Cursor Agent at 47 columns).
+		title = strings.TrimSpace(lines[h-1]) + " " + title
+		h--
+	}
 	if i := strings.Index(title, "? ("); i >= 0 {
 		title = title[:i+1] // the question, without the aside after it
 	}
@@ -151,6 +173,7 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 		p.Options = append(p.Options, wire.Option{N: n, Label: label, Role: role})
 		p.Keys[n] = keysFor(m, i, key)
 	}
+	trustOneTap(&p)
 	// An unnumbered list with a cursor is also how pickers and file
 	// browsers look; only treat it as a prompt when it offers an answer,
 	// or asks how to sign in.
@@ -351,6 +374,9 @@ func detail(lines []string, boxed []bool, header, start int) *string {
 // splitShortcut strips a trailing single-key hint such as "(y)" or "(esc)"
 // and returns the tmux key name it names.
 func splitShortcut(label string) (string, string) {
+	if g := leadShortcut.FindStringSubmatch(label); g != nil {
+		return strings.TrimSpace(g[2]), strings.ToLower(g[1])
+	}
 	g := shortcut.FindStringSubmatch(label)
 	if g == nil {
 		return label, ""
@@ -406,4 +432,105 @@ func keysFor(m menu, i int, key string) []string {
 		}
 	}
 	return append(keys, "Enter")
+}
+
+// findBracketed finds a run of "[1] … [2] …" options numbered from 1,
+// with or without a cursor, above a footer that says how to select.
+// Lines between options that are indented and not options themselves are
+// the label wrapped at a narrow pane (Auggie at 47 columns).
+func findBracketed(lines []string) (menu, bool) {
+	b := -1
+	for i := len(lines) - 1; i >= 0 && footerLines(lines, i) <= maxFooter; i-- {
+		if bracketNum.MatchString(lines[i]) {
+			b = i
+			break
+		}
+	}
+	if b < 0 {
+		return menu{}, false
+	}
+	hinted := false
+	for _, l := range lines[b+1:] {
+		if selectHint.MatchString(l) {
+			hinted = true
+		}
+	}
+	m := menu{end: b, numbered: true}
+	want := 0
+	var wrapped []string
+	for i := b; i >= 0; i-- {
+		g := bracketNum.FindStringSubmatch(lines[i])
+		if g == nil {
+			if len(wrapped) < maxWrap && indentOf(lines[i]) > 0 && !isFiller(lines[i]) {
+				wrapped = append([]string{strings.TrimSpace(lines[i])}, wrapped...)
+				continue
+			}
+			return menu{}, false
+		}
+		n, _ := strconv.Atoi(g[2])
+		if want != 0 && n != want-1 {
+			return menu{}, false
+		}
+		want = n
+		if g[1] != "" {
+			m.cursor = n - 1
+			hinted = true
+		}
+		label := strings.TrimSpace(g[3])
+		if len(wrapped) > 0 {
+			label += " " + strings.Join(wrapped, " ")
+			wrapped = nil
+		}
+		m.labels = append([]string{label}, m.labels...)
+		m.start = i
+		if n == 1 {
+			break
+		}
+	}
+	if want != 1 || !hinted || len(m.labels) < 2 || len(m.labels) > maxOptions {
+		return menu{}, false
+	}
+	return m, true
+}
+
+// wrappedHeader reports a question line that is the tail of the line
+// above: it starts lower case and the line above ends mid-sentence.
+func wrappedHeader(prev, title string) bool {
+	prev = strings.TrimSpace(prev)
+	if prev == "" || title == "" || isFiller(prev) || strings.ContainsAny(prev[len(prev)-1:], ".?!:") {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(title)
+	return r >= 'a' && r <= 'z'
+}
+
+// trustOneTap makes a folder trust question answerable with one tap: when
+// nothing else approves, its single trust option is the approval. Trust is
+// the only grant such a question offers, so approve does not widen it.
+// Seen on Cursor Agent 2026.11.05 ("[a] Trust this workspace").
+func trustOneTap(p *Prompt) {
+	if !trustTitle.MatchString(p.Title) {
+		return
+	}
+	idx := -1
+	for i, o := range p.Options {
+		switch {
+		case o.Role == wire.RoleApprove:
+			return
+		case trustGrant.MatchString(o.Label):
+			if idx >= 0 {
+				return
+			}
+			idx = i
+		}
+	}
+	if idx >= 0 {
+		p.Options[idx].Role = wire.RoleApprove
+	}
+	for i, o := range p.Options {
+		if o.Role == wire.RoleOther && quitRe.MatchString(o.Label) {
+			// Leaving a trust question declines it.
+			p.Options[i].Role = wire.RoleDeny
+		}
+	}
 }

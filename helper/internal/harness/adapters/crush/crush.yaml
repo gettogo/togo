@@ -5,16 +5,47 @@
 # TUI reports the session it shows. But the TUI only joins a server when started with
 # CRUSH_CLIENT_SERVER=1; on tcp:// it needs the server running first, and on unix:// it
 # starts a detached server that outlives it. Togo's launch adds neither an environment
-# variable nor a server, and its unix endpoint does not speak HTTP, so this file is the
-# fallback: it lists the folder's sessions (`crush session list --json`, which reads the
-# project's .crush database) and applies changes by relaunching. The chat stays in the
-# terminal.
+# variable nor a server, and its unix endpoint does not speak HTTP.
+# Chat: so instead the helper reads the project's sqlite database, .crush/crush.db (WAL;
+# tables sessions and messages, seen on 0.100.0 after one `crush run` in a scratch folder),
+# read-only through the system sqlite3. This is the more robust path: it works for the TUI
+# exactly as Togo launches it, needs no server lifetime or env var, and stays read-only;
+# the cost is polling and an internal schema. The sessions feed takes the newest top-level
+# session touched since Togo started this one (sub-agent sessions have a parent); the chat
+# feed follows its messages by updated_at, since Crush rewrites a message row as it streams
+# and adds a finish part when done (finish reason end_turn ends the turn, tool_use keeps it
+# going). A data_directory other than .crush in crush.json is not followed.
+# Sessions list from `crush session list --json`; changes apply by relaunching.
 adapter: crush
 name: Crush
 revision: 1
 match: { agents: [crush], commands: [crush] }
 harness: { version: [crush, --version], pattern: 'v(\d+\.\d+\.\d+)', range: ">=0.100 <0.110" }
-capabilities: [interrupt, commands, mode, resume]
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, mode, resume]
+feeds:
+  session:
+    sqlite:
+      path: '.crush/crush.db'
+      query: >-
+        select id, title, created_at, updated_at from sessions where parent_session_id is null
+        and (created_at >= cast(strftime('%s', :created) as integer) - 60
+        or updated_at >= cast(strftime('%s', :created) as integer) - 60)
+      params: { created: '{{.created}}' }
+      key: id
+    mapper: crush.db
+    stability: internal
+  chat:
+    sqlite:
+      path: '.crush/crush.db'
+      query: >-
+        select id, session_id, role, parts, created_at, updated_at, finished_at, is_summary_message
+        from messages where session_id = :sid and updated_at >= :cursor
+        order by created_at, rowid limit 500
+      params: { sid: '{{.state.harness_session}}' }
+      cursor: updated_at
+      key: id
+    mapper: crush.db
+    stability: internal
 sources:
   sessions:
     cli: { argv: [crush, session, list, --json, --cwd, '{{.cwd}}'] }

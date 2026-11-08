@@ -28,6 +28,13 @@ struct HarnessScreenSheet: View {
             onSettled: { dismiss() },
             root: ScreenDone { dismiss() }
         )
+        // One surface for the whole presentation. The sheet's own surface was the system's
+        // glass, and each primitive paints ink only behind its own frame: where that frame
+        // stopped short (seen on a Duo at about the medium detent's height) the glass, with the
+        // chat tinting through it, showed as a second colour. The sheet is now the same ink at
+        // every detent and while it scrolls.
+        .background(Color.togoInk, ignoresSafeAreaEdges: .all)
+        .presentationBackground(Color.togoInk)
     }
 }
 

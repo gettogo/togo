@@ -16,8 +16,11 @@ func TestAdapterFileLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Endpoint != nil || len(a.Feeds) != 0 {
+	if a.Endpoint != nil {
 		t.Fatal("the fallback adapter must not start Crush with a server host")
+	}
+	if a.Feeds["chat"].SQLite == nil || a.Feeds["session"].Mapper != MapperDB {
+		t.Fatalf("feeds %+v", a.Feeds)
 	}
 	var logs []string
 	engine.New(engine.Config{Logf: func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }})

@@ -70,8 +70,15 @@ struct SmartCommandLine: View {
                                             removal: Motion.conceal(reduce: reduceMotion)))
             }
             bar
+                // The field always shows: the menu gives up its height first when room is short,
+                // such as a folded Duo with the keyboard up.
+                .layoutPriority(1)
         }
         .onChange(of: ComposerParts(model)) { _, parts in follow(parts) }
+        // The keyboard going (a swipe, a tap on the chat, Hide Keyboard) takes the menu with it.
+        .onChange(of: focused) { _, isFocused in
+            if !isFocused, model.menu != .none { model.dismissMenu() }
+        }
         .haptic(.error, trigger: model.notice) { _, notice in notice != nil }
         .task(id: model.draft) { await model.draftChanged() }
         // The screen's class (from the descriptor, before it loads) picks its presentation.

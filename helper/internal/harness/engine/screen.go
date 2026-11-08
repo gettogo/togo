@@ -63,6 +63,7 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 			}
 		}
 		out.Picker = p
+		s.learnModelLabelsLocked(sc, p)
 	case harness.PrimSettings:
 		out.Settings = buildSettings(sc, data, state)
 		for _, sec := range out.Settings.Sections {
