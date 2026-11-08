@@ -313,7 +313,7 @@ func TestEndpointArgsOutsideRange(t *testing.T) {
 	for v, want := range map[string]bool{"1.18.20": true, "2.2.5": false} {
 		bin := fakeBin(t, v)
 		e := New(Config{TogoHome: t.TempDir(), LoginPath: func(context.Context) string { return bin + ":/bin:/usr/bin" }})
-		if got := e.EndpointArgs("fakeapiv", "s_abcdefghij") != nil; got != want {
+		if got := e.EndpointArgs("fakeapiv", "s_abcdefghij", "") != nil; got != want {
 			t.Errorf("version %s: launch flags %v, want %v", v, got, want)
 		}
 	}
@@ -321,7 +321,7 @@ func TestEndpointArgsOutsideRange(t *testing.T) {
 
 func TestEndpointArgs(t *testing.T) {
 	e := New(Config{TogoHome: t.TempDir()})
-	args := e.EndpointArgs("fakeapi", "s_abcdefghij")
+	args := e.EndpointArgs("fakeapi", "s_abcdefghij", "")
 	if len(args) != 2 || args[0] != "--port" || args[1] == "" || args[1] == "0" {
 		t.Fatalf("args = %v", args)
 	}
@@ -329,7 +329,7 @@ func TestEndpointArgs(t *testing.T) {
 	if !ok || ep.url() != "http://127.0.0.1:"+args[1] {
 		t.Fatalf("endpoint = %+v", ep)
 	}
-	if e.EndpointArgs("claude-less", "s_abcdefghij") != nil || e.EndpointArgs("fakeapi", "../x") != nil {
+	if e.EndpointArgs("claude-less", "s_abcdefghij", "") != nil || e.EndpointArgs("fakeapi", "../x", "") != nil {
 		t.Fatal("args for an agent with no endpoint or a bad id")
 	}
 }

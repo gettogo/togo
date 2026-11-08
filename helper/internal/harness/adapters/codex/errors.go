@@ -16,6 +16,10 @@ type turnError struct {
 	Message           string          `json:"message"`
 	CodexErrorInfo    json.RawMessage `json:"codexErrorInfo"`
 	AdditionalDetails *string         `json:"additionalDetails"`
+	// Misalignment explains a policy block (Codex 0.150 and later).
+	Misalignment *struct {
+		DetailedExplanation *string `json:"detailedExplanation"`
+	} `json:"misalignment"`
 }
 
 // errorReason maps codexErrorInfo to an error notice reason; codes that
@@ -47,6 +51,8 @@ func errorReason(e turnError) string {
 		return harness.ErrAuth
 	case "usageLimitExceeded", "rateLimitExceeded", "sessionBudgetExceeded", "policyCapacityUnavailable", "flexUnavailable":
 		return harness.ErrRateLimit
+	case "cyberPolicy", "misalignmentPolicyViolation":
+		return harness.ErrRefused
 	case "contextWindowExceeded":
 		return harness.ErrContextOverflow
 	case "modelNotFound":
@@ -64,6 +70,9 @@ func errorText(e turnError, reason string) string {
 	if e.Message != "" {
 		return e.Message
 	}
+	if m := e.Misalignment; m != nil && m.DetailedExplanation != nil && *m.DetailedExplanation != "" {
+		return *m.DetailedExplanation
+	}
 	switch reason {
 	case harness.ErrAuth:
 		return "Codex isn't signed in or its login expired."
@@ -75,6 +84,8 @@ func errorText(e turnError, reason string) string {
 		return "The selected model doesn't exist or this account can't use it."
 	case harness.ErrProviderUnreachable:
 		return "Codex can't reach the model provider."
+	case harness.ErrRefused:
+		return "Codex's safety policy blocked this request."
 	}
 	return "The turn failed."
 }

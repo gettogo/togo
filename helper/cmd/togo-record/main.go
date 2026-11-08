@@ -34,14 +34,19 @@ var scenarios = map[string]string{
 	"question":  "Use the AskUserQuestion tool once, with two questions in the same call: 'Color?' with options Red and Blue, and 'Size?' with options Small and Large. After I answer, reply with my two answers on one line and nothing else.",
 	"interrupt": "Write the numbers from 1 to 400, one per line, with no other text.",
 	"model":     "Reply with exactly one word: ok",
-	"subagent":  "Use your Task (subagent) tool once, with run_in_background set to true, to start a subagent whose only job is to reply with the word pong. Wait for its result, then reply with what it said and nothing else.",
+	// A real piece of work in a real folder (-cwd, -prompt): every request the agent makes is
+	// approved, as its owner would, short of a sign-in.
+	"task":     "-prompt is required",
+	"subagent": "Use your Task (subagent) tool once, with run_in_background set to true, to start a subagent whose only job is to reply with the word pong. Wait for its result, then reply with what it said and nothing else.",
 }
 
 func main() {
 	agent := flag.String("agent", "", "agent id for session.create")
-	scenario := flag.String("scenario", "turn", "turn, approve, deny, question, interrupt, model, subagent, error or signin")
+	scenario := flag.String("scenario", "turn", "turn, approve, deny, question, interrupt, model, subagent, task, error or signin")
 	args := flag.String("args", "", "comma-separated agent arguments (a cheap model)")
 	prompt := flag.String("prompt", "", "the prompt, instead of the scenario's own")
+	then := flag.String("then", "", "a second prompt, sent once the first turn has settled")
+	cwdAs := flag.String("cwd-as", "/tmp/replay", "how the session folder reads in the fixture")
 	model := flag.String("model", "", "for -scenario model: the model id to switch to")
 	out := flag.String("out", "", "fixture path (.jsonl)")
 	togo := flag.String("togo", filepath.Join(os.Getenv("HOME"), ".togo/bin/togo"), "helper binary")
@@ -53,10 +58,15 @@ func main() {
 		os.Exit(2)
 	}
 	text := *prompt
+	if *scenario == "task" && text == "" {
+		fmt.Fprintln(os.Stderr, "togo-record: -scenario task needs -prompt")
+		os.Exit(2)
+	}
 	if text == "" {
 		text = scenarios[*scenario]
 	}
-	r := &recording{agent: *agent, scenario: *scenario, prompt: text, model: *model, deadline: time.Now().Add(*timeout)}
+	r := &recording{agent: *agent, scenario: *scenario, prompt: text, then: *then, cwdAs: *cwdAs, model: *model,
+		deadline: time.Now().Add(*timeout)}
 	if *args != "" {
 		r.args = strings.Split(*args, ",")
 	}
@@ -112,11 +122,12 @@ func (r *recording) write(path, togo string, runErr error) error {
 	short := strings.SplitN(host, ".", 2)[0]
 	user := filepath.Base(home)
 	realCwd, _ := filepath.EvalSymlinks(r.cwd)
+	as := r.cwdAs
 	s := replay.Scrubber{
-		Paths: map[string]string{home: "~", r.cwd: "/tmp/replay", realCwd: "/tmp/replay", os.TempDir(): "/tmp/",
+		Paths: map[string]string{home: "~", r.cwd: as, realCwd: as, os.TempDir(): "/tmp/",
 			// Claude and others name per-folder state after the folder with dashes for slashes.
-			dashed(r.cwd): "-tmp-replay", dashed(realCwd): "-tmp-replay", dashed(home): "-Users-user",
-			tilde(r.cwd, home): "/tmp/replay"},
+			dashed(r.cwd): dashed(as), dashed(realCwd): dashed(as), dashed(home): "-Users-user",
+			tilde(r.cwd, home): as},
 		Words: map[string]string{user: "user", host: "host", short: "host"},
 	}
 	forbidden := []string{home, user, host, short}
@@ -132,7 +143,7 @@ func (r *recording) write(path, togo string, runErr error) error {
 	}
 	version, _ := exec.Command(togo, "version").Output()
 	header := map[string]any{
-		"replay": 1, "agent": r.agent, "scenario": r.scenario, "args": r.args, "prompt": r.prompt,
+		"replay": 1, "agent": r.agent, "scenario": r.scenario, "args": r.args, "prompt": r.prompt, "then": r.then,
 		"session": r.session, "recorded": time.Now().UTC().Format("2006-01-02"),
 		"helper": strings.TrimSpace(string(version)), "complete": runErr == nil, "note": note,
 		"configChanged": r.changed,

@@ -5,11 +5,25 @@
 # the TUI. Checked on Codex 0.144.1: a second client's thread/resume on a running
 # thread rejoins it (same id, no fork), its turn/interrupt stops the TUI's turn,
 # and turn/start overrides from it reach the TUI as thread/settings/updated.
+# Checked again on Codex 0.167.0 (live, and its generated app-server schema
+# diffed against 0.144.1's): the methods and notifications below are unchanged
+# and only gained fields. --listen unix://PATH now leaves a symlink at PATH to a
+# socket under /tmp/codex-daemon-<uid>/, which dials the same. Threads are
+# "paginated": thread/resume still returns every turn's items (with a
+# deprecationNotice), and turn/completed carries only a summary, which the
+# mapper does not read. Codex's ephemeral title thread shows up in
+# thread/loaded/list but cannot be resumed and never becomes the main thread.
+# New since 0.150 and mapped: functionCallOutput items, async agent messages
+# with questions, and the cyberPolicy and misalignmentPolicyViolation errors.
+# approval_policy "untrusted" is gone: `codex -a` refuses it and a config.toml
+# that sets it no longer loads, so the mode picker (which writes config.toml)
+# offers only on-request and never. A 0.144 thread still reports untrusted,
+# shown as Ask.
 adapter: codex
 name: Codex
 revision: 1
 match: { agents: [codex], commands: [codex] }
-harness: { version: [codex, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=0.144 <0.150" }
+harness: { version: [codex, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=0.144 <0.168" }
 endpoint:
   kind: unix
   server: [codex, app-server, --listen, 'unix://{{.socket}}']
@@ -113,7 +127,6 @@ status:
   actions: [compact]   # inline on the context meter
 modes:
   choices:
-    - { id: untrusted, label: Ask }
     - { id: on-request, label: Auto }
     - { id: never, label: Full access }
   select: $state.mode

@@ -1,0 +1,29 @@
+{
+  "agentVersion": "codex-cli 0.167.0",
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Trust and continue",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Back to Agent Command Center",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Trust this folder?"
+}

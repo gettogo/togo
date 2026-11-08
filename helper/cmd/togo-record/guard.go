@@ -26,6 +26,11 @@ var configFiles = map[string][]string{
 	"goose":    {".config/goose/config.yaml"},
 	"kimi":     {".kimi/config.toml"},
 	"vibe":     {".vibe/config.toml"},
+	// Kilo remembers the model last used per agent in its state, and
+	// prefers it to the config's model.
+	"kilo":   {".config/kilo/kilo.jsonc", ".local/state/kilo/model.json"},
+	"cursor": {".cursor/cli-config.json"},
+	"amp":    {".config/amp/settings.json"},
 }
 
 type configGuard struct {

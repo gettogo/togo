@@ -52,7 +52,7 @@ var (
 	trustGrant = regexp.MustCompile(`(?i)^(yes,? )?(i )?trust\b`)
 	headerRe   = regexp.MustCompile(`(?i)^(do you want|would you like|allow|approve|run|permission|proceed|confirm|apply|choose an option|select an option)\b`)
 	permRe     = regexp.MustCompile(`(?i)\b(allow|approve|permission|run|execute|proceed|edit|write|create|delete|apply|command|make this|make the following|edits?|changes?|patch)\b`)
-	denyRe     = regexp.MustCompile(`(?i)^(no|reject|deny|decline|cancel|abort|skip)\b`)
+	denyRe     = regexp.MustCompile(`(?i)^(no|reject|deny|decline|cancel|abort|skip|continue without)\b`)
 	approveRe  = regexp.MustCompile(`(?i)^(yes|allow|always|approve|accept|run|proceed|continue|ok|okay|apply|confirm|trust|remember)\b`)
 	alwaysRe   = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|auto-accept|all edits|remember|permanent|in this project|for this project|globally|trust)`)
 )
@@ -137,6 +137,12 @@ type menu struct {
 	cursor     int // option index (0-based) under the cursor
 	labels     []string
 	numbered   bool
+	// arrows marks a numbered list that does not take its digits (Codex
+	// 0.167's folder trust at start ignores them): the cursor moves.
+	arrows bool
+	// escNo marks a scrolled list cut to its first option: Esc, which
+	// its hint offers, is the No it cannot show.
+	escNo bool
 }
 
 func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
@@ -156,8 +162,21 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 	if !ok {
 		return Prompt{}, false
 	}
+	for _, l := range m.labels {
+		if composerHint.MatchString(l) {
+			// The agent's input box and its status lines, under the
+			// cursor-led placeholder ("› Ask Codex to do anything").
+			return Prompt{}, false
+		}
+	}
 	h, ok := findHeader(lines, m.start)
 	if !ok {
+		return Prompt{}, false
+	}
+	if leadQuestion(strings.TrimSpace(lines[h])) != "" && !m.arrows {
+		// Only Codex 0.167's start-up dialogs are read this way: their
+		// keys are known (the arrows). Codex 0.144's trust question is
+		// left to the terminal, as before.
 		return Prompt{}, false
 	}
 	title := strings.TrimSpace(lines[h])
@@ -167,8 +186,15 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 		title = strings.TrimSpace(lines[h-1]) + " " + title
 		h--
 	}
+	if echoLine(title) {
+		// The header was the wrapped tail of a transcript line.
+		return Prompt{}, false
+	}
 	if i := strings.Index(title, "? ("); i >= 0 {
 		title = title[:i+1] // the question, without the aside after it
+	}
+	if q := leadQuestion(title); q != "" {
+		title = q // the question, without the description after it
 	}
 	signIn := signInQuestion(title)
 	if footerLines(lines, m.end) > maxFooter && !(signIn && footerLines(lines, m.end) <= maxFooter+maxSignInOptions) {
@@ -200,6 +226,10 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 		p.Options = append(p.Options, wire.Option{N: n, Label: label, Role: role})
 		p.Keys[n] = keysFor(m, i, key)
 	}
+	if m.escNo {
+		p.Options = append(p.Options, wire.Option{N: len(p.Options) + 1, Label: "No", Role: wire.RoleDeny})
+		p.Keys[len(p.Options)] = []string{"Escape"}
+	}
 	trustOneTap(&p)
 	// An unnumbered list with a cursor is also how pickers and file
 	// browsers look; only treat it as a prompt when it offers an answer,
@@ -228,6 +258,12 @@ func findNumbered(lines []string) (menu, bool) {
 		return menu{}, false
 	}
 	m := menu{end: b, cursor: -1, numbered: true}
+	// The last option's own wrapped lines sit below it.
+	var tail []string
+	for j := b + 1; j < len(lines) && len(tail) < maxWrap && continues(lines[b], lines[j]) && !menuHint.MatchString(lines[j]); j++ {
+		tail = append(tail, strings.TrimSpace(lines[j]))
+		m.end = j
+	}
 	want := 0
 	var wrapped []string
 	for i := b; i >= 0; i-- {
@@ -251,6 +287,9 @@ func findNumbered(lines []string) (menu, bool) {
 			m.cursor = n - 1
 		}
 		label := strings.TrimSpace(g[3])
+		if i == b && len(tail) > 0 {
+			label += " " + strings.Join(tail, " ")
+		}
 		if len(wrapped) > 0 {
 			label += " " + strings.Join(wrapped, " ")
 			wrapped = nil
@@ -264,10 +303,49 @@ func findNumbered(lines []string) (menu, bool) {
 	if len(wrapped) > 0 {
 		return menu{}, false
 	}
+	m.arrows = arrowHinted(lines, m.end)
+	if want == 1 && m.cursor == 0 && len(m.labels) == 1 && scrolledEsc(lines, m.end) {
+		// A short pane shows only the first option of a list it scrolls
+		// (Copilot CLI's folder trust and run-command questions in 24
+		// rows): it, and Esc, which cancels.
+		m.escNo = true
+		return m, true
+	}
 	if want != 1 || m.cursor < 0 || len(m.labels) < 2 || len(m.labels) > maxOptions {
 		return menu{}, false
 	}
 	return m, true
+}
+
+// menuHint is a menu's key-hint footer, which no option wraps into.
+var menuHint = regexp.MustCompile(`(?i)\b(enter|esc|↑|↓)\b.*\b(confirm|cancel|select|navigate|continue|back|skip)\b|↑/↓`)
+
+// arrowHint is Codex 0.167's start-up dialog footer ("enter continue · esc
+// back", "enter confirm · esc skip"): its lists move by arrow keys.
+var arrowHint = regexp.MustCompile(`(?i)^enter (continue|confirm) · esc \w+`)
+
+// arrowHinted reports that footer in the few lines below a menu.
+func arrowHinted(lines []string, end int) bool {
+	for j := end + 1; j < len(lines) && j <= end+maxFooter; j++ {
+		if arrowHint.MatchString(strings.TrimSpace(lines[j])) {
+			return true
+		}
+	}
+	return false
+}
+
+// scrollHint is a footer that says the list scrolls and Esc cancels it.
+var scrollHint = regexp.MustCompile(`(?i)\bto scroll\b.*\besc to cancel\b`)
+
+// scrolledEsc reports a scroll-and-cancel hint in the few lines below a
+// menu.
+func scrolledEsc(lines []string, end int) bool {
+	for j := end + 1; j < len(lines) && j <= end+maxFooter; j++ {
+		if scrollHint.MatchString(lines[j]) {
+			return true
+		}
+	}
+	return false
 }
 
 // maxWrap bounds how many wrapped lines one option label may span below
@@ -292,14 +370,21 @@ func wrapsOption(lines []string, i int) bool {
 func indentOf(l string) int { return len(l) - len(strings.TrimLeft(l, " ")) }
 
 // continues reports whether next is a wrapped second line of the numbered
-// option on line prev: indented to exactly where prev's label starts.
+// option on line prev: indented to exactly where prev's label starts, or,
+// on an option without the cursor, to where its number starts (Copilot CLI
+// 1.0.107 wraps "2. Yes, and don't ask again for `touch` in this
+// directory (…)" back to the number's column; seen live at 80 and 47
+// columns, where every approval was left to the terminal).
 func continues(prev, next string) bool {
 	g := numbered.FindStringSubmatchIndex(prev)
 	if g == nil || isFiller(next) || numbered.MatchString(next) {
 		return false
 	}
-	col := utf8.RuneCountInString(prev[:g[6]])
-	return len(next)-len(strings.TrimLeft(next, " ")) == col
+	indent := len(next) - len(strings.TrimLeft(next, " "))
+	if indent == utf8.RuneCountInString(prev[:g[6]]) {
+		return true
+	}
+	return g[2] < 0 && indent == indentOf(prev)
 }
 
 // findArrow finds an unnumbered list where one line carries the cursor and
@@ -358,14 +443,70 @@ func footerLines(lines []string, i int) int {
 	return n
 }
 
+// echoLine reports a transcript line: a sent prompt led by a prompt
+// marker, or the agent's reply led by its bullet. Neither is a dialog's
+// question, whatever words it holds.
+func echoLine(t string) bool {
+	r, size := utf8.DecodeRuneInString(t)
+	if r == '•' || r == '⏺' {
+		// The agent's own reply ("• I'll find the login handler…").
+		return len(t) > size && t[size] == ' '
+	}
+	return (r == '›' || r == '❯') && len(t) > size && t[size] == ' ' && utf8.RuneCountInString(t) > 40
+}
+
+// composerHint is a status or key-hint line under an agent's input box,
+// which no menu option reads like.
+var composerHint = regexp.MustCompile(`(?i)\bcontext \d+% left\b|\? for shortcuts\b|\besc again to edit\b`)
+
+// titleRe names dialogs whose title is no question: Codex 0.167's
+// "Hooks need review" at start, over its new or changed hooks.
+var titleRe = regexp.MustCompile(`(?i)^hooks need review$`)
+
+// leadQuestion is the question a line opens with when a description runs
+// on after it: Codex 0.167's "Trust this folder? Codex can read, edit…".
+// Only a trust or permission question counts, so prose that asks
+// something in passing is no header.
+func leadQuestion(t string) string {
+	q, rest, ok := strings.Cut(t, "? ")
+	if !ok || rest == "" || utf8.RuneCountInString(q) > 60 || utf8.RuneCountInString(q) < 3 {
+		return ""
+	}
+	if !trustTitle.MatchString(q) && !headerRe.MatchString(q) {
+		return ""
+	}
+	return q + "?"
+}
+
 func findHeader(lines []string, start int) (int, bool) {
+	// A trust question that opens a paragraph is the header, though the
+	// paragraph's wrapped lines below it may start like one ("permission
+	// settings. …" at a phone's width).
 	gap := 0
 	for i := start - 1; i >= 0 && gap <= maxHeaderGap; i-- {
 		if isFiller(lines[i]) {
 			continue
 		}
+		if leadQuestion(strings.TrimSpace(lines[i])) != "" {
+			return i, true
+		}
+		gap++
+	}
+	gap = 0
+	for i := start - 1; i >= 0 && gap <= maxHeaderGap; i-- {
+		if isFiller(lines[i]) {
+			continue
+		}
 		t := strings.TrimSpace(lines[i])
-		if strings.HasSuffix(t, "?") || strings.Contains(t, "? (") || headerRe.MatchString(t) || signInQuestion(t) {
+		if echoLine(t) {
+			// The user's own prompt as the agent echoes it ("› POST
+			// /login crashes …" in Codex) asks nothing, though its words
+			// may read like a sign-in question.
+			gap++
+			continue
+		}
+		if strings.HasSuffix(t, "?") || strings.Contains(t, "? (") || headerRe.MatchString(t) || signInQuestion(t) ||
+			leadQuestion(t) != "" || titleRe.MatchString(t) {
 			return i, true
 		}
 		gap++
@@ -445,7 +586,7 @@ func keysFor(m menu, i int, key string) []string {
 	if key != "" {
 		return []string{key}
 	}
-	if m.numbered {
+	if m.numbered && !m.arrows {
 		return strings.Split(strconv.Itoa(i+1), "")
 	}
 	var keys []string

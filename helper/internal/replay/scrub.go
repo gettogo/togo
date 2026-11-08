@@ -29,6 +29,14 @@ type Scrubber struct {
 
 var email = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
 
+// reserved reports whether an address is at one of the domains RFC 2606
+// sets aside for examples (exactly example.com, .org or .net, no subdomain):
+// nobody owns one, so a fixture keeps it as recorded (a demo's test user).
+func reserved(addr string) bool {
+	_, domain, _ := strings.Cut(strings.ToLower(addr), "@")
+	return domain == "example.com" || domain == "example.org" || domain == "example.net"
+}
+
 // oauthParam is a query parameter of a sign-in URL that belongs to one login
 // attempt (PKCE challenge, state, code, nonce) or is a credential.
 var oauthParam = regexp.MustCompile(`(?i)\b(code_challenge|code_verifier|state|code|nonce|client_secret|access_token|refresh_token|id_token|token)=([^&\s"'\[]+)`)
@@ -70,7 +78,12 @@ func (s Scrubber) String(text string) string {
 	for _, p := range paths {
 		text = strings.ReplaceAll(text, p, s.Paths[p])
 	}
-	text = email.ReplaceAllString(text, "user@example.com")
+	text = email.ReplaceAllStringFunc(text, func(addr string) string {
+		if reserved(addr) {
+			return addr
+		}
+		return "user@example.com"
+	})
 	for _, v := range s.wrapped {
 		text = v.ReplaceAllString(text, "[redacted]")
 	}
@@ -138,8 +151,11 @@ func Leaks(text string, forbidden []string) []string {
 			hits = append(hits, f)
 		}
 	}
-	if email.MatchString(strings.ReplaceAll(text, "user@example.com", "")) {
-		hits = append(hits, "email")
+	for _, addr := range email.FindAllString(text, -1) {
+		if !reserved(addr) {
+			hits = append(hits, "email")
+			break
+		}
 	}
 	return hits
 }

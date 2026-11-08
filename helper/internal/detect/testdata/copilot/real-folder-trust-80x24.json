@@ -1,0 +1,28 @@
+{
+  "agentVersion": "1.0.107",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "Escape"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Do you trust the files in this folder?"
+}

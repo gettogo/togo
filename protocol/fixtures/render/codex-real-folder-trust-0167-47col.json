@@ -1,0 +1,33 @@
+{
+  "name": "codex/real-folder-trust-0167-47col",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "codex",
+    "title": "Trust this folder?",
+    "body": "and run files here, subject to your\npermission settings. Folder settings can\nrun code automatically, even without a",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Trust and continue",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Back to Agent Command Center",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Codex",
+    "subtitle": "Trust this folder?",
+    "body": "and run files here, subject to your\npermission settings. Folder settings can\nrun code automatically, even without a",
+    "category": "togo.info"
+  }
+}

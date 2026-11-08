@@ -2,6 +2,7 @@ package watch
 
 import (
 	"context"
+	"crypto/sha256"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
@@ -20,7 +21,11 @@ import (
 //     working only while the screen shows it, and its turn is over once
 //     the indicator is gone, even if redraws continue;
 //   - any other program is working only after startupGrace has passed
-//     since the tap attached and output has run for sustainedOutput.
+//     since the tap attached and output has run for sustainedOutput;
+//   - for a coding agent without an indicator, output that leaves the
+//     screen's text as it was is no output at all: Vibe draws its own
+//     blinking cursor at the idle input box, so its pane never falls
+//     silent.
 const (
 	redrawGrace     = 2 * time.Second
 	startupGrace    = 5 * time.Second
@@ -33,6 +38,9 @@ const (
 	// without it end the turn.
 	busyCheckEvery     = 2 * time.Second
 	busyMissesToSettle = 2
+	// textIdlePoll spaces the screen reads of an agent whose output left
+	// its text unchanged last time (a blinking cursor at an idle prompt).
+	textIdlePoll = 8 * time.Second
 )
 
 func (w *Watcher) output(ctx context.Context, id string, e *entry) {
@@ -48,6 +56,9 @@ func (w *Watcher) output(ctx context.Context, id string, e *entry) {
 			// the redraw as work.
 			e.promptCheck = true
 		}
+		return
+	}
+	if e.prompt == "" && w.textUnchanged(ctx, id, e) {
 		return
 	}
 	if w.cfg.Activity != nil {
@@ -206,4 +217,55 @@ func (w *Watcher) staleWorking(ctx context.Context, id string, e *entry) {
 		return
 	}
 	w.setStatus(id, statusIdle)
+}
+
+// textUnchanged reports whether output from a coding agent without a
+// working indicator left the screen's text as it last was: a cursor it
+// draws itself blinking (Vibe), not work. The screen is read at most every
+// promptPoll, and every textIdlePoll once it was found unchanged; output in
+// between gets the last read's verdict. Plain shells, custom commands and
+// agents with an indicator are not read here, and a failed read counts as
+// a change.
+func (w *Watcher) textUnchanged(ctx context.Context, id string, e *entry) bool {
+	if !codingAgent(e.agent) || detect.KnowsBusy(e.agent) {
+		return false
+	}
+	every := promptPoll
+	if e.textSame {
+		every = textIdlePoll
+	}
+	if !e.textAt.IsZero() && w.now().Sub(e.textAt) < every {
+		return e.textSame
+	}
+	_, err := w.readText(ctx, id, e)
+	return err == nil && e.textSame
+}
+
+// readText captures the screen and notes whether its text changed since
+// the last read.
+func (w *Watcher) readText(ctx context.Context, id string, e *entry) (string, error) {
+	e.textAt = w.now()
+	screen, err := w.capture(ctx, id)
+	if err != nil {
+		e.textSame = false
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(screen))
+	e.textSame = e.textSum == sum
+	e.textSum = sum
+	return screen, nil
+}
+
+// inspectText is inspect for a coding agent's redraw poll: the read also
+// serves textUnchanged, so the two do not both read the screen.
+func (w *Watcher) inspectText(ctx context.Context, id string, e *entry) (detect.Prompt, bool, error) {
+	if detect.KnowsBusy(e.agent) {
+		return w.inspect(ctx, id)
+	}
+	screen, err := w.readText(ctx, id, e)
+	if err != nil {
+		return detect.Prompt{}, false, err
+	}
+	p, ok := detect.Detect(screen)
+	return p, ok, nil
 }

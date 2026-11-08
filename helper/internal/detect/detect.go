@@ -91,6 +91,9 @@ func Detect(screen string) (Prompt, bool) {
 		p, ok = matchHintConfirm(lines)
 	}
 	if !ok {
+		p, ok = matchWordButtons(lines)
+	}
+	if !ok {
 		p, ok = matchSignIn(raw, lines)
 	}
 	if !ok {

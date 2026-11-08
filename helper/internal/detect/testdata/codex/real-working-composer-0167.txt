@@ -1,0 +1,18 @@
+› POST /login crashes or answers 500 when the body is missing email or passwor…
+      });
+    });
+    + 75 lines (⌃t to expand)
+• Ran cat src/app.ts src/users.ts README.md; rg --files --hidden -g AGENTS.md -…
+  └ 2026-11-08 10:33:48.373 xcodebuild[100:200]  DVTFilePathFSEvents: Fai…
+    2026-11-08 10:33:48.496 xcodebuild[100:200] [MT] DVTDeveloperPaths: F…
+    8dd79e2 ignore local files
+    + 51 lines (⌃t to expand)
+• The handler already checks for missing fields, but the tests only cover a
+  missing password. I’ll add coverage for either missing field, an absent body,
+  invalid types, and empty credentials, and tighten validation to reject empty
+  values.
+• Working (33s • esc to interrupt)
+  └ Tip: Use /agents to open the agent command center.
+› Ask Codex to do anything
+  GPT-6.1-Sol low · /Users/ada/code/api · Context 95% left · 475K window
+  ← for agents · ? for shortcuts

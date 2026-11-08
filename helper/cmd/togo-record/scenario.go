@@ -12,12 +12,14 @@ import (
 
 type recording struct {
 	agent, scenario, prompt, model, cwd string
-	args                                []string
-	deadline                            time.Time
-	c                                   *client
-	tape                                *tape
-	session                             string
-	answered                            int
+	// then is a second prompt, sent once the first turn settles; cwdAs is how the folder reads.
+	then, cwdAs string
+	args        []string
+	deadline    time.Time
+	c           *client
+	tape        *tape
+	session     string
+	answered    int
 	// changed names the agent config files the scenario changed (since restored).
 	changed []string
 }
@@ -80,6 +82,16 @@ func (r *recording) run() error {
 	if err := r.send(r.prompt); err != nil {
 		return err
 	}
+	if r.then != "" {
+		// Two turns: the first plays out, then the scenario runs on the second.
+		if err := r.settle(); err != nil {
+			return err
+		}
+		r.tape.forgetWork()
+		if err := r.send(r.then); err != nil {
+			return err
+		}
+	}
 	switch r.scenario {
 	case "approve", "deny":
 		v, err := r.wait("an approval", func(v view) bool { return len(v.approvals) > 0 })
@@ -120,19 +132,39 @@ func (r *recording) described() error {
 }
 
 // startup gives the agent time to draw its prompt, answering a folder-trust
-// dialog if it shows one (nothing else is answered before the prompt goes).
+// dialog if it shows one, and declining an offer to initialise the project
+// (Crush's AGENTS.md turn) or to trust new hooks (Codex), the way a user
+// who came to send a prompt would. Nothing else is answered before the
+// prompt goes.
 func (r *recording) startup() {
 	end := time.Now().Add(6 * time.Second)
 	for time.Now().Before(end) {
-		for _, a := range r.tape.view().approvals {
-			text := strings.ToLower(str(a["title"]) + " " + str(a["detail"]) + " " + str(a["snippet"]))
-			if strings.Contains(text, "trust") {
-				r.answer(str(a["requestId"]), "approve")
-				end = time.Now().Add(6 * time.Second)
-			}
+		if r.answerStartup() {
+			end = time.Now().Add(6 * time.Second)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+// answerStartup answers the start-up dialogs startup names, and reports
+// whether it answered one. Slow agents draw them late, so send asks again.
+func (r *recording) answerStartup() bool {
+	answered := false
+	for _, a := range r.tape.view().approvals {
+		title := strings.ToLower(str(a["title"]))
+		text := strings.ToLower(str(a["title"]) + " " + str(a["detail"]) + " " + str(a["snippet"]))
+		switch {
+		case strings.Contains(title, "initialize this project"), strings.Contains(title, "hooks need review"):
+			// Codex 0.167 asks to trust new hooks at every start; going on
+			// without them changes no setting.
+			r.answer(str(a["requestId"]), "deny")
+			answered = true
+		case strings.Contains(text, "trust"):
+			r.answer(str(a["requestId"]), "approve")
+			answered = true
+		}
+	}
+	return answered
 }
 
 // send types the prompt, retrying while the agent is still starting.
@@ -140,6 +172,9 @@ func (r *recording) send(text string) error {
 	var last error
 	var blocked time.Time
 	for time.Now().Before(r.deadline) {
+		if r.answerStartup() {
+			time.Sleep(3 * time.Second)
+		}
 		_, err := r.c.call("harness.send", map[string]any{"id": r.session, "text": text, "mode": "now"}, rpcWait)
 		if err == nil {
 			return nil
@@ -203,12 +238,18 @@ func (r *recording) settle() error {
 }
 
 func (r *recording) answerApprovals(v view) bool {
+	if r.answerStartup() {
+		// A start-up dialog drawn after the prompt went (Codex's hooks
+		// review comes late) is answered as at start.
+		time.Sleep(time.Second)
+		return true
+	}
 	decision := "deny"
-	if r.scenario == "approve" && r.answered < 3 {
+	if r.scenario == "approve" && r.answered < 3 || r.scenario == "task" && r.answered < 12 {
 		decision = "approve"
 	}
 	for _, a := range v.approvals {
-		if signIn(a) {
+		if signInIn(a, r.scenario == "task") {
 			// Never sign in, and never let a default answer open a login.
 			return false
 		}
@@ -220,9 +261,31 @@ func (r *recording) answerApprovals(v view) bool {
 
 // signIn reports whether a request is a login, sign-in or credential prompt.
 func signIn(a map[string]any) bool {
-	text := strings.ToLower(str(a["title"]) + " " + str(a["detail"]) + " " + str(a["snippet"]))
-	for _, w := range []string{"login", "log in", "sign in", "sign-in", "authenticat", "api key", "credential", "password", "browser"} {
-		if strings.Contains(text, w) {
+	return signInIn(a, false)
+}
+
+// signInIn is signIn with the snippet read loosely for a task: a task's
+// snippet is the screen around the request, so it shows the folder's own
+// code, and a repo with a /login route says "login" and "password" there.
+// A command's title can be the folder's code too ("test/login.test.ts"),
+// so a task reads the title and detail loosely as well; the helper's own
+// sign-in flag always counts.
+func signInIn(a map[string]any, task bool) bool {
+	strict := []string{"login", "log in", "sign in", "sign-in", "authenticat", "api key", "credential", "password", "browser"}
+	loose := []string{"log in", "sign in", "sign-in", "authenticat", "api key", "browser"}
+	head := strings.ToLower(str(a["title"]) + " " + str(a["detail"]))
+	snippet := strings.ToLower(str(a["snippet"]))
+	words := strict
+	if task {
+		words = loose
+	}
+	for _, w := range words {
+		if strings.Contains(head, w) {
+			return true
+		}
+	}
+	for _, w := range words {
+		if strings.Contains(snippet, w) {
 			return true
 		}
 	}

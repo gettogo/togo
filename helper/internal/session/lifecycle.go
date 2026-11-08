@@ -47,7 +47,7 @@ func (s *Service) Relaunch(ctx context.Context, id string) (Session, error) {
 	if err != nil {
 		return Session{}, err
 	}
-	launch = launch.WithEndpoint(sess.Agent, id)
+	launch = launch.WithEndpoint(sess.Agent, id, dir)
 	if err := s.setRunEnv(ctx, id, launch.Env); err != nil {
 		return Session{}, notFoundOr(err, id)
 	}
@@ -97,7 +97,7 @@ func (s *Service) RelaunchWith(ctx context.Context, id string, argv []string) er
 	if err != nil {
 		return err
 	}
-	launch = launch.WithEndpoint(sess.Agent, id)
+	launch = launch.WithEndpoint(sess.Agent, id, dir)
 	if err := s.setRunEnv(ctx, id, launch.Env); err != nil {
 		return notFoundOr(err, id)
 	}

@@ -181,6 +181,13 @@ func (t *tape) trackHarness(p map[string]any) {
 	}
 }
 
+// forgetWork clears what the last turn did, before the next prompt goes.
+func (t *tape) forgetWork() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sawWork = false
+}
+
 func (t *tape) setWorking(w bool) {
 	t.working = w
 	if w {

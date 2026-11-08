@@ -105,7 +105,7 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 		}
 		id = s.newID()
 		options[optionBib] = bib
-		run := launch.WithEndpoint(a.ID, id)
+		run := launch.WithEndpoint(a.ID, id, dir)
 		err = s.Tmux.NewSession(ctx, tmux.NewSessionOpts{
 			Name:    id,
 			Dir:     dir,

@@ -1,0 +1,38 @@
+{
+  "name": "codex/real-hooks-review-0167-47col",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "codex",
+    "title": "Hooks need review",
+    "body": "6 hooks are new or changed.\nHooks can run outside the sandbox after you\ntrust them.",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Review hooks",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "Trust all and continue",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Continue without trusting (hooks won't run)",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Codex",
+    "subtitle": "Hooks need review",
+    "body": "6 hooks are new or changed.\nHooks can run outside the sandbox after you\ntrust them.",
+    "category": "togo.request.deny"
+  }
+}

@@ -44,6 +44,12 @@ type sessionState struct {
 	// quietUntil ends the redraw window a change of it opens.
 	geom       string
 	quietUntil time.Time
+	// textSum is the screen's text when an agent without a working
+	// indicator last wrote to it, read at textAt; textSame is whether that
+	// read found it unchanged (see textUnchanged).
+	textSum  [32]byte
+	textAt   time.Time
+	textSame bool
 	// burstStart is when the current run of output began.
 	burstStart time.Time
 	// promptCheck asks for a prompt check once output that did not mark

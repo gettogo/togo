@@ -387,7 +387,7 @@ func (w *Watcher) Tick(ctx context.Context) {
 			// An agent that keeps repainting (a blinking cursor, a
 			// spinner) while a question waits never falls silent.
 			e.lastPoll = now
-			if p, ok, err := w.inspect(ctx, id); err == nil && ok {
+			if p, ok, err := w.inspectText(ctx, id, e); err == nil && ok {
 				e.awaitingIdle, e.promptCheck, e.working = false, false, false
 				w.promptSeen(ctx, id, e, p)
 			}

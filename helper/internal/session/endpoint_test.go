@@ -18,7 +18,7 @@ func TestEndpointArgsOnCreateRelaunchRestore(t *testing.T) {
 	recorder(t, s, dir, "claude")
 	var asked []string
 	prev := session.EndpointArgs
-	session.EndpointArgs = func(agent, id string) []string {
+	session.EndpointArgs = func(agent, id, _ string) []string {
 		asked = append(asked, agent+" "+id)
 		return []string{"--port", "4242"}
 	}
@@ -87,7 +87,7 @@ func TestEndpointEnvOnCreateAndRelaunch(t *testing.T) {
 	recorder(t, s, dir, "claude")
 	pw := "first"
 	prevA, prevE := session.EndpointArgs, session.EndpointEnv
-	session.EndpointArgs = func(string, string) []string { return []string{"--port", "1"} }
+	session.EndpointArgs = func(string, string, string) []string { return []string{"--port", "1"} }
 	session.EndpointEnv = func(string) map[string]string { return map[string]string{"FAKE_SERVER_PASSWORD": pw} }
 	t.Cleanup(func() { session.EndpointArgs, session.EndpointEnv = prevA, prevE })
 	created := mustCreate(t, s, session.CreateOpts{Agent: "claude", Cwd: dir})

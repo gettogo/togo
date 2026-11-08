@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+                                                                               ┃
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Confirm folder trust                                                         │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ ╭──────────────────────────────────────────────────────────────────────────╮ │
+│ │ /Users/ada/c/ode-api-01/-Users-ada-code-xxxxx-xx/00000000-0000-0000-000 │ │
+│ │ 0-000000000000/workspace/ap                                             │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ Copilot can read files in this folder and, with your permission, edit them   │
+│ or run code and shell commands. It will remember your permissions for the    │
+│ rest of this session.                                                        │
+│                                                                              │
+│ Git commands run in this folder may use configuration from the enclosing     │
+│ repository and execute programs configured by that repository.               │
+│                                                                              │
+│ Do you trust the files in this folder?                                       │
+│                                                                              │
+│ ❯ 1. Yes                                                                     │
+│                                                                              │
+│ ↑/↓ to navigate · pgup/pgdn to scroll · enter to select · esc to cancel      │
+╰──────────────────────────────────────────────────────────────────────────────╯

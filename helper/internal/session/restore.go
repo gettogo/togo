@@ -127,7 +127,7 @@ func (s *Service) Restore(ctx context.Context, id string, resume bool) (Session,
 				return err
 			}
 		}
-		run := launch.WithEndpoint(e.Agent, id)
+		run := launch.WithEndpoint(e.Agent, id, dir)
 		err = s.Tmux.NewSession(ctx, tmux.NewSessionOpts{
 			Name: id, Dir: dir, Cols: defaultCols, Rows: defaultRows,
 			Command: launchWrapper(s.shell(), s.TogoPath, run),

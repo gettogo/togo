@@ -8,10 +8,12 @@ import (
 )
 
 // HookAgents are the agents whose `togo hook <agent>` reports reach
-// local.hook.
+// local.hook. Every agent `togo hook` forwards must be here (a test in
+// cmd/togo checks): one missing has its hooks rejected as an unknown
+// agent, and its chat says the hooks never fired.
 var HookAgents = map[string]bool{
 	"claude": true, "codex": true, "droid": true, "vibe": true, "copilot": true,
-	"auggie": true,
+	"auggie": true, "cursor": true, "amp": true,
 }
 
 // Foreign reports whether a hook for agent fired inside a session started

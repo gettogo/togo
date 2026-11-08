@@ -30,9 +30,11 @@ type servers struct {
 }
 
 // startServer starts the adapter's endpoint server for one session and
-// waits for its health check. On failure the process is stopped and the
-// harness starts without the endpoint.
-func (e *Engine) startServer(a *adapter, sessionID string, ep endpoint, data map[string]any) error {
+// waits for its health check. It runs in the session folder dir (Codex
+// 0.167's app-server starts the TUI's thread in its own working
+// directory), else the home folder. On failure the process is stopped and
+// the harness starts without the endpoint.
+func (e *Engine) startServer(a *adapter, sessionID, dir string, ep endpoint, data map[string]any) error {
 	e.stopServer(sessionID)
 	argv := make([]string, 0, len(a.Endpoint.Server))
 	for _, arg := range a.Endpoint.Server {
@@ -53,7 +55,9 @@ func (e *Engine) startServer(a *adapter, sessionID string, ep endpoint, data map
 		return fmt.Errorf("%s is not installed", argv[0])
 	}
 	cmd := exec.Command(prog, argv[1:]...)
-	if home := e.cfg.Home; home != "" {
+	if st, err := os.Stat(dir); dir != "" && err == nil && st.IsDir() {
+		cmd.Dir = dir
+	} else if home := e.cfg.Home; home != "" {
 		cmd.Dir = home
 	}
 	cmd.Env = append(os.Environ(), "PATH="+path)

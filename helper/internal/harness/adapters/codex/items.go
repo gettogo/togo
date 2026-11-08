@@ -43,6 +43,21 @@ type threadItem struct {
 	AgentsStates      map[string]agentState `json:"agentsStates"`
 	Prompt            *string               `json:"prompt"`
 	Model             *string               `json:"model"`
+
+	// functionCallOutput (Codex 0.150 and later): a tool's output, a
+	// string or Responses content items.
+	Name      string          `json:"name"`
+	Namespace *string         `json:"namespace"`
+	Output    json.RawMessage `json:"output"`
+
+	// An agentMessage delivered "async" may end in questions the user
+	// answers with their next message (Codex 0.150 and later).
+	Questions []asyncQuestion `json:"questions"`
+}
+
+type asyncQuestion struct {
+	Title   string   `json:"title"`
+	Options []string `json:"options"`
 }
 
 type commandAction struct {
@@ -184,12 +199,28 @@ func convert(it threadItem, w where, final bool) []harness.Item {
 		x.User = &harness.UserBody{Text: clip(text), Source: "unknown"}
 		return []harness.Item{x}
 	case "agentMessage", "plan":
-		if it.Text == "" {
+		text := it.Text
+		if final {
+			text = withQuestions(text, it.Questions)
+		}
+		if text == "" {
 			return nil // the text arrives in deltas
 		}
 		x := w.item(it.ID, harness.KindAssistant)
-		x.Assistant = &harness.TextBody{Text: clip(it.Text), Partial: !final}
+		x.Assistant = &harness.TextBody{Text: clip(text), Partial: !final}
 		return []harness.Item{x}
+	case "functionCallOutput":
+		name, title := it.Name, it.Name
+		if it.Namespace != nil && *it.Namespace != "" {
+			name, title = *it.Namespace+"."+it.Name, *it.Namespace+": "+it.Name
+		}
+		st := "completed"
+		if !final {
+			st = "inProgress"
+		}
+		body := toolBody(it.ID, name, title, harness.ToolOther, st, w)
+		body.Output = tail(outputText(it.Output), harness.MaxToolOutput)
+		return []harness.Item{toolItem(it.ID, w, body)}
 	case "reasoning":
 		text := strings.Join(it.Summary, "\n\n")
 		if text == "" {
@@ -279,6 +310,50 @@ func convert(it threadItem, w where, final bool) []harness.Item {
 		return []harness.Item{x}
 	}
 	return nil
+}
+
+// withQuestions appends an async message's questions to its text: the
+// user answers them with their next message, so the chat shows them as
+// part of the reply.
+func withQuestions(text string, qs []asyncQuestion) string {
+	var b strings.Builder
+	b.WriteString(text)
+	for _, q := range qs {
+		if strings.TrimSpace(q.Title) == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(q.Title)
+		for _, o := range q.Options {
+			b.WriteString("\n- " + o)
+		}
+	}
+	return b.String()
+}
+
+// outputText is the text of a functionCallOutput: the string itself, or
+// its text content items joined (images are left out).
+func outputText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var parts []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &parts) != nil {
+		return ""
+	}
+	var out []string
+	for _, p := range parts {
+		if p.Type == "input_text" || p.Type == "output_text" {
+			out = append(out, p.Text)
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 func toolBody(callID, name, title, cat, status string, w where) harness.ToolBody {

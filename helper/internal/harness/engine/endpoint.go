@@ -71,7 +71,7 @@ func (ep endpoint) url() string {
 // one run of the session, picking its port or socket. It suits
 // session.EndpointArgs; it returns nil when the adapter declares no
 // endpoint or the address cannot be picked.
-func (e *Engine) EndpointArgs(agentID, sessionID string) []string {
+func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 	if _, err := session.ValidateID(sessionID); err != nil {
 		return nil
 	}
@@ -130,7 +130,7 @@ func (e *Engine) EndpointArgs(agentID, sessionID string) []string {
 	if len(a.Endpoint.Server) > 0 {
 		// The harness joins a server the helper starts first (Codex
 		// app-server); without a healthy server it starts on its own.
-		if err := e.startServer(a, sessionID, ep, data); err != nil {
+		if err := e.startServer(a, sessionID, dir, ep, data); err != nil {
 			e.cfg.Logf("harness: %s server for %s: %v", a.Adapter.Adapter, sessionID, err)
 			return nil
 		}

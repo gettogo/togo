@@ -1,0 +1,38 @@
+
+  ╱╱╱╱╱╱  Charm™                 v0.100.0 ╱╱╱
+  ╱╱╱╱╱╱ ▄▀▀▀▀▀▀▀ █▀▀▀▄ █   █ ▄▀▀▀▀ █   █ ╱╱╱
+  ╱╱╱╱╱╱ █        █▀▀▀▄ █   █ ▀▀▀▀█ █▀▀▀█ ╱╱╱
+  ╱╱╱╱╱╱  ▀▀▀▀▀▀▀ ▀   ▀  ▀▀▀  ▀▀▀▀  ▀   ▀ ╱╱╱
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Would you like to initialize this project?
+
+    /Users/ada/code/api
+
+  When I initialize your codebase I examine
+  the project and put the result into an
+  AGENTS.md file which serves as general
+  context.
+
+  You can also initialize anytime via ctrl+p.
+
+  Would you like to initialize now?
+
+    Yep!     Nope
+
+ ctrl+c quit • ctrl+c quit • ctrl+g more
+

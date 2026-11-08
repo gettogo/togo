@@ -99,7 +99,7 @@ func fakeServerEngine(t *testing.T, mode string) *Engine {
 // session stops the server.
 func TestEndpointServerStartsAndStops(t *testing.T) {
 	e := fakeServerEngine(t, "serve")
-	args := e.EndpointArgs("fakesrv", "s_abcdefghij")
+	args := e.EndpointArgs("fakesrv", "s_abcdefghij", "")
 	if len(args) != 2 || args[0] != "--remote" || !strings.HasPrefix(args[1], "unix://") {
 		t.Fatalf("args = %v", args)
 	}
@@ -132,7 +132,7 @@ func TestEndpointServerFailureFallsBack(t *testing.T) {
 	serverReady = time.Second
 	t.Cleanup(func() { serverReady = prev })
 	e := fakeServerEngine(t, "dead")
-	if args := e.EndpointArgs("fakesrv", "s_abcdefghij"); args != nil {
+	if args := e.EndpointArgs("fakesrv", "s_abcdefghij", ""); args != nil {
 		t.Fatalf("args for a dead server: %v", args)
 	}
 	if _, ok := e.endpointFor("s_abcdefghij"); ok {
@@ -179,7 +179,7 @@ capabilities: [chat]
 // environment on every start, and the helper's requests carry it.
 func TestEndpointPassword(t *testing.T) {
 	e := New(Config{TogoHome: t.TempDir()})
-	if e.EndpointArgs("fakepw", "s_abcdefghij") == nil {
+	if e.EndpointArgs("fakepw", "s_abcdefghij", "") == nil {
 		t.Fatal("no args")
 	}
 	env := e.EndpointEnv("s_abcdefghij")
@@ -191,11 +191,29 @@ func TestEndpointPassword(t *testing.T) {
 	if ep.auth() == "" || !strings.HasPrefix(ep.auth(), "Basic ") {
 		t.Fatalf("auth %q", ep.auth())
 	}
-	e.EndpointArgs("fakepw", "s_abcdefghij")
+	e.EndpointArgs("fakepw", "s_abcdefghij", "")
 	if again := e.EndpointEnv("s_abcdefghij")["FAKE_SERVER_PASSWORD"]; again == pw {
 		t.Fatal("password reused across starts")
 	}
 	if e.EndpointEnv("s_none000000") != nil {
 		t.Fatal("env for a session with no endpoint")
+	}
+}
+
+// The harness's server runs in the session's folder: Codex 0.167's
+// app-server starts the TUI's thread in its own working directory, so a
+// server started in the home folder had Codex work there (seen live).
+func TestEndpointServerRunsInTheSessionFolder(t *testing.T) {
+	e := fakeServerEngine(t, "serve")
+	dir := t.TempDir()
+	if args := e.EndpointArgs("fakesrv", "s_abcdefghij", dir); args == nil {
+		t.Fatal("no endpoint")
+	}
+	t.Cleanup(func() { e.Forget("s_abcdefghij") })
+	e.srv.mu.Lock()
+	cmd := e.srv.byID["s_abcdefghij"]
+	e.srv.mu.Unlock()
+	if cmd == nil || cmd.Dir != dir {
+		t.Fatalf("server dir = %q, want %q", cmd.Dir, dir)
 	}
 }

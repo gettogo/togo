@@ -281,20 +281,20 @@ var agentEnv = map[string]map[string]string{
 // agent's argv for one run, such as the port or socket the helper picked
 // for the live harness API. They are not stored with the session's argv:
 // every start asks again. The daemon sets it once at start.
-var EndpointArgs func(agentID, sessionID string) []string
+var EndpointArgs func(agentID, sessionID, dir string) []string
 
 // EndpointEnv, when set, returns the environment that goes with the
 // endpoint arguments EndpointArgs just picked. The daemon sets it once at
 // start.
 var EndpointEnv func(sessionID string) map[string]string
 
-// WithEndpoint returns l with the endpoint arguments for this run
-// appended. The plain shell gets none.
-func (l Launch) WithEndpoint(agentID, sessionID string) Launch {
+// WithEndpoint returns l with the endpoint arguments for this run, in the
+// session folder dir, appended. The plain shell gets none.
+func (l Launch) WithEndpoint(agentID, sessionID, dir string) Launch {
 	if l.Program == "" || EndpointArgs == nil {
 		return l
 	}
-	extra := EndpointArgs(agentID, sessionID)
+	extra := EndpointArgs(agentID, sessionID, dir)
 	if len(extra) == 0 {
 		return l
 	}

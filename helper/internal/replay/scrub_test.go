@@ -53,3 +53,23 @@ func TestScrubWrappedSignInValues(t *testing.T) {
 		t.Fatalf("got %s", out)
 	}
 }
+
+func TestScrubKeepsReservedExampleAddresses(t *testing.T) {
+	out := (Scrubber{}).String("ADA@example.com and ada@example.org pass; bob@corp.example.com and me@gmail.com do not")
+	for _, good := range []string{"ADA@example.com", "ada@example.org"} {
+		if !strings.Contains(out, good) {
+			t.Fatalf("%q missing: %s", good, out)
+		}
+	}
+	for _, bad := range []string{"bob@", "corp.example.com", "gmail"} {
+		if strings.Contains(out, bad) {
+			t.Fatalf("%q survived: %s", bad, out)
+		}
+	}
+	if hits := Leaks(`{"a":"ada@example.com"}`, nil); len(hits) != 0 {
+		t.Fatalf("hits = %v", hits)
+	}
+	if hits := Leaks(`{"a":"bob@corp.example.com"}`, nil); len(hits) != 1 {
+		t.Fatalf("hits = %v", hits)
+	}
+}
