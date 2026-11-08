@@ -6,6 +6,7 @@ enum WatchCopy {
     static let waiting = String(localized: "watch.waiting.title", defaultValue: "Waiting")
     static let nothingWaiting = String(localized: "watch.waiting.empty", defaultValue: "Nothing is waiting on you")
     static let allClear = String(localized: "watch.allClear", defaultValue: "All clear")
+    static let setUpOnPhone = String(localized: "watch.setUpOnPhone", defaultValue: "Set up Togo on your iPhone first")
     static let yes = String(localized: "watch.yes", defaultValue: "Yes")
     static let no = String(localized: "watch.no", defaultValue: "No")
     static let approve = String(localized: "watch.approve", defaultValue: "Approve")

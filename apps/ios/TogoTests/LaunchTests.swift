@@ -226,4 +226,26 @@ struct PrivacyCoverTests {
         #expect(PrivacyCoverRule.covers(.background, wasActive: false))
         #expect(PrivacyCoverRule.covers(.background, wasActive: true))
     }
+
+    /// The shield (a window above every presentation) shows the lock while locked, the cover
+    /// on the way out, and holds the cover over a return that is about to lock.
+    @MainActor @Test func shieldFaces() {
+        #expect(SceneShield.face(phase: .active, wasActive: true, locked: true, locksOnReturn: false) == .lock)
+        #expect(SceneShield.face(phase: .background, wasActive: true, locked: false, locksOnReturn: false) == .cover)
+        #expect(SceneShield.face(phase: .active, wasActive: true, locked: false, locksOnReturn: true) == .cover)
+        #expect(SceneShield.face(phase: .active, wasActive: true, locked: false, locksOnReturn: false) == .hidden)
+        #expect(SceneShield.face(phase: .inactive, wasActive: false, locked: false, locksOnReturn: false) == .hidden)
+    }
+
+    /// A sign-in code stays on this device and leaves the clipboard after two minutes.
+    @MainActor @Test func signInCodesStayLocalAndExpire() throws {
+        let now = Date(timeIntervalSince1970: 1000)
+        let options = SensitivePasteboard.options(now: now)
+        #expect(options[.localOnly] as? Bool == true)
+        #expect(options[.expirationDate] as? Date == now.addingTimeInterval(120))
+        let board = try #require(UIPasteboard(name: UIPasteboard.Name("togo-test-\(UUID())"), create: true))
+        SensitivePasteboard.copy("123-456", to: board)
+        #expect(board.string == "123-456")
+        UIPasteboard.remove(withName: board.name)
+    }
 }

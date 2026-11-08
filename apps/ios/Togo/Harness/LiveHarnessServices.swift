@@ -35,9 +35,14 @@ import TogoKit
         try await call(s) { try await $0.harnessDescribe(id: s.sessionID) }
     }
 
+    /// The feed pings its helper while it runs. A Mac that slept or a network that stopped
+    /// passing traffic leaves the channel open but silent; unanswered pings end the feed, and
+    /// drop the machine's connection under it, so the chat reopens over a fresh one instead
+    /// of saying it is live while frozen.
     func feed(_ s: HarnessSubject, after: Int) -> AsyncThrowingStream<HarnessFeed, any Error> {
         let record = records(s.hostID)
         let openFeed = self.openFeed
+        let channels = self.channels
         return AsyncThrowingStream { continuation in
             let task = Task {
                 guard let record else {
@@ -46,6 +51,13 @@ import TogoKit
                 }
                 do {
                     let client = HelperClient(channel: try await openFeed(record))
+                    let watchdog = Task {
+                        let outcome = await HelperLiveness.watch(clock: SystemClock()) { try await client.keepalive() }
+                        guard outcome == .dead else { return }
+                        await client.close()
+                        await channels.drop(record.id)
+                    }
+                    defer { watchdog.cancel() }
                     do {
                         try await Self.run(client, session: s.sessionID, after: after, into: continuation)
                     } catch {
@@ -116,8 +128,14 @@ import TogoKit
         try await call(s) { try await $0.harnessInterrupt(id: s.sessionID) }
     }
 
+    /// Large enough for every command an adapter lists (omp, OpenCode and Kilo list hundreds).
+    static let commandLimit = 2000
+
     func complete(_ s: HarnessSubject, kind: HarnessCompleteParams.Kind, query: String) async throws -> [HarnessCompletion] {
-        try await call(s) { try await $0.harnessComplete(id: s.sessionID, kind: kind, query: query) }
+        // Commands are read in full (the helper's default stops at 50): routing and the palette
+        // need every command the harness lists.
+        let limit = kind == .command ? Self.commandLimit : nil
+        return try await call(s) { try await $0.harnessComplete(id: s.sessionID, kind: kind, query: query, limit: limit) }
     }
 
     func locate(_ s: HarnessSubject, anchor: HarnessAnchor) async throws -> HarnessLocation {

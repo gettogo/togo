@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Whisper, on this device. While listening the microphone's audio stays in memory; it is
 /// transcribed now and then for the partial line, and once more in full when listening ends.
@@ -16,6 +17,7 @@ import Foundation
     /// The one session allowed to use the microphone, as in `AppleSpeechEngine`.
     private var current: WhisperSession?
     private var installing = false
+    private var observers: [NSObjectProtocol] = []
 
     /// The partial line follows the last this-many samples, so it shows the latest words; the
     /// final pass hears everything.
@@ -32,6 +34,19 @@ import Foundation
         self.loader = loader
         makeMicrophone = microphone
         self.interval = interval
+        // The loaded model takes hundreds of megabytes. It goes when memory runs short and when
+        // the app leaves the screen, unless dictation is running; the next dictation loads it.
+        for name in [UIApplication.didReceiveMemoryWarningNotification, UIApplication.didEnterBackgroundNotification] {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.releaseModelIfIdle() }
+            })
+        }
+    }
+
+    /// Drops the loaded model while nothing is listening.
+    func releaseModelIfIdle() {
+        guard current == nil else { return }
+        transcriber = nil
     }
 
     var isInstalled: Bool {

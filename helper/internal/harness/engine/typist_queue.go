@@ -92,6 +92,7 @@ func (e *Engine) typeNext(s *sess) bool {
 	body.Queued = false
 	it.User = &body
 	s.notePhoneLocked(it.ID, u.Text, u.Images)
+	s.awaitReply = true
 	s.publishLocked([]harness.Item{it}, nil)
 	return true
 }

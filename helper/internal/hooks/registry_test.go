@@ -33,7 +33,7 @@ func TestRegistryCoversEveryAgent(t *testing.T) {
 			t.Errorf("%s takes hooks but has no config or events", h.ID)
 		}
 	}
-	want := []string{Claude, Codex, Gemini, Auggie, Droid, Copilot}
+	want := []string{Claude, Codex, Auggie, Droid, Copilot}
 	if !slices.Equal(Agents, want) {
 		t.Fatalf("Agents = %v, want %v", Agents, want)
 	}
@@ -44,20 +44,20 @@ func TestRegistryCoversEveryAgent(t *testing.T) {
 
 func TestPresentNeedsProgramAndConfigRoot(t *testing.T) {
 	root := t.TempDir()
-	o := Options{GeminiDir: filepath.Join(root, ".gemini")}
-	gemini, _ := Lookup(Gemini)
+	o := Options{FactoryDir: filepath.Join(root, ".factory")}
+	droid, _ := Lookup(Droid)
 	kimi, _ := Lookup("kimi")
-	if gemini.Present(o) {
+	if droid.Present(o) {
 		t.Fatal("present without its config root")
 	}
-	if err := os.MkdirAll(o.GeminiDir, 0o755); err != nil {
+	if err := os.MkdirAll(o.FactoryDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if !gemini.Present(o) {
+	if !droid.Present(o) {
 		t.Fatal("not present with its root and no program check")
 	}
 	o.HasBinary = func(c string) bool { return c == "kimi" }
-	if gemini.Present(o) {
+	if droid.Present(o) {
 		t.Fatal("present without its program")
 	}
 	if !kimi.Present(o) {
@@ -67,7 +67,7 @@ func TestPresentNeedsProgramAndConfigRoot(t *testing.T) {
 		t.Fatalf("default %v", Default(o))
 	}
 	o.HasBinary = func(string) bool { return true }
-	if got := Default(o); !slices.Equal(got, []string{Gemini}) {
+	if got := Default(o); !slices.Equal(got, []string{Droid}) {
 		t.Fatalf("default %v", got)
 	}
 }

@@ -12,19 +12,18 @@ const busyLines = 12
 // input box:
 //   - Claude Code: "✻ Thinking… (12s · esc to interrupt)"
 //   - Codex: "• Working (5s • Esc to interrupt)"
-//   - Gemini CLI: "⠏ Thinking… (esc to cancel, 12s)"; its dialogs say
-//     "Esc to cancel" too, but never followed by a comma
 //   - Auggie: "Working (5s • esc to interrupt)"
 //   - Pi: "Working... (escape to interrupt)"; its key hints say "to
 //     interrupt" without the parenthesis
+//   - omp: "⎋ Working…" above its status line (18.16)
 //
 // Other agents fall back to sustained output (see the watch package).
 var busyMarkers = map[string][]string{
 	"claude": {"esc to interrupt"},
 	"codex":  {"esc to interrupt"},
-	"gemini": {"(esc to cancel,"},
 	"auggie": {"esc to interrupt"},
 	"pi":     {"to interrupt)"},
+	"omp":    {"⎋ working"},
 }
 
 // KnowsBusy reports whether agent draws a working indicator Busy can read.

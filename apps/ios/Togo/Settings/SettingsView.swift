@@ -322,7 +322,9 @@ extension HelperState {
         case .present(let version, true): settingsText("settings.helper.live", "Helper \(version)")
         case .present(let version, false): settingsText("settings.helper.polling", "Helper \(version)")
         case .missing: settingsText("settings.helper.missing", "Helper not installed")
+        case .outdated(let found) where found.isEmpty: settingsText("settings.helper.outdatedUnknown", "Helper needs an update")
         case .outdated(let found): settingsText("settings.helper.outdated", "Helper \(found) needs an update")
+        case .newer: settingsText("settings.helper.newer", "Helper is newer than this app; update Togo")
         }
     }
 }

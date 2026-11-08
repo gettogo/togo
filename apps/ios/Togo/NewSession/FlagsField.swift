@@ -47,32 +47,7 @@ struct FlagsField: View {
     /// ones unless they sit between two letters, as an apostrophe does. Line breaks and tabs
     /// become spaces. Everything else stays exactly as typed.
     static func plain(_ text: String) -> String {
-        let characters = Array(text)
-        var result = ""
-        var wordStart = true
-        for (index, character) in characters.enumerated() {
-            var replacement = String(character)
-            switch character {
-            case "\n", "\r", "\r\n", "\t":
-                replacement = " "
-            case "\u{201C}", "\u{201D}":
-                replacement = "\""
-            case "\u{2018}", "\u{2019}":
-                let before = index > 0 ? characters[index - 1] : nil
-                let after = index + 1 < characters.count ? characters[index + 1] : nil
-                if before?.isLetter != true || after?.isLetter != true { replacement = "'" }
-            case "\u{2014}", "\u{2013}":
-                if wordStart { replacement = "--" }
-            case "\u{2010}", "\u{2011}", "\u{2212}":
-                if wordStart { replacement = "-" }
-            default:
-                break
-            }
-            result += replacement
-            // A run of dashes at the start of a word is still the start of that word.
-            wordStart = replacement == " " || (wordStart && replacement.allSatisfy { $0 == "-" })
-        }
-        return result
+        CommandInput.straight(text, flattenLines: true)
     }
 
     /// Why `line` cannot start an agent, or nil when it can. Beyond what `ArgsParser` refuses,

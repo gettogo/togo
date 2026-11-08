@@ -276,3 +276,45 @@ struct WatchFeed: Equatable {
         textRequests = state.requests.filter { $0.allowText && $0.phase == .open }.map(\.id)
     }
 }
+
+/// Paces what goes to the Watch. A feed that differs only in sessions' activity lines waits
+/// until `activityInterval` has passed since the last send; any other change goes at once.
+@MainActor final class WatchFeedGate {
+    enum Decision: Equatable {
+        case send
+        /// Nothing new since the last send.
+        case skip
+        /// Only activity changed: send this after the wait, unless something newer comes.
+        case hold(Duration)
+    }
+
+    static let activityInterval: Duration = .seconds(8)
+
+    private var sent: WatchFeed?
+    private var sentAt: ContinuousClock.Instant?
+
+    func offer(_ next: WatchFeed, now: ContinuousClock.Instant) -> Decision {
+        guard next != sent else { return .skip }
+        guard let sent, let sentAt, next.withoutActivity == sent.withoutActivity else { return .send }
+        let wait = Self.activityInterval - (now - sentAt)
+        return wait > .zero ? .hold(wait) : .send
+    }
+
+    func didSend(_ feed: WatchFeed, at now: ContinuousClock.Instant) {
+        sent = feed
+        sentAt = now
+    }
+}
+
+extension WatchFeed {
+    /// The feed with every activity line left out, to tell a status change from chatter.
+    var withoutActivity: WatchFeed {
+        var out = self
+        out.sessions = sessions.map { session in
+            var session = session
+            session.activity = nil
+            return session
+        }
+        return out
+    }
+}

@@ -74,7 +74,7 @@ struct DiscoveryList: View {
     @ViewBuilder private var emptyRow: some View {
         Group {
             if phase == .quiet {
-                Text(String(localized: "onboard.discovery.empty", defaultValue: "No machines found nearby. Enter an address."))
+                Text(String(localized: "onboard.discovery.empty", defaultValue: "No machines found nearby. A Mac shows here once Remote Login is on (System Settings › General › Sharing), or enter an address."))
                     .font(.body)
                     .foregroundStyle(Color.togoMute)
                     // motion: state change — the search ended empty, in the same row

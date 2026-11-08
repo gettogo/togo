@@ -13,7 +13,8 @@ import UIKit
         let h = EngineHarness()
         let bar = KeyBarView(config: .standard, engine: h.engine)
         #expect(h.engine.inputAccessory === bar)
-        #expect(bar.inputViewStyle == .keyboard)
+        // A plain input view: the keyboard style draws a black backdrop behind the row.
+        #expect(bar.inputViewStyle == .default)
     }
 
     @Test func stepsEncodeThroughEngine() async throws {
@@ -150,6 +151,38 @@ import UIKit
             let size = bar.button(for: item)?.bounds.size ?? .zero
             #expect(size.width >= KeyBarView.minimumKeyWidth && size.height >= KeyBarView.rowHeight, "\(item.title) is \(size)")
         }
+    }
+
+    /// Every key takes a touch at least 44 points square, while its face stays compact.
+    @Test func everyKeyIsA44PointTarget() {
+        let h = EngineHarness()
+        for config in [KeyBarConfig.claude, .standard] {
+            let bar = KeyBarView(config: config, engine: h.engine)
+            bar.frame = CGRect(x: 0, y: 0, width: 390, height: KeyBarView.rowHeight)
+            bar.layoutIfNeeded()
+            for item in config.items {
+                guard let button = bar.button(for: item) as? KeyTargetButton, !button.isHidden else {
+                    Issue.record("\(item.title) is not a key target")
+                    continue
+                }
+                let target = button.touchTarget
+                #expect(target.width >= 44 && target.height >= 44, "\(item.title) takes \(target.size)")
+                #expect(button.point(inside: CGPoint(x: -KeyBarView.keySpacing / 2 + 0.5, y: 1), with: nil))
+                #expect(!button.point(inside: CGPoint(x: -KeyBarView.keySpacing, y: 1), with: nil))
+            }
+        }
+        #expect(KeyBarView.rowHeight - 2 * KeyBarButton.faceInset <= 30, "the face stays as compact as before")
+    }
+
+    /// Armed reads apart from off by an outline, not only its tint, under Differentiate Without Color.
+    @Test func armedModifierIsOutlinedWithoutColour() {
+        let button = KeyBarButton.make(title: "Ctrl", symbol: nil, slim: true)
+        KeyBarButton.show(.once, on: button, differentiateWithoutColor: true)
+        #expect(button.configuration?.background.strokeWidth == 2)
+        KeyBarButton.show(.off, on: button, differentiateWithoutColor: true)
+        #expect(button.configuration?.background.strokeWidth != 2)
+        KeyBarButton.show(.once, on: button, differentiateWithoutColor: false)
+        #expect(button.configuration?.background.strokeWidth != 2)
     }
 
     @Test func keysThatFitShareTheWidth() {

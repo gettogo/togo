@@ -362,6 +362,7 @@ enum PortsCopy {
     static let manualRange = String(localized: "review.ports.manualRange", defaultValue: "Enter a port from 1 to 65535.")
 
     @MainActor static var footer: String {
+        // idiom-ok: names the device in copy ("this iPad"); no layout depends on it.
         let device = UIDevice.current.userInterfaceIdiom == .pad
             ? String(
                 localized: "review.ports.footer.pad",

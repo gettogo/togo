@@ -17,7 +17,7 @@ public enum WakeProbe {
             if delay > .zero { try await clock.sleep(for: delay) }
             if await attempt() { return }
         }
-        throw SSHError.unreachable("\(host) did not answer for 30 s; it may be asleep")
+        throw SSHError.unreachable(String(localized: "\(host) did not answer for 30 s; it may be asleep", bundle: .module))
     }
 
     /// True as soon as any of `hosts` accepts a TCP handshake on `port`; the other probes stop.
@@ -70,6 +70,9 @@ private final class TCPProbe: Sendable {
             connection.stateUpdateHandler = { [self] state in
                 switch state {
                 case .ready: finish(true)
+                // A refused port still means the machine is awake; the connect that follows
+                // reports why it turned SSH away.
+                case .failed(.posix(.ECONNREFUSED)), .waiting(.posix(.ECONNREFUSED)): finish(true)
                 case .failed, .waiting, .cancelled: finish(false)
                 default: break
                 }

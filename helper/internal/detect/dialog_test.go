@@ -58,6 +58,20 @@ func TestDialog(t *testing.T) {
  π > ◑ Opus 5.5 > 🗑 …pad/omp3 > (sub) ▶─2%─┃1M─
 ╰─                 ⇧⇥ to change thinking effort
 `, "", false},
+		// The same banner at full width while omp's slash popup is open
+		// under it (conformance run: every typed command refused).
+		{"omp banner with slash popup", `
+────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.18.0 is available. Run: omp update
+────────────────────────────────────────────────────────────────────────────────
+
+ π > ◑ Haiku 4.5 > 🗑 …/work > ▶─2%─┃200K─
+╰─ /model
+   /model     Select model
+   /models    List models
+   ↑↓ navigate · enter select · esc close
+`, "", false},
 		{"update hint line only", `
                 /update to install v2.2.6
   ┃  Ask anything…

@@ -20,7 +20,7 @@ input:
   dismiss: [Escape]
 feeds:
   session:          # newest session file for this folder; header {type: session, version: 3}
-    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true }
+    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true, exclusive: true }
     mapper: omp.session
     stability: documented
   subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl

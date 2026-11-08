@@ -1,0 +1,258 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ and %lld more" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ and %2$lld more"
+          }
+        }
+      }
+    },
+    "%@ did not answer for 30 s; it may be asleep" : {
+
+    },
+    "%@ is not available in this build" : {
+
+    },
+    "A rename that only changes letter case can't be undone from here." : {
+
+    },
+    "A session named %@ already exists." : {
+
+    },
+    "Answer its setup questions; API keys go in a masked field." : {
+
+    },
+    "Choose Login, then copy the code and open the page." : {
+
+    },
+    "Git is busy in this folder. Try again in a moment." : {
+
+    },
+    "Its setup runs in the terminal; paste your API key there or sign in on your Mac." : {
+
+    },
+    "Keys of type %@ are not supported." : {
+
+    },
+    "Nothing is staged to commit." : {
+
+    },
+    "Only ports on the machine itself can be opened." : {
+
+    },
+    "Only some of the changes were made. Refresh to see where things stand." : {
+
+    },
+    "Opens the sign-in page here; the agent on your machine gets the result." : {
+
+    },
+    "Opens the sign-in page here; your Mac gets the result. If the page shows a code instead, paste it." : {
+
+    },
+    "Pick a provider, then sign in on the page or paste a key." : {
+
+    },
+    "Resolve the conflict first." : {
+
+    },
+    "Set your git name and email on the machine first." : {
+
+    },
+    "Shows a code to copy, then opens the page to enter it." : {
+
+    },
+    "Signs in to OpenRouter. Other providers take an API key in your shell profile." : {
+
+    },
+    "Some changes were made: %@. Refresh to see where things stand." : {
+
+    },
+    "Someone else committed at the same time. Refresh to see both commits." : {
+
+    },
+    "Someone else committed at the same time. Your commit is %@." : {
+
+    },
+    "That file is a link, so it was left alone." : {
+
+    },
+    "That file is not a regular file, so it was left alone." : {
+
+    },
+    "That file is too large to send. The limit is about 700 KB." : {
+
+    },
+    "That folder does not exist on the machine." : {
+
+    },
+    "That request was already answered, or it is no longer waiting." : {
+
+    },
+    "That request was already answered." : {
+
+    },
+    "That session was not started from Togo, so it cannot be changed from here." : {
+
+    },
+    "The Togo helper is not installed on %@." : {
+
+    },
+    "The Togo helper on %@ is too old for this app. Update it on %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The Togo helper on %1$@ is too old for this app. Update it on %2$@."
+          }
+        }
+      }
+    },
+    "The Togo helper on the machine could not do that." : {
+
+    },
+    "The Togo helper on the machine did not answer in time." : {
+
+    },
+    "The Togo helper on the machine is not ready yet." : {
+
+    },
+    "The Togo helper on the machine is too old for this. Update it on the machine." : {
+
+    },
+    "The Togo helper on the machine sent a reply that could not be read." : {
+
+    },
+    "The Togo helper on the machine speaks a different protocol version. Update the app or the helper." : {
+
+    },
+    "The Togo helper on the machine turned that down." : {
+
+    },
+    "The Togo helper on the machine turned that request down. Update the app or the helper." : {
+
+    },
+    "The Togo helper on the machine was asked before it was ready." : {
+
+    },
+    "The agent has stopped, so nothing was typed." : {
+
+    },
+    "The agent is still running." : {
+
+    },
+    "The agent is waiting on a request. Answer that first." : {
+
+    },
+    "The command on the machine stopped." : {
+
+    },
+    "The connection closed unexpectedly." : {
+
+    },
+    "The connection to the Togo helper on the machine closed." : {
+
+    },
+    "The connection was cancelled." : {
+
+    },
+    "The host needs tmux 3.2 or later." : {
+
+    },
+    "The key for %@ is not the one you trusted. Trusted: %@. Sent now: %@. If nobody changed or reinstalled this machine, someone may be intercepting the connection. Togo will not connect until the old key is removed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The key for %1$@ is not the one you trusted. Trusted: %2$@. Sent now: %3$@. If nobody changed or reinstalled this machine, someone may be intercepting the connection. Togo will not connect until the old key is removed."
+          }
+        }
+      }
+    },
+    "The list of trusted machine keys could not be read, so Togo will not connect until it is fixed." : {
+
+    },
+    "The machine could not be reached. Check the address and your network" : {
+
+    },
+    "The machine did not accept the login (tried %@)." : {
+
+    },
+    "The machine did not accept the login." : {
+
+    },
+    "The machine has no list of authorized keys to change, so nothing was removed." : {
+
+    },
+    "The machine took too long to answer." : {
+
+    },
+    "The machine's key was not trusted, so the connection was closed." : {
+
+    },
+    "The passphrase is wrong." : {
+
+    },
+    "There is no commit to amend yet." : {
+
+    },
+    "This file changed since you looked. Check it again." : {
+
+    },
+    "This file uses a git filter such as LFS. Stage it at your desk." : {
+
+    },
+    "This is not an OpenSSH private key." : {
+
+    },
+    "This key is not on this device." : {
+
+    },
+    "This needs a one-time setup on the machine first." : {
+
+    },
+    "This needs the Togo helper on the machine." : {
+
+    },
+    "This session has ended." : {
+
+    },
+    "This session is a plain shell, so nothing was typed." : {
+
+    },
+    "This session was started outside Togo." : {
+
+    },
+    "Togo could not unlock the saved key or password on this device. Sign in again to unlock it." : {
+
+    },
+    "key" : {
+
+    },
+    "mosh-server did not start on the machine. A missing UTF-8 locale is a common cause." : {
+
+    },
+    "mosh-server sent a session key that could not be read." : {
+
+    },
+    "mosh-server started, but nothing came back over UDP from %@. A firewall may be blocking UDP ports 60000 to 61000." : {
+
+    },
+    "mosh-server was not found on the machine. Install mosh there, or connect with SSH." : {
+
+    },
+    "password prompt" : {
+
+    },
+    "tmux could not complete that on %@." : {
+
+    },
+    "tmux is not installed on %@; Togo can still open a plain shell." : {
+
+    }
+  },
+  "version" : "1.0"
+}

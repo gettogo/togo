@@ -5,12 +5,15 @@ import UIKit
 /// Installs itself as the engine's input accessory and its latch as the engine's latch, so a
 /// latched Ctrl applies to the next key typed on the system keyboard as well as on the bar.
 @MainActor public final class KeyBarView: UIInputView {
-    /// Slim, so the terminal keeps its rows while the keyboard is up. Each key fills the row's
-    /// height as a target and draws a little inside it.
-    static let rowHeight: CGFloat = 36
+    /// Each key fills the row's height as a 44 point target and draws a compact face inside
+    /// it, so the bar reads slim while every key is as easy to hit as a system control.
+    static let rowHeight: CGFloat = 44
+    /// The gap between faces. Each key also takes touches in half the gap on either side, so
+    /// a key's target is its width plus this.
     static let keySpacing: CGFloat = 4
     static let rowInset: CGFloat = 6
-    static let minimumKeyWidth: CGFloat = 36
+    /// With the shared gap, the narrowest key still takes a 44 point wide touch.
+    static let minimumKeyWidth: CGFloat = 44 - keySpacing
 
     let config: KeyBarConfig
     let latch = ModifierLatch()
@@ -52,6 +55,10 @@ import UIKit
         maximumContentSizeCategory = .accessibilityMedium
         buildRow()
         latch.onChange = { [weak self] in self?.refreshLatchButtons() }
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(differentiateWithoutColorChanged),
+            name: UIAccessibility.differentiateWithoutColorDidChangeNotification, object: nil
+        )
         latch.softShift = SystemKeyboardShift.live
         repeater.send = { [weak engine] bytes in engine?.write(bytes) }
         presence.onChange = { [weak self] _ in self?.refreshVisibility() }
@@ -218,6 +225,7 @@ import UIKit
         addSubview(scroll)
         for item in config.items {
             let button = KeyBarButton.make(title: item.title, symbol: item.symbol, slim: true)
+            (button as? KeyTargetButton)?.horizontalHitOutset = Self.keySpacing / 2
             button.accessibilityLabel = KeyBarButton.spokenTitle(item.title)
             addActions(for: item, to: button)
             buttons[item.id] = button
@@ -270,6 +278,10 @@ import UIKit
     private func refreshVisibility() {
         isHidden = presence.hardwareKeyboardConnected
         invalidateIntrinsicContentSize()
+    }
+
+    @objc private func differentiateWithoutColorChanged() {
+        refreshLatchButtons()
     }
 
     private func refreshLatchButtons() {

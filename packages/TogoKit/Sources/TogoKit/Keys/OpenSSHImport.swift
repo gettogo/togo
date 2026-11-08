@@ -13,10 +13,10 @@ public enum KeyError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .badPassphrase: "The passphrase is wrong."
-        case .unsupportedKeyType(let type): "Keys of type \(type) are not supported."
-        case .malformed: "This is not an OpenSSH private key."
-        case .missing: "This key is not on this device."
+        case .badPassphrase: String(localized: "The passphrase is wrong.", bundle: .module)
+        case .unsupportedKeyType(let type): String(localized: "Keys of type \(type) are not supported.", bundle: .module)
+        case .malformed: String(localized: "This is not an OpenSSH private key.", bundle: .module)
+        case .missing: String(localized: "This key is not on this device.", bundle: .module)
         }
     }
 }

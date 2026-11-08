@@ -21,11 +21,17 @@ struct PromptInputView: View {
                 .foregroundStyle(Color.togoSnow)
                 .focused($focused)
                 .submitLabel(.send)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+                // Typed straight into the terminal: quotes and `--` stay as on a keyboard.
+                .commandInput($model.inputDraft)
                 .onSubmit {
                     model.sendInput()
                     focused = true
+                }
+                // A hardware keyboard hides the key row: its Esc, ⌃C, Tab and arrows reach the
+                // terminal from here instead.
+                .onKeyPress(phases: .down) { press in
+                    guard let key = Self.hardwareKey(press) else { return .ignored }
+                    return model.hardwareKey(key) ? .handled : .ignored
                 }
             }
             .padding(.horizontal, 16)
@@ -74,5 +80,23 @@ struct PromptKeyRow: View {
         }
         .scrollIndicators(.hidden)
         .padding(.bottom, 2)
+    }
+}
+
+extension PromptInputView {
+    static func hardwareKey(_ press: KeyPress) -> PromptHardwareKey? {
+        let shift = press.modifiers.contains(.shift)
+        if press.modifiers.contains(.control), let letter = press.characters.first, letter.isLetter {
+            return PromptHardwareKey(name: .control(letter))
+        }
+        switch press.key {
+        case .escape: return PromptHardwareKey(name: .escape)
+        case .tab: return PromptHardwareKey(name: .tab, shift: shift)
+        case .upArrow: return PromptHardwareKey(name: .up)
+        case .downArrow: return PromptHardwareKey(name: .down)
+        case .leftArrow: return PromptHardwareKey(name: .left)
+        case .rightArrow: return PromptHardwareKey(name: .right)
+        default: return nil
+        }
     }
 }

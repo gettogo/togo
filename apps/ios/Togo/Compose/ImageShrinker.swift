@@ -57,8 +57,14 @@ enum ImageShrinker {
 
     /// A screen-sized, upright copy for the annotate screen.
     static func preview(_ data: Data) -> UIImage? {
+        preview(data, maxSide: annotateSide)
+    }
+
+    /// An upright copy whose long side is at most `maxSide` pixels, decoded straight at that
+    /// size: a thumbnail never holds the full picture in memory.
+    static func preview(_ data: Data, maxSide: Int) -> UIImage? {
         guard let source = makeSource(data), let longSide = longSide(of: source),
-              let image = thumbnail(source, maxSide: min(longSide, annotateSide)) else { return nil }
+              let image = thumbnail(source, maxSide: min(longSide, maxSide)) else { return nil }
         return UIImage(cgImage: image)
     }
 

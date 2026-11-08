@@ -305,7 +305,26 @@ func (s *Service) SetMuted(ctx context.Context, id string, muted bool) (Session,
 	if err := s.Tmux.SetOption(ctx, id, optionMuted, value); err != nil {
 		return Session{}, notFoundOr(err, id)
 	}
+	s.rememberMuted(id, muted)
 	return s.find(ctx, id)
+}
+
+// rememberMuted updates a recorded session's mute, so a restore keeps it.
+func (s *Service) rememberMuted(id string, muted bool) {
+	if s.Manifest == nil {
+		return
+	}
+	err := s.Manifest.update(func(list []ManifestEntry) []ManifestEntry {
+		for i := range list {
+			if list[i].ID == id {
+				list[i].Muted = muted
+			}
+		}
+		return list
+	})
+	if err != nil {
+		s.logf("session record %s: %v", id, err)
+	}
 }
 
 // AttachCommand returns the argv that attaches a terminal to the session.

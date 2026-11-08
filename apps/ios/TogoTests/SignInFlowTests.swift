@@ -200,7 +200,7 @@ import TogoKit
 
     @Test func callbackPortComesFromTheRedirect() {
         #expect(SignInRoute.callbackPort(URL(string: page)!) == 54545)
-        // Codex, Gemini: their own ports, IPv4 and IPv6 loopback.
+        // OpenAI, Google: their own ports, IPv4 and IPv6 loopback.
         #expect(SignInRoute.callbackPort(URL(string: "https://auth.openai.com/oauth/authorize?redirect_uri=http://localhost:1455/auth/callback")!) == 1455)
         #expect(SignInRoute.callbackPort(URL(string: "https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=http%3A%2F%2F127.0.0.1%3A41231%2Foauth2callback")!) == 41231)
         #expect(SignInRoute.callbackPort(URL(string: "https://x.example/a?redirect_uri=http%3A%2F%2F%5B%3A%3A1%5D%3A8085%2Fcb")!) == 8085)

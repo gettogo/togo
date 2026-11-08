@@ -6,6 +6,7 @@ import TogoKit
 /// capsules under it, so a tap applies one. The keyboard's row is marked.
 struct CommandMenuPanel: View {
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     let model: CommandLineModel
     let screenTitle: (String) -> String
 
@@ -56,7 +57,7 @@ struct CommandMenuPanel: View {
         .background(Color.togoRaised, in: .rect(cornerRadius: 20, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Color.togoLine, lineWidth: 1 / displayScale)
+                .strokeBorder(Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast))
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(isFiles ? ComposerCopy.mention : ComposerCopy.commands)

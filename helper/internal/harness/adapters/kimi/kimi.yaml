@@ -13,7 +13,7 @@ capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands
   agents, background, plan, changes, status, resume, compact]
 feeds:
   wire:
-    jsonl: { glob: '~/.kimi-code/sessions/wd_*_{{slice (sha256 .cwd) 0 12}}/session_*/agents/main/wire.jsonl', follow: true }
+    jsonl: { glob: '~/.kimi-code/sessions/wd_*_{{slice (sha256 .cwd) 0 12}}/session_*/agents/main/wire.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
     mapper: kimi.wire
     stability: internal
 sources:

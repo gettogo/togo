@@ -100,6 +100,8 @@ type Sender struct {
 	mu          sync.Mutex
 	lastPush    map[string]time.Time // session id -> last rate-limited push
 	pausedUntil map[string]time.Time // device token -> relay 429 deadline
+	relayDown   map[string]time.Time // relay URL -> when it last failed every attempt
+	held        heldPushes
 	exits       map[string]string    // session id -> the exit last announced
 	requests    requestSeen          // needs_you pushed or closed, per request id
 
@@ -113,6 +115,7 @@ func (s *Sender) init() {
 		s.queue = make(chan wire.Event, queueSize)
 		s.lastPush = map[string]time.Time{}
 		s.pausedUntil = map[string]time.Time{}
+		s.relayDown = map[string]time.Time{}
 		s.exits = map[string]string{}
 		s.liveDev = map[string]*deviceLive{}
 		if s.Live == nil {
@@ -312,7 +315,19 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 
 	// A clear always goes out: skipping it could leave an earlier needs_you
 	// on the lock screen or Watch after the approval closed.
-	if p.Kind != wire.PushClear && (info.Muted || (s.Muted != nil && s.Muted()) || s.Hub.ForegroundSubscribers() > 0) {
+	if p.Kind == wire.PushClear {
+		s.held.cancel(p.RequestID)
+	}
+	if p.Kind != wire.PushClear && (info.Muted || (s.Muted != nil && s.Muted())) {
+		return Message{}, false
+	}
+	if p.Kind != wire.PushClear && s.Hub.ForegroundSubscribers() > 0 {
+		if p.Kind == wire.PushNeedsYou {
+			held := m
+			held.Plaintext.Title = truncate(p.Title, wire.MaxTitle)
+			held.Plaintext.Body = truncate(p.Body, wire.MaxBody)
+			s.held.hold(held, foregroundRecheck, s.releaseHeld)
+		}
 		return Message{}, false
 	}
 	if p.Kind != wire.PushNeedsYou && p.Kind != wire.PushClear && !s.admit(sid, now) {
@@ -397,14 +412,20 @@ func (s *Sender) Deliver(ctx context.Context, m Message) []Result {
 		s.logf("push: %v", err)
 		return nil
 	}
-	var out []Result
-	for _, d := range live {
-		err := s.deliverOne(ctx, keys.HostID, d, m)
-		if err != nil {
-			s.logf("push: device %s: %v", idHash(d.DeviceID), err)
-		}
-		out = append(out, Result{DeviceID: d.DeviceID, Err: err})
+	// Devices are sent to side by side: one slow or failing device (or
+	// relay) does not hold up the others.
+	out := make([]Result, len(live))
+	var wg sync.WaitGroup
+	for i, d := range live {
+		wg.Go(func() {
+			err := s.deliverOne(ctx, keys.HostID, d, m)
+			if err != nil {
+				s.logf("push: device %s: %v", idHash(d.DeviceID), err)
+			}
+			out[i] = Result{DeviceID: d.DeviceID, Err: err}
+		})
 	}
+	wg.Wait()
 	return out
 }
 

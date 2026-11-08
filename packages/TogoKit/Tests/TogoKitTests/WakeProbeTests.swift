@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import NIOCore
 import Testing
 @testable import TogoKit
 
@@ -37,7 +38,19 @@ struct WakeProbeTests {
         #expect(waking.withLock { $0 } == 0)
     }
 
-    @Test func tcpConnectToClosedPortFails() async {
-        #expect(await WakeProbe.tcpConnect(host: "127.0.0.1", port: 1, timeout: .seconds(2)) == false)
+    /// A machine that turns the port away is awake: the probe stops waiting, and the SSH
+    /// connect that follows says Remote Login is off instead of "it may be asleep".
+    @Test func tcpConnectToARefusingPortCountsAsAwake() async {
+        #expect(await WakeProbe.tcpConnect(host: "127.0.0.1", port: 1, timeout: .seconds(2)) == true)
+    }
+
+    @Test func refusedConnectsAreFoundInsideWrappedErrors() {
+        struct PerAddress: Error { let error: any Error }
+        struct Wrapped: Error { let connectionErrors: [PerAddress] }
+        let refused = IOError(errnoCode: ECONNREFUSED, reason: "connect")
+        #expect(SSHConnection.isRefused(refused))
+        #expect(SSHConnection.isRefused(Wrapped(connectionErrors: [PerAddress(error: refused)])))
+        #expect(!SSHConnection.isRefused(Wrapped(connectionErrors: [PerAddress(error: IOError(errnoCode: ETIMEDOUT, reason: "connect"))])))
+        #expect(SSHConnection.networkError(refused) == .refused)
     }
 }

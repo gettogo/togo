@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/rpc"
@@ -31,6 +32,13 @@ func TestListFixture(t *testing.T) {
 	if err := json.Unmarshal(raw, &fx); err != nil {
 		t.Fatal(err)
 	}
+
+	// The real ps and lsof run here; under -race with other packages
+	// running they took 16.5 s, past the 15 s product bound. The bound is
+	// not what this pins.
+	saved := lookupTimeout
+	lookupTimeout = time.Minute
+	t.Cleanup(func() { lookupTimeout = saved })
 
 	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

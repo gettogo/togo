@@ -58,11 +58,7 @@ extension CommandLineModel {
                 working: { store.working },
                 mode: { store.currentMode },
                 modes: { store.descriptor?.modes ?? [] },
-                queued: {
-                    store.timeline.conversation().filter { item in
-                        if case let .user(user) = item.body { user.queued } else { false }
-                    }
-                },
+                queued: { store.queuedItems },
                 scope: { store.descriptor?.adapter?.id ?? "" },
                 complete: { kind, query in try await store.services.complete(store.subject, kind: kind, query: query) },
                 send: { text, mode in

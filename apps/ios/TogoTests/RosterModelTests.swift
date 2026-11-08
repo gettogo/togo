@@ -64,6 +64,16 @@ import TogoKit
         #expect(store.roster.groups.first?.name == "Studio Mac")
     }
 
+    /// The phone being offline is said once above the roster, not under every machine.
+    @Test func deviceOfflineIsOneBanner() {
+        var first = machine([])
+        var second = machine([])
+        #expect(!RosterModel.make(machines: [first, second], requests: []).deviceOffline)
+        first.reachability = .deviceOffline
+        second.reachability = .deviceOffline
+        #expect(RosterModel.make(machines: [first, second], requests: []).deviceOffline)
+    }
+
     // MARK: Needs you, headline and tally
 
     @Test func aPendingRequestMarksItsLine() {

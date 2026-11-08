@@ -51,7 +51,7 @@ func TestHooksCommandInstallStatusUninstall(t *testing.T) {
 	if code, out := h.run("hooks", "install", "--agent", "claude"); code != 0 || !strings.Contains(out, "claude: installed") {
 		t.Fatalf("install: code=%d out=%q", code, out)
 	}
-	want := `{"auggie":"no-agent","claude":"installed","codex":"no-agent","copilot":"no-agent","droid":"no-agent","gemini":"no-agent"}`
+	want := `{"auggie":"no-agent","claude":"installed","codex":"no-agent","copilot":"no-agent","droid":"no-agent"}`
 	if code, out := h.run("hooks", "status", "--json"); code != 0 || strings.TrimSpace(out) != want {
 		t.Fatalf("status: code=%d out=%q", code, out)
 	}
@@ -115,7 +115,7 @@ func TestHooksInstallSkipsMissingHarnesses(t *testing.T) {
 		return func(c string) bool { return c != "claude" }
 	}
 	code, out := h.run("hooks", "install")
-	if code != 0 || !strings.Contains(out, "claude: skipped: not installed") || !strings.Contains(out, "gemini: skipped: not installed") {
+	if code != 0 || !strings.Contains(out, "claude: skipped: not installed") || !strings.Contains(out, "auggie: skipped: not installed") {
 		t.Fatalf("code=%d out=%q", code, out)
 	}
 }
@@ -134,18 +134,46 @@ func TestHooksNoStatusLineLeavesItAlone(t *testing.T) {
 }
 
 func TestHooksRefusesEditedEntry(t *testing.T) {
-	h := newHooksHome(t, ".gemini")
-	path := filepath.Join(h.root, ".gemini", "settings.json")
-	edited := `{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "FOO=1 togo hook gemini SessionStart"}]}]}}`
+	h := newHooksHome(t, ".factory")
+	path := filepath.Join(h.root, ".factory", "hooks.json")
+	edited := `{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "FOO=1 togo hook droid SessionStart"}]}]}}`
 	if err := os.WriteFile(path, []byte(edited), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, out := h.run("hooks", "install", "--agent", "gemini")
-	if code == 0 || !strings.Contains(out, "gemini: refused:") {
+	code, out := h.run("hooks", "install", "--agent", "droid")
+	if code == 0 || !strings.Contains(out, "droid: refused:") {
 		t.Fatalf("code=%d out=%q", code, out)
 	}
 	if b, _ := os.ReadFile(path); string(b) != edited {
 		t.Fatalf("edited file rewritten: %s", b)
+	}
+}
+
+// Gemini CLI is retired: install refuses it, and uninstall (named or
+// plain) still removes the hooks an earlier version wrote, leaving the
+// user's own settings.
+func TestHooksUninstallRemovesRetiredGeminiHooks(t *testing.T) {
+	h := newHooksHome(t, ".gemini")
+	path := filepath.Join(h.root, ".gemini", "settings.json")
+	old := `{"theme": "dark", "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "'/opt/togo/bin/togo' hook gemini SessionStart"}]}], "AfterAgent": [{"hooks": [{"type": "command", "command": "'/opt/togo/bin/togo' hook gemini AfterAgent"}, {"type": "command", "command": "say done"}]}]}}`
+	for _, args := range [][]string{{"hooks", "uninstall", "--agent", "gemini"}, {"hooks", "uninstall"}} {
+		if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		code, out := h.run(args...)
+		if code != 0 || !strings.Contains(out, "gemini: removed") {
+			t.Fatalf("%v: code=%d out=%q", args, code, out)
+		}
+		b, _ := os.ReadFile(path)
+		if strings.Contains(string(b), "hook gemini") || !strings.Contains(string(b), `"dark"`) || !strings.Contains(string(b), "say done") {
+			t.Fatalf("%v left %s", args, b)
+		}
+	}
+	if code, _ := h.run("hooks", "install", "--agent", "gemini"); code != exitUsage {
+		t.Errorf("install gemini: code=%d", code)
+	}
+	if _, out := h.run("hooks", "status"); strings.Contains(out, "gemini") {
+		t.Errorf("status lists gemini: %q", out)
 	}
 }
 
@@ -156,8 +184,8 @@ func TestDoctorPrintsIntegrations(t *testing.T) {
 		return []hooks.Report{
 			{ID: "claude", Name: "Claude Code", Installed: true, Setup: hooks.SetupHooks, State: hooks.StateReady,
 				Hooks: "installed", StatusLine: hooks.LineChained, LastHookAt: "2026-11-07T10:00:00Z"},
-			{ID: "gemini", Name: "Gemini CLI", Installed: true, Setup: hooks.SetupHooks, State: hooks.StateNeedsSetup,
-				Hooks: "absent", Fix: "togo hooks install --agent gemini"},
+			{ID: "droid", Name: "Droid", Installed: true, Setup: hooks.SetupHooks, State: hooks.StateNeedsSetup,
+				Hooks: "absent", Fix: "togo hooks install --agent droid"},
 			{ID: "kimi", Name: "Kimi Code", Installed: true, Setup: hooks.SetupNone, State: hooks.StateNotNeeded},
 			{ID: "aider", Name: "Aider", Setup: hooks.SetupNone, State: hooks.StateNotInstalled},
 		}
@@ -167,7 +195,7 @@ func TestDoctorPrintsIntegrations(t *testing.T) {
 	out := buf.String()
 	for _, want := range []string{
 		"claude     ready             hooks installed; status line chained; last hook 2026-11-07T10:00:00Z",
-		"gemini     needs setup       hooks absent; no hook received yet; fix: togo hooks install --agent gemini",
+		"droid      needs setup       hooks absent; no hook received yet; fix: togo hooks install --agent droid",
 		"kimi       no setup needed",
 		"not installed: aider",
 	} {

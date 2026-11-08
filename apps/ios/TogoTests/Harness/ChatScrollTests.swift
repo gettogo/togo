@@ -10,6 +10,20 @@ import TogoKit
 struct ChatScrollTests {
     private let a = NeedsMark(id: "approval-a", ready: false)
 
+    /// ⌘↩ and ⌘. answer the topmost open yes-or-no request; answered or text-only ones are skipped.
+    @Test func keyAnswersTakeTheTopmostOpenRequest() {
+        var answered = Samples.request(id: "r1", bib: "01", title: "Edit?")
+        answered.phase = .done(.approved)
+        var words = Samples.request(id: "r2", bib: "01", title: "Which file?")
+        words.options = []
+        words.allowText = true
+        let open = Samples.request(id: "r3", bib: "01", title: "Run tests?")
+        let cards = [answered, words, open, Samples.request(id: "r4", bib: "01", title: "Push?")]
+        let target = ChatKeyAnswers.target(requestIDs: ["r0", "r1", "r2", "r3", "r4"]) { id in cards.first { $0.id == id } }
+        #expect(target == ChatKeyAnswers.Target(requestID: "r3", approve: .option(1), deny: .option(2)))
+        #expect(ChatKeyAnswers.target(requestIDs: ["r1", "r2"]) { id in cards.first { $0.id == id } } == nil)
+    }
+
     @Test func aNewNeedsCardIsScrolledTo() {
         #expect(ChatScroll.target(old: [], new: [a], dragging: false) == "approval-a")
     }

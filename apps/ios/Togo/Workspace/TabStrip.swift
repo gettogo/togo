@@ -102,6 +102,7 @@ struct TabStrip: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .voiceControlNames(VoiceControlNames.session(name: chip.name, bib: chip.bib))
         .accessibilityAddTraits(isSelected || isBeside ? .isSelected : [])
         .modifier(ChipDrag(id: chip.id, enabled: canOpenBeside || supportsMultipleWindows))
         .contextMenu {

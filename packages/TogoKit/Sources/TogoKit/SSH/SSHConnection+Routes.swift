@@ -54,7 +54,7 @@ extension SSHConnection {
             )
         } catch SSHError.hostKeyChanged where gate.sawPinnedKey {
             // The machine answered with its own key somewhere; that route just failed later.
-            throw SSHError.unreachable("The machine could not be reached. Check the address and your network")
+            throw SSHError.unreachable(String(localized: "The machine could not be reached. Check the address and your network", bundle: .module))
         }
         await routeBook.recordMismatches(mismatched.hosts, for: profile.id)
         clients = [win.value.client]
@@ -93,7 +93,7 @@ extension SSHConnection {
 
     static func isNetworkRouteError(_ error: any Error) -> Bool {
         switch error {
-        case SSHError.unreachable, SSHError.timeout, SSHError.channelClosed: true
+        case SSHError.unreachable, SSHError.refused, SSHError.timeout, SSHError.channelClosed: true
         default: false
         }
     }

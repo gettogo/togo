@@ -11,7 +11,7 @@ import (
 // local.hook.
 var HookAgents = map[string]bool{
 	"claude": true, "codex": true, "droid": true, "vibe": true, "copilot": true,
-	"auggie": true, "gemini": true,
+	"auggie": true,
 }
 
 // Foreign reports whether a hook for agent fired inside a session started

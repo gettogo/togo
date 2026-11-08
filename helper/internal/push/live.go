@@ -2,6 +2,7 @@ package push
 
 import (
 	"cmp"
+	"github.com/gettogo/togo/helper/internal/harness/redact"
 	"sync"
 	"time"
 	"unicode/utf16"
@@ -155,7 +156,7 @@ func (t *LiveTracker) OpenRequest(rid string, created time.Time, bib *string, ag
 	}
 	r := liveRequest{created: created, bib: nonEmpty(bib), agent: cmp.Or(agent, agentShell), session: session, context: c}
 	if subject != nil && subject.Kind == wire.SubjectCommand {
-		if c := truncateUTF16(detect.CleanLine(subject.Text), maxLiveCommand); c != "" {
+		if c := truncateUTF16(detect.CleanLine(redact.String(subject.Text)), maxLiveCommand); c != "" {
 			r.command = &c
 		}
 	}

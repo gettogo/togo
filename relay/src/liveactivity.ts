@@ -44,6 +44,7 @@ export interface LiveActivity {
   attributes?: { hostId: string };
   staleDate?: number;
   dismissalDate?: number;
+  urgent?: boolean;
 }
 
 export function parseLiveActivity(raw: unknown): LiveActivity {
@@ -101,12 +102,30 @@ export function parseLiveActivity(raw: unknown): LiveActivity {
   } else if (raw.attributes !== undefined) {
     throw new FieldError("liveActivity.attributes");
   }
+  if (raw.urgent !== undefined) {
+    if (typeof raw.urgent !== "boolean") throw new FieldError("liveActivity.urgent");
+    la.urgent = raw.urgent;
+  }
   if (raw.staleDate !== undefined) la.staleDate = unixSeconds(raw.staleDate, "staleDate");
   if (raw.dismissalDate !== undefined) {
     if (event !== "end") throw new FieldError("liveActivity.dismissalDate");
     la.dismissalDate = unixSeconds(raw.dismissalDate, "dismissalDate");
   }
   return la;
+}
+
+// Statuses a person may act on or wants to see at once; anything else is routine progress.
+const URGENT_STATUSES: readonly ContentState["status"][] = ["needs_you", "done", "ended", "failed", "offline"];
+
+/**
+ * APNs priority for a Live Activity push. Routine progress (a working agent's step) goes at
+ * priority 5, so a long turn does not spend the device's priority-10 budget and get the
+ * needs-you update that matters throttled. Starts, ends, and states the person acts on go
+ * at 10. A sender may mark an update urgent, such as the one that clears an answered request.
+ */
+export function liveActivityPriority(la: LiveActivity): "5" | "10" {
+  if (la.event !== "update" || la.urgent) return "10";
+  return URGENT_STATUSES.includes(la.contentState.status) ? "10" : "5";
 }
 
 export function liveActivityPayload(la: LiveActivity, nowSeconds: number): unknown {

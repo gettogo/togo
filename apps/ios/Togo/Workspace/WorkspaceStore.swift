@@ -305,7 +305,11 @@ extension AppStore {
     func expectsChat(_ id: TabID) -> Bool {
         if harnessTabs.cachedDescriptor(for: id) != nil { return true }
         guard let row = controlCenter.machines.first(where: { $0.id == id.hostID })?.sessions
-            .first(where: { $0.id == id.sessionID }) else { return false }
+            .first(where: { $0.id == id.sessionID }) else {
+            // Not listed yet (just created): the agent it was started with decides.
+            let agent = workspace.tabs.first(where: { $0.id == id })?.agentID
+            return agent.map(HarnessAdapters.expected(agent:)) ?? false
+        }
         return row.mission != nil || HarnessAdapters.expected(agent: row.agent)
     }
 
@@ -329,7 +333,7 @@ extension AppStore {
 /// one of them is expected to have a chat until describe says otherwise.
 enum HarnessAdapters {
     static let known: Set<String> = [
-        "aider", "amp", "auggie", "claude", "cline", "codex", "copilot", "crush", "cursor", "droid", "gemini",
+        "aider", "amp", "auggie", "claude", "cline", "codex", "copilot", "crush", "cursor", "droid",
         "goose", "kilo", "kimi", "kiro", "omp", "opencode", "openhands", "pi", "vibe",
     ]
 

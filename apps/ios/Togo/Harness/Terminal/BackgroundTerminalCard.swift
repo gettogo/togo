@@ -21,6 +21,7 @@ struct BackgroundTerminalCard: View {
 /// The card itself, for a job read from a row or an item.
 struct BackgroundJobCard: View {
     @Environment(\.loopsPaused) private var loopsPaused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let job: BackgroundJob
     let onOpen: () -> Void
     @ScaledMetric(relativeTo: .body) private var tile: CGFloat = 26
@@ -31,7 +32,7 @@ struct BackgroundJobCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: symbol)
-                        .contentTransition(.symbolEffect(.replace))
+                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                         // motion: state change — the job's symbol turns into how it ended, in its tile.
                         .motion(.respond, value: symbol)
                         .font(.subheadline.weight(.semibold))
@@ -86,7 +87,9 @@ struct BackgroundJobCard: View {
                 Text(verbatim: job.tail.joined(separator: "\n"))
                     .font(.mono(.caption2))
                     .foregroundStyle(Color.togoSnow.opacity(0.8))
+                    // trunc-ok: a live tail; the oldest wrapped line gives way so the newest output always shows, and a tap opens the full terminal (onOpen → BackgroundTerminalView).
                     .lineLimit(BackgroundJob.tailLines)
+                    .truncationMode(.head)
                     .primitiveWell(radius: 10)
             }
         }

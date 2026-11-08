@@ -116,7 +116,7 @@ func (s *Service) Create(ctx context.Context, o CreateOpts) (Session, error) {
 			Env:     withEnv(s.sessionEnv(id, bib, a.ID), run.Env),
 		})
 		if err == nil {
-			s.remember(ManifestEntry{ID: id, Bib: bib, Name: name, Agent: a.ID, Cwd: dir, Command: launch.Argv(), CreatedAt: created})
+			s.remember(ManifestEntry{ID: id, Bib: bib, Name: name, Agent: a.ID, Cwd: dir, Command: launch.Argv(), CreatedAt: created, Muted: o.Muted})
 		}
 		return err
 	})

@@ -261,3 +261,41 @@ func TestRegisteredCommandChoiceApplies(t *testing.T) {
 		t.Fatalf("stored device %+v", list[0])
 	}
 }
+
+// Command text in a Live Activity goes only sealed, and redacted.
+func TestLiveCommandIsRedacted(t *testing.T) {
+	e := newEnv(t, 0)
+	e.pairWith(t, "dev_b", func(p *wire.PairParams) {
+		p.LiveActivityToken = strings.Repeat("12", 32)
+		p.LiveActivityCommand = true
+	})
+	e.handle(withSubject(approvalOpen("r_abcdefghij"), wire.SubjectCommand, `curl -H "Authorization: Bearer abcdefghijklmnopq123" https://x`))
+	_, raw := e.livePushes()
+	if len(raw) != 1 {
+		t.Fatalf("got %d live activity pushes", len(raw))
+	}
+	if bytes.Contains(raw[0], []byte("abcdefghijklmnopq123")) || bytes.Contains(raw[0], []byte("curl")) {
+		t.Fatalf("command went out in plain: %s", raw[0])
+	}
+	la, _ := e.livePushes()
+	if c := e.liveCtx(t, la[0], "dev_b"); c.Subject == nil || strings.Contains(c.Subject.Text, "abcdefghijklmnopq123") || !strings.Contains(c.Subject.Text, "curl") {
+		t.Fatalf("sealed subject %+v", c.Subject)
+	}
+}
+
+// The update that clears an answered request is urgent, so the relay
+// sends it at priority 10 while routine progress goes at 5.
+func TestAnsweredRequestClearIsUrgent(t *testing.T) {
+	e := newEnv(t, 0)
+	e.pair(t, "dev_a", updateToken)
+	e.handle(approvalOpen("r_abcdefghij"))
+	e.clock = e.clock.Add(10 * time.Second)
+	e.handle(approvalClosed("r_abcdefghij"))
+	la, raw := e.livePushes()
+	if len(la) < 2 {
+		t.Fatalf("got %d live pushes", len(la))
+	}
+	if la[0].LiveActivity.Urgent || !la[len(la)-1].LiveActivity.Urgent {
+		t.Fatalf("urgent flags: open %v, clear %v (%s)", la[0].LiveActivity.Urgent, la[len(la)-1].LiveActivity.Urgent, raw[len(raw)-1])
+	}
+}

@@ -59,6 +59,28 @@ import TogoKit
         return CommandLineModel(store: .preview(), memory: CommandMemory(defaults: defaults), routes: session.routes())
     }
 
+    // MARK: State chip freshness
+
+    /// The chip's model and effort follow the harness: its choices are read again when a turn
+    /// ends or the mode changes, never only once.
+    @Test func chipReadsItsChoicesAgainAfterATurnAndAModeChange() async {
+        let session = Session()
+        let model = make(session)
+        let first = model.chipRefresh
+        #expect(first != nil)
+        await model.refreshChip()
+        #expect(session.completes.count == 1)
+        session.working = true
+        #expect(model.chipRefresh == nil)
+        await model.refreshChip()
+        #expect(session.completes.count == 1)
+        session.working = false
+        session.mode = "plan"
+        #expect(model.chipRefresh != first)
+        await model.refreshChip()
+        #expect(session.completes.count == 2)
+    }
+
     // MARK: Menu detection
 
     @Test func slashAtTheStartAsksForCommands() {
@@ -301,6 +323,17 @@ import TogoKit
         await model.setMode("default")
         await model.setMode("yolo")
         #expect(session.runs.isEmpty)
+    }
+
+    /// Shift+Tab steps to the next mode and wraps, through the chip's own set path.
+    @Test func shiftTabStepsTheMode() async {
+        let session = Session()
+        let model = make(session)
+        #expect(model.nextMode == "acceptEdits")
+        await model.cycleMode()
+        #expect(session.runs.first?.0 == "set_mode")
+        session.mode = "plan"
+        #expect(model.nextMode == "default")
     }
 
     @Test func refusedModeLeavesTheChip() async {

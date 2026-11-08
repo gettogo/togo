@@ -11,6 +11,10 @@ struct ConnectingOverlay: View {
         case signedOut(String)
         /// The tab's machine is not among the saved ones: retrying cannot help, adding it can.
         case gone(String)
+        /// The machine showed another key: retrying cannot help, reviewing the key can.
+        case hostKeyChanged(String)
+        /// This device has no network; the link starts again when it is back.
+        case deviceOffline
 
         /// The kinds that show the paws walking toward a live link.
         var isWalking: Bool {
@@ -33,6 +37,10 @@ struct ConnectingOverlay: View {
             case .failed(let reason):
                 if !listed {
                     self = .gone(name)
+                } else if case .hostKeyChanged? = machine?.reachability {
+                    self = .hostKeyChanged(name)
+                } else if case .deviceOffline? = machine?.reachability {
+                    self = .deviceOffline
                 } else if case .offline? = machine?.reachability {
                     self = .offline(name)
                 } else {
@@ -47,6 +55,7 @@ struct ConnectingOverlay: View {
     var arrived = false
     let retry: () -> Void
     var addMachine: () -> Void = {}
+    var editMachine: () -> Void = {}
 
     var body: some View {
         content
@@ -82,6 +91,16 @@ struct ConnectingOverlay: View {
                 kind: .offline, title: WorkspaceCopy.offline(machine), message: WorkspaceCopy.offlineMessage,
                 action: .init(WorkspaceCopy.tryAgain, run: retry)
             )
+        case .hostKeyChanged(let machine):
+            StateView(
+                kind: .error, title: WorkspaceCopy.keyChanged(machine), message: WorkspaceCopy.keyChangedMessage,
+                action: .init(WorkspaceCopy.reviewKey, run: editMachine)
+            )
+        case .deviceOffline:
+            StateView(
+                kind: .offline, title: WorkspaceCopy.deviceOffline(DeviceName.model),
+                message: WorkspaceCopy.deviceOfflineMessage, action: .init(WorkspaceCopy.tryAgain, run: retry)
+            )
         }
     }
 }
@@ -92,15 +111,16 @@ struct ConnectingOverlay: View {
 struct ConnectingOverlayHost: View {
     let kind: ConnectingOverlay.Kind?
     var addMachine: () -> Void = {}
+    var editMachine: () -> Void = {}
     let retry: () -> Void
     @State private var arrivedKind: ConnectingOverlay.Kind?
 
     var body: some View {
         Group {
             if let kind {
-                ConnectingOverlay(kind: kind, retry: retry, addMachine: addMachine)
+                ConnectingOverlay(kind: kind, retry: retry, addMachine: addMachine, editMachine: editMachine)
             } else if let arrivedKind {
-                ConnectingOverlay(kind: arrivedKind, arrived: true, retry: retry, addMachine: addMachine)
+                ConnectingOverlay(kind: arrivedKind, arrived: true, retry: retry, addMachine: addMachine, editMachine: editMachine)
             }
         }
         // motion: state change — connecting gives way to the terminal (or what went wrong) in place.

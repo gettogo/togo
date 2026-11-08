@@ -49,7 +49,7 @@ func TestRegistryOrderAndLookup(t *testing.T) {
 		ids = append(ids, a.ID)
 	}
 	want := []string{
-		"claude", "omp", "codex", "opencode", "gemini", "copilot", "cursor", "aider",
+		"claude", "omp", "codex", "opencode", "copilot", "cursor", "aider",
 		"amp", "auggie", "cline", "crush", "droid", "goose", "kilo", "kimi", "kiro", "openhands",
 		"pi", "vibe", "shell",
 	}
@@ -78,9 +78,6 @@ func TestResume(t *testing.T) {
 	}
 	if a, _ := Lookup("codex"); len(a.Resume) != 2 || a.Resume[0] != "resume" || a.Resume[1] != "--last" {
 		t.Errorf("codex Resume = %q, want [resume --last]", a.Resume)
-	}
-	if a, _ := Lookup("gemini"); len(a.Resume) != 2 || a.Resume[0] != "--resume" || a.Resume[1] != "latest" {
-		t.Errorf("gemini Resume = %q, want [--resume latest]", a.Resume)
 	}
 	for _, id := range []string{"omp", "opencode", "amp", "cline", "goose", "kilo", "kiro", "openhands", "shell"} {
 		if a, _ := Lookup(id); a.Resume != nil {

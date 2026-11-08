@@ -101,6 +101,15 @@ struct HarnessScreenLoader: View {
         }
         // Here, not on the page, so a root changing its container does not read again.
         .task(id: screenID) { await load(showingProgress: true) }
+        // The harness changed its model, effort or mode underneath an open screen (the
+        // terminal, another device): read it again quietly so its check follows.
+        .onChange(of: liveSetting) { _, _ in Task { await load(showingProgress: false) } }
+    }
+
+    /// What an open picker or settings screen must follow while it is up.
+    private var liveSetting: [String?] {
+        let status = ModeMemory.statusBlock(store.mission.mission)
+        return [status?.model, status?.effort, store.currentMode]
     }
 
     /// The root's container: the picker's own split view where the policy picks one, else a

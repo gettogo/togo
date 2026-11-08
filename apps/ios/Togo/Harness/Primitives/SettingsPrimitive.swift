@@ -102,13 +102,19 @@ struct SettingsFieldRow: View {
                     commit(.string($0))
                 }
             } else {
-                Picker(selection: Binding(get: { SettingsLogic.string(value) ?? "" }, set: { commit(.string($0)) })) {
+                let picker = Picker(selection: Binding(get: { SettingsLogic.string(value) ?? "" }, set: { commit(.string($0)) })) {
                     ForEach(field.options ?? []) { Text($0.label).tag($0.id) }
                 } label: {
                     labelStack
                 }
-                .pickerStyle(.menu)
                 .disabled(!editable)
+                // A long list or long values (model ids, providers) push a list where every
+                // value wraps in full; a short set of short words stays a menu.
+                if SettingsLogic.choosesInList(field) {
+                    picker.pickerStyle(.navigationLink)
+                } else {
+                    picker.pickerStyle(.menu)
+                }
             }
         case .number:
             NumberField(field: field, value: SettingsLogic.number(value), editable: editable, running: running, commit: commit)
@@ -232,37 +238,45 @@ private struct TextValueField: View {
 
     var body: some View {
         let text = draft ?? value
-        HStack(spacing: 8) {
-            LabeledContent {
-                TextField(field.label, text: Binding(get: { text }, set: { draft = $0 }), prompt: field.placeholder.map { Text($0) })
+        // The label above a full-width field that wraps, so a long base URL, model id or path
+        // reads in full at any text size, not cut at the row's leading edge.
+        VStack(alignment: .leading, spacing: 4) {
+            Text(field.label).foregroundStyle(Color.togoSnow)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                TextField(field.label, text: Binding(get: { text }, set: { typed($0) }), prompt: field.placeholder.map { Text($0) }, axis: .vertical)
                     .font(.mono(.body))
-                    .multilineTextAlignment(.trailing)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                    .lineLimit(1...6)
+                    .commandInput(Binding(get: { draft ?? value }, set: { draft = $0 }))
                     .focused($focused)
                     .submitLabel(.done)
                     .onSubmit(save)
-            } label: {
-                Text(field.label).foregroundStyle(Color.togoSnow)
-            }
-            ZStack {
-                if running {
-                    ProgressView().controlSize(.small)
-                } else if let draft, draft != value {
-                    Button(PrimitiveCopy.save, action: save)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.togoSnow)
-                        .frame(minWidth: 44, minHeight: 44)
-                        // motion: cause → effect — typing opens Save in place beside the field.
-                        .transition(Motion.unfold(reduce: reduceMotion))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ZStack {
+                    if running {
+                        ProgressView().controlSize(.small)
+                    } else if let draft, draft != value {
+                        Button(PrimitiveCopy.save, action: save)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.togoSnow)
+                            .frame(minWidth: 44, minHeight: 44)
+                            // motion: cause → effect — typing opens Save in place beside the field.
+                            .transition(Motion.unfold(reduce: reduceMotion))
+                    }
                 }
+                // motion: state change — Save and the spinner swap in their fixed slot.
+                .motion(.respond, value: running)
+                .motion(.respond, value: draft != nil && draft != value)
             }
-            // motion: state change — Save and the spinner swap in their fixed slot.
-            .motion(.respond, value: running)
-            .motion(.respond, value: draft != nil && draft != value)
         }
         .disabled(!editable)
         .onChange(of: value) { draft = nil }
+    }
+
+    /// A value is one line: Return in the wrapping field saves rather than breaking the line.
+    private func typed(_ text: String) {
+        guard text.contains("\n") else { draft = text; return }
+        draft = text.replacingOccurrences(of: "\n", with: "")
+        save()
     }
 
     private func save() {

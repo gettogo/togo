@@ -17,6 +17,27 @@ enum WatchReplyGate {
             return await sender.send(reply)
         }
     }
+
+    /// The handler while no window has a store, such as when a reply from the Watch launched
+    /// the app in the background. Only a typed answer to a request this device's push
+    /// announced, not yet answered, from the machine it goes to, can be checked without the
+    /// sessions; everything else needs the phone opened.
+    @MainActor static func windowless(
+        pairings: PairingStore, pending: PendingStore, sender: ReplySender
+    ) -> @MainActor (WatchReplyMessage) async -> ReplyOutcome {
+        { message in
+            guard let reply = Reply(message, pairings: pairings) else { return .refused(ReplyCopy.unknownMachine) }
+            guard windowlessAllows(reply, pending: pending, pairings: pairings) else { return .needsPhone }
+            return await sender.send(reply)
+        }
+    }
+
+    static func windowlessAllows(_ reply: Reply, pending: PendingStore, pairings: PairingStore) -> Bool {
+        guard case .answer(let host, let requestID, _) = reply,
+              let request = pending.request(requestID), request.allowText == true, request.answered == nil
+        else { return false }
+        return pairings.pairing(hostId: request.hostId)?.appHostID == host
+    }
 }
 
 extension AppStore {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/rpc"
@@ -68,4 +69,21 @@ func (h *Hub) markRelaunched(id string) {
 	st.awaitRun = true
 	h.mu.Unlock()
 	h.saveExit(id, nil)
+}
+
+// relaunchExitGrace is how long after a relaunch an exit report is taken
+// for the killed run's: respawning the pane ends the old wrapper, which
+// reports its exit at once, while the new run's own failure (a bad flag,
+// "No conversation found") takes longer to start and fail.
+const relaunchExitGrace = 2 * time.Second
+
+// Relaunched records that the agent was restarted in its pane by
+// something other than session.relaunch (an adapter action with new
+// flags): the old run's exit report must not mark the session ended.
+// session.relaunch needs no grace: it starts an agent already gone.
+func (h *Hub) Relaunched(id string) {
+	h.markRelaunched(id)
+	h.mu.Lock()
+	h.stateLocked(id).relaunchedAt = h.clock()
+	h.mu.Unlock()
 }

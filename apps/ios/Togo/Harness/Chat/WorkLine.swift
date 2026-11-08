@@ -75,6 +75,7 @@ struct WorkLine: View {
 /// waits left out.
 private struct WorkLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.loopsPaused) private var loopsPaused
     let summary: WorkSummary
     var waiting = false
     var counting = true
@@ -91,7 +92,7 @@ private struct WorkLabel: View {
                     text(ChatCopy.workRunningLead(summary))
                     if let clock = summary.clock {
                         text(LiveLineLayout.separator)
-                        TimelineView(.periodic(from: clock.displayOrigin(waiting: false), by: 1)) { context in
+                        TimelineView(.clock(from: clock.displayOrigin(waiting: false), paused: loopsPaused)) { context in
                             text(ChatCopy.clock(summary.elapsed(now: context.date) ?? 0))
                                 .clockText()
                         }
@@ -106,6 +107,9 @@ private struct WorkLabel: View {
         .contentTransition(reduceMotion ? .identity : .interpolate)
         // motion: state change — "Working" turns into "Worked …" in place as the turn ends.
         .motion(.respond, value: summary.running)
+        // One driver: a note's arrival transaction moves the rows, never these words (step
+        // counts and files update in place).
+        .transaction { $0.animation = nil }
     }
 
     private func text(_ words: String) -> some View {

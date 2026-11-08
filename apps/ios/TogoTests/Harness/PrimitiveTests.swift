@@ -7,6 +7,18 @@ import TogoKit
 /// grouping, Settings commits and secrets, Confirm answers and its guards, and the smaller
 /// readers behind the Checklist, Live list, Detail card and Status.
 @MainActor struct PrimitiveTests {
+    /// VoiceOver hears the machine's own words too, not only the title; a failure stays until
+    /// dismissed while VoiceOver runs.
+    @Test func feedbackSpeaksTitleAndDetail() {
+        let typed = PrimitiveFeedback(kind: .sent, title: "Sent", detail: "/model sonnet")
+        #expect(typed.spoken == "Sent. /model sonnet")
+        #expect(PrimitiveFeedback(kind: .done, title: "Done").spoken == "Done")
+        let failed = PrimitiveFeedback(kind: .failed, title: "No such model")
+        #expect(failed.clearsAfter(voiceOver: false) != nil)
+        #expect(failed.clearsAfter(voiceOver: true) == nil)
+        #expect(typed.clearsAfter(voiceOver: true) != nil)
+    }
+
     // MARK: Actions
 
     @Test func resultsBecomeFeedback() {

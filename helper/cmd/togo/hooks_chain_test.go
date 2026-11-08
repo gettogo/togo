@@ -49,7 +49,16 @@ func TestInstalledStatusLineChainPrintsTheUsersOutput(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	words := shWords(t, doc.StatusLine.Command)
+	// The installed line is guarded ([ -x BIN ] && exec BIN … || exec sh -c ORIG);
+	// the words exec runs are the part between the guard's test and its fallback.
+	inner := doc.StatusLine.Command
+	if i := strings.Index(inner, " ] && exec "); i >= 0 {
+		inner = inner[i+len(" ] && exec "):]
+	}
+	if i := strings.LastIndex(inner, " || exec sh -c "); i >= 0 {
+		inner = inner[:i]
+	}
+	words := shWords(t, inner)
 	if len(words) != 6 || words[0] != "/opt/togo/bin/togo" || words[5] != original {
 		t.Fatalf("chained command %q -> %q", doc.StatusLine.Command, words)
 	}

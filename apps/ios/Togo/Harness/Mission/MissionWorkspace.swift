@@ -98,6 +98,8 @@ struct MissionWorkspace: ViewModifier {
                 HarnessScreenSheet(store: screen.store, screenID: screen.id) { [app] target in
                     app.followMissionTarget(target, from: screen.tab)
                 }
+                // Paths and links in these screens go through the chat's router.
+                .environment(\.openURL, OpenURLAction { [app] url in app.openChatLink(url, from: screen.tab) })
             }
     }
 }

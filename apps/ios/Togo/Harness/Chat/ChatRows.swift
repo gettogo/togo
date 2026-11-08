@@ -5,6 +5,7 @@ import TogoKit
 /// dimmed and says so.
 struct PromptBubble: View {
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     let text: String
     var note: String?
     var dimmed = false
@@ -19,7 +20,7 @@ struct PromptBubble: View {
                     .foregroundStyle(Color.togoMute)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .overlay { Capsule().strokeBorder(Color.togoLine, lineWidth: 1 / displayScale) }
+                    .overlay { Capsule().strokeBorder(Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast)) }
                     .opacity(dimmed ? 0.6 : 1)
                     // motion: state change — a queued command brightens in place when it is sent.
                     .motion(.respond, value: dimmed)
@@ -112,6 +113,9 @@ struct ReplyRow: View, Equatable {
 
     var body: some View {
         MarkdownText(text: text)
+            // Streamed and finalised text updates in place: a note's arrival transaction moves
+            // the rows around it, never reflows this paragraph (motion v2 §5).
+            .transaction { $0.animation = nil }
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

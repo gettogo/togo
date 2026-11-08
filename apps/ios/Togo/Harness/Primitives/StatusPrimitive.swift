@@ -53,7 +53,7 @@ struct StatusPrimitive: View {
                 // motion: preventing a jump — the cells fade in where space opened; nothing rises.
                 .transition(Motion.arrive(reduce: reduceMotion))
             }
-            if let percent = status.contextPercent {
+            if let percent = StatusLogic.knownContext(status.contextPercent) {
                 StatusMeter(label: PrimitiveCopy.context, percent: percent, resetsAt: nil) {
                     if let compact {
                         CompactButton(ref: compact, percent: percent, context: context)
@@ -94,6 +94,13 @@ struct StatusPrimitive: View {
 }
 
 enum StatusLogic {
+    /// A context reading worth showing: a fresh session's 0 % (a status line or token feed that
+    /// has nothing yet) is unknown, not "empty".
+    static func knownContext(_ percent: Double?) -> Double? {
+        guard let percent, percent.isFinite, percent >= 0.5 else { return nil }
+        return percent
+    }
+
     struct Cell: Equatable {
         var label: String
         var value: String
@@ -116,7 +123,7 @@ enum StatusLogic {
     /// Compact, when the harness offers it in its Status actions. It sits on the context meter;
     /// without a context reading it stays in the action row.
     static func compactAction(_ status: HarnessStatus) -> HarnessActionRef? {
-        guard status.contextPercent != nil else { return nil }
+        guard StatusLogic.knownContext(status.contextPercent) != nil else { return nil }
         return status.actions?.first { compactIDs.contains($0.id) }
     }
 
@@ -177,8 +184,9 @@ private struct StatusMeter<Accessory: View>: View {
                 Spacer(minLength: 8)
                 Text(verbatim: StatusLogic.percentText(percent))
                     .font(.mono(.subheadline))
-                    // Changes once per reply: it rolls in the direction it moved.
-                    .countChange(percent)
+                    // A background value (motion v2 §2): instant, never rolled; the gauge's
+                    // `progress` fill already shows the change.
+                    .clockText()
                     .foregroundStyle(level == .normal ? Color.togoSnow : tint(level))
                 if !typeSize.isAccessibilitySize { accessory() }
             }

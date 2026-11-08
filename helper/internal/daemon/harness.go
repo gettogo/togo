@@ -31,15 +31,25 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 	pane := anchor.TmuxPane{Client: svc.Tmux}
 	pl := &ports.Service{Sessions: svc, Panes: svc.Tmux}
 	eng := engine.New(engine.Config{
-		Sessions:  svc,
-		Typist:    engine.SessionTypist{Sessions: svc, Tmux: svc.Tmux, Status: c.Hub.Status},
-		Relaunch:  svc.RelaunchWith,
+		Sessions: svc,
+		Typist:   engine.SessionTypist{Sessions: svc, Tmux: svc.Tmux, Status: c.Hub.Status},
+		// Marked first, so the exit the killed run reports at once is not
+		// taken for the session ending (it went "ended" and refused sends).
+		Relaunch: func(ctx context.Context, id string, argv []string) error {
+			c.Hub.Relaunched(id)
+			return svc.RelaunchWith(ctx, id, argv)
+		},
 		Marker:    &anchor.Marker{Home: o.Home, Pane: pane},
 		Approvals: c.Approvals,
 		Screen:    pane.Screen,
 		Status:    c.Hub.Status,
 		NeedsYou: func(id, title, body string) {
 			c.Hub.Publish(wire.EventNotify, &id, wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelNeedsYou})
+		},
+		// Through local's publisher, which drops the pane watcher's empty
+		// "Done" for the same turn (doneDedupe).
+		Done: func(id, title, body string) {
+			c.Local.Pub.Publish(wire.EventNotify, &id, wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelDone})
 		},
 		Git:        git.Status,
 		Ports:      pl.List,

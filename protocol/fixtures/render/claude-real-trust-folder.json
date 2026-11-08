@@ -1,0 +1,33 @@
+{
+  "name": "claude/real-trust-folder",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "claude",
+    "title": "Quick safety check: Is this a project you created or one you trust?",
+    "body": "project, or work from your team). If not, take a moment to review what's in this folder first.\nClaude Code'll be able to read, edit, and execute files here.\nSecurity guide",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "No, exit",
+        "role": "deny"
+      },
+      {
+        "n": 2,
+        "label": "Yes, I trust this folder",
+        "role": "approve_always"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Claude Code",
+    "subtitle": "Quick safety check: Is this a project you created or one you trust?",
+    "body": "project, or work from your team). If not, take a moment to review what's in this folder first.\nClaude Code'll be able to read, edit, and execute files here.\nSecurity guide",
+    "category": "togo.request.deny"
+  }
+}

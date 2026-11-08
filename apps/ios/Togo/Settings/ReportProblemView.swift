@@ -18,6 +18,7 @@ struct ReportProblemView: View {
     private var issue: URL {
         IssueLink.url(
             app: appVersion, os: UIDevice.current.systemVersion,
+            // idiom-ok: the device family in a problem report; no layout depends on it.
             device: IssueLink.family(isPad: UIDevice.current.userInterfaceIdiom == .pad),
             helpers: machines.compactMap { Self.version(of: $0.helper) }
         )
@@ -26,8 +27,8 @@ struct ReportProblemView: View {
     static func version(of helper: HelperState) -> String? {
         switch helper {
         case .present(let version, _): version
-        case .outdated(let found): found
-        case .checking, .missing: nil
+        case .outdated(let found): found.isEmpty ? nil : found
+        case .checking, .missing, .newer: nil
         }
     }
 }

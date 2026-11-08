@@ -235,6 +235,9 @@ func (f File) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, 
 		t := &tail{path: p, name: s.Name, replay: true}
 		return pollLoop(ctx, func() error { return t.poll(emit) })
 	}
+	if fs.Exclusive {
+		return watchGlobExclusive(ctx, s.Name, fs.Glob, env, emit)
+	}
 	return watchGlob(ctx, s.Name, fs.Glob, env, emit)
 }
 
@@ -266,8 +269,9 @@ func watchGlob(ctx context.Context, name, pattern string, env harness.Env, emit 
 	}
 	tails := map[string]*tail{}
 	var lastGlob time.Time
+	every := globEvery
 	return pollLoop(ctx, func() error {
-		if time.Since(lastGlob) >= globEvery || len(tails) == 0 {
+		if time.Since(lastGlob) >= every || len(tails) == 0 {
 			lastGlob = time.Now()
 			ms, err := globConfined(pattern, env)
 			if err != nil {

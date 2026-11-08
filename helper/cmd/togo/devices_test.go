@@ -142,19 +142,25 @@ func TestPushTestSealsNotifyToEveryDevice(t *testing.T) {
 	if len(bodies) != 2 {
 		t.Fatalf("relay got %d pushes, want 2", len(bodies))
 	}
-	var req struct {
-		Ciphertext string `json:"ciphertext"`
-	}
-	if err := json.Unmarshal(bodies[0], &req); err != nil {
-		t.Fatal(err)
-	}
 	keys, err := push.LoadOrCreateHostKeys(env["TOGO_HOME"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, err := seal.Open(privA, req.Ciphertext, seal.LabelPush, []byte(keys.HostID+"|dev_a"))
-	if err != nil {
-		t.Fatal(err)
+	// Devices are sent to side by side: dev_a's push is whichever opens.
+	var plain []byte
+	for _, b := range bodies {
+		var req struct {
+			Ciphertext string `json:"ciphertext"`
+		}
+		if err := json.Unmarshal(b, &req); err != nil {
+			t.Fatal(err)
+		}
+		if p, err := seal.Open(privA, req.Ciphertext, seal.LabelPush, []byte(keys.HostID+"|dev_a")); err == nil {
+			plain = p
+		}
+	}
+	if plain == nil {
+		t.Fatal("no push opens for dev_a")
 	}
 	var p wire.PushPlaintext
 	if err := json.Unmarshal(plain, &p); err != nil || p.Kind != wire.PushNotify {

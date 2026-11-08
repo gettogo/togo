@@ -47,11 +47,6 @@
           "installed": false
         },
         {
-          "id": "gemini",
-          "name": "Gemini CLI",
-          "installed": false
-        },
-        {
           "id": "copilot",
           "name": "Copilot CLI",
           "installed": false

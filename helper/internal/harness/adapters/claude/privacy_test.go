@@ -106,3 +106,38 @@ func hookRecord(t *testing.T, payload string) harness.Record {
 	t.Helper()
 	return harness.Record{Source: "hooks", At: time.Now(), Data: json.RawMessage(payload)}
 }
+
+// The last session in the folder ended seconds before this one started
+// (recorded: 8 s); its transcript must not stand in for this one's, or the
+// new chat opens on the old conversation.
+func TestTranscriptGuessSkipsTheSessionJustBefore(t *testing.T) {
+	created := time.Now().Add(-10 * time.Minute).Truncate(time.Second)
+	vars, dir := transcriptEnv(t, created)
+	e := env()
+	e.Vars = vars()
+	writeAt(t, filepath.Join(dir, "previous.jsonl"), created.Add(-8*time.Second))
+	if got := transcriptFor(e); got != "" {
+		t.Fatalf("guessed %s, the previous session's transcript", got)
+	}
+}
+
+// The previous session wrote its transcript once more as it was killed,
+// after this session started: its first record is older, so it is not
+// this session's.
+func TestTranscriptGuessSkipsAFileStartedBefore(t *testing.T) {
+	created := time.Now().Add(-10 * time.Minute).Truncate(time.Second)
+	vars, dir := transcriptEnv(t, created)
+	e := env()
+	e.Vars = vars()
+	p := filepath.Join(dir, "previous.jsonl")
+	line := `{"type":"user","timestamp":"` + created.Add(-30*time.Second).UTC().Format(time.RFC3339Nano) + `"}` + "\n"
+	if err := os.WriteFile(p, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(p, created.Add(time.Second), created.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got := transcriptFor(e); got != "" {
+		t.Fatalf("guessed %s", got)
+	}
+}

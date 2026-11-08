@@ -8,8 +8,11 @@
 package claude
 
 import (
+	"bufio"
 	_ "embed"
 	"encoding/json"
+	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -126,6 +129,12 @@ func plain(s string) string { return ansi.ReplaceAllString(s, "") }
 // the session started, for when no SessionStart hook arrived. Every Claude
 // Code session in the folder writes there, Togo's or not, so it guesses
 // only when exactly one transcript is that recent: never a neighbour's.
+// transcriptSkew allows for "created" being cut to whole seconds. Claude
+// writes a transcript only once a prompt is sent, after the session
+// started, so a file last written before that belongs to an earlier
+// session in the folder.
+const transcriptSkew = 2 * time.Second
+
 func transcriptFor(env harness.Env) string {
 	key := env.Vars["cwd_key"]
 	created, _ := time.Parse(time.RFC3339, env.Vars["created"])
@@ -134,9 +143,37 @@ func transcriptFor(env harness.Env) string {
 	}
 	h := env.Vars[source.VarHome]
 	dir := filepath.Join(source.Expand("~", h), ".claude", "projects", key)
-	p, err := source.Sole(filepath.Join(dir, "*.jsonl"), created.Add(-time.Minute), env)
+	p, err := source.Sole(filepath.Join(dir, "*.jsonl"), created.Add(-transcriptSkew), env)
 	if err != nil {
 		return ""
 	}
+	// The session before this one in the folder can write its transcript
+	// once more as it is killed, after this one started: a transcript whose
+	// first record is older than this session belongs to that one.
+	if first, ok := firstStamp(p); ok && first.Before(created.Add(-transcriptSkew)) {
+		return ""
+	}
 	return p
+}
+
+// firstStamp reads the first timestamp among a transcript's first lines.
+func firstStamp(p string) (time.Time, bool) {
+	f, err := os.Open(p)
+	if err != nil {
+		return time.Time{}, false
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(io.LimitReader(f, 1<<20))
+	sc.Buffer(make([]byte, 64<<10), 1<<20)
+	for i := 0; i < 20 && sc.Scan(); i++ {
+		var e struct {
+			Timestamp string `json:"timestamp"`
+		}
+		if json.Unmarshal(sc.Bytes(), &e) == nil && e.Timestamp != "" {
+			if t, err := time.Parse(time.RFC3339Nano, e.Timestamp); err == nil {
+				return t, true
+			}
+		}
+	}
+	return time.Time{}, false
 }

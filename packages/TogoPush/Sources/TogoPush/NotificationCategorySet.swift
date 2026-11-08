@@ -19,6 +19,17 @@ public enum SharedSettings {
     }
 
     public static var defaults: UserDefaults? { UserDefaults(suiteName: SharedGroup.ios) }
+
+    /// Where the app keeps this device's "show command text" machines (TogoKit's
+    /// `DeviceSettings` in the app group, under the device namespace).
+    public static let liveActivityCommandMachines = "device.push.liveActivityCommandMachines"
+
+    /// The machines, by the app's id, whose command text this device chose to show.
+    public static func readLiveActivityCommandMachines(_ defaults: UserDefaults? = SharedSettings.defaults) -> Set<UUID> {
+        guard let data = defaults?.data(forKey: liveActivityCommandMachines),
+              let ids = try? JSONDecoder().decode([UUID].self, from: data) else { return [] }
+        return Set(ids)
+    }
 }
 
 /// The notification categories and their lock-screen actions, registered by the app at

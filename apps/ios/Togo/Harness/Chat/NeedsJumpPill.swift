@@ -20,7 +20,10 @@ struct NeedsJumpPill: View {
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .capsule)
+        // Opaque, like the mission pill: the needs-you words sit over scrolling chat text and
+        // must read at once, not through glass.
+        .background(Capsule().fill(Color.togoRaised))
+        .overlay(Capsule().strokeBorder(Color.togoLine, lineWidth: 1))
         .accessibilityLabel(ChatCopy.jumpToNeeds)
         .accessibilityHint(ChatCopy.jumpToNeedsHint)
         .accessibilityIdentifier("chat.needsJump")

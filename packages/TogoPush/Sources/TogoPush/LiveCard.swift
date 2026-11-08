@@ -17,7 +17,7 @@ public enum LiveAgentMark: Equatable, Sendable {
         "openhands": "agent.openhands", "pi": "agent.pi",
     ]
     private static let monograms = [
-        "codex": "Cx", "gemini": "Ge", "aider": "Ad", "auggie": "Au", "crush": "Cr", "droid": "Dr", "kiro": "Kr",
+        "codex": "Cx", "aider": "Ad", "auggie": "Au", "crush": "Cr", "droid": "Dr", "kiro": "Kr",
     ]
 
     public static func of(_ agent: String) -> LiveAgentMark {
@@ -72,7 +72,7 @@ public struct LiveCard: Equatable, Sendable {
 
     public init(
         agent: String, status: String, waiting: Int, requestId: String?, command: String?, context: LiveContext?,
-        machine: String?, stale: Bool
+        machine: String?, stale: Bool, showsCommand: Bool = true
     ) {
         let phase: Phase = stale ? .other : status == "needs_you" ? .needsYou : status == "working" ? .working : .other
         self.phase = phase
@@ -92,7 +92,10 @@ public struct LiveCard: Equatable, Sendable {
             let step = context?.step.map { PromptText.clean($0, maxLines: 1) } ?? ""
             self.step = step.isEmpty ? nil : step
         case .needsYou:
-            detail = Self.detail(context?.subject) ?? command.flatMap { raw in
+            // The helper seals the command in the context for every device; the user's "show
+            // command text" choice for the machine decides whether the lock screen shows it.
+            let subject = context?.subject.flatMap { showsCommand || $0.kind != "command" ? $0 : nil }
+            detail = Self.detail(subject) ?? (showsCommand ? command : nil).flatMap { raw in
                 let clean = PromptText.clean(raw, maxLines: 2)
                 return clean.isEmpty ? nil : .command(clean)
             }

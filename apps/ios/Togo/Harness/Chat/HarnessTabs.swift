@@ -35,7 +35,7 @@ import TogoKit
     /// machine, nil while the machine is not listed yet; a tab waits for them. A tab whose
     /// machine gains harness.v1 gets a fresh store. `expectsChat` says whether a tab's session
     /// should have a chat, so its store shows ink rather than the terminal until it knows.
-    func sync(tabs: [TabID], capabilities: (HostID) -> Set<String>?, expectsChat: (TabID) -> Bool = { _ in false }) {
+    func sync(tabs: [TabID], capabilities: (HostID) -> Set<String>?, expectsChat: @escaping (TabID) -> Bool = { _ in false }) {
         let open = Set(tabs)
         for id in stores.keys where !open.contains(id) {
             // Its descriptor stays, so reopening the tab shows its chat at once.
@@ -49,7 +49,8 @@ import TogoKit
                 remove(id)
             }
             let store = HarnessSessionStore(
-                subject: subject, services: services, expectsChat: expectsChat(id), cached: descriptors[id]
+                subject: subject, services: services, expectsChat: expectsChat(id),
+                expectsChatLive: { expectsChat(id) }, cached: descriptors[id]
             )
             stores[id] = store
             if active { store.launch() }

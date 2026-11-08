@@ -26,6 +26,12 @@ enum WatchHome {
         return .request(id: first.requestId, position: 1, count: requests.count)
     }
 
+    /// The words under the unlit beacon. A Watch that has never heard from the phone has no
+    /// machine to answer, so "All clear" would read as working when it is not set up.
+    static func clearWords(paired: Bool, sessions: Int) -> String {
+        paired || sessions > 0 ? WatchCopy.allClear : WatchCopy.setUpOnPhone
+    }
+
     /// How long an answered request stays on the page, so its result and haptic land before
     /// the next request takes its place.
     static let holdAfterAnswer: Duration = .milliseconds(1200)

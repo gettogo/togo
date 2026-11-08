@@ -30,4 +30,6 @@ public enum HelperPresence: Sendable, Equatable {
     case present(version: String)
     case missing
     case outdated(String)
+    /// The helper speaks a newer protocol than this app, so the app is the side to update.
+    case newer
 }

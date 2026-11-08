@@ -9,4 +9,10 @@ public protocol ExecChannel: Sendable {
     /// single task, so implementations need no queue of their own.
     func write(_ data: Data) async throws
     func close() async
+    /// The command's exit status once it ended, if the host reported one.
+    var exitStatus: Int32? { get }
+}
+
+extension ExecChannel {
+    public var exitStatus: Int32? { nil }
 }

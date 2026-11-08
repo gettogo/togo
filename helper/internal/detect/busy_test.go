@@ -34,24 +34,6 @@ const codexWorking = `› fix the tests
   ⏎ send   ⌃J newline   ⌃T transcript
 `
 
-const geminiWorking = `> fix the tests
-
-⠏ Reading the test files (esc to cancel, 12s)
-
-╭────────────────────────────────────────╮
-│ >   Type your message or @path/to/file │
-╰────────────────────────────────────────╯
-~/project      no sandbox      gemini-2.5-pro
-`
-
-const geminiDialog = `Allow execution of: 'go test ./...'?
-
-● 1. Yes, allow once
-  2. Yes, allow always
-  3. No, suggest changes (esc)
-(Use Enter to select, Esc to cancel)
-`
-
 const piWorking = `fix the tests
 
 ⠋ Working... (escape to interrupt)
@@ -75,8 +57,6 @@ func TestBusy(t *testing.T) {
 		{"codex", codexWorking, true},
 		{"codex", "› Ask Codex to do anything\n", false},
 		{"aider", claudeWorking, false},
-		{"gemini", geminiWorking, true},
-		{"gemini", geminiDialog, false},
 		{"auggie", "Working (5s • esc to interrupt)\n> \n", true},
 		{"auggie", "> \n? for shortcuts\n", false},
 		{"pi", piWorking, true},
@@ -90,7 +70,26 @@ func TestBusy(t *testing.T) {
 			t.Errorf("case %d (%s): Busy = %v, want %v", i, c.agent, got, c.want)
 		}
 	}
-	if !KnowsBusy("claude") || !KnowsBusy("codex") || !KnowsBusy("gemini") || KnowsBusy("aider") || KnowsBusy("copilot") {
+	if !KnowsBusy("claude") || !KnowsBusy("codex") || KnowsBusy("aider") || KnowsBusy("copilot") {
 		t.Error("KnowsBusy")
+	}
+}
+
+// omp 18.16 during a turn and at rest (captured live, path shortened).
+const ompWorking = ` Count slowly from 1 to 30, one number per line.
+  ⎋ Working…
+ ⠦ 0s > ◑ Haiku 4.5 > 🗑 …/ompw > (sub) ▶──6%──────────────────────┃────200K─
+╰─
+`
+
+const ompIdle = ` 29
+ 30
+ π > ◑ Haiku 4.5 > 🗑 …/ompw > S0.01 ▶──7%─────────────────────────┃────200K─
+╰─
+`
+
+func TestBusyOmp(t *testing.T) {
+	if !KnowsBusy("omp") || !Busy("omp", ompWorking) || Busy("omp", ompIdle) {
+		t.Fatalf("omp: knows %v, working %v, idle %v", KnowsBusy("omp"), Busy("omp", ompWorking), Busy("omp", ompIdle))
 	}
 }

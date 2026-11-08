@@ -142,11 +142,15 @@ import WidgetKit
             // take a frame from the first screen.
             Task.detached(priority: .utility) {
                 NotificationCategories.register()
-                WatchBridge.activate()
             }
             watchNetwork(services)
             Task { await live.start() }
-            connectWatch(services: services, quietTools: quietTools, activeStore: activeStore)
+        }
+        // The Watch link starts at launch, not with the first screen: a reply from the Watch
+        // can launch the app in the background, where no window ever appears.
+        connectWatch(services: services, quietTools: quietTools, activeStore: activeStore)
+        if watch != nil {
+            Task.detached(priority: .utility) { WatchBridge.activate() }
         }
     }
 
@@ -168,9 +172,13 @@ import WidgetKit
         // without asking; otherwise the Watch hears it needs the phone.
         let quiet = ReplySender(tools: quietTools, quiet: true, label: { Self.label($0, in: activeStore()) })
         let pairings = self.pairings, pending = self.pending
-        // Checked against the window in front; with no window yet the Watch hears it needs the phone.
+        // Checked against the window in front. With no window (the Watch launched the app in
+        // the background) an answer to a request the push announced still goes; anything that
+        // needs the sessions tells the Watch it needs the phone.
         watch.onReply = { message in
-            guard let store = activeStore() else { return .needsPhone }
+            guard let store = activeStore() else {
+                return await WatchReplyGate.windowless(pairings: pairings, pending: pending, sender: quiet)(message)
+            }
             return await WatchReplyGate.handler(store: store, pairings: pairings, pending: pending, sender: quiet)(message)
         }
         // Run again tapped on the Watch starts the session the same quiet way.
@@ -184,11 +192,31 @@ import WidgetKit
         watch.sendPairings(pairings.all())
         watchFeed = Task { [weak watch] in
             let feed = Observations { WatchFeed(activeStore()?.controlCenter ?? ControlCenterState()) }
-            var last: WatchFeed?
-            for await next in feed where next != last {
-                last = next
+            // A change of status or requests goes at once; a session's activity line alone at
+            // most every few seconds, so a busy agent does not keep the Watch link awake.
+            let gate = WatchFeedGate()
+            var trailing: Task<Void, Never>?
+            @MainActor func send(_ next: WatchFeed) {
+                gate.didSend(next, at: .now)
                 watch?.publish(sessions: next.sessions, requests: pending.all(), textRequests: next.textRequests)
             }
+            for await next in feed {
+                switch gate.offer(next, now: .now) {
+                case .skip:
+                    break
+                case .send:
+                    trailing?.cancel()
+                    send(next)
+                case .hold(let wait):
+                    trailing?.cancel()
+                    trailing = Task {
+                        try? await Task.sleep(for: wait)
+                        guard !Task.isCancelled, gate.offer(next, now: .now) == .send else { return }
+                        send(next)
+                    }
+                }
+            }
+            trailing?.cancel()
         }
     }
 

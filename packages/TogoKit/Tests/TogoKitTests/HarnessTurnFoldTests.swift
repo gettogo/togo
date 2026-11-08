@@ -103,6 +103,31 @@ struct HarnessTurnFoldTests {
         #expect(summary.steps == 2)
     }
 
+    /// A background subagent's item comes without a turn id while the turn runs: it joins that
+    /// turn's work line, so the chat shows one working indicator, not two.
+    @Test func aTurnlessStepDuringARunningTurnJoinsItsWorkLine() {
+        let rows = TurnFold.rows([
+            S.user("u1", seq: 1),
+            S.turn("u1", seq: 2, state: .running, steps: 1, files: 0),
+            S.tool("t1", seq: 3, turn: "u1", state: .running, end: nil),
+            S.agent("bg", seq: 4, turn: nil),
+        ])
+        #expect(rows.map(\.id) == ["u1", "work.u1"])
+        guard case .work(_, _, let steps) = rows[1] else { Issue.record("no work row"); return }
+        #expect(steps.map(\.id) == ["t1", "bg"])
+    }
+
+    /// After the turn ended, a turnless step keeps its own row as before.
+    @Test func aTurnlessStepAfterTheTurnKeepsItsRow() {
+        let rows = TurnFold.rows([
+            S.user("u1", seq: 1),
+            S.turn("u1", seq: 2, state: .ok, steps: 1, files: 0),
+            S.tool("t1", seq: 3, turn: "u1"),
+            S.agent("bg", seq: 4, turn: nil),
+        ])
+        #expect(rows.map(\.id) == ["u1", "work.u1", "work.bg"])
+    }
+
     @Test func turnsKeepTheirFirstSeenOrder() {
         let rows = TurnFold.rows([
             S.user("u1", seq: 1), S.reply("m1", seq: 2, turn: "u1"),

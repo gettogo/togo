@@ -4,6 +4,9 @@
 #   curl -fsSL https://github.com/gettogo/togo/releases/latest/download/install.sh | sh
 #   sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart]
 #
+# The default directory is ~/.togo/bin, where the Togo app looks first; a
+# link from /usr/local/bin (when writable) puts it on the terminal PATH.
+#
 # SHA256SUMS must carry a minisign signature by the release key below whose
 # trusted comment is exactly "togo <version> SHA256SUMS", and the archive must
 # match its line in SHA256SUMS. The signature is checked with minisign, or with
@@ -327,13 +330,14 @@ main() {
   say "Verified $archive ($how)"
 
   # Install directory: chosen only now, so a refusal above never touches it.
+  # ~/.togo/bin is where the Togo app looks first (an SSH command's PATH
+  # does not read shell profiles), so that is the default; a link from a
+  # directory on PATH is added below for the terminal.
+  default_dir=no
   if [ -z "$dir" ]; then
-    if [ -d "$system_dir" ] && [ -w "$system_dir" ]; then
-      dir=$system_dir
-    else
-      [ -n "${HOME:-}" ] || refuse "HOME is not set; pass --dir DIR."
-      dir=$HOME/.local/bin
-    fi
+    [ -n "${HOME:-}" ] || refuse "HOME is not set; pass --dir DIR."
+    dir=$HOME/.togo/bin
+    default_dir=yes
   fi
   case $dir in /*) ;; *) dir=$(pwd)/$dir ;; esac
   mkdir -p "$dir" 2>/dev/null || refuse "could not create $dir; pass --dir with a directory you own."
@@ -347,10 +351,29 @@ main() {
   mv -f "$staged" "$dir/togo" || refuse "could not replace $dir/togo; the old binary is unchanged."
   staged=""
   say "Installed $dir/togo"
-  case ":${PATH:-}:" in
-    *":$dir:"*) ;;
-    *) warn "$dir is not on your PATH; add it in your shell profile." ;;
-  esac
+  on_path=no
+  case ":${PATH:-}:" in *":$dir:"*) on_path=yes ;; esac
+  if [ "$default_dir" = yes ]; then
+    # An earlier install put a plain binary in /usr/local/bin or
+    # ~/.local/bin, which a service or PATH may still run: point it here.
+    # With none, link from /usr/local/bin when it is writable.
+    linked=no
+    for d in "$system_dir" "$HOME/.local/bin"; do
+      if [ -f "$d/togo" ] && [ ! -h "$d/togo" ] && [ -w "$d" ]; then
+        ln -sf "$dir/togo" "$d/togo.link.$$" && mv -f "$d/togo.link.$$" "$d/togo" &&
+          say "Linked $d/togo to $dir/togo" && linked=$d
+      elif [ -h "$d/togo" ] && [ "$(readlink "$d/togo")" = "$dir/togo" ]; then
+        linked=$d
+      fi
+    done
+    if [ "$linked" = no ] && [ -d "$system_dir" ] && [ -w "$system_dir" ] && [ ! -e "$system_dir/togo" ]; then
+      ln -s "$dir/togo" "$system_dir/togo" && say "Linked $system_dir/togo to $dir/togo" && linked=$system_dir
+    fi
+    if [ "$linked" != no ]; then
+      case ":${PATH:-}:" in *":$linked:"*) on_path=yes ;; esac
+    fi
+  fi
+  [ "$on_path" = yes ] || warn "$dir is not on your PATH; add it in your shell profile (export PATH=\"$dir:\$PATH\")."
 
   installed_version=$("$dir/togo" version </dev/null 2>/dev/null || true)
   service=$("$dir/togo" service status </dev/null 2>/dev/null || true)
@@ -368,7 +391,7 @@ main() {
     *) next=yes ;;
   esac
   say "${installed_version:-togo $version}"
-  [ "$next" = no ] || say "Next: togo service install"
+  [ "$next" = no ] || say "Next: $dir/togo service install"
 }
 
 main "$@"

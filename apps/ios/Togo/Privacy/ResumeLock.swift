@@ -54,6 +54,12 @@ final class ResumeLockController {
         }
     }
 
+    /// Coming back now would lock: the cover holds over the return instead of showing the
+    /// screen for a frame before the lock goes up.
+    var locksOnReturn: Bool {
+        ResumeLock.needsUnlock(backgroundedAt: backgroundedAt, now: Date(), enabled: isEnabled())
+    }
+
     /// The device locked: the next signature must ask again, even one already on its way.
     func protectedDataBecameUnavailable() {
         biometrics.expire()

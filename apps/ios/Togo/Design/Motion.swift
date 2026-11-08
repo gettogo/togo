@@ -125,8 +125,9 @@ struct MotionSpec: Equatable, Sendable {
 
 extension EnvironmentValues {
     /// Holds looping animations on their first frame, so a snapshot of one renders the same
-    /// every run.
-    @Entry var loopsPaused = false
+    /// every run. UI tests launched with `-ui-still-loops` start with every loop held, so the
+    /// app goes idle between steps instead of XCUITest waiting out each spinner.
+    @Entry var loopsPaused = AmbientLoops.heldAtLaunch
 }
 
 extension View {
@@ -144,4 +145,15 @@ private struct MotionRoleModifier<Value: Equatable>: ViewModifier {
     func body(content: Content) -> some View {
         content.animation(Motion.animation(role, reduce: reduceMotion), value: value)
     }
+}
+
+/// Whether ambient loops (spinners, the beacon's drift, the paws) start held.
+enum AmbientLoops {
+    static let heldAtLaunch: Bool = {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-ui-still-loops")
+        #else
+        false
+        #endif
+    }()
 }

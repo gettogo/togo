@@ -29,7 +29,6 @@ public enum AgentCatalog {
         Entry(id: "omp", name: "OMP", command: "omp", mark: .logo("agent.omp")),
         Entry(id: "codex", name: "Codex", command: "codex", mark: .monogram("Cx")),
         Entry(id: "opencode", name: "OpenCode", command: "opencode", mark: .logo("agent.opencode")),
-        Entry(id: "gemini", name: "Gemini CLI", command: "gemini", mark: .monogram("Ge")),
         Entry(id: "copilot", name: "Copilot CLI", command: "copilot", mark: .logo("agent.copilot")),
         Entry(id: "cursor", name: "Cursor CLI", command: "cursor-agent", mark: .logo("agent.cursor")),
         Entry(id: "aider", name: "Aider", command: "aider", mark: .monogram("Ad")),

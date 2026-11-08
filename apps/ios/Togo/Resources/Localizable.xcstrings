@@ -1334,24 +1334,46 @@
         }
       }
     },
-    "new.agent.favorite.add" : {
+    "new.agent.favorite.add.named" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add to favorites"
+            "value" : "Favorite %@"
           }
         }
       }
     },
-    "new.agent.favorite.remove" : {
+    "new.agent.favorite.remove.named" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove from favorites"
+            "value" : "Unfavorite %@"
+          }
+        }
+      }
+    },
+    "new.agent.favorites" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorites"
+          }
+        }
+      }
+    },
+    "new.agent.others" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other agents"
           }
         }
       }
@@ -4246,7 +4268,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No machines found nearby. Enter an address."
+            "value" : "No machines found nearby. A Mac shows here once Remote Login is on (System Settings › General › Sharing), or enter an address."
           }
         }
       }
@@ -4851,7 +4873,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tmux isn't installed. The helper needs it."
+            "value" : "tmux isn't installed. The helper needs 3.2 or newer."
           }
         }
       }

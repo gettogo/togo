@@ -40,13 +40,6 @@ enum ComposerCopy {
         String(localized: "composer.message", defaultValue: "Message \(name)")
     }
 
-    /// "OMP has no such command.": "/xyz" the agent does not list, held in the field.
-    static func notACommand(_ name: String) -> String {
-        name.isEmpty
-            ? String(localized: "composer.notACommandUnnamed", defaultValue: "Not a known command.")
-            : String(localized: "composer.notACommand", defaultValue: "\(name) has no such command.")
-    }
-
     static let sendAsText = String(localized: "composer.sendAsText", defaultValue: "Send as text")
 
     /// "Model…": a long list on its own screen.
@@ -77,7 +70,7 @@ enum ComposerCopy {
     static let uploadFailed = String(localized: "composer.attach.failed", defaultValue: "Not uploaded")
     static let attachUnreadable = String(localized: "composer.attach.unreadable", defaultValue: "That image could not be read.")
     static let attachUnavailable = String(localized: "composer.attach.unavailable",
-                                          defaultValue: "This Mac's Togo cannot take images yet. Update Togo on the Mac.")
+                                          defaultValue: "The Togo helper on this machine can't take images yet. Update the helper there.")
 
     /// "Up to 10 images per message."
     static func attachLimit(_ n: Int) -> String {

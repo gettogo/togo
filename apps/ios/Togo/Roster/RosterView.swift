@@ -13,6 +13,7 @@ struct RosterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.machineTools) private var machineTools
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.hardwareKeyboard) private var hardwareKeyboard
     @Bindable var store: AppStore
     /// For Escape, which puts keyboard focus back in the focused pane's terminal.
     var terminals: TerminalPool?
@@ -98,6 +99,15 @@ struct RosterView: View {
                 // The notice has a section of its own that is always there, so its row coming
                 // and going never lands in the same update as a line leaving a machine.
                 Section {
+                    if roster.deviceOffline {
+                        Label(ControlCenterCopy.deviceOffline(DeviceName.model), systemImage: "wifi.slash")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.togoSnow)
+                            .listRowBackground(Color.togoInk)
+                            .listRowSeparator(.hidden)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier("roster.deviceOffline")
+                    }
                     if let notice = shown.notice {
                         Label(notice.text, systemImage: notice.isError ? "exclamationmark.circle" : "info.circle")
                             .font(.subheadline)
@@ -110,7 +120,7 @@ struct RosterView: View {
                 ForEach(roster.groups) { group in
                     RosterSection(
                         group: group, etAvailable: store.etAvailable(group.id), now: now, zoom: zoom,
-                        selected: selected, cursor: wide && listFocused ? keys.cursor : nil, draggable: linesDrag,
+                        selected: selected, cursor: keyboardNavigates && listFocused ? keys.cursor : nil, draggable: linesDrag,
                         restoring: store.restoring, wakeNote: shown.wakeNotes[group.id], perform: perform
                     )
                 }
@@ -132,11 +142,11 @@ struct RosterView: View {
             .refreshable { await store.services.refresh() }
             .task(id: store.restoreCandidates) { await store.loadRestorable(tools: machineTools) }
             .sessionRotors(store.listMachines, requests: [])
-            .focusable(wide)
+            .focusable(keyboardNavigates)
             .focusEffectDisabled()
             .focused($listFocused)
             .onKeyPress(keys: [.upArrow, .downArrow]) { press in
-                guard wide else { return .ignored }
+                guard keyboardNavigates else { return .ignored }
                 keys.move(press.key == .upArrow ? -1 : 1, through: roster.lines.map(\.id))
                 if let cursor = keys.cursor { scroller.scrollTo(SessionRotors.Target.row(cursor)) }
                 return .handled
@@ -232,15 +242,21 @@ struct RosterView: View {
         }
     }
 
+    /// Arrow keys, Return and ⌘⌫ move through the lines wherever a hardware keyboard is
+    /// attached, not only beside a terminal: a narrow iPad window or a phone with a keyboard too.
+    private var keyboardNavigates: Bool {
+        wide || hardwareKeyboard.hardwareKeyboardConnected
+    }
+
     private func openCursor(_ roster: RosterModel) -> KeyPress.Result {
-        guard wide, let row = keys.row(in: roster.lines.map(\.row)) else { return .ignored }
+        guard keyboardNavigates, let row = keys.row(in: roster.lines.map(\.row)) else { return .ignored }
         open(row, transport: nil)
         return .handled
     }
 
     /// The same confirmation as the line's menu, and only where the menu offers it.
     private func askToEndCursor(_ roster: RosterModel) -> KeyPress.Result {
-        guard wide, let row = keys.rowToEnd(in: roster.lines.map(\.row), machines: store.controlCenter.machines)
+        guard keyboardNavigates, let row = keys.rowToEnd(in: roster.lines.map(\.row), machines: store.controlCenter.machines)
         else { return .ignored }
         killTarget = row
         return .handled
@@ -320,6 +336,7 @@ struct BeaconDot: View {
         Circle()
             .fill(Color.togoAccent)
             .frame(width: side, height: side)
+            // accent-ok: the lit beacon dot's halo.
             .background(Circle().fill(Color.togoAccent.opacity(0.14)).padding(-4))
             .accessibilityHidden(true)
     }

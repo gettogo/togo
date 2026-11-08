@@ -1,5 +1,29 @@
 {
   "source": "real",
   "agentVersion": "2.1.318 (Claude Code)",
-  "match": false
+  "match": true,
+  "kind": "question",
+  "title": "Quick safety check: Is this a project you created or one you trust?",
+  "options": [
+    {
+      "n": 1,
+      "label": "No, exit",
+      "role": "deny"
+    },
+    {
+      "n": 2,
+      "label": "Yes, I trust this folder",
+      "role": "approve_always"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "subject": null
 }

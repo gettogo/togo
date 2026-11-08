@@ -32,6 +32,9 @@ const (
 	// attentionGap limits captures per session caused by bells and OSC
 	// notifications; notifyGap limits repeats of the same notification.
 	attentionGap = 500 * time.Millisecond
+	// promptPoll spaces the screen reads that look for a prompt while a
+	// coding agent's output goes on.
+	promptPoll = 4 * time.Second
 	notifyGap    = 30 * time.Second
 )
 
@@ -380,6 +383,14 @@ func (w *Watcher) Tick(ctx context.Context) {
 			e.screenCheck = false
 			w.settle(ctx, id, e)
 		case w.signInCheck(ctx, id, e, now):
+		case e.prompt == "" && codingAgent(e.agent) && now.Sub(e.lastOutput) < idle && now.Sub(e.lastPoll) >= promptPoll:
+			// An agent that keeps repainting (a blinking cursor, a
+			// spinner) while a question waits never falls silent.
+			e.lastPoll = now
+			if p, ok, err := w.inspect(ctx, id); err == nil && ok {
+				e.awaitingIdle, e.promptCheck, e.working = false, false, false
+				w.promptSeen(ctx, id, e, p)
+			}
 		case e.promptCheck && !e.awaitingIdle && now.Sub(e.lastOutput) >= idle:
 			e.promptCheck = false
 			w.checkPrompt(ctx, id, e)
@@ -441,7 +452,20 @@ func (w *Watcher) attention(ctx context.Context, sig wire.Signal, e *entry) {
 		return
 	}
 	e.lastNotify, e.notifyTitle, e.notifyBody = now, title, sig.Body
-	w.notify(id, wire.LevelNeedsYou, title, sig.Body)
+	level := wire.LevelNeedsYou
+	if codingAgent(e.agent) {
+		// Agents ring BEL mid-turn and send OSC 9 when they finish or
+		// idle; their real needs arrive as prompts (above) or through
+		// their hooks and feeds. A bell alone is not one.
+		level = wire.LevelInfo
+	}
+	w.notify(id, level, title, sig.Body)
+}
+
+// codingAgent reports whether a session runs a known coding agent rather
+// than a shell or a program the user named.
+func codingAgent(agent string) bool {
+	return agent != "" && agent != "shell" && agent != wire.AgentCustom
 }
 
 func (w *Watcher) inspect(ctx context.Context, id string) (detect.Prompt, bool, error) {

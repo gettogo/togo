@@ -58,6 +58,14 @@ import TogoKit
         #expect(store.workspaceOpen)
     }
 
+    /// ⌘, while New session is being filled in: the form stays with what was typed.
+    @Test func aFormInProgressIsNotReplaced() {
+        let store = store()
+        store.sheet = .newSession(one.hostID)
+        store.showSettings()
+        #expect(store.sheet == .newSession(one.hostID))
+    }
+
     @Test func settingsPushesOnTheCompactList() {
         let store = store(inline: false)
         store.showSettings()

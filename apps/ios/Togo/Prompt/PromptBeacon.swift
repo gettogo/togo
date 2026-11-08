@@ -45,6 +45,7 @@ struct PromptBeacon: View {
 /// at most 11 percent strong, and a 1 px border in the same blue. No outer glow.
 struct PromptRequestLight: ViewModifier {
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     let on: Bool
     let radius: CGFloat
 
@@ -52,6 +53,7 @@ struct PromptRequestLight: ViewModifier {
         content
             .background {
                 EllipticalGradient(
+                    // accent-ok: the prompt bar's beacon glow, on only for a request.
                     colors: [Color.togoAccent.opacity(0.11), Color.togoAccent.opacity(0)],
                     center: UnitPoint(x: 0.18, y: 0), startRadiusFraction: 0, endRadiusFraction: 0.65
                 )
@@ -60,7 +62,8 @@ struct PromptRequestLight: ViewModifier {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(Color.togoAccent.opacity(0.22), lineWidth: 1 / displayScale)
+                    // accent-ok: the beacon's edge, on only for a request.
+                    .strokeBorder(Color.togoAccent.opacity(0.22), lineWidth: Contrast.hairline(displayScale, contrast))
                     .opacity(on ? 1 : 0)
                     .allowsHitTesting(false)
             }
@@ -84,6 +87,7 @@ struct PromptCapsuleStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     let kind: Kind
 
     func makeBody(configuration: Configuration) -> some View {
@@ -97,7 +101,7 @@ struct PromptCapsuleStyle: ButtonStyle {
             .background(fill, in: .capsule)
             .overlay {
                 if kind == .plain {
-                    Capsule().strokeBorder(Color.togoLine, lineWidth: 1 / displayScale)
+                    Capsule().strokeBorder(Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast))
                 }
             }
             .contentShape(.capsule)

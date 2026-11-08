@@ -108,6 +108,30 @@ import TogoKit
         #expect(prompts.queue.isEmpty)
     }
 
+    /// One host shows a question from start to end: the workspace opening (or a sheet) above
+    /// the host that took it does not move it, which read as "popped up, then swiped away".
+    @Test func aQuestionStaysWithTheHostThatTookIt() async {
+        let prompts = AttachPrompts()
+        let prompter = prompter(prompts)
+        _ = prompter.beginAttempt()
+        let reply = Task { await prompter.answer(codePrompt) }
+        await waitForQuestions(prompts, 1)
+        #expect(AttachPrompts.shows("root", holder: prompts.host, active: true))
+        prompts.claim("root")
+        prompts.claim("workspace")
+        #expect(prompts.host == "root")
+        // The workspace is now on top: root is no longer active, yet keeps the question.
+        #expect(AttachPrompts.shows("root", holder: prompts.host, active: false))
+        #expect(!AttachPrompts.shows("workspace", holder: prompts.host, active: true))
+        // The host went away: another may take it.
+        prompts.release("root")
+        prompts.claim("workspace")
+        #expect(prompts.host == "workspace")
+        prompts.withdrawAll()
+        _ = await reply.value
+        #expect(prompts.host == nil)
+    }
+
     @Test func queueIsCappedAndDeclinesTheOldest() async {
         let prompts = AttachPrompts()
         var replies: [Task<AuthAnswer?, Never>] = []

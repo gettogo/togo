@@ -10,6 +10,9 @@ struct Role {
     let asset: String
     let dark: String
     let light: String
+    /// Increase Contrast values, set for the roles that have them.
+    var highDark: String?
+    var highLight: String?
 }
 
 func fail(_ message: String) -> Never {
@@ -25,6 +28,9 @@ let motionURL = repoRoot.appendingPathComponent("apps/ios/Togo/Design/MotionToke
 let checkOnly = CommandLine.arguments.dropFirst().contains("--check")
 
 // Order fixes the order of the generated Swift, so output is stable.
+// Roles that also carry Increase Contrast values in highContrast.dark and highContrast.light.
+let highContrastKeys: Set<String> = ["mute", "muteDim", "line", "accent"]
+
 let roleKeys = [
     "ink", "deepest", "raised", "line", "snow", "mute", "muteDim", "grouped",
     // Content colours for diffs and code; they never reuse the accent hue.
@@ -40,16 +46,28 @@ func loadRoles() -> [Role] {
           let accent = color["accent"] as? [String: String]
     else { fail("cannot read color, color.light and color.accent from \(tokensURL.path)") }
 
+    guard let high = root["highContrast"] as? [String: [String: String]],
+          let highDark = high["dark"], let highLight = high["light"]
+    else { fail("highContrast needs dark and light") }
+    guard Set(highDark.keys) == highContrastKeys, Set(highLight.keys) == highContrastKeys else {
+        fail("highContrast.dark and highContrast.light need exactly \(highContrastKeys.sorted())")
+    }
     var roles: [Role] = roleKeys.map { key in
         guard let dark = color[key] as? String, let lightValue = light[key] else {
             fail("role \(key) needs a dark value and a color.light value")
         }
-        return Role(key: key, asset: key.prefix(1).uppercased() + key.dropFirst(), dark: dark, light: lightValue)
+        return Role(
+            key: key, asset: key.prefix(1).uppercased() + key.dropFirst(), dark: dark, light: lightValue,
+            highDark: highDark[key], highLight: highLight[key]
+        )
     }
     guard let accentDark = accent["dark"], let accentLight = accent["light"] else {
         fail("color.accent needs dark and light")
     }
-    roles.append(Role(key: "accent", asset: "Accent", dark: accentDark, light: accentLight))
+    roles.append(Role(
+        key: "accent", asset: "Accent", dark: accentDark, light: accentLight,
+        highDark: highDark["accent"], highLight: highLight["accent"]
+    ))
     // The light accent is too pale for text on the light background, so "Needs you" gets its own
     // darker value there.
     guard let accentText = color["accentText"] as? [String: String],
@@ -66,17 +84,20 @@ func components(_ hex: String) -> (String, String, String) {
     return ("0x" + String(chars[0...1]), "0x" + String(chars[2...3]), "0x" + String(chars[4...5]))
 }
 
-func colorEntry(_ hex: String, dark: Bool) -> String {
+func colorEntry(_ hex: String, dark: Bool, high: Bool = false) -> String {
     let (red, green, blue) = components(hex)
-    let appearance = dark ? """
+    func item(_ name: String, _ value: String) -> String {
+        "{\n          \"appearance\" : \"\(name)\",\n          \"value\" : \"\(value)\"\n        }"
+    }
+    var appearances: [String] = []
+    if dark { appearances.append(item("luminosity", "dark")) }
+    if high { appearances.append(item("contrast", "high")) }
+    let appearance = appearances.isEmpty ? "" : """
 
           "appearances" : [
-            {
-              "appearance" : "luminosity",
-              "value" : "dark"
-            }
+            \(appearances.joined(separator: ",\n        "))
           ],
-    """ : ""
+    """
     return """
         {\(appearance)
           "color" : {
@@ -94,11 +115,15 @@ func colorEntry(_ hex: String, dark: Bool) -> String {
 }
 
 func colorset(_ role: Role) -> String {
-    """
+    var entries = [colorEntry(role.light, dark: false), colorEntry(role.dark, dark: true)]
+    if let highLight = role.highLight, let highDark = role.highDark {
+        entries.append(colorEntry(highLight, dark: false, high: true))
+        entries.append(colorEntry(highDark, dark: true, high: true))
+    }
+    return """
     {
       "colors" : [
-    \(colorEntry(role.light, dark: false)),
-    \(colorEntry(role.dark, dark: true))
+    \(entries.joined(separator: ",\n"))
       ],
       "info" : {
         "author" : "xcode",

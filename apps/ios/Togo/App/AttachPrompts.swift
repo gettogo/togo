@@ -28,6 +28,28 @@ import TogoKit
 
     var current: Question? { queue.first }
 
+    /// The one view showing the questions (the control center, the new-session sheet or the
+    /// workspace). Taken by the first that is on top when a question arrives and kept until
+    /// the questions are done or that view goes: a sheet or cover opening above it waits
+    /// behind the question instead of moving it (dismissed from one host, shown again from
+    /// another, which reads as "popped up, then swiped away").
+    private(set) var host: String?
+
+    /// Whether `name` shows the current question: the host holding it, or, while none does,
+    /// any host that is on top.
+    static func shows(_ name: String, holder: String?, active: Bool) -> Bool {
+        holder.map { $0 == name } ?? active
+    }
+
+    func claim(_ name: String) {
+        guard current != nil, host == nil else { return }
+        host = name
+    }
+
+    func release(_ name: String) {
+        if host == name { host = nil }
+    }
+
     fileprivate func ask(
         _ prompt: AuthPrompt, owner: ObjectIdentifier, attempt: UUID, hostID: HostID, machine: String, address: String
     ) async -> AuthAnswer? {
@@ -81,6 +103,7 @@ import TogoKit
     private func resolve(_ id: UUID, with answer: AuthAnswer?) {
         guard let index = queue.firstIndex(where: { $0.id == id }) else { return }
         let question = queue.remove(at: index)
+        if queue.isEmpty { host = nil }
         question.reply.resume(returning: answer)
     }
 }
@@ -155,27 +178,50 @@ extension View {
     /// Cancel act on the question this sheet shows, by its id.
     ///
     /// `nests`: the host is itself a sheet (new session) that stays up under the question.
-    func attachPrompts(_ prompts: AttachPrompts?, active: Bool, nests: Bool = false) -> some View {
-        presentSheet("attach.prompt", item: Binding(
-            get: { active ? prompts?.current : nil },
-            set: { _ in }
-        ), nests: nests) { question in
-            NavigationStack {
-                SignInPromptView(request: question.request) { prompts?.answer(question.id, $0) }
-                    .navigationTitle(question.request.machine)
-                    .navigationSubtitle(Text(verbatim: question.address))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) { prompts?.cancel(question.id) }
+    func attachPrompts(_ prompts: AttachPrompts?, host: String, active: Bool, nests: Bool = false) -> some View {
+        modifier(AttachPromptHost(prompts: prompts, name: host, active: active, nests: nests))
+    }
+}
+
+private struct AttachPromptHost: ViewModifier {
+    let prompts: AttachPrompts?
+    let name: String
+    let active: Bool
+    let nests: Bool
+
+    func body(content: Content) -> some View {
+        let shows = AttachPrompts.shows(name, holder: prompts?.host, active: active)
+        content
+            .presentSheet("attach.prompt", item: Binding(
+                get: { shows ? prompts?.current : nil },
+                set: { _ in }
+            ), nests: nests) { question in
+                NavigationStack {
+                    SignInPromptView(request: question.request) { prompts?.answer(question.id, $0) }
+                        .navigationTitle(question.request.machine)
+                        .navigationSubtitle(Text(verbatim: question.address))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) { prompts?.cancel(question.id) }
+                            }
                         }
-                    }
+                }
+                .id(question.id)
+                .togoSheet(.prompt)
+                // Only Cancel declines the question, so a swipe cannot leave it waiting.
+                .interactiveDismissDisabled()
+                .togoControls()
             }
-            .id(question.id)
-            .togoSheet(.prompt)
-            // Only Cancel declines the question, so a swipe cannot leave it waiting.
-            .interactiveDismissDisabled()
-            .togoControls()
-        }
+            .onChange(of: ClaimKey(question: prompts?.current?.id, holder: prompts?.host, active: active), initial: true) { _, key in
+                if key.question != nil, key.holder == nil, key.active { prompts?.claim(name) }
+            }
+            .onDisappear { prompts?.release(name) }
+    }
+
+    private struct ClaimKey: Equatable {
+        var question: UUID?
+        var holder: String?
+        var active: Bool
     }
 }

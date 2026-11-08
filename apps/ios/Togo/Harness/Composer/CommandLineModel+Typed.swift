@@ -4,7 +4,7 @@ import TogoKit
 /// A command typed into the field and sent does what picking it in the palette does (S7): a
 /// choice or a list opens its native screen, a command with its words goes as a command, a run
 /// runs (a destructive one asks), a terminal command switches to the terminal. "/xyz" the agent
-/// does not list is held with a hint instead of being typed into the session.
+/// does not list is sent as typed: the harness judges it.
 extension CommandLineModel {
     /// What Send did with a "/" draft. True when it was a command or held as an unknown one;
     /// false when the draft goes as words.
@@ -15,12 +15,10 @@ extension CommandLineModel {
         // Without the list nothing can be told apart: the line goes as typed, as before.
         guard !commands.isEmpty else { return false }
         switch CommandLineLogic.typed(text, commands: commands) {
-        case .text:
+        case .text, .unknown:
+            // A "/word" the list lacks still goes: the list can miss personal commands and
+            // skills, and the harness itself says when a command does not exist.
             return false
-        case .unknown:
-            notice = ComposerCopy.notACommand(routes.agent())
-            noticeAction = .sendAsText
-            return true
         case let .command(command, args):
             await runTyped(command, args: args, text: text)
             return true

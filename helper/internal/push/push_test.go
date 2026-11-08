@@ -192,6 +192,22 @@ func (e *env) tick() {
 	e.sender.pumpLive(context.Background())
 }
 
+// opener names the phone a sealed push opens for.
+func (e *env) opener(t *testing.T, ct string) string {
+	t.Helper()
+	keys, err := e.svc.HostKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ph := range e.phones {
+		if _, err := seal.Open(ph.priv, ct, seal.LabelPush, []byte(keys.HostID+"|"+ph.id)); err == nil {
+			return ph.id
+		}
+	}
+	t.Fatal("the push opens for no phone")
+	return ""
+}
+
 func (e *env) open(t *testing.T, ct string, deviceID string) wire.PushPlaintext {
 	t.Helper()
 	keys, err := e.svc.HostKeys()

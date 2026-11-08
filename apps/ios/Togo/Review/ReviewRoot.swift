@@ -72,6 +72,8 @@ struct ReviewRoot: View {
     private let onDraft: (Bool) -> Void
 
     @State private var session: ReviewSession
+    /// The review's own width (the sheet or the cover), measured outside its layout.
+    @State private var measuredWidth: CGFloat?
 
     /// `navigation` restores screens already open, for previews and snapshots. `session` is the
     /// store's open review, which outlives this view when a fold moves the review.
@@ -107,8 +109,12 @@ struct ReviewRoot: View {
         ReviewTab.allCases.filter { $0 != .ports || subject.canPorts }
     }
 
-    static func layout(for sizeClass: UserInterfaceSizeClass?) -> Layout {
-        sizeClass == .regular ? .split : .stack
+    /// The split view needs regular width by the policy (size class and ≥ 600 pt) and room
+    /// for its sidebar beside the diff (≥ 640 pt); otherwise the phone's stack.
+    static func layout(for sizeClass: UserInterfaceSizeClass?, width: CGFloat?) -> Layout {
+        guard AdaptivePresentation.width(sizeClass: sizeClass, containerWidth: width) == .regular else { return .stack }
+        if let width, width > 0, width < AdaptivePresentation.splitMinimumWidth { return .stack }
+        return .split
     }
 
     /// A comment from the diff goes into the session's input as a paste, cleaned for a terminal.
@@ -123,7 +129,9 @@ struct ReviewRoot: View {
         }
     }
 
-    private var layout: Layout { Self.layout(for: sizeClass) }
+    /// Follows the live width even while the presentation is kept: a fold inside an open
+    /// review turns its split into the stack.
+    private var layout: Layout { Self.layout(for: sizeClass, width: measuredWidth) }
 
     var body: some View {
         Group {
@@ -132,6 +140,9 @@ struct ReviewRoot: View {
             case .split: split
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // measured-outside: the frame fills the presentation whichever layout is inside.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measuredWidth = $0 }
         .background(Color.togoInk)
         .background { escape }
         .togoControls()
@@ -309,6 +320,7 @@ extension View {
 
 private struct ReviewPresenter: ViewModifier {
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.windowWidth) private var windowWidth
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: AppStore
     let terminals: TerminalPool
@@ -337,7 +349,7 @@ private struct ReviewPresenter: ViewModifier {
         Binding {
             guard active, let request = store.reviewing else { return nil }
             let kept = store.openReview?.subject == request.subject ? store.openReview?.regular : nil
-            return ReviewPresentation.regular(kept: kept, sizeClass: sizeClass) == regular ? request : nil
+            return ReviewPresentation.regular(kept: kept, sizeClass: sizeClass, width: windowWidth) == regular ? request : nil
         } set: { request in
             if request == nil, store.reviewing != nil { store.sheet = nil }
         }

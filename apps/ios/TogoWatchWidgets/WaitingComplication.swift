@@ -92,6 +92,8 @@ struct WaitingComplicationView: View {
                 AccessoryWidgetBackground()
                 beacon.padding(6)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(Self.spoken(entry)))
         case .accessoryCorner:
             Group {
                 if let bib = entry.oldestBib, entry.count > 0 {
@@ -103,11 +105,15 @@ struct WaitingComplicationView: View {
             .widgetLabel {
                 Text(Self.inline(entry.count))
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(Self.spoken(entry)))
         case .accessoryInline:
             Text(Self.inline(entry.count))
                 .contentTransition(.interpolate)
         default:
             rectangular
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(Self.spoken(entry)))
         }
     }
 
@@ -140,6 +146,19 @@ struct WaitingComplicationView: View {
     }
 
     static let allClear = String(localized: "watch.allClear", defaultValue: "All clear")
+
+    /// What VoiceOver says for any family: how many wait, and the oldest one's session and words.
+    static func spoken(_ entry: WaitingEntry) -> String {
+        guard entry.count > 0 else { return String(localized: "watch.complication.spoken.none", defaultValue: "Nothing needs you") }
+        let count = entry.count == 1
+            ? String(localized: "watch.complication.spoken.one", defaultValue: "1 request needs you")
+            : String(localized: "watch.complication.spoken.many", defaultValue: "\(entry.count) requests need you")
+        guard let bib = entry.oldestBib else { return count }
+        let oldest = entry.oldestTitle.map {
+            String(localized: "watch.complication.spoken.oldest", defaultValue: "Session \(bib): \($0)")
+        } ?? String(localized: "watch.complication.spoken.session", defaultValue: "Session \(bib)")
+        return "\(count). \(oldest)"
+    }
 
     /// "2 waiting", or "Nothing waiting".
     static func inline(_ count: Int) -> String {

@@ -50,6 +50,8 @@ extension AppStore {
     /// terminal column; in a compact window it pushes onto the roster.
     func showSettings() {
         if workspaceInline {
+            // A form in progress keeps the screen; Settings waits for it to close.
+            guard sheet?.isForm != true else { return }
             sheet = .settings
         } else {
             path.append(.settings)

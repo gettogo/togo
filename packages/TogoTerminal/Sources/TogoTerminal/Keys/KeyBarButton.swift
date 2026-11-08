@@ -1,8 +1,8 @@
 import UIKit
 
 @MainActor enum KeyBarButton {
-    /// How far a slim key's face sits inside its target, top and bottom.
-    static let faceInset: CGFloat = 3
+    /// How far a slim key's face sits inside its 44 point target, top and bottom.
+    static let faceInset: CGFloat = 7
 
     /// `slim` keys are laid out by the row: the face is drawn inside a target the row's height,
     /// with tighter padding. Others, as on the pad, keep a 44 point minimum.
@@ -29,7 +29,7 @@ import UIKit
                 return attributes
             }
         }
-        let button = UIButton(configuration: configuration)
+        let button = KeyTargetButton(configuration: configuration)
         button.accessibilityLabel = title
         if !slim {
             button.translatesAutoresizingMaskIntoConstraints = false
@@ -54,8 +54,13 @@ import UIKit
         }
     }
 
-    /// Armed is tinted; locked is filled, so the two read apart without colour alone.
-    static func show(_ state: ModifierLatch.State, on button: UIButton) {
+    /// Armed is tinted; locked is filled, so the two read apart without colour alone. With
+    /// Differentiate Without Color on, armed also gets an outline, so it reads apart from off by
+    /// shape too.
+    static func show(
+        _ state: ModifierLatch.State, on button: UIButton,
+        differentiateWithoutColor: Bool = UIAccessibility.shouldDifferentiateWithoutColor
+    ) {
         let title = button.configuration?.title
         var configuration: UIButton.Configuration = switch state {
         case .off: .gray()
@@ -65,6 +70,10 @@ import UIKit
         configuration.cornerStyle = .medium
         configuration.contentInsets = button.configuration?.contentInsets ?? .zero
         configuration.background.backgroundInsets = button.configuration?.background.backgroundInsets ?? .zero
+        if state == .once, differentiateWithoutColor {
+            configuration.background.strokeColor = .tintColor
+            configuration.background.strokeWidth = 2
+        }
         configuration.title = title
         configuration.image = button.configuration?.image
         configuration.preferredSymbolConfigurationForImage = button.configuration?.preferredSymbolConfigurationForImage
@@ -114,5 +123,20 @@ enum KeyRowLayout {
             }
             return page.map { Slot(index: $0, width: widths[$0] + extra) }
         }
+    }
+}
+
+/// A key whose touch target reaches past its frame into half the gap beside it, so a slim key
+/// still takes a 44 point wide touch and a touch between two keys goes to the nearer one.
+final class KeyTargetButton: UIButton {
+    var horizontalHitOutset: CGFloat = 0
+
+    /// The area that takes a touch, in the button's own coordinates.
+    var touchTarget: CGRect {
+        bounds.insetBy(dx: -horizontalHitOutset, dy: 0)
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        touchTarget.contains(point)
     }
 }

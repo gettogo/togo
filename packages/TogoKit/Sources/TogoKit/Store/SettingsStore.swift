@@ -38,6 +38,9 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var cursor: String = "block"
     /// VoiceOver speaks new terminal output once it settles.
     public var readNewOutput = true
+    /// Y, N and R alone answer the request in the prompt bar from a hardware keyboard. Speech
+    /// input can type single letters, so it can be turned off (WCAG 2.1.4); ⌘↩ and ⌘. stay.
+    public var singleKeyAnswers = true
     /// Encoded key bar layout. TogoTerminal owns the type; this package only
     /// carries the bytes so it does not depend on the terminal.
     public var keyBar: Data?
@@ -77,7 +80,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case themeID, fontName, fontSize, cursor, readNewOutput, keyBar, importedThemes, gestures, resumeLock, transport
+        case themeID, fontName, fontSize, cursor, readNewOutput, singleKeyAnswers, keyBar, importedThemes, gestures, resumeLock, transport
         case relayURL, liveActivities
     }
 
@@ -89,6 +92,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? d.fontSize
         cursor = try c.decodeIfPresent(String.self, forKey: .cursor) ?? d.cursor
         readNewOutput = try c.decodeIfPresent(Bool.self, forKey: .readNewOutput) ?? d.readNewOutput
+        singleKeyAnswers = try c.decodeIfPresent(Bool.self, forKey: .singleKeyAnswers) ?? d.singleKeyAnswers
         keyBar = try? c.decodeIfPresent(Data.self, forKey: .keyBar)
         importedThemes = try? c.decodeIfPresent(Data.self, forKey: .importedThemes)
         gestures = try c.decodeIfPresent(GestureBindings.self, forKey: .gestures) ?? d.gestures

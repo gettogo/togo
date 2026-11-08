@@ -156,11 +156,17 @@ private struct ZoomableImage: View {
 
     @State private var zoom: CGFloat = 1
     @State private var settled: CGFloat = 1
+    /// Decoded once, off the main thread and no larger than a 5× zoom can use; a pinch only
+    /// changes the frame.
+    @State private var image: UIImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Long side in pixels: enough for the deepest zoom on the largest screen.
+    private nonisolated static let maxSide = 4096
 
     var body: some View {
         GeometryReader { proxy in
-            if let image = UIImage(data: data) {
+            if let image {
                 ScrollView([.horizontal, .vertical]) {
                     Image(uiImage: image)
                         .resizable()
@@ -175,6 +181,11 @@ private struct ZoomableImage: View {
                         .onChanged { zoom = min(max(settled * $0.magnification, 1), 5) }
                         .onEnded { _ in settled = zoom }
                 )
+                // VoiceOver's three-finger double tap and zoom gestures, and Switch Control.
+                .accessibilityZoomAction { action in
+                    zoom = action.direction == .zoomIn ? min(zoom * 2, 5) : max(zoom / 2, 1)
+                    settled = zoom
+                }
                 .onTapGesture(count: 2) {
                     // motion: cause → effect — the double tap zooms the picture where it was tapped
                     withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
@@ -188,6 +199,11 @@ private struct ZoomableImage: View {
                 .accessibilityHint(FilesCopy.zoomHint)
             }
         }
+        .task(id: data) { image = await Self.decode(data) }
+    }
+
+    @concurrent private nonisolated static func decode(_ data: Data) async -> UIImage? {
+        ImageShrinker.preview(data, maxSide: maxSide)
     }
 }
 

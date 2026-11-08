@@ -197,6 +197,9 @@ struct SmartCommandLine: View {
             // A prompt is natural language; a "/" command or an "@" file is typed exactly.
             .textInputAutocapitalization(assists ? .sentences : .never)
             .autocorrectionDisabled(!assists)
+            // Prompts hold commands, flags and paths an agent may run: `--` stays two hyphens
+            // and quotes stay straight, as in the UIKit compose bar.
+            .straightPunctuation($model.draft)
             .focused($focused)
             .accessibilityIdentifier("composer.field")
             .padding(.vertical, 12)
@@ -319,6 +322,11 @@ struct SmartCommandLine: View {
             model.recall(older: false)
             return before == model.draft ? .ignored : .handled
         case .tab:
+            // Shift+Tab steps the mode, as at the desk; focus stays in the field.
+            if press.modifiers.contains(.shift), !menuOpen, model.nextMode != nil {
+                Task { await model.cycleMode() }
+                return .handled
+            }
             guard menuOpen, let item = model.highlighted else { return .ignored }
             model.choose(item)
             return .handled

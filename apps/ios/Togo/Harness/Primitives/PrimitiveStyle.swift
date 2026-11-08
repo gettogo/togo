@@ -76,6 +76,8 @@ struct PrimitiveStateGlyph: View {
 struct PrimitiveChip: View {
     enum Tone { case plain, strong, ok, fail }
 
+    @Environment(\.colorSchemeContrast) private var contrast
+
     let text: String
     var mono = false
     var tone: Tone = .plain
@@ -107,10 +109,10 @@ struct PrimitiveChip: View {
 
     private var background: Color {
         switch tone {
-        case .plain: .togoSnow.opacity(0.06)
-        case .strong: .togoSnow.opacity(0.1)
-        case .ok: PrimitiveTint.ok.opacity(0.12)
-        case .fail: PrimitiveTint.fail.opacity(0.12)
+        case .plain: .togoSnow.opacity(Contrast.fill(0.06, contrast))
+        case .strong: .togoSnow.opacity(Contrast.fill(0.1, contrast))
+        case .ok: PrimitiveTint.ok.opacity(Contrast.fill(0.12, contrast))
+        case .fail: PrimitiveTint.fail.opacity(Contrast.fill(0.12, contrast))
         }
     }
 }
@@ -118,6 +120,7 @@ struct PrimitiveChip: View {
 /// A filter or role chip that toggles: snow when on, outlined by the hairline when off.
 struct PrimitiveToggleChipStyle: ButtonStyle {
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     let on: Bool
 
     func makeBody(configuration: Configuration) -> some View {
@@ -128,10 +131,11 @@ struct PrimitiveToggleChipStyle: ButtonStyle {
             .frame(minHeight: 34)
             .background(on ? Color.togoSnow : Color.clear, in: .capsule)
             .overlay {
-                if !on { Capsule().strokeBorder(Color.togoLine, lineWidth: 1 / displayScale) }
+                if !on { Capsule().strokeBorder(Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast)) }
             }
-            .contentShape(.capsule)
+            // The whole 44 point row takes the touch, not only the 34 point capsule drawn in it.
             .frame(minHeight: 44)
+            .contentShape(.rect)
             .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
@@ -140,6 +144,7 @@ struct PrimitiveToggleChipStyle: ButtonStyle {
 struct PrimitiveCapsuleStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let role: HarnessActionRef.Role
     var large = false
@@ -155,7 +160,7 @@ struct PrimitiveCapsuleStyle: ButtonStyle {
             .background(role == .primary ? Color.togoSnow : Color.clear, in: .capsule)
             .overlay {
                 if role != .primary {
-                    Capsule().strokeBorder(role == .destructive ? PrimitiveTint.fail.opacity(0.4) : Color.togoLine, lineWidth: 1 / displayScale)
+                    Capsule().strokeBorder(role == .destructive ? PrimitiveTint.fail.opacity(0.4) : Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast))
                 }
             }
             .contentShape(.capsule)
@@ -180,6 +185,7 @@ extension View {
         self.padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.togoRaised, in: .rect(cornerRadius: radius, style: .continuous))
+            .modifier(ContrastOutline(radius: radius))
     }
 
     /// A well on the deepest surface, for machine text: output tails, commands, diffs.
@@ -221,5 +227,21 @@ enum PrimitiveElapsed {
         if h > 0 { return String(format: "%dh %02dm", h, m) }
         if m > 0 { return String(format: "%dm %02ds", m, s) }
         return "\(s)s"
+    }
+}
+
+/// Under Increase Contrast a raised surface gets a line round its edge, so it does not rely on a
+/// small shade difference from the background behind it.
+struct ContrastOutline: ViewModifier {
+    @Environment(\.colorSchemeContrast) private var contrast
+    var radius: CGFloat
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if Contrast.outlinesSurfaces(contrast) {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(Color.togoLine, lineWidth: 1)
+            }
+        }
     }
 }

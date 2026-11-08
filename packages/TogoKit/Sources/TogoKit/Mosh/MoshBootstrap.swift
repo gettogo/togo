@@ -23,11 +23,11 @@ public enum MoshBootstrapError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .serverMissing:
-            "mosh-server was not found on the machine. Install mosh there, or connect with SSH."
+            String(localized: "mosh-server was not found on the machine. Install mosh there, or connect with SSH.", bundle: .module)
         case .noConnectLine:
-            "mosh-server did not start on the machine. A missing UTF-8 locale is a common cause."
+            String(localized: "mosh-server did not start on the machine. A missing UTF-8 locale is a common cause.", bundle: .module)
         case .malformedKey:
-            "mosh-server sent a session key that could not be read."
+            String(localized: "mosh-server sent a session key that could not be read.", bundle: .module)
         }
     }
 }

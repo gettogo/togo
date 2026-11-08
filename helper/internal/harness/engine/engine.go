@@ -52,6 +52,10 @@ type Config struct {
 	// NeedsYou tells the phone a session needs the user at the terminal:
 	// the typing guard found a dialog it will not type into.
 	NeedsYou func(id, title, body string)
+	// Done tells the phone a turn finished, with the reply's text, for
+	// adapters with no hook to say so: without it the pane watcher's
+	// "Done" is all the phone gets, with no body. Nil sends nothing.
+	Done func(id, title, body string)
 	// Status is the hub's status for a session (working, idle, ...).
 	Status func(id string) string
 	// Relaunch restarts the agent with argv in its pane.

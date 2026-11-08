@@ -73,12 +73,23 @@ public actor HostMonitor {
         (snapshots, sink) = AsyncStream<HostSnapshot>.makeStream(bufferingPolicy: .bufferingNewest(1))
     }
 
+    /// Any known route answering is enough, as for terminals: a Mac saved by its LAN address
+    /// is still reached over Tailscale away from home, since the connection races them all.
     private static let wakeProbe: Probe = { record, clock, onWaking in
         let target = record.profile.jumps.first ?? record.profile.endpoint
+        let hosts = await probeHosts(record.profile, book: .shared)
         try await WakeProbe.reach(
-            host: target.host, port: target.port, clock: clock, onWaking: { _ in onWaking() },
-            attempt: { await WakeProbe.tcpConnect(host: target.host, port: target.port, timeout: .seconds(2)) }
+            host: record.profile.jumps.isEmpty ? record.profile.name : target.host, port: target.port, clock: clock,
+            onWaking: { _ in onWaking() },
+            attempt: { await WakeProbe.anyReachable(hosts: hosts, port: target.port, timeout: .seconds(2)) }
         )
+    }
+
+    /// The hosts the wake probe tries: every route for a direct machine, the first jump otherwise.
+    static func probeHosts(_ profile: HostProfile, book: RouteBook) async -> [String] {
+        guard profile.jumps.isEmpty else { return [profile.jumps[0].host] }
+        let routes = await book.candidates(for: profile)
+        return routes.isEmpty ? [profile.endpoint.host] : routes
     }
 
     // MARK: - Public API
@@ -193,7 +204,14 @@ public actor HostMonitor {
             do { try await clock.sleep(for: delay) } catch { return }
             guard isCurrent(run) else { return }
             guard isForeground else { break }
-            if !isAway { setReach(.connecting) }
+            // With no network here, trying would only blame the machine; a path change
+            // starts a new run as soon as the network is back.
+            if path.isOffline {
+                setReach(.deviceOffline)
+                failures = max(failures, Self.failuresBeforeOffline)
+                continue
+            }
+            if !isAway || state.reach == .deviceOffline { setReach(.connecting) }
             let backgroundingsAtStart = backgroundings
             do {
                 let connected = try await connect()
@@ -349,7 +367,7 @@ public actor HostMonitor {
         case SSHError.authFailed, SSHError.cancelled, SSHError.hostKeyRejected:
             return .authNeeded
         case SSHError.hostKeyChanged:
-            return .failed(error.localizedDescription)
+            return .hostKeyChanged
         case KeyError.missing:
             return .keyMissing
         // The keychain or Face ID would not unlock the key or password; only the user can.
@@ -359,7 +377,7 @@ public actor HostMonitor {
             break
         }
         switch helper {
-        case .missing?, .outdated?: return .failed(error.localizedDescription)
+        case .missing?, .outdated?, .newer?: return .failed(error.localizedDescription)
         case .unknown?, .present?, nil: return nil
         }
     }
@@ -463,7 +481,7 @@ public actor HostMonitor {
 
     private func replace(with snapshot: EventSnapshot) {
         state.sessions = snapshot.sessions
-        state.approvals = snapshot.approvals
+        state.replaceApprovals(snapshot.approvals)
         state.lastSeen = now()
         state.reach = .online
         lastSeq = snapshot.seq
@@ -472,7 +490,9 @@ public actor HostMonitor {
     private func applyLocally(_ op: SessionOp, result: Session?) {
         switch op {
         case .kill(let id): state.sessions.removeAll { $0.id == id }
-        case .answer(let requestId, _): state.removeApproval(requestId)
+        case .answer(let requestId, _):
+            state.removeApproval(requestId)
+            state.rememberClosed(requestId)
         case .create, .rename, .setMute: if let result { state.upsert(result) }
         }
     }
@@ -483,7 +503,7 @@ public actor HostMonitor {
     /// flashing back to connecting.
     private var isAway: Bool {
         switch state.reach {
-        case .offline, .failed: true
+        case .offline, .failed, .deviceOffline: true
         default: false
         }
     }
@@ -496,7 +516,19 @@ public actor HostMonitor {
         case SSHError.unreachable, SSHError.timeout:
             .offline(error.localizedDescription)
         default:
-            .failed(error.localizedDescription)
+            .failed(plainReason(error))
+        }
+    }
+
+    /// Togo's own errors word themselves; a raw transport error from below (NIO, POSIX) would
+    /// read as "The operation couldn't be completed (NIOCore.ChannelError error 6)", so it
+    /// says what happened instead.
+    static func plainReason(_ error: any Error) -> String {
+        switch error {
+        case is SSHError, is HelperError, is HelperSourceError, is KeyError:
+            error.localizedDescription
+        default:
+            SSHError.channelClosed(exitStatus: nil).localizedDescription
         }
     }
 

@@ -23,6 +23,13 @@ func (t *transcript) agentItem(agentID, callID string, at time.Time) *harness.It
 		it.Agent.Name = call.Tool.Title
 		it.Agent.Role = t.roles[callID]
 	}
+	if it.TurnID == "" && t.turn != nil {
+		// The Agent call is not known (its prompt did not match, or it
+		// came from before this mapper started): the agent belongs to the
+		// turn that ran last, never to none, which drew a second working
+		// line beside the turn's.
+		it.TurnID = t.turn.id
+	}
 	t.agents[agentID] = it
 	return it
 }

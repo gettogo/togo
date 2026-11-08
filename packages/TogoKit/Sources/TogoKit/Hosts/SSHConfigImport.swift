@@ -93,7 +93,7 @@ public enum SSHConfigImport {
                     } else if patternCount >= maxPatterns {
                         if !patternsCapped {
                             patternsCapped = true
-                            skipped.append(.init(line: line, keyword: keyword, reason: "Too many hosts; the rest were skipped."))
+                            skipped.append(.init(line: line, keyword: keyword, reason: String(localized: "Too many hosts; the rest were skipped.", bundle: .module)))
                         }
                     } else {
                         patternCount += 1
@@ -108,7 +108,7 @@ public enum SSHConfigImport {
             }
             if lower == "match" {
                 inMatch = true
-                skipped.append(.init(line: line, keyword: keyword, reason: "Match blocks aren't supported."))
+                skipped.append(.init(line: line, keyword: keyword, reason: String(localized: "Match blocks aren't supported.", bundle: .module)))
                 continue
             }
             if inMatch { continue }
@@ -139,15 +139,15 @@ public enum SSHConfigImport {
             return ImportedHost(alias: alias, hostName: item.hostName ?? alias, user: item.user, port: item.port, jump: jump)
         }
         if budget <= 0 {
-            skipped.append(.init(line: 0, keyword: "Host", reason: "Some patterns were too complex to match."))
+            skipped.append(.init(line: 0, keyword: "Host", reason: String(localized: "Some patterns were too complex to match.", bundle: .module)))
         }
         return ImportResult(hosts: hosts, skipped: skipped)
     }
 
     private static let skipReasons: [String: String] = [
-        "include": "Include isn't supported; paste the included file too.",
-        "identityfile": "Keys stay on this iPhone; pick one after import.",
-        "proxycommand": "ProxyCommand isn't supported; use ProxyJump.",
+        "include": String(localized: "Include isn't supported; paste the included file too.", bundle: .module),
+        "identityfile": String(localized: "Keys stay on this iPhone; pick one after import.", bundle: .module),
+        "proxycommand": String(localized: "ProxyCommand isn't supported; use ProxyJump.", bundle: .module),
     ]
 
     private struct Pattern {

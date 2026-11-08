@@ -119,6 +119,9 @@ func (s *Service) Restore(ctx context.Context, id string, resume bool) (Session,
 			}
 		}
 		options := map[string]string{optionAgent: e.Agent, optionName: e.Name, optionBib: bib, optionCreated: created.Format(time.RFC3339)}
+		if e.Muted {
+			options[optionMuted] = "1"
+		}
 		if e.Command != nil {
 			if options[optionArgv], err = encodeArgv(e.Command); err != nil {
 				return err
@@ -134,7 +137,7 @@ func (s *Service) Restore(ctx context.Context, id string, resume bool) (Session,
 		if err != nil {
 			return err
 		}
-		s.remember(ManifestEntry{ID: id, Bib: bib, Name: e.Name, Agent: e.Agent, Cwd: dir, Command: e.Command, CreatedAt: created})
+		s.remember(ManifestEntry{ID: id, Bib: bib, Name: e.Name, Agent: e.Agent, Cwd: dir, Command: e.Command, CreatedAt: created, Muted: e.Muted})
 		return nil
 	})
 	if err != nil {

@@ -56,7 +56,7 @@ extension AppStore {
 enum ReviewPresentation {
     /// A sheet in a regular-width window and a full-screen cover in a compact one, chosen when
     /// the review opens. `kept` is the choice made then, which a fold or unfold leaves as it is.
-    static func regular(kept: Bool?, sizeClass: UserInterfaceSizeClass?) -> Bool {
-        kept ?? (ReviewRoot.layout(for: sizeClass) == .split)
+    static func regular(kept: Bool?, sizeClass: UserInterfaceSizeClass?, width: CGFloat?) -> Bool {
+        kept ?? (ReviewRoot.layout(for: sizeClass, width: width) == .split)
     }
 }

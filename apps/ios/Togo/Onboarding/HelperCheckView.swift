@@ -29,14 +29,31 @@ struct HelperCheckView: View {
         .haptic(.error, trigger: saveError) { _, new in new != nil }
     }
 
+    /// The helper runs sessions in tmux, so without tmux 3.2 or newer nothing would start:
+    /// the screen says so instead of "ready".
+    static func needsTmux(_ report: HelperReport) -> Bool {
+        !report.tmuxSupported
+    }
+
     private func present(version: String) -> some View {
-        OnboardingStep(
-            title: String(localized: "onboard.helper.ready.title", defaultValue: "\(machine) is ready"),
-            message: String(
-                localized: "onboard.helper.ready.message",
-                defaultValue: "The Togo helper is running, so you'll see each session's status, answer requests and get notifications."
-            )
+        let needsTmux = Self.needsTmux(report)
+        return OnboardingStep(
+            title: needsTmux
+                ? String(localized: "onboard.helper.needsTmux.title", defaultValue: "\(machine) needs tmux")
+                : String(localized: "onboard.helper.ready.title", defaultValue: "\(machine) is ready"),
+            message: needsTmux
+                ? String(
+                    localized: "onboard.helper.needsTmux.message",
+                    defaultValue: "The Togo helper is running, but it starts every session in tmux 3.2 or newer. Install tmux on \(machine), then check again."
+                )
+                : String(
+                    localized: "onboard.helper.ready.message",
+                    defaultValue: "The Togo helper is running, so you'll see each session's status, answer requests and get notifications."
+                )
         ) {
+            if needsTmux {
+                tmuxInstall
+            }
             VStack(alignment: .leading, spacing: 14) {
                 ReadinessLine(
                     text: String(localized: "onboard.helper.version", defaultValue: "Togo helper \(version)"), ready: true
@@ -56,10 +73,67 @@ struct HelperCheckView: View {
             .foregroundStyle(Color.togoMute)
             notes
         } actions: {
-            Button(String(localized: "onboard.save", defaultValue: "Save"), action: onSave)
-                .buttonStyle(.primary)
-                .disabled(saving)
+            if needsTmux {
+                Button(String(localized: "onboard.checkAgain", defaultValue: "Check again"), action: onCheckAgain)
+                    .buttonStyle(.primary)
+                    .disabled(saving)
+                Button(String(localized: "onboard.helper.saveAnyway", defaultValue: "Save and install tmux later"), action: onSave)
+                    .buttonStyle(.secondary)
+                    .disabled(saving)
+            } else {
+                Button(String(localized: "onboard.save", defaultValue: "Save"), action: onSave)
+                    .buttonStyle(.primary)
+                    .disabled(saving)
+            }
         }
+        .task(id: copied) {
+            guard copied else { return }
+            try? await Task.sleep(for: .seconds(2))
+            copied = false
+        }
+    }
+
+    /// The command that installs tmux, to copy, or where to get it when there is none.
+    @ViewBuilder private var tmuxInstall: some View {
+        if let command = HelperProbe.tmuxInstallCommand(os: report.os) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(localized: "onboard.helper.tmux.install", defaultValue: "To install it, run this on \(machine):"))
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
+                CopyableText(text: command)
+                copyButton(command)
+                if command.hasPrefix("brew") {
+                    Text(String(
+                        localized: "onboard.helper.tmux.brew",
+                        defaultValue: "This uses Homebrew. Without it, install Homebrew from brew.sh first."
+                    ))
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
+                }
+            }
+        } else {
+            Text(String(
+                localized: "onboard.helper.tmux.other",
+                defaultValue: "Install tmux 3.2 or newer with \(machine)'s package manager."
+            ))
+            .font(.subheadline)
+            .foregroundStyle(Color.togoMute)
+        }
+    }
+
+    private func copyButton(_ text: String) -> some View {
+        Button {
+            UIPasteboard.general.string = text
+            copied = true
+        } label: {
+            Label(
+                copied
+                    ? String(localized: "onboard.copied", defaultValue: "Copied")
+                    : String(localized: "onboard.copyCommand", defaultValue: "Copy command"),
+                systemImage: copied ? "checkmark" : "doc.on.doc"
+            )
+        }
+        .buttonStyle(.secondary(.fit))
     }
 
     private var missing: some View {
@@ -84,18 +158,7 @@ struct HelperCheckView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
                 CopyableText(text: install)
-                Button {
-                    UIPasteboard.general.string = install
-                    copied = true
-                } label: {
-                    Label(
-                        copied
-                            ? String(localized: "onboard.copied", defaultValue: "Copied")
-                            : String(localized: "onboard.copyCommand", defaultValue: "Copy command"),
-                        systemImage: copied ? "checkmark" : "doc.on.doc"
-                    )
-                }
-                .buttonStyle(.secondary(.fit))
+                copyButton(install)
             }
             VStack(alignment: .leading, spacing: 14) { machineLines }
             notes
@@ -143,7 +206,7 @@ struct HelperCheckView: View {
 
     private var tmuxLine: String {
         guard let tmux = report.tmux else {
-            return String(localized: "onboard.helper.tmux.missing", defaultValue: "tmux isn't installed. The helper needs it.")
+            return String(localized: "onboard.helper.tmux.missing", defaultValue: "tmux isn't installed. The helper needs 3.2 or newer.")
         }
         if report.tmuxSupported { return tmux }
         return String(localized: "onboard.helper.tmux.old", defaultValue: "\(tmux) is too old; Togo needs 3.2 or newer")

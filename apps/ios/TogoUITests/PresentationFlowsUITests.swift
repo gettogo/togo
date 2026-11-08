@@ -22,7 +22,8 @@ import XCTest
     @discardableResult
     private func launch(replay: String? = nil, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-fakes", "-ui-skip-launch", "-ui-probes"]
+        // Loops held: the app goes idle between steps, so XCUITest does not wait out each spinner.
+        app.launchArguments = ["-ui-fakes", "-ui-skip-launch", "-ui-probes", "-ui-still-loops"]
             + (replay.map { ["-ui-one-machine", "-ui-replay", "replay-\($0)"] } ?? []) + extra
         app.launch()
         self.app = app

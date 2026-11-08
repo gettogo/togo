@@ -120,7 +120,7 @@ import UIKit
         let controller = LinkSheetController(rootView: AnyView(SignInOutcomeSheet(runner: runner, paste: paste, handle: handle)))
         handle.controller = controller
         // The authentication browser is still going away; the presenter waits for it.
-        LinkPresenter.present(controller, height: 360)
+        LinkPresenter.present(controller, height: 360, name: "link.signInOutcome")
     }
 
     /// Opens a pending request in the machine's own browser.
@@ -141,7 +141,7 @@ import UIKit
         configuration.barCollapsingEnabled = true
         let safari = SFSafariViewController(url: url, configuration: configuration)
         safari.dismissButtonStyle = .done
-        LinkPresenter.present(safari, height: nil)
+        LinkPresenter.present(safari, height: nil, name: "link.safari")
     }
 
     /// Every link on a terminal's screen and recent scrollback, newest first.
@@ -156,6 +156,6 @@ import UIKit
     private func present(prompt host: UIHostingController<AnyView>) {
         host.view.backgroundColor = UIColor.togoInk
         let fitted = host.sizeThatFits(in: CGSize(width: 390, height: CGFloat.greatestFiniteMagnitude)).height
-        LinkPresenter.present(host, height: fitted)
+        LinkPresenter.present(host, height: fitted, name: "link.list")
     }
 }

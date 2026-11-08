@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { constantTimeEqual, decodeSecret, HOST_ID_RE, hostIdFromSecret } from "./hostid";
-import { json } from "./http";
+import { json, readBodyCapped } from "./http";
 import { sendOne } from "./push";
 import { due, looksLikeWill, nextCheck, parseWill, WILL_MAX_FRAME, WILL_SETS_PER_MINUTE, type StoredWill } from "./will";
 
@@ -98,10 +98,8 @@ async function connect(request: Request, env: Env, hostId: string): Promise<Resp
 }
 
 async function readCiphertext(request: Request): Promise<string | null> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > MAX_BODY_BYTES) return null;
-  const buf = await request.arrayBuffer();
-  if (buf.byteLength > MAX_BODY_BYTES) return null;
+  const buf = await readBodyCapped(request, MAX_BODY_BYTES);
+  if (buf === null) return null;
   let body: unknown;
   try {
     body = JSON.parse(new TextDecoder().decode(buf));

@@ -298,6 +298,18 @@ import TogoTerminal
         #expect(tapped == ["Esc"])
     }
 
+    /// Single letters can be turned off; ⌘↩ and ⌘. keep working, even while a field types.
+    @Test func singleKeyAnswersCanBeTurnedOff() async {
+        let model = await Self.armed()
+        model.singleKeyAnswers = false
+        #expect(!model.acceptsKeyAnswers)
+        #expect(model.acceptsCommandAnswers)
+        model.otherTextFocused = true
+        #expect(model.acceptsCommandAnswers)
+        model.mode = .start
+        #expect(!model.acceptsCommandAnswers)
+    }
+
     @Test func keyAnswersOnlyWhileNoFieldHoldsTheKeyboard() async {
         let model = await Self.armed()
         #expect(model.acceptsKeyAnswers)
@@ -384,5 +396,18 @@ import TogoTerminal
         #expect(!model.introPending(.command, for: "a"))
         #expect(model.introPending(.beacon, for: "a"))
         #expect(model.introPending(.command, for: "b"))
+    }
+
+    /// With a hardware keyboard the key row is gone: Esc, ⌃C, Tab, ⇧Tab and the arrows still
+    /// reach the terminal from the input line, as its bytes.
+    @Test func hardwareKeysReachTheTerminal() {
+        #expect(PromptHardwareKey(name: .escape).bytes(draftEmpty: false) == "\u{1b}")
+        #expect(PromptHardwareKey(name: .control("c")).bytes(draftEmpty: false) == "\u{03}")
+        #expect(PromptHardwareKey(name: .tab).bytes(draftEmpty: true) == "\t")
+        #expect(PromptHardwareKey(name: .tab, shift: true).bytes(draftEmpty: true) == "\u{1b}[Z")
+        #expect(PromptHardwareKey(name: .up).bytes(draftEmpty: false) == "\u{1b}[A")
+        // Left and right move the caret while there is text.
+        #expect(PromptHardwareKey(name: .left).bytes(draftEmpty: false) == nil)
+        #expect(PromptHardwareKey(name: .left).bytes(draftEmpty: true) == "\u{1b}[D")
     }
 }

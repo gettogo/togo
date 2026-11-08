@@ -41,6 +41,8 @@ type ManifestEntry struct {
 	Command   []string  `json:"command"`
 	CreatedAt time.Time `json:"createdAt"`
 	EndedAt   time.Time `json:"endedAt,omitzero"`
+	// Muted keeps the session's push mute across a restore.
+	Muted bool `json:"muted,omitempty"`
 }
 
 // Manifest is the record of managed sessions at Path, normally
@@ -262,7 +264,7 @@ func (s *Service) forget(id string) {
 }
 
 func entryFor(sess Session) ManifestEntry {
-	e := ManifestEntry{ID: sess.ID, Name: sess.Name, Agent: sess.Agent, Cwd: sess.Cwd, Command: sess.Command, CreatedAt: sess.CreatedAt}
+	e := ManifestEntry{ID: sess.ID, Name: sess.Name, Agent: sess.Agent, Cwd: sess.Cwd, Command: sess.Command, CreatedAt: sess.CreatedAt, Muted: sess.Muted}
 	if sess.Bib != nil {
 		e.Bib = *sess.Bib
 	}

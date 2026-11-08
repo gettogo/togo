@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/logfile"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -55,6 +57,9 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	logger := log.New(stderr, "", log.LstdFlags)
+	// launchd and serve's detached start append to log/daemon.log forever;
+	// keep it private and bounded.
+	logfile.Keep(ctx, filepath.Join(home, "log", "daemon.log"), logfile.MaxSize, time.Hour, logger.Printf)
 	info, err := helperInfo(daemonCapabilities)
 	if err != nil {
 		return fail(stderr, err)

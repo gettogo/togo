@@ -138,7 +138,7 @@ enum MotionLint {
                 if !purposed { report(index, "motion-purpose") }
             }
             if line.firstMatch(of: /\.motion\(|\.animation\(/) != nil,
-               line.firstMatch(of: /value:[^)]*(shownLayer|chatAvailable|hasMission)/) != nil {
+               line.firstMatch(of: /value:[^)]*(shownLayer|chatAvailable|hasMission|awaitsChat|hasLoaded|isLoading|describing|\.pending|[Ll]ayer *[!=]= *\.)/) != nil {
                 report(index, "availability-animates")
             }
         }

@@ -41,6 +41,10 @@ struct WindowRoot: View {
             if let link = DeepLink(url: url) { composition.open(link) }
         }
         .background { SceneEnd { [composition, window] in composition.release(window: window) } }
+        // Links open in UIKit over whatever shows; they go through this window's coordinator.
+        .background { SceneReader { [presentations] scene in
+            if let scene { PresentationRegistry.register(presentations, for: scene) }
+        } }
     }
 
     private func content(_ store: AppStore) -> some View {

@@ -48,8 +48,10 @@ private struct ScreenMargins: ViewModifier {
     @State private var span = Span()
 
     func body(content: Content) -> some View {
+        // width-ok: the reading page comes from the fold, which only a regular Duo has; the measured span decides its width.
         let page = sizeClass == .regular ? fold.readingPage(from: anchor, minX: span.minX, width: span.width) : nil
         content
+            // width-ok: a maximum, not a layout choice: a narrower window is simply narrower than it.
             .frame(maxWidth: sizeClass == .regular ? Layout.readableWidth : .infinity, alignment: .leading)
             .padding(.horizontal, Layout.margin)
             .frame(maxWidth: page.map { $0.upperBound - $0.lowerBound } ?? .infinity)

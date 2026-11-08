@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/logfile"
 	"io"
 	"net"
 	"os"
@@ -164,7 +165,7 @@ func Start(exe, home string) (*os.Process, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("log directory: %w", err)
 	}
-	logFile, err := os.OpenFile(filepath.Join(dir, "daemon.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	logFile, err := logfile.Open(filepath.Join(dir, "daemon.log"), logfile.MaxSize)
 	if err != nil {
 		return nil, fmt.Errorf("daemon log: %w", err)
 	}

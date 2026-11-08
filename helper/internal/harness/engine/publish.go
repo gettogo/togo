@@ -46,10 +46,13 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			delete(s.pending, it.ID)
 			delete(s.lastPart, it.ID)
 		}
+		if it.Kind != harness.KindUser && it.Kind != harness.KindTurn {
+			s.awaitReply = false // the agent answered something
+		}
 		ready = append(ready, it)
 	}
 	if len(ready) > 0 {
-		stored := s.e.log.Append(s.id, ready)
+		stored := s.appendFormLocked(s.e.log.Append(s.id, ready))
 		for _, chunk := range chunkItems(stored, batchBytes) {
 			s.notifyLocked(harness.Notification{Kind: harness.NoteItems, Items: chunk})
 		}
@@ -141,9 +144,50 @@ func (s *sess) schedulePartialLocked(id string) {
 		}
 		delete(s.pending, id)
 		s.lastPart[id] = s.e.cfg.Now()
-		stored := s.e.log.Append(s.id, []harness.Item{it})
+		stored := s.appendFormLocked(s.e.log.Append(s.id, []harness.Item{it}))
 		s.notifyLocked(harness.Notification{Kind: harness.NoteItems, Items: stored})
 	})
+}
+
+// appendFormLocked turns streamed text updates into their new tail: a
+// partial assistant or thinking text that continues what subscribers were
+// last sent goes as {text: tail, appendFrom: bytes held}. Anything else
+// (the first update, a rewrite, the final text) goes whole. The log keeps
+// whole text, which is what harness.open serves, so a client that opens
+// in between holds exactly the sent text the next tail continues.
+func (s *sess) appendFormLocked(items []harness.Item) []harness.Item {
+	if s.sentText == nil {
+		s.sentText = map[string]string{}
+	}
+	out := items
+	for i, it := range items {
+		t := partialText(it)
+		if t == nil {
+			continue
+		}
+		if !t.Partial {
+			delete(s.sentText, it.ID)
+			continue
+		}
+		prev, held := s.sentText[it.ID]
+		s.sentText[it.ID] = t.Text
+		if !held || prev == "" || len(t.Text) <= len(prev) || !strings.HasPrefix(t.Text, prev) {
+			continue
+		}
+		if &out[0] == &items[0] {
+			out = append([]harness.Item(nil), items...)
+		}
+		n := len(prev)
+		tail := harness.TextBody{Text: t.Text[n:], Partial: true, AppendFrom: &n}
+		c := it
+		if c.Kind == harness.KindAssistant {
+			c.Assistant = &tail
+		} else {
+			c.Thinking = &tail
+		}
+		out[i] = c
+	}
+	return out
 }
 
 func partialText(it harness.Item) *harness.TextBody {
@@ -232,6 +276,11 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 				sub.Text = red.String(sub.Text)
 				t.Subject = &sub
 			}
+		}
+	case harness.KindShell:
+		if sh := it.Shell; sh != nil {
+			sh.Command = clipBytes(red.String(sh.Command), harness.MaxItemText)
+			sh.Output = tailBytes(red.String(sh.Output), harness.MaxToolOutput)
 		}
 	case harness.KindNotice:
 		if n := it.Notice; n != nil {

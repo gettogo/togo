@@ -24,7 +24,10 @@ enum HelperState: Equatable, Sendable {
     case checking
     case present(version: String, live: Bool)
     case missing
+    /// `found` is empty when the helper refused this app's protocol before naming its version.
     case outdated(found: String)
+    /// The helper speaks a newer protocol than this app; the app is the side to update.
+    case newer
 }
 
 enum Reachability: Equatable, Sendable {
@@ -34,6 +37,10 @@ enum Reachability: Equatable, Sendable {
     case failed(String)
     /// The machine signs in with a key that is not on this device.
     case keyMissing
+    /// The machine showed a key other than the trusted one; reviewing it is the way on.
+    case hostKeyChanged
+    /// This device has no network; the machine is not to blame.
+    case deviceOffline
 }
 
 struct SessionRow: Identifiable, Equatable, Sendable {
@@ -151,6 +158,9 @@ struct WorkspaceTab: Identifiable, Equatable, Sendable {
     var transport: TransportPreference? = nil
     /// The agent's name as last listed, so the header still names it while the machine is away.
     var agent: String? = nil
+    /// The agent's id when the tab was opened before the roster listed it (a session just
+    /// created), so the tab can expect its chat instead of showing the terminal first.
+    var agentID: String? = nil
 }
 
 enum LinkPhase: Equatable, Sendable {
@@ -196,6 +206,15 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     case settings
 
     var id: Self { self }
+
+    /// A form the user fills in: another sheet asked for meanwhile (⌘, or a Changes command
+    /// from the keyboard) must not replace it and lose what was typed.
+    var isForm: Bool {
+        switch self {
+        case .addMachine, .addMachineFilled, .editMachine, .newSession, .signIn: true
+        case .review, .settings: false
+        }
+    }
 }
 
 enum SettingsPage: Hashable, Sendable {

@@ -58,7 +58,7 @@ func (s *statusline) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 	}
 	if cw := obj(p["context_window"]); cw != nil {
-		if v, ok := num(cw["used_percentage"]); ok && v >= 0 && v <= 100 {
+		if v, ok := num(cw["used_percentage"]); ok && v > 0 && v <= 100 { // 0 is "not known yet"
 			st.ContextPercent = &v
 			s.state["context"] = strconv.FormatFloat(v, 'f', -1, 64)
 		}

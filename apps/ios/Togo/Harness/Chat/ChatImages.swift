@@ -12,34 +12,65 @@ extension EnvironmentValues {
     @Entry var chatImageFetch: ChatImageFetch?
 }
 
-/// Decoded chat pictures, screen-sized, kept in memory. A picture this phone uploaded is put
-/// here under its path on the machine, so it shows without a round trip.
+/// Decoded chat pictures kept in memory: thumbnails at the size they are drawn, and a few
+/// screen-sized ones for the viewer. A picture this phone uploaded is put here under its path
+/// on the machine, so it shows without a round trip. Both caches are bounded by decoded bytes.
 @MainActor final class ChatImageLoader {
     static let shared = ChatImageLoader()
+    /// The longest side a chat thumbnail is decoded at, in pixels.
+    static let thumbnailLimit = 600
 
-    private let cache: NSCache<NSString, UIImage> = {
+    private let thumbs: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
-        cache.countLimit = 80
+        cache.countLimit = 200
+        cache.totalCostLimit = 48 << 20
         return cache
     }()
 
-    func cached(_ ref: HarnessImage) -> UIImage? {
-        Self.key(ref).flatMap { cache.object(forKey: $0 as NSString) }
+    private let full: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 12
+        cache.totalCostLimit = 96 << 20
+        return cache
+    }()
+
+    private var observer: NSObjectProtocol?
+
+    init() {
+        observer = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.thumbs.removeAllObjects()
+                self?.full.removeAllObjects()
+            }
+        }
+    }
+
+    /// A thumbnail when one is held, else the screen-sized picture; `maxSide` nil asks for the
+    /// screen-sized one only.
+    func cached(_ ref: HarnessImage, maxSide: Int? = nil) -> UIImage? {
+        guard let key = Self.key(ref) else { return nil }
+        if maxSide != nil, let thumb = thumbs.object(forKey: key as NSString) { return thumb }
+        return full.object(forKey: key as NSString)
     }
 
     func put(_ image: UIImage, path: String) {
-        cache.setObject(image, forKey: path as NSString)
+        full.setObject(image, forKey: path as NSString, cost: Self.cost(image))
     }
 
     /// The picture from the cache, its inline bytes, or the machine; nil when none can say.
-    func load(_ ref: HarnessImage, fetch: ChatImageFetch?) async -> UIImage? {
-        if let hit = cached(ref) { return hit }
+    /// With `maxSide` it is decoded no larger than that, for a thumbnail.
+    func load(_ ref: HarnessImage, fetch: ChatImageFetch?, maxSide: Int? = nil) async -> UIImage? {
+        if let hit = cached(ref, maxSide: maxSide) { return hit }
         var bytes = ref.data
         if bytes == nil, let path = ref.path, let fetch {
             bytes = try? await fetch.fetch(path)
         }
-        guard let bytes, let image = await Self.decode(bytes) else { return nil }
-        if let key = Self.key(ref) { cache.setObject(image, forKey: key as NSString) }
+        guard let bytes, let image = await Self.decode(bytes, maxSide: maxSide) else { return nil }
+        if let key = Self.key(ref) {
+            (maxSide == nil ? full : thumbs).setObject(image, forKey: key as NSString, cost: Self.cost(image))
+        }
         return image
     }
 
@@ -48,8 +79,19 @@ extension EnvironmentValues {
         return ref.data.map { "inline:\($0.count):\($0.hashValue)" }
     }
 
-    @concurrent private nonisolated static func decode(_ data: Data) async -> UIImage? {
-        ImageShrinker.preview(data)
+    /// The pixels to decode for a thumbnail `points` long on its longer side.
+    static func thumbnailPixels(points: CGFloat, scale: CGFloat) -> Int {
+        min(thumbnailLimit, Int((points * scale).rounded(.up)))
+    }
+
+    private static func cost(_ image: UIImage) -> Int {
+        guard let cg = image.cgImage else { return 1 }
+        return cg.bytesPerRow * cg.height
+    }
+
+    @concurrent private nonisolated static func decode(_ data: Data, maxSide: Int?) async -> UIImage? {
+        if let maxSide { return ImageShrinker.preview(data, maxSide: maxSide) }
+        return ImageShrinker.preview(data)
     }
 }
 
@@ -104,6 +146,7 @@ struct ChatThumbnail: View {
     }
 
     @Environment(\.chatImageFetch) private var fetch
+    @Environment(\.displayScale) private var displayScale
     let ref: HarnessImage
     let side: CGFloat
     var square = true
@@ -129,9 +172,12 @@ struct ChatThumbnail: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.togoLine, lineWidth: 0.5)
         }
         .task(id: ChatImageLoader.key(ref)) {
-            image = ChatImageLoader.shared.cached(ref)
+            // A square crop fills its side with the picture's short side (up to 2:1 stays sharp);
+            // a single picture shows up to 1.4 × its side across.
+            let pixels = ChatImageLoader.thumbnailPixels(points: square ? side * 2 : side * 1.4, scale: displayScale)
+            image = ChatImageLoader.shared.cached(ref, maxSide: pixels)
             guard image == nil else { return }
-            image = await ChatImageLoader.shared.load(ref, fetch: fetch)
+            image = await ChatImageLoader.shared.load(ref, fetch: fetch, maxSide: pixels)
             failed = image == nil
         }
     }

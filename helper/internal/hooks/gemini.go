@@ -1,17 +1,27 @@
 package hooks
 
-// Gemini is Gemini CLI. Its hooks live in ~/.gemini/settings.json under
-// "hooks", in Claude Code's shape ({matcher, hooks: [{type, command}]}), and
-// run through the shell. Hooks are on by default (hooksConfig.enabled).
+import "errors"
+
+// Gemini is Gemini CLI, which Togo no longer runs. Earlier versions wrote
+// hooks into ~/.gemini/settings.json in Claude Code's shape; Uninstall still
+// removes them (and restores the backup when nothing else changed), so an
+// old install can be cleaned up. Install refuses it.
 const Gemini = "gemini"
 
-// geminiEvents are the hooks the gemini adapter reads: session id and
-// transcript path, and the working flag. Tool events come from the chat
-// file, so they are not hooked.
+// Retired lists harnesses Togo no longer sets up but whose old hook entries
+// Uninstall still removes.
+var Retired = []string{Gemini}
+
+// geminiEvents are the hooks earlier versions installed.
 var geminiEvents = []string{"SessionStart", "BeforeAgent", "AfterAgent", "PreCompress", "SessionEnd"}
 
-// geminiEdits edits ~/.gemini/settings.json. Gemini's hooks never answer
-// approvals, so --block adds nothing.
+// errRetired refuses an install for a retired harness.
+var errRetired = errors.New("no longer supported; uninstall removes its old hooks")
+
+// geminiEdits removes Togo's old entries from ~/.gemini/settings.json.
 func geminiEdits(o Options, add bool) ([]edit, string, error) {
-	return claudeShapeEdits(o.Binary, o.GeminiDir, "settings.json", Gemini, geminiEvents, "", false, add)
+	if add {
+		return nil, "", errRetired
+	}
+	return claudeShapeEdits(o.Binary, o.GeminiDir, "settings.json", Gemini, geminiEvents, "", false, false)
 }

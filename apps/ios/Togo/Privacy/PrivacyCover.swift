@@ -1,23 +1,6 @@
 import SwiftUI
-
-/// Hides content from the app switcher snapshot. Opaque ink, never a blur: a blur leaks
-/// the shape of what was on screen, and glass on content is banned.
-private struct PrivacyCover: ViewModifier {
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var wasActive = false
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                if PrivacyCoverRule.covers(scenePhase, wasActive: wasActive) {
-                    PrivacySurface()
-                }
-            }
-            .onChange(of: scenePhase, initial: true) { _, phase in
-                if phase == .active { wasActive = true }
-            }
-    }
-}
+import UIKit
+import UniformTypeIdentifiers
 
 /// When the cover is up. A scene is inactive for a moment at every cold launch, before it
 /// first turns active; covering it then would hide the launch, so the cover waits until the
@@ -60,8 +43,20 @@ struct ResumeLockScreen: View {
     }
 }
 
-extension View {
-    func privacyCover() -> some View {
-        modifier(PrivacyCover())
+/// Sign-in codes and links on the clipboard: this device only (never Universal Clipboard to
+/// the Mac or iPad) and gone after two minutes, so they do not sit there for other apps.
+enum SensitivePasteboard {
+    static let lifetime: TimeInterval = 120
+
+    static func options(now: Date = Date()) -> [UIPasteboard.OptionsKey: Any] {
+        [.localOnly: true, .expirationDate: now.addingTimeInterval(lifetime)]
+    }
+
+    static func copy(_ text: String, to pasteboard: UIPasteboard = .general) {
+        pasteboard.setItems([[UTType.plainText.identifier: text]], options: options())
+    }
+
+    static func copy(_ url: URL, to pasteboard: UIPasteboard = .general) {
+        pasteboard.setItems([[UTType.url.identifier: url]], options: options())
     }
 }

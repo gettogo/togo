@@ -60,13 +60,36 @@ enum ControlCenterCopy {
 
     /// A connected helper older than this app needs; Update walks through installing the new one.
     static func helperOutdated(_ version: String) -> String {
-        String(localized: "cc.machine.helperOutdated", defaultValue: "Helper \(version) needs an update.")
+        version.isEmpty
+            ? String(localized: "cc.machine.helperOutdatedUnknown", defaultValue: "The helper needs an update.")
+            : String(localized: "cc.machine.helperOutdated", defaultValue: "Helper \(version) needs an update.")
+    }
+
+    /// The helper is ahead of this app. Only updating the app helps, so there is no button.
+    static func helperNewer(_ machine: String) -> String {
+        String(localized: "cc.machine.helperNewer", defaultValue: "The helper on \(machine) is newer than this app. Update Togo from the App Store.")
     }
 
     /// Keys never sync, so a machine added on another device can name one this device lacks.
     static func keyMissing(device: String) -> String {
         String(localized: "cc.machine.keyMissing", defaultValue: "Key not on this \(device)")
     }
+
+    /// The machine showed another key. Reviewing it in Edit machine is the only way on: there
+    /// the old key can be forgotten if the machine really was reinstalled.
+    static let hostKeyChanged = String(
+        localized: "cc.machine.hostKeyChanged",
+        defaultValue: "This machine's key changed. If nobody reinstalled it, someone may be intercepting the connection."
+    )
+    static let reviewKey = String(localized: "cc.machine.reviewKey", defaultValue: "Review key")
+    static let keyChangedCaption = String(localized: "cc.machine.keyChangedCaption", defaultValue: "Key changed")
+
+    /// The phone itself has no network, so no machine is tried.
+    static func deviceOffline(_ device: String) -> String {
+        String(localized: "cc.machine.deviceOffline", defaultValue: "This \(device) is offline. Togo reconnects when the network is back.")
+    }
+
+    static let noNetwork = String(localized: "cc.machine.noNetwork", defaultValue: "No network")
 
     static func signedOut(_ machine: String) -> String {
         String(localized: "cc.machine.signedOut", defaultValue: "\(machine) needs you to sign in again.")

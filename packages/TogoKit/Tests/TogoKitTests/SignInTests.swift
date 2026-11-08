@@ -53,11 +53,4 @@ struct SignInTests {
         let ids = SignInCatalog.commands(installed: ["crush", "kimi"]).map(\.id)
         #expect(ids == ["crush", "crush.copilot", "crush.openai", "kimi"])
     }
-
-    @Test func geminiSignsInByRedirectWithACodeFallback() throws {
-        let gemini = SignInCatalog.all.filter { $0.agentID == "gemini" }
-        #expect(gemini.map(\.id) == ["gemini", "gemini.code"])
-        #expect(gemini[0].program == "gemini" && gemini[0].args.isEmpty)
-        #expect(gemini[1].args.contains("NO_BROWSER=true"))
-    }
 }

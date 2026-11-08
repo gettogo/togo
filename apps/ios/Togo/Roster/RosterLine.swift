@@ -51,6 +51,7 @@ struct RosterLine: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenLabel)
+        .voiceControlNames(VoiceControlNames.session(name: displayName, bib: row.bib, agent: showsAgent ? row.agentName : nil))
         .accessibilityValue(row.activity ?? "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }

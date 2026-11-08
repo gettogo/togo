@@ -78,6 +78,9 @@ private struct PromptBarFeed: ViewModifier {
             .onChange(of: store.services.settings.keyBarConfig, initial: true) { _, bar in
                 model.keyBar = bar
             }
+            .onChange(of: store.services.settings.singleKeyAnswers, initial: true) { _, on in
+                model.singleKeyAnswers = on
+            }
             .onChange(of: store.startRequests) {
                 if case .start = model.mode {
                     model.openStart()

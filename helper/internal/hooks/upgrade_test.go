@@ -14,7 +14,7 @@ func TestReinstallUpgradesOlderInstall(t *testing.T) {
 	e := newEnv(t)
 	hooks := map[string]any{"PreToolUse": []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "lint.sh"}}}}}
 	for _, ev := range claudeBase[:8] {
-		g := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": hookCommand(e.o.Binary, Claude, ev)}}}
+		g := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": bareHookCommand(e.o.Binary, Claude, ev)}}}
 		list, _ := hooks[ev].([]any)
 		hooks[ev] = append(list, g)
 	}
@@ -43,7 +43,7 @@ func TestReinstallUpgradesOlderInstall(t *testing.T) {
 	}
 	got := read(t, settingsPath(e))
 	for _, ev := range claudeBase {
-		if n := strings.Count(got, "hook claude "+ev+`"`); n != 1 {
+		if n := strings.Count(got, "hook claude "+ev+guardTrue+`"`); n != 1 {
 			t.Errorf("%s has %d togo entries", ev, n)
 		}
 	}

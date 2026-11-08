@@ -53,13 +53,17 @@ public actor HelperClient {
         harnessSink.finish()
     }
 
+    /// The protocol this app speaks.
+    public static let protocolVersion = 1
+
     public func hello(client: ClientInfo) async throws -> HelloResult {
-        let params = HelloParams(protocol: 1, client: client, capabilities: [])
+        let params = HelloParams(protocol: Self.protocolVersion, client: client, capabilities: [])
         let result: HelloResult = try await call(.hello, params)
-        guard result.protocol == 1 else {
+        guard result.protocol == Self.protocolVersion else {
+            // Shaped like the helper's own refusal: `supported` names what the other side speaks.
             throw HelperError.rpc(RPCErrorObject(
                 code: RPCErrorCode.unsupportedVersion, message: "unsupported_version",
-                data: .object(["supported": .array([.number(1)]), "got": .number(Double(result.protocol))])
+                data: .object(["supported": .array([.number(Double(result.protocol))])])
             ))
         }
         capabilities = Set(result.capabilities)
@@ -332,13 +336,12 @@ public actor HelperClient {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, any Error>) in
                 // Registering before the frame is queued means a response cannot arrive for
                 // an id nobody is waiting on, however the actor interleaves the reader.
+                // The call's own timeout starts once its frame is written (`sent`); until then
+                // a longer one covers the wait behind other frames, such as a large upload.
                 pending[id] = PendingCall(
                     method: method.rawValue,
                     continuation: continuation,
-                    timer: Task { [weak self, callTimeout] in
-                        guard (try? await Task.sleep(for: callTimeout)) != nil else { return }
-                        await self?.finish(id, with: HelperError.timeout(method: method.rawValue))
-                    }
+                    timer: timer(for: id, method: method.rawValue, after: callTimeout * Self.queuedTimeoutFactor)
                 )
                 if Task.isCancelled {
                     finish(id, with: CancellationError())
@@ -354,6 +357,23 @@ public actor HelperClient {
         } catch {
             throw HelperError.malformedResponse
         }
+    }
+
+    /// How much longer than the call timeout a frame may wait to be written.
+    static let queuedTimeoutFactor = 3
+
+    private func timer(for id: Int, method: String, after duration: Duration) -> Task<Void, Never> {
+        Task { [weak self] in
+            guard (try? await Task.sleep(for: duration)) != nil else { return }
+            await self?.finish(id, with: HelperError.timeout(method: method))
+        }
+    }
+
+    /// The frame is on the wire: the call timeout counts from now, not from when it was queued.
+    private func sent(_ id: Int) {
+        guard let call = pending[id] else { return }
+        call.timer.cancel()
+        pending[id]?.timer = timer(for: id, method: call.method, after: callTimeout)
     }
 
     private func finish(_ id: Int, with error: any Error) {
@@ -385,6 +405,7 @@ public actor HelperClient {
                     await self.channelFailed()
                     return
                 }
+                await self.sent(frame.id)
             }
         }
         let incoming = channel.incoming
@@ -475,7 +496,7 @@ private struct OutgoingFrame: Sendable {
 private struct PendingCall {
     let method: String
     let continuation: CheckedContinuation<Data, any Error>
-    let timer: Task<Void, Never>
+    var timer: Task<Void, Never>
 }
 
 /// The routing fields of an incoming message. `result` is decoded later into the type

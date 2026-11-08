@@ -26,6 +26,9 @@ type sessionState struct {
 	// notification. Together they bound what a program ringing the bell in
 	// a loop can cost.
 	lastInspect, lastNotify time.Time
+	// lastPoll is when a coding agent's screen was last read for a prompt
+	// while its output went on.
+	lastPoll time.Time
 	notifyTitle, notifyBody string
 
 	// agent is the session's agent id from the listing; it picks how

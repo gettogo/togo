@@ -45,8 +45,13 @@ func frames(t *testing.T, payloads ...string) *bytes.Buffer {
 
 func serve(t *testing.T, h Handler, payloads ...string) []map[string]any {
 	t.Helper()
+	return serveInfo(t, h, testInfo, payloads...)
+}
+
+func serveInfo(t *testing.T, h Handler, info HelperInfo, payloads ...string) []map[string]any {
+	t.Helper()
 	var out bytes.Buffer
-	if err := Serve(context.Background(), frames(t, payloads...), &out, h, testInfo); err != nil {
+	if err := Serve(context.Background(), frames(t, payloads...), &out, h, info); err != nil {
 		t.Fatalf("Serve: %v", err)
 	}
 	var resps []map[string]any

@@ -47,14 +47,16 @@ public struct HarnessTimeline: Sendable {
 
     public mutating func load(_ result: HarnessOpenResult) {
         if epoch == result.epoch {
-            for item in result.items.sorted(by: { $0.seq < $1.seq }) { upsert(item) }
+            // A tail that does not fit what is held is skipped; the next update repairs it.
+            for item in result.items.sorted(by: { $0.seq < $1.seq }) { _ = upsert(item) }
             cursor = max(cursor, result.cursor)
             settleAhead()
             if items.isEmpty { hasOlder = result.more }
         } else {
             epoch = result.epoch
             cursor = result.cursor
-            items = result.items.sorted { $0.seq < $1.seq }
+            // A tail with nothing to continue is useless here; drop it rather than show a fragment.
+            items = result.items.filter { !$0.isTail }.sorted { $0.seq < $1.seq }
             hasOlder = result.more
             ahead = [:]
             reindex()
@@ -75,7 +77,10 @@ public struct HarnessTimeline: Sendable {
         let fresh = (note.items ?? []).filter { $0.seq > cursor }.sorted { $0.seq < $1.seq }
         guard let first = fresh.first else { return .ignored }
         if first.seq > cursor + 1 { return .reopen }
-        for item in fresh { upsert(item) }
+        // A tail that does not continue the held text means an update was missed: the cursor
+        // stays, so the reopen sends the item whole. Items before it are applied in place,
+        // which the reopen repeats harmlessly.
+        for item in fresh where !upsert(item) { return .reopen }
         cursor = fresh[fresh.count - 1].seq
         settleAhead()
         trim()
@@ -88,7 +93,7 @@ public struct HarnessTimeline: Sendable {
         guard isLoaded else { return }
         if let at = index[item.id], items[at].seq > item.seq { return }
         let known = index[item.id] != nil
-        upsert(item)
+        guard upsert(item) else { return }
         if !known, item.seq > cursor { ahead[item.id] = item.seq }
         trim()
     }
@@ -109,9 +114,17 @@ public struct HarnessTimeline: Sendable {
         index[id].map { items[$0] }
     }
 
-    private mutating func upsert(_ item: HarnessItem) {
+    /// False, changing nothing, when `item` is a tail that does not continue the held text.
+    private mutating func upsert(_ item: HarnessItem) -> Bool {
+        var item = item
         if let at = index[item.id] {
+            if item.isTail {
+                guard let whole = items[at].body.continued(by: item.body) else { return false }
+                item.body = whole
+            }
             items[at] = item
+        } else if item.isTail {
+            return false
         } else if let at = ahead.filter({ $0.value > item.seq }).compactMap({ index[$0.key] }).min() {
             items.insert(item, at: at)
             reindex()
@@ -119,6 +132,7 @@ public struct HarnessTimeline: Sendable {
             index[item.id] = items.count
             items.append(item)
         }
+        return true
     }
 
     /// Sent items the cursor has reached are in their place now.
@@ -135,6 +149,27 @@ public struct HarnessTimeline: Sendable {
 
     private mutating func reindex() {
         index = Dictionary(items.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { _, last in last })
+    }
+}
+
+extension HarnessItem {
+    /// A streamed update carrying only the new end of its text.
+    var isTail: Bool {
+        switch body {
+        case .assistant(let t), .thinking(let t): t.appendFrom != nil
+        default: false
+        }
+    }
+}
+
+extension HarnessItem.Body {
+    /// This text body continued by `tail` of the same kind, or nil when they do not fit.
+    func continued(by tail: HarnessItem.Body) -> HarnessItem.Body? {
+        switch (self, tail) {
+        case (.assistant(let held), .assistant(let new)): held.continued(by: new).map { .assistant($0) }
+        case (.thinking(let held), .thinking(let new)): held.continued(by: new).map { .thinking($0) }
+        default: nil
+        }
     }
 }
 

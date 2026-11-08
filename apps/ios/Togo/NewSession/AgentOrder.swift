@@ -1,29 +1,42 @@
 import Foundation
 import TogoKit
 
-/// The order agents are offered in: the user's favorites in the order they were starred, then
-/// the agents started most recently, then the rest by name. Favorites and recent starts belong
-/// to this device; they never sync.
+/// The order agents are offered in: the user's favorites, then every other agent, each part
+/// by name. Favorites belong to this device; they never sync. Lists take the favorites once,
+/// when they open, so starring an agent leaves the rows where they are until the next open.
 enum AgentOrder {
     /// How many recent agents are kept.
     static let recentLimit = 6
 
-    static func sorted(_ agents: [AgentInfo], favorites: [String], recent: [String]) -> [AgentInfo] {
-        sorted(agents, id: \.id, name: \.name, favorites: favorites, recent: recent)
+    /// The two parts of an agent list. `favorites` is empty when nothing is starred.
+    struct Sections<T> {
+        var favorites: [T]
+        var others: [T]
+        var all: [T] { favorites + others }
     }
 
-    static func sorted<T>(
-        _ items: [T], id: (T) -> String, name: (T) -> String, favorites: [String], recent: [String]
-    ) -> [T] {
-        func rank(_ item: T) -> (group: Int, index: Int) {
-            if let i = favorites.firstIndex(of: id(item)) { return (0, i) }
-            if let i = recent.firstIndex(of: id(item)) { return (1, i) }
-            return (2, 0)
-        }
-        return items.enumerated().sorted { a, b in
-            let ra = rank(a.element), rb = rank(b.element)
-            if ra.group != rb.group { return ra.group < rb.group }
-            if ra.group < 2 { return ra.index < rb.index }
+    static func sections(_ agents: [AgentInfo], favorites: [String]) -> Sections<AgentInfo> {
+        sections(agents, id: \.id, name: \.name, favorites: favorites)
+    }
+
+    static func sections<T>(
+        _ items: [T], id: (T) -> String, name: (T) -> String, favorites: [String]
+    ) -> Sections<T> {
+        let starred = Set(favorites)
+        let sorted = byName(items, name: name)
+        return Sections(
+            favorites: sorted.filter { starred.contains(id($0)) },
+            others: sorted.filter { !starred.contains(id($0)) }
+        )
+    }
+
+    static func sorted(_ agents: [AgentInfo], favorites: [String]) -> [AgentInfo] {
+        sections(agents, favorites: favorites).all
+    }
+
+    /// `items` by name as Finder sorts them; equal names keep their order.
+    static func byName<T>(_ items: [T], name: (T) -> String) -> [T] {
+        items.enumerated().sorted { a, b in
             let order = name(a.element).localizedStandardCompare(name(b.element))
             return order == .orderedSame ? a.offset < b.offset : order == .orderedAscending
         }.map(\.element)

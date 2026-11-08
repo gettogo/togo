@@ -51,6 +51,7 @@ private struct ApproveStyle: ButtonStyle {
             .padding(.horizontal, 18)
             .padding(.vertical, 11)
             .frame(minWidth: 44, minHeight: 44)
+            // accent-ok: the approve button answers a request that needs the user.
             .background(colorScheme == .dark ? Color.togoAccent : Color.togoAccentText, in: .rect(cornerRadius: 22, style: .continuous))
             .contentShape(.rect(cornerRadius: 22, style: .continuous))
             .opacity(isEnabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)

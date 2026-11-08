@@ -184,6 +184,7 @@ struct IslandExpandedCenter: View {
                     Text(verbatim: more)
                         .font(.footnote)
                         .fontWeight(.medium)
+                        // accent-ok: "+3 more" counts further requests waiting for the user.
                         .foregroundStyle(Color.togoAccentText)
                         // trunc-ok: "+3 more"
                         .lineLimit(1)

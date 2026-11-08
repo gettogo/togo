@@ -24,7 +24,7 @@ import TogoKit
         let tools = tools()
         tools.answer("integrations.status", status([
             row("claude", "ready", extra: #","hooks":"installed","statusLine":"chained""#),
-            row("gemini", "needsSetup", extra: #","hooks":"absent""#),
+            row("droid", "needsSetup", extra: #","hooks":"absent""#),
             row("vibe", "notSupported", setup: "pending"),
             row("kimi", "notNeeded", setup: "none"),
             row("aider", "notInstalled", setup: "none", installed: false),
@@ -32,32 +32,32 @@ import TogoKit
         let model = IntegrationsModel(host: host, tools: tools)
         await model.load()
         #expect(model.phase == .loaded)
-        #expect(model.setupRows.map(\.id) == ["claude", "gemini"])
+        #expect(model.setupRows.map(\.id) == ["claude", "droid"])
         #expect(model.notNeededRows.map(\.id) == ["vibe", "kimi"])
-        #expect(model.needing.map(\.id) == ["gemini"])
+        #expect(model.needing.map(\.id) == ["droid"])
         #expect(!model.showsSetUpAll)
     }
 
     @Test func setUpAllShowsWhenMoreThanOneNeedsIt() async {
         let tools = tools()
-        tools.answer("integrations.status", status([row("gemini", "needsSetup"), row("codex", "outdated"), row("claude", "ready")]))
+        tools.answer("integrations.status", status([row("droid", "needsSetup"), row("codex", "outdated"), row("claude", "ready")]))
         let model = IntegrationsModel(host: host, tools: tools)
         await model.load()
         #expect(model.showsSetUpAll)
-        tools.answer("integrations.install", #"{"results":[],"integrations":[\#(row("gemini", "ready")),\#(row("codex", "ready")),\#(row("claude", "ready"))]}"#)
+        tools.answer("integrations.install", #"{"results":[],"integrations":[\#(row("droid", "ready")),\#(row("codex", "ready")),\#(row("claude", "ready"))]}"#)
         await model.setUpAll()
         let sent = tools.requests.filter { $0.method == "integrations.install" }.map(\.params)
-        #expect(sent == [["agents": .array([.string("gemini"), .string("codex")])]])
+        #expect(sent == [["agents": .array([.string("droid"), .string("codex")])]])
         #expect(!model.showsSetUpAll && model.needing.isEmpty)
     }
 
     @Test func setUpTurnsTheRowReady() async {
         let tools = tools()
         let model = IntegrationsModel(host: host, tools: tools, reports: [
-            IntegrationReport(id: "gemini", name: "Gemini CLI", installed: true, setup: .hooks, state: .needsSetup),
+            IntegrationReport(id: "droid", name: "Droid", installed: true, setup: .hooks, state: .needsSetup),
         ])
-        tools.answer("integrations.install", #"{"results":[{"id":"gemini","state":"installed"}],"integrations":[\#(row("gemini", "ready"))]}"#)
-        await model.setUp("gemini")
+        tools.answer("integrations.install", #"{"results":[{"id":"droid","state":"installed"}],"integrations":[\#(row("droid", "ready"))]}"#)
+        await model.setUp("droid")
         #expect(model.setupRows.first?.state == .ready)
         #expect(model.failures.isEmpty && model.busy.isEmpty)
     }
@@ -65,21 +65,21 @@ import TogoKit
     @Test func aRefusedHarnessShowsWhyInPlace() async {
         let tools = tools()
         let model = IntegrationsModel(host: host, tools: tools, reports: [
-            IntegrationReport(id: "gemini", name: "Gemini CLI", installed: true, setup: .hooks, state: .needsSetup),
+            IntegrationReport(id: "droid", name: "Droid", installed: true, setup: .hooks, state: .needsSetup),
         ])
-        tools.answer("integrations.install", #"{"results":[{"id":"gemini","state":"refused","error":"a Togo hook entry was changed by hand\nmore"}],"integrations":[\#(row("gemini", "needsSetup"))]}"#)
-        await model.setUp("gemini")
-        #expect(model.failures["gemini"] == "a Togo hook entry was changed by hand")
+        tools.answer("integrations.install", #"{"results":[{"id":"droid","state":"refused","error":"a Togo hook entry was changed by hand\nmore"}],"integrations":[\#(row("droid", "needsSetup"))]}"#)
+        await model.setUp("droid")
+        #expect(model.failures["droid"] == "a Togo hook entry was changed by hand")
     }
 
     @Test func aFailedCallSaysSoOnTheRow() async {
         let tools = tools()
         let model = IntegrationsModel(host: host, tools: tools, reports: [
-            IntegrationReport(id: "gemini", name: "Gemini CLI", installed: true, setup: .hooks, state: .needsSetup),
+            IntegrationReport(id: "droid", name: "Droid", installed: true, setup: .hooks, state: .needsSetup),
         ])
         tools.fail("integrations.install", code: -32603)
-        await model.setUp("gemini")
-        #expect(model.failures["gemini"] == "Couldn't set up Gemini CLI. Try again.")
+        await model.setUp("droid")
+        #expect(model.failures["droid"] == "Couldn't set up Droid. Try again.")
         #expect(model.setupRows.first?.state == .needsSetup)
     }
 

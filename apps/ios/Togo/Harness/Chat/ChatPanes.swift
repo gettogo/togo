@@ -7,6 +7,8 @@ import UIKit
 /// pane from the first frame and keeps clear of a pane's header, the compose bar and the
 /// keyboard (`insets.bottom`).
 struct ChatPanes: View {
+    /// Loops held from above (a snapshot, a UI test) stay held in a shown chat too.
+    @Environment(\.loopsPaused) private var loopsPaused
     let store: AppStore
     let geometry: PaneGeometry
     let insets: EdgeInsets
@@ -40,8 +42,9 @@ struct ChatPanes: View {
                 if layer == .pending {
                     // Not decided yet: the paws over the terminal, never the terminal itself.
                     SessionLoader(agent: agentName(id))
-                        // motion: state change — the loader gives way to the chat or terminal in place.
-                        .transition(.opacity)
+                        // motion: state change — a cut: availability never animates; fading the
+                        // loader would show the terminal under it mid-fade (the flash on open).
+                        .transition(.identity)
                 } else if let harness, harness.chatAvailable {
                     // Kept alive under the terminal layer, only hidden, so its scroll position and
                     // folds are where they were when the chat comes back. Its loops hold still
@@ -51,6 +54,9 @@ struct ChatPanes: View {
                     // that session and never carry into another tab's conversation.
                     ChatView(store: harness, actions: store.chatActions(for: id))
                         .id(id)
+                        // motion: state change — a tab switch is a cut: two half-faded chats
+                        // would let the next tab's terminal show through.
+                        .transition(.identity)
                         .padding(.bottom, bottom)
                         .padding(.leading, max(0, page.minX - rect.minX))
                         .padding(.trailing, max(0, rect.maxX - page.maxX))
@@ -58,12 +64,10 @@ struct ChatPanes: View {
                         .opacity(shown ? 1 : 0)
                         .allowsHitTesting(shown)
                         .accessibilityHidden(!shown)
-                        .environment(\.loopsPaused, !shown)
+                        .environment(\.loopsPaused, loopsPaused || !shown)
                         .simultaneousGesture(TapGesture().onEnded { store.focus(pane) })
                 }
             }
-            // motion: state change — loader to session is one crossfade, never a flash of either.
-            .motion(.fade, value: layer == .pending)
             // A subagent's own conversation, from a work step or a mission row.
             .modifier(OptionalSubagentChat(harness: harness, actions: store.chatActions(for: id)))
             // Links in the chat and the sheets it opens go through the chat's router.
@@ -117,6 +121,7 @@ extension AppStore {
 /// The bar item that flips the focused tab between chat and terminal. A symbol and a title,
 /// so it can stand in a vertical bar.
 struct LayerToolbarItem: ToolbarContent {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let layer: SessionLayer
     let toggle: () -> Void
 
@@ -127,10 +132,10 @@ struct LayerToolbarItem: ToolbarContent {
                 if layer == .terminal { Self.resignKeyboard() }
                 // motion: cause → effect — the user's toggle crossfades the layers in place and
                 // turns the symbol into the other layer's; nothing else ever fades them.
-                withAnimation(Motion.animation(.fade, reduce: UIAccessibility.isReduceMotionEnabled)) { toggle() }
+                withAnimation(Motion.animation(.fade, reduce: reduceMotion)) { toggle() }
             } label: {
                 Label(title, systemImage: symbol)
-                    .contentTransition(UIAccessibility.isReduceMotionEnabled ? .identity : .symbolEffect(.replace))
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
             .accessibilityHint(layer == .chat ? ChatCopy.showTerminalHint : ChatCopy.showChatHint)

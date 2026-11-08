@@ -94,6 +94,9 @@ func Detect(screen string) (Prompt, bool) {
 		p, ok = matchSignIn(raw, lines)
 	}
 	if !ok {
+		p, ok = matchLoginStart(lines)
+	}
+	if !ok {
 		return Prompt{}, false
 	}
 	p.Title = truncate(p.Title, wire.MaxTitle)

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import TogoKit
 import TogoPush
 @testable import Togo
 
@@ -75,6 +76,17 @@ private func needsYou(_ requestId: String?, since: Date) -> TogoActivityAttribut
 
 @MainActor
 struct LiveActivityControllerTests {
+    /// The widget reads the "show command text" machines where the app's device settings
+    /// keep them, so the two keys must stay one.
+    @Test func widgetReadsTheCommandChoiceTheAppSaves() throws {
+        let defaults = try #require(UserDefaults(suiteName: "device-\(UUID().uuidString)"))
+        let machine = UUID()
+        var settings = AppSettings()
+        settings.liveActivityCommandMachines = [machine]
+        DeviceSettings(backend: DefaultsBackend(defaults: defaults, namespace: "device.")).save(settings)
+        #expect(SharedSettings.readLiveActivityCommandMachines(defaults) == [machine])
+    }
+
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
 
     func pairing(_ hostId: String, name: String, command: Bool = false) -> Pairing {

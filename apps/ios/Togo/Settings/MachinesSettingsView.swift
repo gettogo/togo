@@ -39,6 +39,7 @@ struct MachinesSettingsView: View {
     var forgetRemoval: (String) -> Void = { _ in }
     var machineImport: MachineImport?
     /// The remove question names the kind of device whose key goes.
+    // idiom-ok: names the device in copy; no layout depends on it.
     var isPad = UIDevice.current.userInterfaceIdiom == .pad
     @State private var removal = MachineRemoval()
     @State private var importModel: ImportHostsModel?

@@ -8,32 +8,33 @@ public enum SSHError: Error, Equatable, LocalizedError {
     case authFailed(tried: [String])
     case cancelled
     case unreachable(String)
+    /// The machine answered but turned the SSH port away: on a Mac, Remote Login is off.
+    case refused
     case timeout
     case channelClosed(exitStatus: Int32?)
 
     public var errorDescription: String? {
         switch self {
         case .hostKeyChanged(let host, let expected, let presented):
-            "The key for \(Self.displayHost(host)) is not the one you trusted. "
-                + "Trusted: \(expected.joined(separator: ", ")). Sent now: \(presented). "
-                + "If nobody changed or reinstalled this machine, someone may be intercepting the connection. "
-                + "Togo will not connect until the old key is removed."
+            String(localized: "The key for \(Self.displayHost(host)) is not the one you trusted. Trusted: \(expected.joined(separator: ", ")). Sent now: \(presented). If nobody changed or reinstalled this machine, someone may be intercepting the connection. Togo will not connect until the old key is removed.", bundle: .module)
         case .hostKeyRejected:
-            "The machine's key was not trusted, so the connection was closed."
+            String(localized: "The machine's key wasn't trusted, so the connection was closed.", bundle: .module)
         case .authFailed(let tried) where tried.isEmpty:
-            "The machine did not accept the login."
+            String(localized: "The machine didn't accept the login.", bundle: .module)
         case .authFailed(let tried):
-            "The machine did not accept the login (tried \(tried.map(Self.methodName).joined(separator: ", ")))."
+            String(localized: "The machine did not accept the login (tried \(tried.map(Self.methodName).joined(separator: ", "))).", bundle: .module)
         case .cancelled:
-            "The connection was cancelled."
+            String(localized: "The connection was cancelled.", bundle: .module)
         case .unreachable(let detail):
             detail.hasSuffix(".") ? detail : detail + "."
+        case .refused:
+            String(localized: "The machine turned the connection away: nothing takes SSH on it. On a Mac, turn on System Settings › General › Sharing › Remote Login; elsewhere, start the SSH server. togo doctor on the machine checks this.", bundle: .module)
         case .timeout:
-            "The machine took too long to answer."
+            String(localized: "The machine took too long to answer.", bundle: .module)
         case .channelClosed(nil):
-            "The connection closed unexpectedly."
+            String(localized: "The connection closed unexpectedly.", bundle: .module)
         case .channelClosed:
-            "The command on the machine stopped."
+            String(localized: "The command on the machine stopped.", bundle: .module)
         }
     }
 
@@ -47,8 +48,8 @@ public enum SSHError: Error, Equatable, LocalizedError {
 
     private static func methodName(_ method: String) -> String {
         switch method {
-        case "publickey": "key"
-        case "keyboard-interactive": "password prompt"
+        case "publickey": String(localized: "key", bundle: .module)
+        case "keyboard-interactive": String(localized: "password prompt", bundle: .module)
         default: method
         }
     }

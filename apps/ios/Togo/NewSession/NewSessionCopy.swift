@@ -60,8 +60,14 @@ enum NewSessionCopy {
         localized: "new.agent.flags.invisible", defaultValue: "Flags can't contain invisible characters."
     )
     static let rememberFolder = String(localized: "new.agent.remember", defaultValue: "Remember for this folder")
-    static let addFavorite = String(localized: "new.agent.favorite.add", defaultValue: "Add to favorites")
-    static let removeFavorite = String(localized: "new.agent.favorite.remove", defaultValue: "Remove from favorites")
+    static func addFavorite(_ agent: String) -> String {
+        String(localized: "new.agent.favorite.add.named", defaultValue: "Favorite \(agent)")
+    }
+    static func removeFavorite(_ agent: String) -> String {
+        String(localized: "new.agent.favorite.remove.named", defaultValue: "Unfavorite \(agent)")
+    }
+    static let favoritesHeading = String(localized: "new.agent.favorites", defaultValue: "Favorites")
+    static let otherAgentsHeading = String(localized: "new.agent.others", defaultValue: "Other agents")
     static let notInstalledHeading = String(localized: "new.agent.missing", defaultValue: "Not installed")
     static func notInstalledCount(_ count: Int) -> String {
         String(localized: "new.agent.missing.count", defaultValue: "\(count) agents")

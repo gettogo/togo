@@ -86,6 +86,54 @@ struct TokensTests {
         }
     }
 
+
+    // MARK: Increase Contrast
+
+    private static let highContrastRoles: [(key: String, color: UIColor)] = [
+        ("mute", .togoMute), ("muteDim", .togoMuteDim), ("line", .togoLine), ("accent", .togoAccent),
+    ]
+
+    @Test(arguments: [UIUserInterfaceStyle.dark, .light])
+    func highContrastTextAt7to1(style: UIUserInterfaceStyle) {
+        for background in [UIColor.togoInk, .togoRaised] {
+            for text in [UIColor.togoMute, .togoMuteDim] {
+                #expect(Self.contrast(text, background, style, high: true) >= 7, "\(Self.hex(text, style, high: true)) on \(Self.hex(background, style, high: true))")
+            }
+            #expect(Self.contrast(.togoAccent, background, style, high: true) >= 4.5)
+        }
+    }
+
+    @Test(arguments: [UIUserInterfaceStyle.dark, .light])
+    func highContrastLinesAt3to1(style: UIUserInterfaceStyle) {
+        for background in [UIColor.togoInk, .togoRaised] {
+            #expect(Self.contrast(.togoLine, background, style, high: true) >= 3, "line on \(Self.hex(background, style, high: true))")
+        }
+    }
+
+    @Test func everyTokenHasHighContrastVariant() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("brand/tokens.json")
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        let high = try #require(root?["highContrast"] as? [String: [String: String]], "missing highContrast")
+        for (style, name) in [(UIUserInterfaceStyle.dark, "dark"), (.light, "light")] {
+            let values = try #require(high[name], "missing highContrast.\(name)")
+            for role in Self.highContrastRoles {
+                let value = try #require(values[role.key], "missing highContrast.\(name).\(role.key)")
+                #expect(Self.hex(role.color, style, high: true) == value.uppercased(), "\(name) \(role.key)")
+                #expect(Self.hex(role.color, style, high: true) != Self.hex(role.color, style), "\(name) \(role.key) unchanged")
+            }
+        }
+    }
+
+    private static func traits(_ style: UIUserInterfaceStyle, high: Bool) -> UITraitCollection {
+        UITraitCollection { mutable in
+            mutable.userInterfaceStyle = style
+            mutable.accessibilityContrast = high ? .high : .normal
+        }
+    }
+
     private static func hue(_ color: UIColor, _ style: UIUserInterfaceStyle) -> CGFloat {
         var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
         color.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
@@ -103,21 +151,21 @@ struct TokensTests {
         return try #require(root?["color"] as? [String: Any])
     }
 
-    private static func rgb(_ color: UIColor, _ style: UIUserInterfaceStyle) -> [CGFloat] {
-        let resolved = color.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+    private static func rgb(_ color: UIColor, _ style: UIUserInterfaceStyle, high: Bool = false) -> [CGFloat] {
+        let resolved = color.resolvedColor(with: traits(style, high: high))
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
         resolved.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
         return [red, green, blue]
     }
 
-    private static func hex(_ color: UIColor, _ style: UIUserInterfaceStyle) -> String {
-        "#" + rgb(color, style).map { String(format: "%02X", Int(($0 * 255).rounded())) }.joined()
+    private static func hex(_ color: UIColor, _ style: UIUserInterfaceStyle, high: Bool = false) -> String {
+        "#" + rgb(color, style, high: high).map { String(format: "%02X", Int(($0 * 255).rounded())) }.joined()
     }
 
     // WCAG 2.x relative luminance and contrast ratio.
-    private static func contrast(_ a: UIColor, _ b: UIColor, _ style: UIUserInterfaceStyle) -> CGFloat {
+    private static func contrast(_ a: UIColor, _ b: UIColor, _ style: UIUserInterfaceStyle, high: Bool = false) -> CGFloat {
         func luminance(_ color: UIColor) -> CGFloat {
-            let linear = rgb(color, style).map { $0 <= 0.04045 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
+            let linear = rgb(color, style, high: high).map { $0 <= 0.04045 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
             return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
         }
         let (la, lb) = (luminance(a), luminance(b))

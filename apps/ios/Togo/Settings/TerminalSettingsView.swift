@@ -98,6 +98,18 @@ struct TerminalSettingsView: View {
                     "With VoiceOver on, new output in the focused terminal is read aloud once it settles."
                 ))
             }
+            Section {
+                Toggle(
+                    settingsText("settings.terminal.singleKeys", "Answer with Y, N and R"),
+                    isOn: settings.binding(\.singleKeyAnswers, update)
+                )
+                .frame(minHeight: 44)
+            } footer: {
+                Text(settingsText(
+                    "settings.terminal.singleKeys.footer",
+                    "On a hardware keyboard, Y approves, N denies and R replies to the request in the prompt bar. ⌘↩ and ⌘. always work."
+                ))
+            }
             .groupedRows()
         }
         .groupedList()

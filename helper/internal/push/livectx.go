@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/harness/redact"
 	"github.com/gettogo/togo/helper/internal/seal"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -56,9 +57,11 @@ func (c LiveContext) empty() bool { return c.equal(LiveContext{}) }
 
 // requestContext reads what the Live Activity shows about an approval.
 func requestContext(a wire.Approval) LiveContext {
-	c := LiveContext{Ask: end(detect.CleanLine(a.Title), maxLiveAsk)}
+	c := LiveContext{Ask: end(detect.CleanLine(redact.String(a.Title)), maxLiveAsk)}
 	if a.Subject != nil && a.Subject.Validate() == nil {
-		s := shortSubject(*a.Subject, maxLiveSubject)
+		red := *a.Subject
+		red.Text = redact.String(red.Text)
+		s := shortSubject(red, maxLiveSubject)
 		c.Subject = &s
 	}
 	c.Answer = liveAnswer(a)

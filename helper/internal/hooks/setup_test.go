@@ -93,17 +93,28 @@ func TestEveryHarnessInstallIdempotentBackupRestore(t *testing.T) {
 	}
 }
 
-func TestGeminiEntries(t *testing.T) {
+// Gemini CLI is retired: Install refuses it, Uninstall removes the entries
+// an earlier version wrote and leaves the user's own.
+func TestRetiredGeminiUninstallOnly(t *testing.T) {
 	e := allEnv(t)
-	mustOK(t, Install(e.o, []string{Gemini}))
-	got := read(t, configOf(t, e, Gemini))
-	for _, ev := range geminiEvents {
-		if !strings.Contains(got, "'/opt/togo/bin/togo' hook gemini "+ev) {
-			t.Errorf("no %s in %s", ev, got)
-		}
+	if rs := Install(e.o, []string{Gemini}); rs[0].State != "refused" || !errors.Is(rs[0].Err, errRetired) {
+		t.Fatalf("install %+v", rs[0])
 	}
-	if strings.Contains(got, "BeforeTool") {
-		t.Errorf("tool events hooked: %s", got)
+	if Known(Gemini) {
+		t.Fatal("gemini still installable")
+	}
+	p := filepath.Join(e.o.GeminiDir, "settings.json")
+	var groups []string
+	for _, ev := range geminiEvents {
+		groups = append(groups, `"`+ev+`": [{"hooks": [{"type": "command", "command": "'/opt/togo/bin/togo' hook gemini `+ev+`"}]}]`)
+	}
+	write(t, p, []byte(`{"theme": "dark", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "say done"}]}], `+strings.Join(groups, ", ")+`}}`))
+	if rs := Uninstall(e.o, []string{Gemini}); rs[0].State != "removed" || rs[0].Err != nil {
+		t.Fatalf("uninstall %+v", rs[0])
+	}
+	got := read(t, p)
+	if strings.Contains(got, "hook gemini") || !strings.Contains(got, `"dark"`) || !strings.Contains(got, "say done") {
+		t.Fatalf("uninstall left %s", got)
 	}
 }
 
@@ -158,10 +169,10 @@ func TestAuggieRefusesEditedEntry(t *testing.T) {
 // and leaves the user's edits.
 func TestBackupWrittenOnceAndUserEditsSurvive(t *testing.T) {
 	e := allEnv(t)
-	p := configOf(t, e, Gemini)
+	p := configOf(t, e, Droid)
 	orig := "{\n  \"theme\": \"dark\"\n}\n"
 	write(t, p, []byte(orig))
-	mustOK(t, Install(e.o, []string{Gemini}))
+	mustOK(t, Install(e.o, []string{Droid}))
 	var doc map[string]any
 	if err := json.Unmarshal([]byte(read(t, p)), &doc); err != nil {
 		t.Fatal(err)
@@ -170,13 +181,13 @@ func TestBackupWrittenOnceAndUserEditsSurvive(t *testing.T) {
 	b, _ := json.MarshalIndent(doc, "", "  ")
 	write(t, p, b)
 	e.o.Binary = "/usr/local/bin/togo"
-	mustOK(t, Install(e.o, []string{Gemini}))
+	mustOK(t, Install(e.o, []string{Droid}))
 	if read(t, p+backupSuffix) != orig {
 		t.Fatal("a later install overwrote the first backup")
 	}
-	mustOK(t, Uninstall(e.o, []string{Gemini}))
+	mustOK(t, Uninstall(e.o, []string{Droid}))
 	got := read(t, p)
-	if !strings.Contains(got, `"light"`) || strings.Contains(got, "hook gemini") {
+	if !strings.Contains(got, `"light"`) || strings.Contains(got, "hook droid") {
 		t.Fatalf("uninstall after a user edit left %s", got)
 	}
 }
@@ -230,16 +241,16 @@ func TestSeenRoundTrip(t *testing.T) {
 
 func TestPlainCommand(t *testing.T) {
 	for cmd, want := range map[string]bool{
-		"'/opt/togo/bin/togo' hook gemini Stop":    true,
-		"/Users/a/.togo/bin/togo hook gemini Stop": true,
-		"'/a b/it'\\''s/togo' hook gemini Stop":    true,
-		"FOO=1 togo hook gemini Stop":              false,
-		"'/opt/togo/bin/togo' hook gemini Stop  ":  false,
-		"'/opt/togo/bin/other' hook gemini Stop":   false,
-		"'/opt/togo/bin/togo' -v hook gemini Stop": false,
-		"'/opt/togo/bin/togo' hook claude Stop":    false,
+		"'/opt/togo/bin/togo' hook droid Stop":    true,
+		"/Users/a/.togo/bin/togo hook droid Stop": true,
+		"'/a b/it'\\''s/togo' hook droid Stop":    true,
+		"FOO=1 togo hook droid Stop":              false,
+		"'/opt/togo/bin/togo' hook droid Stop  ":  false,
+		"'/opt/togo/bin/other' hook droid Stop":   false,
+		"'/opt/togo/bin/togo' -v hook droid Stop": false,
+		"'/opt/togo/bin/togo' hook claude Stop":   false,
 	} {
-		if got := plainCommand(cmd, Gemini); got != want {
+		if got := plainCommand(cmd, Droid); got != want {
 			t.Errorf("plainCommand(%q) = %v", cmd, got)
 		}
 	}

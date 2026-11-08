@@ -16,8 +16,6 @@ enum StressFixtures {
         AnswerOption(id: 5, label: "Always allow for this project · saves the rule to .omp/permissions.json"),
         // OpenCode
         AnswerOption(id: 6, label: "Allow always · applies to webfetch on docs.anthropic.com for this session"),
-        // Gemini CLI
-        AnswerOption(id: 7, label: "Allow always for every tool from server google-workspace-mcp"),
         // Copilot CLI
         AnswerOption(id: 9, label: "Yes, and approve 'gh pr create' for the rest of the running session"),
     ]

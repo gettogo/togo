@@ -188,5 +188,8 @@ import UIKit
         let mission = "// motion: state change — x\nBar().animation(Motion.animation(.fade, reduce: r), value: hasMission)"
         #expect(rules(mission) == ["availability-animates"])
         #expect(rules("// motion: state change — the user toggled\nPane().motion(.fade, value: harness.layer)").isEmpty)
+        // Any layer state that comes from availability or load, not only the three names.
+        #expect(rules("// motion: state change — x\nZStack {}.motion(.fade, value: layer == .pending)") == ["availability-animates"])
+        #expect(rules("// motion: state change — x\nPane().motion(.fade, value: store.hasLoaded)") == ["availability-animates"])
     }
 }

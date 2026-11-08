@@ -125,6 +125,17 @@ struct PromptBar: View {
     /// the keyboard, the bar's window is the active one and the request has been there long
     /// enough to read. Each names the request drawn, so one mid-rise is not answered.
     @ViewBuilder private var keyAnswers: some View {
+        if model.acceptsCommandAnswers, scenePhase == .active, let id = (shown ?? model.stage).request?.id {
+            ZStack {
+                Button { model.answer(.yes, to: id) } label: { EmptyView() }
+                    .keyboardShortcut(.return, modifiers: .command)
+                Button { model.answer(.no, to: id) } label: { EmptyView() }
+                    .keyboardShortcut(".", modifiers: .command)
+            }
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
         if model.acceptsKeyAnswers, scenePhase == .active, let id = (shown ?? model.stage).request?.id {
             ZStack {
                 Button { model.answer(.yes, to: id) } label: { EmptyView() }

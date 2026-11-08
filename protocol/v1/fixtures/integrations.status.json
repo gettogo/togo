@@ -1,5 +1,5 @@
 {
-  "description": "Each harness's setup state: Claude set up with its own status line chained, Gemini not set up yet, Vibe's hooks not confirmed, Kimi needing nothing and Aider not on the machine.",
+  "description": "Each harness's setup state: Claude set up with its own status line chained, Droid not set up yet, Vibe's hooks not confirmed, Kimi needing nothing and Aider not on the machine.",
   "setup": [
     {
       "jsonrpc": "2.0",
@@ -40,14 +40,14 @@
           "statusLineAt": "2026-11-07T09:12:30Z"
         },
         {
-          "id": "gemini",
-          "name": "Gemini CLI",
+          "id": "droid",
+          "name": "Droid",
           "installed": true,
           "setup": "hooks",
           "state": "needsSetup",
           "hooks": "absent",
-          "path": "/home/u/.gemini/settings.json",
-          "fix": "togo hooks install --agent gemini"
+          "path": "/home/u/.factory/hooks.json",
+          "fix": "togo hooks install --agent droid"
         },
         {
           "id": "vibe",

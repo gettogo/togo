@@ -140,7 +140,7 @@ func TestMovedBinaryUpdatesCommandInPlace(t *testing.T) {
 	e.o.Binary = "/new/togo"
 	mustOK(t, Install(e.o, []string{Claude}))
 	got := read(t, settingsPath(e))
-	if strings.Contains(got, "/opt/togo") || strings.Count(got, "hook claude Stop\"") != 1 {
+	if strings.Contains(got, "/opt/togo") || strings.Count(got, "hook claude Stop"+guardTrue+"\"") != 1 {
 		t.Errorf("stale or duplicated entry:\n%s", got)
 	}
 }
@@ -404,7 +404,7 @@ func TestCommandPathQuotedWithSpaces(t *testing.T) {
 	if err := json.Unmarshal([]byte(read(t, settingsPath(e))), &doc); err != nil {
 		t.Fatal(err)
 	}
-	want := `'/Users/a b/it'\''s/togo' hook claude Stop`
+	want := `[ -x '/Users/a b/it'\''s/togo' ] && exec '/Users/a b/it'\''s/togo' hook claude Stop || true`
 	if got := doc.Hooks["Stop"][0].Hooks[0].Command; got != want {
 		t.Errorf("command = %q, want %q", got, want)
 	}
@@ -449,7 +449,7 @@ func TestInstallAddsSessionEndAndStopFailure(t *testing.T) {
 				cmds = append(cmds, h.Command)
 			}
 		}
-		want := []string{"'/opt/togo/bin/togo' hook claude " + ev}
+		want := []string{hookCommand("/opt/togo/bin/togo", Claude, ev)}
 		if ev == "SessionEnd" {
 			want = append([]string{"backup.sh"}, want...)
 		}

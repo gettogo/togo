@@ -27,7 +27,7 @@ public actor Connector {
             return try await attachAuto(request)
         }
         guard let factory = factories.first(where: { $0.kind == explicit }) else {
-            throw ConnectorError.unavailable("\(explicit.displayName) is not available in this build")
+            throw ConnectorError.unavailable(String(localized: "\(explicit.displayName) is not available in this build", bundle: .module))
         }
         if let reason = factory.unavailableReason(request.profile) {
             throw ConnectorError.unavailable(reason)
@@ -73,9 +73,9 @@ public actor Connector {
     static func reason(for error: any Error, host: String) -> String {
         switch error {
         case MoshBootstrapError.serverMissing:
-            "mosh-server not found on \(host)"
-        case MoshConnectError.noUDPReply(let address):
-            "no reply over UDP from \(address)"
+            String(localized: "Mosh isn't installed on \(host)", bundle: .module)
+        case MoshConnectError.noUDPReply:
+            String(localized: "Mosh got no reply from \(host); the network may block UDP", bundle: .module)
         default:
             error.localizedDescription
         }

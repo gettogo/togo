@@ -1,6 +1,7 @@
 import Observation
 import OSLog
 import SwiftUI
+import UIKit
 
 /// The one owner of a window's sheets, covers, popovers, inspectors, alerts and dialogs.
 /// Views still declare what they present (`presentSheet`, `presentCover`, `coordinated`); the
@@ -136,4 +137,25 @@ extension EnvironmentValues {
     @Entry var presentationCoordinator: PresentationCoordinator?
     /// The presentation this view lives in; nil at the window's root.
     @Entry var presentationParent: PresentationRequest.ID? = nil
+}
+
+/// Each window scene's coordinator, for presenters outside SwiftUI's environment (`LinkPresenter`).
+@MainActor
+enum PresentationRegistry {
+    private static var coordinators: [ObjectIdentifier: WeakCoordinator] = [:]
+
+    private struct WeakCoordinator {
+        weak var scene: UIWindowScene?
+        weak var coordinator: PresentationCoordinator?
+    }
+
+    static func register(_ coordinator: PresentationCoordinator, for scene: UIWindowScene) {
+        coordinators = coordinators.filter { $0.value.scene != nil && $0.value.coordinator != nil }
+        coordinators[ObjectIdentifier(scene)] = WeakCoordinator(scene: scene, coordinator: coordinator)
+    }
+
+    static func coordinator(for scene: UIWindowScene?) -> PresentationCoordinator? {
+        guard let scene else { return nil }
+        return coordinators[ObjectIdentifier(scene)]?.coordinator
+    }
 }

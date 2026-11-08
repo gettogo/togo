@@ -102,7 +102,7 @@ import TogoKit
         defaults?.set(favorites, forKey: Self.favoritesKey)
     }
 
-    /// Records a start, so the agent rises among the ones that are not favorites.
+    /// Records a start. Lists no longer rank by it; it stays so the stored value keeps its shape.
     func used(_ agent: String) {
         recentAgents = AgentOrder.used(agent, in: recentAgents)
         defaults?.set(recentAgents, forKey: Self.recentKey)

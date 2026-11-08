@@ -269,3 +269,14 @@ func TestAskRoleLabelsMustNameAnOption(t *testing.T) {
 		}
 	}
 }
+
+func TestHookMetaZeroContextIsUnknown(t *testing.T) {
+	h, hub, _, _ := setup()
+	zero := 0.0
+	if _, err := call(t, h, wire.MethodLocalHook, hookEv(EventMeta, wire.HookData{ContextPercent: &zero})); err != nil {
+		t.Fatal(err)
+	}
+	if hub.meta.ContextPercent != nil {
+		t.Fatalf("context %v, want unknown", *hub.meta.ContextPercent)
+	}
+}

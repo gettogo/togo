@@ -169,12 +169,12 @@ import TogoKit
             // A helper being installed or updated drops the connection until it is back, which
             // the monitor reports as a failure too; the review waits for it.
             switch snapshot.helper {
-            case .missing, .outdated: break
+            case .missing, .outdated, .newer: break
             case .checking, .present: endReview(hostID: snapshot.hostID, sessionID: nil, why: ReviewEntryCopy.machineLost(machineName(for: snapshot.hostID)))
             }
-        case .keyMissing:
+        case .keyMissing, .hostKeyChanged:
             endReview(hostID: snapshot.hostID, sessionID: nil, why: ReviewEntryCopy.machineLost(machineName(for: snapshot.hostID)))
-        case .connecting, .waking, .offline, .authNeeded:
+        case .connecting, .waking, .offline, .authNeeded, .deviceOffline:
             break
         }
         controlCenter.requests = mergedRequests(snapshot)
@@ -231,8 +231,13 @@ import TogoKit
         do {
             try await services.kill(hostID: row.hostID, sessionID: row.id)
             closeEndedTab(TabID(hostID: row.hostID, sessionID: row.id))
+        } catch let error as HelperError where error.isSessionGone {
+            // Already ended: that is what the user asked for.
+            closeEndedTab(TabID(hostID: row.hostID, sessionID: row.id))
         } catch {
-            notice = Notice(text: "Couldn't end \(Self.label(row)): \(ServiceErrors.message(error))", isError: true)
+            notice = Notice(text: String(
+                localized: "cc.kill.failed", defaultValue: "Couldn't end \(Self.label(row)): \(ServiceErrors.message(error))"
+            ), isError: true)
         }
     }
 
@@ -244,7 +249,9 @@ import TogoKit
             try await services.rename(hostID: row.hostID, sessionID: row.id, name: trimmed)
         } catch {
             update(row) { $0.name = row.name }
-            notice = Notice(text: "Couldn't rename \(Self.label(row)): \(ServiceErrors.message(error))", isError: true)
+            notice = Notice(text: String(
+                localized: "cc.rename.failed", defaultValue: "Couldn't rename \(Self.label(row)): \(ServiceErrors.message(error))"
+            ), isError: true)
         }
     }
 
@@ -254,13 +261,15 @@ import TogoKit
             try await services.setMute(hostID: row.hostID, sessionID: row.id, muted: muted)
         } catch {
             update(row) { $0.muted = row.muted }
-            notice = Notice(text: "Couldn't change alerts for \(Self.label(row)).", isError: true)
+            notice = Notice(text: String(
+                localized: "cc.mute.failed", defaultValue: "Couldn't change alerts for \(Self.label(row))."
+            ), isError: true)
         }
     }
 
     // MARK: Workspace
 
-    func open(hostID: HostID, sessionID: String, transport: TransportPreference? = nil) {
+    func open(hostID: HostID, sessionID: String, transport: TransportPreference? = nil, agent: String? = nil) {
         let id = TabID(hostID: hostID, sessionID: sessionID)
         if let index = workspace.tabs.firstIndex(where: { $0.id == id }) {
             if let transport {
@@ -271,7 +280,7 @@ import TogoKit
             workspace.tabs.append(WorkspaceTab(
                 hostID: hostID, sessionID: sessionID, bib: row?.bib,
                 title: row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? sessionID, link: .connecting,
-                transport: transport, agent: row?.agentName
+                transport: transport, agent: row?.agentName, agentID: row?.agent ?? agent
             ))
         }
         if id == workspace.secondary {

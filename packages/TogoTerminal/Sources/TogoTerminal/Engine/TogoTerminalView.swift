@@ -196,6 +196,8 @@ final class TogoTerminalView: TerminalView {
     var wantsFocus = false
     /// Another layer covers the terminal, so it may not take the keyboard until uncovered.
     var covered = false
+    /// Counts cover changes, so a delayed hide from an earlier cover does nothing.
+    var coverGeneration = 0
 
     override var canBecomeFirstResponder: Bool {
         acceptsFocus && !covered && super.canBecomeFirstResponder

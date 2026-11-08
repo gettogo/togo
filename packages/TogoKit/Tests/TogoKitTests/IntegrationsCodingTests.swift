@@ -32,7 +32,7 @@ struct IntegrationsCodingTests {
 
     @Test func changeParamsLeaveOutWhatIsUnset() throws {
         #expect(try json(IntegrationsChangeParams(agents: nil, block: nil)) == .object([:]))
-        #expect(try json(IntegrationsChangeParams(agents: ["gemini"], block: nil)) == decode(JSONValue.self, #"{"agents":["gemini"]}"#))
+        #expect(try json(IntegrationsChangeParams(agents: ["droid"], block: nil)) == decode(JSONValue.self, #"{"agents":["droid"]}"#))
     }
 
     @Test func methodNames() {

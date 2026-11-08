@@ -81,11 +81,16 @@ import TogoKit
     // MARK: Presentation
 
     @Test func presentationFollowsTheReviewAsOpened() {
-        #expect(ReviewPresentation.regular(kept: nil, sizeClass: .regular))
-        #expect(!ReviewPresentation.regular(kept: nil, sizeClass: .compact))
+        #expect(ReviewPresentation.regular(kept: nil, sizeClass: .regular, width: 1000))
+        #expect(!ReviewPresentation.regular(kept: nil, sizeClass: .compact, width: 1000))
         // Opened folded, then unfolded: still the cover.
-        #expect(!ReviewPresentation.regular(kept: false, sizeClass: .regular))
+        #expect(!ReviewPresentation.regular(kept: false, sizeClass: .regular, width: 1000))
         // Opened unfolded, then folded: still the sheet.
-        #expect(ReviewPresentation.regular(kept: true, sizeClass: .compact))
+        #expect(ReviewPresentation.regular(kept: true, sizeClass: .compact, width: 466))
+    }
+
+    /// Regular size class in a Split View half (475 pt) is compact by the policy: the cover.
+    @Test func aDuoSplitViewHalfGetsTheCover() {
+        #expect(!ReviewPresentation.regular(kept: nil, sizeClass: .regular, width: 475))
     }
 }

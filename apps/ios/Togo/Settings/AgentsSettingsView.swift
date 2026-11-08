@@ -141,9 +141,9 @@ enum AgentPresetText {
         .filter { !$0.command.isEmpty }
         .map { ($0.id, $0.name) }
 
-    /// `registry` with the user's favorites first, then recent agents, then the rest by name.
-    static func ordered(favorites: [String], recent: [String]) -> [(id: String, name: String)] {
-        AgentOrder.sorted(registry, id: { $0.id }, name: { $0.name }, favorites: favorites, recent: recent)
+    /// `registry` with the user's favorites first, then the rest, each by name.
+    static func ordered(favorites: [String]) -> [(id: String, name: String)] {
+        AgentOrder.sections(registry, id: { $0.id }, name: { $0.name }, favorites: favorites).all
     }
 
     /// The program and its flags as one line, quoted only where a word needs it.

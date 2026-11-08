@@ -162,9 +162,17 @@ import UIKit
     }
 
     @Test func regularWidthUsesSplitView() {
-        #expect(ReviewRoot.layout(for: .regular) == .split)
-        #expect(ReviewRoot.layout(for: .compact) == .stack)
-        #expect(ReviewRoot.layout(for: nil) == .stack)
+        #expect(ReviewRoot.layout(for: .regular, width: 1000) == .split)
+        #expect(ReviewRoot.layout(for: .compact, width: 1000) == .stack)
+        #expect(ReviewRoot.layout(for: nil, width: nil) == .stack)
+    }
+
+    /// A Duo Split View half or a narrow iPad window reports regular but has a phone's room:
+    /// the phone's stack, never a squeezed sidebar beside the diff.
+    @Test func narrowRegularWindowUsesTheStack() {
+        #expect(ReviewRoot.layout(for: .regular, width: 475) == .stack)
+        #expect(ReviewRoot.layout(for: .regular, width: 620) == .stack)
+        #expect(ReviewRoot.layout(for: .regular, width: 669) == .split)
     }
 
     @Test func workingTreeRouteGoesToFilesRoot() {

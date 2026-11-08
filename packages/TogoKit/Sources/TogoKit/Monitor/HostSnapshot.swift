@@ -15,6 +15,11 @@ public struct HostSnapshot: Sendable, Equatable {
         /// The machine signs in with a key that is not on this device. Only choosing
         /// another key helps.
         case keyMissing
+        /// The machine showed a key other than the trusted one. Only reviewing the key, and
+        /// forgetting the old one if the machine was really reinstalled, gets past it.
+        case hostKeyChanged
+        /// This device has no network, so nothing was tried; the machine is not to blame.
+        case deviceOffline
     }
 
     /// The newest requests closed while this device watched, so a card on screen can say why
@@ -30,6 +35,11 @@ public struct HostSnapshot: Sendable, Equatable {
     public var lastSeen: Date?
     public var capabilities: Set<String>
     public var closed: [ClosedApproval] = []
+    /// Every request id closed while this device watched, bounded, including closes for requests
+    /// it never saw open. A late `approval.open` for one of them is a re-announce of an answered
+    /// request and is ignored, so it cannot come back in the prompt bar or the pill.
+    var closedIDs: [String] = []
+    static let closedIDLimit = 256
     /// Keep-awake state; nil until the helper reports it or when it has no `awake.v1`.
     public var awake: AwakeStatus?
     /// The machine's interfaces for Wake-on-LAN; nil until read or when it has no `hostinfo.v1`.
@@ -62,12 +72,14 @@ public struct HostSnapshot: Sendable, Equatable {
             guard let id = envelope.sessionId else { return }
             sessions.removeAll { $0.id == id }
         case .approvalOpen(let approval):
+            guard !closedIDs.contains(approval.requestId) else { return }
             if let index = approvals.firstIndex(where: { $0.requestId == approval.requestId }) {
                 approvals[index] = approval
             } else {
                 approvals.append(approval)
             }
         case .approvalClosed(let requestId, let resolution):
+            rememberClosed(requestId)
             // A second close, such as a second answer, keeps the first reason.
             guard approvals.contains(where: { $0.requestId == requestId }) else { return }
             removeApproval(requestId)
@@ -95,6 +107,19 @@ public struct HostSnapshot: Sendable, Equatable {
 
     mutating func removeApproval(_ requestId: String) {
         approvals.removeAll { $0.requestId == requestId }
+    }
+
+    /// Takes the helper's full list. A request it lists is open, whatever this device saw before.
+    mutating func replaceApprovals(_ list: [Approval]) {
+        let open = Set(list.map(\.requestId))
+        closedIDs.removeAll { open.contains($0) }
+        approvals = list
+    }
+
+    mutating func rememberClosed(_ requestId: String) {
+        guard !closedIDs.contains(requestId) else { return }
+        closedIDs.append(requestId)
+        if closedIDs.count > Self.closedIDLimit { closedIDs.removeFirst(closedIDs.count - Self.closedIDLimit) }
     }
 }
 

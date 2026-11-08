@@ -20,7 +20,7 @@ func TestSignInFixtures(t *testing.T) {
 			t.Errorf("%s: sign-in = %+v, want %+v", name, p.SignIn, want)
 		}
 	}
-	for _, name := range []string{"real-claude-auth-login", "real-gemini-no-browser"} {
+	for _, name := range []string{"real-claude-auth-login"} {
 		p := mustDetect(t, fixture(t, "signin/"+name))
 		if p.SignIn == nil || !p.SignIn.Secret || p.SignIn.URL == "" {
 			t.Errorf("%s: sign-in = %+v, want a page and a secret", name, p.SignIn)

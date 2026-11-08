@@ -61,16 +61,20 @@ enum Load<T: Equatable>: Equatable {
     private var agentsToken = 0
     private let services: any AppServices
     private let library: AgentLibrary
-    private let open: (HostID, String) -> Void
+    /// The favorites as the flow opened. The list keeps this order while it is open, so a
+    /// star toggled now changes only the star; the next new session lists it in its place.
+    private let favoritesAtOpen: [String]
+    private let open: (HostID, String, String?) -> Void
 
     init(
         services: any AppServices, hostID: HostID?, machines: [MachineSection] = [],
         library: AgentLibrary = .inMemory(),
-        open: @escaping (HostID, String) -> Void = { _, _ in }
+        open: @escaping (HostID, String, String?) -> Void = { _, _, _ in }
     ) {
         self.services = services
         self.library = library
         self.open = open
+        favoritesAtOpen = library.favorites
         let choices = machines.isEmpty ? Self.choices(from: services.hosts) : machines.map(Self.choice(from:))
         self.machines = choices
         let preselected = hostID ?? (choices.count == 1 ? choices[0].id : nil)
@@ -100,18 +104,25 @@ enum Load<T: Equatable>: Equatable {
     /// `AgentOrder`. Shell is always offered.
     var offeredAgents: [AgentInfo] { installedAgents + missingAgents }
 
-    /// The agents the machine can start: favorites, then recent ones, then the rest by name.
-    var installedAgents: [AgentInfo] { orderedAgents.filter(\.installed) }
+    /// The agents the machine can start: favorites, then the rest, each by name.
+    var installedAgents: [AgentInfo] { installedSections.all }
 
-    /// The agents the machine lacks, shown on request.
-    var missingAgents: [AgentInfo] { orderedAgents.filter { !$0.installed } }
+    /// The installed agents split into the favorites and the rest, as the flow opened.
+    var installedSections: AgentOrder.Sections<AgentInfo> {
+        AgentOrder.sections(loadedAgents.filter(\.installed), favorites: favoritesAtOpen)
+    }
 
-    private var orderedAgents: [AgentInfo] {
+    /// The agents the machine lacks, shown on request, by name.
+    var missingAgents: [AgentInfo] {
+        AgentOrder.byName(loadedAgents.filter { !$0.installed }, name: \.name)
+    }
+
+    private var loadedAgents: [AgentInfo] {
         guard case .loaded(var list) = agents else { return [] }
         if !list.contains(where: { $0.id == "shell" }) {
             list.append(AgentInfo(id: "shell", name: "Shell", installed: true))
         }
-        return AgentOrder.sorted(list, favorites: library.favorites, recent: library.recentAgents)
+        return list
     }
 
     func isFavorite(_ agent: String) -> Bool { library.isFavorite(agent) }
@@ -324,7 +335,7 @@ enum Load<T: Equatable>: Equatable {
             let row = try await services.create(hostID: hostID, params: params())
             if let started, started != AgentPreset.custom { library.used(started) }
             await rememberChoice(hostID: hostID)
-            open(row.hostID, row.id)
+            open(row.hostID, row.id, row.agent)
             // Stays set: the sheet is about to close and must not accept a second start.
             return row
         } catch {
@@ -394,6 +405,8 @@ enum Load<T: Equatable>: Equatable {
         case .authNeeded: NewSessionCopy.authNeeded
         case .failed(let reason): reason
         case .keyMissing: NewSessionCopy.keyMissing(device: DeviceName.model)
+        case .hostKeyChanged: ControlCenterCopy.hostKeyChanged
+        case .deviceOffline: ControlCenterCopy.deviceOffline(DeviceName.model)
         }
     }
 }

@@ -45,6 +45,9 @@ type turnState struct {
 	files   map[string]bool
 	state   string
 	ended   bool
+	// command is set for a turn a slash command started: a local one
+	// (/model) ends at its output line, with no reply or Stop hook.
+	command bool
 }
 
 func newTranscript(env harness.Env) *transcript {
@@ -248,7 +251,9 @@ func (t *transcript) prompt(e entry, at time.Time, text string, images []harness
 		}
 		return append(items, t.notice(e, at, harness.NoticeInterrupted, "info", "Interrupted")...), nil
 	}
+	command := false
 	if m := cmdName.FindStringSubmatch(text); m != nil {
+		command = true
 		cmd := strings.TrimSpace(m[1])
 		if a := cmdArgs.FindStringSubmatch(text); a != nil {
 			cmd = strings.TrimSpace(cmd + " " + strings.TrimSpace(a[1]))
@@ -256,10 +261,18 @@ func (t *transcript) prompt(e entry, at time.Time, text string, images []harness
 		text = cmd
 	} else if m := cmdStdout.FindStringSubmatch(text); m != nil {
 		out := strings.TrimSpace(plain(m[1]))
-		if out == "" {
-			return nil, nil
+		var items []harness.Item
+		if parent == "" && t.turn != nil && !t.turn.ended && t.turn.command {
+			// A local command's output: it ran without the model and
+			// nothing else will end its turn.
+			t.turn.state = harness.StateOK
+			t.workingAt = at
+			items = append(items, t.endTurn(at)...)
 		}
-		return t.notice(e, at, noticeCode(out), "info", firstLine(out)), nil
+		if out == "" {
+			return items, nil
+		}
+		return append(items, t.notice(e, at, noticeCode(out), "info", firstLine(out))...), nil
 	} else if parent == "" && isTaskNotification(e, text) {
 		return t.continued(e, at, text), nil
 	} else if anyTag.MatchString(text) {
@@ -277,7 +290,7 @@ func (t *transcript) prompt(e entry, at time.Time, text string, images []harness
 	if t.turn != nil && !t.turn.ended {
 		items = append(items, t.endTurn(at)...)
 	}
-	t.turn = &turnState{id: e.UUID, started: at, files: map[string]bool{}, state: harness.StateRunning}
+	t.turn = &turnState{id: e.UUID, started: at, files: map[string]bool{}, state: harness.StateRunning, command: command}
 	t.workingAt = at
 	items = append(items, harness.Item{ID: e.UUID, TurnID: e.UUID, Kind: harness.KindUser, At: at,
 		User: &harness.UserBody{Text: text, Images: images}})

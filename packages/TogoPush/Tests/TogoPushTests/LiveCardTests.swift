@@ -6,12 +6,34 @@ import TogoPush
 struct LiveCardTests {
     func card(
         status: String = "needs_you", waiting: Int = 1, requestId: String? = "r_aaaaaaaaaa", command: String? = nil,
-        context: LiveContext? = nil, machine: String? = nil, stale: Bool = false, agent: String = "claude"
+        context: LiveContext? = nil, machine: String? = nil, stale: Bool = false, agent: String = "claude",
+        showsCommand: Bool = true
     ) -> LiveCard {
         LiveCard(
             agent: agent, status: status, waiting: waiting, requestId: requestId, command: command, context: context,
-            machine: machine, stale: stale
+            machine: machine, stale: stale, showsCommand: showsCommand
         )
+    }
+
+    /// The command comes sealed in the context; the machine's "show command text" choice
+    /// decides whether it shows. Files and URLs are not command text and always show.
+    /// The widget reads the app's per-machine choice from the shared defaults.
+    @Test func commandChoiceIsReadFromTheAppGroup() throws {
+        let defaults = try #require(UserDefaults(suiteName: "live-\(UUID().uuidString)"))
+        let machine = UUID()
+        #expect(SharedSettings.readLiveActivityCommandMachines(defaults).isEmpty)
+        defaults.set(try JSONEncoder().encode([machine]), forKey: SharedSettings.liveActivityCommandMachines)
+        #expect(SharedSettings.readLiveActivityCommandMachines(defaults) == [machine])
+    }
+
+    @Test func sealedCommandFollowsTheChoice() {
+        let command = LiveContext(ask: "Run it?", subject: PushSubject(kind: "command", text: "rm -rf ./build"))
+        #expect(card(context: command).detail == .command("rm -rf ./build"))
+        let hidden = card(context: command, showsCommand: false)
+        #expect(hidden.detail == nil)
+        #expect(hidden.ask == "Run it?")
+        let file = LiveContext(subject: PushSubject(kind: "file", text: "~/a.go"))
+        #expect(card(context: file, showsCommand: false).detail == .file("~/a.go"))
     }
 
     @Test func needsYouShowsSessionRequestAndCount() {

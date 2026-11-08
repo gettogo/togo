@@ -29,7 +29,7 @@ const cursorRunes = "❯›>▶➤→"
 const numberedCursorRunes = cursorRunes + "●"
 
 var (
-	ynToken = regexp.MustCompile(`(?i)[\[(]\s*(y|yes)\s*/\s*(n|no)\s*[\])]\s*[:?]?\s*$`)
+	ynToken = regexp.MustCompile(`(?i)[\[(]\s*(y|yes|\(y\)es)\s*[/,]\s*(n|no|\(n\)o)\s*[\])]\s*[:?]?\s*$`)
 	// aiderYN is Aider's line-mode question: "(Y)es/(N)o [Yes]:", with
 	// "/(A)ll/(S)kip all" or "/(D)on't ask again" before the default.
 	aiderDefault = regexp.MustCompile(`^\s*\[(Yes|No)\]:\s*$`)
@@ -118,6 +118,9 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 		return Prompt{}, false
 	}
 	title := strings.TrimSpace(lines[h])
+	if i := strings.Index(title, "? ("); i >= 0 {
+		title = title[:i+1] // the question, without the aside after it
+	}
 	signIn := signInQuestion(title)
 	if footerLines(lines, m.end) > maxFooter && !(signIn && footerLines(lines, m.end) <= maxFooter+maxSignInOptions) {
 		return Prompt{}, false
@@ -312,7 +315,7 @@ func findHeader(lines []string, start int) (int, bool) {
 			continue
 		}
 		t := strings.TrimSpace(lines[i])
-		if strings.HasSuffix(t, "?") || headerRe.MatchString(t) || signInQuestion(t) {
+		if strings.HasSuffix(t, "?") || strings.Contains(t, "? (") || headerRe.MatchString(t) || signInQuestion(t) {
 			return i, true
 		}
 		gap++

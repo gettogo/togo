@@ -34,6 +34,10 @@ type liveActivity struct {
 	Attributes    *liveAttributes `json:"attributes,omitempty"`
 	DismissalDate *int64          `json:"dismissalDate,omitempty"`
 	StaleDate     *int64          `json:"staleDate,omitempty"`
+	// Urgent asks the relay for priority 10 on an update it would send at
+	// 5 (routine progress): the one that clears an answered request, so
+	// the lock screen stops asking at once.
+	Urgent bool `json:"urgent,omitempty"`
 }
 
 // liveAttributes identify the activity a push-to-start creates.
@@ -66,12 +70,25 @@ func (s *Sender) post(ctx context.Context, d Device, body relayPush) error {
 		return err
 	}
 	backoff := firstBackoff
+	attempts := maxAttempts
+	if s.relayIsDown(d.RelayURL) {
+		// The relay failed every attempt moments ago (an outage, a captive
+		// portal): one try, so the one push goroutine is not held ~33 s per
+		// device per event while the queue fills and drops clears.
+		attempts = 1
+	}
 	for attempt := 1; ; attempt++ {
 		err = s.postOnce(ctx, d.RelayURL+"/v1/push", data, d, body.Token)
 		s.tap("/v1/push", body.Kind, data, err)
 		var st *errStatus
 		retry := err != nil && ctx.Err() == nil && (!errors.As(err, &st) || st.retryable)
-		if !retry || attempt == maxAttempts {
+		if err == nil || !retry {
+			s.markRelay(d.RelayURL, false)
+		}
+		if !retry || attempt >= attempts {
+			if retry {
+				s.markRelay(d.RelayURL, true)
+			}
 			return err
 		}
 		if err := s.sleep(ctx, backoff); err != nil {
@@ -123,6 +140,27 @@ func (s *Sender) postOnce(ctx context.Context, url string, data []byte, d Device
 }
 
 func asStatus(err error, st **errStatus) bool { return errors.As(err, st) }
+
+// relayDownFor is how long a relay that failed every attempt gets a
+// single try per push.
+const relayDownFor = time.Minute
+
+func (s *Sender) relayIsDown(url string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	at, ok := s.relayDown[url]
+	return ok && s.now().Sub(at) < relayDownFor
+}
+
+func (s *Sender) markRelay(url string, down bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if down {
+		s.relayDown[url] = s.now()
+	} else {
+		delete(s.relayDown, url)
+	}
+}
 
 func (s *Sender) paused(token string) (time.Time, bool) {
 	s.mu.Lock()

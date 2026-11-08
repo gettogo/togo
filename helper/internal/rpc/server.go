@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
+	"runtime/debug"
 	"sync"
+	"time"
 )
 
 // protocolVersion is the only protocol version this helper speaks.
@@ -91,6 +94,16 @@ func Serve(ctx context.Context, r io.Reader, w io.Writer, h Handler, info Helper
 	for {
 		payload, err := ReadFrame(r)
 		if errors.Is(err, io.EOF) {
+			// The client is done sending. Quick calls still running off
+			// the loop (a read moved off it so it never blocks Approve)
+			// get a moment to reply; a call that blocks on the user is
+			// cancelled by the deferred cancel.
+			drained := make(chan struct{})
+			go func() { inflight.Wait(); close(drained) }()
+			select {
+			case <-drained:
+			case <-time.After(eofGrace):
+			}
 			return conn.writeErr()
 		}
 		if err != nil {
@@ -156,7 +169,19 @@ func parse(payload []byte, info HelperInfo, ready *bool) (req request, resp resp
 	return req, response{}, false
 }
 
-func call(ctx context.Context, h Handler, req request) response {
+// eofGrace is how long Serve waits, after the client closed its side, for
+// concurrent calls that are still running to send their replies.
+const eofGrace = 2 * time.Second
+
+func call(ctx context.Context, h Handler, req request) (resp response) {
+	defer func() {
+		// One handler's bug answers that call; it must not take the daemon,
+		// its pending approvals and every other client down with it.
+		if r := recover(); r != nil {
+			log.Printf("rpc: %s panicked: %v\n%s", req.Method, r, debug.Stack())
+			resp = failure(req.ID, NewError(CodeInternal, nil))
+		}
+	}()
 	result, rpcErr := h.Handle(ctx, req.Method, req.Params)
 	if rpcErr != nil {
 		return failure(req.ID, rpcErr)

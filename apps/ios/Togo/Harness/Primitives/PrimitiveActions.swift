@@ -15,6 +15,19 @@ struct PrimitiveFeedback: Equatable, Identifiable {
 
     var isFailure: Bool { kind == .failed }
 
+    /// What VoiceOver says: the title and the machine's own words under it.
+    var spoken: String {
+        guard let detail, !detail.isEmpty else { return title }
+        return "\(title). \(detail)"
+    }
+
+    /// How long the outcome stays. A failure stays until dismissed while VoiceOver runs, so
+    /// its words can be read at any pace (WCAG 2.2.1).
+    func clearsAfter(voiceOver: Bool, toast: Bool = false) -> Duration? {
+        if isFailure { return voiceOver ? nil : .seconds(toast ? 4 : 5) }
+        return .seconds(2.4)
+    }
+
     /// nil when there is nothing to say: the call failed in a way its caller reported.
     static func from(_ result: HarnessActionResult?) -> PrimitiveFeedback? {
         guard let result else { return nil }
@@ -210,16 +223,21 @@ struct GatedChange {
             return
         case .toast:
             show(feedback)
-        case .label where feedback.isFailure:
-            show(feedback)
         case .control, .label:
-            // motion: cause → effect — the tapped control's own label becomes the outcome.
-            withAnimation(Motion.animation(.respond, reduce: Self.reduceMotion)) { outcomes[key] = feedback }
+            if feedback.isFailure {
+                // An error after a tap is instant, at the control that failed (motion v2 §2).
+                withTransaction(Transaction(animation: nil)) { outcomes[key] = feedback }
+            } else {
+                // motion: cause → effect — the tapped control's own label becomes the outcome.
+                withAnimation(Motion.animation(.respond, reduce: Self.reduceMotion)) { outcomes[key] = feedback }
+            }
             lastOutcome = feedback
-            AccessibilityNotification.Announcement(feedback.title).post()
+            AccessibilityNotification.Announcement(feedback.spoken).post()
             let id = feedback.id
+            // Kept until the next outcome replaces it.
+            guard let delay = feedback.clearsAfter(voiceOver: UIAccessibility.isVoiceOverRunning) else { return }
             Task { [weak self] in
-                try? await Task.sleep(for: .seconds(feedback.isFailure ? 5 : 2.4))
+                try? await Task.sleep(for: delay)
                 guard let self, self.outcomes[key]?.id == id else { return }
                 // motion: state change — the label returns to what the control does.
                 withAnimation(Motion.animation(.respond, reduce: Self.reduceMotion)) { self.outcomes[key] = nil }
@@ -255,6 +273,7 @@ extension View {
 private struct PrimitiveActionsModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.loopsPaused) private var loopsPaused
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Bindable var actions: PrimitiveActions
     let context: PrimitiveContext
 
@@ -269,12 +288,20 @@ private struct PrimitiveActionsModifier: ViewModifier {
                                 insertion: Motion.present(from: .top, reduce: reduceMotion),
                                 removal: Motion.conceal(reduce: reduceMotion)
                             ))
-                            .task(id: feedback.id) {
-                                AccessibilityNotification.Announcement(feedback.title).post()
-                                guard !loopsPaused else { return }
-                                try? await Task.sleep(for: .seconds(feedback.isFailure ? 4 : 2.4))
+                            // Re-run when the layer comes back: a toast raised while it was
+                            // hidden still clears once it has been seen.
+                            .task(id: "\(feedback.id)-\(loopsPaused)-\(voiceOver)") {
+                                if !loopsPaused { AccessibilityNotification.Announcement(feedback.spoken).post() }
+                                guard !loopsPaused,
+                                      let delay = feedback.clearsAfter(voiceOver: voiceOver, toast: true) else { return }
+                                try? await Task.sleep(for: delay)
                                 actions.clearFeedback(feedback.id)
                             }
+                            // A toast that stays can be dismissed: a tap, a two-finger scrub or
+                            // the named action.
+                            .onTapGesture { actions.clearFeedback(feedback.id) }
+                            .accessibilityAction(.escape) { actions.clearFeedback(feedback.id) }
+                            .accessibilityAction(named: Text(PrimitiveCopy.dismiss)) { actions.clearFeedback(feedback.id) }
                     }
                 }
                 .padding(.top, 8)

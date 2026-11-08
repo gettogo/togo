@@ -12,13 +12,28 @@ import TogoKit
         AgentInfo(id: "pi", name: "Pi", installed: true),
     ]
 
-    @Test func favoritesThenRecentThenByName() {
-        let sorted = AgentOrder.sorted(agents, favorites: ["kimi", "codex"], recent: ["pi", "kimi"])
-        #expect(sorted.map(\.id) == ["kimi", "codex", "pi", "aider", "claude"])
+    @Test func favoritesLeadThenTheRestEachByName() {
+        let sections = AgentOrder.sections(agents, favorites: ["kimi", "codex"])
+        #expect(sections.favorites.map(\.id) == ["codex", "kimi"])
+        #expect(sections.others.map(\.id) == ["aider", "claude", "pi"])
+        #expect(AgentOrder.sorted(agents, favorites: ["kimi", "codex"]).map(\.id) == ["codex", "kimi", "aider", "claude", "pi"])
     }
 
-    @Test func noPicksIsAlphabetical() {
-        #expect(AgentOrder.sorted(agents, favorites: [], recent: []).map(\.id) == ["aider", "claude", "codex", "kimi", "pi"])
+    @Test func noFavoritesIsOneAlphabeticalList() {
+        let sections = AgentOrder.sections(agents, favorites: [])
+        #expect(sections.favorites.isEmpty)
+        #expect(sections.others.map(\.id) == ["aider", "claude", "codex", "kimi", "pi"])
+    }
+
+    @Test func namesSortAsFinderDoes() {
+        let named = ["agent 10", "Agent 2", "beta", "Älpha"].map { AgentInfo(id: $0, name: $0, installed: true) }
+        #expect(AgentOrder.byName(named, name: \.name).map(\.id) == ["Agent 2", "agent 10", "Älpha", "beta"])
+    }
+
+    @Test func unknownFavoritesAreIgnored() {
+        let sections = AgentOrder.sections(agents, favorites: ["gone", "pi"])
+        #expect(sections.favorites.map(\.id) == ["pi"])
+        #expect(sections.all.count == agents.count)
     }
 
     @Test func usedMovesToFrontAndCaps() {

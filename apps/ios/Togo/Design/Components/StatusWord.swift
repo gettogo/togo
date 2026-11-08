@@ -4,7 +4,6 @@ import TogoPush
 
 /// A session's status in words. "Needs you" is the one place a row uses the accent.
 struct StatusWord: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: SessionStatus
     /// How the agent stopped, which words an ended or failed status.
     var exit: SessionExit? = nil
@@ -15,9 +14,11 @@ struct StatusWord: View {
             .font(font)
             .fontWeight(status == .needsYou ? .semibold : .regular)
             .foregroundStyle(status == .needsYou ? Color.togoAccentText : Color.togoMute)
-            .contentTransition(reduceMotion ? .identity : .interpolate)
-            // motion: state change — the status word changes in place; nothing moves.
-            .motion(.fade, value: Self.label(status, exit: exit))
+            // Status words change hundreds of times a day: the word is instant. Only the
+            // beacon colour and weight change for needs-you, on respond.
+            .contentTransition(.identity)
+            // motion: state change — "needs you" lights in place; nothing else animates.
+            .motion(.respond, value: status == .needsYou)
             // trunc-ok: a status word from a fixed short set; ended states say a short phrase
             .lineLimit(1)
     }

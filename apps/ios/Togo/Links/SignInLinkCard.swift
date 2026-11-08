@@ -46,7 +46,7 @@ struct SignInLinkCard: View {
                     .buttonStyle(.primary)
                 HStack(spacing: 8) {
                     Button(copied > 0 ? LinkCopy.copied : LinkCopy.copy) {
-                        UIPasteboard.general.url = open.url
+                        SensitivePasteboard.copy(open.url)
                         failed = false
                         copied += 1
                     }
@@ -102,7 +102,7 @@ enum SignInPageCopy {
     static let ready = String(localized: "signInPage.ready", defaultValue: "The sign-in page is ready")
     static let browsing = String(localized: "signInPage.browsing", defaultValue: "Signing in")
     static let openAgain = String(localized: "signInPage.openAgain", defaultValue: "Open again")
-    static let sentToMac = String(localized: "signInPage.sentToMac", defaultValue: "Opened on your Mac. Finish signing in there.")
+    static let sentToMac = String(localized: "signInPage.sentToMac", defaultValue: "Opened on the machine. Finish signing in there.")
 
     static func confirming(_ agent: String) -> String {
         String(localized: "signInPage.confirming", defaultValue: "Waiting for \(name(agent)) to confirm")

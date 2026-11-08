@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -274,6 +275,12 @@ func TestEndToEndScriptedHarness(t *testing.T) {
 	if err != nil || act.Result != harness.ResultApplied {
 		t.Fatalf("set_model = %+v %v", act, err)
 	}
+	// The typed /model was submitted with its own Enter key (the generic
+	// typed-command check types, then presses Enter); the mode cycle's
+	// presses follow it.
+	pane.mu.Lock()
+	pane.keys = slices.DeleteFunc(pane.keys, func(k string) bool { return k == "Enter" })
+	pane.mu.Unlock()
 	act, _ = e.Act(ctx, harness.ActionRequest{Session: id, Action: "set_mode", Args: map[string]json.RawMessage{"id": json.RawMessage(`"c"`)}})
 	if act.Result != harness.ResultApplied || pane.mode != "c" || len(pane.keys) != 2 {
 		t.Fatalf("set_mode = %+v mode %s keys %v", act, pane.mode, pane.keys)

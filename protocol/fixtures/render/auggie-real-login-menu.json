@@ -1,0 +1,22 @@
+{
+  "name": "auggie/real-login-menu",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "auggie",
+    "title": "Login to continue",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Auggie",
+    "subtitle": "Login to continue",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

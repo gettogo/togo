@@ -9,8 +9,11 @@ enum ChatLinkRoute: Equatable {
     case web(URL)
     /// A file in the session's folder: its diff when the agent changed it, else the file.
     case file(path: String, line: Int?, changed: Bool)
-    /// Anything else (mail, phone): the system.
-    case system(URL)
+    /// A mail link: the system's mail compose.
+    case mail(URL)
+    /// Any other scheme (`shortcuts:`, `tel:`, another app's): never opened from a model's
+    /// text, as in the terminal (`LinkPolicy`).
+    case refused
 }
 
 /// Makes the chat's links real. Markdown links stay as they are; bare URLs are found with the
@@ -22,11 +25,14 @@ enum ChatLinks {
 
     // MARK: Building
 
-    /// Inline markdown with every link the text holds.
+    /// Inline markdown with every link the text holds. Cached: a view body asks for the same
+    /// block on every update of the reply around it.
     static func markdown(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
-        return linked(parsed)
+        ChatTextCache.shared.value("m", text) {
+            let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+            return linked(parsed)
+        }
     }
 
     /// Adds links to an attributed string: a code span that is a file reference as a whole,
@@ -54,6 +60,10 @@ enum ChatLinks {
 
     /// Plain machine text (a code well, a command) with its URLs and file references linked.
     static func plain(_ text: String) -> AttributedString {
+        ChatTextCache.shared.value("p", text) { plainUncached(text) }
+    }
+
+    private static func plainUncached(_ text: String) -> AttributedString {
         var out = AttributedString(text)
         for (range, url) in detect(text) {
             let lower = out.characters.index(out.startIndex, offsetBy: text.distance(from: text.startIndex, to: range.lowerBound))
@@ -132,9 +142,11 @@ enum ChatLinks {
             let path = items.first { $0.name == "path" }?.value ?? ""
             let line = items.first { $0.name == "line" }?.value.flatMap(Int.init)
             let changed = items.first { $0.name == "changed" }?.value == "1"
-            return path.isEmpty ? .system(url) : .file(path: path, line: line, changed: changed)
+            return path.isEmpty ? .refused : .file(path: path, line: line, changed: changed)
+        case "mailto":
+            return .mail(url)
         default:
-            return .system(url)
+            return .refused
         }
     }
 
@@ -174,6 +186,43 @@ enum ChatLinks {
         var path = path
         while let last = path.last, ".,;:)".contains(last) { path.removeLast() }
         return path
+    }
+}
+
+/// Attributed text already built for a string, so drawing a reply again (a streamed update, a
+/// row scrolled back into view) skips the markdown parse and the link detection. NSCache is
+/// thread-safe and gives way under memory pressure; a memory warning empties it.
+final class ChatTextCache: @unchecked Sendable {
+    static let shared = ChatTextCache()
+
+    private final class Box {
+        let value: AttributedString
+        init(_ value: AttributedString) { self.value = value }
+    }
+
+    private let cache = NSCache<NSString, Box>()
+    private var observer: NSObjectProtocol?
+
+    init() {
+        cache.countLimit = 600
+        // Cost is the text's UTF-16 length; about 8 MB of source text at most.
+        cache.totalCostLimit = 4 << 20
+        observer = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil
+        ) { [weak self] _ in self?.purge() }
+    }
+
+    func purge() {
+        cache.removeAllObjects()
+        ChatMarkdown.cache.removeAll()
+    }
+
+    func value(_ kind: String, _ text: String, make: () -> AttributedString) -> AttributedString {
+        let key = (kind + "\u{0}" + text) as NSString
+        if let box = cache.object(forKey: key) { return box.value }
+        let value = make()
+        cache.setObject(Box(value), forKey: key, cost: key.length)
+        return value
     }
 }
 
@@ -276,17 +325,50 @@ private struct SelectableText: UIViewRepresentable {
         view.adjustsFontForContentSizeCategory = true
         view.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12)
         view.dataDetectorTypes = [.link]
+        // Links and selection handles in the text's own colour, underlined, as in the chat:
+        // the beacon blue only ever means needs-you.
+        view.tintColor = .togoSnow
+        view.linkTextAttributes = [
+            .foregroundColor: UIColor.togoSnow,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ]
+        view.delegate = context.coordinator
         return view
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.openURL = context.environment.openURL
         if view.text != text { view.text = text }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// A link here opens as it would in the chat (web pages in the app, mail through the
+    /// system) and any other scheme does nothing, not even from the long-press menu.
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var openURL: OpenURLAction?
+
+        func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+            guard case .link(let url) = textItem.content else { return defaultAction }
+            guard ChatLinks.route(url) != .refused else { return nil }
+            return UIAction { [weak self] _ in self?.openURL?(url) }
+        }
+
+        func textView(
+            _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
+        ) -> UITextItem.MenuConfiguration? {
+            guard case .link(let url) = textItem.content, ChatLinks.route(url) == .refused else {
+                return UITextItem.MenuConfiguration(menu: defaultMenu)
+            }
+            return nil
+        }
     }
 }
 
 extension AppStore {
     /// Opens a link tapped in a tab's chat: web pages in Safari's view, files in the review
-    /// (the diff when the agent changed the file), anything else through the system.
+    /// (the diff when the agent changed the file), mail through the system; any other scheme
+    /// does nothing.
     func openChatLink(_ url: URL, from tab: TabID) -> OpenURLAction.Result {
         switch ChatLinks.route(url) {
         case .web(let page):
@@ -294,8 +376,10 @@ extension AppStore {
             return .handled
         case .file(let path, _, let changed):
             return openChatFile(path, changed: changed, from: tab) ? .handled : .discarded
-        case .system:
+        case .mail:
             return .systemAction
+        case .refused:
+            return .discarded
         }
     }
 

@@ -283,6 +283,8 @@ final class DiagnosticsRecorder: Sendable {
         case .authNeeded: "auth_needed"
         case .failed: "failed"
         case .keyMissing: "key_missing"
+        case .hostKeyChanged: "host_key_changed"
+        case .deviceOffline: "device_offline"
         }
     }
 
@@ -292,6 +294,7 @@ final class DiagnosticsRecorder: Sendable {
         case .present(let version): ("present", releaseWord(version))
         case .missing: ("missing", "unknown")
         case .outdated(let version): ("outdated", releaseWord(version))
+        case .newer: ("newer", "unknown")
         }
     }
 

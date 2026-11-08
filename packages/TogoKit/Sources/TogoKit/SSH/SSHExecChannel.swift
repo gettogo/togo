@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import NIOCore
 @preconcurrency import NIOSSH
 
@@ -122,12 +123,18 @@ private final class SessionHandler: ChannelInboundHandler, Sendable {
 final class SSHExecChannel: ExecChannel {
     let incoming = ByteStream()
     private let session: SessionChannel
+    private let status = ExitStatusBox()
+
+    var exitStatus: Int32? { status.value.withLock { $0 } }
 
     init(session: SessionChannel) {
         self.session = session
         let incoming = self.incoming
+        let status = self.status
         Task {
             for await event in session.events {
+                // Recorded before `incoming` finishes, so a reader that sees the end can ask why.
+                if case .exit(let code) = event { status.value.withLock { $0 = code } }
                 if case .stdout(let data) = event, !(await incoming.write(data)) { break }
                 session.requestMore()
             }
@@ -148,4 +155,9 @@ final class SSHExecChannel: ExecChannel {
         await session.close()
         incoming.finish()
     }
+}
+
+/// Shared between the channel and the task that reads its events.
+private final class ExitStatusBox: Sendable {
+    let value = Mutex<Int32?>(nil)
 }

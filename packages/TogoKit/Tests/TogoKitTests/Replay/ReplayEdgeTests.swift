@@ -57,13 +57,11 @@ struct ReplayEdgeTests {
         #expect(!r.final.needsResync)
     }
 
-    /// A late open for a request already closed brings it back in the monitor
-    /// (`HostSnapshot.apply` upserts it), so the prompt bar shows a phantom.
+    /// A late open for a request already closed must not bring it back in the monitor, or the
+    /// prompt bar and the pill would show a phantom.
     @Test func lateOpenAfterCloseStaysClosed() throws {
         let r = try Replay.run("synthetic.reopen-after-close")
-        withKnownIssue("HostSnapshot.apply re-adds a request on an approval.open that comes after its approval.closed, so a late hook resurrects an answered request as a phantom in the prompt bar and the pill.") {
-            #expect(r.final.pending.isEmpty, "the answered request is pending again")
-        }
+        #expect(r.final.pending.isEmpty, "the answered request is pending again")
         #expect(r.final.openNeeds.isEmpty, "the chat card stays resolved")
     }
 }

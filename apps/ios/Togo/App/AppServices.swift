@@ -191,47 +191,18 @@ enum ServiceErrorCopy {
 
     static func known(_ error: any Error) -> String? {
         switch error {
-        case let error as HelperError: helper(error)
         case let error as SSHError: ssh(error)
         case let error as MoshBootstrapError: mosh(error)
         default: nil
         }
     }
 
-    private static func helper(_ error: HelperError) -> String? {
-        switch error {
-        case .timeout:
-            String(localized: "error.helper.timeout", defaultValue: "The Togo helper on the machine didn't answer in time.")
-        case .closed:
-            String(localized: "error.helper.closed", defaultValue: "The connection to the Togo helper on the machine closed.")
-        case .notReady:
-            String(localized: "error.helper.notReady", defaultValue: "The Togo helper on the machine isn't ready yet.")
-        case .unsupported:
-            String(
-                localized: "error.helper.unsupported",
-                defaultValue: "The Togo helper on the machine is too old for this. Update it there."
-            )
-        case .malformedResponse:
-            String(
-                localized: "error.helper.malformed",
-                defaultValue: "The Togo helper on the machine sent a reply that couldn't be read."
-            )
-        default: nil
-        }
-    }
-
+    /// TogoKit words its own errors (localized there); only where the app says it differently
+    /// does it keep its own copy, so the two never drift apart.
     private static func ssh(_ error: SSHError) -> String? {
         switch error {
-        case .hostKeyRejected:
-            String(localized: "error.ssh.keyRejected", defaultValue: "The machine's key wasn't trusted, so the connection was closed.")
-        case .authFailed(let tried) where tried.isEmpty:
-            String(localized: "error.ssh.authFailed", defaultValue: "The machine didn't accept the login.")
-        case .authFailed:
+        case .authFailed(let tried) where !tried.isEmpty:
             String(localized: "error.ssh.authFailedTried", defaultValue: "The machine didn't accept the login. Check your key or password.")
-        case .timeout:
-            String(localized: "error.ssh.timeout", defaultValue: "The machine took too long to answer.")
-        case .channelClosed(let status) where status != nil:
-            String(localized: "error.ssh.commandStopped", defaultValue: "The command on the machine stopped.")
         default: nil
         }
     }

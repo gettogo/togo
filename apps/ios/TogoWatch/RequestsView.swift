@@ -57,7 +57,7 @@ private struct AllClearView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     BeaconDot(lit: false)
-                    Text(WatchCopy.allClear)
+                    Text(WatchHome.clearWords(paired: store.isPaired, sessions: store.sessions.count))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

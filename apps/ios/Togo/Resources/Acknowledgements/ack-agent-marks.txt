@@ -150,7 +150,7 @@ SOFTWARE.
 
 Other agents
 
-Codex, Gemini CLI, Kiro CLI, Droid, Auggie, Crush and Aider are shown by one or two letters
-of their names in SF Mono, not by their logos: their owners either ask that their logos be
-used only with permission, or publish no mark Togo can use. Codex, Gemini CLI, Kiro CLI,
-Droid, Auggie, Crush and Aider are trademarks of their respective owners.
+Codex, Kiro CLI, Droid, Auggie, Crush and Aider are shown by one or two letters of their
+names in SF Mono, not by their logos: their owners either ask that their logos be used only
+with permission, or publish no mark Togo can use. Codex, Kiro CLI, Droid, Auggie, Crush and
+Aider are trademarks of their respective owners.

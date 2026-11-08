@@ -63,7 +63,7 @@ struct RootView: View {
         // or is killed from the list lets go of its connection at once.
         .onChange(of: store.workspace, initial: true) { terminals.sync(window: window, with: store) }
         // While a sheet is up, the sheet carries the questions itself; one presenter shows one sheet.
-        .attachPrompts(store.services.attachPrompts, active: !store.workspaceOnScreen && store.sheet == nil)
+        .attachPrompts(store.services.attachPrompts, host: "root", active: !store.workspaceOnScreen && store.sheet == nil)
         .focusedSceneValue(\.appStore, store)
         .togoControls()
         .readsFold()

@@ -249,7 +249,6 @@ struct ApprovalRow: View {
             .opacity(sending == nil ? 1 : 0.4)
             // motion: cause → effect — "More" becomes "Fewer" in place as the list opens under it.
             .motion(.respond, value: more.isOpen)
-            .accessibilityValue(more.isOpen ? Text(AnswerOptionsCopy.hide) : Text(ChatCopy.more))
         }
     }
 
@@ -297,11 +296,40 @@ struct ApprovalRow: View {
     }
 
     private func approveDecision(_ card: RequestCard) -> Decision {
-        card.options.first { $0.role == .approve }.map { .option($0.n) } ?? .approve
+        Self.approveDecision(card)
     }
 
     private func denyDecision(_ card: RequestCard) -> Decision {
+        Self.denyDecision(card)
+    }
+
+    static func approveDecision(_ card: RequestCard) -> Decision {
+        card.options.first { $0.role == .approve }.map { .option($0.n) } ?? .approve
+    }
+
+    static func denyDecision(_ card: RequestCard) -> Decision {
         card.options.first { $0.role == .deny }.map { .option($0.n) } ?? .deny
+    }
+}
+
+/// ⌘↩ approves and ⌘. denies the topmost open request in a chat, from a hardware keyboard,
+/// even while the composer holds the keyboard.
+enum ChatKeyAnswers {
+    struct Target: Equatable {
+        var requestID: String
+        var approve: Decision
+        var deny: Decision
+    }
+
+    /// The first request, top to bottom, that is open and answers yes or no here.
+    @MainActor static func target(requestIDs: [String], card: (String) -> RequestCard?) -> Target? {
+        for id in requestIDs {
+            guard let card = card(id), card.phase == .open, !card.options.isEmpty else { continue }
+            let roles = Set(card.options.map(\.role))
+            guard roles.contains(.approve), roles.contains(.deny) else { continue }
+            return Target(requestID: id, approve: ApprovalRow.approveDecision(card), deny: ApprovalRow.denyDecision(card))
+        }
+        return nil
     }
 }
 

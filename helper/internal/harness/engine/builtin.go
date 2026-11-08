@@ -45,6 +45,13 @@ func (e *Engine) startBuiltins(s *sess) {
 	}
 }
 
+// watched reports whether a chat has the session open.
+func (s *sess) watched() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.subs) > 0
+}
+
 // hasNeeds reports whether the chat shows the session's approvals. The
 // screen detector serves every agent, so every adapter-served session
 // does whenever approvals are served at all.
@@ -53,13 +60,23 @@ func (s *sess) hasNeeds() bool {
 		harness.Has(s.ad.Capabilities, harness.CapNeedsQuestions)
 }
 
+// unwatchedEvery is how often a built-in section refreshes while no chat
+// has the session open: git status, ps and lsof for every served session
+// around the clock kept a laptop out of idle. A chat that opens is served
+// at the next regular tick.
+var unwatchedEvery = 5 * time.Minute
+
 func (e *Engine) every(s *sess, d time.Duration, fn func(ctx context.Context)) {
 	t := time.NewTicker(d)
 	defer t.Stop()
+	var last time.Time
 	for {
-		ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
-		fn(ctx)
-		cancel()
+		if s.watched() || time.Since(last) >= max(d, unwatchedEvery) {
+			last = time.Now()
+			ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+			fn(ctx)
+			cancel()
+		}
 		select {
 		case <-s.ctx.Done():
 			return

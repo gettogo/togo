@@ -127,6 +127,7 @@ struct UnfoldingUp: Transition {
 /// The small capsules under the field: the state chip, commands and @.
 struct ComposerChipStyle: ButtonStyle {
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     var prominent = false
 
     func makeBody(configuration: Configuration) -> some View {
@@ -139,7 +140,7 @@ struct ComposerChipStyle: ButtonStyle {
             .frame(minWidth: 34, minHeight: 32)
             .background(prominent ? Color.togoSnow : Color.togoSnow.opacity(0.06), in: .capsule)
             .overlay {
-                if !prominent { Capsule().strokeBorder(Color.togoLine, lineWidth: 1 / displayScale) }
+                if !prominent { Capsule().strokeBorder(Color.togoLine, lineWidth: Contrast.hairline(displayScale, contrast)) }
             }
             .frame(minHeight: 44)
             .contentShape(.capsule)

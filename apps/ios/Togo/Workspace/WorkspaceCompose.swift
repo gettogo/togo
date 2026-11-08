@@ -136,6 +136,11 @@ struct WorkspaceComposeBar: View {
             if let tab = store.composeTab, SessionInput(store.layer(for: tab.id)) == .composer,
                let model = store.harnessTabs.composer(for: tab.id) {
                 SmartCommandLine(model: model)
+                    // The palette and the screens it opens follow links as the chat does.
+                    .environment(\.openURL, OpenURLAction { [store] url in store.openChatLink(url, from: tab.id) })
+                    // Under the chat's centred column on a wide window, not at the pane's edge.
+                    .frame(maxWidth: ChatLayout.composerWidth)
+                    .frame(maxWidth: .infinity)
                     .modifier(ComposerMargins())
                     // A little air above the keyboard, and above the home indicator.
                     .padding(.bottom, ComposerMargins.bottom)
@@ -145,6 +150,8 @@ struct WorkspaceComposeBar: View {
                         harness.composerClearance = height
                     }
                     .id(tab.id)
+                    // motion: state change — another tab's composer replaces this one as a cut.
+                    .transition(.identity)
             } else if let tab = store.composeTab, SessionInput(store.layer(for: tab.id)) == .terminal,
                store.composing == tab.id, terminals.shows(tab.id, in: window),
                let handle = terminals.handle(for: tab.id) {

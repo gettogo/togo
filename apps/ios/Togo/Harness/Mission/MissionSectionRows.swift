@@ -162,6 +162,7 @@ struct MissionRowView: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
+        .voiceControlNames(VoiceControlNames.make([row.title]))
         .accessibilityHint(openLabel ?? "")
     }
 
@@ -228,6 +229,7 @@ struct MissionBackgroundRow: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
+        .voiceControlNames(VoiceControlNames.make([row.title]))
         .accessibilityHint(MissionCopy.openTerminal)
         .help(row.subtitle ?? row.title)
     }
@@ -372,6 +374,7 @@ struct MissionNeedsRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(MissionCopy.needs(1) + ", " + row.title)
+        .voiceControlNames(VoiceControlNames.make([row.title]))
         .accessibilityHint(MissionCopy.answerInChat)
     }
 }

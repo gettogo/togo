@@ -26,7 +26,6 @@ var Registry = []Agent{
 	{ID: "omp", Name: "OMP", Command: "omp"},
 	{ID: "codex", Name: "Codex", Command: "codex", Resume: []string{"resume", "--last"}},
 	{ID: "opencode", Name: "OpenCode", Command: "opencode"},
-	{ID: "gemini", Name: "Gemini CLI", Command: "gemini", Resume: []string{"--resume", "latest"}},
 	{ID: "copilot", Name: "Copilot CLI", Command: "copilot", Resume: []string{"--continue"}},
 	{ID: "cursor", Name: "Cursor CLI", Command: "cursor-agent", Resume: []string{"--resume"}},
 	{ID: "aider", Name: "Aider", Command: "aider", Resume: []string{"--restore-chat-history"}},

@@ -44,6 +44,7 @@ var valuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
 	regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`),
 	regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*`),
+	regexp.MustCompile(`ya29\.[0-9A-Za-z_-]{10,}`),
 }
 
 // bearerValue keeps the scheme word and hides the credential.
@@ -51,7 +52,31 @@ var bearerValue = regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/-]{1
 
 // envAssign hides the value of NAME=value where NAME says it is a secret,
 // as env and set print it.
-var envAssign = regexp.MustCompile(`(?i)\b([A-Z0-9_]*(?:API_KEY|APIKEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*)=("[^"\n]*"|'[^'\n]*'|[^\s"']+)`)
+var envAssign = regexp.MustCompile(`(?i)\b([A-Z0-9_]*(?:API_KEY|APIKEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE_KEY|ACCESS_KEY|CREDENTIAL|COOKIE|_AUTH\b|AUTH_|_KEY\b)[A-Z0-9_]*)=("[^"\n]*"|'[^'\n]*'|[^\s"'&]+)`)
+
+// textSecretName is a field name, in free text, whose value is a secret:
+// the name ends in one of these words (apiKey, db_password, client_secret).
+const textSecretName = `[A-Za-z0-9_.-]*(?:api[_-]?key|apikey|secret|token|password|passwd|private[_-]?key|access[_-]?key|credentials?)`
+
+// flagValue hides the value after a CLI flag that names a secret
+// (--api-key VALUE, --token=VALUE). A following flag is not a value.
+var flagValue = regexp.MustCompile(`(?i)(\s--?(?:api[_-]?key|token|secret|password|passwd|auth[_-]?token|access[_-]?token|client[_-]?secret)(?:[ \t]+|=))("[^"\n]*"|'[^'\n]*'|[^\s"'-][^\s"']*)`)
+
+// urlCreds hides the password in scheme://user:pass@host.
+var urlCreds = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@"']+:)([^\s/@"']+)@`)
+
+// queryParam hides OAuth and key values in URL queries and fragments.
+var queryParam = regexp.MustCompile(`(?i)([?&#](?:code|access_token|refresh_token|id_token|client_secret|token|api_?key|key|password|secret)=)([^&#\s"']+)`)
+
+// headerLine hides a credential header's whole value, at a line start or
+// inside quotes (curl -H "x-api-key: …").
+var headerLine = regexp.MustCompile(`(?im)((?:^[ \t]*|["'])(?:x-api-key|api-key|x-auth-token|x-goog-api-key|authorization|proxy-authorization|cookie|set-cookie)[ \t]*:[ \t]*)([^\n"']+)`)
+
+// quotedKV hides "apiKey": "value" (JSON or Python-ish dicts in text).
+var quotedKV = regexp.MustCompile(`(?i)(["']` + textSecretName + `["'][ \t]*:[ \t]*)("[^"\n]*"|'[^'\n]*'|[^\s,}]+)`)
+
+// yamlKV hides key: value lines (YAML, .ini-ish dumps).
+var yamlKV = regexp.MustCompile(`(?im)(^[ \t]*-?[ \t]*` + textSecretName + `[ \t]*:[ \t]*)([^\s#][^\n]*)$`)
 
 // Redactor implements harness.Redactor. The zero value is ready to use.
 type Redactor struct{}
@@ -72,7 +97,50 @@ func String(s string) string {
 		s = re.ReplaceAllString(s, Marker)
 	}
 	s = bearerValue.ReplaceAllString(s, "$1 "+Marker)
-	return envAssign.ReplaceAllString(s, "$1="+Marker)
+	s = queryParam.ReplaceAllString(s, "$1"+Marker)
+	s = envAssign.ReplaceAllString(s, "$1="+Marker)
+	s = flagValue.ReplaceAllString(s, "$1"+Marker)
+	s = urlCreds.ReplaceAllString(s, "$1"+Marker+"@")
+	s = headerLine.ReplaceAllStringFunc(s, func(m string) string {
+		g := headerLine.FindStringSubmatch(m)
+		if strings.Contains(g[2], Marker) && !strings.EqualFold(strings.TrimSpace(strings.TrimRight(g[1], ": \t")), "cookie") {
+			return m // a bearer value already hidden keeps its scheme word
+		}
+		return g[1] + Marker
+	})
+	s = replaceKV(quotedKV, s, 1)
+	return replaceKV(yamlKV, s, 6)
+}
+
+// replaceKV hides the value group of re unless it is already hidden, a
+// number, a boolean, null, or shorter than minLen (prose, not a secret).
+func replaceKV(re *regexp.Regexp, s string, minLen int) string {
+	return re.ReplaceAllStringFunc(s, func(m string) string {
+		g := re.FindStringSubmatch(m)
+		v := g[2]
+		q := ""
+		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+			q, v = v[:1], v[1:len(v)-1]
+		}
+		if v == "" || strings.Contains(v, Marker) || plainFigure(v) || (q == "" && len(v) < minLen) {
+			return m
+		}
+		return g[1] + q + Marker + q
+	})
+}
+
+// plainFigure is a number or a JSON literal: never a secret value.
+func plainFigure(v string) bool {
+	switch strings.ToLower(v) {
+	case "true", "false", "null", "~":
+		return true
+	}
+	for _, r := range v {
+		if (r < '0' || r > '9') && r != '.' {
+			return false
+		}
+	}
+	return true
 }
 
 // JSON redacts a JSON document; one that does not parse becomes null.

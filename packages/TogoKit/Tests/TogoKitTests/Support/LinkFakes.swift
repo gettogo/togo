@@ -66,9 +66,15 @@ final class TestClock: LinkClock {
 final class FakePath: NetworkPathSource {
     let changes: AsyncStream<Void>
     private let sink: AsyncStream<Void>.Continuation
+    private let offline = Mutex(false)
 
-    init() { (changes, sink) = AsyncStream<Void>.makeStream() }
+    init(offline: Bool = false) {
+        (changes, sink) = AsyncStream<Void>.makeStream()
+        self.offline.withLock { $0 = offline }
+    }
     func change() { sink.yield() }
+    var isOffline: Bool { offline.withLock { $0 } }
+    func setOffline(_ on: Bool) { offline.withLock { $0 = on } }
 }
 
 /// Hands out a scripted sequence of attachments, or errors, one per connect call.

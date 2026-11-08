@@ -39,7 +39,7 @@ struct RecentFoldersTests {
     @MainActor @Test func removingARecentDropsItAtOnce() async {
         let model = NewSessionModel(
             services: FakeAppServices(), hostID: nil,
-            machines: Array(Samples.controlCenter.machines.prefix(1)), open: { _, _ in }
+            machines: Array(Samples.controlCenter.machines.prefix(1)), open: { _, _, _ in }
         )
         await model.start()
         model.removeRecent("/Users/sam/src/site")

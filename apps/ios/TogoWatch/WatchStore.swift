@@ -126,6 +126,9 @@ import WidgetKit
     /// The time the sessions are from, when that is more than five minutes ago.
     var asOf: Date? { asOf(at: deps.clock()) }
 
+    /// The phone has sent at least one machine's pairing.
+    var isPaired: Bool { !deps.pairings.all().isEmpty }
+
     func asOf(at now: Date) -> Date? {
         guard let sessionsAsOf, now.timeIntervalSince(sessionsAsOf) > Self.freshContext else { return nil }
         return sessionsAsOf

@@ -1,5 +1,5 @@
 {
-  "description": "Undo Gemini CLI's setup: Togo's entries go and the file is back as it was.",
+  "description": "Undo Droid's setup: Togo's entries go and the file is back as it was.",
   "setup": [
     {
       "jsonrpc": "2.0",
@@ -21,7 +21,7 @@
     "method": "integrations.uninstall",
     "params": {
       "agents": [
-        "gemini"
+        "droid"
       ]
     }
   },
@@ -31,9 +31,9 @@
     "result": {
       "results": [
         {
-          "id": "gemini",
+          "id": "droid",
           "state": "removed",
-          "path": "/home/u/.gemini/settings.json"
+          "path": "/home/u/.factory/hooks.json"
         }
       ],
       "integrations": [
@@ -51,14 +51,14 @@
           "statusLineAt": "2026-11-07T09:12:30Z"
         },
         {
-          "id": "gemini",
-          "name": "Gemini CLI",
+          "id": "droid",
+          "name": "Droid",
           "installed": true,
           "setup": "hooks",
           "state": "needsSetup",
           "hooks": "absent",
-          "path": "/home/u/.gemini/settings.json",
-          "fix": "togo hooks install --agent gemini"
+          "path": "/home/u/.factory/hooks.json",
+          "fix": "togo hooks install --agent droid"
         },
         {
           "id": "vibe",

@@ -60,7 +60,7 @@ struct ChatLinksTests {
     }
 
     @Test func routerDecisions() {
-        #expect(ChatLinks.route(URL(string: "mailto:sam@example.com")!) == .system(URL(string: "mailto:sam@example.com")!))
+        #expect(ChatLinks.route(URL(string: "mailto:sam@example.com")!) == .mail(URL(string: "mailto:sam@example.com")!))
         let changed = ChatLinks.fileURL(path: "/Users/sam/src/app/web/a b.ts", line: nil, changed: true)
         #expect(ChatLinks.route(changed) == .file(path: "/Users/sam/src/app/web/a b.ts", line: nil, changed: true))
     }
@@ -73,5 +73,16 @@ struct ChatLinksTests {
         #expect(ChatLinks.changedPath("web/LICENSE", cwd: "/Users/sam/src/app", changes: changes) == "app/web/LICENSE")
         #expect(ChatLinks.changedPath("/Users/sam/src/app/src/a.ts", cwd: "/Users/sam/src/app", changes: changes) == "app/src/a.ts")
         #expect(ChatLinks.changedPath("README.md", cwd: "/Users/sam/src/app", changes: changes) == nil)
+    }
+
+    /// A model's link can name any scheme: only web pages, mail and the session's files open.
+    /// `shortcuts:`, `tel:`, `sms:` and app schemes are refused, as in the terminal.
+    @Test func onlyWebMailAndFilesOpen() {
+        #expect(ChatLinks.route(URL(string: "mailto:sam@example.com")!) == .mail(URL(string: "mailto:sam@example.com")!))
+        #expect(ChatLinks.route(URL(string: "shortcuts://run-shortcut?name=x")!) == .refused)
+        #expect(ChatLinks.route(URL(string: "tel:5551234")!) == .refused)
+        #expect(ChatLinks.route(URL(string: "sms:5551234")!) == .refused)
+        #expect(ChatLinks.route(URL(string: "togo://open")!) == .refused)
+        #expect(ChatLinks.route(URL(string: "\(ChatLinks.fileScheme)://open")!) == .refused)
     }
 }

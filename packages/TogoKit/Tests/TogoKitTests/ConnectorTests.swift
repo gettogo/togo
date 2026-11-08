@@ -56,7 +56,7 @@ struct ConnectorTests {
         let attachment = try await connector.attach(Self.request(Self.profile(etAvailable: false)))
         #expect(attachment.kind == .ssh)
         #expect(attachment.notes == [
-            FallbackNote(kind: .mosh, reason: "mosh-server not found on h"),
+            FallbackNote(kind: .mosh, reason: "Mosh isn't installed on h"),
             FallbackNote(kind: .et, reason: "etserver not found on this machine"),
         ])
     }
@@ -69,7 +69,7 @@ struct ConnectorTests {
         ])
         let attachment = try await connector.attach(Self.request(Self.profile()))
         #expect(attachment.kind == .ssh)
-        #expect(attachment.notes == [FallbackNote(kind: .mosh, reason: "no reply over UDP from 100.64.0.5")])
+        #expect(attachment.notes == [FallbackNote(kind: .mosh, reason: "Mosh got no reply from h; the network may block UDP")])
     }
 
     @Test func failedConnectClosesTransport() async throws {

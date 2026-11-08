@@ -97,6 +97,13 @@ enum SettingsLogic {
         return options.count <= 6 && options.contains { $0.detail?.isEmpty == false }
     }
 
+    /// A choice that is not inline pushes a list (every value wraps in full) when it has more
+    /// than a menu's handful of options or any long label; otherwise it is a menu.
+    static func choosesInList(_ field: Field) -> Bool {
+        let options = field.options ?? []
+        return options.count > 7 || options.contains { $0.label.count > 24 }
+    }
+
     /// A form with one field: a change that lands closes it.
     static func isSingleField(_ settings: HarnessScreen.Settings) -> Bool {
         settings.sections.reduce(0) { $0 + $1.fields.count } == 1

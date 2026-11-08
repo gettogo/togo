@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -47,7 +48,7 @@ func (a *adapter) readInput(screen string) (string, bool) {
 	}
 	lines := strings.Split(ansiCSI.ReplaceAllString(screen, ""), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
-		m := re.FindStringSubmatch(strings.TrimRight(lines[i], " \t\r"))
+		m := re.FindStringSubmatch(strings.TrimRight(plainSpaces(lines[i]), " \t\r"))
 		if m == nil {
 			continue
 		}
@@ -60,6 +61,54 @@ func (a *adapter) readInput(screen string) (string, bool) {
 		return text, true
 	}
 	return "", false
+}
+
+// plainSpaces turns every Unicode space (NBSP, which Claude draws its
+// empty input row with, narrow and wide spaces) into an ASCII space, so
+// input patterns written with " " and \s match what the TUI drew.
+func plainSpaces(line string) string {
+	if isASCII(line) {
+		return line
+	}
+	return strings.Map(func(r rune) rune {
+		if r != ' ' && r != '\t' && (unicode.Is(unicode.Zs, r) || r == '\u200b' || r == '\ufeff') {
+			return ' '
+		}
+		return r
+	}, line)
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// inputReadyWait bounds the wait for an adapter's input line to show
+// before typing: right after a relaunch (a model or effort change) the
+// agent is still drawing, and a prompt typed then sat in the line with
+// its Enter lost.
+var inputReadyWait = 15 * time.Second
+
+// waitInputLine waits, for adapters that declare an input line and a
+// session relaunched in the last minute, until the line is on screen. A line that never shows changes nothing: typing goes on
+// as before.
+func (e *Engine) waitInputLine(ctx context.Context, s *sess) {
+	s.mu.Lock()
+	recent := !s.relaunchedAt.IsZero() && time.Since(s.relaunchedAt) < time.Minute
+	s.mu.Unlock()
+	if s.ad.Input == nil || e.cfg.Screen == nil || !recent {
+		return
+	}
+	deadline := time.Now().Add(e.scaled(inputReadyWait))
+	for {
+		if _, ok := e.inputNow(ctx, s); ok || time.Now().After(deadline) || !e.pause(ctx) {
+			return
+		}
+	}
 }
 
 // inputNow reads the session's input line.
@@ -219,6 +268,7 @@ func (e *Engine) pause(ctx context.Context) bool {
 // popup is closed, the line must still read exactly what was typed, and
 // only then is Enter pressed.
 func (e *Engine) typeChecked(ctx context.Context, s *sess, text string, submit bool) error {
+	e.waitInputLine(ctx, s)
 	if err := e.clearInput(ctx, s); err != nil {
 		return err
 	}
@@ -233,6 +283,9 @@ func (e *Engine) typeChecked(ctx context.Context, s *sess, text string, submit b
 			return err
 		}
 		return e.confirmSubmit(ctx, s, text)
+	}
+	if submit && s.ad.Input == nil && e.cfg.Screen != nil && isCommand(text) {
+		return e.genericSubmit(ctx, s, text)
 	}
 	if err := e.cfg.Typist.Type(ctx, s.id, text, submit, false); err != nil {
 		return err

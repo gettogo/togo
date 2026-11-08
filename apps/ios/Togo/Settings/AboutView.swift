@@ -3,6 +3,8 @@ import TogoKit
 
 struct AboutView: View {
     static let sourceURL = URL(string: "https://github.com/gettogo/togo")!
+    static let privacyURL = URL(string: "https://togo.app/privacy/")!
+    static let supportURL = URL(string: "https://togo.app/support/")!
 
     let appVersion: String
     let settings: AppSettings
@@ -50,6 +52,8 @@ struct AboutView: View {
                 } label: {
                     Text(settingsText("settings.about.acknowledgments", "Acknowledgments"))
                 }
+                webLink(settingsText("settings.about.support", "Support"), Self.supportURL)
+                webLink(settingsText("settings.about.privacy", "Privacy policy"), Self.privacyURL)
             } footer: {
                 Text(settingsText(
                     "settings.about.licenses.footer",
@@ -75,6 +79,18 @@ struct AboutView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// A row that opens a page on the website.
+    private func webLink(_ title: String, _ url: URL) -> some View {
+        Link(destination: url) {
+            LabeledContent(title) {
+                Image(systemName: "arrow.up.forward")
+                    .font(.footnote.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(minHeight: 44)
+    }
+
     private func heading(_ text: String) -> some View {
         Text(text)
             .font(.headline)
@@ -87,7 +103,9 @@ struct AboutView: View {
         case .checking: settingsText("settings.about.helper.checking", "Checking")
         case .present(let version, _): version
         case .missing: settingsText("settings.about.helper.missing", "Not installed")
+        case .outdated(let found) where found.isEmpty: settingsText("settings.about.helper.outdatedUnknown", "Update available")
         case .outdated(let found): settingsText("settings.about.helper.outdated", "\(found), update available")
+        case .newer: settingsText("settings.about.helper.newer", "Newer than this app")
         }
     }
 }

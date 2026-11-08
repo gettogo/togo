@@ -137,10 +137,20 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
         }
     }
 
+    /// The user's choice (Settings › Terminal); off leaves only ⌘↩ and ⌘..
+    var singleKeyAnswers = true
+
     /// Hardware y, n and r answer only while a request shows and no field holds the keyboard.
     var acceptsKeyAnswers: Bool {
-        guard case let .request(request, _, _) = mode, isArmed(request) else { return false }
+        guard singleKeyAnswers, case let .request(request, _, _) = mode, isArmed(request) else { return false }
         return request.asksYesOrNo && !otherTextFocused && !barTextFocused
+    }
+
+    /// ⌘↩ and ⌘. answer the request in the bar even while a field holds the keyboard: with a
+    /// modifier they cannot be typed by accident.
+    var acceptsCommandAnswers: Bool {
+        guard case let .request(request, _, _) = mode, isArmed(request) else { return false }
+        return request.asksYesOrNo
     }
 
     /// Whether the request's answers work now: it is the one in the bar, it has been there
@@ -248,6 +258,15 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
         onKey(tab, item)
     }
 
+    /// A hardware key pressed in the input line that the terminal needs (Esc, ⌃C, Tab, ⇧Tab,
+    /// arrows for history): sent to the session as its bytes. False leaves it to the field.
+    func hardwareKey(_ key: PromptHardwareKey) -> Bool {
+        guard case let .input(tab) = mode,
+              let bytes = key.bytes(draftEmpty: inputDraft.isEmpty) else { return false }
+        onKey(tab, KeyBarItem(title: key.title, action: .steps([.text(bytes)])))
+        return true
+    }
+
     /// The keys drawn under the input line: the ones made only of text, which the bar can send.
     var inputKeys: [KeyBarItem] {
         keyBar.items.filter { item in
@@ -331,6 +350,41 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
         switch mode {
         case let .request(request, _, _), let .replying(request): request
         default: nil
+        }
+    }
+}
+
+/// A key from a hardware keyboard in the prompt bar's input line, as the terminal would get it.
+struct PromptHardwareKey: Equatable {
+    enum Name: Equatable { case escape, tab, up, down, left, right, control(Character) }
+    let name: Name
+    var shift = false
+
+    var title: String {
+        switch name {
+        case .escape: "Esc"
+        case .tab: shift ? "Shift-Tab" : "Tab"
+        case .up: "Up"
+        case .down: "Down"
+        case .left: "Left"
+        case .right: "Right"
+        case .control(let letter): "Ctrl-" + String(letter).uppercased()
+        }
+    }
+
+    /// The bytes the terminal gets, or nil when the field keeps the key: left and right move
+    /// the caret while there is text to move through.
+    func bytes(draftEmpty: Bool) -> String? {
+        switch name {
+        case .escape: return "\u{1b}"
+        case .tab: return shift ? "\u{1b}[Z" : "\t"
+        case .up: return "\u{1b}[A"
+        case .down: return "\u{1b}[B"
+        case .right: return draftEmpty ? "\u{1b}[C" : nil
+        case .left: return draftEmpty ? "\u{1b}[D" : nil
+        case .control(let letter):
+            guard let ascii = letter.lowercased().first?.asciiValue, (97...122).contains(ascii) else { return nil }
+            return String(UnicodeScalar(ascii - 96))
         }
     }
 }

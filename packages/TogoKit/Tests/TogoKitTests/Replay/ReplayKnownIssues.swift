@@ -14,7 +14,6 @@ enum ReplayKnownIssues {
         "claude.subagent": [
             "invariants": [
                 "[items-before-first-send": staleTranscript,
-                "[one-running-work-row": "The background subagent's agent item comes without a turnId, so TurnFold gives it its own running work line next to the turn's: two working indicators.",
             ],
         ],
         "claude.model": [
@@ -25,7 +24,6 @@ enum ReplayKnownIssues {
                 "changed the agent's own config": "Claude's `/model X` saves X as the default for new sessions in ~/.claude/settings.json, so Togo's model picker changes every future Claude session (the recorder restored the file).",
             ],
         ],
-        "claude.deny": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "omp.turn": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "opencode.interrupt": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "opencode.turn": ["invariants": [
@@ -34,11 +32,6 @@ enum ReplayKnownIssues {
         "vibe.turn": ["invariants": [
             "[no-reply": "Mistral Vibe ran a turn (working, then a \"done\" notify with an empty body) but neither a reply nor an error notice reached the chat.",
         ]],
-        "synthetic.reopen-after-close": ["invariants": [
-            "[closed-request-pending": lateOpen,
-            "[pending-after-settle": lateOpen,
-            "[needs-count-mismatch": lateOpen,
-        ]],
         "claude.interrupt": ["scenario": [
             "working again": "harness.interrupt answered applied and the turn showed Interrupted, but Claude went on: a new Bash call ran and the reply streamed; the mission went working=false then true again, and session.status never left working.",
         ]],
@@ -46,8 +39,6 @@ enum ReplayKnownIssues {
 
     static let turnEndLag = "The turn item ends (ok or interrupted) but the mission summary keeps working=true for 6 to 10 s more (it waits for the hub's idle), so the pill, Stop and the queue act as if the agent still works."
 
-    /// Robustness gap, not seen from today's helper (its hub orders a request's events).
-    static let lateOpen = "HostSnapshot.apply re-adds a request on an approval.open that arrives after its approval.closed (it keeps `closed` but does not consult it), so a late re-announce would resurrect an answered request in the prompt bar and the pill."
 
     static let staleTranscript = "A new Claude session in a folder used before shows the previous session's conversation (its transcript is tailed before the new session's hook names its own)."
 

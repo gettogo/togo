@@ -27,9 +27,28 @@ import UIKit
     /// nil until described; a descriptor with a nil adapter means terminal only.
     private(set) var descriptor: HarnessDescriptor?
     private(set) var phase: Phase = .describing
-    private(set) var feed = HarnessFeedState()
+    /// Not observed as a whole: a streamed note changes it several times a second, and views
+    /// read the narrower `timeline`, `mission` and `working`, which say when they change.
+    @ObservationIgnored private(set) var feed = HarnessFeedState() {
+        didSet { mirrorFeed() }
+    }
     /// The main conversation folded into rows, rebuilt on every change.
-    private(set) var rows: [ChatRow] = []
+    private(set) var rows: [ChatRow] = [] {
+        didSet {
+            let next = ChatGaps.gaps(rows)
+            if next != gaps { gaps = next }
+        }
+    }
+    /// The pauses before rows, worked out once per change rather than in every chat body.
+    private(set) var gaps: [String: TimeInterval] = [:]
+    /// The live working row's state: shown from a send until the turn ends, nil while idle.
+    /// Kept up to date by `refreshWorking`, so the chat and its announcements read a value.
+    private(set) var liveWork: WorkingState?
+    /// The harness's own queued prompts, for the composer's count; set only when they change,
+    /// so streamed text does not redraw the composer.
+    private(set) var queuedItems: [HarnessItem] = []
+    @ObservationIgnored private var mirroredMission: HarnessMission?
+    @ObservationIgnored private var mirroredWorking = false
     /// Prompts the phone holds: waiting for the turn to end, on their way, or failed.
     private(set) var queue = PromptQueue()
     private(set) var loadingOlder = false
@@ -45,7 +64,11 @@ import UIKit
     private var chosenLayer: SessionLayer = .terminal
     /// The session is expected to have a chat (a cached descriptor, a mission on its roster row
     /// or a known adapter agent), so until describe answers it shows plain ink, not the terminal.
-    @ObservationIgnored let expectsChat: Bool
+    var expectsChat: Bool { expectsChatFixed || expectsChatLive() }
+    @ObservationIgnored private let expectsChatFixed: Bool
+    /// Asked on every read: a session the roster lists after its tab opened (a just-created
+    /// one) starts expecting its chat then, rather than staying on the terminal.
+    @ObservationIgnored private let expectsChatLive: () -> Bool
     /// Describe failed at least once since the last success: the terminal shows meanwhile.
     private(set) var describeFailed = false
     /// Describe has not answered within `pendingTimeout`: the loader gives way to the terminal,
@@ -106,26 +129,59 @@ import UIKit
     init(
         subject: HarnessSubject, services: any HarnessServices,
         retry: (floor: Duration, ceiling: Duration) = (.milliseconds(500), .seconds(10)),
-        expectsChat: Bool = false, cached: HarnessDescriptor? = nil, pendingTimeout: Duration = .seconds(8)
+        expectsChat: Bool = false, expectsChatLive: @escaping () -> Bool = { false },
+        cached: HarnessDescriptor? = nil, pendingTimeout: Duration = .seconds(8)
     ) {
         self.subject = subject
         self.services = services
         retryFloor = retry.floor
         retryCeiling = retry.ceiling
         self.pendingTimeout = pendingTimeout
-        self.expectsChat = expectsChat || cached?.adapter != nil
+        expectsChatFixed = expectsChat || cached?.adapter != nil
+        self.expectsChatLive = expectsChatLive
         // A descriptor this tab already had is adopted at once, so a reopened tab shows its chat
         // on the first frame; describe still runs in the background and replaces it.
         if let cached, cached.adapter != nil, subject.available { adopt(cached) }
     }
 
-    /// The live working row's state: shown from a send until the turn ends, nil while idle.
-    var liveWork: WorkingState? {
-        WorkingLogic.state(
-            items: feed.timeline.conversation(), working: working, awaitingSince: awaitingSince,
-            localSince: localWorkSince, now: .now, needsYou: feed.mission.summary.needsYou,
+    /// The conversation as the feed holds it.
+    var timeline: HarnessTimeline {
+        access(keyPath: \.timeline)
+        return feed.timeline
+    }
+
+    var mission: MissionState {
+        access(keyPath: \.mission)
+        return feed.mission
+    }
+
+    /// A turn is running, so a prompt waits and Interrupt shows.
+    var working: Bool {
+        access(keyPath: \.working)
+        return mirroredWorking
+    }
+
+    /// Tells readers of the narrow views what changed: the timeline always, mission control and
+    /// working only when they did.
+    private func mirrorFeed() {
+        withMutation(keyPath: \.timeline) {}
+        if feed.mission.mission != mirroredMission {
+            mirroredMission = feed.mission.mission
+            withMutation(keyPath: \.mission) {}
+        }
+        let nowWorking = feed.mission.summary.working
+        if nowWorking != mirroredWorking {
+            withMutation(keyPath: \.working) { mirroredWorking = nowWorking }
+        }
+    }
+
+    private func updateLiveWork(_ conversation: [HarnessItem], now: Date = .now) {
+        let next = WorkingLogic.state(
+            items: conversation, working: working, awaitingSince: awaitingSince,
+            localSince: localWorkSince, now: now, needsYou: feed.mission.summary.needsYou,
             resolvedAt: resolvedAt
         )
+        if next != liveWork { liveWork = next }
     }
 
     /// A prompt just went: the working row shows at once, before the helper reports the turn.
@@ -134,6 +190,7 @@ import UIKit
         awaitingSince = now
         sawWorking = working
         if localWorkSince == nil { localWorkSince = now }
+        updateLiveWork(feed.timeline.conversation(), now: now)
         graceTask?.cancel()
         graceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(WorkingLogic.sendGrace + 0.5))
@@ -145,10 +202,14 @@ import UIKit
     /// Clears the sent prompt's hold once the turn it started is over, and tracks since when
     /// the agent works.
     func refreshWorking(now: Date = .now) {
+        refreshWorking(feed.timeline.conversation(), now: now)
+    }
+
+    private func refreshWorking(_ conversation: [HarnessItem], now: Date = .now) {
         if working { sawWorking = true }
         if let since = awaitingSince, WorkingLogic.awaitingEnded(
             awaitingSince: since, wasWorking: sawWorking, working: working,
-            items: feed.timeline.conversation(), now: now
+            items: conversation, now: now
         ) {
             awaitingSince = nil
             graceTask?.cancel()
@@ -158,6 +219,7 @@ import UIKit
         } else {
             localWorkSince = nil
         }
+        updateLiveWork(conversation, now: now)
         if !working, !deferred.isEmpty { runDeferred() }
     }
 
@@ -346,9 +408,16 @@ import UIKit
     /// other changes inside a row land without animation, and a fresh open never animates.
     private func changed(arrivals: Bool = true) {
         if ledger.observe(feed.timeline.items, now: .now) { resolvedAt = ledger.resolvedAt }
-        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: arrivals)
+        // The main conversation once per change; the rows, the live line and the queue count
+        // all read it.
+        let conversation = feed.timeline.conversation()
+        setRows(SubagentThread.mainRows(feed.timeline, conversation: conversation, resolvedAt: resolvedAt), arrivals: arrivals)
+        let queued = conversation.filter { item in
+            if case let .user(user) = item.body { user.queued } else { false }
+        }
+        if queued != queuedItems { queuedItems = queued }
         rememberMode()
-        refreshWorking()
+        refreshWorking(conversation)
         pump()
     }
 

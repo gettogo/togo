@@ -141,3 +141,42 @@ func TestHeadersOAuthAndLowercaseEnv(t *testing.T) {
 		}
 	}
 }
+
+func TestStringTextShapes(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"quoted json", `"apiKey": "plainsecret1"`, `"apiKey": "[redacted]"`},
+		{"quoted json single", `{'api_key': 'plainsecret1'}`, `{'api_key': '[redacted]'}`},
+		{"yaml", "api_key: plainsecret1\nname: x", "api_key: [redacted]\nname: x"},
+		{"yaml indented", "  password: plainsecret1", "  password: [redacted]"},
+		{"flag space", "tool --api-key plainsecret1 --v", "tool --api-key [redacted] --v"},
+		{"flag eq", "tool --token=plainsecret1", "tool --token=[redacted]"},
+		{"flag password", "psql --password plainsecret1", "psql --password [redacted]"},
+		{"env _KEY", "OPENAI_KEY=plainsecret1", "OPENAI_KEY=[redacted]"},
+		{"env MISTRAL", "export MISTRAL_KEY=plainsecret1", "export MISTRAL_KEY=[redacted]"},
+		{"env AUTH", "ANTHROPIC_AUTH_TOKEN=plainsecret1", "ANTHROPIC_AUTH_TOKEN=[redacted]"},
+		{"env COOKIE", "SESSION_COOKIE=plainsecret1", "SESSION_COOKIE=[redacted]"},
+		{"env CREDENTIAL", "GOOGLE_CREDENTIALS=plainsecret1", "GOOGLE_CREDENTIALS=[redacted]"},
+		{"x-api-key", "x-api-key: plainsecret1", "x-api-key: [redacted]"},
+		{"curl header", `curl -H "x-api-key: plainsecret1" u`, `curl -H "x-api-key: [redacted]" u`},
+		{"cookie", "Cookie: session=plainsecret1; other=2", "Cookie: [redacted]"},
+		{"set-cookie", "Set-Cookie: sid=plainsecret1; Path=/", "Set-Cookie: [redacted]"},
+		{"auth token", "Authorization: token plainsecret1", "Authorization: [redacted]"},
+		{"auth short bearer", "Authorization: Bearer abc", "Authorization: [redacted]"},
+		{"oauth code", "http://localhost:1455/cb?code=plainsecret1&state=s", "http://localhost:1455/cb?code=[redacted]&state=s"},
+		{"access_token", "#access_token=plainsecret1&x=1", "#access_token=[redacted]&x=1"},
+		{"refresh_token", "?refresh_token=plainsecret1", "?refresh_token=[redacted]"},
+		{"client_secret", "&client_secret=plainsecret1", "&client_secret=[redacted]"},
+		{"url creds", "postgres://user:plainsecret1@db:5432/x", "postgres://user:[redacted]@db:5432/x"},
+		{"google oauth", "ya29.a0AfH6SMplainsecret1", "[redacted]"},
+		{"plain url", "https://github.com/a/b?tab=code", "https://github.com/a/b?tab=code"},
+		{"plain email", "mail me at a@b.com", "mail me at a@b.com"},
+		{"plain yaml", "name: build\nkey_count: 3", "name: build\nkey_count: 3"},
+		{"usage tokens", "input_tokens: 1200", "input_tokens: 1200"},
+		{"unicode code word", "the code=42 path", "the code=42 path"},
+	}
+	for _, c := range cases {
+		if got := String(c.in); got != c.want {
+			t.Errorf("%s: String(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+}

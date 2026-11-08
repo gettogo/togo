@@ -5,9 +5,15 @@ import {
   type ApnsPushType,
   type ApnsResult,
 } from "./apns";
-import { json } from "./http";
+import { json, readBodyCapped } from "./http";
 import { ConfigError } from "./jwt";
-import { FieldError, liveActivityPayload, parseLiveActivity, type LiveActivity } from "./liveactivity";
+import {
+  FieldError,
+  liveActivityPayload,
+  liveActivityPriority,
+  parseLiveActivity,
+  type LiveActivity,
+} from "./liveactivity";
 import type { Admission } from "./ratelimit";
 
 // The relay forwards sealed bytes it cannot read. It never logs the token,
@@ -94,6 +100,7 @@ export async function sendOne(env: Env, body: PushBody): Promise<SendResult> {
       pushType: body.kind,
       topic: topicFor(env, body),
       collapseId: body.collapseId,
+      priority: body.kind === "liveactivity" ? liveActivityPriority(body.liveActivity!) : undefined,
       payload: apnsPayload(body),
     });
   } catch (err) {
@@ -134,10 +141,8 @@ function topicFor(env: Env, body: PushBody): string {
 }
 
 async function readCapped(request: Request): Promise<unknown> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > MAX_BODY_BYTES) throw new FieldError("body");
-  const buf = await request.arrayBuffer();
-  if (buf.byteLength > MAX_BODY_BYTES) throw new FieldError("body");
+  const buf = await readBodyCapped(request, MAX_BODY_BYTES);
+  if (buf === null) throw new FieldError("body");
   try {
     return JSON.parse(new TextDecoder().decode(buf));
   } catch {

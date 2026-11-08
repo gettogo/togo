@@ -43,8 +43,21 @@ struct AgentStep: View {
             InlineError(message: message)
             RetryButton { Task { await model.loadAgents() } }
         case .loaded:
+            let sections = model.installedSections
             VStack(spacing: 0) {
-                ForEach(model.installedAgents, id: \.id) { agent in
+                // Favorites lead under their own heading; every agent shows once. The order is
+                // the one the flow opened with, so a star toggled here never moves a row.
+                if !sections.favorites.isEmpty {
+                    SectionHeading(NewSessionCopy.favoritesHeading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(sections.favorites, id: \.id) { agent in
+                        agentRow(agent)
+                    }
+                    SectionHeading(NewSessionCopy.otherAgentsHeading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 24)
+                }
+                ForEach(sections.others, id: \.id) { agent in
                     agentRow(agent)
                 }
                 ForEach(model.presets) { preset in
@@ -102,8 +115,7 @@ struct AgentStep: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(on ? NewSessionCopy.removeFavorite : NewSessionCopy.addFavorite)
-        .accessibilityValue(Text(verbatim: agent.name))
+        .accessibilityLabel(on ? NewSessionCopy.removeFavorite(agent.name) : NewSessionCopy.addFavorite(agent.name))
     }
 
     /// Agents the machine lacks stay folded away, so the list is the ones that can start.

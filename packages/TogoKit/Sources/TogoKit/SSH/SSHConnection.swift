@@ -110,7 +110,7 @@ public actor SSHConnection: TCPChannelOpener {
     /// Only the machine's own loopback addresses are reachable this way.
     public func openDirectTCPIP(host: String, port: Int) async throws -> any ExecChannel {
         guard ForwardTarget.isAllowed(host: host, port: port) else {
-            throw DirectTCPIPError.failed("Only ports on the machine itself can be opened.")
+            throw DirectTCPIPError.failed(String(localized: "Only ports on the machine itself can be opened.", bundle: .module))
         }
         guard isConnected, let client = clients.last else { throw SSHError.channelClosed(exitStatus: nil) }
         return try await TCPIPChannel.open(on: client, host: host, port: port)
@@ -318,15 +318,53 @@ public actor SSHConnection: TCPChannelOpener {
         // Session channels with a PTY and exec are opened on the root channel directly,
         // because Citadel opens a PTY only with a login shell.
         let channel = client.channel
+        if parent == nil { await Self.keepAlive(channel) }
         // Mosh needs the address SSH reached, not a name that may resolve elsewhere later.
         if parent == nil, profile.jumps.isEmpty { remoteAddress = channel.remoteAddress?.ipAddress }
         return (client, channel)
     }
 
+    /// TCP keepalive on the socket: a link that stops passing traffic (the Mac slept, a NAT
+    /// entry expired) fails after about 30 s of quiet instead of the system's two hours, so
+    /// terminals and feeds on it see the close and reconnect. Best effort.
+    static func keepAlive(_ channel: any Channel) async {
+        let options: [(ChannelOptions.Types.SocketOption, SocketOptionValue)] = [
+            (ChannelOptions.socketOption(.so_keepalive), 1),
+            (ChannelOptions.tcpOption(.init(rawValue: TCP_KEEPALIVE)), 15),
+            (ChannelOptions.tcpOption(.init(rawValue: TCP_KEEPINTVL)), 5),
+            (ChannelOptions.tcpOption(.init(rawValue: TCP_KEEPCNT)), 3),
+        ]
+        for (option, value) in options {
+            try? await channel.setOption(option, value: value).get()
+        }
+    }
+
     static func networkError(_ error: any Error) -> SSHError {
         if let error = error as? SSHError { return error }
         if case ChannelError.connectTimeout = error { return .timeout }
-        return .unreachable("The machine could not be reached. Check the address and your network")
+        if isRefused(error) { return .refused }
+        return .unreachable(String(localized: "The machine could not be reached. Check the address and your network", bundle: .module))
+    }
+
+    /// True when the error, or any address's error inside a connect that tried several,
+    /// is a refused TCP connection. NIO wraps those per address, so they are found by walking
+    /// the error's fields rather than by its type.
+    static func isRefused(_ error: any Error, depth: Int = 0) -> Bool {
+        if let io = error as? IOError { return io.errnoCode == ECONNREFUSED }
+        if let posix = error as? POSIXError { return posix.code == .ECONNREFUSED }
+        guard depth < 4 else { return false }
+        for child in Mirror(reflecting: error).children {
+            if let nested = child.value as? any Error, isRefused(nested, depth: depth + 1) { return true }
+            if let list = child.value as? [Any] {
+                for element in list {
+                    if let nested = element as? any Error, isRefused(nested, depth: depth + 1) { return true }
+                    for field in Mirror(reflecting: element).children {
+                        if let nested = field.value as? any Error, isRefused(nested, depth: depth + 1) { return true }
+                    }
+                }
+            }
+        }
+        return false
     }
 }
 

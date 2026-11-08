@@ -89,7 +89,7 @@ func TestDroidAndCopilotInstall(t *testing.T) {
 	if err := json.Unmarshal([]byte(read(t, cp)), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.Version != 1 || doc.Hooks["preToolUse"][0].Bash != "'/opt/togo/bin/togo' hook copilot preToolUse" ||
+	if doc.Version != 1 || doc.Hooks["preToolUse"][0].Bash != hookCommand("/opt/togo/bin/togo", Copilot, "preToolUse") ||
 		doc.Hooks["permissionRequest"][0].TimeoutSec != 600 {
 		t.Fatalf("copilot %+v", doc)
 	}

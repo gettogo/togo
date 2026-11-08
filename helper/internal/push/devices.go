@@ -148,6 +148,9 @@ func (d *Devices) UpdateTokens(id, apnsToken, laToken, laStartToken string, comm
 	}
 	dev.RegisterTS = ts
 	dev.LiveActivityCommand = command
+	if apnsToken != "" && apnsToken != dev.APNsToken {
+		dev.Dead = false // APNs refused the old token; this one is new
+	}
 	for _, f := range []struct {
 		dst *string
 		v   string

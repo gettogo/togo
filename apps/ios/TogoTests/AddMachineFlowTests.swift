@@ -5,6 +5,16 @@ import TogoKit
 
 @MainActor
 struct AddMachineFlowTests {
+    /// The key command makes ~/.ssh, appends the key on its own line with sshd's permissions,
+    /// and quotes the key so its comment cannot run as shell.
+    @Test func publicKeyCommandAppendsWithSafePermissions() {
+        let command = PublicKeyCommand.append("ssh-ed25519 AAAAC3Nza sam's iPhone\n")
+        #expect(command.hasPrefix("mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\\n' "))
+        #expect(command.hasSuffix(" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"))
+        #expect(command.contains(#"'ssh-ed25519 AAAAC3Nza sam'\''s iPhone'"#))
+        #expect(!command.contains("\n'"))
+    }
+
     private func flow(_ services: FakeOnboardingServices, saved: SavedRecords = SavedRecords()) -> AddMachineFlow {
         let flow = AddMachineFlow(
             services: services, save: { saved.records.append($0) }, finish: { saved.finished.append($0.id) }

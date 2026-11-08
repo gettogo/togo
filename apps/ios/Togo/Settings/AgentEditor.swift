@@ -40,7 +40,7 @@ struct AgentEditor: View {
 
     /// The agents to pick from, favorites first.
     private var registry: [(id: String, name: String)] {
-        AgentPresetText.ordered(favorites: library?.favorites ?? [], recent: library?.recentAgents ?? [])
+        AgentPresetText.ordered(favorites: library?.favorites ?? [])
     }
 
     /// The machines a check can reach without failing or asking to sign in.
@@ -70,8 +70,7 @@ struct AgentEditor: View {
                 if draft.isCustom {
                     TextField(settingsText("settings.agents.program", "Program"), text: programText)
                         .font(.system(.body, design: .monospaced))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        .commandInput(programText)
                         .focusOnReveal($programFocused, revealed: programRevealed)
                         .frame(minHeight: 44)
                 }

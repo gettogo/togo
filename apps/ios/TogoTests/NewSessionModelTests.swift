@@ -12,7 +12,7 @@ import TogoKit
     ) -> NewSessionModel {
         NewSessionModel(
             services: services, hostID: hostID, machines: machines,
-            open: { store?.open(hostID: $0, sessionID: $1) }
+            open: { store?.open(hostID: $0, sessionID: $1, agent: $2) }
         )
     }
 
@@ -124,14 +124,39 @@ import TogoKit
             AgentInfo(id: "claude", name: "Claude Code", installed: true),
             AgentInfo(id: "aider", name: "Aider", installed: true),
             AgentInfo(id: "kimi", name: "Kimi Code", installed: true),
-            AgentInfo(id: "gemini", name: "Gemini CLI", installed: false),
+            AgentInfo(id: "cursor", name: "Cursor CLI", installed: false),
         ])
-        #expect(model.installedAgents.map(\.id) == ["kimi", "aider", "claude", "shell"])
-        #expect(model.missingAgents.map(\.id) == ["gemini"])
+        #expect(model.installedSections.favorites.map(\.id) == ["kimi"])
+        #expect(model.installedSections.others.map(\.id) == ["aider", "claude", "shell"])
+        #expect(model.missingAgents.map(\.id) == ["cursor"])
         #expect(model.selectedAgent?.id == "kimi")
+    }
+
+    /// A star toggled while the flow is open changes the star, not the order; the next
+    /// flow lists the agent in its new place.
+    @Test func starringKeepsTheOrderUntilTheNextOpen() async {
+        let library = AgentLibrary.inMemory()
+        library.toggleFavorite("kimi")
+        let list = [
+            AgentInfo(id: "claude", name: "Claude Code", installed: true),
+            AgentInfo(id: "aider", name: "Aider", installed: true),
+            AgentInfo(id: "kimi", name: "Kimi Code", installed: true),
+        ]
+        let model = NewSessionModel(services: services, hostID: nil, machines: Samples.controlCenter.machines, library: library)
+        await model.choose(model.machines[0])
+        model.agents = .loaded(list)
         model.toggleFavorite("kimi")
+        model.toggleFavorite("claude")
         #expect(!model.isFavorite("kimi"))
-        #expect(model.installedAgents.map(\.id) == ["aider", "claude", "kimi", "shell"])
+        #expect(model.isFavorite("claude"))
+        #expect(model.installedSections.favorites.map(\.id) == ["kimi"])
+        #expect(model.installedAgents.map(\.id) == ["kimi", "aider", "claude", "shell"])
+
+        let next = NewSessionModel(services: services, hostID: nil, machines: Samples.controlCenter.machines, library: library)
+        await next.choose(next.machines[0])
+        next.agents = .loaded(list)
+        #expect(next.installedSections.favorites.map(\.id) == ["claude"])
+        #expect(next.installedSections.others.map(\.id) == ["aider", "kimi", "shell"])
     }
 
     @Test func browseAnswerAfterLeavingIsIgnored() async {

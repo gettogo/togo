@@ -275,6 +275,42 @@ struct TerminalLinkTests {
         await link.stop()
     }
 
+    /// The Mac restarted under a Mosh tab: SSH answers while Mosh hears nothing, so after a
+    /// while the link attaches again instead of roaming forever.
+    @Test func longRoamingWithTheMachineAnsweringAttachesAgain() async throws {
+        let first = FakeTransport(), second = FakeTransport()
+        let clock = ManualClock()
+        let link = TerminalLink(
+            connect: ScriptedConnect([.attach(first, .mosh), .attach(second, .mosh)]).closure, path: FakePath(),
+            clock: clock, cols: 80, rows: 24, roamAnswers: { _ in true }
+        )
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { log.liveCount == 1 })
+        first.emit(.roaming)
+        #expect(await eventually { log.all.last == .roaming })
+        #expect(await clock.runSleep(TerminalLink.roamCheck))
+        #expect(await eventually { log.liveCount == 2 })
+        await link.stop()
+    }
+
+    @Test func roamingWithTheMachineSilentKeepsRoaming() async throws {
+        let first = FakeTransport()
+        let clock = ManualClock()
+        let link = TerminalLink(
+            connect: ScriptedConnect([.attach(first, .mosh), .attach(FakeTransport(), .mosh)]).closure, path: FakePath(),
+            clock: clock, cols: 80, rows: 24, roamAnswers: { _ in false }
+        )
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { log.liveCount == 1 })
+        first.emit(.roaming)
+        #expect(await clock.runSleep(TerminalLink.roamCheck))
+        #expect(await eventually { clock.pending == [TerminalLink.roamCheck] })
+        #expect(log.all.last == .roaming)
+        await link.stop()
+    }
+
     @Test func inputAcceptedWhileRoaming() async throws {
         let transport = FakeTransport()
         let link = Self.link(ScriptedConnect([.attach(transport, .mosh)]))
@@ -366,6 +402,76 @@ struct TerminalLinkTests {
         #expect(await eventually { if case .failed = log.all.last { true } else { false } })
         guard case .failed(let reason) = log.all.last else { return }
         #expect(reason.contains("mosh-server was not found"))
+        await link.stop()
+    }
+
+    /// "Connecting to X" must not walk forever: a first attach that keeps failing says why.
+    @Test func firstAttachGivesUpAfterThreeTries() async throws {
+        let script = ScriptedConnect([
+            .fail(HelperError.closed), .fail(HelperError.closed), .fail(HelperError.timeout(method: "hello")),
+            .attach(FakeTransport(), .ssh),
+        ])
+        let link = Self.link(script)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { if case .failed = log.all.last { true } else { false } })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(script.sizes.count == TerminalLink.firstAttachLimit)
+        await link.stop()
+    }
+
+    @Test func explicitMoshWithoutUDPStopsAtOnce() async throws {
+        let script = ScriptedConnect([.fail(MoshConnectError.noUDPReply(address: "10.0.0.2")), .attach(FakeTransport(), .ssh)])
+        let link = Self.link(script)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { if case .failed = log.all.last { true } else { false } })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(script.sizes.count == 1)
+        await link.stop()
+    }
+
+    /// The Mac slept mid-session: after a few unanswered attempts the link reports it, and a
+    /// network change starts it again on its own.
+    @Test func reconnectGivesUpOnASilentMachineAndRestartsOnAPathChange() async throws {
+        let first = FakeTransport(), second = FakeTransport()
+        let silent = SSHError.unreachable("work-mac did not answer for 30 s; it may be asleep")
+        let script = ScriptedConnect([.attach(first, .ssh), .fail(silent), .fail(silent), .fail(silent), .attach(second, .ssh)])
+        let path = FakePath()
+        let link = Self.link(script, path: path)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { log.liveCount == 1 })
+        first.emit(.closed(.networkLost))
+        #expect(await eventually { if case .failed = log.all.last { true } else { false } })
+        #expect(script.sizes.count == 4)
+        path.change()
+        #expect(await eventually { log.liveCount == 2 })
+        await link.stop()
+    }
+
+    @Test func linkThatGaveUpOnASilentMachineRetriesInTheForeground() async throws {
+        let script = ScriptedConnect([.fail(SSHError.unreachable("work-mac did not answer")), .attach(FakeTransport(), .ssh)])
+        let link = Self.link(script)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { if case .failed = log.all.last { true } else { false } })
+        await link.willEnterForeground()
+        #expect(await eventually { log.liveCount == 1 })
+        await link.stop()
+    }
+
+    /// Needing the user is not retried on a path change.
+    @Test func permanentFailureIsNotRestartedByAPathChange() async throws {
+        let script = ScriptedConnect([.fail(SSHError.authFailed(tried: ["publickey"])), .attach(FakeTransport(), .ssh)])
+        let path = FakePath()
+        let link = Self.link(script, path: path)
+        let log = StateLog(link)
+        await link.start()
+        #expect(await eventually { if case .failed = log.all.last { true } else { false } })
+        path.change()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(script.sizes.count == 1)
         await link.stop()
     }
 

@@ -83,9 +83,10 @@ struct RosterStatus: View {
                 .font(font)
                 .fontWeight(state == .needsYou ? .semibold : .regular)
                 .foregroundStyle(wordColor)
-                .contentTransition(reduceMotion ? .identity : .interpolate)
-                // motion: state change — the row's status word changes in place; nothing moves.
-                .motion(.fade, value: word)
+                // Instant word (motion v2 §2); only needs-you's colour and weight change.
+                .contentTransition(.identity)
+                // motion: state change — "needs you" lights in place; nothing else animates.
+                .motion(.respond, value: state == .needsYou)
                 // trunc-ok: a status word from a fixed short set
                 .lineLimit(1)
         }

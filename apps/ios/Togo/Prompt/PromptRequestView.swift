@@ -228,6 +228,9 @@ struct PromptRequestView: View {
             TextField(text: $model.replyDraft, prompt: Text(placeholder).foregroundStyle(Color.togoMute)) {
                 Text(placeholder)
             }
+            // A reply is typed into the session as is: "y" stays lower case, a branch name or
+            // path is never "corrected".
+            .commandInput($model.replyDraft)
         }
     }
 

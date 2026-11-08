@@ -99,6 +99,11 @@ type Handlers struct {
 	turns map[string]bool
 	// asking marks sessions running AskUserQuestion.
 	asking map[string]bool
+	// DoneGrace holds a Stop hook's "finished" this long; work in the
+	// meantime (Claude hands a turn to a background subagent and fires
+	// Stop on the way) drops it. Zero sends at once.
+	DoneGrace time.Duration
+	doneT     map[string]*time.Timer
 }
 
 // Methods returns the local methods.
@@ -199,6 +204,10 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		h.noteTool(id, "")
 	}
 	switch ev.Event {
+	case EventPrompt, EventTool, EventToolDone, EventPermission, EventAttention:
+		h.cancelDone(id)
+	}
+	switch ev.Event {
 	case EventPrompt:
 		// A new turn makes any prompt left from the last one moot.
 		h.closeAgentPrompts(id)
@@ -224,7 +233,7 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		h.closeAgentPrompts(id)
 		h.setTurn(id, false)
 		h.Hub.SetStatus(id, statusIdle, nil)
-		h.publishNotify(id, wire.LevelDone, agentTitle(ev.Agent)+" finished", ev.Data.Message)
+		h.doneLater(id, agentTitle(ev.Agent)+" finished", ev.Data.Message)
 	case EventIdle:
 		// Idle at its input, the agent is asking nothing: a pending prompt
 		// was answered, withdrawn or interrupted. A turn whose Stop never
@@ -304,7 +313,7 @@ func (h *Handlers) mergeMeta(id string, d wire.HookData) {
 		model := clip(d.Model, 80)
 		m.Model = &model
 	}
-	if d.ContextPercent != nil && *d.ContextPercent >= 0 && *d.ContextPercent <= 100 {
+	if d.ContextPercent != nil && *d.ContextPercent > 0 && *d.ContextPercent <= 100 { // 0 is "not known yet"
 		v := *d.ContextPercent
 		m.ContextPercent = &v
 	}
@@ -315,6 +324,45 @@ func (h *Handlers) mergeMeta(id string, d wire.HookData) {
 	h.meta[id] = m
 	h.mu.Unlock()
 	h.Hub.SetMeta(id, m)
+}
+
+// doneLater publishes a turn's "finished" after DoneGrace unless the
+// session works again first.
+func (h *Handlers) doneLater(id, title, body string) {
+	if h.DoneGrace <= 0 || id == "" {
+		h.publishNotify(id, wire.LevelDone, title, body)
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.doneT == nil {
+		h.doneT = map[string]*time.Timer{}
+	}
+	if t := h.doneT[id]; t != nil {
+		t.Stop()
+	}
+	var t *time.Timer
+	t = time.AfterFunc(h.DoneGrace, func() {
+		h.mu.Lock()
+		if h.doneT[id] != t {
+			h.mu.Unlock()
+			return
+		}
+		delete(h.doneT, id)
+		h.mu.Unlock()
+		h.publishNotify(id, wire.LevelDone, title, body)
+	})
+	h.doneT[id] = t
+}
+
+// cancelDone drops a "finished" still waiting out its grace.
+func (h *Handlers) cancelDone(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if t := h.doneT[id]; t != nil {
+		t.Stop()
+		delete(h.doneT, id)
+	}
 }
 
 func (h *Handlers) publishNotify(id, level, title, body string) {

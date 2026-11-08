@@ -13,6 +13,7 @@ struct TabletopDeck<Requests: View>: View {
 
     var body: some View {
         requests
+            // width-ok: the request deck's widest on the tabletop half; narrower halves fill.
             .frame(maxWidth: 560)
             .padding(.horizontal, 12)
             .padding(.top, 12)

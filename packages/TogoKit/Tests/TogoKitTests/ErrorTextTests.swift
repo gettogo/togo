@@ -41,6 +41,8 @@ struct ErrorTextTests {
         HelperError.conflict("not_regular"),
         HelperError.refused(""),
         HelperError.rpc(RPCErrorObject(code: RPCErrorCode.refused, message: "refused")),
+        HelperSourceError.newer(host: "mini"),
+        HelperSourceError.outdated(host: "mini"),
         HostKeyStoreError.unreadable("/var/mobile/known_hosts.json"),
         KeyError.badPassphrase,
         KeyError.unsupportedKeyType("ssh-dss"),

@@ -105,10 +105,38 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
     public struct Text: Codable, Hashable, Sendable {
         public var text: String
         public var partial: Bool
+        /// Set on a streamed update that carries only the new tail: `text` continues the held
+        /// text at this UTF-8 byte offset. Nil means `text` is the whole text. The timeline
+        /// resolves it, so a held item never carries one.
+        public var appendFrom: Int?
 
-        public init(text: String, partial: Bool) {
+        public init(text: String, partial: Bool, appendFrom: Int? = nil) {
             self.text = text
             self.partial = partial
+            self.appendFrom = appendFrom
+        }
+
+        private enum CodingKeys: String, CodingKey { case text, partial, appendFrom }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            text = try c.decode(String.self, forKey: .text)
+            partial = try c.decode(Bool.self, forKey: .partial)
+            appendFrom = try c.decodeIfPresent(Int.self, forKey: .appendFrom)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(text, forKey: .text)
+            try c.encode(partial, forKey: .partial)
+            try c.encodeIfPresent(appendFrom, forKey: .appendFrom)
+        }
+
+        /// The held text continued by `tail`, or nil when the tail does not start where it ends.
+        func continued(by tail: Text) -> Text? {
+            guard let from = tail.appendFrom else { return tail }
+            guard from == text.utf8.count else { return nil }
+            return Text(text: text + tail.text, partial: tail.partial)
         }
     }
 

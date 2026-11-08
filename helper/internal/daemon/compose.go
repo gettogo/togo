@@ -59,8 +59,18 @@ var Capabilities = []string{
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read
-// loop because they block.
-var Concurrent = append(append(append([]string{}, local.Concurrent...), browser.Concurrent...), harness.Concurrent...)
+// loop because they block. Read-only methods that can take seconds (ports
+// runs lsof, git and fs touch the disk, describe and history may wait on
+// the version gate) are here too, so an Approve or a Send never queues
+// behind them.
+var Concurrent = append(append(append(append([]string{}, local.Concurrent...), browser.Concurrent...), harness.Concurrent...), readOnlySlow...)
+
+var readOnlySlow = []string{
+	wire.MethodPortsList,
+	wire.MethodGitStatus, wire.MethodGitDiff, wire.MethodGitLog, wire.MethodGitBranches,
+	wire.MethodFsRead, wire.MethodFsImage,
+	harness.MethodDescribe, harness.MethodHistory,
+}
 
 // ComposeOptions configures Compose.
 type ComposeOptions struct {
@@ -166,7 +176,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	if svc.Manifest != nil {
 		svc.Manifest.Logf = logf
 	}
-	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach}
+	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach, DoneGrace: 3 * time.Second}
 	c.Local.Agents = &local.AgentCache{Lookup: func(ctx context.Context, id string) string {
 		sess, err := svc.Resolve(ctx, id)
 		if err != nil {

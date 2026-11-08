@@ -13,6 +13,9 @@ struct WatchHomeTests {
 
     @Test func clearWhenNothingWaits() {
         #expect(WatchHome.page(for: []) == .allClear)
+        #expect(WatchHome.clearWords(paired: false, sessions: 0) == WatchCopy.setUpOnPhone)
+        #expect(WatchHome.clearWords(paired: true, sessions: 0) == WatchCopy.allClear)
+        #expect(WatchHome.clearWords(paired: false, sessions: 2) == WatchCopy.allClear)
     }
 
     @Test func oldestRequestFillsThePage() {

@@ -173,6 +173,9 @@ func (e *Engine) userItem(s *sess, text string, images []harness.ImageRef, queue
 	defer s.mu.Unlock()
 	it := s.newUserItemLocked(text, images, queuedNow)
 	s.notePhoneLocked(it.ID, text, images)
+	if !queuedNow {
+		s.awaitReply = true
+	}
 	s.publishLocked([]harness.Item{it}, nil)
 	stored, _ := e.log.Get(s.id, it.ID)
 	return harness.SendResult{Item: stored}
@@ -197,6 +200,9 @@ func (e *Engine) Interrupt(ctx context.Context, id string) (harness.ActionResult
 	if err != nil {
 		return harness.ActionResult{}, err
 	}
+	s.mu.Lock()
+	s.awaitReply = false // a turn stopped on purpose owes no reply
+	s.mu.Unlock()
 	act, ok := s.ad.Actions[harness.ActionInterrupt]
 	if !ok {
 		return harness.ActionResult{Result: harness.ResultFallback}, nil
@@ -212,7 +218,10 @@ func (e *Engine) Complete(ctx context.Context, req harness.CompleteRequest) (har
 	}
 	limit := req.Limit
 	if limit <= 0 {
-		limit = 50
+		limit = harness.MaxLimit
+		if req.Kind == harness.CompleteFile {
+			limit = 50
+		}
 	}
 	var items []harness.Completion
 	if req.Kind == harness.CompleteFile {

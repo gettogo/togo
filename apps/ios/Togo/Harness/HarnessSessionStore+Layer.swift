@@ -72,13 +72,6 @@ extension HarnessSessionStore {
 
     func has(_ capability: String) -> Bool { descriptor?.has(capability) ?? false }
 
-    var timeline: HarnessTimeline { feed.timeline }
-
-    var mission: MissionState { feed.mission }
-
-    /// A turn is running, so a prompt waits and Interrupt shows.
-    var working: Bool { feed.mission.summary.working }
-
     /// The chat layer can show: an adapter serves the session with a conversation.
     var chatAvailable: Bool { hasAdapter && has(HarnessCapability.chat) && phase != .terminalOnly }
 

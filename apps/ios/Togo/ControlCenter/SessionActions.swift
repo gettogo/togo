@@ -171,7 +171,7 @@ enum SessionActions {
         guard machine.reachability == .online else { return [] }
         switch machine.helper {
         case .present, .outdated: break
-        case .checking, .missing: return []
+        case .checking, .missing, .newer: return []
         }
         var lacking: [SessionAction] = []
         if !machine.capabilities.contains(Capability.git) { lacking += [.changes, .files] }
@@ -184,7 +184,8 @@ enum SessionActions {
     private static func unreachableReason(_ machine: MachineSection) -> String? {
         switch machine.reachability {
         case .offline: ControlCenterCopy.machineOffline(machine.name)
-        case .authNeeded, .failed, .keyMissing: ControlCenterCopy.machineNotConnected(machine.name)
+        case .deviceOffline: ControlCenterCopy.noNetwork
+        case .authNeeded, .failed, .keyMissing, .hostKeyChanged: ControlCenterCopy.machineNotConnected(machine.name)
         case .connecting, .waking, .online: nil
         }
     }

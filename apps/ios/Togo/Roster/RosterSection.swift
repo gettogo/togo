@@ -71,6 +71,10 @@ struct RosterSection: View {
             return lastSeen.map { ControlCenterCopy.offlineSeen(ago($0, now: now)) } ?? ControlCenterCopy.offline
         case .waking:
             return ControlCenterCopy.waking
+        case .deviceOffline:
+            return ControlCenterCopy.noNetwork
+        case .hostKeyChanged:
+            return ControlCenterCopy.keyChangedCaption
         case .connecting, .online, .authNeeded, .failed, .keyMissing:
             return helper == .missing ? ControlCenterCopy.noHelper : nil
         }
@@ -90,7 +94,7 @@ struct RosterSection: View {
     /// user was about to tap moves away.
     private var stale: Bool {
         switch machine.reachability {
-        case .offline, .authNeeded, .failed, .keyMissing: true
+        case .offline, .authNeeded, .failed, .keyMissing, .hostKeyChanged, .deviceOffline: true
         case .connecting, .waking, .online: false
         }
     }
@@ -113,6 +117,13 @@ struct RosterSection: View {
             MachineMessage(ControlCenterCopy.keyMissing(device: DeviceName.model), action: ControlCenterCopy.edit) {
                 perform(.edit(machine.id))
             }
+        case .hostKeyChanged:
+            MachineMessage(ControlCenterCopy.hostKeyChanged, action: ControlCenterCopy.reviewKey) {
+                perform(.edit(machine.id))
+            }
+        case .deviceOffline:
+            // Said once above the roster; the machine's caption reads "No network".
+            EmptyView()
         case .connecting, .waking:
             if machine.sessions.isEmpty {
                 PawWalk(machine.reachability == .waking ? ControlCenterCopy.waking : ControlCenterCopy.connecting)
@@ -133,6 +144,8 @@ struct RosterSection: View {
                 PawWalk(ControlCenterCopy.connecting)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     .listRowBackground(Color.togoInk)
+            case .newer:
+                quiet(ControlCenterCopy.helperNewer(machine.name))
             case .present, .outdated, .checking:
                 if case .outdated(let found) = machine.helper {
                     MachineMessage(ControlCenterCopy.helperOutdated(found), action: ControlCenterCopy.update) {

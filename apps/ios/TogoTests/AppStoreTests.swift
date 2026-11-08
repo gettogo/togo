@@ -178,7 +178,8 @@ import TogoKit
     @Test func helperErrorNoticeIsPlainSentence() async {
         let store = store()
         services.failure = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "not_found"))
-        await store.kill(Samples.controlCenter.machines[0].sessions[0])
+        // Ending one that already ended is no error (WorkspaceTests); renaming it is.
+        await store.rename(Samples.controlCenter.machines[0].sessions[0], to: "other")
         #expect(store.notice?.text.contains("This session has ended.") == true)
         #expect(store.notice?.text.contains("not_found") == false)
     }

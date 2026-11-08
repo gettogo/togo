@@ -36,7 +36,7 @@ struct SubagentChatView: View {
                 }
             }
             .padding(16)
-            .frame(maxWidth: 720)
+            .frame(maxWidth: ChatLayout.columnWidth)
             .frame(maxWidth: .infinity)
         }
         .defaultScrollAnchor(.bottom)

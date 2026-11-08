@@ -33,6 +33,7 @@ enum PaneLayout {
         if fold.posture == .tabletop, let gap = fold.division {
             return .tabletop(topHeight: gap.minY, gap: gap)
         }
+        // width-ok: each posture below measures its room (the fold, or two minimum pane widths).
         guard sizeClass == .regular else { return .single }
         switch fold.posture {
         case .tabletop:

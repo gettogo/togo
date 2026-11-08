@@ -117,7 +117,10 @@ struct PaneView: View {
                 .opacity(Self.terminalOpacity(for: tab.link))
                 // motion: continuity — a terminal has one place at a time, so it lands at once and never fades.
                 .transition(.identity)
-            ConnectingOverlayHost(kind: overlay, addMachine: { store.showSheet(.addMachine) }) { retry(tab) }
+            ConnectingOverlayHost(
+                kind: overlay, addMachine: { store.showSheet(.addMachine) },
+                editMachine: { store.showSheet(.editMachine(tab.hostID)) }
+            ) { retry(tab) }
         }
         // motion: state change — the pane dims while its link reconnects.
         .motion(Self.dimRole, value: reconnecting)

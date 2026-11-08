@@ -153,6 +153,7 @@ struct WaitingSmallView: View {
                 Text(verbatim: "\(summary.count)")
                     .font(.system(size: 48, weight: .semibold))
                     .monospacedDigit()
+                    // accent-ok: the count of requests that need the user.
                     .foregroundStyle(Color.togoAccentText)
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(summary.count)))
                 Text(LiveCopy.waitingWord)

@@ -95,7 +95,7 @@ struct WorkspaceView: View {
             .background { shortcuts }
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
-            .attachPrompts(store.services.attachPrompts, active: true)
+            .attachPrompts(store.services.attachPrompts, host: "workspace", active: true)
             .reviewPresentation(store: store, terminals: terminals, active: true)
             .onChange(of: store.focusedTab?.id) { _, id in
                 status = nil
@@ -146,12 +146,11 @@ struct WorkspaceView: View {
 
     // MARK: Panes
 
-    /// Chip taps and shortcuts settle like a swipe does. Under Reduce Motion the pages fade.
+    /// A tab switch is a cut: the chosen session is simply there. Only the strip's selection
+    /// capsule moves (its own `.motion(.tabSettle, value:)`), so no chat crossfades over the
+    /// next tab's terminal.
     private func show(_ id: TabID) {
-        // motion: continuity — the chosen tab's page settles in, as a swipe to it would.
-        withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
-            store.choose(id)
-        }
+        store.choose(id)
     }
 
     /// The panes land in their new arrangement at once and brighten into it (`WorkspacePanes`).
@@ -403,10 +402,8 @@ struct WorkspaceView: View {
     private var shortcuts: some View {
         ForEach(Array(chips.prefix(9).enumerated()), id: \.element.id) { index, chip in
             Button(WorkspaceCopy.goTo([chip.bib, chip.name].compactMap(\.self).joined(separator: " "))) {
-                // motion: continuity — the numbered tab's page settles in, as a swipe would.
-                withAnimation(Motion.animation(.tabSettle, reduce: reduceMotion)) {
-                    store.selectTab(number: index + 1)
-                }
+                // A cut, like a chip tap (`show`).
+                store.selectTab(number: index + 1)
             }
             .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
         }

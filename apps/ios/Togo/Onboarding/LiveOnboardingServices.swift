@@ -114,7 +114,7 @@ import TogoKit
             return .authFailed
         case .timeout:
             return .unreachable
-        case .unreachable, .channelClosed:
+        case .unreachable, .refused, .channelClosed:
             return .failed(ServiceErrors.message(error))
         }
     }

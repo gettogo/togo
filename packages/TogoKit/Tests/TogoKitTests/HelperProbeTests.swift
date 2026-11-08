@@ -84,6 +84,15 @@ struct HelperProbeTests {
         }
     }
 
+    /// tmux missing or too old: a command to paste, by system. Homebrew on a Mac, apt where it is
+    /// likely; elsewhere nil, and the screen says to use the system's package manager.
+    @Test func tmuxInstallCommandBySystem() {
+        #expect(HelperProbe.tmuxInstallCommand(os: "Darwin") == "brew install tmux")
+        #expect(HelperProbe.tmuxInstallCommand(os: nil) == "brew install tmux")
+        #expect(HelperProbe.tmuxInstallCommand(os: "Linux") == "sudo apt install tmux")
+        #expect(HelperProbe.tmuxInstallCommand(os: "FreeBSD") == nil)
+    }
+
     private func run(_ executable: String, _ arguments: [String]) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)

@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"os"
+	"github.com/gettogo/togo/helper/internal/logfile"
 	"strings"
 	"sync"
 	"unicode"
@@ -44,7 +44,7 @@ func FileTap(path string) func(TapRecord) {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		f, err := logfile.Open(path, logfile.MaxSize)
 		if err != nil {
 			return
 		}

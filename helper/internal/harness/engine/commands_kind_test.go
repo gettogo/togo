@@ -66,16 +66,6 @@ var commandTable = map[string]map[string]cmdWant{
 		"droids": {kind: spec.CommandTerminal},
 		"review": {kind: spec.CommandRun},
 	},
-	"gemini": {
-		"model":    {kind: spec.CommandPicker},
-		"compress": {kind: spec.CommandRun, action: "compact"},
-		"stats":    {kind: spec.CommandRun, opens: spec.OpensStatus},
-		"memory":   {kind: spec.CommandTerminal},
-		"tools":    {kind: spec.CommandTerminal}, "mcp": {kind: spec.CommandTerminal},
-		"settings": {kind: spec.CommandPicker},
-		"resume":   {kind: spec.CommandTerminal},
-		"clear":    {kind: spec.CommandRun, role: spec.RoleDestructive},
-	},
 	"goose": {
 		"mode":    {kind: spec.CommandChoice, action: "set_mode"},
 		"model":   {kind: spec.CommandArgs},

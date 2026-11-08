@@ -5,6 +5,7 @@ enum PrimitiveCopy {
     static let terminal = String(localized: "primitive.terminal", defaultValue: "Terminal")
     static let openTerminal = String(localized: "primitive.openTerminal", defaultValue: "Open terminal")
     static let done = String(localized: "primitive.done", defaultValue: "Done")
+    static let dismiss = String(localized: "primitive.dismiss", defaultValue: "Dismiss")
     static let sent = String(localized: "primitive.sent", defaultValue: "Sent")
     static let queued = String(localized: "primitive.queued", defaultValue: "Queued")
     static let restarted = String(localized: "primitive.restarted", defaultValue: "Restarted the agent")

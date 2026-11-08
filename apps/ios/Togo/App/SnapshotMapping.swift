@@ -83,6 +83,8 @@ struct SnapshotMapper {
         case .authNeeded: .authNeeded
         case .failed(let reason): .failed(reason)
         case .keyMissing: .keyMissing
+        case .hostKeyChanged: .hostKeyChanged
+        case .deviceOffline: .deviceOffline
         }
     }
 
@@ -104,6 +106,7 @@ struct SnapshotMapper {
         case .present(let version): return .present(version: version, live: snapshot.capabilities.contains(Capability.events))
         case .missing: return .missing
         case .outdated(let found): return .outdated(found: found)
+        case .newer: return .newer
         }
     }
 }

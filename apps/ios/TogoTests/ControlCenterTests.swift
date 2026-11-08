@@ -113,6 +113,17 @@ import TogoKit
         #expect(SessionActions.actions(for: row, on: machine).available == [.open, .connectWith, .copyPath])
     }
 
+    @Test func helperAheadOfTheAppAsksToUpdateTheApp() {
+        var snapshot = HostSnapshot(hostID: UUID(), reach: .online, helper: .newer)
+        #expect(SnapshotMapper.helper(snapshot, noHelper: false) == .newer)
+        snapshot.helper = .outdated("")
+        #expect(SnapshotMapper.helper(snapshot, noHelper: false) == .outdated(found: ""))
+        #expect(ControlCenterCopy.helperOutdated("") == "The helper needs an update.")
+        #expect(ControlCenterCopy.helperOutdated("0.2.1") == "Helper 0.2.1 needs an update.")
+        #expect(ControlCenterCopy.helperNewer("mini").contains("Update Togo"))
+        #expect(!HelperState.newer.settingsDescription.contains("needs an update"))
+    }
+
     @Test func muteActionReadsUnmuteWhenMuted() {
         #expect(SessionAction.mute.title(for: managedRow(muted: false)) == "Mute")
         #expect(SessionAction.mute.title(for: managedRow(muted: true)) == "Unmute")

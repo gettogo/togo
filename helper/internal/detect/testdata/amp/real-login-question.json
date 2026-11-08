@@ -1,0 +1,30 @@
+{
+  "source": "real",
+  "agentVersion": "amp 0.0.1794",
+  "match": true,
+  "kind": "confirm",
+  "title": "Would you like to log in to Amp?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ]
+  },
+  "subject": null
+}

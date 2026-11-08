@@ -21,7 +21,7 @@ struct SignInURLTests {
         let cases: [(String, Int?, String)] = [
             // Codex and Crush (ChatGPT): fixed 1455.
             ("https://auth.openai.com/oauth/authorize?redirect_uri=http://localhost:1455/auth/callback&client_id=app", 1455, "OpenAI"),
-            // Gemini: Google, 127.0.0.1 on a random port, encoded.
+            // Google: 127.0.0.1 on a random port, encoded.
             ("https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=http%3A%2F%2F127.0.0.1%3A41231%2Foauth2callback", 41231, "Google"),
             // Copilot: GitHub, 127.0.0.1 random port.
             ("https://github.com/login/oauth/authorize?client_id=x&redirect_uri=http%3A%2F%2F127.0.0.1%3A50123%2Fcallback", 50123, "GitHub"),
@@ -143,8 +143,8 @@ struct WebAuthFlowTests {
     }
 
     @Test func lostForwardWithoutACodeFails() {
-        let gemini = SignInURL(URL(string: "https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=http%3A%2F%2F127.0.0.1%3A41231%2Fcb")!)
-        var flow = WebAuthFlow(gemini)
+        let google = SignInURL(URL(string: "https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=http%3A%2F%2F127.0.0.1%3A41231%2Fcb")!)
+        var flow = WebAuthFlow(google)
         _ = flow.start()
         _ = flow.handle(.forwardReady)
         #expect(flow.handle(.forwardLost("gone")) == [.closeBrowser, .stopForward])

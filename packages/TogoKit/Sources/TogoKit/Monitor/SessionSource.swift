@@ -73,11 +73,14 @@ public struct HelperSource: SessionSource {
         }
     }
 
-    init(host: String, clock: any LinkClock, dial: @escaping @Sendable () async throws -> HelperDial) {
+    init(
+        host: String, clock: any LinkClock, callTimeout: Duration = .seconds(10),
+        dial: @escaping @Sendable () async throws -> HelperDial
+    ) {
         // A consumer that falls behind loses the oldest events; the seq gap makes it resubscribe.
         let (events, sink) = AsyncStream<EventEnvelope>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.events = events
-        link = HelperLink(host: host, clock: clock, dial: dial, events: sink)
+        link = HelperLink(host: host, clock: clock, callTimeout: callTimeout, dial: dial, events: sink)
     }
 
     public func open() async throws -> (HelperPresence, Set<String>) { try await link.open() }
@@ -95,16 +98,27 @@ struct HelperDial: Sendable {
     let hangUp: @Sendable () async -> Void
 }
 
-enum HelperSourceError: Error, Equatable, LocalizedError {
+public enum HelperSourceError: Error, Equatable, LocalizedError {
     case missing(host: String)
     case outdated(host: String)
+    /// The helper is newer than this app; only updating the app helps.
+    case newer(host: String)
+    /// The helper is there but stopped before it answered, such as a daemon that could not
+    /// start. Unlike `missing`, retrying can help, so the monitor keeps trying.
+    case didNotStart(host: String, status: Int32)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
-        case .missing(let host): "The Togo helper is not installed on \(host)."
-        case .outdated(let host): "The Togo helper on \(host) is too old for this app. Update it on \(host)."
+        case .missing(let host): String(localized: "The Togo helper is not installed on \(host).", bundle: .module)
+        case .outdated(let host): String(localized: "The Togo helper on \(host) is too old for this app. Update it on \(host).", bundle: .module)
+        case .newer(let host): String(localized: "The Togo helper on \(host) is newer than this app. Update Togo from the App Store.", bundle: .module)
+        case .didNotStart(let host, _):
+            String(localized: "The Togo helper on \(host) is installed but did not start. Togo keeps trying; running togo doctor on \(host) shows why.", bundle: .module)
         }
     }
+
+    /// Exit status of a shell that could not find the command.
+    static let notFound: Int32 = 127
 }
 
 actor HelperLink {
@@ -113,6 +127,7 @@ actor HelperLink {
 
     private let host: String
     private let clock: any LinkClock
+    private let callTimeout: Duration
     private let dial: @Sendable () async throws -> HelperDial
     private let sink: AsyncStream<EventEnvelope>.Continuation
     private var hangUp: (@Sendable () async -> Void)?
@@ -125,11 +140,12 @@ actor HelperLink {
     private var keepalive: Task<Void, Never>?
 
     init(
-        host: String, clock: any LinkClock, dial: @escaping @Sendable () async throws -> HelperDial,
-        events: AsyncStream<EventEnvelope>.Continuation
+        host: String, clock: any LinkClock, callTimeout: Duration,
+        dial: @escaping @Sendable () async throws -> HelperDial, events: AsyncStream<EventEnvelope>.Continuation
     ) {
         self.host = host
         self.clock = clock
+        self.callTimeout = callTimeout
         self.dial = dial
         sink = events
     }
@@ -141,17 +157,24 @@ actor HelperLink {
             throw HelperError.closed
         }
         hangUp = dialed.hangUp
-        let client = HelperClient(channel: dialed.channel)
+        let client = HelperClient(channel: dialed.channel, callTimeout: callTimeout)
         self.client = client
         do {
             let hello = try await client.hello(client: SessionAttach.client)
             presence = .present(version: hello.helper.version)
             capabilities = Set(hello.capabilities)
         } catch HelperError.closed {
-            // SSH is up, so a channel that ends before hello means no helper binary ran.
+            // SSH is up, so a channel that ends before hello means the helper did not run:
+            // not found (127, or no status), or found but stopped, which is worth retrying.
+            if let status = dialed.channel.exitStatus, status != HelperSourceError.notFound, status != 0 {
+                await dialed.hangUp()
+                self.client = nil
+                hangUp = nil
+                throw HelperSourceError.didNotStart(host: host, status: status)
+            }
             presence = .missing
         } catch HelperError.rpc(let error) where error.code == RPCErrorCode.unsupportedVersion {
-            presence = .outdated(HelperError.rpc(error).localizedDescription)
+            presence = error.helperIsAhead ? .newer : .outdated("")
         }
         if capabilities.contains(Capability.events) {
             let notifications = client.notifications
@@ -179,6 +202,21 @@ actor HelperLink {
 
     func call(_ op: SessionOp) async throws -> Session? {
         let client = try readyClient()
+        do {
+            return try await perform(op, on: client)
+        } catch HelperError.timeout(let method) {
+            // A slow answer or a dead connection: one more ping tells which. A dead one is
+            // closed, which ends `events` and makes the monitor reconnect.
+            if capabilities.contains(Capability.events) {
+                Task { [weak self] in
+                    if await HelperLiveness.isDead(ping: { try await client.keepalive() }) { await self?.close() }
+                }
+            }
+            throw HelperError.timeout(method: method)
+        }
+    }
+
+    private func perform(_ op: SessionOp, on client: HelperClient) async throws -> Session? {
         switch op {
         case .create(let params):
             return try await client.createSession(params)
@@ -233,28 +271,25 @@ actor HelperLink {
         switch presence {
         case .missing: throw HelperSourceError.missing(host: host)
         case .outdated: throw HelperSourceError.outdated(host: host)
+        case .newer: throw HelperSourceError.newer(host: host)
         case .unknown, .present: break
         }
         guard let client else { throw HelperError.closed }
         return client
     }
 
-    /// Any request renews the lease, so the timer counts from the latest subscribe.
+    /// Any request renews the lease, so the timer counts from the latest subscribe. The same
+    /// pings find a connection that went dead without closing: the link is then closed, which
+    /// ends `events`, and the monitor marks the machine and reconnects.
     private func restartKeepalive() {
         keepalive?.cancel()
         keepalive = nil
         guard foreground, !isClosed, let client else { return }
-        keepalive = Task { [clock] in
-            while !Task.isCancelled {
-                do { try await clock.sleep(for: Self.keepaliveInterval) } catch { return }
-                do {
-                    try await client.keepalive()
-                } catch HelperError.closed {
-                    return
-                } catch {
-                    continue
-                }
+        keepalive = Task { [clock, weak self] in
+            let outcome = await HelperLiveness.watch(clock: clock, interval: Self.keepaliveInterval) {
+                try await client.keepalive()
             }
+            if outcome == .dead || outcome == .closed { await self?.close() }
         }
     }
 }

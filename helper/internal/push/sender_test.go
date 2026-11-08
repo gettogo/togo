@@ -24,12 +24,20 @@ func TestApprovalOpenPushedToEveryDevice(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("relay got %d pushes, want 2", len(got))
 	}
-	for i, ph := range e.phones {
-		r := got[i]
+	// Devices are sent to side by side, so the relay sees them in any
+	// order: each push must open for exactly one phone, and every phone
+	// gets one.
+	opened := map[string]bool{}
+	for i, r := range got {
 		if r.Kind != relayAlert || r.CollapseID != "r_abcdefghij" || r.Env != wire.EnvSandbox || r.Token != strings.Repeat("ab", 32) {
 			t.Fatalf("push %d envelope fields %+v", i, r)
 		}
-		p := e.open(t, r.Ciphertext, ph.id)
+		id := e.opener(t, r.Ciphertext)
+		if opened[id] {
+			t.Fatalf("%s got two pushes", id)
+		}
+		opened[id] = true
+		p := e.open(t, r.Ciphertext, id)
 		if p.Kind != wire.PushNeedsYou || p.RequestID != "r_abcdefghij" || len(p.Options) != 3 || p.Title != "Run npm test?" || p.Body != "Bash: npm test" {
 			t.Fatalf("plaintext %+v", p)
 		}

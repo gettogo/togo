@@ -3,7 +3,8 @@
 # every truncation mode on app, widget and Watch text must say why it is safe: a comment with
 # "trunc-ok:" on the same line or within the three lines above, naming where the full text is
 # (a tap, a sheet, a long press, .help, the accessibility label) or why the text cannot be long.
-# Growing ranges for text fields (".lineLimit(1...6)") are not truncation and pass.
+# Growing ranges for text fields (".lineLimit(1...6)") are not truncation and pass. A limit
+# named by a constant (".lineLimit(BackgroundJob.tailLines)") is a fixed limit like a number.
 #
 # Usage: scripts/check-truncation.sh            fails on any unjustified site
 #        scripts/check-truncation.sh --list     lists every site, justified or not
@@ -18,7 +19,7 @@ bad=0
 out=$(find $dirs -name '*.swift' -not -path '*/DerivedData*' | sort | while read -r f; do
     awk -v file="$f" -v list="$list" '
         { line[NR] = $0 }
-        /\.lineLimit\([0-9]+\)|\.lineLimit\([^)]*\? *[0-9]|\.truncationMode\(|\.minimumScaleFactor\(/ && !/\.lineLimit\([^)]*[0-9]\.\.\./ {
+        /\.lineLimit\([0-9]+\)|\.lineLimit\([^)]*\? *[0-9]|\.lineLimit\([A-Za-z_][A-Za-z0-9_.]*\)|\.truncationMode\(|\.minimumScaleFactor\(/ && !/\.lineLimit\([^)]*[0-9]\.\.\./ && !/\.lineLimit\(nil\)/ {
             ok = 0
             for (i = NR; i >= NR - 3 && i > 0; i--) if (line[i] ~ /trunc-ok:/) ok = 1
             if (!ok) print "UNJUSTIFIED " file ":" NR ": " $0

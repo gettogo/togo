@@ -217,7 +217,7 @@
               "message": { "const": "refused" },
               "data": {
                 "type": "object",
-                "properties": { "reason": { "enum": ["needs_admin_setup", "no_adapter", "fallback"] }, "detail": { "enum": ["source", "version", "parse"] } },
+                "properties": { "reason": { "enum": ["needs_admin_setup", "no_adapter", "fallback"] }, "detail": { "enum": ["source", "version", "parse"] }, "message": { "type": "string", "maxLength": 600 } },
                 "required": ["reason"],
                 "additionalProperties": false
               }
@@ -469,7 +469,7 @@
       "additionalProperties": false
     },
     "IntegrationsChangeParams": {
-      "description": "integrations.install and integrations.uninstall (integrations.v1) -> IntegrationsChangeResult. agents: registry ids of harnesses that take hooks (claude, codex, gemini, auggie, droid, copilot), each at most once; anything else is -32602 (reason unknown_agent) and nothing changes. install with no agents sets up every harness installed on the machine; uninstall needs at least one. block also hooks the harness's approval event so the phone can answer (claude, codex, copilot). The helper runs its own installer as the user: it backs each file up once (<file>.togo-backup) before Togo's first change, writes nothing when nothing changes, chains Claude Code's own status line, refuses a Togo entry the user changed by hand, and uninstall restores each file byte for byte when nothing else changed since.",
+      "description": "integrations.install and integrations.uninstall (integrations.v1) -> IntegrationsChangeResult. agents: registry ids of harnesses that take hooks (claude, codex, auggie, droid, copilot), each at most once; anything else is -32602 (reason unknown_agent) and nothing changes. install with no agents sets up every harness installed on the machine; uninstall needs at least one. block also hooks the harness's approval event so the phone can answer (claude, codex, copilot). The helper runs its own installer as the user: it backs each file up once (<file>.togo-backup) before Togo's first change, writes nothing when nothing changes, chains Claude Code's own status line, refuses a Togo entry the user changed by hand, and uninstall restores each file byte for byte when nothing else changed since.",
       "type": "object",
       "properties": {
         "agents": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" }, "maxItems": 32 },
@@ -673,7 +673,7 @@
       "additionalProperties": false
     },
     "AgentsListResult": {
-      "description": "agents.list. Order in v1: claude (Claude Code), omp (OMP), codex (Codex), opencode (OpenCode), gemini (Gemini CLI), copilot (Copilot CLI), cursor (Cursor CLI), aider (Aider), amp (Amp), auggie (Auggie), cline (Cline), crush (Crush), droid (Droid), goose (Goose), kilo (Kilo Code), kimi (Kimi Code), kiro (Kiro CLI), openhands (OpenHands), pi (Pi), vibe (Mistral Vibe), shell (Shell). Clients show ids they do not know by name, so the list may grow within v1.",
+      "description": "agents.list. Order in v1: claude (Claude Code), omp (OMP), codex (Codex), opencode (OpenCode), copilot (Copilot CLI), cursor (Cursor CLI), aider (Aider), amp (Amp), auggie (Auggie), cline (Cline), crush (Crush), droid (Droid), goose (Goose), kilo (Kilo Code), kimi (Kimi Code), kiro (Kiro CLI), openhands (OpenHands), pi (Pi), vibe (Mistral Vibe), shell (Shell). Clients show ids they do not know by name, so the list may grow within v1.",
       "type": "object",
       "properties": {
         "agents": { "type": "array", "items": { "$ref": "#/$defs/Agent" } }
@@ -2022,8 +2022,7 @@
             "droid",
             "vibe",
             "copilot",
-            "auggie",
-            "gemini"
+            "auggie"
           ]
         },
         "hook": {
@@ -2409,7 +2408,8 @@
     },
     "HarnessText": {
       "type": "object",
-      "properties": { "text": { "type": "string", "maxLength": 65536 }, "partial": { "type": "boolean" } },
+      "description": "Assistant or thinking text. appendFrom (optional, only on a harness notification update of an item the client already holds): text is only the new tail and continues the held text at this UTF-8 byte offset, which must equal the held text's byte length; the client appends it. When the offset does not match, or the client holds no such item or one of another kind, it calls harness.open again from its cursor, which answers whole items. Without appendFrom, text is the whole text. harness.open and harness.history never send it.",
+      "properties": { "text": { "type": "string", "maxLength": 65536 }, "partial": { "type": "boolean" }, "appendFrom": { "type": "integer", "minimum": 0 } },
       "required": ["text", "partial"],
       "additionalProperties": false
     },

@@ -51,9 +51,21 @@ extension CommandLineModel {
         return context
     }
 
-    /// Reads the command list once, for the state chip's choices.
-    func loadCommandsOnce() async {
-        guard palette.isEmpty else { return }
+    /// When the state chip reads the command list again: once described, then whenever a turn
+    /// ends or the harness reports another model, effort or mode. nil while a turn runs (a
+    /// change mid-turn shows at its end).
+    var chipRefresh: ChipRefresh? {
+        if working { return nil }
+        return ChipRefresh(
+            describing: routes.describing(), model: status?.model, effort: status?.effort, mode: mode
+        )
+    }
+
+    /// Reads the command list for the chip's choices: the first time, and on each change of
+    /// `chipRefresh` (the choices' `selected` flag is what a harness without a status block
+    /// reports its model and effort with).
+    func refreshChip() async {
+        guard chipRefresh != nil || palette.isEmpty else { return }
         await loadPalette()
     }
 
@@ -216,4 +228,12 @@ extension CommandLineModel {
         handedOverScreen = nil
         presentedScreen = screen
     }
+}
+
+/// The state that makes the chip read its choices again (`CommandLineModel.chipRefresh`).
+struct ChipRefresh: Hashable, Sendable {
+    var describing: Bool
+    var model: String?
+    var effort: String?
+    var mode: String
 }

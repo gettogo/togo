@@ -188,7 +188,8 @@ func TestLiveCoalescesWorkingUpdates(t *testing.T) {
 	}
 }
 
-func TestLiveCommandOnlyWhenOptedIn(t *testing.T) {
+// The website promises nothing from the terminal leaves unencrypted.
+func TestLiveCommandNeverInPlain(t *testing.T) {
 	e := newEnv(t, 0)
 	e.pair(t, "dev_a", updateToken)
 	e.pairWith(t, "dev_b", func(p *wire.PairParams) {
@@ -217,18 +218,21 @@ func TestLiveCommandOnlyWhenOptedIn(t *testing.T) {
 				t.Fatalf("not opted in: command %v present=%v", cmd, present)
 			}
 		default:
-			s, _ := cmd.(string)
-			if !strings.HasPrefix(s, "rm -rf ./build\n") || len([]rune(s)) != maxLiveCommand {
-				t.Fatalf("opted in: command %q", s)
+			// Opted in or not, command text goes only sealed (ctx subject).
+			if !present || cmd != nil {
+				t.Fatalf("opted in: plain command %v", cmd)
+			}
+			if c := e.liveCtx(t, p, "dev_b"); c.Subject == nil || !strings.Contains(c.Subject.Text, "rm -rf ./build") {
+				t.Fatalf("opted in: sealed subject %+v", c.Subject)
 			}
 		}
 		if bytes.Contains(raw[i], []byte("Run npm test")) {
 			t.Fatalf("live activity body carries the title: %s", raw[i])
 		}
 	}
-	for _, b := range raw[:1] {
+	for _, b := range raw {
 		if bytes.Contains(b, []byte("rm -rf")) {
-			t.Fatal("command text left the host for a device that did not opt in")
+			t.Fatal("command text left the host in plain")
 		}
 	}
 }

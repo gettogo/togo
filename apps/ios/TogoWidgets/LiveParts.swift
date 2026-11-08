@@ -148,7 +148,9 @@ enum LiveContextSource {
         return LiveCard(
             agent: state.agent, status: state.status, waiting: state.waiting, requestId: state.requestId,
             command: state.command, context: context(state, hostId: hostId),
-            machine: several ? LiveCopy.machineName(hostId: hostId, pairings: pairings) : nil, stale: stale
+            machine: several ? LiveCopy.machineName(hostId: hostId, pairings: pairings) : nil, stale: stale,
+            showsCommand: pairings?.pairing(hostId: hostId)?.appHostID
+                .map(SharedSettings.readLiveActivityCommandMachines().contains) ?? false
         )
     }
 }

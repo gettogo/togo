@@ -88,11 +88,25 @@ screens:
     section: plan
     capability: plan
 actions:
+  # `/model X` saves X as the default for new sessions (2.1.319, in
+  # ~/.claude/settings.json), so typing it would change every session.
+  # `--model` is for the current session: Togo restarts Claude on the same
+  # conversation with it and never writes settings.json. The restart keeps
+  # the session's effort and permission mode.
   set_model:
     label: Use model
-    type: { text: '/model {{.id}}', submit: true, when_idle: true }
-    verify: { source: transcript, select: $state.model, equals: '{{.id}}', within: 5s }
-    stability: documented-command
+    confirm: Restart Claude on this model? The conversation continues; the model applies to this session only.
+    branch:
+      # --resume only once there is a conversation: before the first
+      # prompt Claude has written none and refuses the id.
+      - when: '{{if and .state.harness_session .state.turn}}true{{end}}'
+        relaunch:
+          argv: [claude, --resume, '{{.state.harness_session}}', --model, '{{.id}}']
+          keep: [[--effort, '{{if eq .state.effort "low" "medium" "high" "xhigh" "max"}}{{.state.effort}}{{end}}'], [--permission-mode, '{{.state.mode}}']]
+      - relaunch:
+          argv: [claude, --model, '{{.id}}']
+          keep: [[--effort, '{{if eq .state.effort "low" "medium" "high" "xhigh" "max"}}{{.state.effort}}{{end}}'], [--permission-mode, '{{.state.mode}}']]
+    stability: documented
   # `/effort X` saves X in ~/.claude/settings.json (modelSettings.<model>.effortLevel,
   # by design in 2.1.319; only a failed save leaves it to the session), so typing it
   # would change every session. `--effort` is "for the current session": Togo restarts
@@ -100,15 +114,35 @@ actions:
   set_effort:
     label: Set effort
     confirm: Restart Claude with this effort? The conversation continues; the effort applies to this session only.
-    branch:   # keep the session's permission mode across the restart
-      - when: '{{if and .state.harness_session .state.mode}}true{{end}}'
-        relaunch: { argv: [claude, --resume, '{{.state.harness_session}}', --effort, '{{.value}}', --permission-mode, '{{.state.mode}}'] }
-      - when: '{{if .state.harness_session}}true{{end}}'
-        relaunch: { argv: [claude, --resume, '{{.state.harness_session}}', --effort, '{{.value}}'] }
+    branch:   # keep the session's model and permission mode across the restart
+      - when: '{{if and .state.harness_session .state.turn .state.mode}}true{{end}}'
+        relaunch:
+          argv: [claude, --resume, '{{.state.harness_session}}', --effort, '{{.value}}', --permission-mode, '{{.state.mode}}']
+          keep: [[--model, '{{.state.model}}']]
+      - when: '{{if and .state.harness_session .state.turn}}true{{end}}'
+        relaunch:
+          argv: [claude, --resume, '{{.state.harness_session}}', --effort, '{{.value}}']
+          keep: [[--model, '{{.state.model}}']]
+      - relaunch:   # no conversation yet: a fresh start loses nothing
+          argv: [claude, --effort, '{{.value}}']
+          keep: [[--model, '{{.state.model}}'], [--permission-mode, '{{.state.mode}}']]
     stability: documented
-  set_mode:         # Shift+Tab is the documented mode cycle; each press is read back from the screen
+  # Shift+Tab is the documented mode cycle; each press is read back from the
+  # screen. "Don't ask" is not in that cycle (only --permission-mode sets
+  # it), so going to it, or leaving it, restarts the session on the same
+  # conversation.
+  set_mode:
     label: Mode
-    keys: { keys: [BTab], cycle: true, max: 6 }
+    branch:
+      - when: '{{if and .state.harness_session .state.turn (or (eq .id "dontAsk") (eq .state.mode "dontAsk"))}}true{{end}}'
+        relaunch:
+          argv: [claude, --resume, '{{.state.harness_session}}', --permission-mode, '{{.id}}']
+          keep: [[--model, '{{.state.model}}'], [--effort, '{{if eq .state.effort "low" "medium" "high" "xhigh" "max"}}{{.state.effort}}{{end}}']]
+      - when: '{{if or (eq .id "dontAsk") (eq .state.mode "dontAsk")}}true{{end}}'
+        relaunch:
+          argv: [claude, --permission-mode, '{{.id}}']
+          keep: [[--model, '{{.state.model}}'], [--effort, '{{if eq .state.effort "low" "medium" "high" "xhigh" "max"}}{{.state.effort}}{{end}}']]
+      - keys: { keys: [BTab], cycle: true, max: 6 }
     verify: { source: hooks, select: $state.mode, equals: '{{.id}}', within: 3s }
     stability: documented
   resume:

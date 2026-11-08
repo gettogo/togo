@@ -34,12 +34,8 @@ struct TogoApp: App {
         // A window opened for a tab, from "Open in New Window" or a drag, arrives with it.
         WindowGroup(for: TabID.self) { $tab in
             WindowRoot(composition: composition, opening: tab)
-                .overlay {
-                    if resumeLock.locked {
-                        ResumeLockScreen { resumeLock.unlock() }
-                    }
-                }
-                .privacyCover()
+                // In a window of its own above the workspace cover, sheets and alerts.
+                .sceneShield(lock: resumeLock)
                 .environment(\.machineTools, composition.machineTools)
                 .environment(\.agentLibrary, composition.agentLibrary)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in

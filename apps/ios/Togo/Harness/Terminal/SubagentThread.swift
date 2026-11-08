@@ -74,8 +74,10 @@ struct SubagentThread: Equatable {
 
     /// The main chat's rows with the subagents' waiting needs added where they arrived, so an
     /// approval a subagent asks for is answerable from the main chat.
-    static func mainRows(_ timeline: HarnessTimeline, resolvedAt: [String: Date] = [:]) -> [ChatRow] {
-        let main = ChatRowDedupe.apply(TurnFold.rows(timeline.conversation(), resolvedAt: resolvedAt))
+    static func mainRows(
+        _ timeline: HarnessTimeline, conversation: [HarnessItem]? = nil, resolvedAt: [String: Date] = [:]
+    ) -> [ChatRow] {
+        let main = ChatRowDedupe.apply(TurnFold.rows(conversation ?? timeline.conversation(), resolvedAt: resolvedAt))
         let waiting = waitingNeeds(in: timeline)
         guard !waiting.isEmpty else { return main }
         var out: [ChatRow] = []

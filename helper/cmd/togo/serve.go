@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/logfile"
 	"io"
 	"log"
 	"os"
@@ -186,7 +187,7 @@ func openServeLog(home string) (*log.Logger, func(), error) {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return nil, nil, fmt.Errorf("log directory: %w", err)
 	}
-	f, err := os.OpenFile(filepath.Join(dir, "serve.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	f, err := logfile.Open(filepath.Join(dir, "serve.log"), logfile.MaxSize)
 	if err != nil {
 		return nil, nil, fmt.Errorf("log file: %w", err)
 	}

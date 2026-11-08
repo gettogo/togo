@@ -173,7 +173,15 @@ func Methods(e Engine) map[string]api.Method {
 			if utf8.RuneCountInString(p.Query) > MaxQuery || !utf8.ValidString(p.Query) {
 				return nil, invalid("query is too long")
 			}
-			p.Limit = min(clampLimit(p.Limit), 50)
+			if p.Kind == CompleteFile {
+				p.Limit = min(clampLimit(p.Limit), 50)
+			} else if p.Limit <= 0 {
+				// The app asks without a limit and treats the list as the
+				// agent's whole vocabulary.
+				p.Limit = MaxLimit
+			} else {
+				p.Limit = clampLimit(p.Limit)
+			}
 			return wrap(e.Complete(ctx, p))
 		},
 		MethodLocate: func(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -245,6 +253,13 @@ func clampLimit(n int) int {
 	return n
 }
 
+func clipMessage(s string) string {
+	if r := []rune(s); len(r) > 600 {
+		return string(r[:599]) + "…"
+	}
+	return s
+}
+
 func invalid(msg string) error { return &session.InvalidParamsError{Msg: msg} }
 
 func wrap[T any](v T, err error) (any, error) {
@@ -264,7 +279,13 @@ func mapErr(err error) error {
 	case errors.Is(err, ErrNoAdapter):
 		return &api.CodeError{Code: rpc.CodeRefused, Data: map[string]string{"reason": "no_adapter"}}
 	case errors.As(err, &fb):
-		return &api.CodeError{Code: rpc.CodeRefused, Data: map[string]string{"reason": "fallback", "detail": fb.Reason}}
+		data := map[string]string{"reason": "fallback", "detail": fb.Reason}
+		if fb.Detail != "" {
+			// Why, in words the phone can show ("Claude Code is showing
+			// \"Update Available\". Nothing was typed.").
+			data["message"] = clipMessage(fb.Detail)
+		}
+		return &api.CodeError{Code: rpc.CodeRefused, Data: data}
 	case errors.Is(err, ErrBusy):
 		return &api.CodeError{Code: rpc.CodeConflict, Data: map[string]string{"reason": "busy"}}
 	case errors.Is(err, ErrUnknownScreen):

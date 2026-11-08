@@ -204,3 +204,36 @@ describe("live activity sealed context", () => {
     }
   });
 });
+
+describe("live activity priority", () => {
+  async function priority(liveActivity: Record<string, unknown>) {
+    const { calls } = mockApns();
+    const res = await push(live(liveActivity));
+    expect(res.status).toBe(202);
+    return calls[0].headers.get("apns-priority");
+  }
+
+  it("routine working progress goes at priority 5", async () => {
+    expect(await priority({ event: "update", contentState: { ...state, status: "working" } })).toBe("5");
+  });
+
+  it("needs you, done and offline go at priority 10", async () => {
+    for (const status of ["needs_you", "done", "ended", "failed", "offline"]) {
+      expect(await priority({ event: "update", contentState: { ...state, status } }), status).toBe("10");
+    }
+  });
+
+  it("start and end go at priority 10", async () => {
+    const working = { ...state, status: "working" };
+    expect(await priority({ event: "start", contentState: working, attributes: { hostId: HOST } })).toBe("10");
+    expect(await priority({ event: "end", contentState: working })).toBe("10");
+  });
+
+  it("an update marked urgent goes at priority 10", async () => {
+    expect(await priority({ event: "update", contentState: { ...state, status: "working" }, urgent: true })).toBe("10");
+  });
+
+  it("urgent must be a boolean", async () => {
+    await expectField(live({ event: "update", contentState: state, urgent: "yes" }), "liveActivity.urgent");
+  });
+});

@@ -14,7 +14,6 @@ import (
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/crush"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/cursor"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/droid"
-	_ "github.com/gettogo/togo/helper/internal/harness/adapters/gemini"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/goose"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/kilo"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/kimi"

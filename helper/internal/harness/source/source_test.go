@@ -161,7 +161,6 @@ func (c *collector) wait(t *testing.T, n int) []string {
 }
 
 func TestJSONLTailFollowsAndRestartsOnTruncation(t *testing.T) {
-	PollEvery = 20 * time.Millisecond
 	env, h := testEnv(t)
 	p := filepath.Join(h, "t.jsonl")
 	_ = os.WriteFile(p, []byte(`{"n":1}`+"\n"+`{"n":2}`+"\n"+`{"n":3`), 0o600)
@@ -187,7 +186,6 @@ func TestJSONLTailFollowsAndRestartsOnTruncation(t *testing.T) {
 }
 
 func TestJSONLGlobTailsNewestThenNewFiles(t *testing.T) {
-	PollEvery, globEvery = 20*time.Millisecond, 20*time.Millisecond
 	env, h := testEnv(t)
 	old := filepath.Join(h, "a.jsonl")
 	_ = os.WriteFile(old, []byte(`{"f":"old"}`+"\n"), 0o600)
@@ -215,7 +213,6 @@ func TestJSONLGlobTailsNewestThenNewFiles(t *testing.T) {
 // conversation: an earlier session's file in the same folder is not replayed
 // into it, only joined once it changes (a resume that writes to it).
 func TestJSONLGlobSkipsFilesOlderThanTheSession(t *testing.T) {
-	PollEvery, globEvery = 20*time.Millisecond, 20*time.Millisecond
 	env, h := testEnv(t)
 	prev := filepath.Join(h, "prev.jsonl")
 	_ = os.WriteFile(prev, []byte(`{"f":"previous session"}`+"\n"), 0o600)
@@ -243,7 +240,6 @@ func TestJSONLGlobSkipsFilesOlderThanTheSession(t *testing.T) {
 // After a helper restart the running session's own file, written since the
 // session began, is replayed at once.
 func TestJSONLGlobReplaysTheSessionsOwnFile(t *testing.T) {
-	PollEvery, globEvery = 20*time.Millisecond, 20*time.Millisecond
 	env, h := testEnv(t)
 	env.Vars["created"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
 	_ = os.WriteFile(filepath.Join(h, "own.jsonl"), []byte(`{"f":"own"}`+"\n"), 0o600)

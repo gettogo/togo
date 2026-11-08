@@ -36,7 +36,7 @@ struct ChatView: View {
                 if showsEarlierButton {
                     earlier
                 }
-                let gaps = ChatGaps.gaps(rows)
+                let gaps = store.gaps
                 // Rows arriving while the chat is open land in the store's `resize`
                 // transaction; rows on first render, from Earlier or by scrolling land at once.
                 ForEach(rows) { row in
@@ -75,9 +75,9 @@ struct ChatView: View {
                         .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, ChatLayout.inset)
             .padding(.vertical, 16)
-            .frame(maxWidth: 720)
+            .frame(maxWidth: ChatLayout.columnWidth)
             .frame(maxWidth: .infinity)
         }
         .defaultScrollAnchor(.bottom)
@@ -103,6 +103,7 @@ struct ChatView: View {
             withTransaction(Transaction(animation: nil)) { showsEarlierButton = shows }
         }
         .modifier(WorkingAnnouncements(active: store.liveWork != nil))
+        .background { keyAnswers }
         // A step's details: a small panel, sized by the window's room (`AdaptivePresentation`).
         .harnessPresent(item: $detail, as: .smallForm, name: "chat.stepDetail") { step in
             StepDetail(step: step, canShowInTerminal: canShow(step)) {
@@ -132,6 +133,25 @@ struct ChatView: View {
             was: false, now: true, afterSend: store.awaitingSince != nil, dragging: scroll.dragging
         ) {
             scroll.go(target, reduce: reduceMotion)
+        }
+    }
+
+    /// ⌘↩ and ⌘. answer the topmost open request from a hardware keyboard (`ChatKeyAnswers`).
+    @ViewBuilder private var keyAnswers: some View {
+        let ids = rows.compactMap { row -> String? in
+            guard case .needs(let item) = row, case .approval(let approval) = item.body else { return nil }
+            return approval.requestId
+        }
+        if let target = ChatKeyAnswers.target(requestIDs: ids, card: actions.card) {
+            ZStack {
+                Button(ChatCopy.approve) { actions.answer(target.requestID, target.approve) }
+                    .keyboardShortcut(.return, modifiers: .command)
+                Button(ChatCopy.deny) { actions.answer(target.requestID, target.deny) }
+                    .keyboardShortcut(".", modifiers: .command)
+            }
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
         }
     }
 
@@ -478,4 +498,15 @@ private struct NeedsVisibility: ViewModifier {
             content
         }
     }
+}
+
+/// The chat's reading column, shared by everything that sits in it or under it (the composer,
+/// a helper's thread, a background terminal), so on a wide window they line up.
+enum ChatLayout {
+    /// The column's widest, centred in wider panes.
+    static let columnWidth: CGFloat = 720
+    /// The column's own side padding; text starts this far inside it.
+    static let inset: CGFloat = 16
+    /// The composer's widest: the column's text width, so the field starts where replies do.
+    static let composerWidth: CGFloat = columnWidth - 2 * inset
 }

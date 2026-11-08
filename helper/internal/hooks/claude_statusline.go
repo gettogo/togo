@@ -42,8 +42,11 @@ func saveStatusLineState(togoHome string, st statusLineState) error {
 
 // chainCommand runs Togo's status line hook, then the user's own command
 // with the same payload, printing only the user's output.
+// Guarded: when the togo binary is gone the user's own command runs
+// alone, so their status line survives a removal without togo uninstall.
 func chainCommand(binary, original string) string {
-	return hookCommand(binary, Claude, "statusline") + " --then " + shellQuote(original)
+	return guardOpen(binary) + bareHookCommand(binary, Claude, "statusline") + " --then " + shellQuote(original) +
+		guardThenExec + shellQuote(original)
 }
 
 // chained reports whether cmd is a chain Togo installed.

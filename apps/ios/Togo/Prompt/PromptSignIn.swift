@@ -62,7 +62,7 @@ struct PromptSignInPanel: View {
     }
 
     private func copy(_ code: String) {
-        UIPasteboard.general.string = code
+        SensitivePasteboard.copy(code)
         copied += 1
     }
 

@@ -91,7 +91,9 @@ struct PasteCodeField: View {
             .textInputAutocapitalization(.never)
             .privacySensitive()
             .submitLabel(.send)
-            .focused($focused)
+            // The page is still being pushed when it appears: focus lands a turn later, so the
+            // keyboard comes up without a tap.
+            .focusOnReveal($focused, revealed: model.phase != .sent)
             .onSubmit { Task { await model.send() } }
             .frame(minHeight: 44)
             if case .failed(let message) = model.phase {
@@ -128,7 +130,6 @@ struct PasteCodeField: View {
         }
         .padding(.vertical, 8)
         .haptic(.done, trigger: model.phase, when: { $0 == .sent })
-        .onAppear { focused = model.phase != .sent }
         .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in
             clipboardHasText = UIPasteboard.general.hasStrings
         }

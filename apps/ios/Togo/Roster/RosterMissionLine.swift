@@ -11,7 +11,7 @@ enum RosterMission {
         if let model = meta.model?.trimmingCharacters(in: .whitespacesAndNewlines), !model.isEmpty {
             parts.append(model)
         }
-        if let percent = meta.contextPercent, percent.isFinite { parts.append(MissionCopy.context(percent)) }
+        if let percent = StatusLogic.knownContext(meta.contextPercent) { parts.append(MissionCopy.context(percent)) }
         if let mission {
             var counted = mission
             counted.needsYou = 0

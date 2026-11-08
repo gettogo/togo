@@ -212,7 +212,10 @@ fi
 #   periodic-now           TimelineView(.periodic(from: .now …)), which re-anchors on every render
 #   motion-purpose         .transition(, withAnimation(, .motion( or matchedGeometryEffect( with no
 #                          `// motion: <purpose> — <what the eye learns>` on it or within 3 lines above
-#   availability-animates  .motion(/.animation( keyed on shownLayer, chatAvailable or hasMission
+#   availability-animates  .motion(/.animation( keyed on availability or load: shownLayer,
+#                          chatAvailable, hasMission, awaitsChat, hasLoaded, isLoading, describing,
+#                          .pending, or any comparison of a layer with a case (`layer == .pending`).
+#                          The user's own toggle (`value: harness.layer`) is not availability.
 # scripts/motion-v2-baseline.txt is empty: every offence fails, and so does any entry in it.
 # The rules check themselves first against scripts/motion-lint/v2-*.txt; TogoTests/MotionLint.swift
 # implements the same rules for the test target. Change both together.
@@ -257,7 +260,7 @@ function judge(    i, j, k, line, b, exempt, inTrans, tdepth, purposed) {
 			for (k = i; k >= 1 && k >= i - 3; k--) if (index(src[k], "// motion:")) purposed = 1
 			if (!purposed) report(i, "motion-purpose")
 		}
-		if (line ~ /(\.motion\(|\.animation\()/ && line ~ /value:[^)]*(shownLayer|chatAvailable|hasMission)/)
+		if (line ~ /(\.motion\(|\.animation\()/ && line ~ /value:[^)]*(shownLayer|chatAvailable|hasMission|awaitsChat|hasLoaded|isLoading|describing|\.pending|[Ll]ayer *[!=]= *\.)/)
 			report(i, "availability-animates")
 	}
 }

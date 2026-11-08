@@ -13,6 +13,13 @@ options:
     sed -i '' -e 's|dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";|dstPath = "";|'
     -e 's|dstSubfolderSpec = 16;|dstSubfolderSpec = 13;|' Togo.xcodeproj/project.pbxproj
 
+# One version for every bundle: App Store Connect rejects an upload whose app, Watch app and
+# extensions disagree.
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig
@@ -58,13 +65,25 @@ targets:
       - target: TogoWatch
       - target: TogoWidgets
       - target: TogoNotificationService
+    preBuildScripts:
+      # A Release build stops while the helper's pinned update key is still the test key.
+      - name: Check release key
+        script: |
+          if [ "$CONFIGURATION" = "Release" ] && [ "${TOGO_ALLOW_TEST_RELEASE_KEY:-NO}" != "YES" ]; then
+            "$SRCROOT/../../scripts/check-release-key.sh" "$SRCROOT/../../helper/internal/release/minisign.pub"
+          fi
+        inputFiles:
+          - $(SRCROOT)/../../scripts/check-release-key.sh
+          - $(SRCROOT)/../../helper/internal/release/minisign.pub
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo
         TARGETED_DEVICE_FAMILY: "1,2"
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # System-drawn surfaces (share sheets, alerts, UIKit text views) take the app's snow,
+        # never system blue: blue reads as the beacon, which only means needs-you.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: Snow
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOLS: YES
         # Palette.swift declares Color.togo* itself; Xcode's extensions would
         # add a second, differently named set.
@@ -75,6 +94,9 @@ targets:
     info:
       path: Togo/Info.plist
       properties:
+        # Only standard, published cryptography (SSH, Mosh, TLS, and CryptoKit's sealing of
+        # push payloads): exempt mass-market encryption, so no export documentation is needed.
+        ITSAppUsesNonExemptEncryption: false
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -152,8 +174,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.watchkitapp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Togo
         INFOPLIST_KEY_WKApplication: YES
@@ -161,6 +181,9 @@ targets:
     info:
       path: TogoWatch/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes:
           - remote-notification
         WKRunsIndependentlyOfCompanionApp: true
@@ -188,11 +211,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.watchkitapp.Widgets
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
     info:
       path: TogoWatchWidgets/Info.plist
       properties:
+        ITSAppUsesNonExemptEncryption: false
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -216,11 +238,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.watchkitapp.NotificationService
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
     info:
       path: TogoWatchNotificationService/Info.plist
       properties:
+        ITSAppUsesNonExemptEncryption: false
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -258,19 +279,21 @@ targets:
       - path: Togo/Resources/Colors.xcassets
       # The agents' marks, for the Live Activity.
       - path: Togo/Resources/Images.xcassets
+      # The app's strings, so Live Activity and widget copy can be translated with the app's.
+      - path: Togo/Resources/Localizable.xcstrings
     dependencies:
       - package: TogoPush
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.Widgets
         TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: Snow
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOLS: YES
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: NO
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
     info:
       path: TogoWidgets/Info.plist
       properties:
+        ITSAppUsesNonExemptEncryption: false
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -295,11 +318,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.Togo.NotificationService
         TARGETED_DEVICE_FAMILY: "1,2"
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
     info:
       path: TogoNotificationService/Info.plist
       properties:
+        ITSAppUsesNonExemptEncryption: false
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

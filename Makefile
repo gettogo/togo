@@ -117,9 +117,11 @@ watch-test: ios-gen
 		-configuration Debug -destination '$(WATCH_TEST_DEST)' test
 
 # Signing is off because this checks what the Release binary contains, not
-# whether it can be provisioned; that happens in Xcode against the team.
+# whether it can be provisioned; that happens in Xcode against the team. The
+# release-key guard is skipped here; scripts/check-release-key.sh runs it alone.
 ios-release-check: ios-gen
-	$(XCODEBUILD) -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+	$(XCODEBUILD) -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO \
+		TOGO_ALLOW_TEST_RELEASE_KEY=YES build
 	./scripts/ios-release-check.sh $(IOS_DERIVED)/Build/Products/Release-iphoneos/Togo.app
 
 tokens:

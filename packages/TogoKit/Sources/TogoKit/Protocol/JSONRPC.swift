@@ -56,6 +56,24 @@ public struct RPCErrorObject: Codable, Error, Equatable, Sendable {
         if case .object(let fields)? = data, case .string(let reason)? = fields["reason"] { return reason }
         return nil
     }
+
+    /// For `refused`: the helper's own sentence in `data.message`, nil when absent or blank.
+    public var refusalMessage: String? {
+        guard case .object(let fields)? = data, case .string(let message)? = fields["message"] else { return nil }
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// For `unsupported_version`: every protocol the helper names in `data.supported` is newer
+    /// than this app's, so the app is the side to update, not the helper.
+    public var helperIsAhead: Bool {
+        guard case .object(let fields)? = data, case .array(let values)? = fields["supported"] else { return false }
+        let versions = values.compactMap { value -> Double? in
+            if case .number(let number) = value { return number }
+            return nil
+        }
+        return !versions.isEmpty && versions.allSatisfy { $0 > Double(HelperClient.protocolVersion) }
+    }
 }
 
 /// Any message from the helper: a response (`id` with `result` or `error`) or a

@@ -39,6 +39,8 @@ type sessionState struct {
 	// first hook of the new run, so a late exit hook from the run the
 	// relaunch killed is not taken for the new one's.
 	awaitRun bool
+	// relaunchedAt is when the agent was last restarted in its pane.
+	relaunchedAt time.Time
 }
 
 func (h *Hub) stateLocked(id string) *sessionState {
@@ -74,6 +76,12 @@ func (h *Hub) SetExit(id string, status string, exit *wire.SessionExit) {
 	h.exitMu.Lock()
 	h.mu.Lock()
 	st := h.stateLocked(id)
+	if st.awaitRun && !st.relaunchedAt.IsZero() && h.clock().Sub(st.relaunchedAt) < relaunchExitGrace {
+		// The run a relaunch just killed reporting its own end.
+		h.mu.Unlock()
+		h.exitMu.Unlock()
+		return
+	}
 	st.exitStatus, st.exit, st.exitKnown, st.exitRestored = status, &e, true, false
 	st.status, st.activity = "", nil
 	h.mu.Unlock()

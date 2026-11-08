@@ -34,7 +34,7 @@ func withUsersLine(t *testing.T) (env, []byte) {
 func TestChainWrapsTheUsersLineOnceAndRestoresExactly(t *testing.T) {
 	e, orig := withUsersLine(t)
 	mustOK(t, Install(e.o, []string{Claude}))
-	want := "'/opt/togo/bin/togo' hook claude statusline --then " + shellQuote(usersLine)
+	want := chainCommand("/opt/togo/bin/togo", usersLine)
 	if got := statusLineCommand(t, e); got != want {
 		t.Fatalf("command %q\nwant %q", got, want)
 	}
@@ -93,7 +93,7 @@ func TestNoStatusLineGetsTogosOwn(t *testing.T) {
 	e := newEnv(t)
 	write(t, settingsPath(e), []byte("{}\n"))
 	mustOK(t, Install(e.o, []string{Claude}))
-	if got := statusLineCommand(t, e); got != "'/opt/togo/bin/togo' hook claude statusline" {
+	if got := statusLineCommand(t, e); got != hookCommand("/opt/togo/bin/togo", Claude, "statusline") {
 		t.Fatalf("command %q", got)
 	}
 	if _, ok := loadStatusLineState(e.o.TogoHome); ok {
@@ -106,7 +106,7 @@ func TestChainFollowsANewBinaryPath(t *testing.T) {
 	mustOK(t, Install(e.o, []string{Claude}))
 	e.o.Binary = "/usr/local/bin/togo"
 	mustOK(t, Install(e.o, []string{Claude}))
-	want := "'/usr/local/bin/togo' hook claude statusline --then " + shellQuote(usersLine)
+	want := chainCommand("/usr/local/bin/togo", usersLine)
 	if got := statusLineCommand(t, e); got != want {
 		t.Fatalf("command %q", got)
 	}

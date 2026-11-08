@@ -414,6 +414,20 @@ import TogoKit
         }
     }
 
+    /// The mode after the current one, wrapping: Shift+Tab steps through the modes as it does
+    /// at the desk. nil when the session has no modes to step through.
+    var nextMode: String? {
+        guard showsModeChip, modes.count > 1 else { return nil }
+        let index = modes.firstIndex { $0.id == mode } ?? -1
+        return modes[(index + 1) % modes.count].id
+    }
+
+    /// Shift+Tab in the field: the next mode, through the chip's own verified path.
+    func cycleMode() async {
+        guard let next = nextMode else { return }
+        await setMode(next)
+    }
+
     func clearNotice() {
         notice = nil
         noticeAction = nil

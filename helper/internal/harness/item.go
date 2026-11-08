@@ -142,6 +142,9 @@ type TextBody struct {
 	Text string `json:"text"`
 	// Partial is true while the text is still streaming.
 	Partial bool `json:"partial"`
+	// AppendFrom, on a notification only, says Text is the new tail of a
+	// text the client holds, which is this many UTF-8 bytes long.
+	AppendFrom *int `json:"appendFrom,omitempty"`
 }
 
 // ToolBody is one tool call and its outcome.

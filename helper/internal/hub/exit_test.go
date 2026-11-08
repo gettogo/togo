@@ -176,3 +176,14 @@ func TestStoredExitReadBackAsRestored(t *testing.T) {
 		t.Fatal("an exit seen happening reads as restored")
 	}
 }
+
+// An adapter's relaunch (new flags) kills the running agent, whose wrapper
+// reports that exit at once: it must not mark the session ended.
+func TestKilledRunExitAfterAdapterRelaunchIgnored(t *testing.T) {
+	h := hub.New(&session.Service{Tmux: tmuxtest.New(t)}, nil)
+	h.Relaunched(exitID)
+	h.SetExit(exitID, wire.StatusFailed, &wire.SessionExit{Code: new(int), Reason: wire.ExitReasonExit})
+	if h.Ended(exitID) {
+		t.Fatal("the killed run's exit ended the session")
+	}
+}

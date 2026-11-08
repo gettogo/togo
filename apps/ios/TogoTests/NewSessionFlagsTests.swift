@@ -164,6 +164,15 @@ import TogoKit
         #expect(FlagsField.plain("-p 'a\u{2014}b'") == "-p 'a\u{2014}b'")
     }
 
+    /// Command fields (terminal input, replies, the composer) straighten the same way but keep
+    /// their line breaks: `npm test -- --watch` and `git commit -m "fix"` reach the session.
+    @Test func commandInputStraightensAndKeepsLines() {
+        #expect(CommandInput.straight("npm test \u{2014} \u{2014}watch") == "npm test -- --watch")
+        #expect(CommandInput.straight("git commit -m \u{201C}fix\u{201D}") == #"git commit -m "fix""#)
+        #expect(CommandInput.straight("line one\n\u{2014}two") == "line one\n--two")
+        #expect(CommandInput.straight("don\u{2019}t") == "don\u{2019}t")
+    }
+
     @Test func emptyQuotesBlockStart() async {
         let model = model(library: .inMemory())
         await ready(model)

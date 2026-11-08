@@ -30,7 +30,7 @@ enum WorkspaceCopy {
     static let notConnected = String(localized: "ws.link.notConnected", defaultValue: "Not connected")
     static let showFallback = String(localized: "ws.link.showFallback", defaultValue: "Shows why")
 
-    /// Why the link is not on the transport the user asked for: "SSH, mosh-server not found on mini".
+    /// Why the link is not on the transport the user asked for: "SSH, Mosh isn't installed on mini".
     static func fallback(transport: String, note: String) -> String {
         String(localized: "ws.link.fallback", defaultValue: "\(transport), \(note)")
     }
@@ -53,6 +53,23 @@ enum WorkspaceCopy {
 
     static let offlineMessage = String(
         localized: "ws.overlay.offlineMessage", defaultValue: "It may be asleep or off the network."
+    )
+    static func keyChanged(_ machine: String) -> String {
+        String(localized: "ws.overlay.keyChanged", defaultValue: "\(machine)'s key changed")
+    }
+
+    static let keyChangedMessage = String(
+        localized: "ws.overlay.keyChangedMessage",
+        defaultValue: "Togo won't connect until you review it. If nobody reinstalled this machine, someone may be intercepting the connection."
+    )
+    static let reviewKey = String(localized: "ws.overlay.reviewKey", defaultValue: "Review key")
+
+    static func deviceOffline(_ device: String) -> String {
+        String(localized: "ws.overlay.deviceOffline", defaultValue: "This \(device) is offline")
+    }
+
+    static let deviceOfflineMessage = String(
+        localized: "ws.overlay.deviceOfflineMessage", defaultValue: "The terminal reconnects when the network is back."
     )
     static let tryAgain = String(localized: "ws.overlay.tryAgain", defaultValue: "Try again")
     static let signInAgain = String(localized: "ws.overlay.signInAgain", defaultValue: "Sign in again")

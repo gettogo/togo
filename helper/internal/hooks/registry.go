@@ -67,7 +67,6 @@ func in(dir func(Options) string, file ...string) func(Options) string {
 var (
 	claudeDir  = func(o Options) string { return o.ClaudeDir }
 	codexDir   = func(o Options) string { return o.CodexDir }
-	geminiDir  = func(o Options) string { return o.GeminiDir }
 	augmentDir = func(o Options) string { return o.AugmentDir }
 	factoryDir = func(o Options) string { return o.FactoryDir }
 	copilotDir = func(o Options) string { return o.CopilotDir }
@@ -81,8 +80,6 @@ var Registry = []Harness{
 		root: claudeDir, config: in(claudeDir, "settings.json"), events: claudeBase},
 	{ID: Codex, Name: "Codex", Command: "codex", Setup: SetupHooks,
 		root: codexDir, config: in(codexDir, "hooks.json"), events: codexEvents},
-	{ID: Gemini, Name: "Gemini CLI", Command: "gemini", Setup: SetupHooks,
-		root: geminiDir, config: in(geminiDir, "settings.json"), events: geminiEvents},
 	{ID: Auggie, Name: "Auggie", Command: "auggie", Setup: SetupHooks,
 		root: augmentDir, config: in(augmentDir, "settings.json"), events: auggieEvents},
 	{ID: Droid, Name: "Droid", Command: "droid", Setup: SetupHooks,

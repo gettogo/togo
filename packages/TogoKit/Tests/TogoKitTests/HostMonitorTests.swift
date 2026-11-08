@@ -224,6 +224,24 @@ struct HostMonitorTests {
         #expect(snapshot.closed.last?.requestId == "r\(HostSnapshot.closedLimit + 4)")
     }
 
+    @Test func lateOpenForAClosedRequestIsIgnored() {
+        var snapshot = HostSnapshot(hostID: UUID())
+        snapshot.apply(F.event(1, .approvalOpen(F.approval("r1"))))
+        snapshot.apply(F.event(2, .approvalClosed(requestId: "r1", resolution: .phone)))
+        snapshot.apply(F.event(3, .approvalOpen(F.approval("r1"))))
+        #expect(snapshot.approvals.isEmpty)
+        // A close for a request this device never saw open also keeps its late open out.
+        snapshot.apply(F.event(4, .approvalClosed(requestId: "r2", resolution: .desk)))
+        snapshot.apply(F.event(5, .approvalOpen(F.approval("r2"))))
+        #expect(snapshot.approvals.isEmpty)
+        #expect(snapshot.closed == [ClosedApproval(requestId: "r1", resolution: .phone)])
+        // A full snapshot from the helper is the truth: a request it lists is open.
+        snapshot.replaceApprovals([F.approval("r1")])
+        #expect(snapshot.approvals.map(\.requestId) == ["r1"])
+        snapshot.apply(F.event(6, .approvalOpen(F.approval("r1", title: "Edit?"))))
+        #expect(snapshot.approvals.first?.title == "Edit?")
+    }
+
     @Test func approvalOpenRepeatUpdates() async throws {
         let source = FakeSource(snapshots: [EventSnapshot(seq: 0, sessions: [], approvals: [F.approval("r0")])])
         let monitor = F.monitor(ScriptedFactory([.source(source)]), clock: ManualClock())

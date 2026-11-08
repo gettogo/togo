@@ -34,10 +34,12 @@ struct BeaconFill<S: InsettableShape>: View {
                         }
                     }
                 } else {
+                    // accent-ok: the beacon fill, shown only while something waits for the user.
                     shape.fill(Color.togoAccent.opacity(Self.still))
                 }
             }
             .clipShape(shape)
+            // accent-ok: the beacon fill's edge, shown only while something waits.
             .overlay { shape.strokeBorder(Color.togoAccent.opacity(0.22), lineWidth: 1) }
             .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
             .onDisappear { visible = false }
@@ -66,6 +68,7 @@ struct BeaconFill<S: InsettableShape>: View {
             center: CGPoint(x: a.x * size.width, y: a.y * size.height), startRadius: 0, endRadius: reach * 0.65
         ))
         canvas.fill(Path(rect), with: .radialGradient(
+            // accent-ok: the beacon fill's second pool.
             Gradient(colors: [Color.togoAccent.opacity(Self.peak * 0.7), Color.togoAccent.opacity(0)]),
             center: CGPoint(x: b.x * size.width, y: b.y * size.height), startRadius: 0, endRadius: reach * 0.5
         ))

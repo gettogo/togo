@@ -73,6 +73,10 @@
         "selected": "opus",
         "searchable": false,
         "onSelect": "set_model",
+        "onSelectConfirm": {
+          "text": "Restart Claude on this model? The conversation continues; the model applies to this session only.",
+          "effect": "relaunch"
+        },
         "onSelectLabel": "Use model"
       },
       "actions": []

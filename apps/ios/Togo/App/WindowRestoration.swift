@@ -22,13 +22,15 @@ struct TabLabel: Codable, Equatable {
 
 extension WindowRestoration {
     @MainActor init(_ store: AppStore) {
+        let labels = store.workspace.tabs.compactMap { tab in
+            tab.title == tab.sessionID && tab.bib == nil
+                ? nil : TabLabel(id: tab.id, bib: tab.bib, title: tab.title, agent: tab.agent)
+        }
         self.init(
             tabs: store.workspace.tabs.map(\.id), selected: store.workspace.selected,
             secondary: store.workspace.secondary, workspaceOpen: store.workspaceOpen,
-            labels: store.workspace.tabs.compactMap { tab in
-                tab.title == tab.sessionID && tab.bib == nil
-                    ? nil : TabLabel(id: tab.id, bib: tab.bib, title: tab.title, agent: tab.agent)
-            }
+            // No tab has a name worth keeping: nothing to save, as data from older versions.
+            labels: labels.isEmpty ? nil : labels
         )
     }
 

@@ -286,13 +286,20 @@ func TestWatchReconnectsAfterServerRestart(t *testing.T) {
 	if f2.count("initialize") != 1 {
 		t.Fatalf("initialize on reconnect: %d", f2.count("initialize"))
 	}
-	n := 0
-	for _, m := range rec.methods() {
-		if m == MethodResume {
-			n++
+	// The server counts the request before the runner emits its record:
+	// wait for the record, not the count (it raced under -race).
+	resumes := func() int {
+		n := 0
+		for _, m := range rec.methods() {
+			if m == MethodResume {
+				n++
+			}
 		}
+		return n
 	}
-	if n != 2 {
+	waitFor(t, "second resume record", func() bool { return resumes() == 2 })
+	time.Sleep(50 * time.Millisecond)
+	if n := resumes(); n != 2 {
 		t.Fatalf("resume records %d, want 2", n)
 	}
 }

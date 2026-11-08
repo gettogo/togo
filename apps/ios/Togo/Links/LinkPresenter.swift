@@ -28,11 +28,46 @@ import UIKit
         return .on(staying)
     }
 
-    /// `height` sizes a short sheet to its content; nil takes the full height.
-    static func present(_ controller: UIViewController, height: CGFloat?, attempt: Int = 0) {
+    /// The height a sheet takes over its presenter: its own fitted height over the window's
+    /// root or a full-screen cover; over another sheet, the full page, never a narrow form sheet
+    /// floating on a page sheet.
+    static func height(_ fitted: CGFloat?, presenterIsSheet: Bool) -> CGFloat? {
+        presenterIsSheet ? nil : fitted
+    }
+
+    /// `height` sizes a short sheet to its content; nil takes the full height. `name` is what
+    /// the window's presentation coordinator calls it: the presentation goes through its rules
+    /// (it waits while a modal is leaving; it nests over a sheet by policy, a page opened from
+    /// inside returning there) and is released when it closes.
+    static func present(_ controller: UIViewController, height: CGFloat?, name: String) {
+        let scene = activeScene()
+        let coordinator = PresentationRegistry.coordinator(for: scene)
+        var request: PresentationRequest?
+        if let coordinator {
+            let asked = PresentationRequest(
+                id: "link.\(UUID().uuidString)", name: name, kind: .sheet,
+                parent: coordinator.ledger.topModal?.id, nests: true
+            )
+            coordinator.request(asked)
+            request = asked
+        }
+        place(controller, height: height, request: request, coordinator: coordinator, attempt: 0)
+    }
+
+    private static func activeScene() -> UIWindowScene? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-        guard let root = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController else { return }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    }
+
+    private static func place(
+        _ controller: UIViewController, height: CGFloat?, request: PresentationRequest?,
+        coordinator: PresentationCoordinator?, attempt: Int
+    ) {
+        let scene = activeScene()
+        guard let root = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController else {
+            if let request { coordinator?.withdraw(request.id) }
+            return
+        }
         var stack = [root]
         while let next = stack.last?.presentedViewController { stack.append(next) }
         let levels = stack.map { controller in
@@ -41,15 +76,33 @@ import UIKit
                 leaving: controller.isBeingDismissed
             )
         }
-        switch anchor(levels, patience: attempt < 12) {
+        let patience = attempt < 12
+        let admitted = request.map { coordinator?.isShown($0.id) ?? true } ?? true
+        let anchor = admitted || !patience ? anchor(levels, patience: patience) : .wait
+        switch anchor {
         case .wait:
             Task {
                 try? await Task.sleep(for: .milliseconds(250))
-                present(controller, height: height, attempt: attempt + 1)
+                place(controller, height: height, request: request, coordinator: coordinator, attempt: attempt + 1)
             }
         case .on(let depth):
-            style(controller, height: height)
-            stack[depth].present(controller, animated: true)
+            let presenter = stack[depth]
+            let isSheet = depth > 0 && ![.fullScreen, .overFullScreen].contains(presenter.modalPresentationStyle)
+            style(controller, height: Self.height(height, presenterIsSheet: isSheet))
+            presenter.present(controller, animated: true)
+            if let request, let coordinator { watch(controller, request: request, coordinator: coordinator) }
+        }
+    }
+
+    /// Tells the coordinator once the controller has gone, however it closed.
+    private static func watch(_ controller: UIViewController, request: PresentationRequest, coordinator: PresentationCoordinator) {
+        Task { [weak controller] in
+            while true {
+                try? await Task.sleep(for: .milliseconds(400))
+                guard let controller, controller.presentingViewController != nil else { break }
+            }
+            coordinator.userDismissed(request.id)
+            coordinator.didLeave(request.id)
         }
     }
 

@@ -3,6 +3,8 @@ import PackageDescription
 
 let package = Package(
     name: "TogoKit",
+    // User-facing errors read from Resources/Localizable.xcstrings through `bundle: .module`.
+    defaultLocalization: "en",
     platforms: [.iOS(.v26), .macOS(.v26)],
     products: [
         .library(name: "TogoKit", targets: ["TogoKit"]),
@@ -15,6 +17,7 @@ let package = Package(
         .target(
             name: "TogoKit",
             dependencies: [.product(name: "Citadel", package: "Citadel")],
+            resources: [.process("Resources/Localizable.xcstrings")],
             swiftSettings: [.treatAllWarnings(as: .error)]
         ),
         .testTarget(

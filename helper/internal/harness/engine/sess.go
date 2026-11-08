@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/wire"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -47,13 +48,23 @@ type sess struct {
 	working  bool
 	// stoppedAt is when a stop last ended the turn (see stopHold).
 	stoppedAt time.Time
-	turn      string
-	summaryT  *time.Timer
-	srcRows   map[string]map[string]bool // mission rows each section's source listed
+	// feedWorking is what the mappers last said about the turn, and
+	// feedEndedAt when they last said it ended (see feedTrust).
+	feedWorking bool
+	feedEndedAt time.Time
+	// awaitReply is set when a prompt from the phone was typed and
+	// nothing the agent said has arrived since (see replyMissingLocked).
+	awaitReply bool
+	// relaunchedAt is when an action last restarted the agent.
+	relaunchedAt time.Time
+	turn         string
+	summaryT     *time.Timer
+	srcRows      map[string]map[string]bool // mission rows each section's source listed
 	// sum mirrors the mission summary for readers that must not take mu
 	// (the hub decorates sessions while holding its own lock).
 	sum      atomic.Pointer[harness.Summary]
 	pending  map[string]harness.Item // coalesced partial updates
+	sentText map[string]string       // streaming item id -> the whole text subscribers hold
 	lastPart map[string]time.Time
 	needs    needsState
 	seed     screenSeed
@@ -90,7 +101,7 @@ func newSess(e *Engine, info session.Session) *sess {
 		e: e, id: info.ID, info: info, ctx: ctx, cancel: cancel, ready: make(chan struct{}),
 		degraded: map[string]bool{}, mappers: map[string]harness.Mapper{}, feeds: map[string]*feedRun{},
 		last: map[string]json.RawMessage{}, anchors: map[string]*harness.Anchor{},
-		subs: map[harness.Subscriber]*subQueue{}, pending: map[string]harness.Item{}, lastPart: map[string]time.Time{},
+		subs: map[harness.Subscriber]*subQueue{}, pending: map[string]harness.Item{}, lastPart: map[string]time.Time{}, sentText: map[string]string{},
 	}
 	if info.Managed {
 		s.ad = e.adapterFor(info.Agent, info.Command, e.envFor(info))
@@ -275,7 +286,29 @@ func (s *sess) dropSub(sub harness.Subscriber) {
 func (s *sess) stateLocked() map[string]string {
 	out, states := s.mapperStateLocked()
 	working := harness.MergeWorking(states...)
-	if st := s.e.cfg.Status; st != nil && st(s.id) == "working" && !s.holdingStopLocked(states) {
+	known := false
+	for _, st := range states {
+		if _, ok := st["working"]; ok {
+			known = true
+		}
+	}
+	now := s.e.cfg.Now()
+	if known && s.feedWorking && !working {
+		s.feedEndedAt = now
+	}
+	if known {
+		s.feedWorking = working
+	}
+	// The hub follows the pane and settles seconds after the feed saw the
+	// turn end; for a while after that end, the feed's word stands.
+	feedEnded := known && !working && !s.feedEndedAt.IsZero() && now.Sub(s.feedEndedAt) < feedTrust
+	status := s.hubStatus()
+	switch {
+	case agentGone(status):
+		// A crashed or killed agent writes no turn end; its mappers would
+		// say working forever.
+		working = false
+	case status == "working" && !s.holdingStopLocked(states) && !feedEnded:
 		working = true
 	}
 	out["working"] = fmt.Sprint(working)
@@ -521,6 +554,129 @@ func (s *sess) statusChanged() {
 		return
 	}
 	s.setWorkingLocked(s.stateLocked()["working"] == "true")
+	if agentGone(s.hubStatus()) {
+		s.agentExitedLocked()
+	}
+}
+
+// feedTrust is how long a turn end the feed reported outweighs the hub's
+// lingering "working" (the pane settles 6-10 s after a turn ends).
+const feedTrust = 20 * time.Second
+
+// turnSettle is how long after a turn ends its done push and its
+// missing-reply check wait: the pane can say idle seconds before the
+// feed's records of the reply arrive (omp writes its session file late).
+var turnSettle = 6 * time.Second
+
+// afterTurnLocked runs the done push and the missing-reply check once
+// the turn's records had time to arrive, unless a new turn began.
+func (s *sess) afterTurnLocked() {
+	if s.e.cfg.Done == nil && !s.awaitReply {
+		return
+	}
+	time.AfterFunc(s.e.scaled(turnSettle), func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.working || s.ctx == nil || s.ctx.Err() != nil {
+			return
+		}
+		s.doneLocked()
+		s.replyMissingLocked()
+	})
+}
+
+// doneLocked reports a finished turn with the last reply's text, for
+// adapters whose feeds include no hook (hooks send their own Stop "done").
+func (s *sess) doneLocked() {
+	if s.e.cfg.Done == nil || agentGone(s.hubStatus()) {
+		return
+	}
+	for _, f := range s.ad.Feeds {
+		if f.Hook != nil {
+			return
+		}
+	}
+	recent, _, _ := s.e.log.Since(s.id, 0, 50)
+	body := ""
+	for i := len(recent) - 1; i >= 0; i-- {
+		it := recent[i]
+		if it.Kind == harness.KindUser {
+			break // only this turn's reply
+		}
+		if it.Kind == harness.KindAssistant && it.Assistant != nil && it.Parent == "" {
+			body = clipRunes(strings.TrimSpace(it.Assistant.Text), wire.MaxBody)
+			break
+		}
+	}
+	id, title := s.id, s.ad.Name+" finished"
+	go s.e.cfg.Done(id, title, body)
+}
+
+// replyMissingLocked runs when a turn ends: if the phone's prompt got
+// nothing back (no reply, tool, notice or question), say so in the chat.
+// Seen on OpenCode with its model server down and on Vibe: the turn ran,
+// ended, and the chat showed the prompt and nothing else.
+func (s *sess) replyMissingLocked() {
+	if !s.awaitReply || !harness.Has(s.ad.Capabilities, harness.CapChat) || agentGone(s.hubStatus()) {
+		return
+	}
+	s.awaitReply = false
+	now := s.e.cfg.Now()
+	s.publishLocked([]harness.Item{{ID: fmt.Sprintf("noreply-%d", now.UnixMilli()), TurnID: s.turn, Kind: harness.KindNotice, At: now,
+		Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError,
+			Text: s.ad.Name + " ended the turn without a reply. The terminal may show why."}}}, nil)
+}
+
+// hubStatus is the hub's status for the session, "" when unknown.
+func (s *sess) hubStatus() string {
+	if st := s.e.cfg.Status; st != nil {
+		return st(s.id)
+	}
+	return ""
+}
+
+// agentGone reports whether a hub status says the agent process exited.
+func agentGone(status string) bool {
+	return status == wire.StatusEnded || status == wire.StatusFailed || status == "exited"
+}
+
+// agentExitedLocked closes what the dead agent left open: running turns
+// and tools end as interrupted, and prompts queued behind them are
+// withdrawn, since nothing will ever drain them.
+func (s *sess) agentExitedLocked() {
+	recent, _, _ := s.e.log.Since(s.id, 0, 200)
+	now := s.e.cfg.Now()
+	var ended []harness.Item
+	for _, it := range recent {
+		switch {
+		case it.Kind == harness.KindTurn && it.Turn != nil && it.Turn.State == harness.StateRunning:
+			t := *it.Turn
+			t.State, t.Ended = harness.StateInterrupted, &now
+			it.Turn = &t
+		case it.Kind == harness.KindTool && it.Tool != nil && it.Tool.State == harness.StateRunning:
+			t := *it.Tool
+			t.State, t.Ended = harness.StateInterrupted, &now
+			it.Tool = &t
+		default:
+			continue
+		}
+		it.Seq = 0
+		ended = append(ended, it)
+	}
+	for _, q := range s.queue {
+		if q.item.User == nil {
+			continue
+		}
+		it := q.item
+		u := *it.User
+		u.Queued, u.Withdrawn = false, true
+		it.User = &u
+		ended = append(ended, it)
+	}
+	s.queue = nil
+	if len(ended) > 0 {
+		s.publishLocked(ended, nil)
+	}
 }
 
 func (s *sess) setWorkingLocked(w bool) {
@@ -530,6 +686,7 @@ func (s *sess) setWorkingLocked(w bool) {
 		s.missionDeltaLocked(d)
 	}
 	if was && !w {
+		s.afterTurnLocked()
 		s.e.turnEnded(s)
 		s.drainLocked()
 		go s.seedFromScreen(seedSettle)

@@ -192,10 +192,10 @@ enum PlainTmuxError: Error, Equatable, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noTmux(let host): "tmux is not installed on \(host); Togo can still open a plain shell."
-        case .foreignSession: "This session was started outside Togo."
-        case .nameTaken(let name): "A session named \(name) already exists."
-        case .unsupported: "This needs the Togo helper on the machine."
+        case .noTmux(let host): String(localized: "tmux is not installed on \(host); Togo can still open a plain shell.", bundle: .module)
+        case .foreignSession: String(localized: "This session was started outside Togo.", bundle: .module)
+        case .nameTaken(let name): String(localized: "A session named \(name) already exists.", bundle: .module)
+        case .unsupported: String(localized: "This needs the Togo helper on the machine.", bundle: .module)
         case .failed(let message): message
         }
     }
@@ -290,7 +290,7 @@ actor PlainTmuxLink {
         let result = try await run(shellQuote(argv))
         guard result.status == 0 else {
             if result.status == 127 { throw PlainTmuxError.noTmux(host: host) }
-            throw PlainTmuxError.failed("tmux could not complete that on \(host).")
+            throw PlainTmuxError.failed(String(localized: "tmux could not complete that on \(host).", bundle: .module))
         }
     }
 

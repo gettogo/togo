@@ -150,7 +150,7 @@ enum CallbackCopy {
     static func unreachable(_ detail: String) -> String {
         String(
             localized: "signIn.unreachable",
-            defaultValue: "Lost the connection to your Mac during the sign-in. \(detail)"
+            defaultValue: "Lost the connection to the machine during the sign-in. \(detail)"
         )
     }
 }

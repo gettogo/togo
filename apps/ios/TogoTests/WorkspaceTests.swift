@@ -159,8 +159,8 @@ import UIKit
         #expect(LinkPhase.live(transport: "Mosh", note: nil).word == "Mosh")
         #expect(LinkPhase.reconnecting(2).word == "Reconnecting")
         #expect(LinkPhase.waking("MacBook").word == "Waking")
-        #expect(WorkspaceCopy.fallback(transport: "SSH", note: "mosh-server not found on mini")
-            == "SSH, mosh-server not found on mini")
+        #expect(WorkspaceCopy.fallback(transport: "SSH", note: "Mosh isn't installed on mini")
+            == "SSH, Mosh isn't installed on mini")
     }
 
     @Test func overlayShowsUntilLiveAndExplainsAnOfflineMachine() {
@@ -189,6 +189,16 @@ import UIKit
         #expect(store.workspace.tabs.map(\.sessionID) == ["s-04"])
         #expect(services.stoppedTerminals.map(\.sessionID) == ["s-01"])
         #expect(store.workspace.ended == nil)
+    }
+
+    /// Ending a session that already ended is what the user wanted: the tab closes, no error.
+    @Test func endingASessionAlreadyGoneIsNotAnError() async {
+        let store = store()
+        store.open(hostID: Samples.studio, sessionID: "s-01")
+        services.failure = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "not_found"))
+        await store.kill(Samples.controlCenter.machines[0].sessions[0])
+        #expect(store.notice == nil)
+        #expect(!store.workspace.tabs.map(\.sessionID).contains("s-01"))
     }
 
     @Test func sessionGoneFromItsMachineClosesTheTab() {

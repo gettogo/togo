@@ -14,7 +14,7 @@ capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands
   changes, status, resume, compact]
 feeds:
   session:
-    jsonl: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', follow: true }
+    jsonl: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
     mapper: pi.session
     stability: documented
 sources:
@@ -62,17 +62,35 @@ screens:
     map: { item.id: .id, item.title: .title, item.subtitle: '{{.updated | ago}}' }
     on_select: resume
 actions:
-  # An exact provider/id applies at once; anything else opens Pi's picker,
-  # so the change is checked against the session's model_change entry.
+  # Typing /model saves the pick as Pi's default model in
+  # ~/.pi/agent/settings.json, changing every later session. `--model`
+  # on a relaunch applies to this session only; the restart reopens the
+  # same session file and keeps its thinking level (and the model, for a
+  # thinking change). --session names this session, where --continue
+  # would take the folder's newest one, which may be another Pi's.
   set_model:
     label: Use model
-    type: { text: '/model {{.id}}', submit: true, when_idle: true }
-    verify: { source: session, select: .model, equals: '{{.id}}', within: 5s }
-    stability: unverified
+    confirm: Restart Pi on this model? The session continues; the model applies to this session only.
+    branch:
+      - when: '{{if .state.harness_session}}true{{end}}'
+        relaunch:
+          argv: [pi, --session, '{{.state.harness_session}}', --model, '{{.id}}']
+          keep: [[--thinking, '{{.state.effort}}']]
+      - relaunch:
+          argv: [pi, --model, '{{.id}}']
+          keep: [[--thinking, '{{.state.effort}}']]
+    stability: documented
   set_effort:
     label: Set thinking
     confirm: Restart Pi with this thinking level? The session continues.
-    relaunch: { argv: [pi, --thinking, '{{.value}}', --continue] }
+    branch:
+      - when: '{{if .state.harness_session}}true{{end}}'
+        relaunch:
+          argv: [pi, --session, '{{.state.harness_session}}', --thinking, '{{.value}}']
+          keep: [[--model, '{{.state.model}}']]
+      - relaunch:
+          argv: [pi, --thinking, '{{.value}}', --continue]
+          keep: [[--model, '{{.state.model}}']]
     stability: documented
   compact:
     confirm: Compact the session now?

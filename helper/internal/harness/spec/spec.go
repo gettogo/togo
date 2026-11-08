@@ -201,6 +201,11 @@ type File struct {
 	Glob   string `yaml:"glob"`
 	Format string `yaml:"format"`
 	Follow bool   `yaml:"follow"`
+	// Exclusive marks a followed glob over a folder several sessions of
+	// the harness share (Pi and Kimi keep every session of a cwd in one
+	// folder): a file one session follows is never joined by another, and
+	// a new file goes first to a session still without one.
+	Exclusive bool `yaml:"exclusive"`
 }
 
 // HTTP calls the harness's endpoint. Path is a template; the base URL is
@@ -368,6 +373,11 @@ type Keys struct {
 // Relaunch restarts the harness in place with a new argv (templates).
 type Relaunch struct {
 	Argv []string `yaml:"argv"`
+	// Keep lists flag groups ([--effort, '{{.state.effort}}']) appended
+	// to Argv only when every element renders to a value, so a restart
+	// keeps what the session already runs with (its mode, effort, model)
+	// without a branch for every combination.
+	Keep [][]string `yaml:"keep"`
 }
 
 // Write sets a key in a harness config file (json or toml), atomically.

@@ -39,6 +39,11 @@ struct RosterModel: Equatable {
     var waiting: Int
     var tally: Tally
 
+    /// This device has no network: the roster says so once, above every machine.
+    var deviceOffline: Bool {
+        groups.contains { $0.machine.reachability == .deviceOffline }
+    }
+
     static let empty = RosterModel(groups: [], waiting: 0, tally: Tally())
 
     /// `requests` count while they are open or on their way; an answered one has left the bar.

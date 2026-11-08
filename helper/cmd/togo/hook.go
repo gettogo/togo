@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/logfile"
 	"io"
 	"os"
 	"path/filepath"
@@ -213,7 +214,7 @@ func hookLogger(env map[string]string) func(format string, args ...any) {
 		if os.MkdirAll(dir, 0o700) != nil {
 			return
 		}
-		f, err := os.OpenFile(filepath.Join(dir, "hook.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		f, err := logfile.Open(filepath.Join(dir, "hook.log"), logfile.MaxSize)
 		if err != nil {
 			return
 		}

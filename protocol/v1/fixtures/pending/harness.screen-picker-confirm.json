@@ -57,7 +57,7 @@
         "searchable": false,
         "onSelect": "set_model",
         "onSelectConfirm": {
-          "text": "Restart Gemini with this model?",
+          "text": "Restart the agent with this model?",
           "effect": "relaunch"
         }
       },

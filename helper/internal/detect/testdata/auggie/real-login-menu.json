@@ -1,0 +1,10 @@
+{
+  "source": "real",
+  "agentVersion": "auggie 0.37.0",
+  "match": true,
+  "kind": "signin",
+  "title": "Login to continue",
+  "options": null,
+  "keys": {},
+  "subject": null
+}

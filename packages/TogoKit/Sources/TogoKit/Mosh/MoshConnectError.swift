@@ -7,8 +7,7 @@ public enum MoshConnectError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .noUDPReply(let address):
-            "mosh-server started, but nothing came back over UDP from \(address). "
-                + "A firewall may be blocking UDP ports 60000 to 61000."
+            String(localized: "mosh-server started, but nothing came back over UDP from \(address). A firewall may be blocking UDP ports 60000 to 61000.", bundle: .module)
         }
     }
 }

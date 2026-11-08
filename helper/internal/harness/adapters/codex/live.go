@@ -180,7 +180,8 @@ func (a *AppServer) tokens(params json.RawMessage) []harness.Op {
 	if json.Unmarshal(params, &p) != nil || p.ThreadID != a.main {
 		return nil
 	}
-	if w := p.TokenUsage.ModelContextWindow; w != nil && *w > 0 {
+	// A new thread's first count has zero totals: unknown, not 0 %.
+	if w := p.TokenUsage.ModelContextWindow; w != nil && *w > 0 && p.TokenUsage.Last.TotalTokens > 0 {
 		pct := min(100, float64(p.TokenUsage.Last.TotalTokens)*100/float64(*w))
 		a.status.ContextPercent = &pct
 	}

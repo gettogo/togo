@@ -20,10 +20,11 @@ func init() {
 	})
 	addUsage("  hooks install|uninstall|status [--agent <id>|all] [--local] [--block] [--no-statusline] [--json]\n" +
 		"                                                set up every installed harness that takes hooks (Claude Code,\n" +
-		"                                                Codex, Gemini CLI, Auggie, Droid, Copilot CLI) and\n" +
+		"                                                Codex, Auggie, Droid, Copilot CLI) and\n" +
 		"                                                chain Claude's status line. Each file is backed up once\n" +
 		"                                                (<file>.togo-backup) before its first change; install is safe\n" +
-		"                                                to run again, and uninstall puts every file back")
+		"                                                to run again, and uninstall puts every file back (and also\n" +
+		"                                                removes hooks left by retired harnesses: gemini)")
 }
 
 // binaryCheck finds a harness's program on the login PATH and the usual
@@ -80,8 +81,12 @@ func runHooks(args []string, env map[string]string, stdout, stderr io.Writer) in
 		return usageError(stderr, fmt.Errorf("unexpected argument %q", rest[0]))
 	}
 	agents := hooks.Agents
+	if action == "uninstall" {
+		agents = append(slices.Clone(hooks.Agents), hooks.Retired...)
+	}
 	if *agent != "all" {
-		if !hooks.Known(*agent) {
+		retired := action == "uninstall" && slices.Contains(hooks.Retired, *agent)
+		if !hooks.Known(*agent) && !retired {
 			return usageError(stderr, fmt.Errorf("unknown agent %q (one of %s)", *agent, strings.Join(hooks.Agents, ", ")))
 		}
 		agents = []string{*agent}

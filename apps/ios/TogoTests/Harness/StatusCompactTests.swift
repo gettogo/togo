@@ -81,4 +81,13 @@ struct StatusCompactTests {
         let plain = HarnessSessionStore(subject: ChatTests.subject, services: FakeHarnessServices(descriptor: ChatTests.claude), cached: ChatTests.claude)
         #expect(MissionWorkspaceModel.compactRef(plain) == nil)
     }
+
+    /// "ctx 0%" before the first reply is unknown, not empty: the meter and the roster leave it out.
+    @Test func zeroContextIsUnknown() {
+        #expect(StatusLogic.knownContext(0) == nil)
+        #expect(StatusLogic.knownContext(0.2) == nil)
+        #expect(StatusLogic.knownContext(.nan) == nil)
+        #expect(StatusLogic.knownContext(42) == 42)
+        #expect(!RosterMission.text(meta: SessionMeta(contextPercent: 0), mission: nil).contains("ctx"))
+    }
 }

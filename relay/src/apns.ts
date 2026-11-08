@@ -9,6 +9,8 @@ export interface ApnsRequest {
   pushType: ApnsPushType;
   topic: string;
   collapseId?: string;
+  /** Overrides the push type's default priority. */
+  priority?: "5" | "10";
   payload: unknown;
 }
 
@@ -38,7 +40,7 @@ export async function apnsSend(env: Env, req: ApnsRequest): Promise<ApnsResult> 
     "apns-id": apnsId,
     "apns-push-type": req.pushType,
     "apns-topic": req.topic,
-    "apns-priority": PRIORITY[req.pushType],
+    "apns-priority": req.priority ?? PRIORITY[req.pushType],
     "content-type": "application/json",
   };
   if (req.collapseId) headers["apns-collapse-id"] = req.collapseId;

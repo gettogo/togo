@@ -65,7 +65,10 @@ public struct WorkSummary: Hashable, Sendable {
 /// the replies; approvals and questions stay as their own rows where they occurred, so the
 /// user never has to expand anything to act (an approval a question owns is drawn by the
 /// question). Items without a turn keep their own rows, and
-/// steps without a turn next to each other share one work row. Items of a subagent's own
+/// steps without a turn next to each other share one work row; a step without a turn that
+/// arrives while the last turn still runs (no turn item yet, or a live one: a background
+/// subagent) joins that turn's work line, so one
+/// working indicator shows, not two. Items of a subagent's own
 /// conversation (with a `parent`) never appear.
 public enum TurnFold {
     /// `resolvedAt` says when requests were answered (see `ResolutionLedger`), so a turn's
@@ -75,6 +78,13 @@ public enum TurnFold {
         var turns: [String: Turn] = [:]
         var order: [Slot] = []
         var loose: [HarnessItem] = []
+        // The turns whose turn item says they are over, and the last turn opened so far: a
+        // turn with no turn item yet, or a live one, still runs.
+        let ended = Set(items.compactMap { item -> String? in
+            guard case .turn(let turn) = item.body, !turn.state.isLive else { return nil }
+            return item.turnId
+        })
+        var lastTurn: String?
 
         func flushLoose() {
             guard let first = loose.first else { return }
@@ -86,7 +96,10 @@ public enum TurnFold {
             if case .unknown = item.body { continue }
             if case .user(let user) = item.body, user.withdrawn { continue }
             guard let turnID = item.turnId else {
-                if isStep(item) {
+                if isStep(item), let running = lastTurn, !ended.contains(running) {
+                    flushLoose()
+                    turns[running]?.add(item)
+                } else if isStep(item) {
                     loose.append(item)
                 } else {
                     flushLoose()
@@ -98,6 +111,7 @@ public enum TurnFold {
             if turns[turnID] == nil {
                 turns[turnID] = Turn()
                 order.append(.turn(turnID))
+                lastTurn = turnID
             }
             turns[turnID]?.add(item)
         }

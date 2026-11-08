@@ -103,6 +103,16 @@ public enum HelperProbe {
         }
     }
 
+    /// The command that installs tmux, for a machine whose tmux is missing or older than 3.2.
+    /// Nil where no single package manager is likely.
+    public static func tmuxInstallCommand(os: String?) -> String? {
+        switch os {
+        case nil, "Darwin": "brew install tmux"
+        case "Linux": "sudo apt install tmux"
+        default: nil
+        }
+    }
+
     public static func run(on connection: SSHConnection) async throws -> HelperReport {
         let result = try await connection.run(command, timeout: .seconds(15))
         var report = parse(String(decoding: result.stdout, as: UTF8.self))

@@ -22,7 +22,9 @@ struct WorkspaceFindBar: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
-                .focused($fieldFocused)
+                // The row is inserted in the same update that asks for the keyboard: focus lands
+                // on the next turn of the run loop, so one tap on Find is enough.
+                .focusOnReveal($fieldFocused, revealed: focused)
                 .onSubmit { find(backwards: false) }
                 .onChange(of: text) { setMissed(false) }
             if missed {
@@ -44,7 +46,6 @@ struct WorkspaceFindBar: View {
         }
         .foregroundStyle(Color.togoSnow)
         .padding(.horizontal, 16)
-        .onChange(of: focused, initial: true) { _, on in fieldFocused = on }
         .onChange(of: fieldFocused) { _, on in focused = on }
     }
 

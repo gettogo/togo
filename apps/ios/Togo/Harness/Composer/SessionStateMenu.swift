@@ -110,12 +110,13 @@ struct SessionStateChip: View {
             Label {
                 if let title {
                     Text(title)
-                        // trunc-ok: two lines in a full-width row of its own; a long model name wraps inside the chip rather than losing its end.
-                        .lineLimit(2)
+                        // Wraps in full: a long model id and the mode after it never lose their end.
                         .multilineTextAlignment(.leading)
                         // motion: state change — the words morph in place when the harness reports a new value.
                         .contentTransition(reduceMotion ? .opacity : .interpolate)
                         .animation(Motion.animation(.respond, reduce: reduceMotion), value: title)
+                        // One driver: a note's arrival transaction never reaches the words.
+                        .transaction { $0.animation = nil }
                 }
             } icon: {
                 Image(systemName: "dial.medium")
@@ -125,9 +126,12 @@ struct SessionStateChip: View {
         .menuStyle(.button)
         .buttonStyle(ComposerChipStyle())
         .accessibilityLabel(ComposerCopy.sessionState)
+        .voiceControlNames(VoiceControlNames.make([title, PrimitiveCopy.model, ComposerCopy.sessionState]))
         .accessibilityValue(title ?? "")
         .accessibilityIdentifier("composer.state")
-        .task { await model.loadCommandsOnce() }
+        // Reads the list once, then again at each turn's end and whenever the harness reports
+        // another model or effort, so the chip follows changes it did not make.
+        .task(id: model.chipRefresh) { await model.refreshChip() }
     }
 
     @ViewBuilder private func rowMenu(_ row: StateChip.Row) -> some View {

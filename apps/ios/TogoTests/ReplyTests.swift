@@ -227,6 +227,30 @@ struct ReplyTests {
         #expect(await bridge.reply(to: here) == .sent)
     }
 
+    /// With no window (the Watch launched the app in the background) a typed answer to a
+    /// request the push announced still goes; a prompt, which needs the sessions, does not.
+    @Test func watchReplyWithoutAWindow() async {
+        let pending = PendingStore(directory: directory, clock: { Samples.now })
+        pending.upsert(PendingRequest(
+            requestId: "r_cccccccccc", hostId: hostID, sessionId: nil, bib: "01", agent: "claude",
+            host: "studio", title: "Which file?", subject: nil, options: [], receivedAt: Samples.now, answered: nil,
+            allowText: true
+        ))
+        tools.answer("approval.answer", #"{"state":"answered"}"#)
+        let handle = WatchReplyGate.windowless(
+            pairings: PairingStore(directory: directory), pending: pending, sender: sender(tools, quiet: true)
+        )
+        let prompt = WatchReplyMessage(
+            target: .prompt(machineId: Samples.studio.uuidString, sessionId: "s_abcdefghij"), text: "go on"
+        )
+        #expect(await handle(prompt) == .needsPhone)
+        let unknown = WatchReplyMessage(target: .answer(hostId: hostID, requestId: "r_dddddddddd"), text: "yes")
+        #expect(await handle(unknown) == .needsPhone)
+        #expect(tools.requests.isEmpty)
+        let answer = WatchReplyMessage(target: .answer(hostId: hostID, requestId: "r_cccccccccc"), text: "yes")
+        #expect(await handle(answer) == .sent)
+    }
+
     /// An error stop with no exit code leaves the agent at its prompt, so a Watch reply goes;
     /// once the code is in, the agent is gone and the reply is refused.
     @Test func errorStopOffersReplyNotRunAgain() async {

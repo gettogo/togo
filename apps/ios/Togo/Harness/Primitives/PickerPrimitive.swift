@@ -128,12 +128,8 @@ struct PickerPrimitive: View {
         }
         .groupedList()
         .overlay {
-            // motion: state change — the list and its empty state swap in place, nothing shifts.
-            Group {
-                if groups.isEmpty, setup.isEmpty { empty.transition(Motion.swap(reduce: reduceMotion)) }
-            }
-            // motion: state change — the swap is keyed on emptiness alone.
-            .motion(.fade, value: groups.isEmpty && setup.isEmpty)
+            // Search results never animate (motion v2 §2): "No matches" is simply there.
+            if groups.isEmpty, setup.isEmpty { empty }
         }
     }
 

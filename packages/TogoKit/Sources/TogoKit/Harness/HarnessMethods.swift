@@ -148,6 +148,36 @@ public struct HarnessOpenResult: Codable, Hashable, Sendable {
         self.more = more
         self.mission = mission
     }
+
+    private enum CodingKeys: String, CodingKey { case epoch, cursor, items, more, mission }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        epoch = try c.decode(String.self, forKey: .epoch)
+        cursor = try c.decode(Int.self, forKey: .cursor)
+        items = try c.decode(LenientItems.self, forKey: .items).items
+        more = try c.decode(Bool.self, forKey: .more)
+        mission = try c.decode(HarnessMission.self, forKey: .mission)
+    }
+}
+
+/// Items decoded one by one: a malformed item is skipped rather than failing the whole
+/// result, so one bad item cannot keep a chat from ever opening.
+struct LenientItems: Decodable {
+    var items: [HarnessItem] = []
+
+    private struct Skip: Decodable {}
+
+    init(from decoder: any Decoder) throws {
+        var c = try decoder.unkeyedContainer()
+        while !c.isAtEnd {
+            if let item = try? c.decode(HarnessItem.self) {
+                items.append(item)
+            } else {
+                _ = try c.decode(Skip.self)
+            }
+        }
+    }
 }
 
 public struct HarnessHistoryParams: Codable, Hashable, Sendable {
@@ -169,6 +199,14 @@ public struct HarnessPage: Codable, Hashable, Sendable {
     public init(items: [HarnessItem], more: Bool) {
         self.items = items
         self.more = more
+    }
+
+    private enum CodingKeys: String, CodingKey { case items, more }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        items = try c.decode(LenientItems.self, forKey: .items).items
+        more = try c.decode(Bool.self, forKey: .more)
     }
 }
 

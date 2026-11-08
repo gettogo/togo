@@ -83,8 +83,36 @@ struct HelperClientTests {
             Issue.record("hello accepted protocol 2")
         } catch HelperError.rpc(let error) {
             #expect(error.code == RPCErrorCode.unsupportedVersion)
+            #expect(error.helperIsAhead, "protocol 2 is newer than this app's 1")
         }
         await #expect(throws: HelperError.notReady) { try await client.listSessions() }
+    }
+
+    /// A refusal that carries the helper's own words shows them; without, the reason's sentence.
+    @Test func refusalShowsTheHelpersReason() {
+        let words = HelperError.rpc(RPCErrorObject(
+            code: RPCErrorCode.refused, message: "refused",
+            data: .object(["reason": .string("fallback"), "message": .string("That mode is not in this session's cycle; back in Plan.")])
+        ))
+        #expect(words.localizedDescription == "That mode is not in this session's cycle; back in Plan.")
+        let admin = HelperError.rpc(RPCErrorObject(
+            code: RPCErrorCode.refused, message: "refused", data: .object(["reason": .string("needs_admin_setup"), "message": .string(" ")])
+        ))
+        #expect(admin.localizedDescription == "This needs a one-time setup on the machine first.")
+    }
+
+    @Test func versionSkewSaysWhichSideIsBehind() {
+        func skew(_ supported: [Double]) -> RPCErrorObject {
+            RPCErrorObject(
+                code: RPCErrorCode.unsupportedVersion, message: "unsupported_version",
+                data: .object(["supported": .array(supported.map(JSONValue.number))])
+            )
+        }
+        #expect(skew([2]).helperIsAhead)
+        #expect(skew([2, 3]).helperIsAhead)
+        #expect(!skew([0]).helperIsAhead)
+        #expect(!skew([]).helperIsAhead)
+        #expect(!RPCErrorObject(code: RPCErrorCode.unsupportedVersion, message: "unsupported_version").helperIsAhead)
     }
 
     @Test func captureRequiresCapability() async throws {

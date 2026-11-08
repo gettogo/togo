@@ -134,6 +134,7 @@ func (e *Engine) holdStop(s *sess) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stoppedAt = e.cfg.Now()
+	s.awaitReply = false
 	if s.gateOK {
 		s.setWorkingLocked(s.stateLocked()["working"] == "true")
 	}

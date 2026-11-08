@@ -168,15 +168,14 @@ import TogoKit
         #expect(session.sends.isEmpty)
     }
 
-    @Test func anUnknownCommandIsHeldWithAHint() async {
+    /// The list Togo has may not hold every command (personal commands, skills, a list cut
+    /// short): the harness judges a "/word" it does not list, so it is sent, never refused.
+    @Test func anUnlistedCommandIsSentForTheHarnessToJudge() async {
         let session = Session()
         let composer = await send("/xyz", session)
-        #expect(session.sends.isEmpty)
-        #expect(composer.draft == "/xyz")
-        #expect(composer.notice == ComposerCopy.notACommand("OMP"))
-        #expect(composer.noticeAction == .sendAsText)
-        await composer.submit(asText: true)
         #expect(session.sends == ["/xyz"])
+        #expect(composer.draft.isEmpty)
+        #expect(composer.notice == nil)
     }
 
     @Test func wordsAndPathsGoAsTheyAre() async {

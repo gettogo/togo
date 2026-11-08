@@ -58,7 +58,7 @@ func Dialog(screen string) (DialogInfo, bool) {
 		lines[i] = strings.TrimSpace(unbox(l))
 	}
 	for i, l := range lines {
-		if !dialogTitle.MatchString(l) {
+		if !dialogTitle.MatchString(l) || bannerAt(lines, i) {
 			continue
 		}
 		end := min(len(lines), i+dialogSpan+1)
@@ -69,6 +69,22 @@ func Dialog(screen string) (DialogInfo, bool) {
 		}
 	}
 	return DialogInfo{}, false
+}
+
+// runUpdate is the instruction a non-modal update notice gives instead of
+// buttons: "Run: omp update", "run `npm i -g x` to update".
+var runUpdate = regexp.MustCompile(`(?i)\brun:?\s+\S.*\b(update|upgrade|install)\b`)
+
+// bannerAt reports an update notice that tells the user what to run: it
+// takes no keys, so key hints below it belong to something else (omp's
+// slash-command popup) and it does not hold typing back.
+func bannerAt(lines []string, i int) bool {
+	for j := i; j < min(len(lines), i+3); j++ {
+		if runUpdate.MatchString(lines[j]) {
+			return true
+		}
+	}
+	return false
 }
 
 // buttonSplit cuts a button row into labels: brackets, angle brackets,

@@ -20,7 +20,7 @@ func newService(t *testing.T) (*Service, hooks.Options) {
 	root := t.TempDir()
 	o := hooks.DefaultOptions(func(string) string { return "" }, root, filepath.Join(root, ".togo"), "/opt/togo/bin/togo")
 	o.HasBinary = func(c string) bool { return c != "aider" }
-	for _, d := range []string{o.ClaudeDir, o.GeminiDir, o.TogoHome} {
+	for _, d := range []string{o.ClaudeDir, o.FactoryDir, o.TogoHome} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func TestStatusListsEveryHarness(t *testing.T) {
 	if len(got) != len(hooks.Registry) {
 		t.Fatalf("%d rows", len(got))
 	}
-	if got["gemini"].State != hooks.StateNeedsSetup || got["codex"].State != hooks.StateNotInstalled ||
+	if got["droid"].State != hooks.StateNeedsSetup || got["codex"].State != hooks.StateNotInstalled ||
 		got["kimi"].State != hooks.StateNotNeeded || got["aider"].State != hooks.StateNotInstalled {
 		t.Fatalf("%+v", got)
 	}
@@ -70,21 +70,21 @@ func TestStatusListsEveryHarness(t *testing.T) {
 
 func TestInstallOneThenUninstall(t *testing.T) {
 	s, o := newService(t)
-	res, err := call(t, s, MethodInstall, `{"agents":["gemini"]}`)
+	res, err := call(t, s, MethodInstall, `{"agents":["droid"]}`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cr := res.(ChangeResult)
-	if len(cr.Results) != 1 || cr.Results[0].ID != "gemini" || cr.Results[0].State != "installed" {
+	if len(cr.Results) != 1 || cr.Results[0].ID != "droid" || cr.Results[0].State != "installed" {
 		t.Fatalf("%+v", cr.Results)
 	}
-	if rows(res)["gemini"].State != hooks.StateReady || rows(res)["claude"].State != hooks.StateNeedsSetup {
+	if rows(res)["droid"].State != hooks.StateReady || rows(res)["claude"].State != hooks.StateNeedsSetup {
 		t.Fatalf("rows after %+v", rows(res))
 	}
 	if _, err := os.Stat(filepath.Join(o.ClaudeDir, "settings.json")); err == nil {
-		t.Fatal("installing gemini touched claude")
+		t.Fatal("installing droid touched claude")
 	}
-	res, err = call(t, s, MethodUninstall, `{"agents":["gemini"]}`)
+	res, err = call(t, s, MethodUninstall, `{"agents":["droid"]}`)
 	if err != nil || res.(ChangeResult).Results[0].State != "removed" {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -100,17 +100,17 @@ func TestInstallAllSetsUpEveryInstalledHarness(t *testing.T) {
 	for _, r := range res.(ChangeResult).Results {
 		ids = append(ids, r.ID)
 	}
-	if !reflect.DeepEqual(ids, []string{"claude", "gemini"}) {
+	if !reflect.DeepEqual(ids, []string{"claude", "droid"}) {
 		t.Fatalf("installed %v", ids)
 	}
 }
 
 func TestChangeValidatesAgents(t *testing.T) {
 	s, _ := newService(t)
-	for _, p := range []string{`{"agents":["kimi"]}`, `{"agents":["../etc"]}`, `{"agents":["gemini","gemini"]}`, `{"agents":["gemini"],"path":"/x"}`} {
+	for _, p := range []string{`{"agents":["kimi"]}`, `{"agents":["../etc"]}`, `{"agents":["droid","droid"]}`, `{"agents":["droid"],"path":"/x"}`} {
 		_, err := call(t, s, MethodInstall, p)
 		var inv *session.InvalidParamsError
-		if err == nil || (!errors.As(err, &inv) && p != `{"agents":["gemini"],"path":"/x"}`) {
+		if err == nil || (!errors.As(err, &inv) && p != `{"agents":["droid"],"path":"/x"}`) {
 			t.Errorf("%s: %v", p, err)
 		}
 	}
@@ -148,10 +148,10 @@ func TestObserveRecordsLastHook(t *testing.T) {
 		t.Fatalf("%+v", rows(res)["claude"])
 	}
 	failing := s.Observe(o.TogoHome, func(context.Context, json.RawMessage) (any, error) { return nil, errors.New("no") })
-	if _, err := failing(context.Background(), json.RawMessage(`{"agent":"gemini"}`)); err == nil {
+	if _, err := failing(context.Background(), json.RawMessage(`{"agent":"droid"}`)); err == nil {
 		t.Fatal("error swallowed")
 	}
-	if _, ok := hooks.LoadSeen(o.TogoHome)["gemini"]; ok {
+	if _, ok := hooks.LoadSeen(o.TogoHome)["droid"]; ok {
 		t.Fatal("a refused hook counted as received")
 	}
 }

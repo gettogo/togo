@@ -203,7 +203,8 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 	stale := now.Unix() + liveStale
 	cs := mask(st, d)
 	cs.Ctx = s.sealContext(d, st.context)
-	la := &liveActivity{Event: ev, ContentState: cs, Attributes: attrs, StaleDate: &stale}
+	la := &liveActivity{Event: ev, ContentState: cs, Attributes: attrs, StaleDate: &stale,
+		Urgent: ev == liveUpdate && st.Waiting < dl.last.Waiting}
 	if ev == liveEnd {
 		dismiss := now.Unix() + liveDismiss
 		la.DismissalDate = &dismiss
@@ -263,11 +264,11 @@ func liveReason(r string) string {
 	return ""
 }
 
-// mask drops the command for a device that did not opt in to command text.
+// mask drops the plain command field for every device.
 func mask(st LiveState, d Device) LiveState {
-	if !d.LiveActivityCommand {
-		st.Command = nil
-	}
+	// Command text never goes in plain: APNs and the relay would see it.
+	// The sealed context's subject carries it (redacted) to every device.
+	st.Command = nil
 	return st
 }
 

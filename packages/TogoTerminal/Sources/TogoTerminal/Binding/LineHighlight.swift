@@ -65,14 +65,35 @@ extension SwiftTermEngine {
     /// True while another layer covers the terminal, as the chat does: the terminal lets the
     /// keyboard go and may not take it, and VoiceOver passes it by. Uncovering it does not
     /// raise the keyboard; the next tap on the terminal does.
+    ///
+    /// While covered it keeps parsing output but stops drawing: once the chat has faded in over
+    /// it, the view is hidden, so an agent's spinner does not keep the GPU busy under an opaque
+    /// chat. Uncovering shows it at once and redraws it whole.
     public var isCovered: Bool {
         get { terminalView.covered }
         set {
             guard newValue != terminalView.covered else { return }
-            terminalView.covered = newValue
-            terminalView.accessibilityElementsHidden = newValue
-            terminalView.wantsFocus = false
-            if newValue { _ = terminalView.resignFirstResponder() }
+            let view = terminalView
+            view.covered = newValue
+            view.accessibilityElementsHidden = newValue
+            view.wantsFocus = false
+            view.coverGeneration += 1
+            if newValue {
+                _ = view.resignFirstResponder()
+                let generation = view.coverGeneration
+                Task { @MainActor [weak view] in
+                    try? await Task.sleep(for: Self.hideAfterCover)
+                    guard let view, view.covered, view.coverGeneration == generation else { return }
+                    view.isHidden = true
+                }
+            } else if view.isHidden {
+                view.isHidden = false
+                view.setNeedsDisplay()
+            }
         }
     }
+
+    /// Longer than the chat's fade over the terminal, so it never vanishes under a chat that is
+    /// still see-through.
+    static let hideAfterCover: Duration = .milliseconds(700)
 }

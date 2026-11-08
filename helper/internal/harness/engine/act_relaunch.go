@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
@@ -26,6 +27,18 @@ func (e *Engine) runRelaunch(ctx context.Context, s *sess, r *spec.Relaunch, dat
 		}
 		argv = append(argv, v)
 	}
+group:
+	for _, g := range r.Keep {
+		vals := make([]string, 0, len(g))
+		for _, a := range g {
+			v, err := Render(a, data)
+			if err != nil || v == "" || len(v) > maxArgString || (flagFromInput(a, v)) {
+				continue group
+			}
+			vals = append(vals, v)
+		}
+		argv = append(argv, vals...)
+	}
 	if !sameProgram(argv[0], s.info.Command, s.info.Agent) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "Only the session's own agent can be restarted"}, nil
 	}
@@ -39,6 +52,9 @@ func (e *Engine) runRelaunch(ctx context.Context, s *sess, r *spec.Relaunch, dat
 		e.cfg.Logf("harness: %s relaunch: %v", s.ad.Adapter.Adapter, err)
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "The agent could not be restarted"}, nil
 	}
+	s.mu.Lock()
+	s.relaunchedAt = time.Now()
+	s.mu.Unlock()
 	return harness.ActionResult{Result: harness.ResultRelaunched}, nil
 }
 

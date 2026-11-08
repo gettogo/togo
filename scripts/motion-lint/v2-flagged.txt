@@ -39,3 +39,9 @@ Pane().motion(.fade, value: store.shownLayer)
 // motion: state change — chat became available
 // expect availability-animates
 Pane().animation(Motion.animation(.fade, reduce: r), value: chatAvailable)
+// motion: state change — loader to session is one crossfade
+// expect availability-animates
+ZStack {}.motion(.fade, value: layer == .pending)
+// motion: state change — the chat loaded
+// expect availability-animates
+Pane().animation(Motion.animation(.fade, reduce: r), value: store.hasLoaded)

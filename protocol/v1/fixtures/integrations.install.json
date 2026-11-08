@@ -1,5 +1,5 @@
 {
-  "description": "One-tap Set up for Gemini CLI: the helper backs up ~/.gemini/settings.json, adds its hooks and returns every row after the change.",
+  "description": "One-tap Set up for Droid: the helper backs up ~/.factory/hooks.json, adds its hooks and returns every row after the change.",
   "setup": [
     {
       "jsonrpc": "2.0",
@@ -21,7 +21,7 @@
     "method": "integrations.install",
     "params": {
       "agents": [
-        "gemini"
+        "droid"
       ]
     }
   },
@@ -31,10 +31,10 @@
     "result": {
       "results": [
         {
-          "id": "gemini",
+          "id": "droid",
           "state": "installed",
-          "path": "/home/u/.gemini/settings.json",
-          "backup": "/home/u/.gemini/settings.json.togo-backup"
+          "path": "/home/u/.factory/hooks.json",
+          "backup": "/home/u/.factory/hooks.json.togo-backup"
         }
       ],
       "integrations": [
@@ -52,14 +52,14 @@
           "statusLineAt": "2026-11-07T09:12:30Z"
         },
         {
-          "id": "gemini",
-          "name": "Gemini CLI",
+          "id": "droid",
+          "name": "Droid",
           "installed": true,
           "setup": "hooks",
           "state": "ready",
           "hooks": "installed",
-          "path": "/home/u/.gemini/settings.json",
-          "backup": "/home/u/.gemini/settings.json.togo-backup"
+          "path": "/home/u/.factory/hooks.json",
+          "backup": "/home/u/.factory/hooks.json.togo-backup"
         },
         {
           "id": "vibe",

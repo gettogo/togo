@@ -15,6 +15,7 @@ import TogoKit
 ///   that is there all turn, so the line's height never changes while it runs.
 struct LiveLine: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.loopsPaused) private var loopsPaused
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
     let state: WorkingState
 
@@ -45,7 +46,7 @@ struct LiveLine: View {
                 .motion(.respond, value: state.waiting)
             if WorkingCopy.seconds(state, now: .now) != nil {
                 Text(verbatim: LiveLineLayout.separator)
-                TimelineView(.periodic(from: LiveLineLayout.origin(state), by: 1)) { context in
+                TimelineView(.clock(from: LiveLineLayout.origin(state), paused: loopsPaused)) { context in
                     Text(verbatim: WorkingCopy.clock(state, now: context.date))
                         .clockText()
                 }
@@ -119,5 +120,29 @@ private struct LiveGlyph: View {
         // motion: state change — the spinner gives way to the still beacon in the same fixed slot: the agent stopped for the user.
         .motion(.respond, value: waiting)
         .accessibilityHidden(true)
+    }
+}
+
+/// A once-a-second clock that holds still while the view is hidden (`loopsPaused`): a chat
+/// under the terminal does not redraw its timers.
+struct ClockSchedule: TimelineSchedule {
+    let origin: Date
+    let paused: Bool
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        if paused {
+            var given = false
+            return AnyIterator {
+                defer { given = true }
+                return given ? nil : startDate
+            }
+        }
+        return AnyIterator(PeriodicTimelineSchedule(from: origin, by: 1).entries(from: startDate, mode: mode))
+    }
+}
+
+extension TimelineSchedule where Self == ClockSchedule {
+    static func clock(from origin: Date, paused: Bool) -> ClockSchedule {
+        ClockSchedule(origin: origin, paused: paused)
     }
 }

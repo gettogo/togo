@@ -60,7 +60,8 @@ func TestAdapterFileParses(t *testing.T) {
 	if a.Adapter != "claude" || a.Feeds["transcript"].Mapper != MapperTranscript || a.Screens["plan"].Primitive != "checklist" {
 		t.Fatalf("unexpected adapter: %+v", a)
 	}
-	if !spec.AllowedKeys[a.Actions["set_mode"].Keys.Keys[0]] || !a.Actions["set_mode"].Keys.Cycle {
+	modeBr := a.Actions["set_mode"].Branch
+	if k := modeBr[len(modeBr)-1].Keys; k == nil || !spec.AllowedKeys[k.Keys[0]] || !k.Cycle {
 		t.Fatal("set_mode must cycle an allowed key")
 	}
 }
@@ -261,5 +262,15 @@ func TestAliasAndReadMode(t *testing.T) {
 	}
 	if ReadMode("Compiling...\n") != nil {
 		t.Error("a screen without the prompt box has no mode")
+	}
+}
+
+// A fresh session's status line says used_percentage 0 before anything is
+// counted; that is unknown, not an empty context meter.
+func TestStatuslineZeroContextIsUnknown(t *testing.T) {
+	s := newStatusline(env())
+	_, ops := s.Map(harness.Record{Data: []byte(`{"model":{"id":"claude-opus-5","display_name":"Opus"},"context_window":{"used_percentage":0}}`)})
+	if len(ops) != 1 || ops[0].Status.ContextPercent != nil {
+		t.Fatalf("ops = %+v", ops)
 	}
 }

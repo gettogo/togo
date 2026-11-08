@@ -67,6 +67,9 @@ type Env struct {
 	// Login and User feed the linger line on Linux; a nil Login leaves it out.
 	Login LoginInfo
 	User  string
+	// SSHListening reports whether sshd answers on this machine (Remote
+	// Login on macOS); nil leaves the line out.
+	SSHListening func(ctx context.Context) bool
 }
 
 const (
@@ -117,6 +120,7 @@ func DefaultEnv(loginPath string) Env {
 
 		TailscaleApp: tailnet.AppBinary,
 		Routes:       hostinfo.SystemRoutes,
+		SSHListening: sshListening,
 	}
 	if e.GOOS == "linux" {
 		e.Login, e.User = defaultLogin(e)
@@ -134,11 +138,15 @@ func execRun(ctx context.Context, bin string, args ...string) (string, error) {
 // Run performs every check in a fixed order: tmux, mosh-server, etserver,
 // agents, firewall, tailscale, routes, then awake and linger.
 func Run(ctx context.Context, e Env) []Check {
-	checks := []Check{
+	var checks []Check
+	if e.SSHListening != nil {
+		checks = append(checks, checkRemoteLogin(ctx, e))
+	}
+	checks = append(checks,
 		checkTmux(ctx, e),
 		checkMosh(ctx, e),
 		checkEternalTerminal(e),
-	}
+	)
 	checks = append(checks, checkAgents(e)...)
 	checks = append(checks, checkFirewall(ctx, e))
 	checks = append(checks, checkTailscale(ctx, e)...)

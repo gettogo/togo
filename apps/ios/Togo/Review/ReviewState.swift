@@ -41,6 +41,8 @@ extension AppStore {
             hostID: row.hostID, sessionID: row.id, bib: row.bib, title: row.name, cwd: row.cwd,
             managed: row.managed, capabilities: capabilities
         )
+        // A form in progress (new session, a machine) keeps the screen and what was typed.
+        guard sheet?.isForm != true else { return }
         reviewEnded = nil
         reviewHasDraft = false
         sheet = .review(subject, tab)

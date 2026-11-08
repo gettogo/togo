@@ -22,6 +22,6 @@ public struct SecretStoreError: Error, Equatable, CustomNSError, LocalizedError 
     public var errorCode: Int { Int(status) }
 
     public var errorDescription: String? {
-        "Togo could not unlock the saved key or password on this device. Sign in again to unlock it."
+        String(localized: "Togo could not unlock the saved key or password on this device. Sign in again to unlock it.", bundle: .module)
     }
 }
