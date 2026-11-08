@@ -279,7 +279,11 @@ const (
 type NoticeBody struct {
 	Level string `json:"level"` // info, warning or error
 	Code  string `json:"code"`
-	Text  string `json:"text"`
+	// Reason says what kind of error an error notice is (see notice.go):
+	// auth, provider_unreachable, rate_limit, model_not_found,
+	// context_overflow, crashed, refused or other. Empty otherwise.
+	Reason string `json:"reason,omitempty"`
+	Text   string `json:"text"`
 }
 
 // ShellBody is one command block of a plain shell session, from OSC 133

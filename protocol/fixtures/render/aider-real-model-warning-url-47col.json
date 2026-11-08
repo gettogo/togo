@@ -1,0 +1,33 @@
+{
+  "name": "aider/real-model-warning-url-47col",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "aider",
+    "title": "Open documentation url for more info?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "No",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Aider",
+    "subtitle": "Open documentation url for more info?",
+    "body": "",
+    "category": "togo.request.deny"
+  }
+}

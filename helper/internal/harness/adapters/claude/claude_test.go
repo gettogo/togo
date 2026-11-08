@@ -206,7 +206,7 @@ func TestHooksMapper(t *testing.T) {
 	if len(ops) != 2 || ops[1].Row.State != harness.RowDone || ops[0].Row.Title != "Find the failing test" {
 		t.Fatalf("ops = %+v", ops)
 	}
-	if len(items) != 1 || items[0].Notice.Code != harness.NoticeRateLimit {
+	if len(items) != 0 { // the transcript carries the StopFailure's error
 		t.Fatalf("items = %+v", items)
 	}
 }
@@ -272,5 +272,59 @@ func TestStatuslineZeroContextIsUnknown(t *testing.T) {
 	_, ops := s.Map(harness.Record{Data: []byte(`{"model":{"id":"claude-opus-5","display_name":"Opus"},"context_window":{"used_percentage":0}}`)})
 	if len(ops) != 1 || ops[0].Status.ContextPercent != nil {
 		t.Fatalf("ops = %+v", ops)
+	}
+}
+
+// Real failure shapes from Claude Code 2.1.31x transcripts (scrubbed): each
+// synthetic isApiErrorMessage entry is one error notice with its reason, and
+// the turn ends failed even when no turn_duration follows (a refused login).
+func TestTranscriptAPIErrors(t *testing.T) {
+	m := newTranscript(env())
+	r := mapAll(m, records(t, "transcript-errors.jsonl"))
+	want := map[string]string{
+		"e1": harness.ErrAuth, "e2": harness.ErrProviderUnreachable, "e3": harness.ErrModelNotFound,
+		"e4": harness.ErrRateLimit, "e5": harness.ErrContextOverflow, "e6": harness.ErrAuth,
+	}
+	for id, reason := range want {
+		it, ok := r.final[id]
+		if !ok || it.Notice == nil || it.Notice.Reason != reason || it.Notice.Text == "" {
+			t.Fatalf("%s = %+v", id, it.Notice)
+		}
+	}
+	if r.final["e1"].Notice.Text != "Login expired · Please run /login" || r.final["e1"].Notice.Level != "error" {
+		t.Fatalf("e1 = %+v", r.final["e1"].Notice)
+	}
+	for _, u := range []string{"u1", "u2", "u3", "u4", "u5", "u6"} {
+		tr, ok := r.final[u+".turn"]
+		if !ok || tr.Turn.State != harness.StateFailed || tr.Turn.Ended == nil {
+			t.Fatalf("%s turn = %+v", u, tr.Turn)
+		}
+	}
+	retry := r.final["u2.retry"]
+	if retry.Notice == nil || retry.Notice.Level != "warning" || retry.Notice.Reason != harness.ErrRateLimit ||
+		!strings.Contains(retry.Notice.Text, "attempt 2 of 10") {
+		t.Fatalf("retry = %+v", retry.Notice)
+	}
+	if st := m.State(); st["working"] != "false" {
+		t.Fatalf("state = %v", st)
+	}
+}
+
+// StopFailure says the same as the transcript's synthetic error; without a
+// transcript it is the only notice, with Claude's tag as its reason.
+func TestStopFailureWithoutTranscript(t *testing.T) {
+	h := newHooks(env())
+	items, _ := h.Map(harness.Record{At: time.Unix(10, 0), Data: json.RawMessage(
+		`{"session_id":"s1","hook_event_name":"StopFailure","error":"authentication_failed"}`)})
+	if len(items) != 1 || items[0].Notice.Reason != harness.ErrAuth || !strings.Contains(items[0].Notice.Text, "/login") {
+		t.Fatalf("items = %+v", items)
+	}
+	if h.State()["working"] != "false" {
+		t.Fatal("still working")
+	}
+	items, _ = h.Map(harness.Record{At: time.Unix(11, 0), Data: json.RawMessage(
+		`{"session_id":"s1","hook_event_name":"StopFailure","error":"model_not_found","error_details":"model claude-nope not found"}`)})
+	if len(items) != 1 || items[0].Notice.Reason != harness.ErrModelNotFound || items[0].Notice.Text != "model claude-nope not found" {
+		t.Fatalf("items = %+v", items)
 	}
 }

@@ -111,6 +111,7 @@ enum ChatCopy {
     static func workLine(_ summary: WorkSummary, now: Date) -> String {
         var parts: [String] = []
         let time = summary.elapsed(now: now).map(clock)
+        if let short = instantLine(summary, now: now) { return short }
         if summary.running {
             parts.append(time.map { String(localized: "chat.work.working", defaultValue: "Working \($0)") }
                 ?? String(localized: "chat.work.workingBare", defaultValue: "Working"))
@@ -122,6 +123,16 @@ enum ChatCopy {
                 ?? String(localized: "chat.work.workedBare", defaultValue: "Worked"))
         }
         if summary.steps > 0 { parts.append(steps(summary.steps)) }
+        if summary.filesChanged > 0 { parts.append(files(summary.filesChanged)) }
+        return parts.joined(separator: "  ")
+    }
+
+    /// A finished turn that took under a second never really ran (start-up output, a typed line
+    /// the agent refused): "2 steps", not "Worked 0s  2 steps". nil for any other line.
+    static func instantLine(_ summary: WorkSummary, now: Date) -> String? {
+        guard !summary.running, !summary.failed, summary.steps > 0, let worked = summary.elapsed(now: now), worked < 1
+        else { return nil }
+        var parts = [steps(summary.steps)]
         if summary.filesChanged > 0 { parts.append(files(summary.filesChanged)) }
         return parts.joined(separator: "  ")
     }

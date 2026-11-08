@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-08T04:23:55.234Z",
+  "agent": "lead",
+  "sessionId": "1794111835108_ek8r9",
+  "origin": {
+    "source": "cli",
+    "mode": "user",
+    "sessionId": "1794111835108_ek8r9",
+    "version": "3.0.74"
+  },
+  "messages": [
+    {
+      "id": "135af53a-5fb8-4c15-94b6-a5d328a62c89",
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input mode=\"act\">say hi</user_input>"
+        }
+      ],
+      "ts": 1794111835147
+    },
+    {
+      "id": "error_440a0c4e-9401-497a-88dd-28140d5d7a57",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "no router for requested model"
+        }
+      ],
+      "ts": 1794111835232,
+      "metadata": {
+        "displayOnly": true,
+        "displayRole": "error"
+      },
+      "modelInfo": {
+        "id": "nope-model-x",
+        "provider": "openai-compatible"
+      }
+    }
+  ]
+}

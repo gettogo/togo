@@ -1,0 +1,32 @@
+{
+  "session_id": "c62e7a44-5a4f-1af0-5ad4-d1c9fa135f62",
+  "parent_session_id": null,
+  "start_time": "2026-11-08T04:25:21.252000+00:00",
+  "end_time": "2026-11-08T04:25:34.050000+00:00",
+  "git_commit": null,
+  "git_branch": null,
+  "environment": {
+    "working_directory": "/w/proj"
+  },
+  "origin_directory": "/w/proj",
+  "username": "user",
+  "child_sessions": [],
+  "loops": [],
+  "title": null,
+  "title_source": "auto",
+  "bumped_at": "2026-11-08T04:25:21.319623+00:00",
+  "pinned_at": null,
+  "archived_at": null,
+  "unseen_at": "2026-11-08T04:25:34.052770+00:00",
+  "seen_at": null,
+  "experiments": null,
+  "config": {
+    "active_model": "qwen5090",
+    "model_name": "qwen3.8-27b"
+  },
+  "runtime_path": "direct",
+  "import_provenance": null,
+  "created_worktree": null,
+  "project": null,
+  "artifacts": []
+}

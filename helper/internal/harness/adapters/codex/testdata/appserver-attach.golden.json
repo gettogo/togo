@@ -144,7 +144,21 @@
    }
   },
   {
-   "id": "error-01a1b3df-e3e5-7783-913c-d46805e6408e-1793966401800",
+   "id": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "seq": 0,
+   "turnId": "01a1b3df-e3e5-7783-913c-d46805e6408e",
+   "kind": "turn",
+   "at": "2026-11-07T02:39:16Z",
+   "turn": {
+    "state": "failed",
+    "startedAt": "2026-11-07T02:39:16Z",
+    "endedAt": "2026-11-06T12:00:01.7Z",
+    "steps": 0,
+    "filesChanged": 0
+   }
+  },
+  {
+   "id": "error-01a1b3df-e3e5-7783-913c-d46805e6408e",
    "seq": 0,
    "turnId": "01a1b3df-e3e5-7783-913c-d46805e6408e",
    "kind": "notice",
@@ -152,6 +166,7 @@
    "notice": {
     "level": "error",
     "code": "error",
+    "reason": "auth",
     "text": "Your access token could not be refreshed. Please log out and sign in again."
    }
   },

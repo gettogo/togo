@@ -2520,7 +2520,8 @@
       "type": "object",
       "properties": {
         "level": { "enum": ["info", "warning", "error"] },
-        "code": { "enum": ["compacted", "model", "mode", "rate_limit", "error", "resumed", "interrupted", "fallback", "continued"] },
+        "code": { "enum": ["compacted", "model", "mode", "rate_limit", "error", "resumed", "interrupted", "fallback", "continued", "ended"] },
+        "reason": { "enum": ["auth", "provider_unreachable", "rate_limit", "model_not_found", "context_overflow", "crashed", "refused", "other"] },
         "text": { "type": "string" }
       },
       "required": ["level", "code", "text"],

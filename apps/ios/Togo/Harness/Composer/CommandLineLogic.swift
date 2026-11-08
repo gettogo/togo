@@ -135,6 +135,15 @@ enum CommandLineLogic {
         return true
     }
 
+    /// The composer's line for a send that did not go: "Not sent", with the helper's reason
+    /// when it refused and said why.
+    static func notSentNotice(_ error: any Error) -> String {
+        if case HelperError.rpc(let rpc) = error, rpc.code == RPCErrorCode.refused, let why = rpc.refusalMessage, !why.isEmpty {
+            return ComposerCopy.notSent + ". " + why
+        }
+        return ComposerCopy.notSent
+    }
+
     /// A prompt typed while the agent works waits its turn; otherwise it goes now.
     static func sendMode(working: Bool) -> HarnessSendParams.Mode {
         working ? .queue : .now

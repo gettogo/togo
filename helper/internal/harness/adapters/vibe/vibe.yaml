@@ -1,7 +1,9 @@
 # Mistral Vibe 3.1. No attach protocol for the TUI (`vibe-acp` and `vibe-app-server` are separate
-# stdio processes). Reads: the message journal ~/.vibe/logs/session/<dir>/messages.jsonl and its
-# meta.json (layout from Vibe's source; no live session was made, it needs an API key) and hooks
-# that use Vibe's claude_code protocol (pre_tool, post_tool, post_agent; payload unverified).
+# stdio processes). Reads: the recovery journal ~/.vibe/logs/session/unified/<id>/journal/*.jsonl
+# (its projection_delta records: the public history entries and the turn's status and error) and
+# the snapshot it folds into after each turn, picked by meta.json's working_directory; layout from
+# Vibe 3.1.0's local harness, checked against live sessions. Hooks that use Vibe's claude_code
+# protocol (pre_tool, post_tool, post_agent; payload unverified) are read when present.
 # Writes: built-in agents are the modes and change by relaunch with --continue; /compact typed.
 adapter: vibe
 name: Mistral Vibe
@@ -15,14 +17,14 @@ feeds:
     hook: { events: [PreToolUse, PostToolUse, Stop] }
     mapper: vibe.hooks
     stability: experimental
-  session:          # path: the newest journal whose meta.json works in this folder
-    jsonl: { path: '{{.state.transcript_path}}', follow: true }
+  session:          # glob: the segments of the newest session whose meta.json works in this folder
+    jsonl: { glob: '{{.state.transcript_path}}', follow: true }
     mapper: vibe.session
     stability: internal
 sources:
   sessions:
-    file: { glob: '~/.vibe/logs/session/*/meta.json', format: json }
-    select: '[.[] | .head[0] as $m | select(($m.environment.working_directory // "") == $state.cwd or ($m.origin_directory // "") == $state.cwd) | {id: $m.session_id, title: $m.title, updated: .mtime}]'
+    file: { glob: '~/.vibe/logs/session/unified/*/meta.json', format: json }
+    select: '[.[] | .head[0] as $m | select($m.parent_session_id == null) | select(($m.environment.working_directory // "") == $state.cwd or ($m.origin_directory // "") == $state.cwd) | {id: $m.session_id, title: $m.title, updated: .mtime}]'
     cache: 30s
     stability: internal
   config:

@@ -80,11 +80,11 @@ type Dialect struct {
 
 // Dialects by agent id.
 var dialects = map[string]Dialect{
-	"droid": {Agent: "droid"},
+	"droid": {Agent: "droid", Prep: droidPrep},
 	"vibe": {Agent: "vibe", Events: map[string]string{
 		"pre_tool": PreToolUse, "post_tool": PostToolUse, "post_agent": Stop,
 	}},
-	"copilot": {Agent: "copilot", Answer: AnswerPermissionDecision, Events: map[string]string{
+	"copilot": {Agent: "copilot", Answer: AnswerPermissionDecision, Prep: copilotPrep, Events: map[string]string{
 		"sessionStart": SessionStart, "sessionEnd": SessionEnd, "userPromptSubmitted": UserPromptSubmit,
 		"preToolUse": PreToolUse, "postToolUse": PostToolUse, "postToolUseFailure": PostToolUseFailure,
 		"permissionRequest": PermissionRequest, "agentStop": Stop, "subagentStart": SubagentStart,

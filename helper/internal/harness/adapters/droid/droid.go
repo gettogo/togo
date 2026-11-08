@@ -1,8 +1,9 @@
 // Package droid is the Factory Droid harness adapter. Droid's hooks follow
 // Claude Code's shape (session_id, transcript_path, permission_mode,
 // tool_name, tool_input), so its chat and state come from the shared
-// hookstyle reader. Its transcript format has not been seen (it needs a
-// login to create one), so no transcript mapper reads it yet.
+// hookstyle reader. No transcript mapper draws the chat yet; a Stop hook
+// reads only the transcript's last agent_turn_outcome, which says whether
+// the turn failed and why (hookstyle/failures.go, seen on 1.5.0).
 package droid
 
 import (

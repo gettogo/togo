@@ -58,6 +58,9 @@ type Config struct {
 	Done func(id, title, body string)
 	// Status is the hub's status for a session (working, idle, ...).
 	Status func(id string) string
+	// Exit returns how the session's agent exited, nil when it runs or it
+	// is not known. It names the exit status in the chat's ended notice.
+	Exit func(id string) *wire.SessionExit
 	// Relaunch restarts the agent with argv in its pane.
 	Relaunch func(ctx context.Context, id string, argv []string) error
 	Git      func(ctx context.Context, dir string) (gitx.Status, error)

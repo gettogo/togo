@@ -1,7 +1,0 @@
-{"role":"system","content":"system prompt text","message_id":"m0"}
-{"role":"user","content":"check the tree","message_id":"m1"}
-{"role":"assistant","content":"","reasoning_content":"Run git status.","tool_calls":[{"id":"call_1","index":0,"type":"function","function":{"name":"bash","arguments":"{\"command\":\"git status\"}"}}],"message_id":"m2"}
-{"role":"tool","name":"bash","tool_call_id":"call_1","content":"On branch main","tool_result":{"output":{"stdout":"On branch main","returncode":0},"duration":0.2,"cancelled":false}}
-{"role":"assistant","content":[{"type":"text","text":"The tree is clean."}],"message_id":"m3"}
-{"role":"user","content":"summary","injected":true,"message_id":"m4"}
-{"role":"user","content":"compacted history","context_boundary":"compaction","message_id":"m5"}

@@ -1,0 +1,10 @@
+provided.
+OpenRouter provides free and paid access to
+many LLMs.
+Login to OpenRouter or create a free account? (
+Login to OpenRouter or create a free account? (
+Y)es/(N)o [Yes]: testing to see if togo is work
+ing?
+Please answer with one of: yes, no, skip, all
+Login to OpenRouter or create a free account? (
+Y)es/(N)o [Yes]: 

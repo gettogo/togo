@@ -57,6 +57,11 @@ var (
 	alwaysRe   = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|auto-accept|all edits|remember|permanent|in this project|for this project|globally|trust)`)
 )
 
+// opensBrowser matches a y/n question whose Yes opens a URL, a browser or a
+// sign-in: Aider's "Open documentation url for more info?" and "Login to
+// OpenRouter or create a free account?".
+var opensBrowser = regexp.MustCompile(`(?i)\b(open|visit|launch)\b.*\b(url|link|browser|page|docs|documentation|website)\b|\b(log ?in|sign ?in|sign ?up|create (a |an )?(free )?account)\b`)
+
 // matchConfirm recognises a line-mode y/n question on the last line, where
 // the terminal cursor sits while a shell tool waits for input. The answer
 // is the letter followed by Enter: these prompts read a whole line, and
@@ -83,6 +88,22 @@ func matchConfirm(lines []string) (Prompt, bool) {
 			last, loc = joined, l
 		}
 	}
+	if loc == nil && len(lines) >= 2 {
+		// A narrow pane wraps inside the token anywhere: Aider at a
+		// phone's 47 columns left "… free account? (" above
+		// "Y)es/(N)o [Yes]:" (seen live), and every chat prompt was typed
+		// into the question. The wrap cuts mid-word, so join with no space;
+		// the token must straddle the cut, else the last line alone matched.
+		joined := strings.TrimRight(lines[len(lines)-2], " ") + strings.TrimSpace(last)
+		l := ynToken.FindStringIndex(joined)
+		if l == nil {
+			l = aiderYN.FindStringIndex(joined)
+		}
+		if l != nil {
+			lines = append(lines[:len(lines)-2:len(lines)-2], joined)
+			last, loc = joined, l
+		}
+	}
 	if loc == nil {
 		return Prompt{}, false
 	}
@@ -93,11 +114,17 @@ func matchConfirm(lines []string) (Prompt, bool) {
 		}
 		title = strings.TrimSpace(lines[len(lines)-2])
 	}
+	yes := wire.RoleApprove
+	if opensBrowser.MatchString(title) {
+		// A Yes that opens a page or a sign-in on the Mac is never a
+		// one-tap approve: the phone must pick it on purpose.
+		yes = wire.RoleOther
+	}
 	return Prompt{
 		Kind:  KindConfirm,
 		Title: title,
 		Options: []wire.Option{
-			{N: 1, Label: "Yes", Role: wire.RoleApprove},
+			{N: 1, Label: "Yes", Role: yes},
 			{N: 2, Label: "No", Role: wire.RoleDeny},
 		},
 		Keys: map[int][]string{1: {"y", "Enter"}, 2: {"n", "Enter"}},

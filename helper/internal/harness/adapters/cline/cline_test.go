@@ -153,3 +153,56 @@ func TestUserTextUnwrapsTheEnvelope(t *testing.T) {
 		t.Fatalf("%q %q", txt, mode)
 	}
 }
+
+// The error fixtures are real Cline 3.0.74 runs whose provider failed: the
+// base URL refused the connection, or the server had no such model. Cline
+// appends the error as a display-only assistant message with displayRole
+// error; it is an error notice and the turn ends failed.
+func TestTerminalErrors(t *testing.T) {
+	for _, c := range []struct{ file, id, reason, text string }{
+		{"error-unreachable", "1794111762279_56b2q", harness.ErrProviderUnreachable,
+			"Can't reach the model provider. Cannot connect to API: Unable to connect. Is the computer able to access the url? (ConnectionRefused)"},
+		{"error-model", "", harness.ErrModelNotFound, "The provider doesn't have this model. no router for requested model"},
+	} {
+		doc, err := os.ReadFile("testdata/" + c.file + ".messages.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d document
+		_ = json.Unmarshal(doc, &d)
+		m := newMessages(env(t.TempDir(), "", "--id", d.SessionID))
+		items, _ := m.Map(harness.Record{Source: "messages", Data: doc})
+		var notice *harness.NoticeBody
+		var turn *harness.TurnBody
+		for _, it := range items {
+			if it.Assistant != nil {
+				t.Fatalf("%s: error shown as a reply: %q", c.file, it.Assistant.Text)
+			}
+			if it.Notice != nil {
+				notice = it.Notice
+			}
+			if it.Turn != nil {
+				turn = it.Turn
+			}
+		}
+		if notice == nil || notice.Code != harness.NoticeError || notice.Reason != c.reason || notice.Text != c.text {
+			t.Fatalf("%s: notice %+v", c.file, notice)
+		}
+		if turn == nil || turn.State != harness.StateFailed || turn.Ended == nil {
+			t.Fatalf("%s: turn %+v", c.file, turn)
+		}
+	}
+}
+
+func TestErrorTextReasons(t *testing.T) {
+	for raw, want := range map[string]string{
+		"401 Incorrect API key provided":             harness.ErrAuth,
+		"429 Rate limit reached for requests":        harness.ErrRateLimit,
+		"400 This model's maximum context length is": harness.ErrContextOverflow,
+		"The model `gpt-9` does not exist":           harness.ErrModelNotFound,
+	} {
+		if r, _ := errorText(raw); r != want {
+			t.Fatalf("%q: %s", raw, r)
+		}
+	}
+}

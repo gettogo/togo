@@ -25,18 +25,22 @@ func (p *blockPane) Type(ctx context.Context, id, text string, submit, paste boo
 	return p.seqPane.Type(ctx, id, text, submit, paste)
 }
 
-func statusEngine(t *testing.T, id string, pane harnessTypist, status *atomic.Value) *Engine {
+func statusEngine(t *testing.T, id string, pane harnessTypist, status *atomic.Value, opts ...func(*Config)) *Engine {
 	t.Helper()
 	bin := fakeBin(t, "1.2.3")
 	home := t.TempDir()
-	e := New(Config{
+	cfg := Config{
 		Sessions: fakeSessions{id: {ID: id, Agent: "fake", Managed: true, Cwd: home, Command: []string{"fake"}}},
 		Typist:   pane, Marker: &fakeMarker{}, Home: home,
 		Status:    func(string) string { v, _ := status.Load().(string); return v },
 		LoginPath: func(context.Context) string { return bin + ":/bin:/usr/bin" },
 		Log:       &Log{NewEpoch: func() string { return "e1" }},
 		Scale:     0.1,
-	})
+	}
+	for _, o := range opts {
+		o(&cfg)
+	}
+	e := New(cfg)
 	t.Cleanup(func() { e.Forget(id) })
 	if _, err := e.Describe(context.Background(), id); err != nil {
 		t.Fatal(err)

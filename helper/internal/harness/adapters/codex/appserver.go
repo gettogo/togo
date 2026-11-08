@@ -27,6 +27,10 @@ type AppServer struct {
 	threads map[string]*threadInfo
 	turns   map[string]*turnInfo
 	streams map[string]*stream
+	// retries counts a turn's retried errors, for the attempt shown.
+	retries map[string]int
+	// erred marks turns whose final error is already a notice.
+	erred   map[string]bool
 	tools   map[string]harness.Item
 	started map[string]time.Time
 	status  harness.StatusBlock
@@ -43,6 +47,7 @@ type turnInfo struct {
 	started time.Time
 	steps   map[string]bool
 	files   map[string]bool
+	done    bool
 }
 
 type stream struct {
@@ -61,6 +66,8 @@ func NewAppServer(env harness.Env) *AppServer {
 		threads: map[string]*threadInfo{},
 		turns:   map[string]*turnInfo{},
 		streams: map[string]*stream{},
+		retries: map[string]int{},
+		erred:   map[string]bool{},
 		tools:   map[string]harness.Item{},
 		started: map[string]time.Time{},
 		planned: map[string]time.Time{},
@@ -125,7 +132,7 @@ func (a *AppServer) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "account/rateLimits/updated":
 		return nil, a.limits(m.Params)
 	case "thread/status/changed":
-		return a.threadStatus(m.Params)
+		return a.threadStatus(m.Params, at)
 	case "thread/settings/updated":
 		return a.settings(m.Params, at)
 	case "thread/compacted":
@@ -176,9 +183,7 @@ type turnPayload struct {
 	Status      string       `json:"status"`
 	StartedAt   int64        `json:"startedAt"`
 	CompletedAt int64        `json:"completedAt"`
-	Error       *struct {
-		Message string `json:"message"`
-	} `json:"error"`
+	Error       *turnError   `json:"error"`
 }
 
 // resumed handles the result of joining a thread: thread facts, settings
@@ -248,6 +253,8 @@ func (a *AppServer) history(thread string, t turnPayload, at time.Time) []harnes
 		}
 	}
 	items = append(items, a.turnItem(t.ID, ti, t.Status, ended, at))
+	ti.done = t.Status != "inProgress"
+	items = append(items, a.turnFailure(t, thread, orNow(derefTime(ended), at))...)
 	if t.Status == "inProgress" && thread == a.main {
 		a.state["turn"] = t.ID
 		a.state["working"], a.state["idle"] = "true", "false"
@@ -362,9 +369,37 @@ func (a *AppServer) turnCompleted(params json.RawMessage, at time.Time) ([]harne
 	if p.ThreadID == a.main {
 		a.state["working"], a.state["idle"] = "false", "true"
 	}
+	ti.done = true
+	delete(a.retries, p.Turn.ID)
 	// A subagent's own state comes from its collab call, not from the end
 	// of one of its turns.
-	return []harness.Item{a.turnItem(p.Turn.ID, ti, p.Turn.Status, ended, at)}, nil
+	items := []harness.Item{a.turnItem(p.Turn.ID, ti, p.Turn.Status, ended, at)}
+	return append(items, a.turnFailure(p.Turn, p.ThreadID, orNow(derefTime(ended), at))...), nil
+}
+
+// turnFailure is the error notice of a failed turn, from the turn's own
+// error, unless the error notification that comes just before
+// turn/completed on a live thread already said it; on a resumed thread's
+// history it is the only record of the failure.
+func (a *AppServer) turnFailure(t turnPayload, thread string, at time.Time) []harness.Item {
+	if t.Status != "failed" || a.erred[t.ID] {
+		delete(a.erred, t.ID)
+		return nil
+	}
+	e := turnError{}
+	if t.Error != nil {
+		e = *t.Error
+	}
+	x := errorItem(e, t.ID, false, 0, at)
+	x.Parent = a.parentOf(thread)
+	return []harness.Item{x}
+}
+
+func derefTime(t *time.Time) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return *t
 }
 
 type itemParams struct {

@@ -11,24 +11,35 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/adapters/hookstyle"
 )
 
-// session maps Vibe's message journal. A user message starts a turn, an
-// assistant message without tool calls ends it, tool messages finish the
-// call named by tool_call_id. The journal has no timestamps, so items take
-// the time they were read.
+// session maps Vibe 3.1's recovery journal. Of its records only
+// projection_delta matters: the public history Vibe's own clients see, as
+// ops on entries (append_entry, replace_entry, set_history_entries) and a
+// set_envelope whose latestTurn says how the turn stands (in_progress,
+// completed, failed with an error, interrupted). Streamed text is never
+// journaled, only settled entries, so a reply shows once it is complete.
 type session struct {
 	env harness.Env
 
-	mu      sync.Mutex
-	state   map[string]string
-	turn    string
+	mu     sync.Mutex
+	state  map[string]string
+	loaded bool
+	turns  map[string]*turn
+	order  []string                // turn ids, oldest first
+	tools  map[string]harness.Item // running effects by entry id
+	failed map[string]bool         // turns whose error notice was shown
+}
+
+type turn struct {
 	started time.Time
-	steps   int
-	tools   map[string]harness.Item
-	n       int
+	last    time.Time
+	steps   map[string]bool
+	state   string
+	ended   *time.Time
 }
 
 func newSession(env harness.Env) *session {
-	return &session{env: env, state: map[string]string{}, tools: map[string]harness.Item{}}
+	return &session{env: env, state: map[string]string{}, turns: map[string]*turn{},
+		tools: map[string]harness.Item{}, failed: map[string]bool{}}
 }
 
 func (s *session) Name() string { return MapperSession }
@@ -43,149 +54,384 @@ func (s *session) State() map[string]string {
 	return out
 }
 
-type message struct {
+type record struct {
+	Type    string `json:"type"`
+	Payload struct {
+		Delta []op `json:"delta"`
+	} `json:"payload"`
+}
+
+type op struct {
+	Op      string    `json:"op"`
+	Entry   *entry    `json:"entry"`
+	Entries []entry   `json:"entries"`
+	State   *envelope `json:"state"`
+}
+
+type entry struct {
+	Type      string          `json:"type"`
+	ID        string          `json:"id"`
+	SessionID string          `json:"sessionId"`
+	TurnID    string          `json:"turnId"`
+	CreatedAt int64           `json:"createdAt"`
+	UpdatedAt int64           `json:"updatedAt"`
 	Role      string          `json:"role"`
 	Content   json.RawMessage `json:"content"`
-	Reasoning json.RawMessage `json:"reasoning_content"`
-	Injected  bool            `json:"injected"`
-	MessageID string          `json:"message_id"`
-	Boundary  string          `json:"context_boundary"`
-	ToolCalls []struct {
-		ID       string `json:"id"`
-		Function struct {
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		} `json:"function"`
-	} `json:"tool_calls"`
-	ToolCallID string `json:"tool_call_id"`
-	ToolResult *struct {
-		Output    json.RawMessage `json:"output"`
-		Cancelled bool            `json:"cancelled"`
-	} `json:"tool_result"`
+	Text      string          `json:"text"`
+	Message   string          `json:"message"`
+	Level     string          `json:"level"`
+	Kind      string          `json:"kind"`
+	Title     string          `json:"title"`
+	Outcome   *struct {
+		Type  string `json:"type"`
+		Cause string `json:"cause"`
+	} `json:"outcome"`
+	Detail struct {
+		ToolName string          `json:"toolName"`
+		Input    json.RawMessage `json:"input"`
+	} `json:"detail"`
+	Details struct {
+		Model string          `json:"model"`
+		Agent string          `json:"agent"`
+		Error json.RawMessage `json:"error"`
+	} `json:"details"`
+	State struct {
+		Status     string          `json:"status"`
+		OutputText string          `json:"outputText"`
+		Output     json.RawMessage `json:"output"`
+		Reason     string          `json:"reason"`
+		Error      *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	} `json:"state"`
+}
+
+type envelope struct {
+	LatestTurn *struct {
+		ID          string     `json:"id"`
+		Status      string     `json:"status"`
+		StartedAt   int64      `json:"startedAt"`
+		CompletedAt int64      `json:"completedAt"`
+		Reason      string     `json:"reason"`
+		StopReason  string     `json:"stopReason"`
+		Error       *turnError `json:"error"`
+	} `json:"latestTurn"`
+	Session struct {
+		ID string `json:"id"`
+	} `json:"session"`
+}
+
+// turnError is a failed turn's PublicError.
+type turnError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Details struct {
+		HTTPStatus    int    `json:"httpStatus"`
+		Reason        string `json:"reason"`
+		ExceptionType string `json:"exceptionType"`
+	} `json:"details"`
 }
 
 func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
-	var m message
-	if json.Unmarshal(rec.Data, &m) != nil || m.Role == "" {
+	var r record
+	if json.Unmarshal(rec.Data, &r) != nil || r.Type != "projection_delta" || len(r.Payload.Delta) == 0 {
 		return nil, nil
 	}
 	hookstyle.MarkLive(s.env.SessionID)
-	at := rec.At
-	if at.IsZero() {
-		at = time.Now()
-	}
-	at = at.UTC()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.n++
-	id := m.MessageID
-	if id == "" {
-		id = "vibe-" + strconv.Itoa(s.n)
+	var items []harness.Item
+	if !s.loaded {
+		s.loaded = true
+		if id := sessionOf(r.Payload.Delta); id != "" {
+			items = s.history(id)
+		}
 	}
-	switch m.Role {
-	case "user":
-		if m.Injected {
-			return nil, nil
-		}
-		if m.Boundary == "compaction" {
-			return []harness.Item{{ID: id, Kind: harness.KindNotice, At: at, Notice: &harness.NoticeBody{
-				Level: "info", Code: harness.NoticeCompacted, Text: "Conversation compacted"}}}, nil
-		}
-		var items []harness.Item
-		if s.turn != "" {
-			items = s.close(at)
-		}
-		s.turn, s.started, s.steps = id+".turn", at, 0
-		s.state["working"], s.state["idle"] = "true", "false"
-		s.state[harness.StateWorkingAt] = harness.StampWorking(at)
-		items = append(items, harness.Item{ID: id, TurnID: s.turn, Kind: harness.KindUser, At: at,
-			User: &harness.UserBody{Text: hookstyle.Clip(text(m.Content)), Source: "unknown"}})
-		return append(items, s.turnItem(harness.StateRunning, nil)), nil
-	case "assistant":
-		return s.assistant(m, id, at), nil
-	case "tool":
-		x, ok := s.tools[m.ToolCallID]
-		if !ok {
-			return nil, nil
-		}
-		delete(s.tools, m.ToolCallID)
-		b := *x.Tool
-		b.State, b.Ended = harness.StateOK, &at
-		out, failed := "", false
-		if m.ToolResult != nil {
-			out, failed = hookstyle.ToolOutput(m.ToolResult.Output)
-			if m.ToolResult.Cancelled {
-				b.State = harness.StateCancelled
+	for _, o := range r.Payload.Delta {
+		switch o.Op {
+		case "append_entry", "replace_entry":
+			if o.Entry != nil {
+				items = append(items, s.entry(*o.Entry)...)
 			}
-		} else {
-			out = hookstyle.Tail(text(m.Content), harness.MaxToolOutput)
+		case "set_history_entries":
+			for _, e := range o.Entries {
+				items = append(items, s.entry(e)...)
+			}
+		case "set_envelope":
+			if o.State != nil {
+				items = append(items, s.envelope(*o.State)...)
+			}
 		}
-		if failed {
-			b.State = harness.StateFailed
-		}
-		b.Output = out
-		x.Tool = &b
-		return []harness.Item{x}, nil
 	}
-	return nil, nil
+	return items, nil
 }
 
-func (s *session) assistant(m message, id string, at time.Time) []harness.Item {
+func sessionOf(delta []op) string {
+	for _, o := range delta {
+		if o.Entry != nil && o.Entry.SessionID != "" {
+			return o.Entry.SessionID
+		}
+		if o.State != nil && o.State.Session.ID != "" {
+			return o.State.Session.ID
+		}
+	}
+	return ""
+}
+
+func ms(v int64) time.Time {
+	if v <= 0 {
+		return time.Now().UTC()
+	}
+	return time.UnixMilli(v).UTC()
+}
+
+// open finds or starts the turn an entry belongs to. A new turn closes an
+// earlier one still open, which only history replay leaves so.
+func (s *session) open(id string, at time.Time) (*turn, []harness.Item) {
+	if id == "" {
+		return nil, nil
+	}
+	if t := s.turns[id]; t != nil {
+		if at.After(t.last) {
+			t.last = at
+		}
+		return t, nil
+	}
 	var items []harness.Item
-	if r := text(m.Reasoning); r != "" {
-		items = append(items, harness.Item{ID: id + ":thought", TurnID: s.turn, Kind: harness.KindThinking, At: at,
-			Thinking: &harness.TextBody{Text: hookstyle.Clip(r)}})
-	}
-	body := text(m.Content)
-	if body != "" {
-		items = append(items, harness.Item{ID: id + ":text", TurnID: s.turn, Kind: harness.KindAssistant, At: at,
-			Assistant: &harness.TextBody{Text: hookstyle.Clip(body)}})
-	}
-	for i, c := range m.ToolCalls {
-		cid := c.ID
-		if cid == "" {
-			cid = id + ":call-" + strconv.Itoa(i)
+	for _, prev := range s.order {
+		if p := s.turns[prev]; p.ended == nil {
+			items = append(items, s.end(prev, harness.StateOK, p.last)...)
 		}
-		args := json.RawMessage(c.Function.Arguments)
-		if !json.Valid(args) {
-			args = nil
-		}
-		title, cat, subj := hookstyle.ToolTitle(c.Function.Name, args)
-		x := harness.Item{ID: cid, TurnID: s.turn, Kind: harness.KindTool, At: at, Tool: &harness.ToolBody{
-			CallID: cid, Name: c.Function.Name, Title: hookstyle.Truncate(title, harness.MaxTitle), Category: cat,
-			Subject: subj, State: harness.StateRunning, Started: at}}
-		s.tools[cid] = x
-		s.steps++
-		items = append(items, x)
 	}
-	if s.turn == "" {
+	t := &turn{started: at, last: at, steps: map[string]bool{}, state: harness.StateRunning}
+	s.turns[id] = t
+	s.order = append(s.order, id)
+	if len(s.order) > 200 {
+		delete(s.turns, s.order[0])
+		s.order = s.order[1:]
+	}
+	s.working(true, at)
+	return t, append(items, s.turnItem(id))
+}
+
+func (s *session) entry(e entry) []harness.Item {
+	at := ms(e.CreatedAt)
+	t, items := s.open(e.TurnID, at)
+	switch e.Type {
+	case "message":
+		body := text(e.Content)
+		if body == "" {
+			return items
+		}
+		switch e.Role {
+		case "user":
+			return append(items, harness.Item{ID: e.ID, TurnID: e.TurnID, Kind: harness.KindUser, At: at,
+				User: &harness.UserBody{Text: hookstyle.Clip(body), Source: "unknown"}})
+		case "assistant":
+			if e.Outcome != nil && e.Outcome.Type == "discarded" && e.Outcome.Cause == "retry" {
+				return items
+			}
+			return append(items, harness.Item{ID: e.ID, TurnID: e.TurnID, Kind: harness.KindAssistant, At: at,
+				Assistant: &harness.TextBody{Text: hookstyle.Clip(body)}})
+		}
+	case "reasoning":
+		if strings.TrimSpace(e.Text) == "" {
+			return items
+		}
+		return append(items, harness.Item{ID: e.ID, TurnID: e.TurnID, Kind: harness.KindThinking, At: at,
+			Thinking: &harness.TextBody{Text: hookstyle.Clip(e.Text)}})
+	case "effect":
+		x := s.effect(e, at)
+		if t != nil && !t.steps[e.ID] {
+			t.steps[e.ID] = true
+			items = append(items, s.turnItem(e.TurnID))
+		}
+		return append(items, x)
+	case "notice":
+		lvl := e.Level
+		if lvl != "warning" && lvl != "error" {
+			lvl = "info"
+		}
+		if e.Message == "" {
+			return items
+		}
+		return append(items, harness.Item{ID: e.ID, TurnID: e.TurnID, Kind: harness.KindNotice, At: at,
+			Notice: &harness.NoticeBody{Level: lvl, Text: hookstyle.Truncate(e.Message, harness.MaxNoticeText)}})
+	case "checkpoint":
+		return append(items, s.checkpoint(e, at)...)
+	}
+	return items
+}
+
+func (s *session) checkpoint(e entry, at time.Time) []harness.Item {
+	n := harness.Item{ID: e.ID, TurnID: e.TurnID, Kind: harness.KindNotice, At: at}
+	switch e.Kind {
+	case "compaction":
+		if e.Message != "Context compacted" {
+			return nil // started, or failed: the turn's error says why
+		}
+		n.Notice = &harness.NoticeBody{Level: "info", Code: harness.NoticeCompacted, Text: "Conversation compacted"}
+	case "model_change":
+		if e.Details.Model != "" {
+			s.state["model"] = e.Details.Model
+		}
+		n.Notice = &harness.NoticeBody{Level: "info", Code: harness.NoticeModel, Text: e.Message}
+	case "agent_change":
+		n.Notice = &harness.NoticeBody{Level: "info", Code: harness.NoticeMode, Text: e.Message}
+	default:
+		return nil
+	}
+	return []harness.Item{n}
+}
+
+func (s *session) effect(e entry, at time.Time) harness.Item {
+	name := e.Detail.ToolName
+	if name == "" {
+		name = e.Title
+	}
+	short := name
+	if i := strings.LastIndexByte(short, '.'); i >= 0 {
+		short = short[i+1:]
+	}
+	title, cat, subj := hookstyle.ToolTitle(short, e.Detail.Input)
+	b := &harness.ToolBody{CallID: e.ID, Name: short, Title: hookstyle.Truncate(title, harness.MaxTitle),
+		Category: cat, Subject: subj, State: harness.StateRunning, Started: at}
+	if prev, ok := s.tools[e.ID]; ok {
+		b.Started = prev.Tool.Started
+	}
+	x := harness.Item{ID: e.ID, TurnID: e.TurnID, Kind: harness.KindTool, At: b.Started, Tool: b}
+	st := e.State
+	switch st.Status {
+	case "", "running", "open":
+		s.tools[e.ID] = x
+		return x
+	case "completed":
+		b.State = harness.StateOK
+	case "cancelled", "skipped":
+		b.State = harness.StateCancelled
+	default:
+		b.State = harness.StateFailed
+		if st.Error != nil && st.Error.Code == "tool_denied" {
+			b.State = harness.StateDenied
+		}
+	}
+	end := ms(e.UpdatedAt)
+	b.Ended = &end
+	b.Output, b.ExitCode = effectOutput(st.OutputText, st.Output)
+	if b.Output == "" {
+		switch {
+		case st.Error != nil && st.Error.Message != "":
+			b.Output = hookstyle.Tail(st.Error.Message, harness.MaxToolOutput)
+		case st.Reason != "":
+			b.Output = hookstyle.Tail(st.Reason, harness.MaxToolOutput)
+		}
+	}
+	delete(s.tools, e.ID)
+	return x
+}
+
+// effectOutput is a settled effect's output: its text, else the tool's
+// structured result (stdout for a shell call) or its text content.
+func effectOutput(textOut string, raw json.RawMessage) (string, *int) {
+	var o struct {
+		Structured json.RawMessage `json:"structured_content"`
+		Content    json.RawMessage `json:"content"`
+	}
+	_ = json.Unmarshal(raw, &o)
+	var code *int
+	var sh struct {
+		ReturnCode *int   `json:"returncode"`
+		Stdout     string `json:"stdout"`
+		Stderr     string `json:"stderr"`
+	}
+	if json.Unmarshal(o.Structured, &sh) == nil && sh.ReturnCode != nil {
+		code = sh.ReturnCode
+		if textOut == "" {
+			textOut = strings.TrimRight(sh.Stdout+sh.Stderr, "\n")
+			return hookstyle.Tail(textOut, harness.MaxToolOutput), code
+		}
+	}
+	if textOut != "" {
+		return hookstyle.Tail(textOut, harness.MaxToolOutput), code
+	}
+	if t := text(o.Content); t != "" {
+		return hookstyle.Tail(t, harness.MaxToolOutput), code
+	}
+	if len(o.Structured) > 0 && string(o.Structured) != "null" {
+		out, _ := hookstyle.ToolOutput(o.Structured)
+		return out, code
+	}
+	return "", code
+}
+
+func (s *session) envelope(v envelope) []harness.Item {
+	if v.Session.ID != "" {
+		s.state["session_id"] = v.Session.ID
+	}
+	lt := v.LatestTurn
+	if lt == nil || lt.ID == "" {
+		return nil
+	}
+	t, items := s.open(lt.ID, ms(lt.StartedAt))
+	if lt.StartedAt > 0 {
+		t.started = ms(lt.StartedAt)
+	}
+	switch lt.Status {
+	case "in_progress":
+		if t.ended != nil {
+			t.ended, t.state = nil, harness.StateRunning
+			s.working(true, time.Now().UTC())
+		}
+		return append(items, s.turnItem(lt.ID))
+	case "completed":
+		return append(items, s.end(lt.ID, harness.StateOK, ms(lt.CompletedAt))...)
+	case "interrupted":
+		return append(items, s.end(lt.ID, harness.StateInterrupted, ms(lt.CompletedAt))...)
+	case "failed":
+		at := ms(lt.CompletedAt)
+		items = append(items, s.end(lt.ID, harness.StateFailed, at)...)
+		if !s.failed[lt.ID] {
+			s.failed[lt.ID] = true
+			items = append(items, harness.Item{ID: lt.ID + ":error", TurnID: lt.ID, Kind: harness.KindNotice, At: at,
+				Notice: failNotice(lt.Error)})
+		}
 		return items
 	}
-	if len(m.ToolCalls) == 0 && body != "" {
-		return append(items, s.close(at)...)
-	}
-	return append(items, s.turnItem(harness.StateRunning, nil))
+	return items
 }
 
-func (s *session) close(at time.Time) []harness.Item {
+// end settles a turn, and any of its effects still running.
+func (s *session) end(id, state string, at time.Time) []harness.Item {
+	t := s.turns[id]
+	if t == nil {
+		return nil
+	}
 	var items []harness.Item
-	for id, x := range s.tools {
+	for eid, x := range s.tools {
+		if x.TurnID != id {
+			continue
+		}
 		b := *x.Tool
 		b.State, b.Ended = harness.StateInterrupted, &at
 		x.Tool = &b
 		items = append(items, x)
-		delete(s.tools, id)
+		delete(s.tools, eid)
 	}
-	items = append(items, s.turnItem(harness.StateOK, &at))
-	s.turn = ""
-	s.state["working"], s.state["idle"] = "false", "true"
-	s.state[harness.StateWorkingAt] = harness.StampWorking(at)
-	return items
+	t.state, t.ended = state, &at
+	s.working(false, at)
+	return append(items, s.turnItem(id))
 }
 
-func (s *session) turnItem(state string, ended *time.Time) harness.Item {
-	return harness.Item{ID: s.turn, TurnID: s.turn, Kind: harness.KindTurn, At: s.started,
-		Turn: &harness.TurnBody{State: state, Started: s.started, Ended: ended, Steps: s.steps}}
+func (s *session) working(on bool, at time.Time) {
+	s.state["working"], s.state["idle"] = strconv.FormatBool(on), strconv.FormatBool(!on)
+	s.state[harness.StateWorkingAt] = harness.StampWorking(at)
+}
+
+func (s *session) turnItem(id string) harness.Item {
+	t := s.turns[id]
+	return harness.Item{ID: id, TurnID: id, Kind: harness.KindTurn, At: t.started,
+		Turn: &harness.TurnBody{State: t.state, Started: t.started, Ended: t.ended, Steps: len(t.steps)}}
 }
 
 // text reads content given as a string or as a list of {type, text} parts.

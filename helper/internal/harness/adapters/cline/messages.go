@@ -186,6 +186,9 @@ type message struct {
 	TS       int64           `json:"ts"`
 	Metadata struct {
 		DisplayOnly bool `json:"displayOnly"`
+		// DisplayRole "error" marks the message recordTerminalError
+		// appends when a run fails (3.0.74): the error text, shown only.
+		DisplayRole string `json:"displayRole"`
 	} `json:"metadata"`
 }
 
@@ -337,6 +340,19 @@ func (m *messages) render(msgs []message) []harness.Item {
 			items = append(items, harness.Item{ID: id, TurnID: tid, Kind: harness.KindUser, At: at,
 				User: &harness.UserBody{Text: hookstyle.Clip(strings.Join(text, "\n\n")), Source: "unknown"}})
 		case "assistant":
+			if msg.Metadata.DisplayRole == "error" {
+				var text []string
+				for _, b := range bs {
+					if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+						text = append(text, strings.TrimSpace(b.Text))
+					}
+				}
+				reason, line := errorText(strings.Join(text, "\n"))
+				items = append(items, harness.Item{ID: id, TurnID: turn.ID, Kind: harness.KindNotice, At: at,
+					Notice: harness.ErrorNotice(reason, line)})
+				closeTurn(harness.StateFailed, at)
+				continue
+			}
 			calls, said := 0, false
 			for i, b := range bs {
 				bid := id + ":" + strconv.Itoa(i)
@@ -458,6 +474,46 @@ func toolTitle(name string, input json.RawMessage) (string, string, *wire.Subjec
 		}
 	}
 	return hookstyle.ToolTitle(name, input)
+}
+
+// modelMissing is how OpenAI-compatible servers refuse a model name the
+// shared classifier does not know ("no router for requested model").
+var modelMissing = regexp.MustCompile(`(?i)\bno (router|provider|endpoints?|deployment) (found )?for (the )?(requested )?model\b|\bmodel\b.{0,40}\bnot (found|exist)`)
+
+// errorText reads a terminal error Cline recorded: its reason, and a short
+// sentence that leads with what it means. Cline repeats a fetch failure's
+// message after its error class ("Cannot connect to API: Unable to
+// connect. Is the computer able to access the url?: TypeError: Unable to
+// connect. … (ConnectionRefused)"); the repeat is dropped.
+func errorText(raw string) (string, string) {
+	text := strings.TrimSpace(raw)
+	for _, sep := range []string{": TypeError: ", ": Error: ", ": APIError: "} {
+		if i := strings.Index(text, sep); i >= 0 {
+			tail := text[i+len(sep):]
+			text = strings.TrimSpace(text[:i])
+			if j := strings.LastIndex(tail, " ("); j >= 0 && strings.HasSuffix(tail, ")") {
+				text += tail[j:] // the error code, e.g. (ConnectionRefused)
+			}
+		}
+	}
+	reason := harness.ClassifyError(raw)
+	if reason == harness.ErrOther && modelMissing.MatchString(raw) {
+		reason = harness.ErrModelNotFound
+	}
+	lead := map[string]string{
+		harness.ErrAuth:                "The provider refused the API key or sign-in.",
+		harness.ErrProviderUnreachable: "Can't reach the model provider.",
+		harness.ErrRateLimit:           "Rate limit or quota reached.",
+		harness.ErrModelNotFound:       "The provider doesn't have this model.",
+		harness.ErrContextOverflow:     "The conversation is too long for the model.",
+	}[reason]
+	switch {
+	case lead == "":
+		return reason, text
+	case text == "":
+		return reason, lead
+	}
+	return reason, lead + " " + text
 }
 
 var userInput = regexp.MustCompile(`(?s)^\s*<user_input(?: mode="([a-z]+)")?>(.*)</user_input>\s*$`)

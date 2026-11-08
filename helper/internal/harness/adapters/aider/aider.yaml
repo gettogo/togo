@@ -3,7 +3,10 @@
 # --chat-history-file), tailed line by line; only what follows this run's "aider chat started"
 # header is mapped (format from io.py, 0.86). Prompts, replies (written whole when they finish),
 # edits, commits and shell runs show in the chat; the file has no turn end, so a turn closes at
-# the next prompt or when the pane goes idle. Approvals are line prompts the existing prompt
+# the next prompt or when the pane goes idle. Errors and warnings (litellm exceptions, retries,
+# token limits, the no-key onboarding before its OpenRouter sign-in question, a typed reply it
+# refused) are notices; an error aider gives up on ends the turn failed (errors.go). The launch
+# command line it logs after the header is dropped. Approvals are line prompts the existing prompt
 # detector answers. Writes: typed prompts and documented slash commands with arguments.
 adapter: aider
 name: Aider

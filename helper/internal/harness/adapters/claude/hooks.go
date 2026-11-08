@@ -84,11 +84,20 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		h.setWorking(false, at)
 	case "StopFailure":
 		h.setWorking(false, at)
-		code, text := harness.NoticeError, "The turn stopped on an error"
-		if str(p, "error") == "rate_limit" {
-			code, text = harness.NoticeRateLimit, "Usage limit reached"
+		if h.state["transcript_path"] != "" {
+			// The transcript holds the same failure as a synthetic API
+			// error message in Claude's words, and that notice ends the
+			// turn: one notice, not two.
+			return nil, nil
 		}
-		return h.notice(at, code, "error", text), nil
+		tag := str(p, "error")
+		text := strings.TrimSpace(firstLine(str(p, "error_details")))
+		if text == "" {
+			text = stopFailureText(tag)
+		}
+		items := h.notice(at, "", "", "")
+		items[0].Notice = harness.ErrorNotice(errorReason(tag, text), text)
+		return items, nil
 	case "TaskCreated", "TaskCompleted":
 		return nil, taskOps(p)
 	}

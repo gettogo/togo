@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/errtext"
 )
 
 // Options tune the Mapper for one harness.
@@ -104,13 +105,16 @@ type payload struct {
 	ToolResponse json.RawMessage `json:"tool_response"`
 	Error        json.RawMessage `json:"error"`
 	ErrorDetails string          `json:"error_details"`
-	LastMessage  string          `json:"last_assistant_message"`
-	AgentID      string          `json:"agent_id"`
-	AgentType    string          `json:"agent_type"`
-	TaskID       string          `json:"task_id"`
-	TaskSubject  string          `json:"task_subject"`
-	TaskDesc     string          `json:"task_description"`
-	Interrupted  bool            `json:"stop_interrupted"`
+	// ErrorReason is a harness.Err* reason a dialect's prep read from the
+	// agent's own error code (failures.go).
+	ErrorReason string `json:"error_reason"`
+	LastMessage string `json:"last_assistant_message"`
+	AgentID     string `json:"agent_id"`
+	AgentType   string `json:"agent_type"`
+	TaskID      string `json:"task_id"`
+	TaskSubject string `json:"task_subject"`
+	TaskDesc    string `json:"task_description"`
+	Interrupted bool   `json:"stop_interrupted"`
 	// Once marks a tool hook that is the whole call (Amp's tool.result):
 	// it starts the call when no earlier hook did.
 	Once bool `json:"tool_once"`
@@ -193,19 +197,22 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		return m.end(p, at, draw, harness.StateOK), nil
 	case StopFailure:
-		code, text := harness.NoticeError, "The turn stopped on an error"
 		if raw(p.Error) == "rate_limit" {
-			code, text = harness.NoticeRateLimit, "Usage limit reached"
+			items := m.end(p, at, draw, harness.StateFailed)
+			return append(items, m.notice(at, harness.NoticeRateLimit, "error", "Usage limit reached")...), nil
 		}
+		tid := m.turn
 		items := m.end(p, at, draw, harness.StateFailed)
-		if !draw && code == harness.NoticeError {
+		if !draw && p.ErrorDetails == "" && p.ErrorReason == "" {
 			// The transcript draws the error itself, in the harness's
 			// own words.
 			return items, nil
 		}
-		return append(items, m.notice(at, code, "error", text)...), nil
+		return append(items, m.errorNotice(at, tid, p, "The turn stopped on an error. The terminal shows the agent's own message.")), nil
 	case ErrorOccurred:
-		return m.notice(at, harness.NoticeError, "warning", firstOf(Truncate(p.ErrorDetails, harness.MaxTitle), "The harness reported an error")), nil
+		n := m.errorNotice(at, m.turn, p, "The harness reported an error")
+		n.Notice.Level = "warning" // the session may go on (a fatal one is StopFailure)
+		return []harness.Item{n}, nil
 	case PostCompact:
 		return m.notice(at, harness.NoticeCompacted, "info", "Conversation compacted"), nil
 	case SubagentStart, SubagentStop:
@@ -345,6 +352,22 @@ func (m *Mapper) notice(at time.Time, code, level, text string) []harness.Item {
 		ID: fmt.Sprintf("hook-notice-%d-%d", at.UnixMilli(), m.n), Kind: harness.KindNotice, At: at,
 		Notice: &harness.NoticeBody{Level: level, Code: code, Text: text},
 	}}
+}
+
+// errorNotice says why a turn failed: the reason the prep read, else one
+// picked from the agent's words, else fallback.
+func (m *Mapper) errorNotice(at time.Time, turn string, p payload, fallback string) harness.Item {
+	m.n++
+	var body *harness.NoticeBody
+	switch {
+	case p.ErrorReason != "":
+		body = errtext.Of(p.ErrorReason, p.ErrorDetails)
+	case p.ErrorDetails != "":
+		body = errtext.Notice(p.ErrorDetails, 0, fallback)
+	default:
+		body = harness.ErrorNotice(harness.ErrOther, fallback)
+	}
+	return harness.Item{ID: fmt.Sprintf("hook-notice-%d-%d", at.UnixMilli(), m.n), TurnID: turn, Kind: harness.KindNotice, At: at, Notice: body}
 }
 
 // agentOps turns a subagent hook into an agent row.

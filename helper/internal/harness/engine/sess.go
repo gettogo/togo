@@ -55,6 +55,13 @@ type sess struct {
 	// awaitReply is set when a prompt from the phone was typed and
 	// nothing the agent said has arrived since (see replyMissingLocked).
 	awaitReply bool
+	// exitNoticed is set once the chat was told the agent exited, until
+	// it runs again.
+	exitNoticed bool
+	// failedTurn is the turn the screen ended as failed while its hooks
+	// still said it ran (see hookfail.go); failedHold is set while it holds.
+	failedTurn string
+	failedHold bool
 	// relaunchedAt is when an action last restarted the agent.
 	relaunchedAt time.Time
 	turn         string
@@ -288,6 +295,10 @@ func (s *sess) dropSub(sub harness.Subscriber) {
 func (s *sess) stateLocked() map[string]string {
 	out, states := s.mapperStateLocked()
 	working := harness.MergeWorking(states...)
+	failed := s.turnFailedLocked(out["turn"], working)
+	if failed {
+		working = false // the screen ended a turn its hooks never closed
+	}
 	known := false
 	for _, st := range states {
 		if _, ok := st["working"]; ok {
@@ -310,7 +321,7 @@ func (s *sess) stateLocked() map[string]string {
 		// A crashed or killed agent writes no turn end; its mappers would
 		// say working forever.
 		working = false
-	case status == "working" && !s.holdingStopLocked(states) && !feedEnded:
+	case status == "working" && !s.holdingStopLocked(states) && !feedEnded && !failed:
 		working = true
 	}
 	out["working"] = fmt.Sprint(working)
@@ -558,6 +569,10 @@ func (s *sess) statusChanged() {
 	s.setWorkingLocked(s.stateLocked()["working"] == "true")
 	if agentGone(s.hubStatus()) {
 		s.agentExitedLocked()
+		s.exitNoticeLocked()
+	} else {
+		s.checkStuckTurnLocked()
+		s.exitNoticed = false
 	}
 }
 
@@ -577,13 +592,15 @@ func (s *sess) afterTurnLocked() {
 		return
 	}
 	time.AfterFunc(s.e.scaled(turnSettle), func() {
+		// The screen is read before the lock: it may say why no reply came.
+		screen := s.screenNow()
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if s.working || s.ctx == nil || s.ctx.Err() != nil {
 			return
 		}
 		s.doneLocked()
-		s.replyMissingLocked()
+		s.replyMissingLocked(screen)
 	})
 }
 
@@ -618,15 +635,22 @@ func (s *sess) doneLocked() {
 // nothing back (no reply, tool, notice or question), say so in the chat.
 // Seen on OpenCode with its model server down and on Vibe: the turn ran,
 // ended, and the chat showed the prompt and nothing else.
-func (s *sess) replyMissingLocked() {
+//
+// When the pane shows an error the agent printed ("litellm.APIConnectionError:
+// …", "Please answer with one of: …"), the notice carries it and its reason.
+func (s *sess) replyMissingLocked(screen string) {
 	if !s.awaitReply || !harness.Has(s.ad.Capabilities, harness.CapChat) || agentGone(s.hubStatus()) {
 		return
 	}
 	s.awaitReply = false
 	now := s.e.cfg.Now()
+	notice := &harness.NoticeBody{Level: "error", Code: harness.NoticeError,
+		Text: s.ad.Name + " ended the turn without a reply. The terminal may show why."}
+	if line, ok := screenError(screen); ok {
+		notice = harness.ErrorNotice(harness.ClassifyError(line), line)
+	}
 	s.publishLocked([]harness.Item{{ID: fmt.Sprintf("noreply-%d", now.UnixMilli()), TurnID: s.turn, Kind: harness.KindNotice, At: now,
-		Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError,
-			Text: s.ad.Name + " ended the turn without a reply. The terminal may show why."}}}, nil)
+		Notice: notice}}, nil)
 }
 
 // hubStatus is the hub's status for the session, "" when unknown.

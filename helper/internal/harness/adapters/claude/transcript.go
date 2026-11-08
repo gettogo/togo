@@ -96,6 +96,12 @@ type entry struct {
 	DurationMs       float64         `json:"durationMs"`
 	CompactMetadata  json.RawMessage `json:"compactMetadata"`
 	Origin           json.RawMessage `json:"origin"`
+	// Error is the failure tag of an isApiErrorMessage entry
+	// ("authentication_failed", "rate_limit", ...) and the API error
+	// object of a system api_error entry.
+	Error        json.RawMessage `json:"error"`
+	RetryAttempt int             `json:"retryAttempt"`
+	MaxRetries   int             `json:"maxRetries"`
 }
 
 type message struct {
@@ -308,6 +314,23 @@ func noticeCode(out string) string {
 	return harness.NoticeMode
 }
 
+// apiError maps the synthetic assistant message Claude Code writes when a
+// request failed for good (isApiErrorMessage, model "<synthetic>"): an
+// error notice in its words, and the main chain's turn ends failed. No
+// turn_duration follows some of them (a refused login), so nothing else
+// would end the turn. A synthetic message without the flag is still
+// shown as an error but ends nothing.
+func (t *transcript) apiError(e entry, at time.Time, text string) []harness.Item {
+	items := t.notice(e, at, harness.NoticeError, "error", text)
+	items[0].Notice = harness.ErrorNotice(errorReason(errorTag(e.Error), text), text)
+	if e.IsAPIError && !e.IsSidechain && t.parentOf(e) == "" && t.turn != nil && !t.turn.ended {
+		t.turn.state = harness.StateFailed
+		t.workingAt = at
+		items = append(items, t.endTurn(at)...)
+	}
+	return items
+}
+
 func (t *transcript) notice(e entry, at time.Time, code, level, text string) []harness.Item {
 	id := e.UUID
 	if id == "" {
@@ -355,7 +378,7 @@ func (t *transcript) assistant(e entry) ([]harness.Item, []harness.Op) {
 				continue
 			}
 			if e.IsAPIError || m.Model == "<synthetic>" {
-				items = append(items, t.notice(e, at, harness.NoticeError, "error", firstLine(b.Text))...)
+				items = append(items, t.apiError(e, at, firstLine(b.Text))...)
 				continue
 			}
 			id := firstNonEmpty(m.ID, e.UUID)
@@ -405,7 +428,21 @@ func (t *transcript) system(e entry) ([]harness.Item, []harness.Op) {
 		}
 		return t.notice(e, at, harness.NoticeCompacted, "info", text), nil
 	case "api_error":
-		return t.notice(e, at, harness.NoticeError, "warning", "The API returned an error; retrying"), nil
+		if e.IsSidechain {
+			return nil, nil
+		}
+		reason, text := retryText(e)
+		code := harness.NoticeError
+		if reason == harness.ErrRateLimit {
+			code = harness.NoticeRateLimit
+		}
+		it := t.notice(e, at, code, "warning", text)
+		if t.turn != nil && !t.turn.ended {
+			// One line per turn that counts the attempts up.
+			it[0].ID = t.turn.id + ".retry"
+		}
+		it[0].Notice.Reason = reason
+		return it, nil
 	}
 	return nil, nil
 }

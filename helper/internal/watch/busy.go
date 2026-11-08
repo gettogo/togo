@@ -60,6 +60,9 @@ func (w *Watcher) output(ctx context.Context, id string, e *entry) {
 			return
 		}
 		if ok && p.Fingerprint == e.prompt {
+			if w.askedAgain(id, e, p) {
+				w.promptSeen(ctx, id, e, p)
+			}
 			return
 		}
 		w.clearPrompt(ctx, id, e)

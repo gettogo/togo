@@ -64,7 +64,8 @@ func (e *Engine) typeNext(s *sess) bool {
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
-	if !e.idleNow(s) {
+	if !e.idleNow(s) || e.blockedBy(s.ctx, s) != "" {
+		// A question on screen holds the queue until it is answered.
 		return false
 	}
 	s.mu.Lock()
@@ -93,6 +94,7 @@ func (e *Engine) typeNext(s *sess) bool {
 	it.User = &body
 	s.notePhoneLocked(it.ID, u.Text, u.Images)
 	s.awaitReply = true
+	s.failedHold = false // a new prompt starts a new turn
 	s.publishLocked([]harness.Item{it}, nil)
 	return true
 }

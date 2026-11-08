@@ -98,3 +98,44 @@ func TestOtherFolderIgnored(t *testing.T) {
 		t.Fatalf("%d items from another session", len(final))
 	}
 }
+
+// errors.jsonl is a real Goose 1.57 session (paths and host scrubbed) with
+// two failed turns: the provider unreachable, then an unknown model (404).
+// Each error part is an error notice and ends its turn failed.
+func TestErrorParts(t *testing.T) {
+	m := newDB(harness.Env{Cwd: "/w/proj"})
+	final := map[string]harness.Item{}
+	feed(t, m, "errors.jsonl", final)
+	cases := []struct{ id, reason, text string }{
+		{"msg_dc88eaec-7329-49c9-89b7-28905a51b483:0", harness.ErrProviderUnreachable,
+			"Can't reach the model provider. Network error: Could not connect to 127.0.0.1:9 — check your network connection and try again"},
+		{"msg_20d10145-1639-4fe8-9bb8-e3cdd5da190c:0", harness.ErrModelNotFound,
+			"The provider doesn't have this model. Request failed: Resource not found (404) at http://gpu.example:8080/v1/chat/completions: no router for requested model. Available models for this provider: qwen3.8-27b"},
+	}
+	for _, c := range cases {
+		n := final[c.id].Notice
+		if n == nil || n.Code != harness.NoticeError || n.Level != "error" || n.Reason != c.reason || n.Text != c.text {
+			t.Fatalf("%s: %+v", c.id, n)
+		}
+	}
+	for _, id := range []string{"msg_cde51fa1-556a-409a-9465-3755e6e1ef21.turn", "msg_7fbf9e61-2402-49ae-a085-16e626b0de1f.turn"} {
+		if tb := final[id].Turn; tb == nil || tb.State != harness.StateFailed || tb.Ended == nil {
+			t.Fatalf("%s: %+v", id, tb)
+		}
+	}
+	if m.State()["working"] == "true" {
+		t.Fatal("still working after the error")
+	}
+}
+
+func TestErrorKinds(t *testing.T) {
+	for _, c := range []struct{ kind, msg, reason string }{
+		{"authentication", "Authentication failed: 401 invalid key", harness.ErrAuth},
+		{"contextLengthExceeded", "Context length exceeded", harness.ErrContextOverflow},
+		{"other", "Ran into this error: Rate limit exceeded: 429 Too Many Requests.\n\nPlease retry if you think this is a transient or recoverable error.", harness.ErrRateLimit},
+	} {
+		if r, _ := errorReason(c.kind, c.msg); r != c.reason {
+			t.Fatalf("%s %q: %s", c.kind, c.msg, r)
+		}
+	}
+}

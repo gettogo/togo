@@ -76,6 +76,18 @@ type record struct {
 	Response      json.RawMessage `json:"response"`
 	Info          json.RawMessage `json:"info"`
 	CompactionSum string          `json:"summary"`
+	Error         *wireError      `json:"error"`
+}
+
+// wireError is the error a failed turn.ended carries (protocol 1.5).
+type wireError struct {
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Message string `json:"message"`
+	Details struct {
+		StatusCode int `json:"statusCode"`
+		MaxSteps   int `json:"maxSteps"`
+	} `json:"details"`
 }
 
 type part struct {
@@ -127,14 +139,13 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "turn.cancel":
 		return w.endTurn(harness.StateInterrupted, at)
 	case "turn.ended":
-		state := harness.StateOK
 		switch r.Reason {
 		case "cancelled":
-			state = harness.StateInterrupted
-		case "failed":
-			state = harness.StateFailed
+			return w.endTurn(harness.StateInterrupted, at)
+		case "failed", "blocked":
+			return w.failTurn(r, at)
 		}
-		return w.endTurn(state, at)
+		return w.endTurn(harness.StateOK, at)
 	case "full_compaction.complete":
 		return []harness.Item{{ID: "compact-" + strconv.FormatInt(r.Time, 10), Kind: harness.KindNotice, At: at,
 			Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeCompacted, Text: "Conversation compacted"}}}, nil

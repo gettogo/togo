@@ -359,21 +359,31 @@ public struct HarnessItem: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// A quiet system line. `level` is info, warning or error; `code` is compacted, model, mode,
-    /// rate_limit, error, resumed, interrupted, fallback or continued.
+    /// rate_limit, error, resumed, interrupted, fallback, continued or ended.
     public struct Notice: Codable, Hashable, Sendable {
         /// Opens a turn the agent started on its own, such as after a background task or
         /// subagent finished; the text names the trigger.
         public static let continued = "continued"
 
+        /// The agent process exited; the text names the exit status.
+        public static let ended = "ended"
+
         public var level: String
         public var code: String
+        /// What kind of error an error notice is: auth, provider_unreachable, rate_limit,
+        /// model_not_found, context_overflow, crashed, refused or other. nil otherwise.
+        public var reason: String?
         public var text: String
 
-        public init(level: String, code: String, text: String) {
+        public init(level: String, code: String, reason: String? = nil, text: String) {
             self.level = level
             self.code = code
+            self.reason = reason
             self.text = text
         }
+
+        /// An error the agent hit, as opposed to a quiet system line.
+        public var isError: Bool { level == "error" || reason != nil }
     }
 
     /// One command block of a plain shell session, from OSC 133 prompt marks.

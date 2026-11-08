@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-08T04:22:56.355Z",
+  "agent": "lead",
+  "sessionId": "1794111762279_56b2q",
+  "origin": {
+    "source": "cli",
+    "mode": "user",
+    "sessionId": "1794111762279_56b2q",
+    "version": "3.0.74"
+  },
+  "messages": [
+    {
+      "id": "1c93a602-e094-4c84-90cb-07f6bcacd68b",
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input mode=\"act\">say hi</user_input>"
+        }
+      ],
+      "ts": 1794111762316
+    },
+    {
+      "id": "error_1a5d4bac-8f4d-43fe-b290-5c2457f8ffa4",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Cannot connect to API: Unable to connect. Is the computer able to access the url?: TypeError: Unable to connect. Is the computer able to access the url? (ConnectionRefused)"
+        }
+      ],
+      "ts": 1794111776353,
+      "metadata": {
+        "displayOnly": true,
+        "displayRole": "error"
+      },
+      "modelInfo": {
+        "id": "qwen3.8-27b",
+        "provider": "openai-compatible"
+      }
+    }
+  ]
+}

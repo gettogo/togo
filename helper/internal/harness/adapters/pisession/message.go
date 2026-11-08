@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/errtext"
 	x "github.com/gettogo/togo/helper/internal/harness/adapters/internal/itemtext"
 )
 
@@ -17,6 +18,7 @@ type message struct {
 	Model        string          `json:"model"`
 	StopReason   string          `json:"stopReason"`
 	ErrorMessage string          `json:"errorMessage"`
+	ErrorStatus  int             `json:"errorStatus"`
 	ToolCallID   string          `json:"toolCallId"`
 	ToolName     string          `json:"toolName"`
 	IsError      bool            `json:"isError"`
@@ -105,9 +107,15 @@ func (s *Session) assistant(id string, m message, at time.Time) ([]harness.Item,
 			items = append(items, s.toolCall(b, at))
 		}
 	}
-	if m.ErrorMessage != "" {
+	// An aborted reply carries errorMessage "Interrupted by user" too; only
+	// a failed one gets an error notice.
+	switch {
+	case m.StopReason == "aborted":
+		items = append(items, harness.Item{ID: id + ":interrupted", TurnID: s.turnID(), Kind: harness.KindNotice, At: at,
+			Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeInterrupted, Text: "Interrupted"}})
+	case m.StopReason == "error" || m.ErrorMessage != "":
 		items = append(items, harness.Item{ID: id + ":error", TurnID: s.turnID(), Kind: harness.KindNotice, At: at,
-			Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError, Text: x.Title(m.ErrorMessage)}})
+			Notice: errtext.Notice(m.ErrorMessage, m.ErrorStatus, "The model request failed")})
 	}
 	switch m.StopReason {
 	case "stop", "length":

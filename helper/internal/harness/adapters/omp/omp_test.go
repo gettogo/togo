@@ -302,3 +302,23 @@ func TestModelAndEffortCommandsOpenTheirScreens(t *testing.T) {
 		t.Fatalf("missing commands %v", want)
 	}
 }
+
+// A real omp 18.16.0 record of a turn the provider refused (a bogus key):
+// the turn fails, ends, and says why in words.
+func TestProviderErrorEndsTurnWithNotice(t *testing.T) {
+	m := newSession(env())
+	got := run(m, records(t, "error-401.jsonl", "session")).last()
+	n := got["edd5d43e-error"]
+	if n.Notice == nil || n.Notice.Level != "error" || n.Notice.Reason != harness.ErrAuth ||
+		!strings.HasPrefix(n.Notice.Text, "The provider rejected the sign-in or API key: 401 Incorrect API key") {
+		t.Fatalf("notice %+v", n.Notice)
+	}
+	if m.State()["working"] != "false" {
+		t.Fatal("still working after the error")
+	}
+	for _, it := range got {
+		if it.Kind == harness.KindTurn && it.Turn.State != harness.StateFailed {
+			t.Fatalf("turn %+v", it.Turn)
+		}
+	}
+}

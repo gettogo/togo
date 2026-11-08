@@ -15,7 +15,7 @@
       {
         "n": 1,
         "label": "Yes",
-        "role": "approve"
+        "role": "other"
       },
       {
         "n": 2,
@@ -28,6 +28,6 @@
     "title": "03 Amp",
     "subtitle": "Would you like to log in to Amp?",
     "body": "",
-    "category": "togo.request"
+    "category": "togo.request.deny"
   }
 }

@@ -110,7 +110,7 @@ func TestCopilotCamelCaseHooks(t *testing.T) {
 			notice = x.Notice
 		}
 	}
-	if notice == nil || notice.Text != "network timeout" || notice.Level != "warning" {
+	if notice == nil || notice.Text != "Could not reach the provider: network timeout" || notice.Level != "warning" || notice.Reason != harness.ErrProviderUnreachable {
 		t.Fatalf("notice %+v", notice)
 	}
 	if st := m.State(); st["working"] != "false" {

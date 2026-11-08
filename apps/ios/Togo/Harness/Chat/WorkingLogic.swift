@@ -85,6 +85,11 @@ enum WorkingLogic {
         if wasWorking, !working { return true }
         if working { return false }
         if now.timeIntervalSince(awaitingSince) > sendGrace { return true }
+        // The agent hit an error or exited after the send: nothing more is coming.
+        if items.contains(where: { item in
+            guard item.parent == nil, case .notice(let notice) = item.body else { return false }
+            return (notice.isError || notice.code == HarnessItem.Notice.ended) && item.at.date >= awaitingSince
+        }) { return true }
         // A turn that started after the send has already ended.
         return items.contains { item in
             guard item.parent == nil, case .turn(let turn) = item.body, let ended = turn.endedAt else { return false }

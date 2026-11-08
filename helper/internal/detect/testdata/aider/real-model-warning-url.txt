@@ -1,0 +1,6 @@
+/Users/jamie/.local/bin/aider
+Warning for openai/qwen3.8-27b: Unknown context window size and costs, using san
+e defaults.
+You can skip this check with --no-show-model-warnings
+https://aider.chat/docs/llms/warnings.html
+Open documentation url for more info? (Y)es/(N)o/(D)on't ask again [Yes]: 

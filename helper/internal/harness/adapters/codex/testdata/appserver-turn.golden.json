@@ -440,14 +440,15 @@
    }
   },
   {
-   "id": "error-019a0000-0000-7000-8000-0000000000a2-1793966403300",
+   "id": "error-019a0000-0000-7000-8000-0000000000a2",
    "seq": 0,
    "turnId": "019a0000-0000-7000-8000-0000000000a2",
    "kind": "notice",
    "at": "2026-11-06T12:00:03.3Z",
    "notice": {
-    "level": "error",
+    "level": "warning",
     "code": "rate_limit",
+    "reason": "rate_limit",
     "text": "Rate limit reached"
    }
   }

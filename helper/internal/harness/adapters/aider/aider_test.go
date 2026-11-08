@@ -87,9 +87,9 @@ func TestHistoryMapsOnlyThisRun(t *testing.T) {
 		"tool:shell:python hello.py",
 		"tool:other:Add command output to the chat? (Y)es/(N)o [Yes]: y",
 		"user:/ask what does it print?\nanswer briefly",
-		"turn:ok",
+		"turn:failed",
 		"assistant:It prints `hi`.",
-		"notice:litellm.APIError: upstream timed out",
+		"notice:Can't reach the provider: upstream timed out",
 	}
 	if strings.Join(desc, "|") != strings.Join(want, "|") {
 		t.Fatalf("items:\n%q\nwant:\n%q", desc, want)

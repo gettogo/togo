@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/errtext"
 )
 
 // session maps omp session JSONL (~/.omp/agent/sessions/<dir>/<ts>_<id>.jsonl
@@ -295,9 +296,9 @@ func (s *session) assistant(id, parent string, m map[string]any, at time.Time) (
 			Kind: harness.KindNotice, At: at, Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeInterrupted, Text: "Interrupted"}})
 	case "error":
 		items = append(items, s.stopRunning(tid, harness.StateFailed, at)...)
-		msg := truncate(firstNonEmpty(str(m, "errorMessage"), "The model request failed"), harness.MaxTitle)
+		status, _ := num(m["errorStatus"])
 		items = append(items, s.endTurn(harness.StateFailed, at), harness.Item{ID: id + "-error", TurnID: tid,
-			Kind: harness.KindNotice, At: at, Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError, Text: msg}})
+			Kind: harness.KindNotice, At: at, Notice: errtext.Notice(str(m, "errorMessage"), int(status), "The model request failed")})
 	default:
 		items = append(items, s.endTurn(harness.StateOK, at))
 	}

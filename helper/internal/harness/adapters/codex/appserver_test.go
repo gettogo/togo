@@ -7,6 +7,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -304,5 +305,46 @@ func TestClosedConnectionDropsQuestions(t *testing.T) {
 	}
 	if items, ops := m.Map(harness.Record{Data: json.RawMessage(`{"method":"rpc/closed"}`)}); len(items)+len(ops) != 0 {
 		t.Fatal("closed twice produced output")
+	}
+}
+
+// Turn errors (app-server v2 TurnError shapes, Codex 0.16x): a retried
+// error is one warning per turn counting the attempts, the final one an
+// error notice with the reason codexErrorInfo names, shown once even
+// though turn/completed repeats it; a failed turn in resumed history gets
+// its notice; a systemError ends the open turn failed.
+func TestTurnErrors(t *testing.T) {
+	m := NewAppServer(harness.Env{SessionID: "s_errors"})
+	out := run(m, records(t, "appserver-errors.jsonl"))
+	final := map[string]harness.Item{}
+	count := map[string]int{}
+	for _, x := range out.items {
+		final[x.ID] = x
+		count[x.ID]++
+	}
+	check := func(id, reason, level string) {
+		t.Helper()
+		x, ok := final[id]
+		if !ok || x.Notice == nil || x.Notice.Reason != reason || x.Notice.Level != level || x.Notice.Text == "" {
+			t.Fatalf("%s = %+v", id, x.Notice)
+		}
+	}
+	check("error-old-ctx", harness.ErrContextOverflow, "error")
+	check("retry-t-net", harness.ErrProviderUnreachable, "warning")
+	check("error-t-net", harness.ErrProviderUnreachable, "error")
+	check("error-t-model", harness.ErrModelNotFound, "error")
+	if !strings.Contains(final["retry-t-net"].Notice.Text, "attempt 2") {
+		t.Fatalf("retry = %q", final["retry-t-net"].Notice.Text)
+	}
+	if count["error-t-net"] != 1 || count["error-t-model"] != 1 {
+		t.Fatalf("counts %v", count)
+	}
+	for _, id := range []string{"old-ctx", "t-net", "t-model", "t-crash"} {
+		if x := final[id]; x.Turn == nil || x.Turn.State != harness.StateFailed || x.Turn.Ended == nil {
+			t.Fatalf("turn %s = %+v", id, x.Turn)
+		}
+	}
+	if st := m.State(); st["working"] != "false" {
+		t.Fatalf("state %v", st)
 	}
 }

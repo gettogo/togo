@@ -6,7 +6,10 @@
 # TUI creates its row at launch), which gives the session id and its goose_mode; the chat
 # feed then follows that session's messages by row id. Goose stores a message once it is
 # whole, so replies show when they end and tool calls when asked, not token by token.
-# Messages with userVisible false (the per-turn <turn-context>) are skipped.
+# Messages with userVisible false (the per-turn <turn-context>) are skipped. A failed turn
+# ends in an assistant message with an error part ({type: error, kind: authentication |
+# contextLengthExceeded | other, message}, read from a real 1.57 database): it maps to an
+# error notice and the turn ends failed.
 # Writes: documented in-TUI commands with arguments (`/mode`, `/model`), relaunch with
 # `session --resume --session-id`. Sessions: `goose session list --format json --working_dir`.
 adapter: goose

@@ -5,7 +5,10 @@
 # installed CLI's bundled source, no live session was made. The newest messages file whose
 # manifest works in this folder and started (or changed) since the session began is followed; a
 # `--id` launch follows that id. Writes: resume relaunches with --id; prompts are typed. Model,
-# thinking and mode relaunches are not offered yet. There is no MCP list command.
+# thinking and mode relaunches are not offered yet. There is no MCP list command. A failed run
+# (provider refused, unreachable, unknown model) appends a display-only assistant message with
+# metadata.displayRole error (recordTerminalError, read from real failed runs): it maps to an
+# error notice and the turn ends failed.
 adapter: cline
 name: Cline
 revision: 1

@@ -3,6 +3,7 @@ package goose
 import (
 	"encoding/json"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,6 +89,12 @@ type part struct {
 		Error string `json:"error"`
 	} `json:"toolResult"`
 	Msg string `json:"msg"`
+	// An error part (MessageContent::Error, 1.57): kind is authentication,
+	// contextLengthExceeded or other, message Goose's own words.
+	Kind    string `json:"kind"`
+	Message string `json:"message"`
+	// A systemNotification part names its kind in notificationType.
+	NotificationType string `json:"notificationType"`
 }
 
 func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
@@ -189,7 +196,7 @@ func (m *db) user(id string, parts []part, at time.Time) []harness.Item {
 
 func (m *db) assistant(id string, parts []part, at time.Time) []harness.Item {
 	var items []harness.Item
-	calls, reply := 0, false
+	calls, reply, failed := 0, false, false
 	for i, p := range parts {
 		pid := id + ":" + strconv.Itoa(i)
 		switch p.Type {
@@ -215,16 +222,79 @@ func (m *db) assistant(id string, parts []part, at time.Time) []harness.Item {
 		case "conversationCompacted", "summarizationRequested":
 			items = append(items, m.b.Notice(pid, harness.NoticeCompacted, "Conversation compacted", at))
 		case "contextLengthExceeded":
-			items = append(items, m.b.Notice(pid, "", firstNonEmpty(p.Msg, "Context length exceeded"), at))
+			items = append(items, m.errorItem(pid, harness.ErrContextOverflow, firstNonEmpty(p.Msg, "Context length exceeded"), at))
+			failed = true
+		case "error":
+			reason, text := errorReason(p.Kind, p.Message)
+			items = append(items, m.errorItem(pid, reason, text, at))
+			failed = true
+		case "systemNotification":
+			if p.NotificationType == "creditsExhausted" {
+				items = append(items, m.errorItem(pid, harness.ErrRateLimit, firstNonEmpty(p.Msg, "Out of credits"), at))
+				failed = true
+			}
 		}
 	}
 	if !m.b.Open() {
 		return items
 	}
+	if failed {
+		// Goose ends the turn after an error part: it waits for a resend.
+		return append(items, m.b.Close(harness.StateFailed, at)...)
+	}
 	if calls == 0 && reply {
 		return append(items, m.b.Close(harness.StateOK, at)...)
 	}
 	return append(items, m.b.TurnItem(harness.StateRunning, nil))
+}
+
+func (m *db) errorItem(id, reason, text string, at time.Time) harness.Item {
+	return harness.Item{ID: id, TurnID: m.b.TurnID(), Kind: harness.KindNotice, At: at,
+		Notice: harness.ErrorNotice(reason, humanError(reason, text))}
+}
+
+// errorReason reads an error part's kind and message. Goose wraps provider
+// failures as "Ran into this error: …" and adds a paragraph asking for a
+// retry or resend; only the first paragraph, without the wrapper, is kept.
+func errorReason(kind, msg string) (string, string) {
+	text := strings.TrimSpace(msg)
+	if i := strings.Index(text, "\n\n"); i >= 0 {
+		text = strings.TrimSpace(text[:i])
+	}
+	text = strings.TrimPrefix(text, "Ran into this error: ")
+	text = strings.TrimSuffix(strings.TrimSpace(text), ".")
+	switch kind {
+	case "authentication":
+		return harness.ErrAuth, text
+	case "contextLengthExceeded":
+		return harness.ErrContextOverflow, text
+	}
+	if notFound.MatchString(text) {
+		return harness.ErrModelNotFound, text
+	}
+	return harness.ClassifyError(text), text
+}
+
+// notFound is an OpenAI-compatible 404 about the model ("Resource not
+// found (404) at …: no router for requested model").
+var notFound = regexp.MustCompile(`(?i)\(404\).*\bmodel\b|\bmodel\b.*\(404\)`)
+
+// humanError leads the agent's words with what they mean for the user.
+func humanError(reason, text string) string {
+	lead := map[string]string{
+		harness.ErrAuth:                "The provider refused the API key or sign-in.",
+		harness.ErrProviderUnreachable: "Can't reach the model provider.",
+		harness.ErrRateLimit:           "Rate limit or quota reached.",
+		harness.ErrModelNotFound:       "The provider doesn't have this model.",
+		harness.ErrContextOverflow:     "The conversation is too long for the model.",
+	}[reason]
+	switch {
+	case lead == "":
+		return text
+	case text == "":
+		return lead
+	}
+	return lead + " " + text
 }
 
 func toolOutput(p part) (string, string) {

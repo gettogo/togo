@@ -130,6 +130,7 @@ type content2 struct {
 type error2 struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+	Status  int    `json:"status"`
 }
 
 type inboxItem2 struct {
@@ -178,7 +179,9 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "session.execution.failed":
 		items, ops := e.ended(d.SessionID, harness.StateFailed, at)
 		if d.Error != nil && e.follows(d.SessionID) {
-			items = append(items, e.notice("failed-"+ev.ID, e.turnFor(d.SessionID), d.SessionID, at, "error", harness.NoticeError, errText(d.Error)))
+			// step.failed brought the same error: one notice per turn.
+			t := e.turnFor(d.SessionID)
+			items = append(items, e.noticeBody(failedID(t, ev.ID), t, d.SessionID, at, errorBody(d.Error.Type, d.Error.Status, d.Error.Message)))
 		}
 		return items, ops
 	case "session.execution.interrupted":
@@ -207,15 +210,23 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return e.tool(ev.Type, d, at)
 	case "session.step.failed":
 		if d.Error != nil && d.Error.Type != "aborted" && e.follows(d.SessionID) {
-			return []harness.Item{e.notice("step-failed-"+d.MessageID, e.turnFor(d.SessionID), d.SessionID, at, "error", harness.NoticeError, errText(d.Error))}, nil
+			t := e.turnFor(d.SessionID)
+			return []harness.Item{e.noticeBody(failedID(t, d.MessageID), t, d.SessionID, at, errorBody(d.Error.Type, d.Error.Status, d.Error.Message))}, nil
 		}
 	case "session.retry.scheduled":
 		if e.follows(d.SessionID) {
-			text := "Retrying"
-			if d.Error != nil && d.Error.Message != "" {
-				text = d.Error.Message
+			var name, msg string
+			status := 0
+			if d.Error != nil {
+				name, msg, status = d.Error.Type, d.Error.Message, d.Error.Status
 			}
-			return []harness.Item{e.notice("retry-"+ev.ID, e.turnFor(d.SessionID), d.SessionID, at, "warning", harness.NoticeRateLimit, text)}, nil
+			// One notice per turn, updated on each attempt.
+			t := e.turnFor(d.SessionID)
+			id := "retry-" + t
+			if t == "" {
+				id = "retry-" + ev.ID
+			}
+			return []harness.Item{e.noticeBody(id, t, d.SessionID, at, retryBody(name, status, msg, d.Attempt))}, nil
 		}
 	case "session.compaction.ended":
 		if e.follows(d.SessionID) {
@@ -368,6 +379,20 @@ func (e *Events2) turnItem(id string, tu *turn, ended *time.Time) harness.Item {
 func (e *Events2) notice(id, turn, sess string, at time.Time, level, code, text string) harness.Item {
 	return harness.Item{ID: id, TurnID: turn, Parent: e.parent(sess), Kind: harness.KindNotice, At: at,
 		Notice: &harness.NoticeBody{Level: level, Code: code, Text: truncate(text, 400)}}
+}
+
+// noticeBody is a notice item with a ready body (an error notice).
+func (e *Events2) noticeBody(id, turn, sess string, at time.Time, b *harness.NoticeBody) harness.Item {
+	return harness.Item{ID: id, TurnID: turn, Parent: e.parent(sess), Kind: harness.KindNotice, At: at, Notice: b}
+}
+
+// failedID names the error notice of a turn, or of the event when the
+// turn is unknown.
+func failedID(turn, fallback string) string {
+	if turn == "" {
+		return "failed-" + fallback
+	}
+	return "failed-" + turn
 }
 
 func errText(err *error2) string {

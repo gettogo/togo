@@ -80,3 +80,17 @@ struct HarnessContractCodingTests {
         #expect(f.actionConfirm?.effect == nil)
     }
 }
+
+/// Error notices carry an optional reason; a notice without one decodes as before.
+struct HarnessNoticeReasonTests {
+    @Test func reasonDecodesAndIsOptional() throws {
+        let with = try JSONDecoder().decode(HarnessItem.Notice.self, from: Data(#"{"level":"error","code":"error","reason":"auth","text":"401"}"#.utf8))
+        #expect(with.reason == "auth")
+        #expect(with.isError)
+        let without = try JSONDecoder().decode(HarnessItem.Notice.self, from: Data(#"{"level":"info","code":"ended","text":"Aider exited."}"#.utf8))
+        #expect(without.reason == nil)
+        #expect(without.code == HarnessItem.Notice.ended)
+        let json = String(decoding: try JSONEncoder().encode(without), as: UTF8.self)
+        #expect(!json.contains("reason"))
+    }
+}

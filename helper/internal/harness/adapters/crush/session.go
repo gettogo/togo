@@ -75,6 +75,7 @@ type part struct {
 		IsError    bool   `json:"is_error"`
 		Reason     string `json:"reason"`
 		Message    string `json:"message"`
+		Details    string `json:"details"`
 	} `json:"data"`
 }
 
@@ -118,8 +119,10 @@ func (m *db) message(r messageRow) []harness.Item {
 	}
 	at := time.Unix(r.Created, 0).UTC()
 	finish := ""
+	var fin part
 	for _, p := range parts {
 		if p.Type == "finish" {
+			fin = p
 			finish = p.Data.Reason
 			if finish == "" {
 				finish = "stop"
@@ -156,12 +159,16 @@ func (m *db) message(r messageRow) []harness.Item {
 		}
 		return items
 	case "assistant":
-		return m.assistant(r, parts, finish, at)
+		return m.assistant(r, parts, fin, at)
 	}
 	return nil
 }
 
-func (m *db) assistant(r messageRow, parts []part, finish string, at time.Time) []harness.Item {
+func (m *db) assistant(r messageRow, parts []part, fin part, at time.Time) []harness.Item {
+	finish := fin.Data.Reason
+	if fin.Type == "finish" && finish == "" {
+		finish = "stop"
+	}
 	var items []harness.Item
 	var text, thought []string
 	for _, p := range parts {
@@ -197,6 +204,10 @@ func (m *db) assistant(r messageRow, parts []part, finish string, at time.Time) 
 	items = append(head, items...)
 	if finish != "" {
 		m.done[r.ID] = true
+	}
+	if finish == "error" {
+		items = append(items, harness.Item{ID: r.ID + ":error", TurnID: m.b.TurnID(), Kind: harness.KindNotice,
+			At: at, Notice: errorNotice(fin.Data.Message, fin.Data.Details)})
 	}
 	if !m.b.Open() {
 		return items

@@ -43,6 +43,10 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		Approvals: c.Approvals,
 		Screen:    pane.Screen,
 		Status:    c.Hub.Status,
+		Exit: func(id string) *wire.SessionExit {
+			_, x := c.Hub.Exit(id)
+			return x
+		},
 		NeedsYou: func(id, title, body string) {
 			c.Hub.Publish(wire.EventNotify, &id, wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelNeedsYou})
 		},

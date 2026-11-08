@@ -35,7 +35,7 @@ const (
 	// promptPoll spaces the screen reads that look for a prompt while a
 	// coding agent's output goes on.
 	promptPoll = 4 * time.Second
-	notifyGap    = 30 * time.Second
+	notifyGap  = 30 * time.Second
 )
 
 // StatusSink receives status changes derived from pane activity.
@@ -478,20 +478,40 @@ func (w *Watcher) inspect(ctx context.Context, id string) (detect.Prompt, bool, 
 }
 
 func (w *Watcher) promptSeen(ctx context.Context, id string, e *entry, p detect.Prompt) {
-	if e.prompt == p.Fingerprint {
+	if e.prompt == p.Fingerprint && !w.askedAgain(id, e, p) {
 		return
 	}
-	e.prompt = p.Fingerprint
+	e.prompt, e.promptSnippet = p.Fingerprint, p.Snippet
 	if w.cfg.Prompts != nil {
 		w.cfg.Prompts.PromptSeen(ctx, id, p)
 	}
+}
+
+// PendingReader lists a session's open approvals. A PromptSink that
+// implements it lets the watcher tell a re-asked prompt from one still
+// waiting.
+type PendingReader interface {
+	Pending(sessionID string) []wire.Approval
+}
+
+// askedAgain reports the same prompt drawn anew after its approval was
+// answered: Aider refuses an answer it cannot read ("Please answer with
+// one of: yes, no, skip, all") and asks the same question again. The
+// fingerprint is the same, but the screen around it moved and nothing is
+// pending any more, so it is a new request, not the answered one.
+func (w *Watcher) askedAgain(id string, e *entry, p detect.Prompt) bool {
+	r, ok := w.cfg.Prompts.(PendingReader)
+	if !ok || p.Snippet == e.promptSnippet {
+		return false
+	}
+	return len(r.Pending(id)) == 0
 }
 
 func (w *Watcher) clearPrompt(ctx context.Context, id string, e *entry) {
 	if e.prompt == "" {
 		return
 	}
-	e.prompt = ""
+	e.prompt, e.promptSnippet = "", ""
 	if w.cfg.Prompts != nil {
 		w.cfg.Prompts.PromptGone(ctx, id)
 	}

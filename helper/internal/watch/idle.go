@@ -21,6 +21,9 @@ type sessionState struct {
 	// prompt is the fingerprint of the prompt reported to the PromptSink,
 	// empty when none is pending.
 	prompt string
+	// promptSnippet is the screen around that prompt when it was reported,
+	// to tell a re-asked prompt from the same one still up.
+	promptSnippet string
 	// lastInspect is when an attention signal last captured the screen;
 	// lastNotify, notifyTitle and notifyBody describe the last needs_you
 	// notification. Together they bound what a program ringing the bell in
@@ -28,7 +31,7 @@ type sessionState struct {
 	lastInspect, lastNotify time.Time
 	// lastPoll is when a coding agent's screen was last read for a prompt
 	// while its output went on.
-	lastPoll time.Time
+	lastPoll                time.Time
 	notifyTitle, notifyBody string
 
 	// agent is the session's agent id from the listing; it picks how

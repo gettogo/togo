@@ -233,7 +233,7 @@ func (a *AppServer) limits(params json.RawMessage) []harness.Op {
 	return []harness.Op{a.statusOp()}
 }
 
-func (a *AppServer) threadStatus(params json.RawMessage) ([]harness.Item, []harness.Op) {
+func (a *AppServer) threadStatus(params json.RawMessage, at time.Time) ([]harness.Item, []harness.Op) {
 	var p struct {
 		ThreadID string `json:"threadId"`
 		Status   struct {
@@ -254,13 +254,23 @@ func (a *AppServer) threadStatus(params json.RawMessage) ([]harness.Item, []harn
 	if p.ThreadID != a.main {
 		return nil, nil
 	}
+	var items []harness.Item
 	switch p.Status.Type {
 	case "active":
 		a.state["working"], a.state["idle"] = "true", "false"
-	case "idle", "systemError", "notLoaded":
+	case "systemError":
+		// The thread broke: a turn still open will get no turn/completed
+		// if the server is gone, so it ends failed now (a turn/completed
+		// that does come restates it).
+		if ti := a.turns[a.state["turn"]]; ti != nil && !ti.done && ti.thread == p.ThreadID {
+			ti.done = true
+			items = append(items, a.turnItem(a.state["turn"], ti, "failed", nil, at))
+		}
+		a.state["working"], a.state["idle"] = "false", "true"
+	case "idle", "notLoaded":
 		a.state["working"], a.state["idle"] = "false", "true"
 	}
-	return nil, nil
+	return items, nil
 }
 
 // applySettings records model, effort and approval policy from a resume
@@ -332,26 +342,22 @@ func (a *AppServer) rerouted(params json.RawMessage, at time.Time) []harness.Ite
 
 func (a *AppServer) errorNotice(params json.RawMessage, at time.Time) []harness.Item {
 	var p struct {
-		Error struct {
-			Message   string          `json:"message"`
-			ErrorInfo json.RawMessage `json:"codexErrorInfo"`
-		} `json:"error"`
-		WillRetry bool   `json:"willRetry"`
-		ThreadID  string `json:"threadId"`
-		TurnID    string `json:"turnId"`
+		Error     turnError `json:"error"`
+		WillRetry bool      `json:"willRetry"`
+		ThreadID  string    `json:"threadId"`
+		TurnID    string    `json:"turnId"`
 	}
-	if json.Unmarshal(params, &p) != nil || p.Error.Message == "" {
+	if json.Unmarshal(params, &p) != nil || (p.Error.Message == "" && len(p.Error.CodexErrorInfo) == 0) {
 		return nil
 	}
-	level, code := "error", harness.NoticeError
-	if p.WillRetry {
-		level = "warning"
+	attempt := 0
+	if !p.WillRetry {
+		a.erred[p.TurnID] = true
+	} else {
+		a.retries[p.TurnID]++
+		attempt = a.retries[p.TurnID]
 	}
-	var info string
-	if json.Unmarshal(p.Error.ErrorInfo, &info) == nil && (info == "usageLimitExceeded" || info == "rateLimited") {
-		code = harness.NoticeRateLimit
-	}
-	x := notice("error-"+p.TurnID+"-"+strconv.FormatInt(at.UnixMilli(), 10), p.TurnID, at, level, code, p.Error.Message)
+	x := errorItem(p.Error, p.TurnID, p.WillRetry, attempt, at)
 	x.Parent = a.parentOf(p.ThreadID)
 	return []harness.Item{x}
 }

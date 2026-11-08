@@ -362,7 +362,8 @@ func (e *Events) sessionError(raw json.RawMessage, at time.Time) []harness.Item 
 		Error     *struct {
 			Name string `json:"name"`
 			Data struct {
-				Message string `json:"message"`
+				Message    string `json:"message"`
+				StatusCode int    `json:"statusCode"`
 			} `json:"data"`
 		} `json:"error"`
 	}
@@ -372,9 +373,16 @@ func (e *Events) sessionError(raw json.RawMessage, at time.Time) []harness.Item 
 	if p.Error.Name == "MessageAbortedError" {
 		return nil // the message update reports it
 	}
-	text := p.Error.Data.Message
-	if text == "" {
-		text = p.Error.Name
+	t := e.state["turn"]
+	if p.SessionID != "" && p.SessionID != e.main {
+		t = ""
 	}
-	return []harness.Item{e.notice("session-error-"+strconv.FormatInt(at.UnixMilli(), 10), e.state["turn"], e.parentOf(p.SessionID), at, "error", harness.NoticeError, text)}
+	id := "error-" + t // the same notice the failed message brings
+	if t == "" {
+		id = "session-error-" + strconv.FormatInt(at.UnixMilli(), 10)
+	} else if tu := e.turns[t]; tu != nil && tu.state == harness.StateRunning {
+		tu.state = harness.StateFailed
+	}
+	return []harness.Item{e.noticeBody(id, t, e.parentOf(p.SessionID), at,
+		errorBody(p.Error.Name, p.Error.Data.StatusCode, p.Error.Data.Message))}
 }

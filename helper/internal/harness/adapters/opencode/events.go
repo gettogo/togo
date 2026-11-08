@@ -2,7 +2,6 @@ package opencode
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strconv"
 	"sync"
@@ -259,7 +258,8 @@ type messagePayload struct {
 		Error *struct {
 			Name string `json:"name"`
 			Data struct {
-				Message string `json:"message"`
+				Message    string `json:"message"`
+				StatusCode int    `json:"statusCode"`
 			} `json:"data"`
 		} `json:"error"`
 	} `json:"info"`
@@ -320,11 +320,13 @@ func (e *Events) messageInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 	if tu != nil {
 		tu.state = harness.StateFailed
 	}
-	text := in.Error.Data.Message
-	if text == "" {
-		text = in.Error.Name
-	}
-	return []harness.Item{e.notice("error-"+in.ID, t, e.parentOf(in.SessionID), at, "error", harness.NoticeError, text)}, nil
+	return []harness.Item{e.noticeBody("error-"+t, t, e.parentOf(in.SessionID), at,
+		errorBody(in.Error.Name, in.Error.Data.StatusCode, in.Error.Data.Message))}, nil
+}
+
+// noticeBody is a notice item with a ready body (an error notice).
+func (e *Events) noticeBody(id, turn, parent string, at time.Time, b *harness.NoticeBody) harness.Item {
+	return harness.Item{ID: id, TurnID: turn, Parent: parent, Kind: harness.KindNotice, At: at, Notice: b}
 }
 
 func (e *Events) turnItem(id string, tu *turn, ended *time.Time) harness.Item {
@@ -357,12 +359,20 @@ func (e *Events) sessionStatus(raw json.RawMessage, at time.Time) ([]harness.Ite
 	case "idle":
 		return e.idle(p.SessionID, at)
 	case "retry":
-		text := p.Status.Message
-		if text == "" {
-			text = "Retrying"
+		if p.Status.Message == "Reconnected" {
+			return nil, nil // Kilo: the network came back, the call runs again
 		}
-		id := fmt.Sprintf("retry-%s-%d", e.state["turn"], p.Status.Attempt)
-		return []harness.Item{e.notice(id, e.state["turn"], e.parentOf(p.SessionID), at, "warning", harness.NoticeRateLimit, text)}, nil
+		// One notice per turn, updated on each attempt.
+		t := e.state["turn"]
+		return []harness.Item{e.noticeBody("retry-"+t, t, e.parentOf(p.SessionID), at,
+			retryBody("", 0, p.Status.Message, p.Status.Attempt))}, nil
+	case "offline":
+		// Kilo: the provider call failed to connect; Kilo waits for the
+		// network and tries again ({"type":"offline","message":"Connection
+		// refused"}, Kilo 7.8.27).
+		t := e.state["turn"]
+		return []harness.Item{e.noticeBody("offline-"+t, t, e.parentOf(p.SessionID), at,
+			retryBody("provider.transport", 0, p.Status.Message, 0))}, nil
 	}
 	return nil, nil
 }

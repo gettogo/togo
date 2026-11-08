@@ -61,6 +61,15 @@ type history struct {
 	open    bool
 	started time.Time
 	steps   int
+
+	launchSeen  bool          // the command line after the start header was dropped
+	failed      bool          // the open turn hit an error that ends it
+	interrupted bool          // the user pressed ^C in the open turn
+	notice      *harness.Item // the last error or warning notice, which later lines may update
+	noticeBase  string        // its text before any retry note
+	noticeFails bool          // it ends the turn unless aider retries
+	retries     int           // how often aider retried after it
+	absorb      absorb        // which following lines belong to it
 }
 
 func newHistory(env harness.Env) *history {
@@ -162,7 +171,8 @@ func (h *history) line(line string, at time.Time) []harness.Item {
 		if h.active && h.open {
 			items = append(items, h.closeTurn(at, harness.StateInterrupted)...)
 		}
-		h.active = true
+		h.active, h.launchSeen = true, false
+		h.endNotice()
 		return items
 	}
 	if !h.active {
@@ -217,11 +227,13 @@ func (h *history) flushUser(at time.Time) []harness.Item {
 	}
 	var items []harness.Item
 	if h.open {
-		items = h.closeTurn(at, harness.StateOK)
+		items = h.closeTurn(at, h.endState())
 	}
 	h.n++
 	id := "aider-" + strconv.Itoa(h.n)
 	h.turn, h.open, h.started, h.steps = id+".turn", true, at, 0
+	h.failed, h.interrupted = false, false
+	h.endNotice()
 	h.state["turn"] = h.turn
 	items = append(items, harness.Item{ID: id, TurnID: h.turn, Kind: harness.KindUser, At: at,
 		User: &harness.UserBody{Text: hookstyle.Clip(text), Source: "unknown"}})
@@ -245,8 +257,8 @@ func (h *history) flushReply(at time.Time) []harness.Item {
 }
 
 // flushQuote turns a run of tool lines into items: edits, commits and shell
-// runs become tool steps, errors become notices, token reports are
-// dropped, and each run of other lines between them (files added,
+// runs become tool steps, errors and warnings become notices (errors.go),
+// the launch command line and token reports are dropped, and each run of other lines between them (files added,
 // answered confirmations) folds into one step titled by its first line.
 func (h *history) flushQuote(at time.Time) []harness.Item {
 	if len(h.quote) == 0 {
@@ -268,29 +280,49 @@ func (h *history) flushQuote(at time.Time) []harness.Item {
 		rest = nil
 	}
 	for _, l := range lines {
-		switch {
-		case l == "" || strings.HasPrefix(l, "Tokens: "):
-		case editLine.MatchString(l):
+		if h.absorb != absorbNone && h.notice != nil {
+			before := h.notice.Notice.Text
+			if h.follows(h.absorb, l, h.notice) {
+				if h.notice.Notice.Text != before {
+					items = append(items, *h.notice)
+				}
+				continue
+			}
+			h.absorb = absorbNone
+		}
+		c := h.classify(l)
+		switch c.kind {
+		case lineSkip:
+		case lineInterrupt:
+			h.interrupted = true
+		case lineRetry:
+			if it := h.retry(); it != nil {
+				items = append(items, *it)
+			}
+		case lineError, lineWarning:
 			fold()
-			p := editLine.FindStringSubmatch(l)[1]
-			items = append(items, h.tool(at, "edit", harness.ToolEdit, "Edited "+p,
-				&wire.Subject{Kind: wire.SubjectFile, Text: p}, []harness.FileChange{{Path: p}}))
-		case commitLine.MatchString(l):
-			fold()
-			m := commitLine.FindStringSubmatch(l)
-			items = append(items, h.tool(at, "commit", harness.ToolOther, "Commit "+m[1]+" "+m[2], nil, nil))
-		case runLine.MatchString(l):
-			fold()
-			c := runLine.FindStringSubmatch(l)[1]
-			items = append(items, h.tool(at, "run", harness.ToolShell, c,
-				&wire.Subject{Kind: wire.SubjectCommand, Text: c}, nil))
-		case errorLine.MatchString(l):
-			fold()
-			h.n++
-			items = append(items, harness.Item{ID: "aider-" + strconv.Itoa(h.n), TurnID: h.turn, Kind: harness.KindNotice, At: at,
-				Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError, Text: hookstyle.Truncate(l, harness.MaxTitle)}})
+			if it := h.noticeItem(at, c); it != nil {
+				items = append(items, *it)
+			}
 		default:
-			rest = append(rest, l)
+			switch {
+			case editLine.MatchString(l):
+				fold()
+				p := editLine.FindStringSubmatch(l)[1]
+				items = append(items, h.tool(at, "edit", harness.ToolEdit, "Edited "+p,
+					&wire.Subject{Kind: wire.SubjectFile, Text: p}, []harness.FileChange{{Path: p}}))
+			case commitLine.MatchString(l):
+				fold()
+				m := commitLine.FindStringSubmatch(l)
+				items = append(items, h.tool(at, "commit", harness.ToolOther, "Commit "+m[1]+" "+m[2], nil, nil))
+			case runLine.MatchString(l):
+				fold()
+				c := runLine.FindStringSubmatch(l)[1]
+				items = append(items, h.tool(at, "run", harness.ToolShell, c,
+					&wire.Subject{Kind: wire.SubjectCommand, Text: c}, nil))
+			default:
+				rest = append(rest, l)
+			}
 		}
 	}
 	fold()
@@ -332,5 +364,75 @@ func (h *history) CloseIdle(at time.Time) []harness.Item {
 		return nil
 	}
 	items := h.flush(at.UTC())
-	return append(items, h.closeTurn(at.UTC(), harness.StateOK)...)
+	return append(items, h.closeTurn(at.UTC(), h.endState())...)
+}
+
+// endState is how the open turn ends: failed after an error aider gave up
+// on, interrupted after ^C, else ok.
+func (h *history) endState() string {
+	switch {
+	case h.failed:
+		return harness.StateFailed
+	case h.interrupted:
+		return harness.StateInterrupted
+	}
+	return harness.StateOK
+}
+
+// endNotice forgets the last notice: lines after this no longer update it.
+func (h *history) endNotice() {
+	h.notice, h.noticeBase, h.noticeFails, h.retries, h.absorb = nil, "", false, 0, absorbNone
+}
+
+// noticeItem makes the notice for an error or warning line. The same error
+// again while aider retries updates the notice it already showed.
+func (h *history) noticeItem(at time.Time, c classified) *harness.Item {
+	if c.kind == lineError && h.notice != nil && h.retries > 0 && c.text == h.noticeBase {
+		// Failed again: an error until aider says it retries once more.
+		h.absorb = c.absorb
+		if c.fails && h.open {
+			h.failed = true
+		}
+		it := *h.notice
+		body := *it.Notice
+		body.Level, body.Text = harness.ErrorNotice(c.reason, c.text).Level, h.noticeBase
+		it.Notice = &body
+		h.notice = &it
+		return &it
+	}
+	var body *harness.NoticeBody
+	if c.kind == lineError {
+		body = harness.ErrorNotice(c.reason, c.text)
+	} else {
+		body = &harness.NoticeBody{Level: "warning", Code: harness.NoticeError, Text: hookstyle.Truncate(c.text, harness.MaxNoticeText)}
+	}
+	h.n++
+	it := harness.Item{ID: "aider-" + strconv.Itoa(h.n), TurnID: h.turn, Kind: harness.KindNotice, At: at, Notice: body}
+	h.notice, h.noticeBase, h.noticeFails, h.retries, h.absorb = &it, body.Text, c.fails, 0, c.absorb
+	if c.fails && h.open {
+		h.failed = true
+	}
+	return &it
+}
+
+// retry marks the last error as one aider retries: a warning, and the turn
+// goes on.
+func (h *history) retry() *harness.Item {
+	if h.notice == nil || h.notice.Notice.Reason == "" {
+		return nil
+	}
+	h.retries++
+	if h.noticeFails {
+		h.failed = false
+	}
+	body := *h.notice.Notice
+	body.Level = "warning"
+	body.Text = h.noticeBase + " Retrying…"
+	if h.retries > 1 {
+		body.Text = h.noticeBase + " Retrying (attempt " + strconv.Itoa(h.retries) + ")…"
+	}
+	it := *h.notice
+	it.Notice = &body
+	h.notice = &it
+	return &it
 }

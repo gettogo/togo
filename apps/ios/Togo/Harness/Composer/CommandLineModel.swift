@@ -362,9 +362,11 @@ import TogoKit
     }
 
     /// The words go back in the field; the pictures stay attached.
+    /// A refusal that says why ("Aider is asking “Login to OpenRouter…”. Nothing was typed")
+    /// shows the reason; Try again sends once it is answered.
     private func restore(_ text: String, _ error: any Error) {
         if draft.isEmpty { draft = text }
-        notice = ComposerCopy.notSent
+        notice = CommandLineLogic.notSentNotice(error)
         noticeAction = .retry
     }
 

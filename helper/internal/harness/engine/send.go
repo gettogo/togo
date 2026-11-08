@@ -56,9 +56,15 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
+	blocked := e.blockedBy(ctx, s)
 	s.mu.Lock()
 	working := s.stateLocked()["working"] == "true"
-	if working || len(s.queue) > 0 {
+	if working || len(s.queue) > 0 || blocked != "" {
+		if req.Mode == harness.SendNow && blocked != "" {
+			// Asked to go now: say why it did not, so the phone shows it.
+			s.mu.Unlock()
+			return harness.SendResult{}, refuseBlocked(blocked)
+		}
 		if req.Mode == harness.SendNow || len(s.queue) >= MaxQueued {
 			s.mu.Unlock()
 			return harness.SendResult{}, harness.ErrBusy
@@ -175,6 +181,7 @@ func (e *Engine) userItem(s *sess, text string, images []harness.ImageRef, queue
 	s.notePhoneLocked(it.ID, text, images)
 	if !queuedNow {
 		s.awaitReply = true
+		s.failedHold = false // a new prompt starts a new turn
 	}
 	s.publishLocked([]harness.Item{it}, nil)
 	stored, _ := e.log.Get(s.id, it.ID)

@@ -120,27 +120,79 @@ struct ReplyRow: View, Equatable {
     }
 }
 
-/// A quiet system line: compacted, model changed, interrupted.
+/// A quiet system line: compacted, model changed, interrupted. An error the agent hit (it could
+/// not sign in, reach its model, or it quit) reads as its own small block, left-aligned with a
+/// red-tinted glyph and a plain-words lead, so it is found at a glance without shouting; the
+/// accent stays with Needs you.
 struct ChatNoticeRow: View {
     let notice: HarnessItem.Notice
 
     var body: some View {
-        Label(notice.text, systemImage: symbol)
-            .font(.footnote)
-            .foregroundStyle(Color.togoMute)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .multilineTextAlignment(.center)
+        if notice.isError, notice.code != "rate_limit" {
+            errorBlock
+        } else {
+            Label(notice.text, systemImage: symbol)
+                .font(.footnote)
+                .foregroundStyle(Color.togoMute)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private var errorBlock: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbol)
+                .foregroundStyle(Color.togoDiffRemovedWord)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(NoticeCopy.lead(notice))
+                    .foregroundStyle(Color.togoSnow)
+                Text(notice.text)
+                    .foregroundStyle(Color.togoMute)
+                    .textSelection(.enabled)
+            }
+        }
+        .font(.footnote)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private var symbol: String {
+        switch notice.reason {
+        case "auth": return "person.crop.circle.badge.exclamationmark"
+        case "provider_unreachable": return "wifi.exclamationmark"
+        case "rate_limit": return "hourglass"
+        case "model_not_found": return "questionmark.circle"
+        case "context_overflow": return "text.badge.xmark"
+        case "crashed": return "xmark.octagon"
+        case "refused": return "arrow.uturn.left.circle"
+        default: break
+        }
         switch notice.code {
-        case "compacted": "rectangle.compress.vertical"
-        case "model", "mode": "arrow.triangle.2.circlepath"
-        case "rate_limit": "hourglass"
-        case "interrupted": "stop.circle"
-        case "resumed": "arrow.uturn.forward"
-        case "fallback": "terminal"
-        default: notice.level == "info" ? "info.circle" : "exclamationmark.circle"
+        case "compacted": return "rectangle.compress.vertical"
+        case "model", "mode": return "arrow.triangle.2.circlepath"
+        case "rate_limit": return "hourglass"
+        case "interrupted": return "stop.circle"
+        case "resumed": return "arrow.uturn.forward"
+        case "fallback": return "terminal"
+        case "ended": return "power"
+        default: return notice.level == "info" ? "info.circle" : "exclamationmark.circle"
+        }
+    }
+}
+
+/// The plain-words lead of an error notice, by its reason.
+enum NoticeCopy {
+    static func lead(_ notice: HarnessItem.Notice) -> String {
+        switch notice.reason {
+        case "auth": String(localized: "chat.notice.auth", defaultValue: "Sign-in needed")
+        case "provider_unreachable": String(localized: "chat.notice.unreachable", defaultValue: "Couldn't reach the model")
+        case "rate_limit": String(localized: "chat.notice.rateLimit", defaultValue: "Rate limited")
+        case "model_not_found": String(localized: "chat.notice.model", defaultValue: "Model not found")
+        case "context_overflow": String(localized: "chat.notice.context", defaultValue: "Too long for the model")
+        case "crashed": String(localized: "chat.notice.crashed", defaultValue: "The agent quit")
+        case "refused": String(localized: "chat.notice.refused", defaultValue: "The agent didn't take that")
+        default: String(localized: "chat.notice.error", defaultValue: "Error")
         }
     }
 }
