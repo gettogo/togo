@@ -76,35 +76,35 @@ struct MachinesSettingsView: View {
                 }
             }
         }
-        .presentSheet("settings.importHosts", item: $importModel, onDismiss: {
-            if let draft = draftToOpen {
-                draftToOpen = nil
-                machineImport?.openInForm(draft)
-            }
-        }) { model in
-            NavigationStack {
+        // Importing pushes, the same at every width: inside the Settings sheet a sheet of its own
+        // would stack on it (C8). A host opened in the form leaves it first, then the form opens.
+        .navigationDestination(isPresented: Binding { importModel != nil } set: { if !$0 { importModel = nil } }) {
+            if let importModel {
                 ImportHostsView(
-                    model: model,
+                    model: importModel,
                     openInForm: { host in
                         draftToOpen = MachineDraft(imported: host)
-                        importModel = nil
+                        self.importModel = nil
                     },
                     finish: { machineImport?.finished($0) }
                 )
             }
-            .togoControls()
-            .togoSheet(.form)
         }
-        .coordinated("settings.removeMachine", .dialog, isPresented: Binding { removal.pending != nil } set: { if !$0 { removal.cancel() } }) { view, shown in
-            view.confirmationDialog(
+        .onChange(of: importModel == nil) { _, closed in
+            guard closed, let draft = draftToOpen else { return }
+            draftToOpen = nil
+            machineImport?.openInForm(draft)
+        }
+        .coordinated("settings.removeMachine", .alert, isPresented: Binding { removal.pending != nil } set: { if !$0 { removal.cancel() } }) { view, shown in
+            view.alert(
                 settingsText("settings.machines.remove.title", "Remove \(removal.pending?.name ?? "")?"),
                 isPresented: shown,
-                titleVisibility: .visible,
                 presenting: removal.pending
             ) { machine in
                 Button(settingsText("settings.machines.remove.confirm", "Remove \(machine.name)"), role: .destructive) {
                     removal.confirm(remove)
                 }
+                Button(settingsText("settings.confirm.cancel", "Cancel"), role: .cancel) {}
             } message: { machine in
                 Text(machine.removesKey
                     ? (isPad

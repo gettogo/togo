@@ -194,19 +194,12 @@ extension AppStore {
         return [workspace.selected, secondary].compactMap(\.self)
     }
 
-    /// Sheets hang off the sessions list. In a compact window that is under the workspace
-    /// cover, so the cover closes first and the sheet follows once it is gone.
+    /// Sheets hang off the window's split view, over whatever it shows (the workspace is a
+    /// column of it at every width, never a cover), so they open at once and the session stays.
     func showSheet(_ sheet: AppSheet) {
-        guard workspaceOpen, !workspaceInline else {
-            self.sheet = sheet
-            return
-        }
-        workspaceOpen = false
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.coverDismissal)
-            self?.sheet = sheet
-        }
+        self.sheet = sheet
     }
 
+    /// How long a sheet that is up takes to go before another can take its place.
     static let coverDismissal: Duration = .milliseconds(450)
 }

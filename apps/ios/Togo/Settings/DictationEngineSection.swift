@@ -130,9 +130,10 @@ struct DictationEngineSection: View {
             }
             .groupedRows()
             // Getting the model back is another large download, so deleting asks first.
-            .coordinated("settings.deleteWhisper", .dialog, isPresented: $confirmingDelete) { view, shown in
-                view.confirmationDialog(DictationCopy.whisperDeleteTitle, isPresented: shown, titleVisibility: .visible) {
+            .coordinated("settings.deleteWhisper", .alert, isPresented: $confirmingDelete) { view, shown in
+                view.alert(DictationCopy.whisperDeleteTitle, isPresented: shown) {
                     Button(DictationCopy.whisperDelete, role: .destructive) { model.delete(update: update) }
+                    Button(settingsText("settings.confirm.cancel", "Cancel"), role: .cancel) {}
                 } message: {
                     Text(DictationCopy.whisperDeleteMessage(size: size))
                 }

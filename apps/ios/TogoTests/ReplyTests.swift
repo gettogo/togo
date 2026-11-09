@@ -15,7 +15,7 @@ import TogoPush
     }
 }
 
-@MainActor private final class ReplyWatchLink: WatchLink {
+@MainActor private final class ReplyWatchLink: Togo.WatchLink {
     var canReachWatchApp = true
     func updateApplicationContext(_ context: [String: Any]) throws {}
 }

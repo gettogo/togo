@@ -2,7 +2,6 @@ import SwiftUI
 import TogoKit
 
 struct AgentStep: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The agents this machine lacks, folded away until asked for (spec §2.1, §2.2).
     @State private var missing = Disclosure()
@@ -21,8 +20,7 @@ struct AgentStep: View {
                         .transition(Motion.unfold(reduce: reduceMotion))
                 }
                 nameField
-                // At large text sizes the pinned footer would cover the list, so the error scrolls.
-                if dynamicTypeSize.isAccessibilitySize, let error = model.createError {
+                if let error = model.createError {
                     InlineError(message: error)
                 }
             }
@@ -32,8 +30,9 @@ struct AgentStep: View {
                 CaseName.of(model.agents), "\(model.showsFlags)", "\(model.selectedPreset != nil)",
             ])
         }
-        // The list scrolls under the Start button behind the system's soft edge.
-        .safeAreaBar(edge: .bottom) { footer }
+        .toolbar {
+            StartItem(label: model.startTitle, creating: model.creating, enabled: model.canStart, onStart: onStart)
+        }
     }
 
     @ViewBuilder private var agents: some View {
@@ -201,15 +200,5 @@ struct AgentStep: View {
             .padding(.vertical, 10)
             .frame(minHeight: 44)
             .overlay(alignment: .bottom) { Color.togoLine.frame(height: 1) }
-    }
-
-    private var footer: some View {
-        VStack(spacing: 12) {
-            if !dynamicTypeSize.isAccessibilitySize, let error = model.createError { InlineError(message: error) }
-            StartButton(title: model.startTitle, creating: model.creating, onStart: onStart)
-                .disabled(!model.canStart)
-        }
-        .screenMargins()
-        .padding(.vertical, 12)
     }
 }

@@ -12,10 +12,15 @@ struct RootView: View {
     /// and shrinks back into the row of whichever tab is on screen when it closes.
     @Namespace private var zoom
     private let onboarding: any OnboardingServices
-    /// The guide: offered on the first-run screen and reopened from settings.
+    /// The guide: offered on the first-run screen, opened once on a first launch that already
+    /// has machines, and reopened from settings.
     private let tutorial: TutorialModel?
     @State private var guideShown = false
+    /// The user tapped Add a machine on the welcome, passing the guide by.
+    @State private var startedFromWelcome = false
     @State private var launchShown = LaunchGate.app.claim()
+    /// A form opened from the Settings sheet takes the window's one sheet; Settings comes back after.
+    @State private var settingsHandover = SettingsHandover()
 
     init(store: AppStore, terminals: TerminalPool, onboarding: any OnboardingServices, tutorial: TutorialModel? = nil) {
         _store = State(initialValue: store)
@@ -34,6 +39,7 @@ struct RootView: View {
                     .transition(.opacity)
             } else if hasNoMachines {
                 FirstRunView(tutorial: tutorial, launchPlaying: launchShown) {
+                    startedFromWelcome = true
                     store.sheet = .addMachine
                 }
                     .task { PerfSignposts.interactive() }
@@ -55,6 +61,10 @@ struct RootView: View {
                 sheet: sheet, store: store, onboarding: onboarding, zoom: zoom, tutorial: tutorial,
                 settings: { AnyView(settingsSheet) }
             )
+        }
+        .onChange(of: store.sheet) { _, sheet in
+            guard sheet == nil, let back = settingsHandover.closed() else { return }
+            store.sheet = back
         }
         // From the sessions list, the board or the empty detail; while the workspace is on
         // screen, the workspace presents it.
@@ -93,7 +103,16 @@ struct RootView: View {
 
     @ViewBuilder private var controlCenter: some View {
         if let tutorial {
-            adaptive.tutorialCover(tutorial, isPresented: $guideShown) { store.showSheet(.addMachine) }
+            adaptive
+                .tutorialCover(tutorial, isPresented: $guideShown) { store.showSheet(.addMachine) }
+                // A first launch with machines from iCloud skips the welcome, so the guide
+                // comes to the user once; closing it marks it seen.
+                .onChange(of: tutorial.opensOnLaunch(
+                    hasMachines: !hasNoMachines, startedFromWelcome: startedFromWelcome,
+                    launchPlaying: launchShown, sheetShown: store.sheet != nil
+                ), initial: true) { _, opens in
+                    if opens { guideShown = true }
+                }
         } else {
             adaptive
         }
@@ -114,18 +133,11 @@ struct RootView: View {
         }
     }
 
-    /// Settings beside the sidebar: a sheet with its own stack, so it never covers the session
-    /// in the detail. Its pages push inside it.
+    /// Settings beside the sidebar: a page sheet that owns its navigation, so it never covers
+    /// the session in the detail. Its panes sit beside the list where the sheet is wide.
     private var settingsSheet: some View {
-        NavigationStack {
-            SettingsView(values: settingsValues, actions: settingsActions)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(role: .close) { store.sheet = nil }
-                    }
-                }
-        }
-        .togoControls()
+        SettingsSplitView(values: settingsValues, actions: settingsActions) { store.sheet = nil }
+            .togoControls()
     }
 
     private var settingsValues: SettingsValues {
@@ -155,6 +167,8 @@ struct RootView: View {
     /// "Getting started" in settings: the guide from its first page, with every tip again.
     private func openGuide() {
         guard let tutorial else { return }
+        // The guide is a new root: the Settings sheet closes first, or the guide would wait behind it.
+        if store.sheet == .settings { store.sheet = nil }
         tutorial.reopen()
         guideShown = true
     }
@@ -163,8 +177,8 @@ struct RootView: View {
         let store = self.store
         return SettingsActions(
             update: { store.services.settings = $0 },
-            addMachine: { store.sheet = .addMachine },
-            editMachine: { store.sheet = .editMachine($0) },
+            addMachine: { store.sheet = settingsHandover.open(.addMachine, from: store.sheet) },
+            editMachine: { store.sheet = settingsHandover.open(.editMachine($0), from: store.sheet) },
             removeMachine: { id in
                 Task {
                     do {
@@ -186,7 +200,7 @@ struct RootView: View {
                         save: { try await services.saveHost($0) }
                     )
                 },
-                openInForm: { store.sheet = .addMachineFilled($0) },
+                openInForm: { store.sheet = settingsHandover.open(.addMachineFilled($0), from: store.sheet) },
                 finished: { count in
                     store.notice = Notice(
                         text: count == 1

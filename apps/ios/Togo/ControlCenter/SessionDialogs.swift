@@ -12,12 +12,13 @@ struct SessionDialogs: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .coordinated("session.kill", .dialog, isPresented: presented($kill)) { view, shown in
-                view.confirmationDialog(
+            .coordinated("session.kill", .alert, isPresented: presented($kill)) { view, shown in
+                view.alert(
                     kill.map { SessionActions.killConfirmation(for: $0).title } ?? "",
-                    isPresented: shown, titleVisibility: .visible, presenting: kill
+                    isPresented: shown, presenting: kill
                 ) { row in
                     Button(ControlCenterCopy.kill, role: .destructive) { Task { await store.kill(row) } }
+                    Button(ControlCenterCopy.cancel, role: .cancel) {}
                 } message: { row in
                     Text(SessionActions.killConfirmation(for: row).message)
                 }
@@ -78,6 +79,8 @@ extension AppStore {
             Task { await services.refresh() }
         case .signIn(let hostID):
             sheet = .signIn(hostID)
+        case .setUpHere(let hostID):
+            sheet = .setUpHere(hostID)
         case .wake(let hostID):
             Task { await wake(hostID) }
         case .installHelper(let hostID), .edit(let hostID):

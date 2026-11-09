@@ -204,7 +204,7 @@ import XCTest
         file: StaticString = #filePath, line: UInt = #line
     ) {
         add(XCTAttachment(screenshot: settledScreenshot(app)))
-        let overWorkspace = isPad && ["Sessions", "roster.more"].contains { name in
+        let overWorkspace = isPad && ["Sessions", "roster.settings"].contains { name in
             let button = app.buttons[name]
             return button.exists && !button.isHittable
         }

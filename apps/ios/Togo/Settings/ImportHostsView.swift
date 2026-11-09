@@ -2,7 +2,8 @@ import SwiftUI
 import TogoKit
 import UniformTypeIdentifiers
 
-/// Paste SSH config text or choose a file, then tick the hosts to add as machines.
+/// Paste SSH config text or choose a file, then tick the hosts to add as machines. Pushed from
+/// the machines page, so Back leaves it and Import finishes it.
 struct ImportHostsView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: ImportHostsModel
@@ -29,9 +30,6 @@ struct ImportHostsView: View {
         .navigationTitle(settingsText("import.hosts.screenTitle", "Import hosts"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(settingsText("import.hosts.cancel", "Cancel"), systemImage: "xmark", role: .cancel) { dismiss() }
-            }
             if model.reviewed {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(importTitle, systemImage: "checkmark", role: .confirm) {

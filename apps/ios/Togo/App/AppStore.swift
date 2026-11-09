@@ -10,9 +10,17 @@ import TogoKit
     var workspace = WorkspaceState()
     var query = ""
     var filter: SessionFilter = .all
-    var path: [AppRoute] = []
+    /// The window's place in the navigation tree; saved with the window.
+    var router = Router()
+    var path: [AppRoute] {
+        get { router.path }
+        set { router.path = newValue }
+    }
     var sheet: AppSheet?
-    var workspaceOpen = false
+    var workspaceOpen: Bool {
+        get { router.workspaceOpen }
+        set { router.workspaceOpen = newValue }
+    }
     var firstRun: Bool
     var notice: Notice?
     /// What the last wake signal to a machine said, shown under its name.
@@ -50,7 +58,10 @@ import TogoKit
     /// Compose text per tab. Cleared when it is sent and when the tab closes.
     var drafts: [TabID: String] = [:]
     /// Monitor mode: the roster full screen as a status display, over the workspace.
-    var monitorShown = false
+    var monitorShown: Bool {
+        get { router.monitorShown }
+        set { router.monitorShown = newValue }
+    }
     /// The workspace with its chrome hidden.
     var zen = false
     /// Both panes are on screen. The workspace sets it from its arrangement; while false the
@@ -60,12 +71,16 @@ import TogoKit
     var panePromotion: PanePromotion?
     /// Open tabs, most recently put on screen first.
     var recentTabs: [TabID] = []
-    /// The workspace sits beside the session sidebar instead of in a cover over the list.
+    /// The window is regular width: the workspace is the detail column beside the roster
+    /// instead of a cover over it. Set by the root from the size class only.
     var workspaceInline = false
     /// The window is wide enough for two panes, so ⌘\ can open one.
     var panesFit = false
     /// The session sidebar of a regular-width window.
-    var sidebar = SidebarState()
+    var sidebar: SidebarState {
+        get { router.sidebar }
+        set { router.sidebar = newValue }
+    }
     /// Why the last answer to a card did not arrive, by card id. It sits on the card the user
     /// will answer again rather than in `notice`, which belongs to the whole screen.
     private(set) var answerFailures: [String: String] = [:]
@@ -174,7 +189,7 @@ import TogoKit
             }
         case .keyMissing, .hostKeyChanged:
             endReview(hostID: snapshot.hostID, sessionID: nil, why: ReviewEntryCopy.machineLost(machineName(for: snapshot.hostID)))
-        case .connecting, .waking, .offline, .authNeeded, .deviceOffline:
+        case .connecting, .waking, .offline, .authNeeded, .setUpHere, .deviceOffline:
             break
         }
         controlCenter.requests = mergedRequests(snapshot)

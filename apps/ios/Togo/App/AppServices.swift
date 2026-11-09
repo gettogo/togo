@@ -32,6 +32,9 @@ import UIKit
     /// monitor use that connection. Background connections never ask.
     func signIn(hostID: HostID, prompter: any ConnectionPrompter) async throws
     func saveHost(_ record: HostRecord) async throws
+    /// Saves a machine from another device once this device's key is on it. This device
+    /// remembers its own key for it; the synced record keeps the one it named.
+    func setUpHere(_ record: HostRecord) async throws
     func removeHost(_ id: HostID) async throws
     /// The stored record behind a machine, for editing it.
     func hostRecord(_ id: HostID) -> HostRecord?
@@ -86,6 +89,10 @@ extension AppServices {
     func refresh() async {}
 
     func hostRecord(_ id: HostID) -> HostRecord? { nil }
+
+    func setUpHere(_ record: HostRecord) async throws {
+        try await saveHost(record)
+    }
 
     func removesKey(_ id: HostID) -> Bool { false }
 

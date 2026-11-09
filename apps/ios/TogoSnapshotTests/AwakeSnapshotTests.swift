@@ -62,8 +62,14 @@ struct AwakeSnapshotTests {
         }
     }
 
-    @Test func batterySheet() {
-        assertScreen(named: "awake-battery-sheet") { AwakeBatterySheet(name: "Studio").togoControls() }
+    @Test func batterySetup() {
+        assertScreen(named: "awake-battery-setup") {
+            NavigationStack {
+                List { Section { AwakeBatterySetup(name: "Studio") }.groupedRows() }
+                    .groupedList()
+            }
+            .togoControls()
+        }
     }
 
     @Test func headingWords() {

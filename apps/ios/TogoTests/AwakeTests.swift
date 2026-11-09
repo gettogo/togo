@@ -66,17 +66,29 @@ import TogoKit
         #expect(tools.requests.filter { $0.method == "awake.set" }.map(\.params) == [["mode": .string("off")]])
         #expect(model.status?.mode == .off)
         #expect(model.error == nil)
-        #expect(!model.showsBatterySheet)
+        #expect(!model.needsBatterySetup)
     }
 
-    @Test func refusedBatteryShowsSheetAndRevertsPicker() async {
+    @Test func refusedBatteryShowsTheSetupStepAndRevertsPicker() async {
         let tools = FakeMachineTools()
         let model = model(tools, start: status(mode: .plugged))
         tools.fail("awake.set", code: -32008, data: #"{"reason":"needs_admin_setup"}"#)
         await model.choose(.battery)
-        #expect(model.showsBatterySheet)
+        #expect(model.needsBatterySetup)
         #expect(model.status?.mode == .plugged)
         #expect(model.error == nil)
+    }
+
+    /// The setup step stays under the choice until the next pick, which may succeed.
+    @Test func theNextPickClearsTheSetupStep() async {
+        let tools = FakeMachineTools()
+        let model = model(tools, start: status(mode: .plugged))
+        tools.fail("awake.set", code: -32008, data: #"{"reason":"needs_admin_setup"}"#)
+        await model.choose(.battery)
+        #expect(model.needsBatterySetup)
+        tools.answer("awake.set", json(mode: "off"))
+        await model.choose(.off)
+        #expect(!model.needsBatterySetup)
     }
 
     @Test func showsTheChoiceAtOnceAndRevertsOnAnyFailure() async {
@@ -92,7 +104,7 @@ import TogoKit
         await pending.value
         #expect(slow.status?.mode == .plugged)
         #expect(slow.error == "Couldn't change keep awake on Studio. Try again.")
-        #expect(!slow.showsBatterySheet)
+        #expect(!slow.needsBatterySetup)
     }
 
     @Test func loadReadsTheCurrentStatus() async {

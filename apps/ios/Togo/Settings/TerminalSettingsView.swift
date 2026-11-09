@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct TerminalSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.hardwareKeyboard) private var keyboard
     let settings: AppSettings
     let fonts: [String]
     let update: (AppSettings) -> Void
@@ -109,10 +110,14 @@ struct TerminalSettingsView: View {
                 )
                 .frame(minHeight: 44)
             } footer: {
-                Text(settingsText(
-                    "settings.terminal.singleKeys.footer",
-                    "On a hardware keyboard, Y approves, N denies and R replies to the request in the prompt bar. ⌘↩ and ⌘. always work."
-                ))
+                // The shortcut glyphs only with a keyboard attached to type them (P5).
+                Text([
+                    settingsText(
+                        "settings.terminal.singleKeys.footer",
+                        "On a hardware keyboard, Y approves, N denies and R replies to the request in the prompt bar."
+                    ),
+                    keyboard.hint(settingsText("settings.terminal.singleKeys.shortcuts", "⌘↩ and ⌘. always work.")),
+                ].compactMap { $0 }.joined(separator: " "))
             }
             .groupedRows()
         }

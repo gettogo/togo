@@ -167,16 +167,25 @@ private extension WatchReplyModel.State {
 
 /// The row or button that opens a reply.
 struct ReplyLink: View {
-    let store: WatchStore
     let target: WatchReplyMessage.Target
     let title: String
 
     var body: some View {
-        NavigationLink {
-            ReplyView(model: store.replyModel(target), title: title)
-        } label: {
+        NavigationLink(value: WatchRoute.reply(ReplyRoute(target: target, title: title))) {
             Label(WatchCopy.reply, systemImage: "arrowshape.turn.up.left")
                 .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+        }
+    }
+}
+
+extension View {
+    /// The screens pushed over the Watch's pages, for any stack that shows them.
+    func watchRoutes(store: WatchStore) -> some View {
+        navigationDestination(for: WatchRoute.self) { route in
+            switch route {
+            case .reply(let reply):
+                ReplyView(model: store.replyModel(reply.target), title: reply.title)
+            }
         }
     }
 }

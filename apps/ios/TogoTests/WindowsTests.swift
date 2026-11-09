@@ -62,7 +62,8 @@ import UserNotifications
         store.openBeside(tab("s-02"))
         let saved = WindowRestoration(store)
         #expect(saved == WindowRestoration(
-            tabs: [tab("s-01"), tab("s-04"), tab("s-02")], selected: tab("s-04"), secondary: tab("s-02"), workspaceOpen: true
+            tabs: [tab("s-01"), tab("s-04"), tab("s-02")], selected: tab("s-04"), secondary: tab("s-02"), workspaceOpen: true,
+            router: Router(workspaceOpen: true)
         ))
 
         let data = try JSONEncoder().encode(saved)
@@ -70,6 +71,26 @@ import UserNotifications
         #expect(decoded == saved)
         let restored = composition.makeStore(window: WindowID(), restoring: decoded)
         #expect(WindowRestoration(restored) == saved)
+    }
+
+    /// The window comes back to the same place: what was pushed, the status display and the
+    /// sidebar the user hid. A ⌘K in flight is not saved.
+    @Test func restorationKeepsThePlace() throws {
+        let composition = AppComposition(services: services)
+        let store = composition.makeStore(window: WindowID(), restoring: nil)
+        store.open(hostID: Samples.studio, sessionID: "s-01")
+        store.showArchive()
+        store.monitorShown = true
+        store.sidebar.hidden = true
+        store.sidebar.searchRequests = 3
+        let data = try JSONEncoder().encode(WindowRestoration(store))
+        let decoded = try JSONDecoder().decode(WindowRestoration.self, from: data)
+        let restored = composition.makeStore(window: WindowID(), restoring: decoded)
+        #expect(restored.path == [.archive])
+        #expect(restored.monitorShown)
+        #expect(restored.sidebar.isHidden)
+        #expect(restored.sidebar.searchRequests == 0)
+        #expect(restored.workspaceOpen)
     }
 
     @Test func restorationDropsWhatNoLongerFits() {

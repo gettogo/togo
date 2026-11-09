@@ -79,6 +79,9 @@ import UIKit
     private(set) var hasLoaded = false
     /// The composer's height under this tab's chat, measured where the composer is drawn.
     var composerClearance: CGFloat = 0
+    /// Where the reader is in this session's chat. Kept with the session rather than the view,
+    /// so a fold, unfold or window resize that rebuilds the workspace returns to the same place.
+    @ObservationIgnored let chatScroll = ChatScrollModel()
     /// The composer's / or @ menu is up: a tap on the chat puts it away.
     var composerMenuOpen = false
     /// A scroll the chat should make: to a needs card ("Go to request", the capsule).

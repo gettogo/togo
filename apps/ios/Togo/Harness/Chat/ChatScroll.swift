@@ -109,6 +109,19 @@ enum ChatScroll {
         withAnimation(Motion.animation(.resize, reduce: false), move)
     }
 
+    /// A chat view made again for the same session (a fold or unfold moves the workspace to
+    /// another presenter) returns to the row the reader had at the top. At the foot it stays at
+    /// the foot, which the default anchor already gives.
+    func resume() {
+        guard !pinned, let id = position.viewID(type: String.self) else { return }
+        Task { @MainActor [weak self] in
+            guard let self, !self.dragging else { return }
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { self.position.scrollTo(id: id, anchor: .top) }
+        }
+    }
+
     func setVisible(_ id: String, _ visible: Bool) {
         if visible {
             if !visibleNeeds.contains(id) { visibleNeeds.insert(id) }

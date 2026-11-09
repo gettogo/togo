@@ -41,6 +41,29 @@ import TogoKit
         #expect(navigation.path.count == 1)
     }
 
+    // MARK: Screen models
+
+    @Test func foldKeepsTheOpenDiffsModel() {
+        let session = ReviewSession(subject: subject(), services: FakeReviewServices(), tab: .changes, machine: "Studio")
+        let route = ReviewRoute.diff(.worktree(path: "a.ts"))
+        session.navigation.open(route, layout: .split)
+        let made = session.screen(for: route) { DiffModel.preview(.worktree(path: "a.ts")) }
+        session.navigation.relayout(to: .stack)
+        let again = session.screen(for: route) { DiffModel.preview(.worktree(path: "a.ts")) }
+        #expect(again === made)
+    }
+
+    @Test func closedRoutesLetTheirModelGo() {
+        let session = ReviewSession(subject: subject(), services: FakeReviewServices(), tab: .changes, machine: "Studio")
+        let route = ReviewRoute.diff(.worktree(path: "a.ts"))
+        session.navigation.open(route, layout: .stack)
+        let made = session.screen(for: route) { DiffModel.preview(.worktree(path: "a.ts")) }
+        session.navigation.path = []
+        session.navigation.open(route, layout: .stack)
+        let fresh = session.screen(for: route) { DiffModel.preview(.worktree(path: "a.ts")) }
+        #expect(fresh !== made)
+    }
+
     // MARK: Kept review
 
     @Test func reviewIsKeptWhileItsPresentationChanges() {

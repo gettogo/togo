@@ -7,6 +7,11 @@ enum WatchHome {
         /// The oldest waiting request fills the screen; `position` counts from 1.
         case request(id: String, position: Int, count: Int)
         case allClear
+
+        /// The request on the page, if any.
+        var requestId: String? {
+            if case let .request(id, _, _) = self { id } else { nil }
+        }
     }
 
     /// One roster line: mono bib, session name, status word.
@@ -19,10 +24,14 @@ enum WatchHome {
         var needsYou: Bool
     }
 
-    /// The first page: the oldest request while any waits, otherwise "All clear".
+    /// The first page: the `focus` request while it waits (a notification or complication asked
+    /// for it), else the oldest while any waits, otherwise "All clear".
     /// `requests` are the waiting ones, oldest first.
-    static func page(for requests: [PendingRequest]) -> Page {
+    static func page(for requests: [PendingRequest], focus: String? = nil) -> Page {
         guard let first = requests.first else { return .allClear }
+        if let focus, let index = requests.firstIndex(where: { $0.requestId == focus }) {
+            return .request(id: focus, position: index + 1, count: requests.count)
+        }
         return .request(id: first.requestId, position: 1, count: requests.count)
     }
 
@@ -40,11 +49,11 @@ enum WatchHome {
     static let armDelay: Duration = .milliseconds(500)
 
     /// The page while `holding` an answered request: it stays until the hold ends.
-    static func page(for requests: [PendingRequest], holding: String?) -> Page {
+    static func page(for requests: [PendingRequest], holding: String?, focus: String? = nil) -> Page {
         if let holding, !requests.contains(where: { $0.requestId == holding }) {
             return .request(id: holding, position: 1, count: 1)
         }
-        return page(for: requests)
+        return page(for: requests, focus: focus)
     }
 
     /// Whether the page should hold `previous` as the queue moves on: only when it was

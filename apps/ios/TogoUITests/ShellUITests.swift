@@ -18,36 +18,39 @@ import XCTest
         return app
     }
 
-    /// New session is in the roster's menu on every size.
+    /// New session is a button in the roster's bar on every size.
     func testMenuOpensNewSession() {
         let app = launchTogo()
         app.pickFromRosterMenu("New session")
         XCTAssertTrue(app.navigationBars["Machine"].waitForExistence(timeout: 5), "The new-session sheet opened")
     }
 
-    /// The roster's bar holds one menu, and everything that is not a session is in it.
+    /// New session and Settings are bar buttons; the menu holds the rarer things.
     func testRosterBarHoldsOneMenu() {
         let app = launchTogo()
-        XCTAssertTrue(app.rosterMenu.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["roster.settings"].waitForExistence(timeout: 10))
         assertTappable(app.rosterMenu)
+        for id in ["roster.newSession", "roster.settings", "roster.filter"] {
+            XCTAssertTrue(app.buttons[id].exists, "The roster's bar has no \(id)")
+        }
         XCTAssertFalse(app.buttons["Debug tools"].exists, "Debug lives in Settings")
         app.rosterMenu.tap()
-        for item in ["New session", "Monitor", "Settings", "Add machine", "Archive"] {
+        for item in ["Status display", "Add machine", "Archive"] {
             XCTAssertTrue(app.buttons[item].waitForExistence(timeout: 5), "The menu has no \(item)")
         }
     }
 
-    /// Monitor comes from the menu and has a way back by touch.
+    /// The status display comes from the menu and has a way back by touch.
     func testMonitorOpensAndCloses() {
         let app = launchTogo()
-        app.pickFromRosterMenu("Monitor")
+        app.pickFromRosterMenu("Status display")
         let done = app.buttons["monitor.done"]
-        XCTAssertTrue(done.waitForExistence(timeout: 5), "Monitor has no way out")
+        XCTAssertTrue(done.waitForExistence(timeout: 5), "The status display has no way out")
         done.tap()
-        XCTAssertTrue(done.waitForNonExistence(timeout: 5), "Done left Monitor up")
+        XCTAssertTrue(done.waitForNonExistence(timeout: 5), "Done left the status display up")
     }
 
-    /// Settings is a sheet beside the roster; closing it and tapping a line shows the session.
+    /// Settings is a sheet in every layout; closing it and tapping a line shows the session.
     func testSessionShowsAfterSettings() throws {
         let app = try launchShell()
         app.pickFromRosterMenu("Settings")

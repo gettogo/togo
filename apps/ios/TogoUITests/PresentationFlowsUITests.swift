@@ -122,7 +122,7 @@ import XCTest
     func testLaunchShowsSessionList() {
         launch(replay: "chat")
         XCTAssertTrue(app.row("01", "api").waitForExistence(timeout: 15))
-        XCTAssertTrue(app.buttons["roster.more"].exists)
+        XCTAssertTrue(app.buttons["roster.settings"].exists)
         expectClean()
         XCTAssertTrue(probeValue.contains("depth=0"), probeValue)
     }

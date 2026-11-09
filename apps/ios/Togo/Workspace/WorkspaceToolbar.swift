@@ -95,15 +95,12 @@ struct WorkspaceRunAgain {
 enum WorkspaceLeading: Equatable {
     /// "Sessions", back to the list the workspace covers.
     case back
-    /// Shows the sidebar the workspace sits beside.
-    case showSidebar
-    /// Nothing: the sidebar is on screen beside the workspace.
+    /// Nothing: the workspace is the detail column; the split view's toggle handles the sidebar.
     case none
 
     var item: (title: String, symbol: String)? {
         switch self {
         case .back: (WorkspaceCopy.sessions, "chevron.backward")
-        case .showSidebar: (AppCommandCopy.showSidebar, "sidebar.leading")
         case .none: nil
         }
     }

@@ -2093,6 +2093,17 @@
         }
       }
     },
+    "settings.confirm.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
     "settings.machineNotify.idle" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7117,7 +7128,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "How Togo works"
+            "value" : "How it works"
           }
         }
       }
@@ -8141,28 +8152,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add machine"
-          }
-        }
-      }
-    },
-    "sidebar.empty.shortcut" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "or press ⌘T"
-          }
-        }
-      }
-    },
-    "sidebar.empty.shortcutHint" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Command T"
           }
         }
       }

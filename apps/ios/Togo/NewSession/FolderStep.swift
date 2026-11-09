@@ -227,30 +227,33 @@ private struct PlainStart: View {
                     .font(.body)
                     .foregroundStyle(Color.togoMute)
                 if let error = model.createError { InlineError(message: error) }
-                StartButton(title: NewSessionCopy.plainStart, creating: model.creating, onStart: onStart)
             }
         }
+        .toolbar { StartItem(label: NewSessionCopy.plainStart, creating: model.creating, enabled: true, onStart: onStart) }
     }
 }
 
-/// The Start action with its working state; the label becomes "Starting" while the machine answers.
-struct StartButton: View {
-    let title: String
+/// Start, the sheet's prominent action: in its bar after Close, so on a Duo it is second in
+/// the vertical bar (`D13`) and on every layout the list keeps the full height. A short verb
+/// with a symbol (`P9`, `D12`); `label` names the agent to VoiceOver and Voice Control. While
+/// the machine answers it reads "Starting" and waits.
+struct StartItem: ToolbarContent {
+    let label: String
     let creating: Bool
+    let enabled: Bool
     let onStart: () async -> Void
 
-    var body: some View {
-        Button {
-            Task { await onStart() }
-        } label: {
-            Text(creating ? NewSessionCopy.starting : title)
-                .contentTransition(.interpolate)
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button(creating ? NewSessionCopy.starting : NewSessionCopy.plainStart, systemImage: "play.fill") {
+                Task { await onStart() }
+            }
+            // Command-Return starts from any field on the step.
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(creating || !enabled)
+            .accessibilityLabel(creating ? NewSessionCopy.starting : label)
+            .accessibilityInputLabels([label, NewSessionCopy.plainStart])
+            .accessibilityIdentifier("new.start")
         }
-        .buttonStyle(.primary)
-        // Command-Return starts from any field on the step.
-        .keyboardShortcut(.return, modifiers: .command)
-        .disabled(creating)
-        // motion: cause → effect — the tapped button shows it is creating, in place
-        .motion(.respond, value: creating)
     }
 }

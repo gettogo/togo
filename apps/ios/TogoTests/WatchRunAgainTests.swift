@@ -4,7 +4,7 @@ import TogoKit
 import TogoPush
 @testable import Togo
 
-@MainActor private final class RunAgainWatchLink: WatchLink {
+@MainActor private final class RunAgainWatchLink: Togo.WatchLink {
     var canReachWatchApp = true
     func updateApplicationContext(_ context: [String: Any]) throws {}
 }

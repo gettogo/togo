@@ -9,7 +9,7 @@ struct FileViewer: View {
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The header (breadcrumb, ref, cut-short notice) as drawn: it arrives with the file in a
+    /// The header (ref, cut-short notice) as drawn: it arrives with the file in a
     /// `resize` transaction, so the code below moves down with it.
     @State private var readyShown = LiveMirror<Bool>()
 
@@ -25,6 +25,8 @@ struct FileViewer: View {
             .safeAreaInset(edge: .top, spacing: 0) { header }
             .mirrors(model.state == .ready, into: $readyShown)
             .navigationTitle(Text(verbatim: model.fileName))
+            // The folder is the subtitle, as on a diff, rather than a row of its own.
+            .navigationSubtitle(Text(verbatim: model.breadcrumb))
             .navigationBarTitleDisplayMode(.inline)
             .modifier(FindBar(model: model))
             .toolbar {
@@ -71,7 +73,6 @@ struct FileViewer: View {
     @ViewBuilder private var header: some View {
         if readyShown.read(model.state == .ready) {
             VStack(alignment: .leading, spacing: 4) {
-                if !model.breadcrumb.isEmpty { PathText(model.breadcrumb) }
                 if let ref = model.refBanner {
                     Text(verbatim: ref).font(.footnote).foregroundStyle(Color.togoMute)
                 }
@@ -89,7 +90,7 @@ struct FileViewer: View {
     }
 
     private var hasHeader: Bool {
-        !model.breadcrumb.isEmpty || model.refBanner != nil || model.truncatedNotice != nil
+        model.refBanner != nil || model.truncatedNotice != nil
     }
 }
 

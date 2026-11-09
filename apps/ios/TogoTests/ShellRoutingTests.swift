@@ -66,11 +66,12 @@ import TogoKit
         #expect(store.sheet == .newSession(one.hostID))
     }
 
-    @Test func settingsPushesOnTheCompactList() {
+    /// The same sheet on the compact list: Settings is presented one way in every layout.
+    @Test func settingsIsASheetOnTheCompactList() {
         let store = store(inline: false)
         store.showSettings()
-        #expect(store.sheet == nil)
-        #expect(store.path == [.settings])
+        #expect(store.sheet == .settings)
+        #expect(store.path.isEmpty)
     }
 
     // MARK: Edge swipe

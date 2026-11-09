@@ -4,7 +4,6 @@ import TogoTerminal
 /// The bar with nothing waiting and no terminal open: `> New session`. Tapped, it opens into a
 /// field with up to three places to start, and a way to the full New session sheet.
 struct PromptStartView: View {
-    @Environment(\.hardwareKeyboard) private var keyboard
     @Environment(\.loopsPaused) private var loopsPaused
     @Bindable var model: PromptBarModel
     let expanded: Bool
@@ -26,12 +25,6 @@ struct PromptStartView: View {
                     .font(.body)
                     .foregroundStyle(Color.togoMute)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if let hint = keyboard.hint("⌘T") {
-                    Text(verbatim: hint)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(Color.togoMuteDim)
-                        .accessibilityHidden(true)
-                }
             }
             .padding(.horizontal, 16)
             .frame(minHeight: 50)

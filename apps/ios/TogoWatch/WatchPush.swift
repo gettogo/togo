@@ -14,6 +14,7 @@ import WatchKit
 /// the Watch to be unlocked first.
 @MainActor final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificationCenterDelegate {
     let store: WatchStore
+    let router = WatchRouter()
     private let core: NotificationServiceCore
     private let link: WatchConnectivityClient
 
@@ -90,6 +91,15 @@ import WatchKit
             await open(route)
             return
         }
+        if action == UNNotificationDefaultActionIdentifier || action == NotificationActionID.open {
+            // The body or Open: land on what the notification was about, not the oldest request.
+            if let requestId = info?["requestId"] as? String, WatchLink.isRequestID(requestId) {
+                await land(.request(requestId))
+            } else if (info?["sessionId"] as? String).map({ !$0.isEmpty }) == true {
+                await land(.sessions)
+            }
+            return
+        }
         if action == NotificationActionID.reply {
             let text = (response as? UNTextInputNotificationResponse)?.userText ?? ""
             let hostId = info?["hostId"] as? String, requestId = info?["requestId"] as? String
@@ -158,6 +168,11 @@ import WatchKit
 
     private func open(_ route: ReplyRoute) {
         store.openReply = route
+    }
+
+    private func land(_ link: WatchLink) {
+        store.openReply = nil
+        router.open(link)
     }
 
     private func answer(hostId: String, requestId: String, decision: String) async {

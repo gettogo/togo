@@ -6,6 +6,8 @@ import TogoPush
 struct RequestsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: WatchStore
+    /// The request a notification, complication or control asked for; the oldest otherwise.
+    var focus: String?
     /// An answered request kept on the page for a moment, so its result shows.
     @State private var held: String?
     /// The page on screen. It follows the model's page in one presentation transaction, so the
@@ -13,7 +15,7 @@ struct RequestsView: View {
     @State private var shown: WatchHome.Page?
 
     var body: some View {
-        let page = WatchHome.page(for: store.requests, holding: held)
+        let page = WatchHome.page(for: store.requests, holding: held, focus: focus)
         ZStack {
             switch shown ?? page {
             case let .request(id, position, count):
@@ -35,7 +37,8 @@ struct RequestsView: View {
             // motion: state change — a crossfade in place, no shift
             withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { shown = new }
         }
-        .onChange(of: store.requests.first?.requestId) { old, new in
+        // The request the page shows, held or not: the focused one or the oldest.
+        .onChange(of: WatchHome.page(for: store.requests, focus: focus).requestId) { old, new in
             let answered = old.map { store.outcome($0) == .approved || store.outcome($0) == .denied } ?? false
             guard WatchHome.holds(previous: old, next: new, answeredHere: answered), let old else { return }
             held = old
@@ -91,9 +94,14 @@ struct BeaconDot: View {
 /// "04  Claude Code  Needs you": mono bib, name, status word. Beacon blue only for "Needs you".
 struct RosterLine: View {
     let line: WatchHome.Line
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 6) {
+        // At accessibility sizes the three parts stack, so the name never squeezes to nothing.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(spacing: 6))
+        layout {
             Text(line.bib)
                 .font(.system(.footnote, design: .monospaced))
                 .foregroundStyle(.secondary)
@@ -104,7 +112,7 @@ struct RosterLine: View {
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
-            Spacer(minLength: 4)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 4) }
             Text(line.status)
                 .font(.footnote)
                 .foregroundStyle(line.needsYou ? Color.togoAccent : Color.secondary)

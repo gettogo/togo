@@ -5,5 +5,6 @@ import WidgetKit
 struct TogoWatchWidgets: WidgetBundle {
     var body: some Widget {
         WaitingComplication()
+        WaitingControl()
     }
 }

@@ -103,6 +103,12 @@ import TogoMosh
         let services = LiveServices(
             hostRecords: hostRecords, settingsRecords: settingsRecords, syncSwitch: syncSwitch,
             device: DeviceSettings(backend: isolated ? MemoryBackend() : AppPush.deviceBackend()),
+            // Never synced: which machines this device signed in to, and with which of its keys.
+            deviceMachines: DeviceMachines(
+                backend: isolated ? MemoryBackend() : DefaultsBackend(namespace: "device."),
+                hasKey: { (try? keys.info(id: $0)) != nil },
+                deviceKeyID: { LiveOnboardingServices.storedDeviceKeyID }
+            ),
             dependencies: LiveServices.Dependencies(
                 watch: { record in
                     HostMonitor(

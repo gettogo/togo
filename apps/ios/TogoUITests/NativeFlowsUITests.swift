@@ -51,7 +51,7 @@ import XCTest
 
     /// Starts a session for `agent` (its name in the agent list) in the E2E folder.
     func startSession(_ agent: String) {
-        expect(app.buttons["roster.more"], "roster", timeout: 30)
+        expect(app.buttons["roster.settings"], "roster", timeout: 30)
         app.pickFromRosterMenu("New session")
         expect(app.buttons[dir], "the E2E folder").tap()
         let row = app.buttons.matching(NSPredicate(format: "label ==[c] %@ OR label BEGINSWITH[c] %@", agent, agent + ",")).firstMatch
@@ -204,7 +204,7 @@ import XCTest
         expect(app.navigationBars["Compaction"], "the Compaction screen", timeout: 20)
         dump("compaction")
         tapVisible(["Snapcompact"])
-        let sheet = app.sheets.firstMatch
+        let sheet = app.alerts.firstMatch
         if sheet.waitForExistence(timeout: 5) {
             sheet.buttons.allElementsBoundByIndex.first { $0.label != "Cancel" }?.tap()
         }

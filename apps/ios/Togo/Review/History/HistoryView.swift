@@ -19,8 +19,7 @@ struct HistoryView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .phaseSwap(model.state)
             .background(Color.togoInk)
-            .navigationTitle(HistoryCopy.title)
-            .navigationBarTitleDisplayMode(.inline)
+            // The title stays the session's, as on Changes and Files; the picker says History.
             .task { await model.loadIfNeeded() }
     }
 

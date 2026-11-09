@@ -75,6 +75,17 @@ enum ControlCenterCopy {
         String(localized: "cc.machine.keyMissing", defaultValue: "Key not on this \(device)")
     }
 
+    /// A machine added on another device, whose key list does not have this device's key yet.
+    /// Nothing failed, so it never says "sign in again".
+    static func setUpHere(_ machine: String, device: String) -> String {
+        String(
+            localized: "cc.machine.setUpHere",
+            defaultValue: "\(machine) was added on another device. Add this \(device)'s key to use it here."
+        )
+    }
+
+    static let setUp = String(localized: "cc.machine.setUp", defaultValue: "Set up")
+
     /// The machine showed another key. Reviewing it in Edit machine is the only way on: there
     /// the old key can be forgotten if the machine really was reinstalled.
     static let hostKeyChanged = String(

@@ -49,6 +49,8 @@ struct DiagnosticsSnapshotTests {
     }
 
     @Test func preview() {
-        assertScreen(named: "settings-diagnostics-preview") { DiagnosticsPreview(text: summary.text) }
+        assertScreen(named: "settings-diagnostics-preview") {
+            NavigationStack { DiagnosticsPreview(text: summary.text) }.togoControls()
+        }
     }
 }

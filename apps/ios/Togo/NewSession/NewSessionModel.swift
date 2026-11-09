@@ -405,6 +405,7 @@ enum Load<T: Equatable>: Equatable {
         case .authNeeded: NewSessionCopy.authNeeded
         case .failed(let reason): reason
         case .keyMissing: NewSessionCopy.keyMissing(device: DeviceName.model)
+        case .setUpHere: NewSessionCopy.setUpHere(device: DeviceName.model)
         case .hostKeyChanged: ControlCenterCopy.hostKeyChanged
         case .deviceOffline: ControlCenterCopy.deviceOffline(DeviceName.model)
         }

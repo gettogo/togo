@@ -10,7 +10,6 @@ import Testing
     private let scratch = TabID(hostID: Samples.studio, sessionID: "s-scratch")
     private let release = TabID(hostID: Samples.build, sessionID: "s-02")
     private let iPad = CGSize(width: 1032, height: 1376)
-    private let iPhone = CGSize(width: 402, height: 874)
 
     private func store() -> AppStore {
         AppStore(services: FakeAppServices(), controlCenter: Samples.controlCenter)
@@ -21,22 +20,25 @@ import Testing
     }
 
     @Test func regularShowsSidebarAndDetail() {
-        #expect(ShellLayout.resolve(size: iPad, sizeClass: .regular, workspaceOpen: true, hasTabs: true)
+        #expect(ShellLayout.resolve(sizeClass: .regular, workspaceOpen: true, hasTabs: true)
             == .split(detail: .workspace))
-        #expect(ShellLayout.resolve(size: iPad, sizeClass: .regular, workspaceOpen: false, hasTabs: true)
+        #expect(ShellLayout.resolve(sizeClass: .regular, workspaceOpen: false, hasTabs: true)
             == .split(detail: .empty))
-        #expect(ShellLayout.resolve(size: iPad, sizeClass: .regular, workspaceOpen: true, hasTabs: false)
+        #expect(ShellLayout.resolve(sizeClass: .regular, workspaceOpen: true, hasTabs: false)
             == .split(detail: .empty))
-        // Regular but too narrow for a sidebar column stays a stack.
-        #expect(ShellLayout.resolve(size: CGSize(width: 600, height: 900), sizeClass: .regular, workspaceOpen: true, hasTabs: true)
-            == .stack(coverShown: true))
+        // The split view collapses on the size class alone, as the system does.
+        #expect(ShellLayout.resolve(sizeClass: nil, workspaceOpen: true, hasTabs: true)
+            == .stack(workspaceShown: true))
     }
 
-    @Test func compactKeepsCover() {
-        #expect(ShellLayout.resolve(size: iPhone, sizeClass: .compact, workspaceOpen: true, hasTabs: true)
-            == .stack(coverShown: true))
-        #expect(ShellLayout.resolve(size: iPhone, sizeClass: .compact, workspaceOpen: false, hasTabs: true)
-            == .stack(coverShown: false))
+    /// Compact pushes the workspace column over the roster, and only with a tab to show.
+    @Test func compactPushesTheWorkspace() {
+        #expect(ShellLayout.resolve(sizeClass: .compact, workspaceOpen: true, hasTabs: true)
+            == .stack(workspaceShown: true))
+        #expect(ShellLayout.resolve(sizeClass: .compact, workspaceOpen: false, hasTabs: true)
+            == .stack(workspaceShown: false))
+        #expect(ShellLayout.resolve(sizeClass: .compact, workspaceOpen: true, hasTabs: false)
+            == .stack(workspaceShown: false))
     }
 
     @Test func sizeClassChangeKeepsTabsAndSelection() {
@@ -56,22 +58,22 @@ import Testing
         #expect(store.workspace.selected == workspace.selected)
         #expect(store.workspace.secondary == workspace.secondary)
         #expect(store.workspaceOpen)
-        #expect(ShellLayout.resolve(size: iPhone, sizeClass: .compact, workspaceOpen: store.workspaceOpen, hasTabs: true)
-            == .stack(coverShown: true))
+        #expect(ShellLayout.resolve(sizeClass: .compact, workspaceOpen: store.workspaceOpen, hasTabs: true)
+            == .stack(workspaceShown: true))
 
         store.setWorkspaceInline(true)
         store.setPanesVisible(true)
         #expect(store.workspace.tabs == workspace.tabs)
         #expect(store.workspace.selected == workspace.selected)
         #expect(store.workspace.secondary == workspace.secondary)
-        #expect(ShellLayout.resolve(size: iPad, sizeClass: .regular, workspaceOpen: store.workspaceOpen, hasTabs: true)
+        #expect(ShellLayout.resolve(sizeClass: .regular, workspaceOpen: store.workspaceOpen, hasTabs: true)
             == .split(detail: .workspace))
 
         // With the cover closed, compact shows the list and regular the empty detail.
         store.workspaceOpen = false
         store.setWorkspaceInline(false)
-        #expect(ShellLayout.resolve(size: iPhone, sizeClass: .compact, workspaceOpen: store.workspaceOpen, hasTabs: true)
-            == .stack(coverShown: false))
+        #expect(ShellLayout.resolve(sizeClass: .compact, workspaceOpen: store.workspaceOpen, hasTabs: true)
+            == .stack(workspaceShown: false))
         #expect(store.workspace.tabs == workspace.tabs)
     }
 
@@ -117,17 +119,18 @@ import Testing
         ) == .single)
     }
 
-    @Test func narrowTwoPanesHideTheSidebarByDefault() {
+    /// Never hide the sidebar to make room: two panes that do not fit beside it wait as one,
+    /// and only the user hides it.
+    @Test func twoPanesNeverHideTheSidebar() {
         let store = store()
         store.setWorkspaceInline(true)
         store.open(hostID: one.hostID, sessionID: one.sessionID)
         store.open(hostID: four.hostID, sessionID: four.sessionID)
-        store.updateSidebarDefault(size: CGSize(width: 900, height: 700))
-        #expect(!store.sidebar.isHidden)
         store.openBeside(one)
-        store.updateSidebarDefault(size: CGSize(width: 900, height: 700))
+        #expect(!store.sidebar.isHidden)
+        store.toggleSidebar()
         #expect(store.sidebar.isHidden)
-        store.updateSidebarDefault(size: CGSize(width: 1376, height: 1032))
+        store.toggleSidebar()
         #expect(!store.sidebar.isHidden)
     }
 

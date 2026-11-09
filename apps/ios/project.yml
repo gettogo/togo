@@ -62,7 +62,13 @@ targets:
       - package: TogoPush
       - package: argmax-oss-swift
         product: WhisperKit
+      # A watchOS app ships inside the iPhone app's Watch folder; without the explicit copy,
+      # XcodeGen puts it in PlugIns and iOS never offers it to the Watch.
       - target: TogoWatch
+        embed: true
+        copy:
+          destination: wrapper
+          subpath: Watch
       - target: TogoWidgets
       - target: TogoNotificationService
     preBuildScripts:
@@ -206,6 +212,8 @@ targets:
     platform: watchOS
     sources:
       - path: TogoWatchWidgets
+      # The control's intent, also in the app so it can run there when the control opens it.
+      - path: TogoWatch/Intents/OpenWaitingIntent.swift
     dependencies:
       - package: TogoPush
     settings:

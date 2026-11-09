@@ -45,7 +45,8 @@ enum ScreenSize: String, CaseIterable, Sendable {
     }
 
     var sizeClass: UserInterfaceSizeClass {
-        size.width >= PaneLayout.sidebarMinimumWidth ? .regular : .compact
+        // The widths these layouts report regular at; the split view collapses below.
+        size.width >= 700 ? .regular : .compact
     }
 
     /// The fold this size is held with when a test passes none.

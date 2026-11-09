@@ -89,17 +89,17 @@ struct ActionGateRequest: Identifiable {
 }
 
 extension View {
-    /// Asks `request`'s question in a system `confirmationDialog`: an action sheet on compact
-    /// widths, a popover from the control on regular ones. Clears the request as it closes.
+    /// Asks `request`'s question in a system alert, the same at every width: it is attached to
+    /// the whole screen, so a confirmation dialog would turn into a popover pointing at nothing
+    /// on regular widths (iPad, an unfolded iPhone Duo). Clears the request as it closes.
     func actionConfirmation(_ request: Binding<ActionGateRequest?>) -> some View {
         coordinated(
-            "action.confirm", .dialog,
+            "action.confirm", .alert,
             isPresented: Binding(get: { request.wrappedValue != nil }, set: { if !$0 { request.wrappedValue = nil } })
         ) { view, shown in
-            view.confirmationDialog(
+            view.alert(
                 request.wrappedValue?.dialog.title ?? "",
                 isPresented: shown,
-                titleVisibility: .visible,
                 presenting: request.wrappedValue
             ) { pending in
                 Button(pending.dialog.confirmLabel, role: pending.dialog.destructive ? .destructive : nil) {

@@ -17,7 +17,8 @@ struct ChatView: View {
     @State private var detail: HarnessItem?
     @State private var selecting: SelectedText?
     @State private var announcer = ChatAnnouncer()
-    @State private var scroll = ChatScrollModel()
+    /// The session's, so the place survives the view being rebuilt (`HarnessSessionStore.chatScroll`).
+    private var scroll: ChatScrollModel { store.chatScroll }
     @Namespace private var rotorSpace
     /// Mirrors of store state that put a view in or take it out, so each change runs in its
     /// own transaction (spec §2.3): the live line and "Earlier". Until the store's first load
@@ -79,6 +80,9 @@ struct ChatView: View {
                         .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
+            // The scroll position follows the row at the top as the reader scrolls, so a
+            // rebuilt chat can return to it (`ChatScrollModel.resume`).
+            .scrollTargetLayout()
             .padding(.horizontal, ChatLayout.inset)
             .padding(.vertical, 16)
             .frame(maxWidth: ChatLayout.columnWidth)
@@ -86,6 +90,8 @@ struct ChatView: View {
         }
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        // A chat rebuilt by a fold, unfold or resize opens where the reader left it.
+        .onAppear { scroll.resume() }
         .scrollDismissesKeyboard(.interactively)
         // While the composer's / or @ menu is up, a tap on the conversation puts the keyboard
         // away, and the menu goes with it: a way out that needs no aim.

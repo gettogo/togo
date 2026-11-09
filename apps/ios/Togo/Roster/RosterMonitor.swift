@@ -45,7 +45,7 @@ struct RosterMonitor: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
             }
-            RosterView(store: store, wide: store.workspaceInline, now: now, keepsNavigationBar: true)
+            RosterView(store: store, wide: store.workspaceInline, now: now)
         }
         .offset(monitor.shift)
         // motion: preventing a jump — the roster drifts a few points at a time so a screen left on never burns in, and never jumps.
@@ -57,7 +57,7 @@ struct RosterMonitor: View {
         }
         .background(Color.togoInk)
         .toolbar { keepScreenOn }
-        .toolbarVisibility(monitor.dimmed ? .hidden : .automatic, for: .navigationBar)
+        .toolbarVisibility(monitor.dimmed ? .hidden : .automatic, for: .navigationBar, .bottomBar)
         .onAppear { appeared = true }
         // Let go here rather than through `onScreen`, whose change may never run for a screen
         // that is leaving.
@@ -170,7 +170,12 @@ extension AppStore {
 
 /// Every sentence monitor mode shows. The keep-awake lines keep the keys they had.
 enum MonitorCopy {
-    static let toggle = String(localized: "monitor.cmd.toggle", defaultValue: "Monitor")
+    /// The ⌃⌘B command, in the menu bar's title case.
+    static let toggle = String(localized: "monitor.cmd.toggle", defaultValue: "Status Display")
+    /// The roster menu's item, with a line under it saying what it does.
+    static let menuTitle = String(localized: "monitor.menu.title", defaultValue: "Status display")
+    static let menuSubtitle = String(localized: "monitor.menu.subtitle", defaultValue: "Full screen, made to leave on")
+    static let symbol = "gauge.with.dots.needle.67percent"
     static let done = String(localized: "monitor.done", defaultValue: "Done")
     static let keepScreenOn = String(localized: "board.keepScreenOn", defaultValue: "Keep screen on")
     static let lowBattery = String(

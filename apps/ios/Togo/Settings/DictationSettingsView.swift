@@ -123,9 +123,10 @@ struct DictationSettingsView: View {
         .navigationTitle(DictationCopy.title)
         .navigationBarTitleDisplayMode(.inline)
         // Clearing can't be undone, so it asks first.
-        .coordinated("settings.clearDictations", .dialog, isPresented: $confirmingClear) { view, shown in
-            view.confirmationDialog(DictationCopy.clearTitle, isPresented: shown, titleVisibility: .visible) {
+        .coordinated("settings.clearDictations", .alert, isPresented: $confirmingClear) { view, shown in
+            view.alert(DictationCopy.clearTitle, isPresented: shown) {
                 Button(DictationCopy.clearConfirm, role: .destructive, action: model.clear)
+                Button(settingsText("settings.confirm.cancel", "Cancel"), role: .cancel) {}
             } message: {
                 Text(DictationCopy.clearMessage)
             }

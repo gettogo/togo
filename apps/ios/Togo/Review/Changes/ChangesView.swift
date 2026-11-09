@@ -17,10 +17,9 @@ struct ChangesView: View {
         content
             .background(Color.togoInk)
             .task { await model.refresh() }
-            .coordinated("review.discard", .dialog, isPresented: confirming) { view, shown in
-                view.confirmationDialog(
-                    model.pendingConfirmation?.title ?? "", isPresented: shown, titleVisibility: .visible,
-                    presenting: model.pendingConfirmation
+            .coordinated("review.discard", .alert, isPresented: confirming) { view, shown in
+                view.alert(
+                    model.pendingConfirmation?.title ?? "", isPresented: shown, presenting: model.pendingConfirmation
                 ) { confirmation in
                     Button(confirmation.button, role: .destructive) {
                         Task { await model.confirm(confirmation) }
@@ -96,17 +95,17 @@ struct ChangesView: View {
         }
         .groupedList()
         .refreshable { await model.refresh() }
-        .safeAreaInset(edge: .bottom) {
+        // Commit is the list's prominent action: in the bar of the pane it acts on, after Close,
+        // so on a Duo it sits second in the vertical bar and the list keeps the full height.
+        .toolbar {
             if shown.canWrite {
-                Button(ChangesCopy.commit) { model.openCommitSheet() }
-                    .buttonStyle(.primary)
-                    .padding(.horizontal, Layout.margin)
-                    .padding(.vertical, 12)
-                    .background(Color.togoInk)
+                ToolbarItem(placement: .primaryAction) {
+                    Button(ChangesCopy.commit, systemImage: "checkmark.circle") { model.openCommitSheet() }
+                }
             }
         }
-        // The commit bar comes with the repository being writable, not with anything the user
-        // did here, so it lands at once.
+        // The item comes with the repository being writable, not with anything the user did
+        // here, so it lands at once.
         .transaction(value: shown.canWrite) { $0.animation = nil }
     }
 

@@ -17,6 +17,9 @@ enum PresentationContent: String, CaseIterable, Sendable {
     case destructive
     /// Context kept beside the main content while the user works: mission control.
     case sideContext
+    /// A flow that takes over until it is finished or skipped: the guide. It brings its own
+    /// way out, so it never closes by a swipe.
+    case walkthrough
 }
 
 /// How content is put on screen. Every presentation is a system one, so it adopts Liquid Glass,
@@ -40,6 +43,8 @@ enum PresentationStyle: Equatable, Sendable {
     case push
     /// A trailing inspector column beside the content.
     case inspector
+    /// A full-screen cover: a new root over the window, for a flow on a compact width.
+    case fullScreenCover
 
     var isSheet: Bool {
         switch self {
@@ -111,6 +116,10 @@ enum AdaptivePresentation {
             return .confirmationDialog
         case .sideContext:
             return regular && hostsInspector ? .inspector : .mediumSheet
+        case .walkthrough:
+            // A phone-shaped flow fills a compact window; a wide one gets a page that floats
+            // over the app, not the flow stretched edge to edge (P13, P14).
+            return regular ? .pageSheet : .fullScreenCover
         }
     }
 

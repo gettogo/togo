@@ -46,6 +46,16 @@ struct SetupDetection: Equatable, Sendable {
         !seen
     }
 
+    /// Whether the guide opens by itself now. `seen` lives on this device only, so a device's
+    /// first launch can find machines already here from iCloud, and the welcome that offers the
+    /// guide is skipped or gone in a moment. The guide then opens once the launch has played and
+    /// no sheet is up. Without machines the welcome offers it, and nothing opens by itself; nor
+    /// after the user added a machine from the welcome (`startedFromWelcome`), having passed
+    /// the guide by.
+    func opensOnLaunch(hasMachines: Bool, startedFromWelcome: Bool, launchPlaying: Bool, sheetShown: Bool) -> Bool {
+        showsOnLaunch && hasMachines && !startedFromWelcome && !launchPlaying && !sheetShown
+    }
+
     func go(to page: TutorialPage) {
         self.page = page
         defaults.set(page.rawValue, forKey: Keys.page)

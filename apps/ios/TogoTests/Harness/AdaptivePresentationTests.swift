@@ -85,6 +85,16 @@ struct AdaptivePresentationTests {
         #expect(!PresentationStyle.push.isSheet)
     }
 
+    /// The guide fills a compact window and floats as a page over a wide one, never stretched.
+    @Test func aWalkthroughIsACoverWhenCompactAndAPageWhenWide() {
+        #expect(style(.walkthrough, .compact, 390) == .fullScreenCover)
+        #expect(style(.walkthrough, .regular, 475) == .fullScreenCover)
+        #expect(style(.walkthrough, .regular, 669) == .pageSheet)
+        #expect(style(.walkthrough, .regular, 1194) == .pageSheet)
+        #expect(PresentationCoordinator.kind(of: .fullScreenCover) == .cover)
+        #expect(PresentationCoordinator.kind(of: .pageSheet) == .sheet)
+    }
+
     // MARK: Browse layout
 
     @Test func aBrowseListIsASplitViewOnlyAsTheWideRootOfItsSheetWithGroups() {

@@ -2,8 +2,9 @@ import SwiftUI
 
 extension View {
     /// Presents `item` the way `AdaptivePresentation` says for `content` and the room the
-    /// window has: a popover, a sheet of the right size, or an inspector. The one way the
-    /// harness screens, the command palette and mission control's screens are presented.
+    /// window has: a popover, a sheet of the right size, a full-screen cover or an inspector. The
+    /// one way the harness screens, the command palette, mission control's screens and the guide
+    /// are presented.
     ///
     /// `anchored`: this view is the control the user tapped, so a popover can point at it.
     /// `hostsInspector`: an inspector may share the window with this view.
@@ -90,6 +91,9 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
             }
             .sheet(item: gated(style, shown: shown, closed: closed, \.isSheet), onDismiss: onDismiss) { item in
                 inside(make(item).presentationChrome(style))
+            }
+            .fullScreenCover(item: gated(style, shown: shown, closed: closed) { $0 == .fullScreenCover }, onDismiss: onDismiss) { item in
+                inside(make(item))
             }
         // Only a host beside main content gets the inspector column at all.
         if hostsInspector {

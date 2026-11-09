@@ -17,10 +17,6 @@ enum PaneArrangement: Equatable, Sendable {
 /// Where the workspace's panes go, from window size, size class and the fold alone.
 enum PaneLayout {
     static let minimumPaneWidth: CGFloat = 360
-    /// Window width that can carry a sidebar column.
-    static let sidebarMinimumWidth: CGFloat = 700
-    /// The sidebar column's width in a flat window.
-    static let sidebarIdealWidth: CGFloat = 320
     static let fractions: [CGFloat] = [1.0 / 3, 0.5, 2.0 / 3]
     /// The line between two panes that meet without a fold.
     static let hairline: CGFloat = 1
@@ -46,24 +42,6 @@ enum PaneLayout {
             let fraction = snap(primaryFraction, width: size.width)
             return .sideBySide(primaryWidth: (size.width - hairline) * fraction, gap: nil)
         }
-    }
-
-    static func showsSidebar(size: CGSize, sizeClass: UserInterfaceSizeClass?) -> Bool {
-        sizeClass == .regular && size.width >= sidebarMinimumWidth
-    }
-
-    /// Hide the sidebar by default when two panes would fall under minimumPaneWidth beside it.
-    static func prefersSidebarHidden(size: CGSize, hasSecondary: Bool) -> Bool {
-        hasSecondary && size.width - sidebarIdealWidth < 2 * minimumPaneWidth + hairline
-    }
-
-    /// The roster column beside the terminal: narrow on a foldable, a little wider on iPad. It
-    /// never follows the fold, so nothing sits on the hinge but the terminal.
-    static let rosterWidthFoldable: CGFloat = 290
-    static let rosterWidthTablet: CGFloat = 320
-
-    static func rosterWidth(fold: FoldInfo) -> CGFloat {
-        fold.division != nil || fold.inactiveDivision != nil ? rosterWidthFoldable : rosterWidthTablet
     }
 
     /// The nearest of `fractions` that keeps both panes at or above the minimum width. When

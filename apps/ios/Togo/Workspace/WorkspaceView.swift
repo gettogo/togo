@@ -70,6 +70,7 @@ struct WorkspaceView: View {
             }
             .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar })
             .modifier(TitleOffBesideVerticalBar())
+            .modifier(TaskBarCompression())
             .onChange(of: store.zen, initial: true) { _, on in
                 if !on { zen.hide() }
                 terminals.zenChanged(on, in: window)
@@ -131,12 +132,12 @@ struct WorkspaceView: View {
                     Button(ControlCenterCopy.cancel, role: .cancel) {}
                 }
             }
-            .coordinated("workspace.kill", .dialog, isPresented: presented($killTarget)) { view, shown in
-                view.confirmationDialog(
-                    killTarget.map(killTitle) ?? "", isPresented: shown, titleVisibility: .visible,
-                    presenting: killTarget
+            .coordinated("workspace.kill", .alert, isPresented: presented($killTarget)) { view, shown in
+                view.alert(
+                    killTarget.map(killTitle) ?? "", isPresented: shown, presenting: killTarget
                 ) { tab in
                     Button(ControlCenterCopy.kill, role: .destructive) { Task { status = await store.end(tab) } }
+                    Button(ControlCenterCopy.cancel, role: .cancel) {}
                 } message: { _ in
                     Text(ControlCenterCopy.killMessage)
                 }
@@ -260,19 +261,13 @@ struct WorkspaceView: View {
         }
     }
 
-    /// Back to the sessions list over a compact window. Beside the sidebar there is no list to go
-    /// back to; with the sidebar hidden, the button shows it again.
-    private var leading: WorkspaceLeading {
-        guard store.workspaceInline else { return .back }
-        return store.sidebar.isHidden ? .showSidebar : .none
-    }
+    /// No item of its own: in a compact window the workspace is the pushed detail column and the
+    /// system's Back ("Sessions") leads its bar; beside the sidebar the split view's toggle
+    /// brings a hidden sidebar back (root.md).
+    private var leading: WorkspaceLeading { .none }
 
     private func leadingAction() {
-        if store.workspaceInline {
-            store.sidebar.hidden = false
-        } else {
-            store.workspaceOpen = false
-        }
+        store.workspaceOpen = false
     }
 
     /// The tab in the pane that does not have focus, while two panes are on screen.
@@ -303,7 +298,10 @@ struct WorkspaceView: View {
         ConnectWithMenu(etAvailable: etAvailable) { transport in
             store.open(hostID: tab.hostID, sessionID: tab.sessionID, transport: transport)
         }
-        OpenInWindowButton(tab: tab.id)
+        // With two panes on screen each pane's own menu has it (`PaneHeader`), once per pane.
+        if !store.panesVisible {
+            OpenInWindowButton(tab: tab.id)
+        }
         if let harness = store.harness(for: tab.id), harness.chatAvailable {
             MissionSessionSection(store: harness, tab: tab.id, model: mission)
         }
@@ -329,14 +327,7 @@ struct WorkspaceView: View {
                     Button(ReviewCopy.tabName(.history), systemImage: "clock") { store.review(row, tab: .history) }
                 }
             }
-            if allowed.available.contains(.runAgain) {
-                Section {
-                    Button(LifecycleCopy.runAgain, systemImage: SessionAction.runAgain.systemImage(for: row)) {
-                        Task { await store.runAgain(row, tools: machineTools) }
-                    }
-                    .disabled(!allowed.allows(.runAgain) || store.relaunching.contains(tab.id))
-                }
-            }
+            // Run again is the bar's prominent item once the agent stopped; not repeated here.
             Section {
                 if allowed.available.contains(.rename) {
                     Button(ControlCenterCopy.rename, systemImage: SessionAction.rename.systemImage(for: row)) {
@@ -467,5 +458,17 @@ private struct VerticalEdgeTitle: ViewModifier {
 
     func body(content: Content) -> some View {
         content.toolbar(removing: edge == nil ? nil : .title)
+    }
+}
+
+/// The workspace is a task screen: on a Duo the vertical bar keeps the session's items and lets
+/// the tab bar minimize first (HIG, iPhone Duo; `D14`).
+private struct TaskBarCompression: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.toolbarVerticalCompressionBehavior(.prefersToolbarItems)
+        } else {
+            content
+        }
     }
 }

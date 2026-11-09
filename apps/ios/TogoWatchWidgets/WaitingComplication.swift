@@ -10,6 +10,21 @@ struct WaitingEntry: TimelineEntry {
     var oldestBib: String?
     var oldestAgent: String?
     var oldestTitle: String?
+    var oldestId: String?
+    /// When the oldest waiting request runs out, and the next entry takes over.
+    var oldestExpiry: Date?
+
+    /// A tap opens the oldest waiting request itself; with none, the Waiting page.
+    var link: URL {
+        (oldestId.map(WatchLink.request) ?? .waiting).url
+    }
+
+    /// The Smart Stack raises the card while something waits, more the more that wait, until the
+    /// oldest runs out; clear, it claims nothing.
+    var relevance: TimelineEntryRelevance? {
+        guard count > 0, let oldestExpiry else { return TimelineEntryRelevance(score: 0) }
+        return TimelineEntryRelevance(score: Float(min(count, 5)), duration: max(0, oldestExpiry.timeIntervalSince(date)))
+    }
 
     static func make(_ requests: [PendingRequest], at date: Date) -> WaitingEntry {
         let waiting = RequestLifetime.waiting(requests, now: date)
@@ -18,7 +33,9 @@ struct WaitingEntry: TimelineEntry {
             date: date, count: waiting.count,
             oldestBib: oldest?.bib.map { PromptText.clean($0, maxLines: 1) }.flatMap { $0.isEmpty ? nil : $0 },
             oldestAgent: oldest?.agent.map(AgentName.display),
-            oldestTitle: oldest.map { PromptText.clean($0.title, maxLines: 1) }.flatMap { $0.isEmpty ? nil : $0 }
+            oldestTitle: oldest.map { PromptText.clean($0.title, maxLines: 1) }.flatMap { $0.isEmpty ? nil : $0 },
+            oldestId: oldest?.requestId,
+            oldestExpiry: oldest.map { $0.receivedAt.addingTimeInterval(RequestLifetime.seconds) }
         )
     }
 }
@@ -53,6 +70,7 @@ struct WaitingComplication: Widget {
         StaticConfiguration(kind: "togo.watch.waiting", provider: WaitingProvider()) { entry in
             WaitingComplicationView(entry: entry)
                 .containerBackground(.clear, for: .widget)
+                .widgetURL(entry.link)
         }
         .configurationDisplayName("Waiting")
         .description("Requests waiting on you.")

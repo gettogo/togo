@@ -89,6 +89,7 @@ import UIKit
         case .popover: .popover
         case .inspector: .inspector
         case .confirmationDialog: .dialog
+        case .fullScreenCover: .cover
         default: .sheet
         }
     }

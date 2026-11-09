@@ -4,7 +4,7 @@ import TogoKit
 import TogoPush
 @testable import Togo
 
-@MainActor private final class FakeWatchLink: WatchLink {
+@MainActor private final class FakeWatchLink: Togo.WatchLink {
     var canReachWatchApp = true
     var sent: [[String: Any]] = []
 

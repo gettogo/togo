@@ -155,9 +155,10 @@ import TogoKit
         #expect(mode([request("a")], composing: true) == .request(request("a"), position: 1, count: 1))
     }
 
-    @Test func nothingWaitingIsTheTerminalsInputOrTheStartLine() {
+    /// New session is a bar button wherever the roster is, so with no terminal the bar goes.
+    @Test func nothingWaitingIsTheTerminalsInputOrNothing() {
         #expect(mode([], focused: four) == .input(four))
-        #expect(mode([], focused: nil) == .start)
+        #expect(mode([], focused: nil) == .hidden)
     }
 
     @Test func theComposeBarTakesOverTheInput() {

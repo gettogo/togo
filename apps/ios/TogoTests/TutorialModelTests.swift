@@ -60,6 +60,34 @@ import TogoKit
         #expect(relaunched.tipsGeneration == generation + 1)
     }
 
+    /// Machines from iCloud on a device's first launch: the welcome that offers the guide is
+    /// skipped, so the guide opens by itself once the launch has played and nothing else is up.
+    @Test func guideOpensOverMachinesWhileUnseen() {
+        let model = TutorialModel(defaults: defaults())
+        #expect(model.opensOnLaunch(hasMachines: true, startedFromWelcome: false, launchPlaying: false, sheetShown: false))
+        #expect(!model.opensOnLaunch(hasMachines: true, startedFromWelcome: false, launchPlaying: true, sheetShown: false))
+        #expect(!model.opensOnLaunch(hasMachines: true, startedFromWelcome: false, launchPlaying: false, sheetShown: true))
+    }
+
+    /// Without machines the welcome offers the guide and nothing opens by itself; nor after the
+    /// user added a machine from the welcome.
+    @Test func guideWaitsOnTheWelcome() {
+        let model = TutorialModel(defaults: defaults())
+        #expect(!model.opensOnLaunch(hasMachines: false, startedFromWelcome: false, launchPlaying: false, sheetShown: false))
+        #expect(!model.opensOnLaunch(hasMachines: true, startedFromWelcome: true, launchPlaying: false, sheetShown: false))
+    }
+
+    /// Once skipped it never opens by itself again, on this launch or the next.
+    @Test func guideOpensOverMachinesOnce() {
+        let store = defaults()
+        let model = TutorialModel(defaults: store)
+        model.skip()
+        #expect(!model.opensOnLaunch(hasMachines: true, startedFromWelcome: false, launchPlaying: false, sheetShown: false))
+        #expect(!TutorialModel(defaults: store).opensOnLaunch(
+            hasMachines: true, startedFromWelcome: false, launchPlaying: false, sheetShown: false
+        ))
+    }
+
     @Test func gettingStartedGivesEveryTipANewID() {
         let model = TutorialModel(defaults: defaults())
         let before = TutorialTip.allCases.map { $0.tip(generation: model.tipsGeneration).id }

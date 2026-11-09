@@ -58,7 +58,7 @@ struct FirstRunView: View {
                 Button(String(localized: "onboard.firstRun.add", defaultValue: "Add a machine"), action: onAddMachine)
                     .buttonStyle(.primary)
                 if tutorial != nil {
-                    Button(String(localized: "tutorial.firstRun.open", defaultValue: "How Togo works"), action: openGuide)
+                    Button(String(localized: "tutorial.firstRun.open", defaultValue: "How it works"), action: openGuide)
                         .buttonStyle(.secondary)
                 }
                 Button(SetupPage.demoTitle) {

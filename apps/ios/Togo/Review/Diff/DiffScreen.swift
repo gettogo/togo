@@ -41,16 +41,16 @@ struct DiffScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .modifier(FileMenu(model: model))
             .toolbar { toolbar }
-            .coordinated("review.diffDiscard", .dialog, isPresented: Binding { model.pendingDiscard != nil } set: { if !$0 { model.cancelDiscard() } }) { view, shown in
-                view.confirmationDialog(
+            .coordinated("review.diffDiscard", .alert, isPresented: Binding { model.pendingDiscard != nil } set: { if !$0 { model.cancelDiscard() } }) { view, shown in
+                view.alert(
                     model.pendingDiscard?.title ?? "",
                     isPresented: shown,
-                    titleVisibility: .visible,
                     presenting: model.pendingDiscard
                 ) { confirmation in
                     Button(confirmation.button, role: .destructive) {
                         Task { await model.confirm(confirmation) }
                     }
+                    Button(DiffCopy.cancel, role: .cancel) {}
                 } message: { confirmation in
                     Text(confirmation.message)
                 }
@@ -107,7 +107,18 @@ struct DiffScreen: View {
 
     // MARK: Toolbar
 
+    /// Order for every bar, the Duo's vertical one included (`D13`, `D14`): Back, then Stage or
+    /// Unstage as the prominent action, then the options menu; the hunk steps, used most while
+    /// reading, in the bottom bar beside the code.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if let action = model.actions.first(where: { $0 != .discard }) {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action == .stage ? DiffCopy.stage : DiffCopy.unstage, systemImage: action == .stage ? "plus.circle" : "minus.circle") {
+                    Task { await model.perform(action) }
+                }
+                .disabled(model.busy)
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 if splitAvailable {
@@ -139,15 +150,6 @@ struct DiffScreen: View {
                     .disabled(!model.canGoToPreviousHunk)
                 Button(DiffCopy.nextHunk, systemImage: "chevron.down") { model.nextHunk() }
                     .disabled(!model.canGoToNextHunk)
-            }
-        }
-        if let action = model.actions.first(where: { $0 != .discard }) {
-            ToolbarSpacer(.flexible, placement: .bottomBar)
-            ToolbarItem(placement: .bottomBar) {
-                Button(action == .stage ? DiffCopy.stage : DiffCopy.unstage, systemImage: action == .stage ? "plus.circle" : "minus.circle") {
-                    Task { await model.perform(action) }
-                }
-                .disabled(model.busy)
             }
         }
     }

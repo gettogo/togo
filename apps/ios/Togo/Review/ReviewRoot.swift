@@ -254,7 +254,9 @@ struct ReviewRoot: View {
         switch route {
         case .diff(let source):
             DiffDestination(
-                model: DiffModel(subject: subject, services: services, source: source, sendToSession: sendToSession, machine: machine),
+                model: session.screen(for: route) {
+                    DiffModel(subject: subject, services: services, source: source, sendToSession: sendToSession, machine: machine)
+                },
                 onOpen: open,
                 onWrite: {
                     onWrite()
@@ -262,13 +264,21 @@ struct ReviewRoot: View {
                 }
             )
         case .file(let path, let ref, let base):
-            FileViewer(model: FileViewerModel(subject: subject, services: services, path: path, ref: ref, base: base))
+            FileViewer(model: session.screen(for: route) {
+                FileViewerModel(subject: subject, services: services, path: path, ref: ref, base: base)
+            })
         case .folder(let path, let ref, let base):
             FileBrowserView(
-                model: FilesModel(subject: subject, services: services, path: path, ref: ref, base: base), onOpen: open
+                model: session.screen(for: route) {
+                    FilesModel(subject: subject, services: services, path: path, ref: ref, base: base)
+                },
+                onOpen: open
             )
         case .commit(let commit):
-            CommitDetailView(model: CommitDetailModel(subject: subject, services: services, commit: commit), onOpen: open)
+            CommitDetailView(
+                model: session.screen(for: route) { CommitDetailModel(subject: subject, services: services, commit: commit) },
+                onOpen: open
+            )
         }
     }
 

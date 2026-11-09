@@ -87,7 +87,9 @@ enum PromptFeed {
         if composing || chatShown { return .hidden }
         // Nothing typed reaches a terminal that is not connected, so the bar does not offer to.
         if let focused { return terminalTyping || !focusedConnected ? .hidden : .input(focused) }
-        return .start
+        // No start line: every roster and empty detail has a New session button in its bar,
+        // and ⌘T opens the sheet when the bar is not on its start line.
+        return .hidden
     }
 
     /// Places to start from: the folders and agents already on the user's machines, each once,

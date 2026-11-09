@@ -11,6 +11,7 @@ struct RequestDetailView: View {
     var count = 1
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         if let request = store.request(requestId) {
@@ -23,10 +24,16 @@ struct RequestDetailView: View {
     private func content(_ request: PendingRequest) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    BeaconDot(lit: true)
-                    RequestHeader(request: request)
-                    Spacer(minLength: 4)
+                // At accessibility sizes the counter moves under the agent, so both keep their words.
+                let header = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                    : AnyLayout(HStackLayout(spacing: 6))
+                header {
+                    HStack(spacing: 6) {
+                        BeaconDot(lit: true)
+                        RequestHeader(request: request)
+                    }
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: 4) }
                     if let counter = WatchHome.counter(position: position, count: count) {
                         Text(counter)
                             .font(.system(.footnote, design: .monospaced))
@@ -44,6 +51,8 @@ struct RequestDetailView: View {
                 Text(request.title)
                     .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
+                    // The question can quote code: hidden while the wrist is down.
+                    .privacySensitive()
                 if let command = WatchHome.commandText(request) {
                     Text(command)
                         .font(.system(.footnote, design: .monospaced))
@@ -51,12 +60,14 @@ struct RequestDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
                         .background(Color.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        // A command can carry a path or a token: hidden while the wrist is down.
+                        .privacySensitive()
                 }
                 AnswerButtons(store: store, request: request, done: dismissSoon)
                     .padding(.top, 2)
                 if store.canReply(request.requestId) {
                     ReplyLink(
-                        store: store, target: .answer(hostId: request.hostId, requestId: request.requestId),
+                        target: .answer(hostId: request.hostId, requestId: request.requestId),
                         title: [request.bib, request.agent.map(AgentName.display)].compactMap { $0 }.joined(separator: " ")
                     )
                 }
@@ -175,6 +186,9 @@ private struct AnswerButtons: View {
         .buttonBorderShape(.capsule)
         .tint(.togoAccent)
         .disabled(!canApprove || sending)
+        // Double Tap approves, the one thing this page is for. Only while Approve can go:
+        // otherwise Double Tap scrolls the page as usual.
+        .handGestureShortcut(.primaryAction, isEnabled: canApprove && armed && (state == .open || state == .failed))
         // motion: cause → effect — the buttons give way to the result in the same place
         .transition(Motion.swap(reduce: reduceMotion))
         if !canApprove {
@@ -188,11 +202,11 @@ private struct AnswerButtons: View {
             Task { await store.answer(request.requestId, "deny") }
         } label: {
             Text(WatchCopy.no)
-                .frame(maxWidth: .infinity, minHeight: 36)
-                // The whole row answers, not just the word.
-                .contentShape(.rect)
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        // A full-width capsule the height of Yes: the whole row answers, and the pair reads as one choice.
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
         .disabled(sending)
         // motion: cause → effect — the buttons give way to the result in the same place
         .transition(Motion.swap(reduce: reduceMotion))

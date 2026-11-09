@@ -75,13 +75,14 @@ enum AwakeCopy {
 }
 
 /// One machine's keep-awake choice. A pick shows at once and goes back if the machine refuses;
-/// battery mode that needs the one-time setup opens the sheet that explains it.
+/// battery mode that needs the one-time setup shows the step that explains it, in the section.
 @MainActor @Observable final class MachineAwakeModel {
     private(set) var status: AwakeStatus?
     private(set) var error: String?
     /// True after a read with no status yet failed, so the page can offer a retry.
     private(set) var loadFailed = false
-    var showsBatterySheet = false
+    /// Battery mode was refused until the machine's one-time setup is done.
+    var needsBatterySetup = false
 
     private let host: HostID
     private let name: String
@@ -119,6 +120,7 @@ enum AwakeCopy {
         guard let previous = status, previous.mode != mode else { return }
         latest += 1
         picks += 1
+        needsBatterySetup = false
         defer { picks -= 1 }
         let token = latest
         var shown = previous
@@ -130,7 +132,7 @@ enum AwakeCopy {
             if token == latest { status = result }
         } catch HelperError.refused(let reason) where reason == "needs_admin_setup" {
             if token == latest { status = previous }
-            showsBatterySheet = true
+            needsBatterySetup = true
         } catch {
             if token == latest { status = previous }
             self.error = AwakeCopy.changeFailed(name: name)
@@ -188,6 +190,9 @@ struct MachineAwakeRows: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
                 .accessibilityLabel(AwakeCopy.title)
+                if model.needsBatterySetup {
+                    AwakeBatterySetup(name: name)
+                }
             } else if model.loadFailed {
                 Button(AwakeCopy.retry) { Task { await model.load() } }
                     .frame(minHeight: 44, alignment: .leading)
@@ -197,16 +202,13 @@ struct MachineAwakeRows: View {
                     .accessibilityLabel(AwakeCopy.title)
             }
         } header: {
-            // The header is the one view of this section that is always there, so the read and
-            // the sheet hang from it rather than from rows that come and go with the status.
+            // The header is the one view of this section that is always there, so the read hangs
+            // from it rather than from rows that come and go with the status.
             Text(AwakeCopy.title)
                 .font(.headline)
                 .foregroundStyle(Color.togoSnow)
                 .textCase(nil)
                 .task { await model.load() }
-                .presentSheet("settings.awakeBattery", isPresented: Binding(get: { model.showsBatterySheet }, set: { model.showsBatterySheet = $0 })) {
-                    AwakeBatterySheet(name: name)
-                }
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 if let error = model.error {
@@ -225,7 +227,7 @@ struct MachineAwakeRows: View {
         // Loading → the choices, or → Try again, and the footer's lines: rows arrive and leave
         // on `resize`.
         .resizesOnRows([
-            model.status != nil, model.loadFailed, model.error != nil,
+            model.status != nil, model.loadFailed, model.error != nil, model.needsBatterySetup,
             model.status.map { !AwakeCopy.reason($0).isEmpty } ?? false,
         ])
     }

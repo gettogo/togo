@@ -85,6 +85,7 @@ enum SessionCommand {
     case newSession(HostID)
     case retry(HostID)
     case signIn(HostID)
+    case setUpHere(HostID)
     case installHelper(HostID)
     case edit(HostID)
     case wake(HostID)
@@ -185,7 +186,7 @@ enum SessionActions {
         switch machine.reachability {
         case .offline: ControlCenterCopy.machineOffline(machine.name)
         case .deviceOffline: ControlCenterCopy.noNetwork
-        case .authNeeded, .failed, .keyMissing, .hostKeyChanged: ControlCenterCopy.machineNotConnected(machine.name)
+        case .authNeeded, .failed, .keyMissing, .setUpHere, .hostKeyChanged: ControlCenterCopy.machineNotConnected(machine.name)
         case .connecting, .waking, .online: nil
         }
     }

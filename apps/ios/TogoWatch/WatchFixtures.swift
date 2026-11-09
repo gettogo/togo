@@ -76,20 +76,23 @@ private struct FixtureRoot: View {
 
     var body: some View {
         NavigationStack {
-            switch name {
-            case "requests", "requests-empty":
-                RequestsView(store: store)
-            case "detail", "detail-approved", "detail-failed":
-                RequestDetailView(store: store, requestId: "r_1")
-                    .task {
-                        guard name != "detail" else { return }
-                        await store.answer("r_1", name == "detail-approved" ? "approve" : "deny")
-                    }
-            case "detail-deny-only":
-                RequestDetailView(store: store, requestId: "r_2")
-            default:
-                SessionsView(store: store)
+            Group {
+                switch name {
+                case "requests", "requests-empty":
+                    RequestsView(store: store)
+                case "detail", "detail-approved", "detail-failed":
+                    RequestDetailView(store: store, requestId: "r_1")
+                        .task {
+                            guard name != "detail" else { return }
+                            await store.answer("r_1", name == "detail-approved" ? "approve" : "deny")
+                        }
+                case "detail-deny-only":
+                    RequestDetailView(store: store, requestId: "r_2")
+                default:
+                    SessionsView(store: store)
+                }
             }
+            .watchRoutes(store: store)
         }
     }
 }

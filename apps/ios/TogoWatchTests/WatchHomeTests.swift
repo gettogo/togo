@@ -73,3 +73,46 @@ struct WatchHomeTests {
         #expect(WatchHome.lines([working])[0].id != WatchHome.lines([other])[0].id)
     }
 }
+
+/// A notification, complication or control lands on the request it was about.
+struct WatchFocusTests {
+    private func request(_ id: String) -> PendingRequest {
+        PendingRequest(
+            requestId: id, hostId: "h", sessionId: "s", bib: "04", agent: "claude", host: "studio",
+            title: "Run npm test?", subject: nil, options: [], receivedAt: Date(), answered: nil
+        )
+    }
+
+    @Test func aFocusedRequestFillsThePageInItsPlace() {
+        let waiting = [request("a"), request("b"), request("c")]
+        #expect(WatchHome.page(for: waiting, focus: "b") == .request(id: "b", position: 2, count: 3))
+        #expect(WatchHome.page(for: waiting, focus: "b").requestId == "b")
+    }
+
+    /// A focus no longer waiting, answered or gone, falls back to the oldest.
+    @Test func aStaleFocusFallsBackToTheOldest() {
+        #expect(WatchHome.page(for: [request("a")], focus: "gone") == .request(id: "a", position: 1, count: 1))
+        #expect(WatchHome.page(for: [], focus: "gone") == .allClear)
+        #expect(WatchHome.page(for: [], focus: "gone").requestId == nil)
+    }
+
+    /// The answered request is still held before the focused one's neighbour takes its place.
+    @Test func holdingWinsOverFocus() {
+        #expect(WatchHome.page(for: [request("b")], holding: "a", focus: "b") == .request(id: "a", position: 1, count: 1))
+    }
+
+    @MainActor @Test func routerLandsOnTheExactPage() {
+        let router = WatchRouter()
+        router.page = .sessions
+        router.path = [.reply(ReplyRoute(target: .prompt(machineId: "m", sessionId: "s"), title: "04"))]
+        router.open(.request("r_1"))
+        #expect(router.page == .waiting)
+        #expect(router.focus == "r_1")
+        #expect(router.path.isEmpty)
+        router.open(.sessions)
+        #expect(router.page == .sessions)
+        router.open(.waiting)
+        #expect(router.page == .waiting)
+        #expect(router.focus == nil)
+    }
+}

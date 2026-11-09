@@ -100,46 +100,111 @@ struct SettingsActions {
     }
 }
 
-/// The settings root. Pages push inside whatever navigation stack presents it; `page(_:)` is
-/// also the destination for `AppRoute.settingsPage`.
+/// A settings pane: one row of the list and the page it opens. The raw value is what
+/// `@SceneStorage` keeps, so the selected pane survives fold, unfold, a resize and a relaunch.
+enum SettingsPane: String, CaseIterable, Hashable, Sendable {
+    case machines, agents, notifications, terminal, keyboard, shortcuts, gestures, dictation, sync, privacy, diagnostics, about
+
+    init(_ page: SettingsPage) {
+        switch page {
+        case .terminal: self = .terminal
+        case .keyboard: self = .keyboard
+        case .shortcuts: self = .shortcuts
+        case .gestures: self = .gestures
+        case .dictation: self = .dictation
+        case .machines: self = .machines
+        case .notifications: self = .notifications
+        case .sync: self = .sync
+        case .privacy: self = .privacy
+        case .diagnostics: self = .diagnostics
+        case .about: self = .about
+        }
+    }
+
+    /// The route that pushes it where Settings sits on another stack; nil where there is none.
+    var page: SettingsPage? {
+        switch self {
+        case .terminal: .terminal
+        case .keyboard: .keyboard
+        case .shortcuts: .shortcuts
+        case .gestures: .gestures
+        case .dictation: .dictation
+        case .machines: .machines
+        case .notifications: .notifications
+        case .sync: .sync
+        case .privacy: .privacy
+        case .diagnostics: .diagnostics
+        case .about: .about
+        case .agents: nil
+        }
+    }
+}
+
+/// The settings list. Pushed onto another stack (the roster in a compact window), its rows push
+/// `AppRoute.settingsPage`, so the pane lives in that stack's path. Given a `selection`, it is the
+/// sidebar of `SettingsSplitView`, which owns the navigation and shows the pane beside it.
 struct SettingsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.agentLibrary) private var agentLibrary
     let values: SettingsValues
     let actions: SettingsActions
+    /// The selected pane where Settings owns its navigation; nil where it is pushed.
+    var selection: Binding<SettingsPane?>?
+
+    init(values: SettingsValues, actions: SettingsActions, selection: Binding<SettingsPane?>? = nil) {
+        self.values = values
+        self.actions = actions
+        self.selection = selection
+    }
 
     var body: some View {
-        List {
-            Section {
-                row(.machines)
-                if let agentLibrary { agentsRow(agentLibrary) }
-                row(.notifications)
+        Group {
+            if let selection {
+                // The system sidebar: its own background and selection, no app tint (P17).
+                List(selection: selection) { sections }
+                    .listStyle(.sidebar)
+            } else {
+                List { sections }
+                    .groupedList()
             }
-            .groupedRows()
-            Section {
-                row(.terminal)
-                row(.keyboard)
-                row(.gestures)
-                row(.dictation)
-            }
-            .groupedRows()
-            Section {
-                row(.sync)
-                row(.privacy)
-            }
-            .groupedRows()
-            Section {
-                gettingStarted
-                row(.diagnostics)
-                row(.about)
-            }
-            .groupedRows()
         }
-        .groupedList()
         .navigationTitle(settingsText("settings.title", "Settings"))
     }
 
-    @ViewBuilder func page(_ page: SettingsPage) -> some View {
+    @ViewBuilder private var sections: some View {
+        Section {
+            row(.machines)
+            if agentLibrary != nil { row(.agents) }
+            row(.notifications)
+        }
+        .settingsRows(sidebar: selection != nil)
+        Section {
+            row(.terminal)
+            row(.keyboard)
+            row(.gestures)
+            row(.dictation)
+        }
+        .settingsRows(sidebar: selection != nil)
+        Section {
+            row(.sync)
+            row(.privacy)
+        }
+        .settingsRows(sidebar: selection != nil)
+        Section {
+            gettingStarted
+            row(.diagnostics)
+            row(.about)
+        }
+        .settingsRows(sidebar: selection != nil)
+    }
+
+    /// The page for a route pushed onto another stack.
+    func page(_ route: SettingsPage) -> some View {
+        pane(SettingsPane(route))
+    }
+
+    /// A pane's page, for the split view's detail column and the rows that push it.
+    @ViewBuilder func pane(_ page: SettingsPane) -> some View {
         let settings = values.settings
         switch page {
         case .terminal:
@@ -180,6 +245,11 @@ struct SettingsView: View {
             DiagnosticsView(settings: settings)
         case .about:
             AboutView(appVersion: values.appVersion, settings: settings, machines: values.machines)
+        case .agents:
+            // Saved agents live in their own store rather than in `values`.
+            if let agentLibrary {
+                AgentsSettingsView(library: agentLibrary, machines: values.machines)
+            }
         }
     }
 
@@ -189,26 +259,7 @@ struct SettingsView: View {
         actions.update(changed)
     }
 
-    /// Saved agents live in their own store rather than in `values`, so this row reads it.
-    private func agentsRow(_ agentLibrary: AgentLibrary) -> some View {
-        NavigationLink {
-            AgentsSettingsView(library: agentLibrary, machines: values.machines)
-        } label: {
-            LabeledContent {
-                Text(agentLibrary.presets.isEmpty ? settingsText("settings.machines.none", "None") : String(agentLibrary.presets.count))
-                    .foregroundStyle(Color.togoMute)
-            } label: {
-                let title = settingsText("settings.agents.title", "Agents")
-                if dynamicTypeSize.isAccessibilitySize {
-                    Text(title)
-                } else {
-                    Label(title, systemImage: "sparkles")
-                }
-            }
-        }
-    }
-
-    /// Opens the guide full screen rather than pushing a page, so it has no chevron.
+    /// Opens the guide rather than pushing a page, so it has no chevron.
     private var gettingStarted: some View {
         Button(action: actions.openGuide) {
             let title = String(localized: "tutorial.settings.row", defaultValue: "Getting started")
@@ -221,33 +272,42 @@ struct SettingsView: View {
         .foregroundStyle(Color.togoSnow)
     }
 
-    private func row(_ target: SettingsPage) -> some View {
-        NavigationLink {
-            page(target)
+    /// A pane's row. In the sidebar its value is the pane, which the list's selection takes;
+    /// pushed, it is the route, so the host stack's path keeps the pane across a fold.
+    @ViewBuilder private func row(_ target: SettingsPane) -> some View {
+        if selection != nil {
+            NavigationLink(value: target) { label(target) }
+        } else if let route = target.page {
+            NavigationLink(value: AppRoute.settingsPage(route)) { label(target) }
+        } else {
+            NavigationLink { pane(target) } label: { label(target) }
+        }
+    }
+
+    private func label(_ target: SettingsPane) -> some View {
+        LabeledContent {
+            // The system's secondary gray falls under 4.5:1 on the light grouped rows.
+            if let detail = detail(target) {
+                Text(detail).foregroundStyle(Color.togoMute)
+            }
         } label: {
-            LabeledContent {
-                // The system's secondary gray falls under 4.5:1 on the light grouped rows.
-                if let detail = detail(target) {
-                    Text(detail).foregroundStyle(Color.togoMute)
-                }
-            } label: {
-                // At accessibility sizes the symbol would squeeze titles into hyphenated fragments.
-                if dynamicTypeSize.isAccessibilitySize {
-                    Text(title(target))
-                } else {
-                    Label(title(target), systemImage: symbol(target))
-                }
+            // At accessibility sizes the symbol would squeeze titles into hyphenated fragments.
+            if dynamicTypeSize.isAccessibilitySize {
+                Text(title(target))
+            } else {
+                Label(title(target), systemImage: symbol(target))
             }
         }
     }
 
-    private func title(_ page: SettingsPage) -> String {
+    private func title(_ page: SettingsPane) -> String {
         switch page {
         case .terminal: settingsText("settings.terminal.title", "Terminal")
         case .keyboard: settingsText("settings.keyboard.title", "Key bar")
         case .shortcuts: settingsText("settings.builder.title", "New shortcut")
         case .gestures: settingsText("settings.gestures.title", "Gestures")
         case .machines: settingsText("settings.machines.title", "Machines")
+        case .agents: settingsText("settings.agents.title", "Agents")
         case .notifications: settingsText("settings.notifications.title", "Notifications")
         case .sync: settingsText("settings.sync.title", "iCloud sync")
         case .privacy: settingsText("settings.privacy.title", "Privacy")
@@ -257,13 +317,14 @@ struct SettingsView: View {
         }
     }
 
-    private func symbol(_ page: SettingsPage) -> String {
+    private func symbol(_ page: SettingsPane) -> String {
         switch page {
         case .terminal: "terminal"
         case .keyboard: "keyboard"
         case .shortcuts: "command"
         case .gestures: "hand.tap"
         case .machines: "desktopcomputer"
+        case .agents: "sparkles"
         case .notifications: "bell"
         case .sync: "icloud"
         case .privacy: "lock"
@@ -273,13 +334,16 @@ struct SettingsView: View {
         }
     }
 
-    private func detail(_ page: SettingsPage) -> String? {
+    private func detail(_ page: SettingsPane) -> String? {
         let settings = values.settings
         switch page {
         case .terminal:
             return ThemeChoice.all(imported: settings.customThemes).first { $0.id == settings.themeID }?.name
         case .machines:
             return values.machines.isEmpty ? settingsText("settings.machines.none", "None") : String(values.machines.count)
+        case .agents:
+            guard let agentLibrary else { return nil }
+            return agentLibrary.presets.isEmpty ? settingsText("settings.machines.none", "None") : String(agentLibrary.presets.count)
         case .notifications:
             return values.notifications.authorization.allowsPush ? settingsText("settings.on", "On") : settingsText("settings.off", "Off")
         case .sync:
@@ -292,6 +356,13 @@ struct SettingsView: View {
         case .keyboard, .shortcuts, .gestures, .dictation, .diagnostics:
             return nil
         }
+    }
+}
+
+private extension View {
+    /// Pushed, a section's rows sit on the grouped cards; in the sidebar they keep the system's.
+    @ViewBuilder func settingsRows(sidebar: Bool) -> some View {
+        if sidebar { self } else { groupedRows() }
     }
 }
 
@@ -337,6 +408,11 @@ struct SettingsPreviewHost: View {
     var body: some View {
         NavigationStack {
             SettingsView(values: values, actions: SettingsActions { values.settings = $0 })
+                .navigationDestination(for: AppRoute.self) { route in
+                    if case .settingsPage(let page) = route {
+                        SettingsView(values: values, actions: SettingsActions { values.settings = $0 }).page(page)
+                    }
+                }
         }
         .togoControls()
     }

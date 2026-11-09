@@ -43,10 +43,13 @@ struct TutorialFlow: View {
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
         }
-        .presentCover("tutorial.demo", item: demoItem) { item in
+        // A cover is a new root, so it may open over the guide wherever the guide is a sheet.
+        .presentCover("tutorial.demo", item: demoItem, nests: true) { item in
             DemoControlCenter(store: item.store, now: now) { demo = nil }
         }
         .togoControls()
+        // Skip and the last page's buttons are the ways out, as a cover and as a page sheet.
+        .interactiveDismissDisabled()
     }
 
     private var selection: Binding<TutorialPage> {
@@ -172,7 +175,8 @@ extension View {
         modifier(FirstLaunchTutorial(model: model, onAddMachine: onAddMachine))
     }
 
-    /// The guide full screen while `isPresented` is true. "Getting started" calls
+    /// The guide while `isPresented` is true: full screen in a compact window, a page sheet in a
+    /// wide one (`PresentationContent.walkthrough`). "Getting started" calls
     /// `TutorialModel.reopen()` first, so it opens on the first page.
     func tutorialCover(
         _ model: TutorialModel, isPresented: Binding<Bool>, onAddMachine: @escaping () -> Void
@@ -201,10 +205,10 @@ private struct TutorialCover: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .presentCover("tutorial.cover", isPresented: $isPresented) {
+            .harnessPresent(isPresented: $isPresented, as: .walkthrough, name: "tutorial.cover") {
                 if exit == .addMachine { onAddMachine() }
                 exit = .closed
-            } content: {
+            } body: {
                 TutorialFlow(model: model) { how in
                     exit = how
                     isPresented = false

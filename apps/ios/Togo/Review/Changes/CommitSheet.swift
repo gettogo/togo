@@ -33,8 +33,8 @@ struct CommitSheet: View {
                         .keyboardShortcut(.cancelAction)
                 }
             }
-            .coordinated("review.amend", .dialog, isPresented: $confirmingAmend) { view, shown in
-                view.confirmationDialog(ChangesCopy.amendQuestion, isPresented: shown, titleVisibility: .visible) {
+            .coordinated("review.amend", .alert, isPresented: $confirmingAmend) { view, shown in
+                view.alert(ChangesCopy.amendQuestion, isPresented: shown) {
                     Button(ChangesCopy.amendButton, role: .destructive) { submit() }
                     Button(ChangesCopy.cancel, role: .cancel) {}
                 } message: {

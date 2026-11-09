@@ -20,16 +20,26 @@ extension XCUIApplication {
         )).firstMatch
     }
 
-    /// The roster's one toolbar menu: New session, Show, Monitor, Settings, Add machine, Archive.
-    var rosterMenu: XCUIElement { buttons["roster.more"] }
+    /// The roster's overflow: Status display, Add machine, Archive. On iOS 27 it is the bar's
+    /// system overflow menu; before, a menu of the app's own. New session, Settings and the
+    /// filter are buttons in the roster's bars.
+    var rosterMenu: XCUIElement {
+        let own = buttons["roster.more"]
+        return own.exists ? own : navigationBars.buttons["More"].firstMatch
+    }
 
-    /// Opens the roster's menu and picks `label` from it.
+    /// Taps a roster action: the bar button when there is one, else the item in the menu.
     func pickFromRosterMenu(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(rosterMenu.waitForExistence(timeout: 10), "The roster never loaded", file: file, line: line)
+        XCTAssertTrue(buttons["roster.settings"].waitForExistence(timeout: 10), "The roster never loaded", file: file, line: line)
+        let direct = buttons[label]
+        if direct.exists && direct.isHittable {
+            direct.tap()
+            return
+        }
         rosterMenu.tap()
         let item = buttons.matching(identifier: label).allElementsBoundByIndex.last { $0.exists && $0.isHittable }
             ?? buttons[label]
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "The roster's menu has no \(label)", file: file, line: line)
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "The roster has no \(label)", file: file, line: line)
         item.tap()
     }
 

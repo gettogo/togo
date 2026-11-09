@@ -76,7 +76,7 @@ struct RosterSection: View {
             return ControlCenterCopy.noNetwork
         case .hostKeyChanged:
             return ControlCenterCopy.keyChangedCaption
-        case .connecting, .online, .authNeeded, .failed, .keyMissing:
+        case .connecting, .online, .authNeeded, .failed, .keyMissing, .setUpHere:
             return helper == .missing ? ControlCenterCopy.noHelper : nil
         }
     }
@@ -95,7 +95,7 @@ struct RosterSection: View {
     /// user was about to tap moves away.
     private var stale: Bool {
         switch machine.reachability {
-        case .offline, .authNeeded, .failed, .keyMissing, .hostKeyChanged, .deviceOffline: true
+        case .offline, .authNeeded, .failed, .keyMissing, .setUpHere, .hostKeyChanged, .deviceOffline: true
         case .connecting, .waking, .online: false
         }
     }
@@ -114,6 +114,10 @@ struct RosterSection: View {
             }
         case .failed(let reason):
             MachineMessage(reason, action: ControlCenterCopy.tryAgain) { perform(.retry(machine.id)) }
+        case .setUpHere:
+            MachineMessage(ControlCenterCopy.setUpHere(machine.name, device: DeviceName.model), action: ControlCenterCopy.setUp) {
+                perform(.setUpHere(machine.id))
+            }
         case .keyMissing:
             MachineMessage(ControlCenterCopy.keyMissing(device: DeviceName.model), action: ControlCenterCopy.edit) {
                 perform(.edit(machine.id))

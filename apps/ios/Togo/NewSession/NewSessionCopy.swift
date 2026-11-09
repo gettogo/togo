@@ -15,6 +15,9 @@ enum NewSessionCopy {
     static func keyMissing(device: String) -> String {
         String(localized: "new.machine.keyMissing", defaultValue: "Key not on this \(device)")
     }
+    static func setUpHere(device: String) -> String {
+        String(localized: "new.machine.setUpHere", defaultValue: "Not set up on this \(device)")
+    }
     static func offline(_ reason: String) -> String {
         String(localized: "new.machine.offline", defaultValue: "Offline, \(reason.lowercased())")
     }

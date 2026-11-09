@@ -82,16 +82,4 @@ struct PaneLayoutTests {
         #expect(flat.inactiveDivision == band)
         #expect(FoldInfo.from(active: nil, inactive: nil) == .flat)
     }
-
-    /// The roster column is narrow on a foldable whatever its posture, and 320 on iPad.
-    @Test func rosterWidthByDevice() {
-        #expect(PaneLayout.rosterWidth(fold: .from(active: band, inactive: band)) == 290)
-        #expect(PaneLayout.rosterWidth(fold: .from(active: nil, inactive: band)) == 290)
-        #expect(PaneLayout.rosterWidth(fold: .flat) == 320)
-        #expect(PaneLayout.showsSidebar(size: ipad, sizeClass: .regular))
-        #expect(!PaneLayout.showsSidebar(size: ipad, sizeClass: .compact))
-        #expect(PaneLayout.prefersSidebarHidden(size: CGSize(width: 1000, height: 800), hasSecondary: true))
-        #expect(!PaneLayout.prefersSidebarHidden(size: CGSize(width: 1376, height: 1032), hasSecondary: true))
-        #expect(!PaneLayout.prefersSidebarHidden(size: CGSize(width: 1000, height: 800), hasSecondary: false))
-    }
 }

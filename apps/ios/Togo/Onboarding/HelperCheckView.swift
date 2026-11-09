@@ -37,6 +37,9 @@ struct HelperCheckView: View {
 
     private func present(version: String) -> some View {
         let needsTmux = Self.needsTmux(report)
+        let away = AwayFromHome(
+            machineOnTailnet: report.routes.map { _ in report.machineOnTailnet }, phoneOnTailnet: phoneOnTailnet
+        )
         return OnboardingStep(
             title: needsTmux
                 ? String(localized: "onboard.helper.needsTmux.title", defaultValue: "\(machine) needs tmux")
@@ -54,15 +57,18 @@ struct HelperCheckView: View {
             if needsTmux {
                 tmuxInstall
             }
+            // A ready Tailscale route is one more check, so it sits in the list at the same
+            // spacing; the tip and the steps stay a separate note below it.
             VStack(alignment: .leading, spacing: 14) {
                 ReadinessLine(
                     text: String(localized: "onboard.helper.version", defaultValue: "Togo helper \(version)"), ready: true
                 )
                 machineLines
+                if away == .ready {
+                    AwayFromHomeNote(machine: machine, state: .ready)
+                }
             }
-            if let away = AwayFromHome(
-                machineOnTailnet: report.routes.map { _ in report.machineOnTailnet }, phoneOnTailnet: phoneOnTailnet
-            ) {
+            if let away, away != .ready {
                 AwayFromHomeNote(machine: machine, state: away)
             }
             Text(String(

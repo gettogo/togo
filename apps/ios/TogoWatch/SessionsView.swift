@@ -32,7 +32,7 @@ struct SessionsView: View {
                             SessionRow(session: session)
                             if session.acceptsReply, let machine = session.machineId, let id = session.sessionId {
                                 ReplyLink(
-                                    store: store, target: .prompt(machineId: machine, sessionId: id),
+                                    target: .prompt(machineId: machine, sessionId: id),
                                     title: "\(session.bib) \(session.agentName)"
                                 )
                             }
@@ -91,6 +91,8 @@ private struct SessionRow: View {
                     .foregroundStyle(.secondary)
                     // trunc-ok: the agent's live last action, one line on the wrist; the phone shows it in full
                     .lineLimit(1)
+                    // The last action can quote a command: hidden while the wrist is down.
+                    .privacySensitive()
                     // motion: preventing a jump — the row grows for the agent's last action, by opacity
                     .transition(Motion.arrive(reduce: reduceMotion))
             }

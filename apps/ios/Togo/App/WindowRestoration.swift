@@ -1,7 +1,8 @@
 import Foundation
 
 /// What a window shows, kept by the system with the window so it comes back the same after
-/// the app was closed: its tabs, which of them are on screen, and whether the workspace is up.
+/// the app was closed: its tabs, which of them are on screen, whether the workspace is up, and
+/// the rest of its place in the navigation tree (`Router`).
 struct WindowRestoration: Codable, Equatable {
     var tabs: [TabID]
     var selected: TabID?
@@ -10,6 +11,9 @@ struct WindowRestoration: Codable, Equatable {
     /// What each tab was last called, so a tab put back while its machine is away still shows
     /// its number, name and agent rather than its id. Absent in data from older versions.
     var labels: [TabLabel]? = nil
+    /// Where the window was in the navigation tree: what was pushed, the status display and
+    /// the sidebar choice. Absent in data from older versions.
+    var router: Router? = nil
 }
 
 /// A tab's number, name and agent as its machine last listed them.
@@ -30,7 +34,8 @@ extension WindowRestoration {
             tabs: store.workspace.tabs.map(\.id), selected: store.workspace.selected,
             secondary: store.workspace.secondary, workspaceOpen: store.workspaceOpen,
             // No tab has a name worth keeping: nothing to save, as data from older versions.
-            labels: labels.isEmpty ? nil : labels
+            labels: labels.isEmpty ? nil : labels,
+            router: store.router
         )
     }
 
@@ -63,6 +68,11 @@ extension AppStore {
         workspace.selected = selected
         workspace.secondary = saved.secondary.flatMap { seen.contains($0) && $0 != selected ? $0 : nil }
         recentTabs = [selected, workspace.secondary].compactMap { $0 }
+        if let place = saved.router {
+            path = place.path
+            monitorShown = place.monitorShown
+            sidebar.hidden = place.sidebar.hidden
+        }
         workspaceOpen = saved.workspaceOpen && !ids.isEmpty
     }
 }

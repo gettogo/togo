@@ -132,12 +132,11 @@ struct AgentEditor: View {
                 .disabled(finished == nil)
             }
         }
-        .confirmationDialog(
-            settingsText("settings.agents.discardTitle", "Discard your changes?"),
-            isPresented: $confirmsDiscard, titleVisibility: .visible
-        ) {
-            Button(settingsText("settings.agents.discard", "Discard changes"), role: .destructive) { dismiss() }
-            Button(settingsText("settings.agents.keepEditing", "Keep editing"), role: .cancel) {}
+        .coordinated("settings.discardAgent", .alert, isPresented: $confirmsDiscard) { view, shown in
+            view.alert(settingsText("settings.agents.discardTitle", "Discard your changes?"), isPresented: shown) {
+                Button(settingsText("settings.agents.discard", "Discard changes"), role: .destructive) { dismiss() }
+                Button(settingsText("settings.agents.keepEditing", "Keep editing"), role: .cancel) {}
+            }
         }
         .onChange(of: draft.agent) { checks = [:] }
         .onChange(of: draft.program) { checks = [:] }

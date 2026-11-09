@@ -131,14 +131,17 @@ struct DiagnosticsPage: View {
         .groupedList()
         .navigationTitle(settingsText("settings.diagnostics.title", "Diagnostics"))
         .navigationBarTitleDisplayMode(.inline)
-        .coordinated("settings.clearDiagnostics", .dialog, isPresented: $confirmingClear) { view, shown in
-            view.confirmationDialog(
-                settingsText("diagnostics.clear.title", "Clear recorded events?"), isPresented: shown, titleVisibility: .visible
+        .coordinated("settings.clearDiagnostics", .alert, isPresented: $confirmingClear) { view, shown in
+            view.alert(
+                settingsText("diagnostics.clear.title", "Clear recorded events?"), isPresented: shown
             ) {
                 Button(settingsText("diagnostics.clear", "Clear"), role: .destructive, action: clear)
+                Button(settingsText("settings.confirm.cancel", "Cancel"), role: .cancel) {}
             }
         }
-        .presentSheet("settings.diagnosticsPreview", isPresented: $previewing) {
+        // Reading material pushes, the same at every width: inside the Settings sheet a sheet
+        // of its own would stack on it (C8).
+        .navigationDestination(isPresented: $previewing) {
             DiagnosticsPreview(text: summary?.text ?? "")
         }
     }
@@ -161,31 +164,20 @@ struct DiagnosticsPage: View {
     }
 }
 
-/// The report as it would be sent, as text.
+/// The report as it would be sent, as text. Pushed from Diagnostics; Back returns.
 struct DiagnosticsPreview: View {
     let text: String
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                Text(verbatim: text)
-                    .font(.system(.footnote, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(Layout.margin)
-            }
-            .background(Color.togoInk)
-            .navigationTitle(settingsText("diagnostics.preview", "Preview"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(settingsText("diagnostics.done", "Done"), systemImage: "checkmark", role: .confirm) { dismiss() }
-                }
-            }
+        ScrollView {
+            Text(verbatim: text)
+                .font(.system(.footnote, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Layout.margin)
         }
-        .togoControls()
-        // Reading material: the full height on a phone, a page in a regular window.
-        .togoSheet(.page)
+        .background(Color.togoInk)
+        .navigationTitle(settingsText("diagnostics.preview", "Preview"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

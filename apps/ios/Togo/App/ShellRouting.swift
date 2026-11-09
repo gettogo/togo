@@ -2,8 +2,8 @@ import Foundation
 import TogoKit
 
 extension AppStore {
-    /// The workspace is what the window shows: the cover in a compact window, or the terminal
-    /// column beside the roster (which shows the empty detail while no tab is open). The
+    /// The workspace is what the window shows: pushed over the roster in a compact window, or
+    /// the terminal column beside it (which shows the empty detail while no tab is open). The
     /// workspace presents reviews and sign-in questions only while it is mounted; otherwise the
     /// root does.
     var workspaceOnScreen: Bool {
@@ -46,16 +46,12 @@ extension AppStore {
         workspaceOpen = true
     }
 
-    /// Settings opens as a sheet beside the roster, so it never covers the session in the
-    /// terminal column; in a compact window it pushes onto the roster.
+    /// Settings is a sheet with its own stack in every layout (its pages push inside it), so it
+    /// never covers the session in the detail column.
     func showSettings() {
-        if workspaceInline {
-            // A form in progress keeps the screen; Settings waits for it to close.
-            guard sheet?.isForm != true else { return }
-            sheet = .settings
-        } else {
-            path.append(.settings)
-        }
+        // A form in progress keeps the screen; Settings waits for it to close.
+        guard sheet?.isForm != true else { return }
+        showSheet(.settings)
     }
 
     /// A swipe in from the leading edge of a terminal: beside the roster it shows the roster,

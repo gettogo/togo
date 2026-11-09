@@ -61,6 +61,8 @@ import UIKit
     @ObservationIgnored private let hostRecords: SyncedRecordStore<HostRecord>
     @ObservationIgnored private let settingsStore: SettingsStore
     @ObservationIgnored let deps: Dependencies
+    /// Which machines are set up on this device, and the key each signs in with here.
+    @ObservationIgnored let deviceMachines: DeviceMachines
     @ObservationIgnored private(set) var records: [HostID: HostRecord] = [:]
     @ObservationIgnored private(set) var watches: [HostID: any HostWatch] = [:]
     @ObservationIgnored private var feeds: [HostID: Task<Void, Never>] = [:]
@@ -86,8 +88,9 @@ import UIKit
     init(
         hostRecords: SyncedRecordStore<HostRecord>, settingsRecords: SyncedRecordStore<AppSettings>,
         syncSwitch: SyncSwitch, device: DeviceSettings = DeviceSettings(backend: MemoryBackend()),
-        dependencies: Dependencies
+        deviceMachines: DeviceMachines? = nil, dependencies: Dependencies
     ) {
+        self.deviceMachines = deviceMachines ?? .inMemory()
         self.hostRecords = hostRecords
         hostStore = HostStore(records: hostRecords)
         settingsStore = SettingsStore(records: settingsRecords, syncSwitch: syncSwitch, device: device)
@@ -169,14 +172,6 @@ import UIKit
 
     func snapshots() -> AsyncStream<HostViewSnapshot> {
         hub.stream()
-    }
-
-    func refresh() async {
-        await withTaskGroup(of: Void.self) { group in
-            for watch in watches.values {
-                group.addTask { await watch.refresh() }
-            }
-        }
     }
 
     func answer(hostID: HostID, requestID: String, decision: Decision) async throws {
@@ -343,7 +338,8 @@ import UIKit
 
     /// Brings monitors in line with the stored machines: new ones start, removed ones stop,
     /// and an edited one starts over with its new address or credentials.
-    private func reconcile(_ all: [HostRecord]) {
+    private func reconcile(_ stored: [HostRecord]) {
+        let all = deviceMachines.resolve(stored)
         let incoming = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         let removed = records.keys.filter { incoming[$0] == nil }
         // A new wake target or route is no reason to reconnect.
@@ -363,6 +359,7 @@ import UIKit
         }
         for id in removed {
             mapper.forget(id)
+            deviceMachines.forget(id)
             attachPrompts.withdraw(hostID: id)
             if !paired.contains(id) { deps.forgetPassword(id) }
             onMachineRemoved(id)
@@ -407,6 +404,7 @@ import UIKit
     private func received(_ snapshot: HostSnapshot) {
         guard let record = records[snapshot.hostID] else { return }
         latest[snapshot.hostID] = snapshot
+        if snapshot.reach == .online { deviceMachines.signedIn(to: record.id) }
         deps.diagnostics.reached(snapshot, record: record)
         publish(snapshot, record: record)
         learnWake(from: snapshot, record: record)
@@ -429,7 +427,8 @@ import UIKit
     }
 
     private func publish(_ snapshot: HostSnapshot, record: HostRecord) {
-        let view = mapper.map(snapshot, noHelper: record.noHelper, wake: record.wake, now: deps.now())
+        var view = mapper.map(snapshot, noHelper: record.noHelper, wake: record.wake, now: deps.now())
+        if deviceMachines.needsSetUp(record.id, reach: snapshot.reach) { view.reachability = .setUpHere }
         hub.publish(view)
         onPublish(view)
     }

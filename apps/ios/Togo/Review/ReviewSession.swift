@@ -15,6 +15,11 @@ import TogoKit
     /// Whether the review opened as a sheet (regular width) or a full-screen cover. Kept until it
     /// closes, so folding or unfolding does not swap one presentation for the other.
     @ObservationIgnored var regular: Bool?
+    /// The models behind the screens open now, by route. A fold or unfold moves an open diff or
+    /// file between the detail column and the stack, which builds its screen again; the same
+    /// model comes back with it, so the file picked in a commit, the loaded text and any find
+    /// stay. Routes no longer open are let go.
+    @ObservationIgnored private var screens: [ReviewRoute: AnyObject] = [:]
 
     init(
         subject: ReviewSubject, services: any ReviewServices, tab: ReviewTab, machine: String,
@@ -28,6 +33,17 @@ import TogoKit
         files = FilesModel(subject: subject, services: services, path: "", ref: nil)
         ports = PortsModel(subject: subject, services: services)
         self.regular = regular
+    }
+
+    /// The model for `route`'s screen: the one already made while the route stays open, else
+    /// a new one from `make`.
+    func screen<Model: AnyObject>(for route: ReviewRoute, make: () -> Model) -> Model {
+        let open = Set(navigation.path + [navigation.detail].compactMap(\.self))
+        screens = screens.filter { open.contains($0.key) }
+        if let kept = screens[route] as? Model { return kept }
+        let made = make()
+        if open.contains(route) { screens[route] = made }
+        return made
     }
 }
 

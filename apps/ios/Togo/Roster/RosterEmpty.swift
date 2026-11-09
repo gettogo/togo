@@ -27,30 +27,21 @@ struct RosterEmptyDetail: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// A session needs the user, so the headline says so instead of "All clear".
     var waiting = false
-    /// The roster column is hidden, so this screen also offers to show it.
-    var rosterHidden = false
-    var showRoster: () -> Void = {}
 
+    /// With the roster hidden, the split view's own toggle in the bar is the way back to it.
     var body: some View {
         VStack(spacing: 12) {
-            VStack(spacing: 12) {
-                UnlitMark()
-                Text(waiting ? RosterCopy.detailWaiting : RosterCopy.detailClear)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.togoSnow)
-                    .multilineTextAlignment(.center)
-                Text(RosterCopy.detailMessage)
-                    .font(.body)
-                    .foregroundStyle(Color.togoMute)
-                    .multilineTextAlignment(.center)
-            }
-            .accessibilityElement(children: .combine)
-            if rosterHidden {
-                Button(RosterCopy.showRoster, action: showRoster)
-                    .buttonStyle(.secondary(.fit))
-                    .padding(.top, 8)
-            }
+            UnlitMark()
+            Text(waiting ? RosterCopy.detailWaiting : RosterCopy.detailClear)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.togoSnow)
+                .multilineTextAlignment(.center)
+            Text(RosterCopy.detailMessage)
+                .font(.body)
+                .foregroundStyle(Color.togoMute)
+                .multilineTextAlignment(.center)
         }
+        .accessibilityElement(children: .combine)
         .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? .infinity : 340)
         .padding(.horizontal, Layout.margin)
         .centredInDetail()

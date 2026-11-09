@@ -25,9 +25,8 @@ import TogoKit
         store.toggleMonitor()
         #expect(store.monitorShown)
         #expect(store.workspaceOpen)
-        #expect(ShellLayout.resolve(
-            size: CGSize(width: 1032, height: 1376), sizeClass: .regular, workspaceOpen: true, hasTabs: true, monitorShown: true
-        ) == .split(detail: .monitor))
+        #expect(ShellLayout.resolve(sizeClass: .regular, workspaceOpen: true, hasTabs: true, monitorShown: true)
+            == .split(detail: .monitor))
     }
 
     /// A line picked on the monitor leaves it for the terminal.

@@ -41,6 +41,10 @@ struct RootSheet: View {
             if let record = store.services.hostRecord(id) {
                 AddMachineSheet(flow: AddMachineFlow.editing(record, store: store, services: onboarding, tutorial: tutorial))
             }
+        case .setUpHere(let id):
+            if let record = store.services.hostRecord(id) {
+                AddMachineSheet(flow: AddMachineFlow.settingUp(record, store: store, services: onboarding, tutorial: tutorial))
+            }
         case .newSession(let hostID):
             NewSessionSheet(
                 model: NewSessionModel(
@@ -90,11 +94,33 @@ extension AddMachineFlow {
     static func editing(
         _ record: HostRecord, store: AppStore, services: any OnboardingServices, tutorial: TutorialModel?
     ) -> AddMachineFlow {
-        let flow = AddMachineFlow(
-            services: services, id: record.id,
-            save: { try await store.services.saveHost($0) },
-            finish: { _ in store.sheet = nil }
-        )
+        stored(record, services: services, tutorial: tutorial, save: { try await store.services.saveHost($0) }) {
+            store.sheet = nil
+        }
+    }
+
+    /// Setting up a machine that came from another device: straight to connecting with this
+    /// device's key. A machine without the key leads to adding it, then the helper check and
+    /// the notification question, so this device pairs with the helper like the one that
+    /// added it. Back reaches the form, for a user name that differs here.
+    static func settingUp(
+        _ record: HostRecord, store: AppStore, services: any OnboardingServices, tutorial: TutorialModel?
+    ) -> AddMachineFlow {
+        let flow = stored(record, services: services, tutorial: tutorial, save: { try await store.services.setUpHere($0) }) {
+            store.sheet = nil
+        }
+        flow.draft.auth = .deviceKey
+        flow.draft.importedKey = nil
+        flow.notificationAsk = .asking(store.services)
+        flow.path = [.connect]
+        return flow
+    }
+
+    private static func stored(
+        _ record: HostRecord, services: any OnboardingServices, tutorial: TutorialModel?,
+        save: @escaping @MainActor (HostRecord) async throws -> Void, finish: @escaping @MainActor () -> Void
+    ) -> AddMachineFlow {
+        let flow = AddMachineFlow(services: services, id: record.id, save: save, finish: { _ in finish() })
         let profile = record.profile
         var draft = MachineDraft()
         draft.name = profile.name

@@ -103,7 +103,7 @@ extension AppStore {
         controlCenter.requests.removeAll { $0.hostID == hostID }
         controlCenter.archived.removeAll { $0.hostID == hostID }
         // A sign-in or edit for the machine has nothing left to act on; closing it cancels it.
-        if sheet == .signIn(hostID) || sheet == .editMachine(hostID) { sheet = nil }
+        if sheet == .signIn(hostID) || sheet == .editMachine(hostID) || sheet == .setUpHere(hostID) { sheet = nil }
         if composing?.hostID == hostID { composing = nil }
         for tab in workspace.tabs where tab.hostID == hostID {
             close(tab.id)

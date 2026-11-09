@@ -99,17 +99,17 @@ struct IntegrationsRows: View {
             }
         }
         .groupedRows()
-        .coordinated("settings.removeIntegration", .dialog, isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } }) { view, shown in
-            view.confirmationDialog(
+        .coordinated("settings.removeIntegration", .alert, isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } }) { view, shown in
+            view.alert(
                 IntegrationsCopy.removeTitle(removing?.name ?? ""),
                 isPresented: shown,
-                titleVisibility: .visible,
                 presenting: removing
             ) { report in
                 Button(IntegrationsCopy.remove, role: .destructive) {
                     removing = nil
                     Task { await model.uninstall(report.id) }
                 }
+                Button(settingsText("settings.confirm.cancel", "Cancel"), role: .cancel) {}
             } message: { _ in
                 Text(IntegrationsCopy.removeMessage)
             }

@@ -25,13 +25,6 @@ struct RosterView: View {
     var now: Date?
     /// The launch mark shrinks into the headline's leading edge on a cold start.
     var launchTarget = false
-    /// On a phone, whether the navigation bar stays for a host's own items there (the monitor's
-    /// keep-awake switch, the tutorial's Done). Otherwise it goes: the roster's bar row is its
-    /// search field with the menu beside it.
-    var keepsNavigationBar = false
-    /// The roster is the sidebar column beside the terminal, so its bar offers to hide it: the
-    /// way to a full-width terminal by touch, as ⌃⌘S is by keyboard.
-    var sidebar = false
 
     @State private var killTarget: SessionRow?
     @State private var renameTarget: SessionRow?
@@ -43,33 +36,24 @@ struct RosterView: View {
     @State private var missionExit: (tab: TabID, exit: RosterMissionExit)?
     @FocusState private var listFocused: Bool
 
+    /// One body at every width: the bar's items and the search field's place change with
+    /// `wide`, the view tree does not, so a fold or resize keeps the list's scroll, search and
+    /// cursor. System bars throughout, so they take the safe area and the standard spacing, and
+    /// an iPhone Duo stands them on their side beside its status bar.
     var body: some View {
-        if wide {
-            // As a sidebar column the field sits in the column's bar row, the menu trailing it.
-            screen
-                .toolbar { toolbar }
-                .searchable(
-                    text: $store.query, isPresented: $searching, placement: .toolbarPrincipal,
-                    prompt: RosterCopy.searchPrompt
-                )
+        withSearch(screen.toolbar { toolbar })
+    }
+
+    /// Nothing to search before there is a machine. A column searches in the sidebar's own
+    /// field; a phone at the foot, beside New session, as iOS puts search there.
+    @ViewBuilder private func withSearch(_ view: some View) -> some View {
+        if hasNoMachines {
+            view
         } else {
-            // On a phone the system puts a searchable field in a row of its own under the bar,
-            // leaving the menu alone above it; so the field and the menu share one row here.
-            screen
-                .safeAreaBar(edge: .top) {
-                    if hasNoMachines {
-                        // Nothing to search yet; the menu keeps its place for Settings.
-                        HStack {
-                            Spacer()
-                            menu
-                        }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 2)
-                    } else {
-                        RosterSearchBar(query: $store.query, searching: $searching) { menu }
-                    }
-                }
-                .toolbarVisibility(keepsNavigationBar ? .automatic : .hidden, for: .navigationBar)
+            view.searchable(
+                text: $store.query, isPresented: $searching, placement: wide ? .sidebar : .automatic,
+                prompt: RosterCopy.searchPrompt
+            )
         }
     }
 
@@ -81,6 +65,10 @@ struct RosterView: View {
             // `initial`: a roster that comes on screen with the ⌘K that showed it, as the
             // sidebar does, still takes it.
             .onChange(of: store.sidebar.searchRequests, initial: true) { takeSearchRequest() }
+            // No title on screen: the status row says what matters. It is still the stack's
+            // title, so the system's Back over the workspace reads "Sessions".
+            .navigationTitle(WorkspaceCopy.sessions)
+            .toolbar(removing: .title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
@@ -207,50 +195,39 @@ struct RosterView: View {
 
     // MARK: Toolbar
 
-    /// One button: everything that is not a session lives in its menu, so the roster has no
-    /// bottom bar of its own; the prompt bar sits there.
+    /// Each control once per layout (roster.md). A phone, iPhone Duo folded and a narrow
+    /// window: Settings and the filter in the bar at the top, search and New session at the foot;
+    /// folded, the Duo puts them all in one vertical bar. The sidebar column (iPad, iPhone Duo
+    /// open): the filter and New session over the list they act on, Settings at its foot,
+    /// search in the sidebar's field. The rarer things go in the system's overflow everywhere.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        if sidebar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(AppCommandCopy.hideSidebar, systemImage: "sidebar.leading") { store.toggleSidebar() }
-                    .foregroundStyle(Color.togoSnow)
-                    .accessibilityIdentifier("roster.hideSidebar")
+        if wide {
+            if !hasNoMachines {
+                ToolbarItem(placement: .topBarTrailing) { RosterFilterMenu(store: store) }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                ToolbarItem(placement: .topBarTrailing) { RosterNewSessionButton(store: store) }
+            }
+            ToolbarItem(placement: .bottomBar) { RosterSettingsButton(store: store) }
+        } else {
+            ToolbarItem(placement: .topBarLeading) { RosterSettingsButton(store: store) }
+            if !hasNoMachines {
+                ToolbarItem(placement: .topBarTrailing) { RosterFilterMenu(store: store) }
+                DefaultToolbarItem(kind: .search, placement: .bottomBar)
+                ToolbarSpacer(.fixed, placement: .bottomBar)
+                ToolbarItem(placement: .bottomBar) { RosterNewSessionButton(store: store) }
             }
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu { menuItems } label: {
-                Label(RosterCopy.more, systemImage: "line.3.horizontal")
-            }
-            .foregroundStyle(Color.togoSnow)
-            .accessibilityIdentifier("roster.more")
-        }
+        rareItems
     }
 
-    /// The same menu on a phone, as a glass circle trailing the search field.
-    private var menu: some View {
-        Menu { menuItems } label: { RosterMenuLabel() }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("roster.more")
-    }
-
-    @ViewBuilder private var menuItems: some View {
-        Button(RosterCopy.newSession, systemImage: "plus") { store.startNewSession() }
-            .disabled(store.services.hosts.isEmpty)
-        Picker(selection: $store.filter) {
-            ForEach(SessionFilter.allCases, id: \.self) { filter in
-                Text(ControlCenterCopy.filterName(filter)).tag(filter)
-            }
-        } label: {
-            Label(RosterCopy.show, systemImage: "line.3.horizontal.decrease")
+    /// The status display, adding a machine and the archive: the system's overflow, so the
+    /// ellipsis means overflow only and no hamburger stands in a bar.
+    @ToolbarContentBuilder private var rareItems: some ToolbarContent {
+        if #available(iOS 27.0, *) {
+            ToolbarOverflowMenu { RosterRareActions(store: store) }
+        } else {
+            ToolbarItem(placement: .topBarTrailing) { RosterMoreMenu(store: store) }
         }
-        .pickerStyle(.menu)
-        Button(MonitorCopy.toggle, systemImage: "rectangle.grid.1x2") { store.toggleMonitor() }
-        Divider()
-        Button(RosterCopy.settings, systemImage: "gearshape") { store.showSettings() }
-        Button(RosterCopy.addMachine, systemImage: "desktopcomputer") { store.showSheet(.addMachine) }
-        Button(RosterCopy.archive, systemImage: "archivebox") { store.showArchive() }
-            .disabled(store.controlCenter.archived.isEmpty)
     }
 
     // MARK: Derived state

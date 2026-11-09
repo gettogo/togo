@@ -37,6 +37,9 @@ enum Reachability: Equatable, Sendable {
     case failed(String)
     /// The machine signs in with a key that is not on this device.
     case keyMissing
+    /// The machine came from another device and this device's key is not on it yet. Unlike
+    /// `authNeeded`, nothing failed: this device was never set up for it.
+    case setUpHere
     /// The machine showed a key other than the trusted one; reviewing it is the way on.
     case hostKeyChanged
     /// This device has no network; the machine is not to blame.
@@ -187,13 +190,6 @@ struct WorkspaceState: Equatable, Sendable {
     var primaryFraction: CGFloat = 0.5
 }
 
-enum AppRoute: Hashable, Sendable {
-    case settings
-    /// Finished sessions, from the list or the sidebar.
-    case archive
-    case settingsPage(SettingsPage)
-}
-
 enum AppSheet: Identifiable, Hashable, Sendable {
     case addMachine
     /// The add-machine form, already filled in.
@@ -201,6 +197,8 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     case editMachine(HostID)
     case newSession(HostID?)
     case signIn(HostID)
+    /// Adding this device's key to a machine that came from another device.
+    case setUpHere(HostID)
     case review(ReviewSubject, ReviewTab)
     /// Settings beside the sidebar, where pushing it would cover the session in the detail.
     case settings
@@ -211,14 +209,10 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     /// from the keyboard) must not replace it and lose what was typed.
     var isForm: Bool {
         switch self {
-        case .addMachine, .addMachineFilled, .editMachine, .newSession, .signIn: true
+        case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .newSession, .signIn: true
         case .review, .settings: false
         }
     }
-}
-
-enum SettingsPage: Hashable, Sendable {
-    case terminal, keyboard, shortcuts, gestures, dictation, machines, notifications, sync, privacy, diagnostics, about
 }
 
 /// One machine's complete view at `at`. Applying it replaces everything the store knew about
