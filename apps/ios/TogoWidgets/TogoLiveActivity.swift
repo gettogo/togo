@@ -12,7 +12,9 @@ struct TogoLiveActivity: Widget {
         ActivityConfiguration(for: TogoActivityAttributes.self) { context in
             let card = LiveContextSource.card(context.state, hostId: context.attributes.hostId, stale: context.isStale)
             let machine = LiveCopy.machineName(hostId: context.attributes.hostId, pairings: LiveCopy.sharedPairings())
-            LiveActivityContent(state: context.state, card: card, isStale: context.isStale)
+            LiveActivityContent(
+                state: context.state, card: card, hostId: context.attributes.hostId, isStale: context.isStale
+            )
                 .activityBackgroundTint(Color.togoInk)
                 .activitySystemActionForegroundColor(Color.togoSnow)
                 .widgetURL(LiveCopy.link(bib: context.state.bib, machine: machine))
@@ -57,6 +59,7 @@ private struct LiveActivityContent: View {
     @Environment(\.activityFamily) private var family
     let state: TogoActivityAttributes.ContentState
     let card: LiveCard
+    let hostId: String
     let isStale: Bool
 
     var body: some View {
@@ -64,7 +67,7 @@ private struct LiveActivityContent: View {
         case .small:
             LiveSmallView(state: state, card: card, isStale: isStale)
         default:
-            LiveLockScreenView(state: state, card: card, isStale: isStale)
+            LiveLockScreenView(state: state, card: card, hostId: hostId, isStale: isStale)
         }
     }
 }

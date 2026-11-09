@@ -1,0 +1,40 @@
+ mcp__chrome_devtools_chrome_devtools_take_sna
+ pshot,
+ mcp__chrome_devtools_chrome_devtools_type_tex
+ t,
+ mcp__chrome_devtools_chrome_devtools_upload_f
+ ile,
+ mcp__chrome_devtools_chrome_devtools_wait_for
+
+───────────────────────────────────────────────
+ Update Available
+ New version 18.18.3 is available. Run: omp
+ update
+───────────────────────────────────────────────
+
+ Connected to MCP server:
+ chrome-devtools:chrome-devtools.
+
+
+ Run the shell command: ls -la (use the bash
+ tool). Then stop.
+
+
+ User's request: Execute ls -la in the bash
+ tool, then stop.
+
+╭─────────────────────────────────────────────╮
+│ $ ls -la                                    │
+╰─── elapsed 13.0s ───────────────────────────╯
+
+  ⎋ Listing directory contents
+╭─ Allow tool: bash ──────────────────────────╮
+│ Command: ls -la                             │
+│ ❯ Approve                                   │
+│   Approve bash for this session             │
+│   Deny                                      │
+├─────────────────────────────────────────────┤
+│ ↑/↓ choose · ⏎ select · ⌃⏎/⌃Q approve · ⎋ … │
+╰─────────────────────────────────────────────╯
+ ⠙ 15s > 🗑 …repro ▶──8%─────────────╎──┃──131K─
+╰─

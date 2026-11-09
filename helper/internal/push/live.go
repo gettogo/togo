@@ -301,6 +301,31 @@ func (t *LiveTracker) Next(now time.Time) (state LiveState, event string, ok boo
 	return st, event, true
 }
 
+// Shows reports whether the activity's state, as it stands, is the event
+// a push of kind would announce, so an activity update can stand in for
+// that push: an open request for needs_you, and the session sid as the
+// done, ended or failed focus with nothing else waiting or working.
+func (t *LiveTracker) Shows(kind, requestID, sid string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.lazy()
+	switch kind {
+	case wire.PushNeedsYou:
+		_, open := t.reqs[requestID]
+		return requestID != "" && open
+	case wire.PushDone, wire.StatusEnded, wire.StatusFailed:
+		if sid == "" || len(t.reqs) > 0 || len(t.working) > 0 || !t.hasLast || t.lastID != sid {
+			return false
+		}
+		status := wire.PushDone
+		if x, ok := t.exited[sid]; ok {
+			status = x
+		}
+		return status == kind
+	}
+	return false
+}
+
 // Current returns the last pushed state while an activity is believed
 // shown, for a device whose update token just arrived.
 func (t *LiveTracker) Current() (LiveState, bool) {

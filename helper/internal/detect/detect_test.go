@@ -352,3 +352,28 @@ func TestRealFixturesForEachAgent(t *testing.T) {
 		}
 	}
 }
+
+// omp 18.16 titles its approval box in the top border, with the command
+// between it and the options however long that command is; the cursor
+// moves with the arrows, so answers typed later follow it.
+func TestOmpAllowToolBox(t *testing.T) {
+	screen := fixture(t, "omp/real-allow-tool-47col")
+	p := mustDetect(t, screen)
+	moved := strings.Replace(strings.Replace(screen, "│ ❯ Approve   ", "│   Approve   ", 1),
+		"│   Approve bash for this session  ", "│ ❯ Approve bash for this session  ", 1)
+	if keys, ok := KeysFor(moved, p.Fingerprint, "Deny"); !ok || !reflect.DeepEqual(keys, []string{"Down", "Enter"}) {
+		t.Errorf("Deny with the cursor on 2: %v %v", keys, ok)
+	}
+	if keys, ok := KeysFor(moved, p.Fingerprint, "Approve"); !ok || !reflect.DeepEqual(keys, []string{"Up", "Enter"}) {
+		t.Errorf("Approve with the cursor on 2: %v %v", keys, ok)
+	}
+	long := strings.Replace(screen, "│ Command: ls -la                             │\n",
+		"│ Command: npm run typecheck && npm test &&   │\n"+strings.Repeat("│ echo one two three four five six seven      │\n", 8), 1)
+	q := mustDetect(t, long)
+	if q.Title != "Allow tool: bash" || q.Kind != KindPermission || len(q.Options) != 3 {
+		t.Errorf("long command: %q %q %+v", q.Kind, q.Title, q.Options)
+	}
+	if q.Fingerprint == p.Fingerprint {
+		t.Error("a different command kept the same fingerprint")
+	}
+}

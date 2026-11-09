@@ -73,5 +73,5 @@ func (s *Sender) releaseHeld(m Message) {
 		}
 	}
 	m.Plaintext.TS = s.now().UnixMilli()
-	s.afterDeliver(m, s.Deliver(context.Background(), m), "")
+	s.afterDeliver(m, s.send(context.Background(), m), "")
 }

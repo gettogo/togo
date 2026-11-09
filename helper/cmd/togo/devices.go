@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -98,45 +99,95 @@ func runDevices(args []string, env map[string]string, stdout, stderr io.Writer) 
 			return fail(stderr, err)
 		}
 		fmt.Fprintf(stdout, "revoked %s\n", args[1])
-		if dev.SSHKey != "" {
-			removeDeviceKey(env, dev, stdout, stderr)
-		}
+		removeDeviceKey(env, dev, stdout, stderr)
 		return exitOK
 	}
 	return usageError(stderr, errors.New("devices takes ls or revoke <deviceId>"))
 }
 
 // removeDeviceKey takes a revoked device's key out of
-// ~/.ssh/authorized_keys. The device is already unpaired, so a file it
-// cannot edit is reported and left for the user rather than failing.
+// ~/.ssh/authorized_keys: the lines holding exactly the key it sent at
+// pairing under a Togo comment. The device is already unpaired, so a key
+// that cannot be removed is reported for the user to remove by hand rather
+// than failing.
 func removeDeviceKey(env map[string]string, dev push.Device, stdout, stderr io.Writer) {
 	path, err := authorizedKeysPath(env)
-	if err == nil {
-		var n int
-		n, err = authkeys.Remove(path, dev.SSHKey)
-		if err == nil && n > 0 {
-			fmt.Fprintln(stdout, "Removed this device's key from ~/.ssh/authorized_keys.")
-			return
-		}
-		if err == nil {
-			fmt.Fprintln(stdout, "No key for this device was found in ~/.ssh/authorized_keys.")
-			return
-		}
+	if err != nil {
+		fmt.Fprintf(stderr, "togo: could not remove this device's key from ~/.ssh/authorized_keys: %v\n", err)
+		return
+	}
+	if dev.SSHKey == "" {
+		reportUnknownKey(path, stdout)
+		return
+	}
+	n, err := authkeys.Remove(path, dev.SSHKey)
+	switch {
+	case err == nil && n > 0:
+		fmt.Fprintf(stdout, "Removed this device's key from ~/.ssh/authorized_keys (previous copy in ~/.ssh/authorized_keys%s).\n", authkeys.BackupSuffix)
+		return
+	case err == nil:
+		reportKeyNotFound(path, dev.SSHKey, stdout)
+		return
 	}
 	var c *authkeys.Conflict
 	if !errors.As(err, &c) {
 		fmt.Fprintf(stderr, "togo: could not remove this device's key from ~/.ssh/authorized_keys: %v\n", err)
 		return
 	}
-	byHand := "; remove the line containing " + keyHint(dev.SSHKey) + " (comment starts with " + authkeys.CommentPrefix + ") by hand."
+	byHand := "; remove the line containing " + keyHint(dev.SSHKey) + " by hand."
 	switch c.Reason {
 	case authkeys.ReasonSymlink:
-		fmt.Fprintln(stdout, "~/.ssh/authorized_keys is a link"+byHand)
+		fmt.Fprintln(stdout, "~/.ssh/authorized_keys is a link, so this device's key was not removed"+byHand)
 	case authkeys.ReasonNotRegular:
-		fmt.Fprintln(stdout, "~/.ssh/authorized_keys is not a regular file"+byHand)
+		fmt.Fprintln(stdout, "~/.ssh/authorized_keys is not a regular file, so this device's key was not removed"+byHand)
 	default:
 		fmt.Fprintln(stdout, "~/.ssh/authorized_keys does not exist, so there was no key to remove.")
 	}
+}
+
+// reportKeyNotFound explains why no line was removed: the key is absent,
+// or present only under a comment Togo did not write, which is left alone.
+func reportKeyNotFound(path, key string, stdout io.Writer) {
+	lines, _ := authkeys.Lines(path)
+	var foreign int
+	for _, l := range lines {
+		if l.Key() == key {
+			foreign++
+		}
+	}
+	if foreign == 0 {
+		fmt.Fprintln(stdout, "No key for this device was found in ~/.ssh/authorized_keys.")
+		return
+	}
+	fmt.Fprintf(stdout, "This device's key (%s) is in ~/.ssh/authorized_keys under a comment Togo did not write, "+
+		"so it was left in place; remove it by hand if this device should lose SSH access.\n", keyHint(key))
+}
+
+// reportUnknownKey covers a device that paired without sending its key:
+// which line is its own cannot be told apart from another device's, so
+// nothing is removed and the Togo lines are listed for the user.
+func reportUnknownKey(path string, stdout io.Writer) {
+	lines, err := authkeys.Lines(path)
+	if err != nil {
+		return
+	}
+	var togo []authkeys.Line
+	for _, l := range lines {
+		// A line that is not a well-formed key is never printed: its
+		// bytes come from the file, not from Togo.
+		if _, _, err := authkeys.ParseKey(l.Key()); err == nil && authkeys.IsTogoComment(l.Comment) {
+			togo = append(togo, l)
+		}
+	}
+	if len(togo) == 0 {
+		return
+	}
+	fmt.Fprintln(stdout, "This device did not send its SSH key when it paired, so Togo cannot tell which line in "+
+		"~/.ssh/authorized_keys is its own and removed none. Togo key lines there:")
+	for _, l := range togo {
+		fmt.Fprintf(stdout, "  %s %s\n", keyHint(l.Key()), strconv.Quote(l.Comment))
+	}
+	fmt.Fprintln(stdout, "Remove this device's line by hand so it loses SSH access.")
 }
 
 // authorizedKeysPath is ~/.ssh/authorized_keys under HOME from env, so

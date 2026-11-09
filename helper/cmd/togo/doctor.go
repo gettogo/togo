@@ -44,8 +44,9 @@ func osEnv() map[string]string {
 }
 
 // runDoctor prints the host readiness report, then each harness's setup
-// state. It exits 1 only when tmux is missing or too old, since Togo
-// cannot work without it; every other finding is advice.
+// state. It exits 1 when a required check fails (doctor.Failed: tmux
+// missing or too old), wherever that check sits in the report; every other
+// finding is advice.
 func runDoctor(args []string, e doctor.Env, out io.Writer) int {
 	fs := newFlagSet("doctor")
 	asJSON := fs.Bool("json", false, "print the report as JSON")
@@ -79,7 +80,7 @@ func runDoctor(args []string, e doctor.Env, out io.Writer) int {
 		}
 		printIntegrations(out, integrations)
 	}
-	if len(checks) > 0 && checks[0].Name == "tmux" && (checks[0].Status == doctor.StatusMissing || checks[0].Status == doctor.StatusWarn && checks[0].Version != "") {
+	if doctor.AnyFailed(checks) {
 		return exitError
 	}
 	return exitOK

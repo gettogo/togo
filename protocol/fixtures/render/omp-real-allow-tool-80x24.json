@@ -1,0 +1,42 @@
+{
+  "name": "omp/real-allow-tool-80x24",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "omp",
+    "title": "Allow tool: bash",
+    "body": "ls -la",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "ls -la"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Approve",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Approve bash for this session",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Deny",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 OMP",
+    "subtitle": "Allow tool: bash",
+    "body": "ls -la",
+    "category": "togo.request"
+  }
+}

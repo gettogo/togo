@@ -19,6 +19,8 @@ type deviceLive struct {
 	lastAt   time.Time
 	last     LiveState
 	pending  *LiveState // an update held back by liveCoalesce
+	alert    bool       // the next update carries an alert, standing in for a push
+	alerted  bool       // an update with an alert went out this pump
 }
 
 // observe feeds the tracker. Muted sessions, and every session while the
@@ -75,19 +77,29 @@ func (s *Sender) observe(ev wire.Event, sid string, info SessionInfo, now time.T
 // update and end through the update token to a device with one. Held-back
 // updates go out once their window has passed.
 func (s *Sender) pumpLive(ctx context.Context) {
+	s.pumpLiveAlert(ctx, false)
+}
+
+// pumpLiveAlert is pumpLive for a push the activity shows (alert): each
+// device with a running activity gets the update at once with an alert,
+// the current state again if nothing changed, in place of the push.
+// alerted holds those devices; started holds devices sent a start, whose
+// own alert stands in for the push until the activity is confirmed.
+func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted, started map[string]bool) {
 	s.liveMu.Lock()
 	defer s.liveMu.Unlock()
 	now := s.now()
 	st, ev, ok := s.Live.Next(now)
 	gen := s.Devices.Gen()
-	if !ok && !s.anyPendingLocked() && gen == s.liveGen {
-		return
+	if !ok && !alert && !s.anyPendingLocked() && gen == s.liveGen {
+		return nil, nil
 	}
 	list, err := s.Devices.List()
 	if err != nil {
 		s.logf("push: %v", err)
-		return
+		return nil, nil
 	}
+	alerted, started = map[string]bool{}, map[string]bool{}
 	s.liveGen = gen
 	seen := map[string]bool{}
 	hostID := ""
@@ -116,6 +128,8 @@ func (s *Sender) pumpLive(ctx context.Context) {
 		if d.LiveActivityToken == "" {
 			dl.token, dl.pending = "", nil
 		}
+		dl.alert, dl.alerted = alert && dl.token != "", false
+		wasStarted := dl.started
 		handled := false
 		if ok {
 			handled = s.liveEvent(ctx, d, dl, st, ev, host, now)
@@ -125,15 +139,29 @@ func (s *Sender) pumpLive(ctx context.Context) {
 				s.queueUpdate(ctx, d, dl, cur, now)
 			}
 		}
+		if dl.alert && dl.token != "" {
+			// Nothing changed for this device: the current state again, with the alert.
+			if cur, shown := s.Live.Current(); shown {
+				s.sendLive(ctx, d, dl, liveUpdate, cur, nil, now)
+			}
+		}
 		if dl.pending != nil && dl.token != "" && now.Sub(dl.lastAt) >= holdFor(dl.last, *dl.pending) {
 			s.sendLive(ctx, d, dl, liveUpdate, *dl.pending, nil, now)
 		}
+		if dl.alerted {
+			alerted[d.DeviceID] = true
+		}
+		if alert && dl.started && !wasStarted {
+			started[d.DeviceID] = true
+		}
+		dl.alert, dl.alerted = false, false
 	}
 	for id := range s.liveDev {
 		if !seen[id] {
 			delete(s.liveDev, id)
 		}
 	}
+	return alerted, started
 }
 
 // liveEvent applies one tracker event to one device and reports whether
@@ -175,7 +203,7 @@ func (s *Sender) liveEvent(ctx context.Context, d Device, dl *deviceLive, st Liv
 // The pending state is kept unmasked; sendLive masks it for the device as
 // it is when the update goes out.
 func (s *Sender) queueUpdate(ctx context.Context, d Device, dl *deviceLive, st LiveState, now time.Time) {
-	if dl.lastAt.IsZero() || now.Sub(dl.lastAt) >= holdFor(dl.last, st) ||
+	if dl.alert || dl.lastAt.IsZero() || now.Sub(dl.lastAt) >= holdFor(dl.last, st) ||
 		(st.Status == wire.LevelNeedsYou || dl.last.Status == wire.LevelNeedsYou) && !onlyStep(dl.last, st) {
 		s.sendLive(ctx, d, dl, liveUpdate, st, nil, now)
 		return
@@ -203,8 +231,9 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 	stale := now.Unix() + liveStale
 	cs := mask(st, d)
 	cs.Ctx = s.sealContext(d, st.context)
+	alert := dl.alert && ev == liveUpdate
 	la := &liveActivity{Event: ev, ContentState: cs, Attributes: attrs, StaleDate: &stale,
-		Urgent: ev == liveUpdate && st.Waiting < dl.last.Waiting}
+		Urgent: ev == liveUpdate && st.Waiting < dl.last.Waiting, Alert: alert}
 	if ev == liveEnd {
 		dismiss := now.Unix() + liveDismiss
 		la.DismissalDate = &dismiss
@@ -212,6 +241,9 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 	dl.lastAt, dl.last, dl.pending = now, st, nil
 	body := relayPush{Token: token, Env: d.Env, Kind: relayLiveActivity, LiveActivity: la}
 	err := s.post(ctx, d, body)
+	if alert {
+		dl.alert, dl.alerted = false, err == nil
+	}
 	if err == nil {
 		return nil
 	}

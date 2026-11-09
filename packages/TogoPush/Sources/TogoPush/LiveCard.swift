@@ -14,10 +14,10 @@ public enum LiveAgentMark: Equatable, Sendable {
         "claude": "agent.claude", "opencode": "agent.opencode", "copilot": "agent.copilot",
         "cursor": "agent.cursor", "cline": "agent.cline", "vibe": "agent.mistral", "omp": "agent.omp",
         "amp": "agent.amp", "goose": "agent.goose", "kilo": "agent.kilo", "kimi": "agent.kimi",
-        "openhands": "agent.openhands", "pi": "agent.pi",
+        "openhands": "agent.openhands", "pi": "agent.pi", "codex": "agent.codex",
     ]
     private static let monograms = [
-        "codex": "Cx", "aider": "Ad", "auggie": "Au", "crush": "Cr", "droid": "Dr", "kiro": "Kr",
+        "aider": "Ad", "auggie": "Au", "crush": "Cr", "droid": "Dr", "kiro": "Kr",
     ]
 
     public static func of(_ agent: String) -> LiveAgentMark {

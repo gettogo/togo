@@ -1,7 +1,8 @@
 // Package authkeys takes a paired phone's SSH key off this machine. It
 // only ever removes lines, and only lines Togo installed: those whose key
-// equals the phone's and whose comment starts with "togo@". A user who
-// imported their own key into the app keeps every other use of it.
+// equals the phone's and whose comment is a Togo comment, "togo@host" from
+// earlier builds or "togo-<model>-<fingerprint>" from current ones. A user
+// who imported their own key into the app keeps every other use of it.
 package authkeys
 
 import (
@@ -28,8 +29,23 @@ const (
 	ReasonNotRegular = "not_regular"
 )
 
-// CommentPrefix starts the comment of every key line Togo installs.
+// CommentPrefix starts the comment of key lines from earlier builds of
+// the app, such as "togo@Sams-iPhone".
 const CommentPrefix = "togo@"
+
+// DeviceCommentPrefix starts the comment current builds give a device
+// key, such as "togo-iPhone-1a2b3c4d".
+const DeviceCommentPrefix = "togo-"
+
+// BackupSuffix names the copy of authorized_keys Remove keeps, beside it,
+// from just before its last edit. sshd does not read it.
+const BackupSuffix = ".togo-backup"
+
+// IsTogoComment reports whether comment is one Togo gives the keys it
+// makes.
+func IsTogoComment(comment string) bool {
+	return strings.HasPrefix(comment, CommentPrefix) || strings.HasPrefix(comment, DeviceCommentPrefix)
+}
 
 // maxFile bounds how much of authorized_keys is read. sshd itself reads
 // far less in practice; a larger file is refused rather than truncated.
@@ -90,28 +106,18 @@ func DefaultPath() (string, error) {
 }
 
 // Remove deletes from the authorized_keys file at path every line whose
-// key is publicKey and whose comment starts with "togo@", and returns how
-// many it removed. Every other byte stays as it was, including CRLF line
-// ends and a missing final newline. The file is replaced through a temp
-// file in the same directory, synced and renamed, with its mode kept; when
-// nothing matches it is not written at all.
+// key is publicKey and whose comment is a Togo comment (IsTogoComment), and
+// returns how many it removed. Every other byte stays as it was, including
+// CRLF line ends and a missing final newline. Before the edit the file is
+// copied to path+BackupSuffix; then it is replaced through a temp file in
+// the same directory, synced and renamed. Both keep the file's mode. When
+// nothing matches nothing is written at all.
 func Remove(path, publicKey string) (int, error) {
 	keyType, blob, err := ParseKey(publicKey)
 	if err != nil {
 		return 0, err
 	}
-	fi, err := os.Lstat(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return 0, &Conflict{Reason: ReasonMissing}
-	case err != nil:
-		return 0, fmt.Errorf("authkeys: %w", err)
-	case fi.Mode()&os.ModeSymlink != 0:
-		return 0, &Conflict{Reason: ReasonSymlink}
-	case !fi.Mode().IsRegular():
-		return 0, &Conflict{Reason: ReasonNotRegular}
-	}
-	data, err := readNoFollow(path, fi)
+	fi, data, err := load(path)
 	if err != nil {
 		return 0, err
 	}
@@ -119,10 +125,58 @@ func Remove(path, publicKey string) (int, error) {
 	if removed == 0 {
 		return 0, nil
 	}
+	if err := replace(path+BackupSuffix, data, fi.Mode().Perm()); err != nil {
+		return 0, err
+	}
 	if err := replace(path, kept, fi.Mode().Perm()); err != nil {
 		return 0, err
 	}
 	return removed, nil
+}
+
+// Line is one key line of authorized_keys, without its options.
+type Line struct {
+	Type, Blob, Comment string
+}
+
+// Key returns the line's key as "type blob".
+func (l Line) Key() string { return l.Type + " " + l.Blob }
+
+// Lines returns the key lines of the authorized_keys file at path, for a
+// caller that explains why Remove found nothing. It writes nothing and
+// refuses the same files Remove does.
+func Lines(path string) ([]Line, error) {
+	_, data, err := load(path)
+	if err != nil {
+		return nil, err
+	}
+	var out []Line
+	for _, raw := range strings.Split(string(data), "\n") {
+		if l, ok := parseLine(strings.TrimSuffix(raw, "\r")); ok {
+			out = append(out, l)
+		}
+	}
+	return out, nil
+}
+
+// load reads the regular file at path without following a link.
+func load(path string) (os.FileInfo, []byte, error) {
+	fi, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil, nil, &Conflict{Reason: ReasonMissing}
+	case err != nil:
+		return nil, nil, fmt.Errorf("authkeys: %w", err)
+	case fi.Mode()&os.ModeSymlink != 0:
+		return nil, nil, &Conflict{Reason: ReasonSymlink}
+	case !fi.Mode().IsRegular():
+		return nil, nil, &Conflict{Reason: ReasonNotRegular}
+	}
+	data, err := readNoFollow(path, fi)
+	if err != nil {
+		return nil, nil, err
+	}
+	return fi, data, nil
 }
 
 // readNoFollow opens path without following a link and checks it is still
@@ -183,25 +237,40 @@ func filter(data []byte, keyType, blob string) ([]byte, int) {
 }
 
 // matches reports whether one authorized_keys line, without its line end,
-// holds keyType and blob with a comment starting "togo@". The line is
-// "[options] type blob [comment]", where options run to the first space or
-// tab outside double quotes.
+// holds exactly keyType and blob with a Togo comment.
 func matches(line, keyType, blob string) bool {
+	l, ok := parseLine(line)
+	return ok && l.Type == keyType && l.Blob == blob && IsTogoComment(l.Comment)
+}
+
+// keyTypes are the key types a line can hold, so the first field of a line
+// is known to be options when it is none of them.
+var keyTypes = map[string]bool{
+	"ssh-ed25519": true, "ssh-rsa": true, "ssh-dss": true,
+	"ecdsa-sha2-nistp256": true, "ecdsa-sha2-nistp384": true, "ecdsa-sha2-nistp521": true,
+	"sk-ssh-ed25519@openssh.com": true, "sk-ecdsa-sha2-nistp256@openssh.com": true,
+}
+
+// parseLine splits one authorized_keys line, without its line end, into
+// its key and comment. The line is "[options] type blob [comment]", where
+// options run to the first space or tab outside double quotes. Blank
+// lines, comments and lines of no known key type are not key lines.
+func parseLine(line string) (Line, bool) {
 	s := strings.TrimLeft(line, " \t")
 	if s == "" || s[0] == '#' {
-		return false
+		return Line{}, false
 	}
 	t, rest := field(s)
-	if t != keyType {
-		// Not the key type, so the first field is options.
+	if !keyTypes[t] {
+		// Not a key type, so the first field is options.
 		_, rest = optionsField(s)
 		t, rest = field(rest)
-		if t != keyType {
-			return false
+		if !keyTypes[t] {
+			return Line{}, false
 		}
 	}
 	b, comment := field(rest)
-	return b == blob && strings.HasPrefix(comment, CommentPrefix)
+	return Line{Type: t, Blob: b, Comment: strings.TrimRight(comment, " \t")}, true
 }
 
 // field returns the text up to the next space or tab and what follows the

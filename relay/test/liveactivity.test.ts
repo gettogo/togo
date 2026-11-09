@@ -64,7 +64,7 @@ describe("live activity start", () => {
     expect(aps.event).toBe("start");
     expect(aps["attributes-type"]).toBe("TogoActivityAttributes");
     expect(aps.attributes).toEqual({ hostId: HOST });
-    expect(aps.alert).toEqual({ title: "Togo", body: "Needs you" });
+    expect(aps.alert).toEqual({ title: "Togo", body: "Needs you", sound: "default" });
     expect(aps["content-state"]).toEqual(state);
     expect(typeof aps.timestamp).toBe("number");
   });
@@ -75,6 +75,15 @@ describe("live activity start", () => {
     const aps = (calls[0].body as { aps: Record<string, unknown> }).aps;
     expect(aps.alert).toBeUndefined();
     expect(aps["attributes-type"]).toBeUndefined();
+  });
+
+  it("update with alert lights the screen with a fixed word for its status", async () => {
+    const { calls } = mockApns();
+    await push(live({ event: "update", contentState: state, alert: true }));
+    const aps = (calls[0].body as { aps: Record<string, unknown> }).aps;
+    expect(aps.alert).toEqual({ title: "Togo", body: "Needs you", sound: "default" });
+    await expectField(live({ event: "end", contentState: state, alert: true }), "liveActivity.alert");
+    await expectField(live({ event: "update", contentState: state, alert: "yes" }), "liveActivity.alert");
   });
 });
 

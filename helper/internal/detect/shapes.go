@@ -169,18 +169,20 @@ func matchMenu(lines []string, boxed []bool) (Prompt, bool) {
 			return Prompt{}, false
 		}
 	}
-	h, ok := findHeader(lines, m.start)
-	if !ok {
-		return Prompt{}, false
+	h, title, titled := borderTitle(lines, boxed, m.start)
+	if !titled {
+		if h, ok = findHeader(lines, m.start); !ok {
+			return Prompt{}, false
+		}
+		title = strings.TrimSpace(lines[h])
 	}
-	if leadQuestion(strings.TrimSpace(lines[h])) != "" && !m.arrows {
+	if leadQuestion(title) != "" && !m.arrows {
 		// Only Codex 0.167's start-up dialogs are read this way: their
 		// keys are known (the arrows). Codex 0.144's trust question is
 		// left to the terminal, as before.
 		return Prompt{}, false
 	}
-	title := strings.TrimSpace(lines[h])
-	if h > 0 && wrappedHeader(lines[h-1], title) {
+	if !titled && h > 0 && wrappedHeader(lines[h-1], title) {
 		// A narrow pane wrapped the question: "Do you trust the contents
 		// of this" / "directory?" (Cursor Agent at 47 columns).
 		title = strings.TrimSpace(lines[h-1]) + " " + title
@@ -505,13 +507,43 @@ func findHeader(lines []string, start int) (int, bool) {
 			gap++
 			continue
 		}
-		if strings.HasSuffix(t, "?") || strings.Contains(t, "? (") || headerRe.MatchString(t) || signInQuestion(t) ||
-			leadQuestion(t) != "" || titleRe.MatchString(t) {
+		if isHeader(t) {
 			return i, true
 		}
 		gap++
 	}
 	return 0, false
+}
+
+// isHeader reports a line that reads as a dialog's question or title.
+func isHeader(t string) bool {
+	return strings.HasSuffix(t, "?") || strings.Contains(t, "? (") || headerRe.MatchString(t) || signInQuestion(t) ||
+		leadQuestion(t) != "" || titleRe.MatchString(t)
+}
+
+// titledTop is a dialog's top border with its title set in it: omp 18.16's
+// "╭─ Allow tool: bash ─────╮".
+var titledTop = regexp.MustCompile(`^\s*[╭┌┏╔][─━═]+\s+(\S.*?)\s+[─━═]+[╮┐┓╗]$`)
+
+// borderTitle finds the title in the top border of the box a menu sits
+// in, however much the box holds above the options (omp's command, wrapped
+// over several lines at a phone's width). It returns the border's index
+// and the title when the menu is boxed and that title reads as a header.
+func borderTitle(lines []string, boxed []bool, start int) (int, string, bool) {
+	if start >= len(lines) || !boxed[start] {
+		return 0, "", false
+	}
+	for i := start - 1; i >= 0; i-- {
+		if boxed[i] {
+			continue
+		}
+		g := titledTop.FindStringSubmatch(lines[i])
+		if g == nil || !isHeader(g[1]) {
+			return 0, "", false
+		}
+		return i, g[1], true
+	}
+	return 0, "", false
 }
 
 // detail is what the prompt is about: the lines between the question and

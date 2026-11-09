@@ -45,6 +45,7 @@ export interface LiveActivity {
   staleDate?: number;
   dismissalDate?: number;
   urgent?: boolean;
+  alert?: boolean;
 }
 
 export function parseLiveActivity(raw: unknown): LiveActivity {
@@ -106,6 +107,11 @@ export function parseLiveActivity(raw: unknown): LiveActivity {
     if (typeof raw.urgent !== "boolean") throw new FieldError("liveActivity.urgent");
     la.urgent = raw.urgent;
   }
+  if (raw.alert !== undefined) {
+    // An update that stands in for an alert push: it lights the screen and sounds.
+    if (typeof raw.alert !== "boolean" || event !== "update") throw new FieldError("liveActivity.alert");
+    la.alert = raw.alert;
+  }
   if (raw.staleDate !== undefined) la.staleDate = unixSeconds(raw.staleDate, "staleDate");
   if (raw.dismissalDate !== undefined) {
     if (event !== "end") throw new FieldError("liveActivity.dismissalDate");
@@ -128,6 +134,15 @@ export function liveActivityPriority(la: LiveActivity): "5" | "10" {
   return URGENT_STATUSES.includes(la.contentState.status) ? "10" : "5";
 }
 
+const ALERT_WORDS: Record<ContentState["status"], string> = {
+  needs_you: "Needs you",
+  working: "Working",
+  done: "Done",
+  ended: "Ended",
+  failed: "Failed",
+  offline: "Offline",
+};
+
 export function liveActivityPayload(la: LiveActivity, nowSeconds: number): unknown {
   const aps: Record<string, unknown> = {
     timestamp: nowSeconds,
@@ -137,7 +152,11 @@ export function liveActivityPayload(la: LiveActivity, nowSeconds: number): unkno
   if (la.event === "start") {
     aps["attributes-type"] = ATTRIBUTES_TYPE;
     aps.attributes = la.attributes;
-    aps.alert = { title: "Togo", body: "Needs you" };
+    aps.alert = { title: "Togo", body: "Needs you", sound: "default" };
+  }
+  if (la.event === "update" && la.alert) {
+    // Fixed words from the plain status only: nothing sealed reaches the alert.
+    aps.alert = { title: "Togo", body: ALERT_WORDS[la.contentState.status], sound: "default" };
   }
   if (la.staleDate !== undefined) aps["stale-date"] = la.staleDate;
   if (la.dismissalDate !== undefined) aps["dismissal-date"] = la.dismissalDate;

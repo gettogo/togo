@@ -30,11 +30,14 @@ struct LiveStatusText: View {
 /// The Live Activity on the lock screen and in the notification list. At a glance: which
 /// session (the agent's mark and the session's title), the state, how long, how many wait,
 /// and what the focused request is about, as a question and its command, file or URL. While
-/// the agent works it shows the step it is on. The whole card opens the session.
+/// the agent works it shows the step it is on. The whole card opens the session. While the
+/// activity runs it stands in for the request's notification, so a request that one tap may
+/// answer gets Deny and Approve here too, with the same unlock rule as the notification's.
 struct LiveLockScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let state: TogoActivityAttributes.ContentState
     let card: LiveCard
+    var hostId = ""
     var isStale = false
 
     private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
@@ -61,6 +64,10 @@ struct LiveLockScreenView: View {
                     LiveDetailBlock(detail: detail)
                         // motion: state change — the system crossfades between entries in place; nothing moves.
                         .transition(.opacity)
+                }
+                if !hostId.isEmpty, !isStale, state.requestId != nil, card.answer != nil {
+                    LiveAnswerButtons(state: state, card: card, hostId: hostId, link: nil)
+                        .padding(.top, 2)
                 }
             }
         }

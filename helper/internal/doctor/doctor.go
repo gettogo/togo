@@ -35,6 +35,24 @@ const (
 	StatusNote    Status = "note"
 )
 
+// Failed reports whether c is a required check that failed: Togo cannot
+// work without tmux 3.2 or newer. Every other finding is advice. A tmux
+// whose version could not be read is a warning, not a failure.
+func Failed(c Check) bool {
+	return c.Name == "tmux" && (c.Status == StatusMissing || c.Status == StatusWarn && c.Version != "")
+}
+
+// AnyFailed reports whether any check in checks is a required one that
+// failed, wherever it sits in the report.
+func AnyFailed(checks []Check) bool {
+	for _, c := range checks {
+		if Failed(c) {
+			return true
+		}
+	}
+	return false
+}
+
 // Check is one line of the report.
 type Check struct {
 	Name    string `json:"name"`

@@ -48,6 +48,14 @@ struct HarnessContractCodingTests {
         #expect(old.requestId == nil)
     }
 
+    @Test func questionWithNullOptionsDecodesAsNone() throws {
+        let json = #"{"id":"0","prompt":"Kimi is waiting for you","options":null,"multi":false,"allowText":false}"#
+        let q = try JSONDecoder().decode(HarnessQuestion.self, from: Data(json.utf8))
+        #expect(q.options.isEmpty)
+        let missing = #"{"id":"0","prompt":"p","multi":true,"allowText":true}"#
+        #expect(try JSONDecoder().decode(HarnessQuestion.self, from: Data(missing.utf8)).multi)
+    }
+
     @Test func commandKinds() throws {
         let items = try Self.result(HarnessCompleteResult.self, "harness.complete-command-kinds.json").items
         #expect(items.map(\.kind) == [.choice, .picker, .run, .run, .run, .terminal])

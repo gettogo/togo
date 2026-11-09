@@ -49,5 +49,5 @@ func (s *Sender) deliverReminder(ctx context.Context, m Message) {
 			return
 		}
 	}
-	s.Deliver(ctx, m)
+	s.send(ctx, m)
 }

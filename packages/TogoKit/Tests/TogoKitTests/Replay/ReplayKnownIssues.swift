@@ -26,6 +26,9 @@ enum ReplayKnownIssues {
         ],
         "claude.demo": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "omp.turn": ["invariants": ["[working-after-turn-end": turnEndLag]],
+        // Straight, Cline's turn ends 4.9 s before the hub's idle, inside the 5 s grace; with its last
+        // tool frame swapped behind the turn's end the same lag reads 7 s.
+        "cline.task": ["swap": ["[swap-working-after-turn-end": turnEndLag]],
         "opencode.interrupt": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "opencode.turn": ["invariants": [
             "[no-reply": "OpenCode ran a turn (working true, then false, a \"done\" notify with an empty body) but neither a reply nor an error notice reached the chat: the user sees the prompt and nothing else.",

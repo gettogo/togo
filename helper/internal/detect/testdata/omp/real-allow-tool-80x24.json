@@ -1,0 +1,42 @@
+{
+  "source": "real",
+  "agentVersion": "18.16.0",
+  "match": true,
+  "kind": "permission",
+  "title": "Allow tool: bash",
+  "subject": {
+    "kind": "command",
+    "text": "ls -la"
+  },
+  "options": [
+    {
+      "n": 1,
+      "label": "Approve",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Approve bash for this session",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Deny",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  }
+}

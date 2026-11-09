@@ -91,6 +91,18 @@ public struct HarnessQuestion: Codable, Hashable, Sendable, Identifiable {
         self.multi = multi
         self.allowText = allowText
     }
+
+    /// A missing or null `options` reads as none, so an older helper's question without
+    /// options still decodes instead of failing its whole frame.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        header = try c.decodeIfPresent(String.self, forKey: .header)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        options = try c.decodeIfPresent([HarnessChoice].self, forKey: .options) ?? []
+        multi = try c.decode(Bool.self, forKey: .multi)
+        allowText = try c.decode(Bool.self, forKey: .allowText)
+    }
 }
 
 public struct HarnessFileChange: Codable, Hashable, Sendable {

@@ -179,8 +179,15 @@ func TestRemoveKeepsMode(t *testing.T) {
 			t.Errorf("mode %v, want %v", fi.Mode(), mode)
 		}
 		entries, _ := os.ReadDir(filepath.Dir(path))
-		if len(entries) != 1 {
-			t.Errorf("temp file left behind: %d entries", len(entries))
+		if len(entries) != 2 {
+			t.Errorf("want authorized_keys and its backup, got %d entries", len(entries))
+		}
+		bfi, err := os.Lstat(path + BackupSuffix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bfi.Mode() != mode {
+			t.Errorf("backup mode %v, want %v", bfi.Mode(), mode)
 		}
 	}
 }
@@ -230,5 +237,63 @@ func TestDefaultPathWithoutHome(t *testing.T) {
 	}
 	if !filepath.IsAbs(path) || filepath.Base(path) != "authorized_keys" || filepath.Base(filepath.Dir(path)) != ".ssh" {
 		t.Errorf("DefaultPath = %q", path)
+	}
+}
+
+// An exact key match removes only that line: the same key under a foreign
+// comment, other Togo keys, comments and blank lines all stay.
+func TestRemoveExactKeyOnly(t *testing.T) {
+	// thirdKey is another phone's Togo key, sharing the phone key's type.
+	const thirdKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMz"
+	keep := "# my keys\n" +
+		otherKey + " me@laptop\n" +
+		"\n" +
+		thirdKey + " togo-iPhone-9f8e7d6c\n" +
+		phoneKey + " me@phone-import\n" +
+		phoneKey[:len(phoneKey)-1] + "A togo-iPhone-1a2b3c4d\n"
+	content := keep[:len("# my keys\n")] + phoneKey + " togo-iPhone-1a2b3c4d\n" + keep[len("# my keys\n"):]
+	path := writeKeys(t, content, 0o600)
+	n, err := Remove(path, phoneKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("removed %d, want 1", n)
+	}
+	if got := readKeys(t, path); got != keep {
+		t.Errorf("file after remove:\n%q\nwant\n%q", got, keep)
+	}
+	if got := readKeys(t, path+BackupSuffix); got != content {
+		t.Errorf("backup %q, want the file as it was %q", got, content)
+	}
+}
+
+// Current builds of the app name a device key "togo-<model>-<fingerprint>";
+// earlier ones "togo@host". Both are Togo's.
+func TestRemoveDeviceCommentFormats(t *testing.T) {
+	for _, comment := range []string{"togo-iPhone-1a2b3c4d", "togo-iPad", "togo-device-ab12cd34", "togo@Sams-iPhone"} {
+		path := writeKeys(t, otherKey+" me@laptop\n"+phoneKey+" "+comment+"\n", 0o600)
+		n, err := Remove(path, phoneKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 1 {
+			t.Errorf("%s: removed %d, want 1", comment, n)
+		}
+		if got, want := readKeys(t, path), otherKey+" me@laptop\n"; got != want {
+			t.Errorf("%s: file after remove %q, want %q", comment, got, want)
+		}
+	}
+}
+
+func TestLines(t *testing.T) {
+	path := writeKeys(t, "# c\n\n"+`restrict,command="a b" `+phoneKey+" togo-iPhone-1a2b3c4d\r\n"+otherKey+"\n", 0o600)
+	got, err := Lines(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Key() != phoneKey || got[0].Comment != "togo-iPhone-1a2b3c4d" ||
+		got[1].Key() != otherKey || got[1].Comment != "" {
+		t.Errorf("Lines = %+v", got)
 	}
 }

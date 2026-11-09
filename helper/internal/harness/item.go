@@ -219,6 +219,17 @@ type Question struct {
 	AllowText bool     `json:"allowText"`
 }
 
+// MarshalJSON sends a question without options as an empty list, never
+// null: the schema requires an array, and the app refuses the whole frame
+// otherwise (Kimi's fallback "Kimi is waiting for you" has none).
+func (q Question) MarshalJSON() ([]byte, error) {
+	type plain Question
+	if q.Options == nil {
+		q.Options = []Choice{}
+	}
+	return json.Marshal(plain(q))
+}
+
 // PlanBody is a light marker that the plan changed; the full plan lives in
 // mission control.
 type PlanBody struct {

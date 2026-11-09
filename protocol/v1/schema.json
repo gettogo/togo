@@ -557,7 +557,7 @@
       "pattern": "^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa) [A-Za-z0-9+/]+={0,2}$"
     },
     "AuthkeysRemoveParams": {
-      "description": "authkeys.remove (authkeys.v1) -> AuthkeysRemoveResult. Removes from ~/.ssh/authorized_keys the lines whose key blob equals publicKey and whose comment starts with togo@; every other byte and the file mode stay. A malformed key: -32602 reason key. authorized_keys a symlink, missing or not a regular file: -32006 reason symlink, missing or not_regular, and nothing is written.",
+      "description": "authkeys.remove (authkeys.v1) -> AuthkeysRemoveResult. Removes from ~/.ssh/authorized_keys the lines whose key equals publicKey and whose comment starts with togo@ or togo- (the device-key comment formats); every other byte and the file mode stay, and the file as it was is copied to authorized_keys.togo-backup first. A malformed key: -32602 reason key. authorized_keys a symlink, missing or not a regular file: -32006 reason symlink, missing or not_regular, and nothing is written.",
       "type": "object",
       "properties": { "publicKey": { "$ref": "#/$defs/SSHPublicKey" } },
       "required": ["publicKey"],

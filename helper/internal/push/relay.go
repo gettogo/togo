@@ -38,6 +38,9 @@ type liveActivity struct {
 	// 5 (routine progress): the one that clears an answered request, so
 	// the lock screen stops asking at once.
 	Urgent bool `json:"urgent,omitempty"`
+	// Alert asks the relay to light the screen and sound for an update
+	// that stands in for an alert push. The relay words it from the status.
+	Alert bool `json:"alert,omitempty"`
 }
 
 // liveAttributes identify the activity a push-to-start creates.

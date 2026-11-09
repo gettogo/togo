@@ -6,7 +6,7 @@ import TogoKit
 struct DeviceKeyLine: Codable, Equatable, Sendable {
     /// Type and base64 blob, without options or comment: all the helper is ever sent.
     var publicKey: String
-    /// The comment at the end of the line, such as `togo@Sams-iPhone`, which names the line
+    /// The comment at the end of the line, such as `togo-iPhone-1a2b3c4d`, which names the line
     /// for someone removing it by hand.
     var comment: String
 
@@ -20,9 +20,9 @@ struct DeviceKeyLine: Codable, Equatable, Sendable {
         comment = fields.dropFirst(2).joined(separator: " ")
     }
 
-    /// The helper removes only lines whose comment starts with `togo@`, the comment Togo gives
-    /// the keys it makes.
-    var helperCanRemove: Bool { comment.hasPrefix("togo@") }
+    /// The helper removes only lines whose comment is one Togo gives the keys it makes:
+    /// `togo-<model>-<fingerprint>` now, `togo@<host>` from earlier builds.
+    var helperCanRemove: Bool { comment.hasPrefix("togo-") || comment.hasPrefix("togo@") }
 
     /// The key `record` signs in with when it is this device's own key, the one Togo made;
     /// nil for a password or a key the user imported, which the helper would leave in place.

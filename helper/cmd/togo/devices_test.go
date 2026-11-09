@@ -226,7 +226,7 @@ func TestRevokeRemovesKey(t *testing.T) {
 	if got, _ := os.ReadFile(path); string(got) != other {
 		t.Errorf("authorized_keys %q, want %q", got, other)
 	}
-	if !strings.Contains(out.String(), "Removed this device's key from ~/.ssh/authorized_keys.\n") {
+	if !strings.Contains(out.String(), "Removed this device's key from ~/.ssh/authorized_keys (previous copy in ~/.ssh/authorized_keys.togo-backup).\n") {
 		t.Errorf("output %q", out.String())
 	}
 
@@ -253,8 +253,8 @@ func TestRevokeWithoutKeyStillUnpairs(t *testing.T) {
 	if got, _ := os.ReadFile(path); string(got) != line {
 		t.Errorf("authorized_keys changed: %q", got)
 	}
-	if strings.Contains(out.String(), "authorized_keys") {
-		t.Errorf("output mentions authorized_keys for a device without a key: %q", out.String())
+	if !strings.Contains(out.String(), "removed none") {
+		t.Errorf("output does not say no key was removed: %q", out.String())
 	}
 }
 
@@ -278,7 +278,7 @@ func TestRevokeConflictStillUnpairs(t *testing.T) {
 	if got, _ := os.ReadFile(targetPath); string(got) != line {
 		t.Errorf("link target changed: %q", got)
 	}
-	want := "~/.ssh/authorized_keys is a link; remove the line containing ssh-ed25519 …ERERERERERERERER (comment starts with togo@) by hand.\n"
+	want := "~/.ssh/authorized_keys is a link, so this device's key was not removed; remove the line containing ssh-ed25519 …ERERERERERERERER by hand.\n"
 	if !strings.Contains(out.String(), want) {
 		t.Errorf("output %q, want %q", out.String(), want)
 	}
@@ -296,5 +296,86 @@ func TestRevokeConflictStillUnpairs(t *testing.T) {
 	assertUnpaired(t, env)
 	if !strings.Contains(out.String(), "~/.ssh/authorized_keys does not exist") {
 		t.Errorf("output %q", out.String())
+	}
+}
+
+// The app names its device keys "togo-<model>-<fingerprint>". Revoke
+// removes the paired key's line in that format and only that line.
+func TestRevokeRemovesNewFormatKey(t *testing.T) {
+	other := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIi me@laptop\n" +
+		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMz togo-iPad-9f8e7d6c\n"
+	env, path := revokeEnv(t, revokeKey+" togo-iPhone-1a2b3c4d\n"+other)
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pairWithKey(t, env, "dev_a", "Desk iPhone", revokeKey)
+	var out, errOut bytes.Buffer
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	if got, _ := os.ReadFile(path); string(got) != other {
+		t.Errorf("authorized_keys %q, want %q", got, other)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o644 {
+		t.Errorf("mode after revoke: %v, %v", fi.Mode(), err)
+	}
+	if !strings.Contains(out.String(), "Removed this device's key from ~/.ssh/authorized_keys") {
+		t.Errorf("output %q", out.String())
+	}
+	if _, err := os.Stat(path + ".togo-backup"); err != nil {
+		t.Errorf("no backup: %v", err)
+	}
+}
+
+// A key that is not in the file, or is there only under a comment Togo did
+// not write, is reported; the file is not touched.
+func TestRevokeReportsKeyNotRemoved(t *testing.T) {
+	env, path := revokeEnv(t, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIi me@laptop\n")
+	pairWithKey(t, env, "dev_a", "Desk iPhone", revokeKey)
+	var out, errOut bytes.Buffer
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "No key for this device was found in ~/.ssh/authorized_keys.\n") {
+		t.Errorf("output %q", out.String())
+	}
+
+	line := revokeKey + " me@phone-import\n"
+	env, path = revokeEnv(t, line)
+	pairWithKey(t, env, "dev_a", "Desk iPhone", revokeKey)
+	out.Reset()
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	if got, _ := os.ReadFile(path); string(got) != line {
+		t.Errorf("authorized_keys changed: %q", got)
+	}
+	if !strings.Contains(out.String(), "under a comment Togo did not write, so it was left in place") {
+		t.Errorf("output %q", out.String())
+	}
+}
+
+// A device that paired without its key: nothing is removed, and the Togo
+// lines are listed so the user can remove its line by hand.
+func TestRevokeWithoutRecordedKeyListsTogoLines(t *testing.T) {
+	content := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIi me@laptop\n" +
+		revokeKey + " togo-iPhone-1a2b3c4d\n"
+	env, path := revokeEnv(t, content)
+	pairWithKey(t, env, "dev_a", "Desk iPhone", "")
+	var out, errOut bytes.Buffer
+	if code := run([]string{"devices", "revoke", "dev_a"}, env, &out, &errOut); code != exitOK {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	assertUnpaired(t, env)
+	if got, _ := os.ReadFile(path); string(got) != content {
+		t.Errorf("authorized_keys changed: %q", got)
+	}
+	for _, want := range []string{"did not send its SSH key", `ssh-ed25519 …ERERERERERERERER "togo-iPhone-1a2b3c4d"`, "Remove this device's line by hand"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output %q lacks %q", out.String(), want)
+		}
+	}
+	if strings.Contains(out.String(), "me@laptop") {
+		t.Errorf("output lists a line that is not Togo's: %q", out.String())
 	}
 }

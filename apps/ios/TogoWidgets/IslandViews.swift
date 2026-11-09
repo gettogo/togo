@@ -225,7 +225,23 @@ struct IslandExpandedBottom: View {
         .dynamicTypeSize(...LiveCopy.largestType)
     }
 
-    @ViewBuilder private var buttons: some View {
+    private var buttons: some View {
+        LiveAnswerButtons(state: state, card: card, hostId: hostId, link: link)
+            // The island's corners round in under the outer button ends.
+            .padding(.horizontal, 8)
+    }
+}
+
+/// Deny and Approve where a one-tap answer is allowed (the relay mailbox path), else Open when
+/// there is a link. Shared by the expanded island and the lock screen card, which replaces the
+/// notification while the activity runs.
+struct LiveAnswerButtons: View {
+    let state: TogoActivityAttributes.ContentState
+    let card: LiveCard
+    let hostId: String
+    let link: URL?
+
+    var body: some View {
         HStack(spacing: 8) {
             if let requestId = state.requestId, let answer = card.answer {
                 Button(intent: DenyRequestIntent(hostId: hostId, requestId: requestId)) {
@@ -246,10 +262,9 @@ struct IslandExpandedBottom: View {
         }
         .font(.subheadline.weight(.semibold))
         .controlSize(.small)
-        // The island's corners round in under the outer button ends.
-        .padding(.horizontal, 8)
         // trunc-ok: one-word button labels
         .lineLimit(1)
+        .environment(\.colorScheme, .dark)
     }
 
     /// Approve needs the device unlocked unless the user turned that off, as on notifications.

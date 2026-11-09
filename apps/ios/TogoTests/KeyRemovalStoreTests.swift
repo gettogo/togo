@@ -29,6 +29,21 @@ struct KeyRemovalStoreTests {
         #expect(DeviceKeyLine(line: "ssh-dss AAAA togo@x") == nil)
     }
 
+    /// Current builds name the device key `togo-<model>-<fingerprint>`; the helper removes it,
+    /// so the app sends it at pairing and on the next connection of a device paired without it.
+    @Test func deviceCommentFormatIsThisDevicesKey() {
+        for comment in ["togo-iPhone-1a2b3c4d", "togo-iPad", "togo@Sams-iPhone"] {
+            let line = "\(ForgetMachineTests.publicKey) \(comment)"
+            #expect(DeviceKeyLine(line: line)?.helperCanRemove == true, "\(comment)")
+            let key = DeviceKeyLine.of(record(.key(id: "device")), deviceKeyID: "device") { _ in line }
+            #expect(key?.publicKey == ForgetMachineTests.publicKey, "\(comment)")
+            #expect(key?.comment == comment)
+        }
+        for comment in ["", "sam@laptop", "xtogo-iPhone", "Togo-iPhone"] {
+            #expect(DeviceKeyLine(line: "\(ForgetMachineTests.publicKey) \(comment)")?.helperCanRemove == false)
+        }
+    }
+
     @Test func unreadableStoreIsKeptAside() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

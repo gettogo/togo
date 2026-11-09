@@ -35,6 +35,28 @@ func TestDoctorOldTmuxExitsOne(t *testing.T) {
 	}
 }
 
+// The ssh check runs before tmux; a missing tmux still fails doctor.
+func TestDoctorMissingTmuxExitsOneAfterSSHCheck(t *testing.T) {
+	for _, sshUp := range []bool{true, false} {
+		e := doctor.Env{
+			Path: t.TempDir(), GOOS: "linux",
+			Run:          func(context.Context, string, ...string) (string, error) { return "", nil },
+			SSHListening: func(context.Context) bool { return sshUp },
+		}
+		var buf bytes.Buffer
+		if code := runDoctor(nil, e, &buf); code != 1 {
+			t.Fatalf("ssh up %v: exit = %d, want 1; output:\n%s", sshUp, code, &buf)
+		}
+		first, _, _ := strings.Cut(buf.String(), "\n")
+		if !strings.HasPrefix(first, "ssh ") {
+			t.Errorf("first line = %q, want the ssh check first", first)
+		}
+		if !strings.Contains(buf.String(), "tmux is not installed") {
+			t.Errorf("output lacks the tmux finding:\n%s", &buf)
+		}
+	}
+}
+
 func TestDoctorGoodTmuxExitsZero(t *testing.T) {
 	var buf bytes.Buffer
 	if code := runDoctor(nil, doctorEnv(t, "tmux 3.6a"), &buf); code != 0 {

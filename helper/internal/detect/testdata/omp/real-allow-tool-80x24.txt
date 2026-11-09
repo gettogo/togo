@@ -1,0 +1,24 @@
+
+ Connected to MCP server: chrome-devtools:chrome-devtools.
+
+
+ Run the shell command: ls -la (use the bash tool). Then stop.
+
+
+ User's request: Execute ls -la in the bash tool, then stop.
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ $ ls -la                                                                     │
+╰─── elapsed 6.0s ─────────────────────────────────────────────────────────────╯
+
+  ⎋ Listing directory contents
+╭─ Allow tool: bash ───────────────────────────────────────────────────────────╮
+│ Command: ls -la                                                              │
+│ ❯ Approve                                                                    │
+│   Approve bash for this session                                              │
+│   Deny                                                                       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ choose · ⏎ select · ⌃⏎/⌃Q approve · ⎋ deny · ⌃O details · type to deny … │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ ⠧ 7s > ◑ Qwen3.8 27B (5090) > 🗑 omp-approve-repro ▶──8%─────────────╎──┃──131K─
+╰─

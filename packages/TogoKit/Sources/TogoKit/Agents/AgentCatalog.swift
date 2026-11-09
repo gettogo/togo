@@ -27,7 +27,7 @@ public enum AgentCatalog {
     public static let entries: [Entry] = [
         Entry(id: "claude", name: "Claude Code", command: "claude", mark: .logo("agent.claude")),
         Entry(id: "omp", name: "OMP", command: "omp", mark: .logo("agent.omp")),
-        Entry(id: "codex", name: "Codex", command: "codex", mark: .monogram("Cx")),
+        Entry(id: "codex", name: "Codex", command: "codex", mark: .logo("agent.codex")),
         Entry(id: "opencode", name: "OpenCode", command: "opencode", mark: .logo("agent.opencode")),
         Entry(id: "copilot", name: "Copilot CLI", command: "copilot", mark: .logo("agent.copilot")),
         Entry(id: "cursor", name: "Cursor CLI", command: "cursor-agent", mark: .logo("agent.cursor")),

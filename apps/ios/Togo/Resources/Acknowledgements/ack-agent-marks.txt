@@ -148,9 +148,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+Codex
+
+The Codex mark is the OpenAI Blossom as OpenAI publishes it on its brand page
+(https://openai.com/brand). OpenAI, Codex and the Blossom are trademarks of OpenAI.
+
 Other agents
 
-Codex, Kiro CLI, Droid, Auggie, Crush and Aider are shown by one or two letters of their
-names in SF Mono, not by their logos: their owners either ask that their logos be used only
-with permission, or publish no mark Togo can use. Codex, Kiro CLI, Droid, Auggie, Crush and
-Aider are trademarks of their respective owners.
+Kiro CLI, Droid, Auggie, Crush and Aider are shown by one or two letters of their names in
+SF Mono, not by their logos: their owners either ask that their logos be used only with
+permission, or publish no mark Togo can use. Kiro CLI, Droid, Auggie, Crush and Aider are
+trademarks of their respective owners.
