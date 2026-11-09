@@ -24,6 +24,15 @@ struct UITestLaunch {
     var replay: String?
     /// The second machine needs a password before it connects (its sign-in sheet asks for it).
     var authNeeded: Bool
+    /// The busy demo roster (`Samples.demoHosts`, `Samples.demoControlCenter`): two machines and
+    /// nine sessions across eight agents, for the website's reference captures.
+    var demoRoster: Bool
+    /// Acts as a plain iPhone with no hardware keyboard, so no shortcut hint shows. The
+    /// Simulator otherwise reports the Mac's keyboard as attached.
+    var noKeyboard: Bool
+    /// Session 01 reviews the demo API and the new session sheet lists the registry's agents
+    /// (`DemoAPIFixture`), for the website's screen captures.
+    var demoAPI: Bool
 
     static let current = UITestLaunch(arguments: ProcessInfo.processInfo.arguments)
 
@@ -41,6 +50,9 @@ struct UITestLaunch {
         }
         probes = arguments.contains("-ui-probes") || replay != nil
         authNeeded = arguments.contains("-ui-auth-needed")
+        demoRoster = arguments.contains("-ui-demo-roster")
+        noKeyboard = arguments.contains("-ui-no-keyboard")
+        demoAPI = arguments.contains("-ui-demo-api")
     }
 
     /// A defaults suite emptied on every launch, so one test's guide progress and settings
@@ -70,17 +82,20 @@ struct UITestLaunch {
     private let replay: ReplayHarnessServices?
 
     init(firstRun: Bool, oneMachine: Bool = false, oldHelper: Bool = false, authNeeded: Bool = false,
-         replay: ReplayHarnessServices? = nil) {
-        let hosts = oneMachine ? Array(Samples.hosts.prefix(1)) : Samples.hosts
+         demoRoster: Bool = false, replay: ReplayHarnessServices? = nil) {
+        // The demo roster brings its own two machines; `oneMachine` narrows the usual samples.
+        let hosts = demoRoster ? Samples.demoHosts : oneMachine ? Array(Samples.hosts.prefix(1)) : Samples.hosts
         services = FakeAppServices(hosts: firstRun ? [] : hosts)
         self.replay = replay
         if !firstRun {
-            let state = Samples.controlCenter
+            let state = demoRoster ? Samples.demoControlCenter : Samples.controlCenter
             for (index, machine) in state.machines.enumerated() where hosts.contains(where: { $0.id == machine.id }) {
                 let old = oldHelper && index == 0
                 var capabilities: Set<String> = old ? [Capability.events] : Self.capabilities
                 // A replayed helper serves harness.v1, so the first machine's agents get a chat.
                 if replay != nil, index == 0 { capabilities.insert(Capability.harness) }
+                // A current helper takes an agent's flags.
+                if DemoAPIFixture.enabled { capabilities.insert(Capability.launch) }
                 snapshots[machine.id] = HostViewSnapshot(
                     hostID: machine.id,
                     reachability: authNeeded && index == 1 ? .authNeeded : machine.reachability,
@@ -114,6 +129,18 @@ struct UITestLaunch {
                 snapshot.requests.removeAll { $0.id == requestID }
             }
         }
+    }
+
+    /// The first machine's first session: the one a replay plays in.
+    var firstSessionID: String? {
+        services.hosts.first.flatMap { snapshots[$0.id]?.sessions.first?.id }
+    }
+
+    /// A request answered outside the app (the Live Activity), as the helper would report it.
+    func answeredElsewhere(_ requestID: String) {
+        guard let hostID = services.hosts.first?.id else { return }
+        change(hostID) { $0.requests.removeAll { $0.id == requestID } }
+        replay?.trigger("approval.answer")
     }
 
     /// Publishes every machine once, the way monitors report on start.

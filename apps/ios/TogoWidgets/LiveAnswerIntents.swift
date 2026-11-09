@@ -17,6 +17,13 @@ enum LiveAnswer {
         else { throw Failure.unavailable }
         let pending = PendingStore(directory: directory, clock: { Date() })
         guard pending.claim(requestId, hostId: hostId) else { return }
+        #if DEBUG
+        // The app's recorded demo (`-ui-demo-live`) has no relay: it reads the answer from the store.
+        if SharedSettings.defaults?.bool(forKey: "ui.demo.liveAnswers") == true {
+            pending.mark(requestId, decision == "deny" ? .denied : .approved)
+            return
+        }
+        #endif
         let sender = RelayAnswerSender(keys: KeychainDeviceKeys(accessGroup: nil), pending: pending, clock: { Date() })
         do {
             try await sender.send(requestId: requestId, decision: decision, pairing: pairing)

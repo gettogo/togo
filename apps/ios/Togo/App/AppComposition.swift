@@ -36,6 +36,7 @@ import TogoMosh
     @ObservationIgnored private var started = false
     #if DEBUG
     @ObservationIgnored private var uiTestMachines: UITestMachines?
+    @ObservationIgnored private var liveDemo: LiveDemo?
     #endif
 
     private static let deviceIDDefault = "sync.deviceID"
@@ -237,7 +238,7 @@ import TogoMosh
         let replay = launch.replay.flatMap(ReplayScript.load).map(ReplayHarnessServices.init)
         let machines = UITestMachines(
             firstRun: launch.firstRun, oneMachine: launch.oneMachine, oldHelper: launch.oldHelper,
-            authNeeded: launch.authNeeded, replay: replay
+            authNeeded: launch.authNeeded, demoRoster: launch.demoRoster, replay: replay
         )
         let defaults = launch.defaults()
         self.init(
@@ -247,6 +248,16 @@ import TogoMosh
         )
         uiTestMachines = machines
         appStorage = defaults
+        if launch.demoAPI {
+            for agent in DemoAPIFixture.favorites { agentLibrary.toggleFavorite(agent) }
+        }
+        if LiveDemo.enabled, let replay {
+            let demo = LiveDemo(session: machines.firstSessionID ?? "")
+            demo.prepare(appHostID: machines.services.hosts.first?.id)
+            demo.onAnswered = { [weak machines] requestID, _ in machines?.answeredElsewhere(requestID) }
+            replay.onPlayback = { [weak demo] in demo?.playback($0) }
+            liveDemo = demo
+        }
     }
 
     convenience init(services: any AppServices) {

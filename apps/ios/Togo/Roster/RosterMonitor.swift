@@ -45,7 +45,7 @@ struct RosterMonitor: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
             }
-            RosterView(store: store, wide: store.workspaceInline, now: now)
+            RosterView(store: store, wide: store.workspaceInline, now: now, keepsNavigationBar: true)
         }
         .offset(monitor.shift)
         // motion: preventing a jump — the roster drifts a few points at a time so a screen left on never burns in, and never jumps.

@@ -53,9 +53,11 @@ enum ChatScroll {
         pinned && old != new && !dragging
     }
 
-    /// At the foot, within a few points.
-    static func isPinned(visibleMaxY: CGFloat, content: CGFloat) -> Bool {
-        visibleMaxY >= content - 8
+    /// At the foot, within a few points: the last line shows above the composer. The visible
+    /// foot is where the content insets begin (the top inset, then the container), not the
+    /// frame's edge, which lies behind the composer and the keyboard.
+    static func isPinned(offset: CGFloat, topInset: CGFloat, container: CGFloat, content: CGFloat) -> Bool {
+        offset + topInset + container >= content - 8
     }
 
     /// The card the "Needs you" capsule jumps to: the oldest open card off screen. Nothing
@@ -158,7 +160,10 @@ struct ChatScrolling: ViewModifier {
         content
             .modifier(NeedsScrolling(marks: marks, loaded: store.hasLoaded, scroll: scroll))
             .onScrollGeometryChange(for: Bool.self) { geometry in
-                ChatScroll.isPinned(visibleMaxY: geometry.visibleRect.maxY, content: geometry.contentSize.height)
+                ChatScroll.isPinned(
+                    offset: geometry.contentOffset.y, topInset: geometry.contentInsets.top,
+                    container: geometry.containerSize.height, content: geometry.contentSize.height
+                )
             } action: { _, pinned in
                 scroll.pinned = pinned
             }

@@ -198,8 +198,10 @@ struct IslandExpandedTrailing: View {
     }
 }
 
-/// Expanded bottom: the whole request, then Deny and Approve where a one-tap answer is
-/// allowed (the relay mailbox path), else Open.
+/// Expanded bottom: the request, then Deny and Approve where a one-tap answer is allowed (the
+/// relay mailbox path), else Open. The expanded island is at most 160 pt tall, so with a detail
+/// the question gives way to it: the header already says "Needs you", and a question beside
+/// a command would push the buttons out of the island.
 struct IslandExpandedBottom: View {
     let state: TogoActivityAttributes.ContentState
     let card: LiveCard
@@ -208,18 +210,17 @@ struct IslandExpandedBottom: View {
     var isStale = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             if card.phase == .needsYou {
-                if let ask = card.ask {
-                    LiveAskText(ask: ask, alone: card.detail == nil)
+                if let ask = card.ask, card.detail == nil {
+                    LiveAskText(ask: ask, alone: true)
                 }
                 if let detail = card.detail {
-                    LiveDetailBlock(detail: detail, cornerRadius: 14)
+                    LiveDetailBlock(detail: detail, cornerRadius: 14, verticalPadding: 4)
                 }
                 buttons
             }
         }
-        .padding(.top, 4)
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...LiveCopy.largestType)
     }
@@ -244,6 +245,9 @@ struct IslandExpandedBottom: View {
             }
         }
         .font(.subheadline.weight(.semibold))
+        .controlSize(.small)
+        // The island's corners round in under the outer button ends.
+        .padding(.horizontal, 8)
         // trunc-ok: one-word button labels
         .lineLimit(1)
     }

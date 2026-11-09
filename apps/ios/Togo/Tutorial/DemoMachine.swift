@@ -125,7 +125,7 @@ struct DemoControlCenter: View {
 
     var body: some View {
         NavigationStack(path: $store.path) {
-            RosterView(store: store, now: now)
+            RosterView(store: store, now: now, keepsNavigationBar: true)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(String(localized: "tutorial.demo.done", defaultValue: "Done"), systemImage: "checkmark", role: .confirm, action: onDone)

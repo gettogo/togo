@@ -46,16 +46,30 @@ import TogoKit
 
     private let app = FakeReviewServices(status: UITestReviewServices.appStatus)
     private let other = FakeReviewServices()
+    private let demo: FakeReviewServices = {
+        let fake = FakeReviewServices(status: DemoAPIFixture.status)
+        fake.portList = DemoAPIFixture.ports
+        return fake
+    }()
     private let opener = PageOpener()
     private var forwards: [Int: LocalForward] = [:]
     private var subscribers: [UUID: AsyncStream<(localPort: Int, message: String)>.Continuation] = [:]
 
     private func fake(_ s: ReviewSubject) -> FakeReviewServices {
-        s.sessionID == Self.appSession ? app : other
+        if DemoAPIFixture.enabled, s.sessionID == DemoAPIFixture.session { return demo }
+        return s.sessionID == Self.appSession ? app : other
     }
 
     func status(_ s: ReviewSubject) async throws -> GitStatus { try await fake(s).status(s) }
     func diff(_ s: ReviewSubject, _ source: DiffSource) async throws -> GitDiff {
+        if DemoAPIFixture.enabled, s.sessionID == DemoAPIFixture.session {
+            _ = try await demo.diff(s, source)
+            let path: String? = switch source {
+            case .worktree(let path), .staged(let path), .untracked(let path): path
+            case .commit(_, let path): path
+            }
+            return GitDiff(diff: path.flatMap { DemoAPIFixture.diffs[$0] } ?? "", truncated: false, binary: [])
+        }
         if s.sessionID == Self.appSession, case .worktree("Sources/App.swift") = source {
             _ = try await app.diff(s, source)
             return GitDiff(diff: Self.appDiff, truncated: false, binary: [])
@@ -148,6 +162,11 @@ private final class PageChannel: ExecChannel {
             return true
         }
         guard complete else { return }
+        if DemoAPIFixture.enabled {
+            _ = await incoming.write(Data(DemoAPIFixture.rootResponse.utf8))
+            incoming.finish()
+            return
+        }
         let body = """
             <!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">\
             <title>Dev server</title><h1 style="font: 600 28px -apple-system">Running on \(port)</h1>

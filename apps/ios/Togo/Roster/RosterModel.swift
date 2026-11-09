@@ -156,6 +156,7 @@ enum RosterCopy {
     static let newSession = String(localized: "roster.newSession", defaultValue: "New session")
     static let show = String(localized: "roster.show.filter", defaultValue: "Show")
     static let searchPrompt = String(localized: "roster.search", defaultValue: "Search")
+    static let clearSearch = String(localized: "roster.search.clear", defaultValue: "Clear search")
     static let settings = String(localized: "roster.settings", defaultValue: "Settings")
     static let addMachine = String(localized: "roster.addMachine", defaultValue: "Add machine")
     static let archive = String(localized: "roster.archive", defaultValue: "Archive")

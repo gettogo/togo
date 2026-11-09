@@ -48,7 +48,9 @@ struct ReplayScript: Sendable {
 
     enum ParseError: Error, Equatable { case badLine(Int) }
 
-    init(jsonl: String) throws {
+    /// `longestGap` caps the wait between notifications, seconds (`-ui-replay-pace <s>` sets it
+    /// for a launch; the website's recording plays at 0.25).
+    init(jsonl: String, longestGap: Double = 0.5) throws {
         var requests: [String: (method: String, key: String, chapter: Int?, line: Int)] = [:]
         var lastStamp: Double?
         for (index, raw) in jsonl.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
@@ -83,7 +85,7 @@ struct ReplayScript: Sendable {
                 // A notification.
                 let stamp = (object["t"] as? Double).map { $0 / 1000 } ?? Self.stamp(params["ts"])
                 var delay = 0.15
-                if let stamp, let lastStamp { delay = min(max(stamp - lastStamp, 0.05), 0.5) }
+                if let stamp, let lastStamp { delay = min(max(stamp - lastStamp, 0.05), longestGap) }
                 if let stamp { lastStamp = stamp }
                 guard let data = try? JSONSerialization.data(withJSONObject: params) else { continue }
                 chapters[chapters.count - 1].notes.append(Note(method: method, params: data, delay: delay))
@@ -123,7 +125,9 @@ struct ReplayScript: Sendable {
     static func load(_ name: String) -> ReplayScript? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "jsonl"),
               let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        return try? ReplayScript(jsonl: text)
+        let args = ProcessInfo.processInfo.arguments
+        let pace = args.firstIndex(of: "-ui-replay-pace").flatMap { args.indices.contains($0 + 1) ? Double(args[$0 + 1]) : nil }
+        return try? ReplayScript(jsonl: text, longestGap: pace ?? 0.5)
     }
 }
 
@@ -139,6 +143,15 @@ struct ReplayScript: Sendable {
     let script: ReplayScript
     /// The control center's side of approval events, with the session they belong to.
     var onApproval: ((ApprovalChange, String) -> Void)?
+    /// What plays, for `LiveDemo`: a chapter released by its trigger, each `event` notification's
+    /// params, and the end of a chapter's notifications.
+    var onPlayback: ((Playback) -> Void)?
+
+    enum Playback {
+        case released(String)
+        case event([String: Any])
+        case finished(String?)
+    }
     private var released = 0
     private var position = 0
     private var feeds: [UUID: (session: String, continuation: AsyncThrowingStream<HarnessFeed, any Error>.Continuation)] = [:]
@@ -210,6 +223,7 @@ struct ReplayScript: Sendable {
         guard let index = script.chapter(for: method, after: released) else { return }
         released = index
         position = script.chapters[index].line
+        onPlayback?(.released(method))
         play(index)
     }
 
@@ -224,6 +238,7 @@ struct ReplayScript: Sendable {
         guard let index = script.chapter(for: trigger, after: released) else { throw HarnessUnavailable() }
         released = index
         position = script.chapters[index].line
+        onPlayback?(.released(trigger))
         play(index)
         guard let data = script.chapters[index].response else { throw HarnessUnavailable() }
         return try decoder.decode(T.self, from: data)
@@ -231,11 +246,13 @@ struct ReplayScript: Sendable {
 
     private func play(_ index: Int) {
         let notes = script.chapters[index].notes
+        let trigger = script.chapters[index].trigger
         Task { [weak self] in
             for note in notes {
                 try? await Task.sleep(for: .seconds(note.delay))
                 self?.deliver(note)
             }
+            self?.onPlayback?(.finished(trigger))
         }
     }
 
@@ -253,6 +270,7 @@ struct ReplayScript: Sendable {
             }
         case "event":
             guard let event = try? JSONSerialization.jsonObject(with: note.params) as? [String: Any] else { return }
+            onPlayback?(.event(event))
             switch event["kind"] as? String {
             case "approval.open":
                 guard let body = event["approval"],

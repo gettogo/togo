@@ -1,5 +1,6 @@
 import SwiftUI
 import TogoKit
+import TogoTerminal
 import UIKit
 
 @main
@@ -8,6 +9,8 @@ struct TogoApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var composition: AppComposition
     @State private var resumeLock: ResumeLockController
+    /// Whether a hardware keyboard is attached, for every shortcut hint in the app.
+    private let keyboard = Self.makeKeyboard()
 
     init() {
         let composition = Self.makeComposition()
@@ -30,6 +33,14 @@ struct TogoApp: App {
         return PerfSignposts.measure("composition") { AppComposition(isolated: AppComposition.isRunningTests) }
     }
 
+    /// The shared presence; a UI test launched with `-ui-no-keyboard` sees none attached.
+    private static func makeKeyboard() -> KeyboardPresence {
+        #if DEBUG
+        if UITestLaunch.current.noKeyboard { return KeyboardPresence(isConnected: { false }) }
+        #endif
+        return .shared
+    }
+
     var body: some Scene {
         // A window opened for a tab, from "Open in New Window" or a drag, arrives with it.
         WindowGroup(for: TabID.self) { $tab in
@@ -38,6 +49,7 @@ struct TogoApp: App {
                 .sceneShield(lock: resumeLock)
                 .environment(\.machineTools, composition.machineTools)
                 .environment(\.agentLibrary, composition.agentLibrary)
+                .environment(\.hardwareKeyboard, keyboard)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
                     resumeLock.protectedDataBecameUnavailable()
                 }

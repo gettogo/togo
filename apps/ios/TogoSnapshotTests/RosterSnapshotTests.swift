@@ -98,6 +98,12 @@ struct RosterSnapshotTests {
         assertScreen(screen(Self.loaded), named: "roster-loaded")
     }
 
+    /// The website's demo: the search field and the menu share the bar row, and every count in
+    /// the status row is the same mono, "needs you" lit only by its colour and weight.
+    @Test func demo() {
+        assertScreen(screen(Samples.demoControlCenter, hosts: Samples.demoHosts), named: "roster-demo")
+    }
+
     /// Stopped agents say how they stopped, never "Done", and in the row's usual muted words.
     @Test func stoppedSessions() {
         func stopped(_ bib: String, _ name: String, _ status: SessionStatus, _ exit: SessionExit) -> SessionRow {

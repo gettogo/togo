@@ -25,6 +25,10 @@ struct RosterView: View {
     var now: Date?
     /// The launch mark shrinks into the headline's leading edge on a cold start.
     var launchTarget = false
+    /// On a phone, whether the navigation bar stays for a host's own items there (the monitor's
+    /// keep-awake switch, the tutorial's Done). Otherwise it goes: the roster's bar row is its
+    /// search field with the menu beside it.
+    var keepsNavigationBar = false
 
     @State private var killTarget: SessionRow?
     @State private var renameTarget: SessionRow?
@@ -37,17 +41,40 @@ struct RosterView: View {
     @FocusState private var listFocused: Bool
 
     var body: some View {
+        if wide {
+            // As a sidebar column the field sits in the column's bar row, the menu trailing it.
+            screen
+                .toolbar { toolbar }
+                .searchable(
+                    text: $store.query, isPresented: $searching, placement: .toolbarPrincipal,
+                    prompt: RosterCopy.searchPrompt
+                )
+        } else {
+            // On a phone the system puts a searchable field in a row of its own under the bar,
+            // leaving the menu alone above it; so the field and the menu share one row here.
+            screen
+                .safeAreaBar(edge: .top) {
+                    if hasNoMachines {
+                        // Nothing to search yet; the menu keeps its place for Settings.
+                        HStack {
+                            Spacer()
+                            menu
+                        }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 2)
+                    } else {
+                        RosterSearchBar(query: $store.query, searching: $searching) { menu }
+                    }
+                }
+                .toolbarVisibility(keepsNavigationBar ? .automatic : .hidden, for: .navigationBar)
+        }
+    }
+
+    /// Everything but the bar row: ⌘K or a tap searches session names, agents, machines and
+    /// folders, from the bar row on every width.
+    private var screen: some View {
         content
             .background(Color.togoInk)
-            .toolbar { toolbar }
-            // Pulled down, or ⌘K: a search over session names, agents, machines and folders. As
-            // a sidebar column the field sits in the column's bar row, the menu trailing it, so
-            // the menu never floats alone above the field; on a phone it pulls down as before.
-            .searchable(
-                text: $store.query, isPresented: $searching,
-                placement: wide ? .toolbarPrincipal : .navigationBarDrawer(displayMode: .automatic),
-                prompt: RosterCopy.searchPrompt
-            )
             .onChange(of: store.sidebar.searchRequests) { searching = true }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
@@ -126,6 +153,7 @@ struct RosterView: View {
                 }
             }
             .listStyle(.plain)
+            .scrollDismissesKeyboard(.immediately)
             .overlay {
                 if store.listNarrowed && roster.lines.isEmpty {
                     if store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -165,29 +193,39 @@ struct RosterView: View {
     /// bottom bar of its own; the prompt bar sits there.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Menu {
-                Button(RosterCopy.newSession, systemImage: "plus") { store.startNewSession() }
-                    .disabled(store.services.hosts.isEmpty)
-                Picker(selection: $store.filter) {
-                    ForEach(SessionFilter.allCases, id: \.self) { filter in
-                        Text(ControlCenterCopy.filterName(filter)).tag(filter)
-                    }
-                } label: {
-                    Label(RosterCopy.show, systemImage: "line.3.horizontal.decrease")
-                }
-                .pickerStyle(.menu)
-                Button(MonitorCopy.toggle, systemImage: "rectangle.grid.1x2") { store.toggleMonitor() }
-                Divider()
-                Button(RosterCopy.settings, systemImage: "gearshape") { store.showSettings() }
-                Button(RosterCopy.addMachine, systemImage: "desktopcomputer") { store.showSheet(.addMachine) }
-                Button(RosterCopy.archive, systemImage: "archivebox") { store.showArchive() }
-                    .disabled(store.controlCenter.archived.isEmpty)
-            } label: {
+            Menu { menuItems } label: {
                 Label(RosterCopy.more, systemImage: "line.3.horizontal")
             }
             .foregroundStyle(Color.togoSnow)
             .accessibilityIdentifier("roster.more")
         }
+    }
+
+    /// The same menu on a phone, as a glass circle trailing the search field.
+    private var menu: some View {
+        Menu { menuItems } label: { RosterMenuLabel() }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("roster.more")
+    }
+
+    @ViewBuilder private var menuItems: some View {
+        Button(RosterCopy.newSession, systemImage: "plus") { store.startNewSession() }
+            .disabled(store.services.hosts.isEmpty)
+        Picker(selection: $store.filter) {
+            ForEach(SessionFilter.allCases, id: \.self) { filter in
+                Text(ControlCenterCopy.filterName(filter)).tag(filter)
+            }
+        } label: {
+            Label(RosterCopy.show, systemImage: "line.3.horizontal.decrease")
+        }
+        .pickerStyle(.menu)
+        Button(MonitorCopy.toggle, systemImage: "rectangle.grid.1x2") { store.toggleMonitor() }
+        Divider()
+        Button(RosterCopy.settings, systemImage: "gearshape") { store.showSettings() }
+        Button(RosterCopy.addMachine, systemImage: "desktopcomputer") { store.showSheet(.addMachine) }
+        Button(RosterCopy.archive, systemImage: "archivebox") { store.showArchive() }
+            .disabled(store.controlCenter.archived.isEmpty)
     }
 
     // MARK: Derived state
@@ -271,13 +309,18 @@ struct RosterView: View {
     }
 }
 
-/// One small row: "1 needs you" with its beacon and the tally after it in mono, or with
-/// nothing waiting only the tally ("1 idle").
+/// One small row in one voice: "1 needs you" and the tally after it ("2 working  2 idle"),
+/// all in the same mono at the same size on one baseline. "Needs you" stands out the way it
+/// does on a line, by its status colour and weight, with the lit dot before it; with nothing
+/// waiting only the tally shows.
 struct RosterHeadline: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let roster: RosterModel
     /// Marks the leading edge, where the launch mark shrinks to on its way out.
     var launchTarget = false
+
+    /// The one font for every count in the row.
+    static let font = Font.system(.footnote, design: .monospaced)
 
     /// Nothing to say with no sessions and nothing waiting.
     static func shows(_ roster: RosterModel) -> Bool {
@@ -285,33 +328,12 @@ struct RosterHeadline: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            if roster.waiting > 0 {
-                HStack(alignment: .center, spacing: 8) {
-                    BeaconDot()
-                    Text(roster.headline)
-                        .font(.headline)
-                        .foregroundStyle(Color.togoSnow)
-                        // trunc-ok: the headline is a count and two words
-                        .lineLimit(1)
-                        .fixedSize()
-                        // The needs count is an event: it may roll. Nothing else here does.
-                        .countChange(Double(roster.waiting))
-                }
-                // motion: attention — something now needs you; the beacon line appears in place
-                .transition(.opacity)
-            }
-            if !roster.tallyText.isEmpty {
-                // The session tally is a background value: it changes at once, never rolls.
-                Text(verbatim: roster.tallyText)
-                    .font(.system(.footnote, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.togoMute)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transaction { $0.animation = nil }
-            }
+        // One line where it fits; at the largest text sizes the tally goes under the needs.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) { parts }
+            VStack(alignment: .leading, spacing: 4) { parts }
         }
-        // motion: attention — the beacon lights when something needs you, and goes out after
+        // motion: attention — the dot lights when something needs you, and goes out after
         .motion(.respond, value: roster.waiting)
         .background(alignment: .leading) {
             if launchTarget {
@@ -325,15 +347,51 @@ struct RosterHeadline: View {
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("roster.headline")
     }
+
+    @ViewBuilder private var parts: some View {
+        if roster.waiting > 0 {
+            // Centred on the words; the row lines up on their baseline.
+            HStack(alignment: .center, spacing: 8) {
+                BeaconDot(side: 6, relativeTo: .footnote)
+                Text(roster.headline)
+                    .font(Self.font)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(Color.togoAccentText)
+                    // trunc-ok: the headline is a count and two words
+                    .lineLimit(1)
+                    .fixedSize()
+                    // The needs count is an event: it may roll. Nothing else here does.
+                    .countChange(Double(roster.waiting))
+            }
+            // motion: attention — something now needs you; the lit words appear in place
+            .transition(.opacity)
+        }
+        if !roster.tallyText.isEmpty {
+            // The session tally is a background value: it changes at once, never rolls.
+            Text(verbatim: roster.tallyText)
+                .font(Self.font)
+                .monospacedDigit()
+                .foregroundStyle(Color.togoMute)
+                .fixedSize(horizontal: false, vertical: true)
+                .transaction { $0.animation = nil }
+        }
+    }
 }
 
 /// The beacon lit: the one mark that says something waits on the user. Hidden from
 /// VoiceOver; the words beside it carry the meaning.
 struct BeaconDot: View {
-    @ScaledMetric(relativeTo: .headline) private var side: CGFloat = 8
+    @ScaledMetric private var side: CGFloat
+
+    /// `side` at the default text size, scaled with `relativeTo`.
+    init(side: CGFloat = 8, relativeTo style: Font.TextStyle = .headline) {
+        _side = ScaledMetric(wrappedValue: side, relativeTo: style)
+    }
 
     var body: some View {
         Circle()
+            // accent-ok: the lit dot says something needs the user.
             .fill(Color.togoAccent)
             .frame(width: side, height: side)
             // accent-ok: the lit beacon dot's halo.

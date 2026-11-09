@@ -52,6 +52,8 @@ struct LiveDetailBlock: View {
     let detail: LiveCard.Detail
     var lines = 2
     var cornerRadius: CGFloat = 12
+    /// Inner space above and below machine text; the island's tighter block uses less.
+    var verticalPadding: CGFloat = 8
 
     var body: some View {
         Group {
@@ -62,7 +64,7 @@ struct LiveDetailBlock: View {
                     .lineLimit(lines)
                     .truncationMode(.middle)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, verticalPadding)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.togoRaised, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             } else {

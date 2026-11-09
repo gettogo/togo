@@ -85,6 +85,7 @@ import UIKit
 
     func agents(hostID: HostID) async throws -> [AgentInfo] {
         try fail()
+        if DemoAPIFixture.enabled { return DemoAPIFixture.agents }
         return [
             AgentInfo(id: "claude", name: "Claude Code", installed: true),
             AgentInfo(id: "codex", name: "Codex", installed: true),
@@ -94,6 +95,7 @@ import UIKit
 
     func recentDirs(hostID: HostID) async throws -> [String] {
         try fail()
+        if DemoAPIFixture.enabled { return DemoAPIFixture.recentDirs }
         return ["/Users/sam/src/app", "/Users/sam/src/site", "/Users/sam/notes"]
     }
 

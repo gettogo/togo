@@ -62,8 +62,19 @@ struct ChatScrollTests {
         #expect(ChatScroll.repins(pinned: true, old: 60, new: 90, dragging: false))
         #expect(!ChatScroll.repins(pinned: false, old: 60, new: 90, dragging: false))
         #expect(!ChatScroll.repins(pinned: true, old: 60, new: 60, dragging: false))
-        #expect(ChatScroll.isPinned(visibleMaxY: 995, content: 1_000))
-        #expect(!ChatScroll.isPinned(visibleMaxY: 700, content: 1_000))
+        #expect(ChatScroll.isPinned(offset: 300, topInset: 116, container: 580, content: 1_000))
+        #expect(!ChatScroll.isPinned(offset: 0, topInset: 116, container: 580, content: 1_000))
+    }
+
+    /// Measured on an iPhone 18 Pro with a five-line draft and the keyboard down: 758 pt of
+    /// conversation, 116 pt of bar above, 272 pt of composer and home indicator below. Scrolled
+    /// to the top, the frame's edge is past the content's end, yet its last 272 pt sit under the
+    /// composer: that is not the foot. Only at the furthest offset (156) is the last line above it.
+    @Test func theLatestLinesUnderTheComposerAreNotTheFoot() {
+        let container: CGFloat = 874 - 116 - 272
+        #expect(!ChatScroll.isPinned(offset: -116, topInset: 116, container: container, content: 758))
+        #expect(!ChatScroll.isPinned(offset: 100, topInset: 116, container: container, content: 758))
+        #expect(ChatScroll.isPinned(offset: 156, topInset: 116, container: container, content: 758))
     }
 
     @Test func theCapsuleOffersTheOldestCardOffScreen() {
