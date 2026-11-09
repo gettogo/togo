@@ -131,10 +131,22 @@ func (r *recording) write(path, togo string, runErr error) error {
 		Words: map[string]string{user: "user", host: "host", short: "host"},
 	}
 	forbidden := []string{home, user, host, short}
+	// What each forbidden string is, so a refusal can say what leaked without printing it.
+	label := map[string]string{home: "home folder", user: "user name", host: "host name", short: "host name", "email": "email address"}
+	// The helper's hello names the machine by its Bonjour name ("Sams-MacBook-Pro.local"), which
+	// macOS keeps apart from the host name.
+	if out, err := exec.Command("scutil", "--get", "LocalHostName").Output(); err == nil {
+		if local := strings.TrimSpace(string(out)); local != "" {
+			s.Words[local] = "host"
+			forbidden = append(forbidden, local)
+			label[local] = "Bonjour name"
+		}
+	}
 	for _, kv := range os.Environ() {
 		k, v, _ := strings.Cut(kv, "=")
 		if len(v) >= 12 && looksSecret(k) {
 			forbidden = append(forbidden, v)
+			label[v] = "$" + k
 		}
 	}
 	note := ""
@@ -165,7 +177,11 @@ func (r *recording) write(path, togo string, runErr error) error {
 		b.WriteByte('\n')
 	}
 	if hits := replay.Leaks(b.String(), forbidden); len(hits) > 0 {
-		return fmt.Errorf("fixture not written: %d identifying strings survived scrubbing", len(hits))
+		kinds := make([]string, len(hits))
+		for i, h := range hits {
+			kinds[i] = label[h]
+		}
+		return fmt.Errorf("fixture not written: %d identifying strings survived scrubbing (%s)", len(hits), strings.Join(kinds, ", "))
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

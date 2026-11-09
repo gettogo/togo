@@ -36,8 +36,12 @@ images: { insert: together }   # how image paths are pasted into the input
 feeds:
   appserver:
     rpc:
+      # No threadId: the feed follows every thread the server loads (the
+      # TUI's, its subagents', a /new or /resume) and the mapper picks the
+      # top-level one. A threadId from state would hold the feed back until
+      # Codex's SessionStart hook ran, and 0.167 runs hooks only once the
+      # user trusts them.
       method: thread/resume
-      params: { threadId: '{{.state.harness_session}}' }
       notifications: [thread/status/changed, thread/settings/updated, thread/tokenUsage/updated,
         thread/compacted, turn/started, turn/completed, turn/plan/updated, turn/diff/updated,
         item/started, item/completed, item/agentMessage/delta, item/reasoning/summaryTextDelta,

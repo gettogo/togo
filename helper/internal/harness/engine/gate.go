@@ -33,6 +33,8 @@ type gateResult struct {
 	// load, a PATH not yet read from the login shell) rather than an answer:
 	// it is not cached and the session asks again.
 	transient bool
+	// err is why the version command failed, for the log only.
+	err error
 }
 
 // check returns the harness version and whether it is inside the range.
@@ -64,7 +66,7 @@ func (g *gate) check(ctx context.Context, a *adapter, env harness.Env) gateResul
 	r := gateResult{}
 	switch {
 	case err != nil:
-		r.reason, r.transient = "the version command failed", true
+		r.reason, r.transient, r.err = "the version command failed", true, err
 	default:
 		r = judgeVersion(string(out), a.Harness.Pattern, a.Harness.Range)
 	}

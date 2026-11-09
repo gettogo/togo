@@ -25,8 +25,11 @@ const errorTail = 12
 var screenErrorLine = regexp.MustCompile(`(?i)^(\S*(error|exception)\b:?\s|error\b[:!]|fatal\b[:!]|panic:|traceback \(most recent call last\)|please answer with one of\b)`)
 
 // screenError returns the lowest error line in the bottom of screen.
-func screenError(screen string) (string, bool) {
+// A line that is part of prompt, the text the phone sent as the agent
+// echoes and wraps it, is never the error.
+func screenError(screen, prompt string) (string, bool) {
 	lines := strings.Split(strings.TrimRight(screen, "\n "), "\n")
+	sent := strings.Join(strings.Fields(prompt), " ")
 	seen := 0
 	for i := len(lines) - 1; i >= 0 && seen < errorTail; i-- {
 		l := strings.TrimSpace(lines[i])
@@ -34,6 +37,9 @@ func screenError(screen string) (string, bool) {
 			continue
 		}
 		seen++
+		if sent != "" && strings.Contains(sent, strings.Join(strings.Fields(l), " ")) {
+			continue
+		}
 		if screenErrorLine.MatchString(l) {
 			return l, true
 		}

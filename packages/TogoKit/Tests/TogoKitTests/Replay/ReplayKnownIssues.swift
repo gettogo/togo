@@ -24,6 +24,7 @@ enum ReplayKnownIssues {
                 "changed the agent's own config": "Claude's `/model X` saves X as the default for new sessions in ~/.claude/settings.json, so Togo's model picker changes every future Claude session (the recorder restored the file).",
             ],
         ],
+        "claude.demo": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "omp.turn": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "opencode.interrupt": ["invariants": ["[working-after-turn-end": turnEndLag]],
         "opencode.turn": ["invariants": [

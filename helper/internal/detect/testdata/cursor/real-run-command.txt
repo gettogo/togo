@@ -1,0 +1,19 @@
+    ▎+   it("returns the user's id and email", async () => {
+    ▎+     const res = await request(createApp()).get("/users/u_1");
+    ▎+     expect(res.status).toBe(200);
+    ▎+     expect(res.body).toEqual({ id: "u_1", email: "ada@example.com"
+    ▎  });
+    ▎+     expect(res.body).not.toHaveProperty("salt");
+    ▎+     expect(res.body).not.toHaveProperty("hash");
+    ▎+   });
+    ▎ … truncated (7 more lines) · ctrl+r to review
+  $ npm test -- test/users.test.ts Waiting for approval...
+────────────────────────────────────────────────────────────────────────────────
+ $  npm test -- test/users.test.ts in .
+ Run this command?
+ Not in allowlist: npm test
+  → Run (once) (y)
+    Add Shell(npm test) to allowlist? (tab)
+    Run Everything (shift+tab)
+    Skip & tell the agent what to do instead (esc or n)
+                                                ctrl+r to review changed files

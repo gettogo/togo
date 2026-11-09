@@ -180,7 +180,7 @@ func (e *Engine) userItem(s *sess, text string, images []harness.ImageRef, queue
 	it := s.newUserItemLocked(text, images, queuedNow)
 	s.notePhoneLocked(it.ID, text, images)
 	if !queuedNow {
-		s.awaitReply = true
+		s.awaitReply, s.awaitText = true, text
 		s.failedHold = false // a new prompt starts a new turn
 	}
 	s.publishLocked([]harness.Item{it}, nil)

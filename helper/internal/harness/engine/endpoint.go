@@ -83,6 +83,7 @@ func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 		// Launch flags belong to the versions the adapter knows: OpenCode
 		// 2.x refuses 1.x's --port and exits (seen live after it updated
 		// itself), so a harness outside the range starts plain.
+		e.cfg.Logf("harness: %s starts without its endpoint: version outside the adapter's range", a.Adapter.Adapter)
 		return nil
 	}
 	ep := endpoint{kind: a.Endpoint.Kind}
@@ -103,10 +104,12 @@ func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 		}
 	case spec.EndpointUnix:
 		if e.cfg.TogoHome == "" {
+			e.cfg.Logf("harness: %s starts without its endpoint: no Togo folder", a.Adapter.Adapter)
 			return nil
 		}
 		dir := filepath.Join(e.cfg.TogoHome, "run", "harness")
 		if err := os.MkdirAll(dir, 0o700); err != nil || os.Chmod(dir, 0o700) != nil {
+			e.cfg.Logf("harness: %s starts without its endpoint: socket folder: %v", a.Adapter.Adapter, err)
 			return nil
 		}
 		ep.socket = filepath.Join(dir, sessionID+".sock")
@@ -123,6 +126,7 @@ func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 	for _, arg := range a.Endpoint.LaunchArgs {
 		r, err := Render(arg, data)
 		if err != nil {
+			e.cfg.Logf("harness: %s starts without its endpoint: launch args: %v", a.Adapter.Adapter, err)
 			return nil
 		}
 		out = append(out, r)

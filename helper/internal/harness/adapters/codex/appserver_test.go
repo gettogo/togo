@@ -348,3 +348,28 @@ func TestTurnErrors(t *testing.T) {
 		t.Fatalf("state %v", st)
 	}
 }
+
+// The app-server feed starts as soon as the session's server is up. The
+// engine holds a feed back until every state value its block names is
+// known, and the thread id was known only from Codex's SessionStart hook;
+// Codex 0.167 asks the user to trust new hooks before they run, so until
+// then (or with no hooks installed) the chat stayed empty. Without a thread
+// id the feed follows every thread the server has loaded and the mapper
+// picks the top-level one.
+func TestAppServerFeedNeedsNoHookState(t *testing.T) {
+	a, err := spec.Parse(AdapterFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, ok := a.Feeds["appserver"]
+	if !ok || f.RPC == nil {
+		t.Fatal("no appserver rpc feed")
+	}
+	raw, err := json.Marshal(f.RPC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), ".state.") {
+		t.Fatalf("appserver feed waits on session state: %s", raw)
+	}
+}

@@ -55,6 +55,8 @@ type sess struct {
 	// awaitReply is set when a prompt from the phone was typed and
 	// nothing the agent said has arrived since (see replyMissingLocked).
 	awaitReply bool
+	// awaitText is the prompt awaitReply waits on, never read as its error.
+	awaitText string
 	// exitNoticed is set once the chat was told the agent exited, until
 	// it runs again.
 	exitNoticed bool
@@ -211,7 +213,11 @@ func (s *sess) start() {
 			s.degraded[c] = true
 		}
 		s.mu.Unlock()
-		s.e.cfg.Logf("harness: %s: %s; the session shows the terminal", s.ad.Adapter.Adapter, r.reason)
+		if r.err != nil {
+			s.e.cfg.Logf("harness: %s: %s (%v); the session shows the terminal", s.ad.Adapter.Adapter, r.reason, r.err)
+		} else {
+			s.e.cfg.Logf("harness: %s: %s; the session shows the terminal", s.ad.Adapter.Adapter, r.reason)
+		}
 		return
 	}
 	for _, name := range s.ad.feedOrder {
@@ -604,14 +610,16 @@ func (s *sess) afterTurnLocked() {
 	})
 }
 
-// doneLocked reports a finished turn with the last reply's text, for
-// adapters whose feeds include no hook (hooks send their own Stop "done").
+// doneLocked reports a finished turn with the last reply's text, unless
+// the session's hooks are delivering (they send their own Stop "done").
+// An adapter's hook feed alone is not enough: Codex 0.167 runs hooks only
+// once the user trusts them, and hooks may not be installed at all.
 func (s *sess) doneLocked() {
 	if s.e.cfg.Done == nil || agentGone(s.hubStatus()) {
 		return
 	}
-	for _, f := range s.ad.Feeds {
-		if f.Hook != nil {
+	for name, f := range s.ad.Feeds {
+		if f.Hook != nil && s.last[name] != nil {
 			return
 		}
 	}
@@ -646,7 +654,7 @@ func (s *sess) replyMissingLocked(screen string) {
 	now := s.e.cfg.Now()
 	notice := &harness.NoticeBody{Level: "error", Code: harness.NoticeError,
 		Text: s.ad.Name + " ended the turn without a reply. The terminal may show why."}
-	if line, ok := screenError(screen); ok {
+	if line, ok := screenError(screen, s.awaitText); ok {
 		notice = harness.ErrorNotice(harness.ClassifyError(line), line)
 	}
 	s.publishLocked([]harness.Item{{ID: fmt.Sprintf("noreply-%d", now.UnixMilli()), TurnID: s.turn, Kind: harness.KindNotice, At: now,

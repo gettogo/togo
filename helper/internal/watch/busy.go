@@ -3,6 +3,7 @@ package watch
 import (
 	"context"
 	"crypto/sha256"
+	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
@@ -250,7 +251,7 @@ func (w *Watcher) readText(ctx context.Context, id string, e *entry) (string, er
 		e.textSame = false
 		return "", err
 	}
-	sum := sha256.Sum256([]byte(screen))
+	sum := screenSum(e.agent, screen)
 	e.textSame = e.textSum == sum
 	e.textSum = sum
 	return screen, nil
@@ -268,4 +269,23 @@ func (w *Watcher) inspectText(ctx context.Context, id string, e *entry) (detect.
 	}
 	p, ok := detect.Detect(screen)
 	return p, ok, nil
+}
+
+// decor is the animation an agent draws at the start of its lines while it
+// waits: Amp's welcome screen spins an orb of dots beside "Welcome to Amp".
+var decor = map[string]string{"amp": " •●·.:"}
+
+// screenSum is the screen's text for telling work from animation: without
+// the run of decor characters that starts each line, for an agent that
+// draws one.
+func screenSum(agent, screen string) [sha256.Size]byte {
+	cut := decor[agent]
+	if cut == "" {
+		return sha256.Sum256([]byte(screen))
+	}
+	lines := strings.Split(screen, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimLeft(l, cut)
+	}
+	return sha256.Sum256([]byte(strings.Join(lines, "\n")))
 }

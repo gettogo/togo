@@ -21,7 +21,7 @@ func TestScreenError(t *testing.T) {
 		{"> fix the error handling in main.go\nI fixed the error: it was a nil map.\n> ", ""},
 	}
 	for _, c := range cases {
-		got, ok := screenError(c.screen)
+		got, ok := screenError(c.screen, "")
 		if got != c.want || ok != (c.want != "") {
 			t.Errorf("screenError(%q) = %q, %v; want %q", c.screen, got, ok, c.want)
 		}
@@ -77,6 +77,20 @@ func TestExitedAgentNoticeOnce(t *testing.T) {
 
 // The owner's case after the fix: a turn ends with no reply and the pane
 // shows the agent's error. The notice carries the error and its reason.
+// The prompt the phone sent, echoed and wrapped by the agent, is never its
+// error: Auggie wrapped "…Answer 413 with a JSON error instead, add a test"
+// onto a line that began "error instead", and the notice quoted it.
+func TestScreenErrorSkipsThePrompt(t *testing.T) {
+	prompt := "A JSON body over 1 kb gets Express's HTML error page. Answer 413 with a JSON error instead, add a test, then run npm test."
+	screen := "› A JSON body over 1 kb gets Express's HTML error page. Answer 413 with a JSON\n  error instead, add a test, then run npm test.\n● You have run out of usage.\n›\n"
+	if got, ok := screenError(screen, prompt); ok {
+		t.Fatalf("screenError = %q, want none", got)
+	}
+	if got, _ := screenError(screen+"Error: 402 Payment Required\n", prompt); got != "Error: 402 Payment Required" {
+		t.Fatalf("screenError = %q", got)
+	}
+}
+
 func TestTurnWithoutReplyNamesTheScreenError(t *testing.T) {
 	const id = "s_noreplyscr"
 	var status atomic.Value

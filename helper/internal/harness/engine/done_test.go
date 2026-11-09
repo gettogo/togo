@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -9,12 +10,15 @@ import (
 
 // omp, OpenCode and other adapters without a Stop hook got only the pane
 // watcher's "Done" with no body. A turn the feed ends is reported with
-// the reply's text; adapters with hooks leave it to their Stop hook.
+// the reply's text; adapters whose hooks are delivering leave it to their
+// Stop hook. Hooks that never arrive (Codex 0.167 runs them only once the
+// user trusts them, or none are installed) leave it to the feed.
 func TestTurnEndSendsDoneWithTheReply(t *testing.T) {
 	for _, c := range []struct {
 		adapter string
+		hooked  bool // a hook feed has delivered
 		want    bool
-	}{{"omp", true}, {"claude", false}} {
+	}{{"omp", false, true}, {"claude", true, false}, {"codex", false, true}, {"codex", true, false}} {
 		a, err := compileAdapter(harness.AdapterFiles()[c.adapter], "test")
 		if err != nil {
 			t.Fatal(err)
@@ -27,16 +31,19 @@ func TestTurnEndSendsDoneWithTheReply(t *testing.T) {
 			{ID: "a1", Kind: harness.KindAssistant, Assistant: &harness.TextBody{Text: " ok \n"}},
 			{ID: "t1", Kind: harness.KindTurn, Turn: &harness.TurnBody{State: harness.StateOK}},
 		})
-		s := &sess{e: e, id: "s_doneabc001", ad: a}
+		s := &sess{e: e, id: "s_doneabc001", ad: a, last: map[string]json.RawMessage{}}
+		if c.hooked {
+			s.last["hooks"] = json.RawMessage(`{}`)
+		}
 		s.doneLocked()
 		select {
 		case g := <-got:
 			if !c.want || g[1] != a.Name+" finished" || g[2] != "ok" {
-				t.Errorf("%s: done %q", c.adapter, g)
+				t.Errorf("%s (hooked %v): done %q", c.adapter, c.hooked, g)
 			}
 		case <-time.After(200 * time.Millisecond):
 			if c.want {
-				t.Errorf("%s: no done", c.adapter)
+				t.Errorf("%s (hooked %v): no done", c.adapter, c.hooked)
 			}
 		}
 	}

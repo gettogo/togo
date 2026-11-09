@@ -1,0 +1,47 @@
+{
+  "name": "cursor/real-run-command",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cursor",
+    "title": "Run this command?",
+    "body": "npm test -- test/users.test.ts in .",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "npm test -- test/users.test.ts in ."
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Run (once)",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Add Shell(npm test) to allowlist? (tab)",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "Run Everything (shift+tab)",
+        "role": "other"
+      },
+      {
+        "n": 4,
+        "label": "Skip \u0026 tell the agent what to do instead (esc or n)",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cursor CLI",
+    "subtitle": "Run this command?",
+    "body": "npm test -- test/users.test.ts in .",
+    "category": "togo.request"
+  }
+}

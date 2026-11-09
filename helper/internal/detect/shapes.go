@@ -564,6 +564,8 @@ var plainApprove = map[string]bool{
 	"yes": true, "allow": true, "approve": true, "run": true,
 	"yes, proceed": true, "allow once": true, "approve once": true,
 	"run once": true, "yes, once": true, "yes, allow once": true,
+	// Cursor CLI 2026.11: "Run this command?" → "Run (once) (y)".
+	"run (once)": true, "allow (once)": true,
 }
 
 func roleOf(label string) string {

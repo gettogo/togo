@@ -3,7 +3,9 @@ package hookstyle
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +25,29 @@ type Options struct {
 	Mode func(string) string
 	// Screen, when set, reads state (the mode) from the pane's text.
 	Screen func(text string) map[string]string
+	// Replies, when set, reads what the agent said that its hooks do not
+	// carry (Copilot's hooks hold no reply text): the messages written to
+	// the harness's own log for session after offset, and the offset to go
+	// on from. An offset below zero asks only for the log's end.
+	Replies func(env harness.Env, session string, offset int64) ([]Reply, int64)
 }
+
+// Reply is one agent message from the harness's own log: its text (empty
+// for a message that only requests tools) and the tool calls it requests.
+type Reply struct {
+	Text  string
+	Calls []string
+}
+
+// The harness writes its log a moment after the hook fires (Copilot, seen
+// live): a read waits this long at most for the message the hook implies,
+// the one requesting the tool about to run, or the answer at a stop.
+var (
+	replyWaitTool = 500 * time.Millisecond
+	replyWaitStop = 1500 * time.Millisecond
+)
+
+const replyPoll = 50 * time.Millisecond
 
 // Mapper reads normalized hook payloads. It always keeps the session's
 // state: the harness's own session id, transcript path, permission mode,
@@ -45,6 +69,9 @@ type Mapper struct {
 	running   map[string][]string // tool name -> running call ids, oldest first
 	tools     map[string]harness.Item
 	n         int
+	// replyFrom is where Options.Replies goes on reading replySession's log.
+	replySession string
+	replyFrom    int64
 }
 
 // New returns a mapper for one session.
@@ -143,6 +170,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 	case UserPromptSubmit:
 		m.begin(at)
+		m.skipReplies()
 		if !draw {
 			return nil, nil
 		}
@@ -155,11 +183,13 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			m.begin(at)
 		}
 		m.working(at)
+		call := p.ToolUseID
+		said := m.replies(at, draw, replyWaitTool, func(r Reply) bool { return call != "" && slices.Contains(r.Calls, call) })
 		x := m.toolStart(p, at)
 		if !draw {
 			return nil, nil
 		}
-		return []harness.Item{x, m.turnItem(harness.StateRunning, nil)}, nil
+		return append(said, x, m.turnItem(harness.StateRunning, nil)), nil
 	case PostToolUse, PostToolUseFailure:
 		if _, started := m.tools[m.callID(p, false)]; p.Once && !started {
 			if m.turn == "" {
@@ -192,10 +222,11 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return []harness.Item{{ID: m.turn + ":reply-" + strconv.Itoa(m.n), TurnID: m.turn, Kind: harness.KindAssistant, At: at,
 			Assistant: &harness.TextBody{Text: Clip(p.LastMessage)}}}, nil
 	case Stop, SessionEnd:
+		said := m.replies(at, draw, replyWaitStop, func(r Reply) bool { return len(r.Calls) == 0 })
 		if p.Interrupted {
-			return m.end(p, at, draw, harness.StateInterrupted), nil
+			return append(said, m.end(p, at, draw, harness.StateInterrupted)...), nil
 		}
-		return m.end(p, at, draw, harness.StateOK), nil
+		return append(said, m.end(p, at, draw, harness.StateOK)...), nil
 	case StopFailure:
 		if raw(p.Error) == "rate_limit" {
 			items := m.end(p, at, draw, harness.StateFailed)
@@ -417,4 +448,57 @@ func raw(v json.RawMessage) string {
 	var s string
 	_ = json.Unmarshal(v, &s)
 	return s
+}
+
+// skipReplies starts reading the harness's log at its end when a turn
+// begins in a session not read yet, so an earlier conversation's messages
+// stay out of this turn.
+func (m *Mapper) skipReplies() {
+	session := m.state["harness_session"]
+	if m.opts.Replies == nil || session == "" || session == m.replySession {
+		return
+	}
+	_, end := m.opts.Replies(m.env, session, -1)
+	m.replySession, m.replyFrom = session, end
+}
+
+// replies returns the agent's messages written since the last read, as
+// the turn's assistant items. It reads again, for up to wait, until one of
+// them is the message want looks for.
+func (m *Mapper) replies(at time.Time, draw bool, wait time.Duration, want func(Reply) bool) []harness.Item {
+	if m.opts.Replies == nil || m.turn == "" {
+		return nil
+	}
+	session := m.state["harness_session"]
+	if session == "" {
+		return nil
+	}
+	if session != m.replySession {
+		m.replySession, m.replyFrom = session, 0
+	}
+	var got []Reply
+	deadline := time.Now().Add(wait)
+	for {
+		more, next := m.opts.Replies(m.env, session, m.replyFrom)
+		m.replyFrom = next
+		got = append(got, more...)
+		if slices.ContainsFunc(got, want) || !time.Now().Before(deadline) {
+			break
+		}
+		time.Sleep(replyPoll)
+	}
+	if !draw {
+		return nil
+	}
+	var items []harness.Item
+	for _, r := range got {
+		t := strings.TrimSpace(r.Text)
+		if t == "" {
+			continue
+		}
+		m.n++
+		items = append(items, harness.Item{ID: m.turn + ":reply-" + strconv.Itoa(m.n), TurnID: m.turn, Kind: harness.KindAssistant, At: at,
+			Assistant: &harness.TextBody{Text: Clip(t)}})
+	}
+	return items
 }

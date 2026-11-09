@@ -58,7 +58,10 @@ func (s *sess) endStuckTurn() {
 	if _, asking := detect.Detect(screen); asking {
 		return
 	}
-	line, ok := screenError(screen)
+	s.mu.Lock()
+	sent := s.awaitText
+	s.mu.Unlock()
+	line, ok := screenError(screen, sent)
 	if !ok {
 		return
 	}

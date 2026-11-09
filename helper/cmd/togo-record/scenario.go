@@ -133,7 +133,8 @@ func (r *recording) described() error {
 
 // startup gives the agent time to draw its prompt, answering a folder-trust
 // dialog if it shows one, and declining an offer to initialise the project
-// (Crush's AGENTS.md turn) or to trust new hooks (Codex), the way a user
+// (Crush's AGENTS.md turn), to trust new hooks (Codex) or to index the
+// folder (Auggie), the way a user
 // who came to send a prompt would. Nothing else is answered before the
 // prompt goes.
 func (r *recording) startup() {
@@ -154,9 +155,11 @@ func (r *recording) answerStartup() bool {
 		title := strings.ToLower(str(a["title"]))
 		text := strings.ToLower(str(a["title"]) + " " + str(a["detail"]) + " " + str(a["snippet"]))
 		switch {
-		case strings.Contains(title, "initialize this project"), strings.Contains(title, "hooks need review"):
+		case strings.Contains(title, "initialize this project"), strings.Contains(title, "hooks need review"),
+			strings.Contains(text, "index this workspace"):
 			// Codex 0.167 asks to trust new hooks at every start; going on
-			// without them changes no setting.
+			// without them changes no setting. Auggie offers to index a new
+			// folder; "Skip indexing for this session" changes none either.
 			r.answer(str(a["requestId"]), "deny")
 			answered = true
 		case strings.Contains(text, "trust"):
