@@ -171,6 +171,12 @@ enum RosterCopy {
         localized: "roster.detail.message", defaultValue: "Pick a line to open its terminal."
     )
     static let showRoster = String(localized: "roster.show", defaultValue: "Show sessions")
+    static let showAll = String(localized: "roster.filter.showAll", defaultValue: "Show all")
+
+    /// The filter in force, over the roster's lines: "Show: Working".
+    static func filtered(_ name: String) -> String {
+        String(localized: "roster.filter.shown", defaultValue: "Show: \(name)")
+    }
 
     static func machineCount(_ name: String, _ count: Int) -> String {
         String(localized: "roster.machine.spoken", defaultValue: "\(name), \(count) sessions")

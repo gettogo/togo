@@ -71,10 +71,11 @@ private struct AttachmentChip: View {
                 .foregroundStyle(Color.togoInk)
                 .frame(width: 20, height: 20)
                 .background(Color.togoSnow, in: .circle)
-                .frame(width: 32, height: 32)
-                .contentShape(.circle)
+                // A 44 pt target around the small badge, centred where the badge sits.
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
                 .buttonStyle(.plain)
-                .offset(x: 10, y: -10)
+                .offset(x: 16, y: -16)
                 .accessibilityHidden(true)
         }
         .padding(.top, 8)

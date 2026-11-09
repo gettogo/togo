@@ -74,6 +74,8 @@ struct ReviewRoot: View {
     @State private var session: ReviewSession
     /// The review's own width (the sheet or the cover), measured outside its layout.
     @State private var measuredWidth: CGFloat?
+    /// A find field is open in a file, so Escape is its to close first.
+    @State private var findOpen = false
 
     /// `navigation` restores screens already open, for previews and snapshots. `session` is the
     /// store's open review, which outlives this view when a fold moves the review.
@@ -158,6 +160,7 @@ struct ReviewRoot: View {
         .onChange(of: ended, initial: true) { _, why in changes.ended = why }
         .onChange(of: changes.hasDraft, initial: true) { _, draft in onDraft(draft) }
         .environment(\.reviewEnded, ended)
+        .environment(\.reviewFindOpen, $findOpen)
     }
 
     // MARK: Layouts
@@ -269,10 +272,11 @@ struct ReviewRoot: View {
         }
     }
 
-    /// Escape closes the review from any screen in it.
+    /// Escape closes the review from any screen in it, once a find field in a file is closed.
     private var escape: some View {
         Button(ReviewEntryCopy.close) { dismiss() }
             .keyboardShortcut(.cancelAction)
+            .disabled(findOpen)
             .opacity(0)
             .accessibilityHidden(true)
     }
@@ -305,6 +309,8 @@ private struct DiffDestination: View {
 extension EnvironmentValues {
     /// Why the review can no longer change anything, once its session or machine is gone.
     @Entry var reviewEnded: String?
+    /// Set by a file's find field while it is open, so Escape closes the field before the review.
+    @Entry var reviewFindOpen: Binding<Bool>?
 }
 
 // MARK: Presentation

@@ -136,6 +136,8 @@ struct WaitingComplicationView: View {
                         // oldest request; tapping opens the app with the whole request.
                         Text(entry.oldestTitle ?? entry.oldestAgent ?? Self.inline(entry.count))
                             .font(.headline).lineLimit(2).layoutPriority(1)
+                            // The request can quote a command: hidden while the Watch is locked or dimmed.
+                            .privacySensitive()
                     }
                     Text(Self.inline(entry.count)).font(.footnote).foregroundStyle(.secondary)
                         .contentTransition(.numericText(value: Double(entry.count)))

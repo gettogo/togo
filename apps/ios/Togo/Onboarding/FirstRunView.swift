@@ -33,11 +33,19 @@ struct FirstRunView: View {
                         .accessibilityElement()
                         .accessibilityLabel(Text(verbatim: "Togo"))
                         .accessibilityAddTraits([.isHeader, .isImage])
-                    Text(String(localized: "onboard.firstRun.line", defaultValue: "Your coding agents, from anywhere."))
-                        .font(.title2.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(Color.togoSnow)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(spacing: 8) {
+                        Text(String(localized: "onboard.firstRun.line", defaultValue: "Your coding agents, from anywhere."))
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(Color.togoSnow)
+                        Text(String(
+                            localized: "onboard.firstRun.detail",
+                            defaultValue: "Chat with Claude Code, Codex, OpenCode and more on your Mac or Linux machine, and answer their requests from the Lock Screen."
+                        ))
+                        .font(.body)
+                        .foregroundStyle(Color.togoMute)
+                    }
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .screenMargins()
                 .padding(.vertical, 24)
@@ -53,7 +61,7 @@ struct FirstRunView: View {
                     Button(String(localized: "tutorial.firstRun.open", defaultValue: "How Togo works"), action: openGuide)
                         .buttonStyle(.secondary)
                 }
-                Button(String(localized: "onboard.firstRun.demo", defaultValue: "Try a demo")) {
+                Button(SetupPage.demoTitle) {
                     demo = DemoItem(store: DemoMachine.store())
                 }
                 .buttonStyle(.secondary)

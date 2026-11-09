@@ -248,4 +248,12 @@ import TogoKit
         await library.delete(kimi.id)
         #expect(await library.rememberedPreset(host: Samples.studio, cwd: folder) == nil)
     }
+
+    @Test func returnInAWrappingFieldEndsTheEdit() {
+        #expect(FlagsField.typedReturn(from: "--yolo", to: "--yolo\n"))
+        #expect(FlagsField.typedReturn(from: "--a --b", to: "--a\n --b"))
+        #expect(!FlagsField.typedReturn(from: "--yolo", to: "--yolo "))
+        #expect(!FlagsField.typedReturn(from: "", to: "--a\n--b"))
+        #expect(!FlagsField.typedReturn(from: "--a", to: "--b\n"))
+    }
 }

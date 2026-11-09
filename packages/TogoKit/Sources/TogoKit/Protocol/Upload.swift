@@ -20,6 +20,8 @@ public enum Capability {
     public static let notify = "notify.v1"
     public static let reply = "reply.v1"
     public static let authkeys = "authkeys.v1"
+    /// `push.pair` takes `doneSilent`.
+    public static let doneSilent = "donesilent.v1"
     public static let hostInfo = "hostinfo.v1"
     public static let awake = "awake.v1"
     /// The `browser.open` event and `browser.openOnMac`.

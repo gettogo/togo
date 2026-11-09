@@ -23,6 +23,7 @@ import WidgetKit
     private var actions: NotificationActionHandler?
     private var clear: ClearHandler?
     private var sharedApproveWithoutUnlock: Bool?
+    private var sharedDoneSilent: Bool?
     private let path = NWPathMonitor()
     private var watchFeed: Task<Void, Never>?
     private var pendingStart: (@MainActor () -> Void)?
@@ -51,7 +52,8 @@ import WidgetKit
         let unpairs = PendingUnpairStore(directory: directory)
         let link = PairingLink()
         let live = LiveActivityController(
-            pairings: pairings, isRetired: { id in unpairs.all().contains { $0.id == id } }
+            pairings: pairings, isRetired: { id in unpairs.all().contains { $0.id == id } },
+            onEnded: { hostId, token in await link.pairing?.liveActivityEnded(hostId: hostId, token: token) }
         ) { _, _ in
             await link.pairing?.tokensChanged()
         }
@@ -254,9 +256,18 @@ import WidgetKit
     func share(_ settings: AppSettings) {
         SharedSettings.writeDoneSilent(settings.doneSilent, to: SharedSettings.defaults)
         watch?.sendDoneSilent(settings.doneSilent)
+        if settings.doneSilent != sharedDoneSilent {
+            // Machines apply it to the Live Activity update that stands in for a done push.
+            let changed = sharedDoneSilent != nil
+            sharedDoneSilent = settings.doneSilent
+            if changed { source.services?.pairOnlineMachines() }
+        }
         guard settings.approveWithoutUnlock != sharedApproveWithoutUnlock else { return }
         sharedApproveWithoutUnlock = settings.approveWithoutUnlock
         NotificationCategories.setApproveWithoutUnlock(settings.approveWithoutUnlock)
+        // A running activity's Approve was chosen when it was drawn.
+        let live = live
+        Task { await live.redrawAll() }
     }
 
     /// A machine reported after the app came forward; notifications and Live Activities for

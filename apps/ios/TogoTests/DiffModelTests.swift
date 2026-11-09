@@ -191,6 +191,28 @@ import UIKit
         #expect(model.commentDraft(row: 0) == nil)
     }
 
+    @Test func commentInTwoColumnsQuotesTheHalfPressed() async {
+        var sent: [String] = []
+        let services = ScriptedDiffServices()
+        services.diffs["src/app.ts"] = GitDiff(diff: """
+        diff --git a/src/app.ts b/src/app.ts
+        --- a/src/app.ts
+        +++ b/src/app.ts
+        @@ -3,1 +3,1 @@
+        -let a = 1
+        +let a = 2
+
+        """, truncated: false, binary: [])
+        let model = model(.worktree(path: "src/app.ts"), services: services, send: { sent.append($0) })
+        await model.load()
+        model.showsSplit = true
+        let row = model.rows(split: true).firstIndex { if case .split = $0 { true } else { false } }!
+        #expect(model.commentDraft(row: row)?.quote == "let a = 2")
+        #expect(model.commentDraft(row: row, old: true)?.quote == "let a = 1")
+        model.comment(model.commentDraft(row: row, old: true)!, text: "Why change this?")
+        #expect(sent == ["src/app.ts:3: Why change this?"])
+    }
+
     @Test func hostileFileNameIsCleanedBeforeTheSession() async {
         var sent: [String] = []
         let services = ScriptedDiffServices()

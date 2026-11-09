@@ -175,13 +175,14 @@ struct WaitingSmallView: View {
 }
 
 struct WaitingRectangularView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let summary: WaitingSummary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(summary.count == 0 ? LiveCopy.nothingWaiting : LiveCopy.waiting(summary.count))
                 .font(.headline)
-                .contentTransition(.interpolate)
+                .contentTransition(reduceMotion ? .identity : .interpolate)
                 .widgetAccentable()
                 // trunc-ok: "3 waiting" or "Nothing waiting"
                 .lineLimit(1)
@@ -197,6 +198,7 @@ struct WaitingRectangularView: View {
 }
 
 struct WaitingCircularView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let summary: WaitingSummary
 
     var body: some View {
@@ -207,7 +209,7 @@ struct WaitingCircularView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                     .monospacedDigit()
-                    .contentTransition(.numericText(value: Double(summary.count)))
+                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(summary.count)))
                     .widgetAccentable()
                 Text(LiveCopy.waitingWord)
                     .font(.caption2)

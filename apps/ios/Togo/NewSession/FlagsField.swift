@@ -11,6 +11,7 @@ struct FlagsField: View {
     var error: String?
     /// Off inside a grouped list, whose row already draws the field's edge.
     var underlined = true
+    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -20,9 +21,16 @@ struct FlagsField: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.done)
-                .onChange(of: text) {
-                    let plain = Self.plain(text)
-                    if plain != text { text = plain }
+                .focused($focused)
+                .onChange(of: text) { old, new in
+                    // The keyboard's Done ends the edit; it is not a space between flags.
+                    if Self.typedReturn(from: old, to: new) {
+                        text = old
+                        focused = false
+                        return
+                    }
+                    let plain = Self.plain(new)
+                    if plain != new { text = plain }
                 }
                 .padding(.vertical, 10)
                 .frame(minHeight: 44)
@@ -48,6 +56,17 @@ struct FlagsField: View {
     /// become spaces. Everything else stays exactly as typed.
     static func plain(_ text: String) -> String {
         CommandInput.straight(text, flattenLines: true)
+    }
+
+    /// True when `new` is `old` with one line break typed into it: the Return key of a field
+    /// that grows to wrap, which inserts a line break where a one-line field would submit.
+    static func typedReturn(from old: String, to new: String) -> Bool {
+        guard new.count == old.count + 1 else { return false }
+        let index = new.index(new.startIndex, offsetBy: zip(old, new).prefix { $0 == $1 }.count)
+        guard new[index].isNewline else { return false }
+        var rest = new
+        rest.remove(at: index)
+        return rest == old
     }
 
     /// Why `line` cannot start an agent, or nil when it can. Beyond what `ArgsParser` refuses,

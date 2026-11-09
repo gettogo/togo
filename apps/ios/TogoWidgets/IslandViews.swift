@@ -24,8 +24,10 @@ struct IslandCompactLeading: View {
         LiveMark(agent: card.agentID)
             .font(.subheadline)
             .foregroundStyle(Color.togoSnow)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(card.agentName.isEmpty ? card.title : card.agentName)
             .environment(\.colorScheme, .dark)
-            .dynamicTypeSize(...LiveCopy.largestType)
+            .dynamicTypeSize(...LiveCopy.compactLargestType)
     }
 }
 
@@ -70,7 +72,7 @@ struct IslandCompactTrailing: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(state.waiting > 1 && status == .needsYou ? LiveCopy.waiting(state.waiting) : status.word(reason: state.reason))
         .environment(\.colorScheme, .dark)
-        .dynamicTypeSize(...LiveCopy.largestType)
+        .dynamicTypeSize(...LiveCopy.compactLargestType)
     }
 
     static func symbol(_ status: LiveStatus) -> String {
@@ -101,12 +103,14 @@ struct IslandMinimal: View {
                 LiveMark(agent: card.agentID)
                     .font(.caption)
                     .foregroundStyle(Color.togoSnow)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(LiveStatus(state.status, stale: isStale).word(reason: state.reason))
             }
         }
         // motion: state change — the system crossfades between entries in place; nothing moves.
         .transition(.opacity)
         .environment(\.colorScheme, .dark)
-        .dynamicTypeSize(...LiveCopy.largestType)
+        .dynamicTypeSize(...LiveCopy.compactLargestType)
     }
 }
 
@@ -264,7 +268,7 @@ struct LiveAnswerButtons: View {
         .controlSize(.small)
         // trunc-ok: one-word button labels
         .lineLimit(1)
-        .environment(\.colorScheme, .dark)
+        // The island draws these in dark; the lock screen card follows the device's appearance.
     }
 
     /// Approve needs the device unlocked unless the user turned that off, as on notifications.

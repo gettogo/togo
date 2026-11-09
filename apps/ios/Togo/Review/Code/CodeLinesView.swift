@@ -2,6 +2,13 @@ import SwiftUI
 import TogoKit
 import UIKit
 
+/// A line chosen from its menu: the row, and in a side-by-side row whether the old file's
+/// half (the leading one) was pressed.
+struct CodeLinePick: Equatable, Sendable {
+    var row: Int
+    var old = false
+}
+
 /// Code or diff text in one virtualised view: line numbers, syntax colours, changed words and
 /// `+`/`-` glyphs, smooth with tens of thousands of rows. Only rows on screen are laid out.
 struct CodeLinesView: UIViewRepresentable {
@@ -9,15 +16,16 @@ struct CodeLinesView: UIViewRepresentable {
     var wrap: Bool
     var showsOldNumbers: Bool
     var scrollTo: Int?
-    var onLongPress: ((Int) -> Void)?
+    var onLongPress: ((CodeLinePick) -> Void)?
     var onTopRow: ((Int) -> Void)?
 
     /// `scrollTo` brings a row to the top when it changes; `onLongPress` adds "Comment on line"
-    /// to a line's menu (never a header's or a notice's) and receives the row index. `onTopRow`
-    /// hears the row at the top whenever the user scrolls, not when `scrollTo` moves the view.
+    /// to a line's menu and its VoiceOver actions (never a header's or a notice's) and receives
+    /// the line picked. `onTopRow` hears the row at the top whenever the user scrolls, not when
+    /// `scrollTo` moves the view.
     init(
         rows: [CodeRow], wrap: Bool, showsOldNumbers: Bool, scrollTo: Int? = nil,
-        onLongPress: ((Int) -> Void)? = nil, onTopRow: ((Int) -> Void)? = nil
+        onLongPress: ((CodeLinePick) -> Void)? = nil, onTopRow: ((Int) -> Void)? = nil
     ) {
         self.rows = rows
         self.wrap = wrap
@@ -44,7 +52,7 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
     private(set) var rows: [CodeRow] = []
     private var wrap = false
     private var showsOldNumbers = false
-    private var onLongPress: ((Int) -> Void)?
+    private var onLongPress: ((CodeLinePick) -> Void)?
     var onTopRow: ((Int) -> Void)?
     private var reportedTop: Int?
     private var requestedScroll: Int?
@@ -81,7 +89,9 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
         fatalError("init(coder:) is not used")
     }
 
-    func update(rows: [CodeRow], wrap: Bool, showsOldNumbers: Bool, scrollTo: Int?, onLongPress: ((Int) -> Void)?) {
+    func update(
+        rows: [CodeRow], wrap: Bool, showsOldNumbers: Bool, scrollTo: Int?, onLongPress: ((CodeLinePick) -> Void)?
+    ) {
         self.onLongPress = onLongPress
         let rowsChanged = rows != self.rows
         if rowsChanged {
@@ -185,6 +195,7 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
             let render = renderer.render(indexPath.item, layout: layout)
             let tiles = renderer.tileSource(indexPath.item, render: render, height: layout.height(ofRow: indexPath.item))
             cell.configure(row: rows[indexPath.item], render: render, metrics: metrics, tiles: tiles)
+            cell.accessibilityCustomActions = lineActions(indexPath.item)
         }
         return cell
     }
@@ -212,12 +223,16 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
     ) -> UIContextMenuConfiguration? {
         guard let index = indexPaths.first?.item, rows.indices.contains(index) else { return nil }
         let text: String
+        let pick: CodeLinePick
         switch rows[index] {
         case let .line(_, _, _, kind, _, _, _) where kind != .noNewline:
             text = rows[index].copyText
+            pick = CodeLinePick(row: index)
         case let .split(left, right):
-            guard let side = point.x < layout.halfWidth ? left ?? right : right ?? left else { return nil }
+            let old = point.x < layout.halfWidth
+            guard let side = old ? left ?? right : right ?? left else { return nil }
             text = side.text
+            pick = CodeLinePick(row: index, old: old)
         default:
             return nil
         }
@@ -230,7 +245,7 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
             ]
             if let comment {
                 actions.append(UIAction(title: CodeCopy.comment, image: UIImage(systemName: "text.bubble")) { _ in
-                    comment(index)
+                    comment(pick)
                 })
             }
             return UIMenu(children: actions)
@@ -238,6 +253,46 @@ class CodeLinesUIView: UIView, UICollectionViewDataSource, UICollectionViewDeleg
     }
 
     // MARK: - VoiceOver
+
+    /// The line menu as VoiceOver actions: Copy line, and a comment on each half that has a line.
+    private func lineActions(_ index: Int) -> [UIAccessibilityCustomAction]? {
+        guard rows.indices.contains(index) else { return nil }
+        var picks: [(String, CodeLinePick)] = []
+        switch rows[index] {
+        case let .line(_, _, _, kind, _, _, _) where kind != .noNewline:
+            picks = [(CodeCopy.comment, CodeLinePick(row: index))]
+        case let .split(left, right):
+            let numbered = { (side: CodeRowSide?) in side.map { $0.number != nil && $0.kind != .noNewline } ?? false }
+            switch (numbered(left), numbered(right)) {
+            case (true, true) where left?.kind != .context:
+                picks = [
+                    (CodeCopy.commentOld, CodeLinePick(row: index, old: true)),
+                    (CodeCopy.commentNew, CodeLinePick(row: index)),
+                ]
+            case (true, false): picks = [(CodeCopy.comment, CodeLinePick(row: index, old: true))]
+            case (_, true): picks = [(CodeCopy.comment, CodeLinePick(row: index))]
+            default: return nil
+            }
+        default:
+            return nil
+        }
+        let text = rows[index].copyText
+        var actions = [
+            UIAccessibilityCustomAction(name: CodeCopy.copyLine, image: UIImage(systemName: "doc.on.doc")) { _ in
+                UIPasteboard.general.string = text
+                return true
+            },
+        ]
+        if onLongPress != nil {
+            actions += picks.map { name, pick in
+                UIAccessibilityCustomAction(name: name, image: UIImage(systemName: "text.bubble")) { [weak self] _ in
+                    self?.onLongPress?(pick)
+                    return true
+                }
+            }
+        }
+        return actions
+    }
 
     /// Hunk headers as headings, found even when they are far off screen.
     private func hunkRotor() -> UIAccessibilityCustomRotor {

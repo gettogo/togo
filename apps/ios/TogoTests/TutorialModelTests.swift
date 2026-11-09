@@ -17,13 +17,13 @@ import TogoKit
         #expect(first.page == .welcome)
         first.next()
         first.next()
-        #expect(first.page == .helper)
+        #expect(first.page == .sessions)
 
         let relaunched = TutorialModel(defaults: store)
-        #expect(relaunched.page == .helper)
+        #expect(relaunched.page == .sessions)
         #expect(relaunched.showsOnLaunch)
         relaunched.back()
-        #expect(TutorialModel(defaults: store).page == .setup)
+        #expect(TutorialModel(defaults: store).page == .approvals)
     }
 
     @Test func skipMarksSeen() {
@@ -38,7 +38,7 @@ import TogoKit
     @Test func finishingMarksSeen() {
         let store = defaults()
         let model = TutorialModel(defaults: store)
-        model.go(to: .ready)
+        model.go(to: .setup)
         model.finish()
         #expect(!TutorialModel(defaults: store).showsOnLaunch)
     }
@@ -46,7 +46,7 @@ import TogoKit
     @Test func gettingStartedReopensAtStart() {
         let store = defaults()
         let model = TutorialModel(defaults: store)
-        model.go(to: .session)
+        model.go(to: .sessions)
         model.skip()
         let generation = model.tipsGeneration
 
@@ -69,28 +69,34 @@ import TogoKit
         #expect(Set(after).count == TutorialTip.allCases.count)
     }
 
-    @Test func sessionDemoPlaysOnlyOnItsPage() {
-        #expect(TutorialFlow.playsSessionDemo(on: .session, animated: true))
-        #expect(!TutorialFlow.playsSessionDemo(on: .privacy, animated: true))
-        #expect(!TutorialFlow.playsSessionDemo(on: .ready, animated: true))
-        #expect(!TutorialFlow.playsSessionDemo(on: .session, animated: false))
+    /// Progress saved by the six-page guide this one replaced opens on a page that still
+    /// exists, never past the end.
+    @Test func progressFromTheOldGuideStillOpens() {
+        let store = defaults()
+        store.set(5, forKey: TutorialModel.Keys.page)
+        #expect(TutorialModel(defaults: store).page == .welcome)
     }
 
-    @Test func sessionDemoStartsAndStopsWithItsPage() {
-        let demo = TerminalDemo.DemoController(theme: TerminalDemo.theme(for: .light))
-        #expect(!demo.isPlaying)
-        demo.setPlaying(true)
-        #expect(demo.isPlaying)
-        demo.setPlaying(true)
-        #expect(demo.isPlaying)
-        demo.setPlaying(false)
-        #expect(!demo.isPlaying)
+    /// Only Mosh is optional: the helper is what gives chat, approvals and notifications.
+    @Test func helperIsPartOfTheStandardSetup() {
+        #expect(SetupItem.allCases.filter(\.isOptional) == [.mosh])
+        #expect(SetupItem.allCases.firstIndex(of: .helper)! < SetupItem.allCases.firstIndex(of: .mosh)!)
+    }
+
+    /// The helper's steps install tmux first, then the helper, then start it at login.
+    @Test func helperStepsInstallTmuxAndStartTheService() {
+        for os in MachineOS.allCases {
+            let commands = SetupItem.helper.steps(for: os).compactMap(\.command)
+            #expect(commands.first?.contains("tmux") == true)
+            #expect(commands.contains(HelperProbe.installCommand(os: os.unameName)))
+            #expect(commands.last == "togo service install")
+        }
     }
 
     @Test func nextStopsAtTheLastPage() {
         let model = TutorialModel(defaults: defaults())
         for _ in 0..<10 { model.next() }
-        #expect(model.page == .ready)
+        #expect(model.page == .setup)
         for _ in 0..<10 { model.back() }
         #expect(model.page == .welcome)
     }

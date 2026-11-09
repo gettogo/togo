@@ -315,8 +315,8 @@ func TestLiveActivityUpdateCarriesMetadataOnly(t *testing.T) {
 	e.pair(t, "dev_a", strings.Repeat("cd", 32))
 	e.handle(approvalOpen("r_abcdefghij"))
 	got := e.relay.received()
-	if len(got) != 1 {
-		t.Fatalf("relay got %d pushes, want the live activity update alone", len(got))
+	if len(got) != 2 || got[1].Kind != relayBackground {
+		t.Fatalf("relay got %+v, want the live activity update and the silent copy for the app", got)
 	}
 	la := got[0]
 	if la.Kind != relayLiveActivity || la.Token != strings.Repeat("cd", 32) || la.Ciphertext != "" || la.LiveActivity == nil {
@@ -326,7 +326,7 @@ func TestLiveActivityUpdateCarriesMetadataOnly(t *testing.T) {
 	if la.LiveActivity.Event != liveUpdate || cs.Waiting != 1 || cs.Status != wire.LevelNeedsYou || cs.Agent != "claude" || *cs.Bib != "01" {
 		t.Fatalf("content state %+v", cs)
 	}
-	if bytes.Contains(e.relay.raw()[0], []byte("npm")) {
+	if bytes.Contains(e.relay.raw()[0], []byte("npm")) || got[1].Token == la.Token {
 		t.Fatal("live activity push carries approval text")
 	}
 	e.handle(wire.Event{Kind: wire.EventApprovalClosed, SessionID: sid("s_abcdefghij"),
@@ -467,4 +467,103 @@ func TestLiveActivityReplacesPushWhileRunning(t *testing.T) {
 	n = len(e.relay.received())
 	e.handle(notifyEv("s_abcdefghij", wire.LevelDone))
 	check(n, wire.PushDone)
+}
+
+// A Live Activity the phone reports ended or dismissed no longer stands in
+// for the push: the next request reaches that device as a regular alert.
+func TestEndedLiveActivityFallsBackToPush(t *testing.T) {
+	e := newEnv(t, 0)
+	token := strings.Repeat("cd", 32)
+	e.pair(t, "dev_b", token)
+	e.handle(sessionEv("s_abcdefghij", "01", wire.LiveWorking))
+	if err := e.svc.Devices().EndLiveActivity("dev_b", token); err != nil {
+		t.Fatal(err)
+	}
+	n := len(e.relay.received())
+	e.handle(approvalOpen("r_abcdefghij"))
+	alerts := 0
+	for _, p := range e.relay.received()[n:] {
+		switch {
+		case p.Kind == relayAlert:
+			alerts++
+		case p.Kind == relayLiveActivity && p.Token == token:
+			t.Fatalf("update sent to the ended activity: %+v", p.LiveActivity)
+		}
+	}
+	if alerts != 1 {
+		t.Fatalf("%d alert pushes, want the regular push", alerts)
+	}
+}
+
+// While a phone's Live Activity stands in for a request, nothing is mirrored
+// to the Watch, so the Watch gets the request as an alert with its actions;
+// otherwise it stays silent, and its clear always does.
+func TestWatchAlertedWhileLiveActivityStandsIn(t *testing.T) {
+	e := newEnv(t, 0)
+	e.pair(t, "dev_b", strings.Repeat("cd", 32))
+	e.pairWith(t, "w_watch", func(p *wire.PairParams) { p.Platform = wire.PlatformWatch })
+	e.handle(sessionEv("s_abcdefghij", "01", wire.LiveWorking))
+	watch := func(n int) (kinds []string) {
+		for _, p := range e.relay.received()[n:] {
+			if p.Target == targetWatch {
+				kinds = append(kinds, p.Kind)
+			}
+		}
+		return kinds
+	}
+	n := len(e.relay.received())
+	e.handle(approvalOpen("r_abcdefghij"))
+	if got := watch(n); len(got) != 1 || got[0] != relayAlert {
+		t.Fatalf("watch pushes %v, want one alert", got)
+	}
+	n = len(e.relay.received())
+	e.handle(approvalClosed("r_abcdefghij"))
+	if got := watch(n); len(got) != 1 || got[0] != relayBackground {
+		t.Fatalf("watch pushes on clear %v, want one background", got)
+	}
+
+	// With no activity on the phone, its alert is mirrored: the Watch stays silent.
+	if err := e.svc.Devices().EndLiveActivity("dev_b", strings.Repeat("cd", 32)); err != nil {
+		t.Fatal(err)
+	}
+	n = len(e.relay.received())
+	e.handle(approvalOpen("r_bcdefghijk"))
+	if got := watch(n); len(got) != 1 || got[0] != relayBackground {
+		t.Fatalf("watch pushes without an activity %v, want one background", got)
+	}
+}
+
+// A device that keeps done silent gets the done update standing in for its
+// push without the alert, so it neither lights the screen nor sounds; a
+// request still alerts.
+func TestDoneSilentLiveActivityUpdateDoesNotAlert(t *testing.T) {
+	e := newEnv(t, 0)
+	token := strings.Repeat("cd", 32)
+	e.pairWith(t, "dev_b", func(p *wire.PairParams) { p.LiveActivityToken, p.DoneSilent = token, true })
+	e.handle(sessionEv("s_abcdefghij", "01", wire.LiveWorking))
+	check := func(n int, status string, alert bool) {
+		t.Helper()
+		var live []relayPush
+		for _, p := range e.relay.received()[n:] {
+			switch p.Kind {
+			case relayAlert:
+				t.Fatalf("%s: regular push sent while the activity stands in", status)
+			case relayLiveActivity:
+				live = append(live, p)
+			}
+		}
+		if len(live) != 1 || live[0].LiveActivity.ContentState.Status != status || live[0].LiveActivity.Alert != alert {
+			t.Fatalf("%s: live pushes %+v, want one with alert %v", status, live, alert)
+		}
+	}
+	n := len(e.relay.received())
+	e.handle(approvalOpen("r_abcdefghij"))
+	check(n, wire.LevelNeedsYou, true)
+
+	e.handle(approvalClosed("r_abcdefghij"))
+	e.handle(sessionEv("s_abcdefghij", "01", "idle"))
+	e.clock = e.clock.Add(time.Minute)
+	n = len(e.relay.received())
+	e.handle(notifyEv("s_abcdefghij", wire.LevelDone))
+	check(n, wire.PushDone, false)
 }

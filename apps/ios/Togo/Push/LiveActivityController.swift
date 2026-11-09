@@ -12,7 +12,11 @@ import TogoPush
     var state: TogoActivityAttributes.ContentState? { get }
     /// Each token the system issues for updating this activity through push.
     var pushTokens: AsyncStream<Data> { get }
+    /// Finishes once the activity has ended or the user dismissed it.
+    var endings: AsyncStream<Void> { get }
     func end() async
+    /// Draws the activity again with the content it has, after a setting it reads changed.
+    func redraw() async
 }
 
 /// The part of ActivityKit the controller uses, so tests can stand in for it.
@@ -36,10 +40,13 @@ import TogoPush
     private let pairings: PairingStore
     private let system: any LiveActivitySystem
     private let onTokens: (String?, String?) async -> Void
+    private let onEnded: (String, String) async -> Void
     private let clock: () -> Date
     private let isRetired: (String) -> Bool
     private var watched: Set<String> = []
     private var updateTokens: [String: String] = [:]
+    /// The last update token of each watched activity, by activity id.
+    private var activityTokens: [String: String] = [:]
     private var started = false
     private static let log = Logger(subsystem: "app.togo", category: "live-activity")
 
@@ -51,16 +58,20 @@ import TogoPush
 
     /// `onTokens(update, start)` runs each time either token changes, with lowercase hex; the
     /// update token is the one of the activity that changed. `isRetired` tells machines that
-    /// were removed but whose helper may still push.
+    /// were removed but whose helper may still push. `onEnded(hostId, token)` runs when the
+    /// machine's current activity ends or is dismissed, with the update token the helper holds,
+    /// so the helper sends the regular push again instead of updating an activity nobody sees.
     init(
         pairings: PairingStore, system: (any LiveActivitySystem)? = nil, clock: @escaping () -> Date = { Date() },
         isRetired: @escaping (String) -> Bool = { _ in false },
+        onEnded: @escaping (String, String) async -> Void = { _, _ in },
         onTokens: @escaping (String?, String?) async -> Void
     ) {
         self.pairings = pairings
         self.system = system ?? ActivityKitSystem()
         self.clock = clock
         self.isRetired = isRetired
+        self.onEnded = onEnded
         self.onTokens = onTokens
     }
 
@@ -135,6 +146,11 @@ import TogoPush
         }
     }
 
+    /// Draws every running activity again, so its Approve follows the unlock setting now.
+    func redrawAll() async {
+        for activity in system.running { await activity.redraw() }
+    }
+
     /// Ends the machine's activity at once and forgets its token.
     func machineRemoved(hostId: String) async {
         for activity in system.running where activity.hostId == hostId {
@@ -160,9 +176,25 @@ import TogoPush
             await activity.end()
             return
         }
-        for await token in activity.pushTokens {
-            await received(updateToken: token, hostId: activity.hostId)
+        let endings = activity.endings
+        let id = activity.id, hostId = activity.hostId
+        // Outlives the token stream, which need not finish when the activity does.
+        Task {
+            for await _ in endings {}
+            await self.ended(activityId: id, hostId: hostId)
         }
+        for await token in activity.pushTokens {
+            await received(updateToken: token, hostId: hostId, activityId: id)
+        }
+    }
+
+    /// The activity is over. When its token is the one the helper holds for the machine, the
+    /// token goes and the helper hears so; a newer activity's token stays.
+    private func ended(activityId: String, hostId: String) async {
+        guard let token = activityTokens.removeValue(forKey: activityId), updateTokens[hostId] == token else { return }
+        updateTokens[hostId] = nil
+        Self.log.info("Live Activity ended; telling the helper")
+        await onEnded(hostId, token)
     }
 
     private func received(startToken data: Data) async {
@@ -173,8 +205,9 @@ import TogoPush
         await onTokens(nil, startToken)
     }
 
-    private func received(updateToken data: Data, hostId: String) async {
+    private func received(updateToken data: Data, hostId: String, activityId: String) async {
         let hex = Self.hex(data)
+        activityTokens[activityId] = hex
         guard updateTokens[hostId] != hex else { return }
         updateTokens[hostId] = hex
         await onTokens(hex, startToken)
@@ -256,8 +289,20 @@ import TogoPush
 
     var state: TogoActivityAttributes.ContentState? { Self.state(id) }
 
+    var endings: AsyncStream<Void> {
+        let id = id
+        return AsyncStream { continuation in
+            let task = Task.detached { await Self.waitForEnd(of: id, then: continuation) }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     func end() async {
         await Self.end(id: id)
+    }
+
+    func redraw() async {
+        await Self.redraw(id: id)
     }
 
     private nonisolated static func state(_ id: String) -> TogoActivityAttributes.ContentState? {
@@ -275,6 +320,24 @@ import TogoPush
             }
         }
         continuation.finish()
+    }
+
+    /// Finishes `continuation` when the activity ends or is dismissed, or at once when it is gone.
+    private nonisolated static func waitForEnd(of id: String, then continuation: AsyncStream<Void>.Continuation) async {
+        guard let activity = activity(id) else {
+            continuation.finish()
+            return
+        }
+        for await state in activity.activityStateUpdates where state == .ended || state == .dismissed {
+            break
+        }
+        // A cancelled wait means the watcher went away, not that the activity ended.
+        if !Task.isCancelled { continuation.finish() }
+    }
+
+    private nonisolated static func redraw(id: String) async {
+        guard let activity = activity(id) else { return }
+        await activity.update(activity.content)
     }
 
     private nonisolated static func end(id: String) async {

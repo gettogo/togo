@@ -96,14 +96,30 @@ struct FileViewer: View {
 /// Find in a text file: the search field, and previous and next buttons with the position.
 private struct FindBar: ViewModifier {
     @Bindable var model: FileViewerModel
+    @Environment(\.reviewFindOpen) private var findOpen
+    @State private var presented = false
 
     func body(content: Content) -> some View {
         if case .text? = model.content {
             content
-                .searchable(text: $model.query, prompt: FilesCopy.findPrompt)
+                .searchable(text: $model.query, isPresented: $presented, prompt: FilesCopy.findPrompt)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .onSubmit(of: .search) { model.next() }
+                // Escape clears and closes the find field first; the review's own Escape waits.
+                .onChange(of: presented, initial: true) { _, open in findOpen?.wrappedValue = open }
+                .onDisappear { findOpen?.wrappedValue = false }
+                .background {
+                    if presented {
+                        Button(FilesCopy.closeFind) {
+                            model.query = ""
+                            presented = false
+                        }
+                        .keyboardShortcut(.cancelAction)
+                        .opacity(0)
+                        .accessibilityHidden(true)
+                    }
+                }
                 .toolbar {
                     if let position = model.position {
                         ToolbarItemGroup(placement: .bottomBar) {

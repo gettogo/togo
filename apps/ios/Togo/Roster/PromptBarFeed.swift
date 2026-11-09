@@ -150,7 +150,14 @@ private struct PromptBarFeed: ViewModifier {
         model.onOpen = { request in
             guard let card = store.controlCenter.requests.first(where: { $0.id == request.id }),
                   let sessionID = card.sessionID else { return }
-            store.open(hostID: card.hostID, sessionID: sessionID)
+            // As a tap on its line: off the monitor, and beside the roster out from under
+            // whatever the detail had pushed, into the focused pane.
+            if store.workspaceInline {
+                store.showSession(TabID(hostID: card.hostID, sessionID: sessionID))
+            } else {
+                store.monitorShown = false
+                store.open(hostID: card.hostID, sessionID: sessionID)
+            }
         }
     }
 }

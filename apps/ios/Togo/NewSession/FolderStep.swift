@@ -44,6 +44,9 @@ struct FolderStep: View {
         .screenMargins()
         .navigationTitle(NewSessionCopy.folderTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // A link that named the folder opens on the agent step; Back from there lands here
+        // with nothing read yet.
+        .task { if model.recent == .idle { await model.loadRecent() } }
     }
 
     @ViewBuilder private var recentRows: some View {
@@ -244,6 +247,8 @@ struct StartButton: View {
                 .contentTransition(.interpolate)
         }
         .buttonStyle(.primary)
+        // Command-Return starts from any field on the step.
+        .keyboardShortcut(.return, modifiers: .command)
         .disabled(creating)
         // motion: cause → effect — the tapped button shows it is creating, in place
         .motion(.respond, value: creating)

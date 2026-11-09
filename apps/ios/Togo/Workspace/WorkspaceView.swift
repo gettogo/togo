@@ -69,6 +69,7 @@ struct WorkspaceView: View {
                 }
             }
             .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar })
+            .modifier(TitleOffBesideVerticalBar())
             .onChange(of: store.zen, initial: true) { _, on in
                 if !on { zen.hide() }
                 terminals.zenChanged(on, in: window)
@@ -430,40 +431,6 @@ struct WorkspaceView: View {
 }
 #endif
 
-/// The panes' last report, read only by the small views that place things around the panes, so
-/// a new report never rebuilds the whole workspace.
-@Observable final class PanesState {
-    var report = PanesReport.single
-}
-
-/// Content built from the panes' report.
-private struct WithPanes<Content: View>: View {
-    let state: PanesState
-    @ViewBuilder let content: (PanesReport) -> Content
-
-    var body: some View {
-        content(state.report)
-    }
-}
-
-/// Keeps a full-width bar to the columns the panes give it, such as the leading page of a book,
-/// so nothing in it lands on the fold. Without columns it keeps the full width.
-private struct PaneColumns: ViewModifier {
-    let state: PanesState
-    let pick: (PanesReport) -> CGRect?
-
-    func body(content: Content) -> some View {
-        if let frame = pick(state.report), frame.width > 0 {
-            content
-                .frame(width: frame.width)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .offset(x: frame.minX)
-        } else {
-            content
-        }
-    }
-}
-
 /// In book posture the header and tab strip keep to the page before the fold, so no button or
 /// chip sits on it. Read from the fold itself rather than the panes' report, so the chrome is
 /// laid out once and does not move when the report arrives.
@@ -478,5 +445,27 @@ private struct LeadingPageOnly: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// Beside a vertical bar the system sets the title in a row of its own above the content, which
+/// would take back the height the bar gave the terminal. There the title leaves the screen; the
+/// window and VoiceOver keep it, and the session menu says the name and status at its top.
+private struct TitleOffBesideVerticalBar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.modifier(VerticalEdgeTitle())
+        } else {
+            content
+        }
+    }
+}
+
+@available(iOS 27.1, *)
+private struct VerticalEdgeTitle: ViewModifier {
+    @Environment(\.toolbarVerticalEdge) private var edge
+
+    func body(content: Content) -> some View {
+        content.toolbar(removing: edge == nil ? nil : .title)
     }
 }

@@ -50,7 +50,7 @@ struct RosterSearchBar<Trailing: View>: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(Color.togoMute)
-                        .frame(minWidth: 32, minHeight: height)
+                        .frame(minWidth: height, minHeight: height)
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -59,7 +59,8 @@ struct RosterSearchBar<Trailing: View>: View {
         }
         .font(.body)
         .padding(.leading, 14)
-        .padding(.trailing, query.isEmpty ? 14 : 6)
+        // The clear button is a full target at the capsule's end, its glyph centred on the curve.
+        .padding(.trailing, query.isEmpty ? 14 : 0)
         .frame(minHeight: height)
         .contentShape(.capsule)
         .onTapGesture { focused = true }

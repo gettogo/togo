@@ -18,6 +18,7 @@ struct ArchiveView: View {
                             SessionRowView(row: row)
                         }
                         .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
                         .listRowBackground(Color.togoInk)
                         .contextMenu {
                             Button(SessionAction.open.title(for: row), systemImage: SessionAction.open.systemImage(for: row)) {

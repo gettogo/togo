@@ -144,6 +144,13 @@ struct VectorTests {
         )
         let oneWant = "togo-register/v2\nh_mmg42klgyqzwneiskrelxms3j7\ndev_test-1\n\n" + live + "\n\nfalse\n1793707200000"
         #expect(one == Data(oneWant.utf8))
+        let ended = Signing.registerBytes(
+            hostID: host, deviceID: dev, apnsToken: nil, liveActivityToken: nil, liveActivityStartToken: start,
+            liveActivityEnded: live, liveActivityCommand: false, ts: ts
+        )
+        let endedWant = "togo-register/v3\nh_mmg42klgyqzwneiskrelxms3j7\ndev_test-1\n\n\n" + start + "\n" + live
+            + "\nfalse\n1793707200000"
+        #expect(ended == Data(endedWant.utf8))
     }
 
     /// The protocol's register fixture is signed by the Go side; the same bytes must verify here.

@@ -30,6 +30,8 @@ struct CommentSheet: View {
                         dismiss()
                     }
                     .buttonStyle(.primary)
+                    // Command-Return sends from the field; Return there starts a new line.
+                    .keyboardShortcut(.return, modifiers: .command)
                     .disabled(!canSend || trimmed.isEmpty)
                 }
                 .padding(Layout.margin)
@@ -39,7 +41,9 @@ struct CommentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // Escape closes this sheet only, never the review under it.
                     Button(DiffCopy.cancel, systemImage: "xmark", role: .cancel) { dismiss() }
+                        .keyboardShortcut(.cancelAction)
                 }
             }
         }

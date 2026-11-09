@@ -304,6 +304,7 @@ struct SelectTextSheet: View {
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(ChatCopy.done, systemImage: "checkmark") { dismiss() }
+                            .keyboardShortcut(.cancelAction)
                     }
                 }
         }

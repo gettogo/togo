@@ -31,10 +31,11 @@ struct WorkspaceChrome: Equatable {
     }
 
     /// Shows the chrome for three seconds, starting the three seconds again if it is showing.
+    /// With VoiceOver on it stays until zen ends: three seconds is not enough to reach the items.
     func reveal() {
         hiding?.cancel()
         revealed = true
-        guard !pinned else { return }
+        guard !pinned, !UIAccessibility.isVoiceOverRunning else { return }
         hiding = Task { [weak self, wait] in
             await wait(Self.revealDuration)
             guard !Task.isCancelled, let self, !self.pinned else { return }

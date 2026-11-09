@@ -242,6 +242,7 @@ struct SmartCommandLine: View {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
         .disabled(!stops && !model.canSend)
         .opacity(stops || model.canSend ? 1 : 0.35)
         .accessibilityLabel(stops ? ComposerCopy.interrupt : (model.working ? ComposerCopy.queue : ComposerCopy.send))

@@ -18,6 +18,10 @@ import (
 // It must refuse a ts no newer than the last one it applied for the device.
 type RegisterFunc func(deviceID, apnsToken, laToken, laStartToken string, command bool, ts int64) error
 
+// EndLiveFunc forgets a device's Live Activity update token if it is still
+// token, after the device reported that activity ended or was dismissed.
+type EndLiveFunc func(deviceID, token string) error
+
 var tokenRe = regexp.MustCompile(`^[0-9a-f]{64,200}$`)
 
 // verifyRegister checks a registration with the same device, signature,
@@ -36,7 +40,7 @@ func (v *Verifier) verifyRegister(pt []byte) (wire.RegisterPlaintext, error) {
 	if !deviceIDRe.MatchString(r.DeviceID) {
 		return r, ErrMalformed
 	}
-	for _, tok := range []string{r.APNsToken, r.LiveActivityToken, r.LiveActivityStartToken} {
+	for _, tok := range []string{r.APNsToken, r.LiveActivityToken, r.LiveActivityStartToken, r.LiveActivityEnded} {
 		if tok != "" && !tokenRe.MatchString(tok) {
 			return r, ErrMalformed
 		}
@@ -51,6 +55,10 @@ func (v *Verifier) verifyRegister(pt []byte) (wire.RegisterPlaintext, error) {
 	}
 	msg := wire.RegisterSignedBytes(v.keys.HostID, r.DeviceID, r.APNsToken, r.LiveActivityToken, r.LiveActivityStartToken,
 		*r.LiveActivityCommand, r.TS)
+	if r.LiveActivityEnded != "" {
+		msg = wire.RegisterEndedSignedBytes(v.keys.HostID, r.DeviceID, r.APNsToken, r.LiveActivityToken,
+			r.LiveActivityStartToken, r.LiveActivityEnded, *r.LiveActivityCommand, r.TS)
+	}
 	if !seal.Verify(dev.ApprovalKey, msg, sig) {
 		return r, ErrSignature
 	}

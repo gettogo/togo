@@ -38,9 +38,12 @@ type Config struct {
 	// Register stores tokens from a verified registration. Nil drops
 	// registrations.
 	Register RegisterFunc
-	Dial     DialFunc         // default websocket.Dial
-	Now      func() time.Time // default time.Now
-	Logf     func(format string, args ...any)
+	// EndLive forgets the Live Activity a verified registration reports
+	// ended. Nil ignores the report.
+	EndLive EndLiveFunc
+	Dial    DialFunc         // default websocket.Dial
+	Now     func() time.Time // default time.Now
+	Logf    func(format string, args ...any)
 
 	MinBackoff     time.Duration // default 1 s
 	MaxBackoff     time.Duration // default 30 s
@@ -374,6 +377,10 @@ func (r *runner) handle(ctx context.Context, f frame) bool {
 		}
 		g := m.Register
 		err = r.cfg.Register(g.DeviceID, g.APNsToken, g.LiveActivityToken, g.LiveActivityStartToken, *g.LiveActivityCommand, g.TS)
+		if err == nil && g.LiveActivityEnded != "" && r.cfg.EndLive != nil {
+			// After the new tokens, so an ended token only goes if no newer activity replaced it.
+			err = r.cfg.EndLive(g.DeviceID, g.LiveActivityEnded)
+		}
 	} else {
 		err = r.cfg.Answer(ctx, m.Answer.RequestID, m.Answer.Decision, ByPhone)
 	}

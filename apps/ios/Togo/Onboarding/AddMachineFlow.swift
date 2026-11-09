@@ -18,6 +18,8 @@ struct ChangedHostKey: Equatable, Sendable {
 enum DiscoveryEvent: Equatable, Sendable {
     case hosts([DiscoveredHost])
     case denied
+    /// Browsing works, such as right after the user allows Local Network in the system alert.
+    case browsing
 }
 
 enum ConnectOutcome: Equatable, Sendable {
@@ -148,20 +150,34 @@ enum ConnectPhase: Equatable, Sendable {
     // MARK: Discovery
 
     func discover() async {
-        let quiet = Task { [weak self] in
-            try await Task.sleep(for: Self.quietAfter)
-            guard let self, self.discovery == .searching, self.hosts.isEmpty else { return }
-            self.discovery = .quiet
-        }
+        var quiet = quietTimer()
         defer { quiet.cancel() }
         for await event in services.discover() {
             switch event {
             case .hosts(let found):
                 hosts = found
-                if discovery == .denied { discovery = .searching }
+            case .browsing:
+                break
             case .denied:
                 discovery = .denied
+                continue
             }
+            // iOS reports Local Network as denied while its alert is still up, then browsing once
+            // the user allows it, often before any machine answers. The search starts over then,
+            // with its own wait before it reads as quiet.
+            if discovery == .denied {
+                discovery = .searching
+                quiet.cancel()
+                quiet = quietTimer()
+            }
+        }
+    }
+
+    private func quietTimer() -> Task<Void, Never> {
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.quietAfter)
+            guard !Task.isCancelled, let self, self.discovery == .searching, self.hosts.isEmpty else { return }
+            self.discovery = .quiet
         }
     }
 
@@ -203,6 +219,7 @@ enum ConnectPhase: Equatable, Sendable {
 
     func retry() {
         phase = .connecting
+        saveError = nil
         attempt += 1
     }
 
@@ -220,6 +237,8 @@ enum ConnectPhase: Equatable, Sendable {
             do {
                 deviceKey = try await services.deviceKey()
             } catch {
+                // Leaving the step while the key is made is not a failure to show.
+                guard !Task.isCancelled else { return }
                 phase = .failed(String(
                     localized: "onboard.connect.noDeviceKey", defaultValue: "Togo couldn't open this device's key."
                 ))
@@ -343,9 +362,10 @@ enum ConnectPhase: Equatable, Sendable {
 
     /// The answer to the notification question. Only "Turn on" brings up the system alert.
     func answerNotifications(turnOn: Bool) async {
+        // Taken before the system alert so a second tap can neither ask again nor finish twice.
         guard let record = savedRecord else { return }
-        if turnOn { await notificationAsk?.turnOn() }
         savedRecord = nil
+        if turnOn { await notificationAsk?.turnOn() }
         finish(record)
     }
 }

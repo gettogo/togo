@@ -4191,7 +4191,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ did not answer for 30 s; it may be asleep."
+            "value" : "%1$@ didn't answer within 30 seconds. It may be asleep, or on a network this %2$@ can't reach."
           }
         }
       }
@@ -4379,50 +4379,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add a machine"
-          }
-        }
-      }
-    },
-    "onboard.firstRun.message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See the coding agents running on your machines and answer them from here."
-          }
-        }
-      }
-    },
-    "onboard.firstRun.step.find" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pick a Mac or Linux machine you reach over SSH."
-          }
-        }
-      }
-    },
-    "onboard.firstRun.step.helper" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add the Togo helper for status, requests and notifications."
-          }
-        }
-      }
-    },
-    "onboard.firstRun.step.key" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check its key and sign in with a key made on this device."
           }
         }
       }
@@ -4741,7 +4697,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Requests you can answer from here"
+            "value" : "Approvals from here, the Lock Screen or your Watch"
           }
         }
       }
@@ -4752,7 +4708,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Each session's status at a glance"
+            "value" : "A chat for each agent, with its status"
           }
         }
       }
@@ -4829,7 +4785,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The Togo helper is running, so you'll see each session's status, answer requests and get notifications."
+            "value" : "The Togo helper is installed, so each agent gets a chat, and you can answer its requests and get notifications."
           }
         }
       }
@@ -5071,7 +5027,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add this key to ~/.ssh/authorized_keys on %@"
+            "value" : "Add this key to ~/.ssh/authorized_keys on %@."
           }
         }
       }
@@ -6237,7 +6193,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Live Activities can't be encrypted, so command text would pass through Togo's relay in plain text. Use this only with a relay you run yourself."
+            "value" : "The command an agent wants to run will show on the Lock Screen and in the Dynamic Island, where anyone holding your locked %@ can read it. It stays encrypted on the way."
           }
         }
       }
@@ -6402,7 +6358,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Notifications are sealed on your machine and opened on this %@, so the relay can't read them. It does see when they're sent, this %@'s push address, and command text where you turn it on."
+            "value" : "Notifications are sealed on your machine and your answers on this %@, so the relay can't read either. It does see when they're sent, this %@'s push address, and each Live Activity's status: session number, agent, state, how many requests wait, when it started and the request's id."
           }
         }
       }
@@ -7243,72 +7199,6 @@
         }
       }
     },
-    "tutorial.helper.with" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With the helper"
-          }
-        }
-      }
-    },
-    "tutorial.helper.with.notifications" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notifications"
-          }
-        }
-      }
-    },
-    "tutorial.helper.with.status" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Each agent's status"
-          }
-        }
-      }
-    },
-    "tutorial.helper.without" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Without the helper"
-          }
-        }
-      }
-    },
-    "tutorial.helper.without.attach" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attach, or open a new shell"
-          }
-        }
-      }
-    },
-    "tutorial.helper.without.ssh" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plain SSH and tmux"
-          }
-        }
-      }
-    },
     "tutorial.pageIndicator" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7316,72 +7206,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Page %lld of %lld"
-          }
-        }
-      }
-    },
-    "tutorial.privacy.liveActivity.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A Live Activity shows only which session it is, its status and for how long. It shows what the agent wrote only if you turn that on."
-          }
-        }
-      }
-    },
-    "tutorial.privacy.liveActivity.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In a Live Activity"
-          }
-        }
-      }
-    },
-    "tutorial.privacy.lockScreen.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A notification shows the whole request, so you can answer without opening Togo. It is end-to-end encrypted, and only this device can read it."
-          }
-        }
-      }
-    },
-    "tutorial.privacy.lockScreen.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On the lock screen"
-          }
-        }
-      }
-    },
-    "tutorial.privacy.relay.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notifications pass through Togo's relay to reach Apple. The relay carries them sealed and never sees what they say."
-          }
-        }
-      }
-    },
-    "tutorial.privacy.relay.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On the way"
           }
         }
       }
@@ -7404,171 +7228,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Explore with a demo machine"
-          }
-        }
-      }
-    },
-    "tutorial.session.compose.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Write a longer message with dictation and autocorrect, then send it to the agent in one go."
-          }
-        }
-      }
-    },
-    "tutorial.session.compose.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The compose bar"
-          }
-        }
-      }
-    },
-    "tutorial.session.demo" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A terminal where an agent edits a test and asks to run npm test, with the key bar below it."
-          }
-        }
-      }
-    },
-    "tutorial.session.gesture.back" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Swipe in from the left edge to go back"
-          }
-        }
-      }
-    },
-    "tutorial.session.gesture.pinch" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pinch to make the text larger or smaller"
-          }
-        }
-      }
-    },
-    "tutorial.session.gesture.swipe" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Swipe with two fingers to move between sessions"
-          }
-        }
-      }
-    },
-    "tutorial.session.gesture.tab" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Double tap to send Tab"
-          }
-        }
-      }
-    },
-    "tutorial.session.gestures" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gestures"
-          }
-        }
-      }
-    },
-    "tutorial.session.keyBar.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esc, Ctrl, Tab and the arrows sit above the keyboard. Tap Ctrl once for the next key, twice to keep it on."
-          }
-        }
-      }
-    },
-    "tutorial.session.keyBar.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The key bar"
-          }
-        }
-      }
-    },
-    "tutorial.session.keyboard" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With a hardware keyboard"
-          }
-        }
-      }
-    },
-    "tutorial.session.shortcut.controlCenter" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Back to your sessions"
-          }
-        }
-      }
-    },
-    "tutorial.session.shortcut.detach" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close the tab. The session keeps running."
-          }
-        }
-      }
-    },
-    "tutorial.session.shortcut.new" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New session"
-          }
-        }
-      }
-    },
-    "tutorial.session.shortcut.sessions" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Switch sessions"
           }
         }
       }
@@ -7613,28 +7272,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Install the Togo helper"
-          }
-        }
-      }
-    },
-    "tutorial.setup.helper.install" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Run this on the machine:"
-          }
-        }
-      }
-    },
-    "tutorial.setup.helper.uninstall" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To remove it later:"
           }
         }
       }
@@ -7887,7 +7524,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Approve or deny and the agent carries on. The same request reaches your lock screen when Togo is closed."
+            "value" : "Approve or deny and the agent carries on. When Togo is closed, the same request reaches your Lock Screen and Apple Watch."
           }
         }
       }
@@ -7909,7 +7546,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esc, Ctrl, Tab and arrows sit above the keyboard. Use compose for longer messages."
+            "value" : "Write to the agent here. Terminal at the top shows its own screen, with Esc, Ctrl and the arrows above the keyboard."
           }
         }
       }
@@ -7920,84 +7557,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keys and compose"
-          }
-        }
-      }
-    },
-    "tutorial.welcome.attach.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open a session to see it as it is on the machine, type into it, or answer what the agent asked."
-          }
-        }
-      }
-    },
-    "tutorial.welcome.attach.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your device attaches"
-          }
-        }
-      }
-    },
-    "tutorial.welcome.diagram" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This device connects over SSH or Mosh to your machine, where agents run inside tmux."
-          }
-        }
-      }
-    },
-    "tutorial.welcome.diagram.link" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SSH or Mosh"
-          }
-        }
-      }
-    },
-    "tutorial.welcome.diagram.machine" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac or Linux"
-          }
-        }
-      }
-    },
-    "tutorial.welcome.tmux.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Each agent runs in its own tmux session, so it carries on when your device sleeps or loses signal."
-          }
-        }
-      }
-    },
-    "tutorial.welcome.tmux.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessions live in tmux"
+            "value" : "Chat and terminal"
           }
         }
       }
@@ -8530,39 +8090,6 @@
         }
       }
     },
-    "tutorial.helper.message.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plain SSH works. The helper adds status, approvals and notifications."
-          }
-        }
-      }
-    },
-    "tutorial.helper.title.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The helper adds the rest"
-          }
-        }
-      }
-    },
-    "tutorial.helper.with.approve" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Approve from the lock screen"
-          }
-        }
-      }
-    },
     "tutorial.more.collapsed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8603,138 +8130,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Learn more"
-          }
-        }
-      }
-    },
-    "tutorial.privacy.mark" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A lock: notifications are sealed end to end."
-          }
-        }
-      }
-    },
-    "tutorial.privacy.message.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only this device can read your notifications."
-          }
-        }
-      }
-    },
-    "tutorial.privacy.title.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Private by design"
-          }
-        }
-      }
-    },
-    "tutorial.ready.mark" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Togo looks for machines nearby."
-          }
-        }
-      }
-    },
-    "tutorial.ready.message.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You need its name or address and your user name on it."
-          }
-        }
-      }
-    },
-    "tutorial.ready.title.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add your first machine"
-          }
-        }
-      }
-    },
-    "tutorial.session.message.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keys, gestures and a compose bar make the terminal easy to use."
-          }
-        }
-      }
-    },
-    "tutorial.session.title.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Made for touch"
-          }
-        }
-      }
-    },
-    "tutorial.setup.message.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tick each step as you go."
-          }
-        }
-      }
-    },
-    "tutorial.setup.title.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Get your machine ready"
-          }
-        }
-      }
-    },
-    "tutorial.welcome.message.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "They run on your Mac or Linux machine, even when this app is closed."
-          }
-        }
-      }
-    },
-    "tutorial.welcome.title.short" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your agents keep running"
           }
         }
       }
@@ -8823,6 +8218,699 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sign in again"
+          }
+        }
+      }
+    },
+    "onboard.signIn.refused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That answer didn't work. Check it and try again."
+          }
+        }
+      }
+    },
+    "onboard.notifications.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get notified when an agent needs you"
+          }
+        }
+      }
+    },
+    "onboard.notifications.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Togo can tell you when an agent on %@ is waiting for an answer, even while the app is closed."
+          }
+        }
+      }
+    },
+    "onboard.notifications.turnOn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on notifications"
+          }
+        }
+      }
+    },
+    "onboard.notifications.notNow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not now"
+          }
+        }
+      }
+    },
+    "onboard.firstRun.line" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your coding agents, from anywhere."
+          }
+        }
+      }
+    },
+    "onboard.firstRun.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat with Claude Code, Codex, OpenCode and more on your Mac or Linux machine, and answer their requests from the Lock Screen."
+          }
+        }
+      }
+    },
+    "onboard.helper.needsTmux.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ needs tmux"
+          }
+        }
+      }
+    },
+    "onboard.helper.needsTmux.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Togo helper is installed, but it starts every session in tmux 3.2 or newer. Install tmux on %@, then check again."
+          }
+        }
+      }
+    },
+    "onboard.helper.integrations" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next, set up each agent's chat and requests in Settings › Agents › %@. One tap sets them all up."
+          }
+        }
+      }
+    },
+    "onboard.helper.saveAnyway" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save and install tmux later"
+          }
+        }
+      }
+    },
+    "onboard.helper.tmux.install" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To install it, run this on %@:"
+          }
+        }
+      }
+    },
+    "onboard.helper.tmux.brew" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This uses Homebrew. Without it, install Homebrew from brew.sh first."
+          }
+        }
+      }
+    },
+    "onboard.helper.tmux.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install tmux 3.2 or newer with %@'s package manager."
+          }
+        }
+      }
+    },
+    "onboard.helper.outdated.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The helper on %@ is too old for this version of Togo. The current one adds:"
+          }
+        }
+      }
+    },
+    "onboard.helper.update" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To update it, run this on %@:"
+          }
+        }
+      }
+    },
+    "onboard.connect.probeTimeout" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed in to %@, but checking it for the helper took too long. Try again."
+          }
+        }
+      }
+    },
+    "onboard.form.error.addressPort" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Put the port in the Port field below."
+          }
+        }
+      }
+    },
+    "onboard.publicKey.command" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Or run this in Terminal on %@. It adds the key with the right permissions:"
+          }
+        }
+      }
+    },
+    "tutorial.setup.helper.tmux.mac" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The helper runs each agent in tmux 3.2 or newer. With Homebrew:"
+          }
+        }
+      }
+    },
+    "tutorial.setup.helper.tmux.linux" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The helper runs each agent in tmux 3.2 or newer. On Debian or Ubuntu:"
+          }
+        }
+      }
+    },
+    "tutorial.setup.helper.tmux.fedora" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On Fedora:"
+          }
+        }
+      }
+    },
+    "tutorial.setup.helper.tmux.arch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On Arch:"
+          }
+        }
+      }
+    },
+    "tutorial.setup.helper.install.then" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Then install the helper:"
+          }
+        }
+      }
+    },
+    "tutorial.setup.helper.service" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Then start it at login, so requests reach you while Togo is closed:"
+          }
+        }
+      }
+    },
+    "tutorial.setup.helper.why" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For chat, approvals and notifications"
+          }
+        }
+      }
+    },
+    "tutorial.chat.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat with your agents"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer from the Lock Screen"
+          }
+        }
+      }
+    },
+    "tutorial.sessions.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start agents, review their work"
+          }
+        }
+      }
+    },
+    "tutorial.setup.title.machine" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up your machine"
+          }
+        }
+      }
+    },
+    "tutorial.chat.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code, Codex, OpenCode and more run on your Mac or Linux machine. Each one gets a chat here, with its terminal one tap away."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When an agent asks to run something, approve or deny it from the Lock Screen, a notification or your Apple Watch."
+          }
+        }
+      }
+    },
+    "tutorial.sessions.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a session in any folder on your machine, then look over what the agent changed before you commit it."
+          }
+        }
+      }
+    },
+    "tutorial.setup.message.ssh" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Togo signs in over SSH. You need the machine's name or address and your user name on it."
+          }
+        }
+      }
+    },
+    "tutorial.chat.terminal.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The terminal is one tap away"
+          }
+        }
+      }
+    },
+    "tutorial.chat.terminal.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap Terminal at the top of a chat to see the agent's own screen, with Esc, Ctrl, Tab and the arrows above the keyboard."
+          }
+        }
+      }
+    },
+    "tutorial.chat.running.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agents keep running"
+          }
+        }
+      }
+    },
+    "tutorial.chat.running.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each agent runs in tmux on your machine, so it carries on when this device sleeps or loses signal."
+          }
+        }
+      }
+    },
+    "tutorial.chat.fallback.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some sessions open as a terminal"
+          }
+        }
+      }
+    },
+    "tutorial.chat.fallback.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A plain shell, an agent Togo can't read yet, or any session on a machine without the Togo helper opens in the terminal instead."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.notification.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In a notification"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.notification.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It shows the whole request, so you can answer without opening Togo. It is encrypted on your machine for this device, and only this device can read it."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.live.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In a Live Activity"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.live.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While a session's Live Activity runs, the request shows there in place of a notification, with the same Approve and Deny. The command shows only if you turn that on for the machine."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.unlock.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approve asks you to unlock first"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.unlock.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On this device you can turn that off in Settings. A one-tap answer never picks \"always allow\"."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.relay.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What the relay sees"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.relay.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pushes reach Apple through Togo's relay, which can't read notifications or your answers. It can read a Live Activity's status: the session number, agent, state, how many requests wait, when it started and the request's id."
+          }
+        }
+      }
+    },
+    "tutorial.sessions.start.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a session"
+          }
+        }
+      }
+    },
+    "tutorial.sessions.start.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a machine, a folder and an agent. It starts in tmux on the machine and opens here as a chat."
+          }
+        }
+      }
+    },
+    "tutorial.sessions.review.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review changes"
+          }
+        }
+      }
+    },
+    "tutorial.sessions.review.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read the diff, stage or discard files, commit, or comment on a line and send it to the agent."
+          }
+        }
+      }
+    },
+    "tutorial.chat.demo.prompt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a test for an empty password"
+          }
+        }
+      }
+    },
+    "tutorial.chat.demo.reply" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added `rejects an empty password` to `test/login.test.ts`. It passes, and the other 41 tests still do."
+          }
+        }
+      }
+    },
+    "tutorial.chat.demo.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A chat with Claude Code. You ask it to add a test for an empty password; it works for a minute and says what it changed. A Terminal button sits at the top."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.demo.ask" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run this command?"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.demo.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Live Activity on the Lock Screen: Claude Code on Studio needs you to approve npm test, with Deny and Approve buttons."
+          }
+        }
+      }
+    },
+    "tutorial.sessions.agents.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agents you can start: %@"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.notification.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A notification from Togo: Claude Code wants to run npm test, with Approve and Deny below it."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.notification.now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "now"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.title.notification" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer from a notification"
+          }
+        }
+      }
+    },
+    "tutorial.approvals.message.notification" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When an agent asks to run something, approve or deny it right from the notification, without opening Togo."
+          }
+        }
+      }
+    },
+    "tutorial.approvals.relay.detail.notification" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pushes reach Apple through Togo's relay, which can't read notifications or your answers. It sees only when they are sent and which device they go to."
           }
         }
       }

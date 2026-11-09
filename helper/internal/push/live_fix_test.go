@@ -199,7 +199,7 @@ func TestLiveSendsCurrentStateToNewToken(t *testing.T) {
 	}
 	p := la[1].LiveActivity
 	if la[1].Token != updateToken || p.Event != liveUpdate || p.ContentState.Waiting != 1 ||
-		p.StaleDate == nil || *p.StaleDate != e.clock.Unix()+3600 {
+		p.StaleDate == nil || *p.StaleDate != p.ContentState.Since+600 {
 		t.Fatalf("replayed state %+v", la[1])
 	}
 }

@@ -52,7 +52,11 @@ struct ChatPanes: View {
                     // the chat becoming available is a cut.
                     // One chat per tab: its scroll position, folds and live line belong to
                     // that session and never carry into another tab's conversation.
-                    ChatView(store: harness, actions: store.chatActions(for: id))
+                    ChatView(
+                        store: harness, actions: store.chatActions(for: id),
+                        // ⌘↩ and ⌘. answer in the focused pane's chat only.
+                        answersKeys: shown && (!geometry.showsTwoPanes || store.workspace.focused == pane)
+                    )
                         .id(id)
                         // motion: state change — a tab switch is a cut: two half-faded chats
                         // would let the next tab's terminal show through.

@@ -235,29 +235,6 @@ struct WorkspaceBar<Items: ToolbarContent>: ViewModifier {
             .navigationTitle(revealOnly ? "" : title?.title ?? "")
             .navigationSubtitle(revealOnly ? "" : title?.subtitle ?? "")
             .navigationBarTitleDisplayMode(.inline)
-            .modifier(TitleOffBesideVerticalBar())
-    }
-}
-
-/// Beside a vertical bar the system sets the title in a row of its own above the content, which
-/// would take back the height the bar gave the terminal. There the title leaves the screen; the
-/// window and VoiceOver keep it, and the session menu says the name and status at its top.
-private struct TitleOffBesideVerticalBar: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 27.1, *) {
-            content.modifier(VerticalEdgeTitle())
-        } else {
-            content
-        }
-    }
-}
-
-@available(iOS 27.1, *)
-private struct VerticalEdgeTitle: ViewModifier {
-    @Environment(\.toolbarVerticalEdge) private var edge
-
-    func body(content: Content) -> some View {
-        content.toolbar(removing: edge == nil ? nil : .title)
     }
 }
 

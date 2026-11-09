@@ -172,6 +172,9 @@ struct ApprovalRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(ChatCopy.spokenNeeds(shownCard?.title ?? ChatCopy.waitingInTerminal))
         .accessibilityIdentifier("chat.needs.approval")
+        // A double-tap never answers: the card is heard as its request only, so Approve and Deny
+        // are named actions. It shows the prompt in the terminal, when it has a place there.
+        .accessibilityAction { showInTerminal?() }
         .accessibilityActions {
             if let card, card.phase == .open {
                 Button(approveLabel(card)) { approve(card) }

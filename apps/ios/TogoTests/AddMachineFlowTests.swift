@@ -170,6 +170,59 @@ struct AddMachineFlowTests {
         #expect(saved.finished == saved.records.map(\.id))
     }
 
+    /// A second tap while the system alert is up neither asks again nor closes twice.
+    @Test func turnOnTappedTwiceAsksOnce() async {
+        let saved = SavedRecords()
+        var turnedOn = 0
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)]), saved: saved)
+        flow.notificationAsk = .init(needed: { true }, turnOn: {
+            turnedOn += 1
+            await Task.yield()
+        })
+        flow.connect()
+        await flow.runAttempt()
+        await flow.save(withHelper: true)
+        let first = Task { await flow.answerNotifications(turnOn: true) }
+        let second = Task { await flow.answerNotifications(turnOn: true) }
+        await first.value
+        await second.value
+        #expect(turnedOn == 1)
+        #expect(saved.finished.count == 1)
+    }
+
+    /// iOS reports Local Network as denied while its alert is up; allowing it brings the search
+    /// back even when no machine has answered yet.
+    @Test func discoveryRecoversWhenLocalNetworkIsAllowed() async {
+        let services = FakeOnboardingServices(events: [])
+        let flow = AddMachineFlow(services: services, save: { _ in }, finish: { _ in })
+        let browsing = Task { await flow.discover() }
+        while services.discoveryFeed == nil { await Task.yield() }
+        services.discoveryFeed?.yield(.denied)
+        while flow.discovery != .denied { await Task.yield() }
+        services.discoveryFeed?.yield(.browsing)
+        while flow.discovery != .searching { await Task.yield() }
+        #expect(flow.hosts.isEmpty)
+        browsing.cancel()
+        await browsing.value
+    }
+
+    /// A port typed into the address, or an IPv6 address in brackets, as copied from a URL.
+    @Test func addressWithAPortIsCaughtAndBracketsAreDropped() {
+        var draft = MachineDraft()
+        draft.name = "Studio"
+        draft.user = "sam"
+        for typed in ["studio.local:2222", "[fd7a:115c:a1e0::1]:22"] {
+            draft.address = typed
+            #expect(draft.errors[.address] != nil, "\(typed)")
+        }
+        draft.address = " [fd7a:115c:a1e0::1] "
+        #expect(draft.errors[.address] == nil)
+        #expect(draft.profile(id: UUID(), deviceKeyID: "key")?.endpoint.host == "fd7a:115c:a1e0::1")
+        draft.address = "fe80::1c2b%en0"
+        #expect(draft.errors[.address] == nil)
+        #expect(MachineDraft.endpoint("sam@jump@bastion") == nil)
+    }
+
     @Test func noNotificationQuestionWithoutHelperOrOnceAnswered() async {
         for (outcome, withHelper, needed) in [
             (OnboardingSamples.noHelper, false, true), (OnboardingSamples.ready, true, false),

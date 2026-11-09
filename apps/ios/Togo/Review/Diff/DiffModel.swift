@@ -303,8 +303,8 @@ enum DiffMode: String, CaseIterable, Sendable {
 
     var commentActionTitle: String { canSendComments ? DiffCopy.sendToSession : DiffCopy.openSessionToSend }
 
-    /// The line under a long press, or nil for headers and notices.
-    func commentDraft(row: Int) -> CommentDraft? {
+    /// The line under a long press, or nil for headers and notices; `old` is the half pressed.
+    func commentDraft(row: Int, old: Bool = false) -> CommentDraft? {
         let rows = rows(split: showsSplit)
         guard rows.indices.contains(row) else { return nil }
         let text: String
@@ -314,7 +314,7 @@ enum DiffMode: String, CaseIterable, Sendable {
             guard kind != .noNewline, let shown = new ?? old else { return nil }
             (text, number) = (HiddenCharacters.raw(line, tokens: tokens), shown)
         case let .split(left, right):
-            guard let side = [right, left].compactMap({ $0 }).first(where: { $0.number != nil }),
+            guard let side = (old ? [left, right] : [right, left]).compactMap({ $0 }).first(where: { $0.number != nil }),
                   side.kind != .noNewline, let shown = side.number else { return nil }
             (text, number) = (HiddenCharacters.raw(side.text, tokens: side.tokens), shown)
         case .hunk, .notice:

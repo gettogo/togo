@@ -23,6 +23,8 @@ private func needsYou(_ requestId: String?, since: Date) -> TogoActivityAttribut
     let staleDate: Date?
     let pushTokens: AsyncStream<Data>
     let tokens: AsyncStream<Data>.Continuation
+    let endedStream: AsyncStream<Void>
+    let endedContinuation: AsyncStream<Void>.Continuation
     var ended = false
 
     init(id: String, hostId: String, state: TogoActivityAttributes.ContentState, staleDate: Date? = nil) {
@@ -31,11 +33,26 @@ private func needsYou(_ requestId: String?, since: Date) -> TogoActivityAttribut
         content = state
         self.staleDate = staleDate
         (pushTokens, tokens) = AsyncStream.makeStream()
+        (endedStream, endedContinuation) = AsyncStream.makeStream()
     }
 
     var state: TogoActivityAttributes.ContentState? { ended ? nil : content }
 
-    func end() async { ended = true }
+    var endings: AsyncStream<Void> { endedStream }
+
+    func end() async {
+        ended = true
+        endedContinuation.finish()
+    }
+
+    var redraws = 0
+    func redraw() async { redraws += 1 }
+
+    /// The user swiped the activity away.
+    func dismiss() {
+        ended = true
+        endedContinuation.finish()
+    }
 }
 
 @MainActor final class FakeActivitySystem: LiveActivitySystem {
@@ -105,13 +122,14 @@ struct LiveActivityControllerTests {
     }
 
     func make(
-        _ system: FakeActivitySystem, log: TokenLog, retired: Set<String> = []
+        _ system: FakeActivitySystem, log: TokenLog, retired: Set<String> = [],
+        onEnded: @escaping (String, String) async -> Void = { _, _ in }
     ) -> LiveActivityController {
         let pairings = PairingStore(directory: directory)
         pairings.put(pairing(studio, name: "Studio"))
         pairings.put(pairing(buildBox, name: "Build box", command: true))
         return LiveActivityController(
-            pairings: pairings, system: system, clock: { now }, isRetired: { retired.contains($0) }
+            pairings: pairings, system: system, clock: { now }, isRetired: { retired.contains($0) }, onEnded: onEnded
         ) { update, start in
             await MainActor.run { log.calls.append((update, start)) }
         }
@@ -136,6 +154,26 @@ struct LiveActivityControllerTests {
         #expect(controller.updateToken(hostId: studio) == "deadbeef")
         #expect(log.calls.contains { $0.update == "deadbeef" })
         #expect(log.calls.last?.start == "0aff00" || log.calls.contains { $0.start == "0aff00" })
+    }
+
+    /// A dismissed activity's token goes, and the helper hears which one, so it sends the
+    /// regular push again. An activity whose token was replaced reports nothing.
+    @Test func dismissedActivityReportsItsToken() async {
+        let system = FakeActivitySystem()
+        let (reports, report) = AsyncStream<(String, String)>.makeStream()
+        let controller = make(system, log: TokenLog()) { hostId, token in report.yield((hostId, token)) }
+        let activity = FakeActivity(id: "a", hostId: studio, state: needsYou("r_1", since: now))
+        system.activities.append(activity)
+        activity.tokens.yield(Data([0xDE, 0xAD]))
+        system.finish()
+        await controller.start()
+        #expect(controller.updateToken(hostId: studio) == "dead")
+
+        activity.dismiss()
+        var iterator = reports.makeAsyncIterator()
+        let got = await iterator.next()
+        #expect(got?.0 == studio && got?.1 == "dead")
+        #expect(controller.updateToken(hostId: studio) == nil)
     }
 
     @Test func startTokenForwardedOnce() async {

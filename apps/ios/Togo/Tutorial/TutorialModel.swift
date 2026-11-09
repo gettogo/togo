@@ -2,12 +2,13 @@ import Foundation
 import Observation
 import TogoKit
 
-/// Something the standard setup needs on the machine. The last two are optional.
+/// Something the standard setup needs on the machine. Only Mosh is optional: without the helper
+/// Togo is a plain terminal, with no chat, approvals or notifications.
 enum SetupItem: String, CaseIterable, Codable, Sendable {
-    case remoteLogin, reachable, phoneKey, mosh, helper
+    case remoteLogin, reachable, phoneKey, helper, mosh
 
     var isOptional: Bool {
-        self == .mosh || self == .helper
+        self == .mosh
     }
 }
 

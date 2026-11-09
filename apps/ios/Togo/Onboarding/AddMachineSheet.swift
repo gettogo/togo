@@ -186,7 +186,9 @@ struct ConnectPhaseView: View {
                 machine: machine, kind: .changed(change), onTrust: {}, onCancel: actions.back, onForget: actions.forget
             )
         case .signIn(let request, let error):
+            // A new round may ask for a different number of answers; fresh fields for each.
             SignInPromptView(request: request, error: error, onSubmit: actions.answer)
+                .id(request)
         case .keyNotAuthorised(let publicKey):
             PublicKeyView(machine: machine, publicKey: publicKey, onCheckAgain: actions.retry)
         case .helper(let report):
@@ -195,22 +197,27 @@ struct ConnectPhaseView: View {
                 onSave: actions.save, onCheckAgain: actions.retry, onUseWithoutHelper: actions.skipHelper
             )
         case .unreachable:
-            StateView(
-                kind: .offline,
-                title: String(localized: "onboard.connect.unreachable.title", defaultValue: "No answer from \(machine)"),
-                message: String(
-                    localized: "onboard.connect.unreachable.message",
-                    defaultValue: "\(machine) did not answer for 30 s; it may be asleep"
-                ),
-                action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: actions.retry)
-            )
+            ScrollsWhenTall {
+                StateView(
+                    kind: .offline,
+                    title: String(localized: "onboard.connect.unreachable.title", defaultValue: "No answer from \(machine)"),
+                    message: String(
+                        localized: "onboard.connect.unreachable.message",
+                        defaultValue: "\(machine) didn't answer within 30 seconds. It may be asleep, or on a network this \(DeviceName.model) can't reach."
+                    ),
+                    action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: actions.retry)
+                )
+            }
         case .failed(let message):
-            StateView(
-                kind: .error,
-                title: String(localized: "onboard.connect.failed.title", defaultValue: "Couldn't connect to \(machine)"),
-                message: message,
-                action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: actions.retry)
-            )
+            // Some reasons run to several sentences, such as how to turn on Remote Login.
+            ScrollsWhenTall {
+                StateView(
+                    kind: .error,
+                    title: String(localized: "onboard.connect.failed.title", defaultValue: "Couldn't connect to \(machine)"),
+                    message: message,
+                    action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: actions.retry)
+                )
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ package push
 import (
 	"context"
 	"errors"
+	"github.com/gettogo/togo/helper/internal/approval"
 	"net/http"
 	"time"
 
@@ -229,11 +230,19 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 		token = d.LiveActivityStartToken
 	}
 	stale := now.Unix() + liveStale
+	if st.Status == wire.LevelNeedsYou && st.Since > 0 {
+		// The buttons go with the answer window: past it the helper refuses the answer,
+		// and an asleep Mac sends no update to say so.
+		stale = min(stale, st.Since+int64(approval.DefaultTTL/time.Second))
+	}
 	cs := mask(st, d)
 	cs.Ctx = s.sealContext(d, st.context)
 	alert := dl.alert && ev == liveUpdate
+	// A done the user keeps silent still stands in for its push, but neither lights the
+	// screen nor sounds, as that push's notification would be passive.
+	quiet := alert && st.Status == wire.PushDone && d.DoneSilent
 	la := &liveActivity{Event: ev, ContentState: cs, Attributes: attrs, StaleDate: &stale,
-		Urgent: ev == liveUpdate && st.Waiting < dl.last.Waiting, Alert: alert}
+		Urgent: ev == liveUpdate && st.Waiting < dl.last.Waiting, Alert: alert && !quiet}
 	if ev == liveEnd {
 		dismiss := now.Unix() + liveDismiss
 		la.DismissalDate = &dismiss

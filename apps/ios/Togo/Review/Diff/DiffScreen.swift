@@ -87,7 +87,7 @@ struct DiffScreen: View {
         case .ready:
             CodeLinesView(
                 rows: model.rows(split: showsSplit), wrap: model.wrap, showsOldNumbers: !showsSplit,
-                scrollTo: model.scrollTarget, onLongPress: { row in draft = model.commentDraft(row: row) },
+                scrollTo: model.scrollTarget, onLongPress: { pick in draft = model.commentDraft(row: pick.row, old: pick.old) },
                 onTopRow: { model.scrolled(toTopRow: $0) }
             )
         }

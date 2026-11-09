@@ -11,7 +11,7 @@ struct AppCommands: Commands {
         CommandMenu(String(localized: "cmd.menu", defaultValue: "Sessions")) {
             Button(String(localized: "cmd.search", defaultValue: "Search Sessions")) { store?.showControlCenter() }
                 .keyboardShortcut("k", modifiers: .command)
-            Button(String(localized: "cmd.newSession", defaultValue: "New session")) { store?.requestStart() }
+            Button(String(localized: "cmd.newSession", defaultValue: "New Session")) { store?.requestStart() }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled((store?.services.hosts.isEmpty ?? true) || reviewOpen)
             // Closing a tab detaches; the session keeps running on its machine. Over the review,
@@ -113,6 +113,7 @@ extension AppStore {
             sheet = nil
             path = []
         }
+        sidebar.searchPending = true
         sidebar.searchRequests += 1
     }
 

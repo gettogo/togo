@@ -218,6 +218,7 @@ struct SignInPage: View {
                 Section {
                     SignInLinkCard(open: open, agent: model.agent, model: model)
                 }
+                .groupedRows()
             }
             if model.showsPaste, let paste = model.paste {
                 Section {
@@ -229,6 +230,7 @@ struct SignInPage: View {
                     }
                     PasteCodeField(model: paste)
                 }
+                .groupedRows()
             }
         }
         .groupedList()
@@ -307,5 +309,8 @@ private struct SignInStatusRow: View {
         }
         .frame(minHeight: 44)
         .accessibilityElement(children: .combine)
+        // On the row itself rather than its section: the Done and Try again rows under it
+        // keep their clear background.
+        .groupedRows()
     }
 }

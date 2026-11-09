@@ -43,7 +43,9 @@ struct AwakeBatterySheet: View {
             .padding(24)
         }
         .background(Color.togoInk)
-        .presentationDetents([.medium, .large])
+        // One short step: sized to its content, so a short window scrolls it rather than
+        // cutting it at half height, and a regular window gets the centred card.
+        .togoSheet(.prompt)
         .haptic(.done, trigger: copies)
         .task(id: copies) {
             guard copies > 0 else { return }

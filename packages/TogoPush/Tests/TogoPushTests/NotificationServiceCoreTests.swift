@@ -57,6 +57,12 @@ struct NotificationServiceCoreTests {
         #expect(Seen(content) == Seen.generic, comment)
     }
 
+    /// Opened but too old or seen already: no claim, no sound.
+    func expectQuiet(_ content: UNNotificationContent, _ comment: Comment) {
+        #expect(Seen(content) == Seen.quiet, comment)
+        #expect(content.sound == nil && content.interruptionLevel == .passive, comment)
+    }
+
     @Test func opensAndRenders() throws {
         pair(Self.otherHostID, name: "laptop")
         pair(Self.hostID, name: "studio")
@@ -127,9 +133,9 @@ struct NotificationServiceCoreTests {
     @Test func replayedPushIsNotActionable() throws {
         pair(Self.hostID, name: "studio")
         let old = core.process(try generic(ts: 1_793_707_200_000 - 601_000))
-        expectGeneric(old.content, "older than ten minutes")
+        expectQuiet(old.content, "older than ten minutes")
         #expect(!old.pendingChanged)
-        expectGeneric(core.process(try generic(ts: 1_793_707_200_000 + 61_000)).content, "from the future")
+        expectQuiet(core.process(try generic(ts: 1_793_707_200_000 + 61_000)).content, "from the future")
         #expect(pending.all().isEmpty)
         #expect(core.process(try generic(ts: 1_793_707_200_000 - 599_000)).content.categoryIdentifier == "togo.request")
     }
@@ -269,30 +275,30 @@ struct NotificationServiceCoreTests {
 
     @Test func offlineOlderThanLimitFallsBack() throws {
         pair(Self.hostID, name: "studio")
-        expectGeneric(core.process(try sealed(offline(secondsAgo: 31 * 3600))).content, "past 30 hours")
+        expectQuiet(core.process(try sealed(offline(secondsAgo: 31 * 3600))).content, "past 30 hours")
         var future = offline(active: 2)
         future.ts += 120_000
-        expectGeneric(core.process(try sealed(future)).content, "claims to be from the future")
+        expectQuiet(core.process(try sealed(future)).content, "claims to be from the future")
     }
 
     @Test func nonOfflineStillUses600s() throws {
         pair(Self.hostID, name: "studio")
         var done = PushPayload(kind: .done, sessionId: "s_abcdefghij", bib: "01", agent: "claude", title: "", body: "x", ts: 0)
         done.ts = 1_793_707_200_000 - 700_000
-        expectGeneric(core.process(try sealed(done)).content, "700 s old")
+        expectQuiet(core.process(try sealed(done)).content, "700 s old")
         done.ts = 1_793_707_200_000 - 500_000
         #expect(core.process(try sealed(done)).content.categoryIdentifier == "togo.prompt")
-        expectGeneric(core.process(try sealed(stopped(.failed, code: 1, reason: "exit", secondsAgo: 3600))).content, "stopped, an hour old")
+        expectQuiet(core.process(try sealed(stopped(.failed, code: 1, reason: "exit", secondsAgo: 3600))).content, "stopped, an hour old")
     }
 
     @Test func offlineReplayRefused() throws {
         pair(Self.hostID, name: "studio")
         let first = offline(secondsAgo: 3600)
         #expect(core.process(try sealed(first)).content.title == "studio stopped answering")
-        expectGeneric(core.process(try sealed(first)).content, "the same seal again")
+        expectQuiet(core.process(try sealed(first)).content, "the same seal again")
         var older = first
         older.ts -= 1000
-        expectGeneric(core.process(try sealed(older)).content, "an older seal")
+        expectQuiet(core.process(try sealed(older)).content, "an older seal")
         let refreshed = offline(secondsAgo: 60)
         #expect(core.process(try sealed(refreshed)).content.title == "studio stopped answering")
     }
@@ -301,7 +307,7 @@ struct NotificationServiceCoreTests {
         pair(Self.hostID, name: "studio")
         let will = offline(secondsAgo: 3600)
         #expect(core.process(try sealed(will)).content.title == "studio stopped answering")
-        expectGeneric(core.process(try sealed(will)).content, "the same frame, nothing heard from the machine")
+        expectQuiet(core.process(try sealed(will)).content, "the same frame, nothing heard from the machine")
     }
 
     @Test func secondOutageAfterPushShows() throws {
@@ -413,6 +419,7 @@ struct NotificationServiceCoreTests {
 /// The parts of a delivered content the tests look at.
 private struct Seen: Equatable, Sendable {
     static let generic = Seen(title: "Togo", subtitle: "", body: "A session needs you", category: "", infoKeys: [])
+    static let quiet = Seen(title: "Togo", subtitle: "", body: "Open Togo for the latest.", category: "", infoKeys: [])
 
     var title, subtitle, body, category: String
     var infoKeys: Set<String>

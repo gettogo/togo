@@ -31,15 +31,19 @@ struct AgentSignInSection: View {
                 .accessibilityHint(AgentSignInCopy.hint)
             }
             if let failure {
-                Text(failure)
+                // Full ink with a mark, as the other failure lines: system red falls under 4.5:1
+                // on the light rows.
+                Label(failure, systemImage: "exclamationmark.circle")
                     .font(.footnote)
-                    .foregroundStyle(Color.red)
+                    .foregroundStyle(Color.togoSnow)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
             if !commands.isEmpty { Text(AgentSignInCopy.title) }
         } footer: {
             if !commands.isEmpty { Text(AgentSignInCopy.footer) }
         }
+        .groupedRows()
         .task(id: machine) { await load() }
     }
 

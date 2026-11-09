@@ -49,11 +49,14 @@ struct AcknowledgmentsView: View {
                         AcknowledgmentTextView(item: item)
                     } label: {
                         LabeledContent {
-                            Text(item.license)
+                            // Mute rather than the system's secondary gray, which falls under
+                            // 4.5:1 on the light rows.
+                            Text(verbatim: item.license).foregroundStyle(Color.togoMute)
                         } label: {
-                            Text(item.name)
+                            Text(verbatim: item.name)
                             if item.modified {
                                 Text(settingsText("settings.ack.modified", "Modified"))
+                                    .foregroundStyle(Color.togoMute)
                             }
                         }
                     }

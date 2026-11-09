@@ -1,53 +1,56 @@
 import SwiftUI
+import TogoKit
 
-/// The guide's pages, in order. The raw value is what progress saves.
+/// The guide's pages, in order: what Togo gives you, then what your machine needs. The raw value
+/// is what progress saves.
 enum TutorialPage: Int, CaseIterable, Sendable {
-    case welcome, setup, helper, privacy, session, ready
+    case welcome, approvals, sessions, setup
 
-    var title: String {
+    /// `liveActivities` is false where the device shows none, such as an iPad: requests are
+    /// answered from a notification there.
+    func title(liveActivities: Bool = true) -> String {
         switch self {
-        case .welcome: String(localized: "tutorial.welcome.title.short", defaultValue: "Your agents keep running")
-        case .setup: String(localized: "tutorial.setup.title.short", defaultValue: "Get your machine ready")
-        case .helper: String(localized: "tutorial.helper.title.short", defaultValue: "The helper adds the rest")
-        case .privacy: String(localized: "tutorial.privacy.title.short", defaultValue: "Private by design")
-        case .session: String(localized: "tutorial.session.title.short", defaultValue: "Made for touch")
-        case .ready: String(localized: "tutorial.ready.title.short", defaultValue: "Add your first machine")
+        case .welcome: String(localized: "tutorial.chat.title", defaultValue: "Chat with your agents")
+        case .approvals where !liveActivities:
+            String(localized: "tutorial.approvals.title.notification", defaultValue: "Answer from a notification")
+        case .approvals: String(localized: "tutorial.approvals.title", defaultValue: "Answer from the Lock Screen")
+        case .sessions: String(localized: "tutorial.sessions.title", defaultValue: "Start agents, review their work")
+        case .setup: String(localized: "tutorial.setup.title.machine", defaultValue: "Set up your machine")
         }
     }
 
-    /// One short sentence. Anything more sits behind Learn more on the page.
-    var message: String {
+    /// One or two short sentences. Anything more sits behind Learn more on the page.
+    func message(liveActivities: Bool = true) -> String {
         switch self {
         case .welcome:
             String(
-                localized: "tutorial.welcome.message.short",
-                defaultValue: "They run on your Mac or Linux machine, even when this app is closed."
+                localized: "tutorial.chat.message",
+                defaultValue: "Claude Code, Codex, OpenCode and more run on your Mac or Linux machine. Each one gets a chat here, with its terminal one tap away."
+            )
+        case .approvals where !liveActivities:
+            String(
+                localized: "tutorial.approvals.message.notification",
+                defaultValue: "When an agent asks to run something, approve or deny it right from the notification, without opening Togo."
+            )
+        case .approvals:
+            String(
+                localized: "tutorial.approvals.message",
+                defaultValue: "When an agent asks to run something, approve or deny it from the Lock Screen, a notification or your Apple Watch."
+            )
+        case .sessions:
+            String(
+                localized: "tutorial.sessions.message",
+                defaultValue: "Start a session in any folder on your machine, then look over what the agent changed before you commit it."
             )
         case .setup:
-            String(localized: "tutorial.setup.message.short", defaultValue: "Tick each step as you go.")
-        case .helper:
             String(
-                localized: "tutorial.helper.message.short",
-                defaultValue: "Plain SSH works. The helper adds status, approvals and notifications."
-            )
-        case .privacy:
-            String(
-                localized: "tutorial.privacy.message.short",
-                defaultValue: "Only this device can read your notifications."
-            )
-        case .session:
-            String(
-                localized: "tutorial.session.message.short",
-                defaultValue: "Keys, gestures and a compose bar make the terminal easy to use."
-            )
-        case .ready:
-            String(
-                localized: "tutorial.ready.message.short",
-                defaultValue: "You need its name or address and your user name on it."
+                localized: "tutorial.setup.message.ssh",
+                defaultValue: "Togo signs in over SSH. You need the machine's name or address and your user name on it."
             )
         }
     }
 }
+
 
 /// One page of the guide: a title and a sentence, then the page's content, scrolling as one.
 /// With room to spare, the content sits in the middle of the space under the title rather than
@@ -55,6 +58,7 @@ enum TutorialPage: Int, CaseIterable, Sendable {
 /// as the user opens it, such as the checklist.
 struct TutorialPageLayout<Content: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.liveActivitiesAvailable) private var liveActivitiesAvailable
     let page: TutorialPage
     var centered = true
     @ViewBuilder var content: Content
@@ -67,11 +71,11 @@ struct TutorialPageLayout<Content: View>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(page.title)
+                        Text(page.title(liveActivities: liveActivitiesAvailable))
                             .font(.title.weight(.bold))
                             .foregroundStyle(Color.togoSnow)
                             .accessibilityAddTraits(.isHeader)
-                        Text(page.message)
+                        Text(page.message(liveActivities: liveActivitiesAvailable))
                             .font(.body)
                             .foregroundStyle(Color.togoMute)
                     }
@@ -190,36 +194,38 @@ struct TutorialMore<Content: View>: View {
     }
 }
 
-// MARK: Welcome
+// MARK: Chat
 
 struct WelcomePage: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let animated: Bool
     /// Opens Learn more, for snapshots.
     var expanded = false
 
     var body: some View {
         TutorialPageLayout(page: .welcome) {
-            // At accessibility sizes the sentence says what the diagram shows, and the diagram
-            // would push Learn more off the screen.
-            if !dynamicTypeSize.isAccessibilitySize {
-                ConnectionDiagram(animated: animated)
-            }
+            ChatDemo()
             TutorialMore(expanded: expanded) {
                 TutorialPoint(
-                    String(localized: "tutorial.welcome.tmux.title", defaultValue: "Sessions live in tmux"),
-                    systemImage: "rectangle.split.3x1",
+                    String(localized: "tutorial.chat.terminal.title", defaultValue: "The terminal is one tap away"),
+                    systemImage: "terminal",
                     String(
-                        localized: "tutorial.welcome.tmux.detail",
-                        defaultValue: "Each agent runs in its own tmux session, so it carries on when your device sleeps or loses signal."
+                        localized: "tutorial.chat.terminal.detail",
+                        defaultValue: "Tap Terminal at the top of a chat to see the agent's own screen, with Esc, Ctrl, Tab and the arrows above the keyboard."
                     )
                 )
                 TutorialPoint(
-                    String(localized: "tutorial.welcome.attach.title", defaultValue: "Your device attaches"),
-                    systemImage: DeviceName.symbol,
+                    String(localized: "tutorial.chat.running.title", defaultValue: "Agents keep running"),
+                    systemImage: "rectangle.split.3x1",
                     String(
-                        localized: "tutorial.welcome.attach.detail",
-                        defaultValue: "Open a session to see it as it is on the machine, type into it, or answer what the agent asked."
+                        localized: "tutorial.chat.running.detail",
+                        defaultValue: "Each agent runs in tmux on your machine, so it carries on when this device sleeps or loses signal."
+                    )
+                )
+                TutorialPoint(
+                    String(localized: "tutorial.chat.fallback.title", defaultValue: "Some sessions open as a terminal"),
+                    systemImage: "rectangle.on.rectangle",
+                    String(
+                        localized: "tutorial.chat.fallback.detail",
+                        defaultValue: "A plain shell, an agent Togo can't read yet, or any session on a machine without the Togo helper opens in the terminal instead."
                     )
                 )
             }
@@ -227,214 +233,91 @@ struct WelcomePage: View {
     }
 }
 
-/// Phone, network, machine, tmux and agents, drawn in brand tokens. The link draws in and the
-/// agents appear once; under Reduce Motion, or when not animated, it starts complete.
-struct ConnectionDiagram: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let animated: Bool
-    @State private var shown = false
+// MARK: Approvals
 
-    private var complete: Bool { shown || !animated || reduceMotion }
-
-    /// The entrance waits this long, so it starts once the page has settled.
-    static let entranceDelay = 0.25
-    /// The diagram's agents attach one after another, in order (the tutorial's explanatory
-    /// stagger, the one kept by motion principles v2): each rises this far as it fades in...
-    static let agentRise: CGFloat = 6
-    /// ...a beat after the helper appears, 30 ms apart, at most 150 ms in total.
-    static func agentDelay(_ index: Int) -> Double {
-        0.06 + min(Double(max(index, 0)) * 0.03, 0.15)
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            phone
-            link
-            machine
-        }
-        .dynamicTypeSize(...DynamicTypeSize.xLarge)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(
-            localized: "tutorial.welcome.diagram",
-            defaultValue: "This device connects over SSH or Mosh to your machine, where agents run inside tmux."
-        ))
-        .onAppear {
-            guard animated, !reduceMotion, !shown else { return }
-            // motion: origin — first run only: the link draws from the phone to the machine and
-            // the agents attach one after another (30 ms apart, 150 ms at most), so the order
-            // explains how Togo reaches them.
-            withAnimation(Motion.animation(.progress, reduce: reduceMotion)?.delay(Self.entranceDelay)) { shown = true }
-        }
-    }
-
-    private var phone: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .strokeBorder(Color.togoSnow, lineWidth: 2)
-            .frame(width: 48, height: 88)
-            .overlay(alignment: .top) {
-                Capsule().fill(Color.togoSnow).frame(width: 14, height: 4).padding(.top, 8)
-            }
-    }
-
-    private var link: some View {
-        VStack(spacing: 6) {
-            Line()
-                .trim(from: 0, to: complete ? 1 : 0)
-                .stroke(Color.togoMute, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [2, 6]))
-                .frame(height: 2)
-            Text(String(localized: "tutorial.welcome.diagram.link", defaultValue: "SSH or Mosh"))
-                .font(.caption)
-                .foregroundStyle(Color.togoMute)
-                // trunc-ok: the fixed words "SSH or Mosh" under the link, sized to fit
-                .lineLimit(1)
-                .fixedSize()
-        }
-        .frame(minWidth: 72, maxWidth: 110)
-        .padding(.horizontal, 8)
-    }
-
-    private var machine: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "tutorial.welcome.diagram.machine", defaultValue: "Mac or Linux"))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.togoSnow)
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: "tmux")
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(Color.togoMute)
-                ForEach(Array(["claude", "codex", "shell"].enumerated()), id: \.offset) { index, agent in
-                    Text(verbatim: agent)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(Color.togoSnow)
-                        // trunc-ok: fixed words (claude, codex, shell) in the diagram
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.togoGrouped, in: .rect(cornerRadius: 4))
-                        .opacity(complete ? 1 : 0)
-                        .offset(y: complete || reduceMotion ? 0 : Self.agentRise)
-                        // motion: origin — each agent attaches to the machine in turn, so the order explains it
-                        .transaction(value: complete) { transaction in
-                            guard transaction.animation != nil else { return }
-                            transaction.animation = Motion.animation(.reveal, reduce: reduceMotion)?
-                                .delay(Self.entranceDelay + Self.agentDelay(index))
-                        }
-                }
-            }
-            .padding(8)
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.togoLine))
-        }
-        .padding(10)
-        .frame(width: 128)
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.togoSnow, lineWidth: 2))
-    }
-}
-
-private struct Line: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: rect.minX, y: rect.midY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        }
-    }
-}
-
-// MARK: Notifications and privacy
-
-struct PrivacyPage: View {
+struct ApprovalsPage: View {
     @Environment(\.liveActivitiesAvailable) private var liveActivitiesAvailable
+    /// A fixed clock for snapshots; nil follows the time of day.
+    var now: Date?
     /// Opens Learn more, for snapshots.
     var expanded = false
 
     var body: some View {
-        TutorialPageLayout(page: .privacy) {
-            PrivacyMark()
+        TutorialPageLayout(page: .approvals) {
+            if liveActivitiesAvailable {
+                LockScreenDemo(now: now)
+            } else {
+                NotificationDemo(now: now)
+            }
             TutorialMore(expanded: expanded) {
                 TutorialPoint(
-                    String(localized: "tutorial.privacy.lockScreen.title", defaultValue: "On the lock screen"),
+                    String(localized: "tutorial.approvals.notification.title", defaultValue: "In a notification"),
                     systemImage: "bell",
                     String(
-                        localized: "tutorial.privacy.lockScreen.detail",
-                        defaultValue: "A notification shows the whole request, so you can answer without opening Togo. It is end-to-end encrypted, and only this device can read it."
+                        localized: "tutorial.approvals.notification.detail",
+                        defaultValue: "It shows the whole request, so you can answer without opening Togo. It is encrypted on your machine for this device, and only this device can read it."
                     )
                 )
                 if liveActivitiesAvailable {
                     TutorialPoint(
-                        String(localized: "tutorial.privacy.liveActivity.title", defaultValue: "In a Live Activity"),
+                        String(localized: "tutorial.approvals.live.title", defaultValue: "In a Live Activity"),
                         systemImage: "rectangle.badge.checkmark",
                         String(
-                            localized: "tutorial.privacy.liveActivity.detail",
-                            defaultValue: "A Live Activity shows only which session it is, its status and for how long. It shows what the agent wrote only if you turn that on."
+                            localized: "tutorial.approvals.live.detail",
+                            defaultValue: "While a session's Live Activity runs, the request shows there in place of a notification, with the same Approve and Deny. The command shows only if you turn that on for the machine."
                         )
                     )
                 }
                 TutorialPoint(
-                    String(localized: "tutorial.privacy.relay.title", defaultValue: "On the way"),
+                    String(localized: "tutorial.approvals.unlock.title", defaultValue: "Approve asks you to unlock first"),
                     systemImage: "lock",
                     String(
-                        localized: "tutorial.privacy.relay.detail",
-                        defaultValue: "Notifications pass through Togo's relay to reach Apple. The relay carries them sealed and never sees what they say."
+                        localized: "tutorial.approvals.unlock.detail",
+                        defaultValue: "On this device you can turn that off in Settings. A one-tap answer never picks \"always allow\"."
                     )
+                )
+                TutorialPoint(
+                    String(localized: "tutorial.approvals.relay.title", defaultValue: "What the relay sees"),
+                    systemImage: "arrow.left.arrow.right",
+                    liveActivitiesAvailable
+                        ? String(
+                            localized: "tutorial.approvals.relay.detail",
+                            defaultValue: "Pushes reach Apple through Togo's relay, which can't read notifications or your answers. It can read a Live Activity's status: the session number, agent, state, how many requests wait, when it started and the request's id."
+                        )
+                        : String(
+                            localized: "tutorial.approvals.relay.detail.notification",
+                            defaultValue: "Pushes reach Apple through Togo's relay, which can't read notifications or your answers. It sees only when they are sent and which device they go to."
+                        )
                 )
             }
         }
     }
 }
 
-// MARK: Ready
+// MARK: Sessions and review
 
-struct ReadyPage: View {
-    static let demoTitle = String(localized: "tutorial.ready.demo", defaultValue: "Explore with a demo machine")
-    /// Set at accessibility sizes, where the demo button moves from the bottom bar into the page.
-    var onDemo: (() -> Void)?
-
+struct SessionsPage: View {
     var body: some View {
-        TutorialPageLayout(page: .ready) {
-            NearbyMark()
-            if let onDemo {
-                Button(Self.demoTitle, action: onDemo)
-                    .buttonStyle(.secondary)
+        TutorialPageLayout(page: .sessions) {
+            AgentMarks()
+            VStack(alignment: .leading, spacing: 20) {
+                TutorialPoint(
+                    String(localized: "tutorial.sessions.start.title", defaultValue: "Start a session"),
+                    systemImage: "plus.bubble",
+                    String(
+                        localized: "tutorial.sessions.start.detail",
+                        defaultValue: "Pick a machine, a folder and an agent. It starts in tmux on the machine and opens here as a chat."
+                    )
+                )
+                TutorialPoint(
+                    String(localized: "tutorial.sessions.review.title", defaultValue: "Review changes"),
+                    systemImage: "plus.forwardslash.minus",
+                    String(
+                        localized: "tutorial.sessions.review.detail",
+                        defaultValue: "Read the diff, stage or discard files, commit, or comment on a line and send it to the agent."
+                    )
+                )
             }
         }
-    }
-}
-
-/// A page's single symbol, large and quiet, for pages whose idea has no diagram.
-struct TutorialMark: View {
-    let systemImage: String
-    let label: String
-
-    var body: some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 44, weight: .regular))
-            .foregroundStyle(Color.togoSnow)
-            .frame(width: 112, height: 112)
-            .overlay(Circle().strokeBorder(Color.togoLine, lineWidth: 2))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityElement()
-            .accessibilityLabel(label)
-    }
-}
-
-struct PrivacyMark: View {
-    var body: some View {
-        TutorialMark(
-            systemImage: "lock.shield",
-            label: String(localized: "tutorial.privacy.mark", defaultValue: "A lock: notifications are sealed end to end.")
-        )
-    }
-}
-
-struct NearbyMark: View {
-    var body: some View {
-        TutorialMark(
-            systemImage: "dot.radiowaves.left.and.right",
-            label: String(localized: "tutorial.ready.mark", defaultValue: "Togo looks for machines nearby.")
-        )
     }
 }

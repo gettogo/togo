@@ -30,11 +30,13 @@ private final class RecordingRegister: PushTokenRegistering {
     let live = Mutex<[String: String?]>([:])
     let commands = Mutex<[String: Bool]>([:])
     let commandLog = Mutex<[Bool]>([])
+    let ended = Mutex<[(hostId: String, token: String)]>([])
 
     func send(
         _ tokens: (apns: String?, liveActivity: String?, liveActivityStart: String?), liveActivityCommand: Bool,
-        pairing: Pairing
+        liveActivityEnded: String?, pairing: Pairing
     ) async throws {
+        if let liveActivityEnded { ended.withLock { $0.append((pairing.hostId, liveActivityEnded)) } }
         sent.withLock { $0.append((pairing.hostId, tokens.apns)) }
         commands.withLock { $0[pairing.hostId] = liveActivityCommand }
         commandLog.withLock { $0.append(liveActivityCommand) }
@@ -311,6 +313,39 @@ private final class RecordingRegister: PushTokenRegistering {
         #expect(sent.map(\.hostId) == ["h_studio"])
         #expect(sent.first?.apns == String(repeating: "cd", count: 32))
         #expect(helper.pairs.count == 1)
+    }
+
+    /// An ended activity is reported to its machine through the mailbox at once, in front or
+    /// not; in front the machines are also paired again over SSH.
+    @Test func endedLiveActivityReportedToItsMachine() async {
+        let (coordinator, _) = await coordinator()
+        await online(coordinator)
+        var asked = 0
+        coordinator.onRepairNeeded = { asked += 1 }
+        let token = String(repeating: "ef", count: 32)
+        await coordinator.liveActivityEnded(hostId: "h_studio", token: token)
+        await coordinator.liveActivityEnded(hostId: "h_unknown", token: token)
+
+        let ended = register.ended.withLock { $0 }
+        #expect(ended.map(\.hostId) == ["h_studio"])
+        #expect(ended.first?.token == token)
+        #expect(asked == 1)
+    }
+
+    /// "Done silent" reaches only a helper that takes it, and turning it on pairs again.
+    @Test func doneSilentSentOnlyToHelpersThatTakeIt() async {
+        let inputs = Inputs()
+        inputs.settings.doneSilent = true
+        let (coordinator, _) = await coordinator(inputs)
+        await online(coordinator)
+        #expect(helper.pairs.last?.doneSilent == false)
+
+        await online(coordinator, capabilities: ["push.v1", "donesilent.v1"])
+        #expect(helper.pairs.count == 2)
+        #expect(helper.pairs.last?.doneSilent == true)
+
+        await online(coordinator, capabilities: ["push.v1", "donesilent.v1"])
+        #expect(helper.pairs.count == 2, "nothing changed, so no pairing again")
     }
 
     @Test func foregroundTokenChangeAsksForMachinesAgain() async {

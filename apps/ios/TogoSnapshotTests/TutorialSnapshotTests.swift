@@ -14,7 +14,7 @@ struct TutorialSnapshotTests {
     }
 
     private func flow(_ model: TutorialModel) -> some View {
-        TutorialFlow(model: model, animated: false, now: Samples.now) { _ in }
+        TutorialFlow(model: model, now: Samples.now) { _ in }
     }
 
     @Test func welcome() {
@@ -22,6 +22,7 @@ struct TutorialSnapshotTests {
         assertScreen(named: "tutorial-welcome") { flow(model) }
     }
 
+    /// The last page, with Add your first machine and the demo in the bar.
     @Test func checklistMixed() {
         let model = model(on: .setup)
         model.record(SetupDetection(keyAccepted: true, report: nil))
@@ -49,60 +50,50 @@ struct TutorialSnapshotTests {
         }
     }
 
-    /// At accessibility sizes the two columns stack.
-    @Test func helperComparison() {
-        let model = model(on: .helper)
-        assertScreen(named: "tutorial-helper") { flow(model) }
+    @Test func approvals() {
+        let model = model(on: .approvals)
+        assertScreen(named: "tutorial-approvals") { flow(model) }
     }
 
-    /// The comparison on its own, so the AX5 references show the columns stacked.
-    @Test func helperComparisonColumns() {
-        assertScreen(named: "tutorial-comparison") {
-            ScrollView {
-                HelperComparison()
-                    .screenMargins()
-            }
+    /// Without Live Activities, as on an iPad: the request as an opened notification.
+    @Test func approvalsWithoutLiveActivities() {
+        let model = model(on: .approvals)
+        assertScreen(named: "tutorial-approvals-notification", sizes: [.iPhone17, .iPadPro13]) {
+            flow(model).environment(\.liveActivitiesAvailable, false)
         }
     }
 
-    @Test func privacy() {
-        let model = model(on: .privacy)
-        assertScreen(named: "tutorial-privacy") { flow(model) }
-    }
-
-    @Test func session() {
-        let model = model(on: .session)
-        assertScreen(named: "tutorial-session") { flow(model) }
-    }
-
-    @Test func ready() {
-        let model = model(on: .ready)
-        assertScreen(named: "tutorial-ready") { flow(model) }
+    @Test func sessions() {
+        let model = model(on: .sessions)
+        assertScreen(named: "tutorial-sessions") { flow(model) }
     }
 
     /// Learn more open: the detail each page folds away.
     @Test func welcomeLearnMore() {
         assertScreen(named: "tutorial-welcome-more") {
-            NavigationStack { WelcomePage(animated: false, expanded: true) }
+            NavigationStack { WelcomePage(expanded: true) }
         }
     }
 
-    @Test func helperLearnMore() {
-        assertScreen(named: "tutorial-helper-more") {
-            NavigationStack { HelperPage(expanded: true) }
+    @Test func approvalsLearnMore() {
+        assertScreen(named: "tutorial-approvals-more") {
+            NavigationStack { ApprovalsPage(now: Samples.now, expanded: true) }
         }
     }
 
-    @Test func privacyLearnMore() {
-        assertScreen(named: "tutorial-privacy-more") {
-            NavigationStack { PrivacyPage(expanded: true) }
+    @Test func helperLimits() {
+        assertScreen(named: "tutorial-helper-limits") {
+            ScrollView {
+                HelperLimits()
+                    .screenMargins()
+            }
         }
     }
 
-    @Test func sessionLearnMore() {
-        assertScreen(named: "tutorial-session-more") {
-            NavigationStack { SessionPage(playing: false, expanded: true) }
-        }
+    /// The guide on a full-screen iPad and beside another app: the column keeps to a readable width.
+    @Test func welcomeOnIPad() {
+        let model = model(on: .welcome)
+        assertScreen(named: "tutorial-welcome-ipad", sizes: [.iPadPro13, .iPadHalf]) { flow(model) }
     }
 
     @Test func demoMachine() {

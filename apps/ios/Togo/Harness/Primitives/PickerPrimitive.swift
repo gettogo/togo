@@ -226,7 +226,8 @@ struct PickerPrimitive: View {
                         .foregroundStyle(Color.togoMute)
                 }
             }
-            .frame(minHeight: 32)
+            // A header that folds its group is a 44 point target.
+            .frame(minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

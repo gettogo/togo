@@ -7,7 +7,7 @@ import TipKit
 /// configured, so "Getting started" instead raises `TutorialModel.tipsGeneration`: every tip gets
 /// a new id, which TipKit treats as a tip it has never shown.
 enum TutorialTip: String, CaseIterable, Sendable {
-    /// The first time a workspace opens: the key bar and the compose bar.
+    /// The first time a workspace opens: writing to the agent, and its terminal a tap away.
     case workspace
     /// The first request card: approving and denying, here and on the lock screen.
     case request
@@ -26,7 +26,7 @@ enum TutorialTip: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .workspace: String(localized: "tutorial.tip.workspace.title", defaultValue: "Keys and compose")
+        case .workspace: String(localized: "tutorial.tip.workspace.title", defaultValue: "Chat and terminal")
         case .request: String(localized: "tutorial.tip.request.title", defaultValue: "Answer from here")
         case .offline: String(localized: "tutorial.tip.offline.title", defaultValue: "What Offline means")
         }
@@ -37,12 +37,12 @@ enum TutorialTip: String, CaseIterable, Sendable {
         case .workspace:
             String(
                 localized: "tutorial.tip.workspace.message",
-                defaultValue: "Esc, Ctrl, Tab and arrows sit above the keyboard. Use compose for longer messages."
+                defaultValue: "Write to the agent here. Terminal at the top shows its own screen, with Esc, Ctrl and the arrows above the keyboard."
             )
         case .request:
             String(
                 localized: "tutorial.tip.request.message",
-                defaultValue: "Approve or deny and the agent carries on. The same request reaches your lock screen when Togo is closed."
+                defaultValue: "Approve or deny and the agent carries on. When Togo is closed, the same request reaches your Lock Screen and Apple Watch."
             )
         case .offline:
             String(

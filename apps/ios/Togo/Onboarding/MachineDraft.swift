@@ -92,7 +92,7 @@ struct MachineDraft: Hashable, Sendable {
         if trimmedName.isEmpty {
             errors[.name] = String(localized: "onboard.form.error.name", defaultValue: "Give this machine a name.")
         }
-        let host = address.trimmingCharacters(in: .whitespaces)
+        let host = Self.bareHost(address)
         if host.isEmpty {
             errors[.address] = String(localized: "onboard.form.error.addressEmpty", defaultValue: "Enter a host name or IP address.")
         } else if host.hasPrefix("-") {
@@ -103,11 +103,16 @@ struct MachineDraft: Hashable, Sendable {
             errors[.address] = String(
                 localized: "onboard.form.error.addressShape", defaultValue: "Enter only the host name, without a user or path."
             )
+        } else if host.filter({ $0 == ":" }).count == 1 || host.contains(where: { $0 == "[" || $0 == "]" }) {
+            // `studio.local:2222` or `[fe80::1]:2222`: the port would be read as part of the name.
+            errors[.address] = String(
+                localized: "onboard.form.error.addressPort", defaultValue: "Put the port in the Port field below."
+            )
         }
         if Self.port(port) == nil {
             errors[.port] = String(localized: "onboard.form.error.port", defaultValue: "Use a port from 1 to 65535.")
         }
-        let user = user.trimmingCharacters(in: .whitespaces)
+        let user = user.trimmingCharacters(in: .whitespacesAndNewlines)
         if user.isEmpty {
             errors[.user] = String(localized: "onboard.form.error.userEmpty", defaultValue: "Enter the user name you sign in with.")
         } else if user.hasPrefix("-") {
@@ -118,7 +123,7 @@ struct MachineDraft: Hashable, Sendable {
         if auth == .importedKey, importedKey == nil {
             errors[.key] = String(localized: "onboard.form.error.key", defaultValue: "Choose a key file to import.")
         }
-        if !jump.trimmingCharacters(in: .whitespaces).isEmpty, Self.endpoint(jump) == nil {
+        if !jump.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, Self.endpoint(jump) == nil {
             errors[.jump] = String(
                 localized: "onboard.form.error.jump", defaultValue: "Write the jump host as user@host or user@host:port."
             )
@@ -143,18 +148,26 @@ struct MachineDraft: Hashable, Sendable {
         case .password:
             auth = .password
         }
-        let jumps = jump.trimmingCharacters(in: .whitespaces).isEmpty ? [] : Self.endpoint(jump).map { [$0] } ?? []
-        let host = address.trimmingCharacters(in: .whitespaces)
+        let jumps = jump.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : Self.endpoint(jump).map { [$0] } ?? []
+        let host = Self.bareHost(address)
         return HostProfile(
             id: id, name: trimmedName,
-            endpoint: HostEndpoint(host: host, port: port, user: user.trimmingCharacters(in: .whitespaces)),
+            endpoint: HostEndpoint(host: host, port: port, user: user.trimmingCharacters(in: .whitespacesAndNewlines)),
             jumps: jumps, auth: auth, routes: Self.routes(routes, saved: savedAddress, address: host), lastRoute: lastRoute
         )
     }
 
     private static func port(_ text: String) -> Int? {
-        guard let value = Int(text.trimmingCharacters(in: .whitespaces)), (1...65535).contains(value) else { return nil }
+        guard let value = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)), (1...65535).contains(value) else { return nil }
         return value
+    }
+
+    /// The address as SSH takes it: trimmed, and an IPv6 address taken out of the brackets it
+    /// often carries when copied from a URL or an `ssh` command.
+    static func bareHost(_ text: String) -> String {
+        let host = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard host.hasPrefix("["), host.hasSuffix("]"), host.contains(":") else { return host }
+        return String(host.dropFirst().dropLast())
     }
 
     /// The text for a jump host in the form, the inverse of `endpoint(_:)`: an address with colons
@@ -167,7 +180,7 @@ struct MachineDraft: Hashable, Sendable {
 
     /// Parses `user@host`, `user@host:port` or `user@[v6 address]:port`.
     static func endpoint(_ text: String) -> HostEndpoint? {
-        let text = text.trimmingCharacters(in: .whitespaces)
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let at = text.firstIndex(of: "@") else { return nil }
         let user = String(text[..<at])
         var host = String(text[text.index(after: at)...])
@@ -187,7 +200,8 @@ struct MachineDraft: Hashable, Sendable {
             host = String(host[..<colon])
         }
         guard !user.isEmpty, !host.isEmpty, !user.hasPrefix("-"), !host.hasPrefix("-"),
-              !(user + host).contains(where: \.isWhitespace) else { return nil }
+              !(user + host).contains(where: \.isWhitespace),
+              !host.contains(where: { $0 == "@" || $0 == "/" || $0 == "[" || $0 == "]" }) else { return nil }
         return HostEndpoint(host: host, port: port, user: user)
     }
 

@@ -100,6 +100,7 @@ import TogoKit
 struct DictationEngineSection: View {
     let model: WhisperSettingsModel
     let update: (AppSettings) -> Void
+    @State private var confirmingDelete = false
 
     private var whisper: WhisperModel { model.whisper.model }
     private var size: String { ByteCountFormatter.string(fromByteCount: whisper.bytes, countStyle: .file) }
@@ -128,6 +129,14 @@ struct DictationEngineSection: View {
                 }
             }
             .groupedRows()
+            // Getting the model back is another large download, so deleting asks first.
+            .coordinated("settings.deleteWhisper", .dialog, isPresented: $confirmingDelete) { view, shown in
+                view.confirmationDialog(DictationCopy.whisperDeleteTitle, isPresented: shown, titleVisibility: .visible) {
+                    Button(DictationCopy.whisperDelete, role: .destructive) { model.delete(update: update) }
+                } message: {
+                    Text(DictationCopy.whisperDeleteMessage(size: size))
+                }
+            }
         }
     }
 
@@ -162,7 +171,7 @@ struct DictationEngineSection: View {
                     .frame(minHeight: 44)
             }
             if model.isInstalled {
-                Button(DictationCopy.whisperDelete, role: .destructive) { model.delete(update: update) }
+                Button(DictationCopy.whisperDelete, role: .destructive) { confirmingDelete = true }
                     .frame(minHeight: 44)
             } else {
                 Button(DictationCopy.whisperDownload(whisper.name, size: size)) { model.startDownload(update: update) }
@@ -214,6 +223,20 @@ extension DictationCopy {
     static let whisperFailedToHear = String(
         localized: "dictation.whisper.failedToHear", defaultValue: "Whisper couldn't turn that into text."
     )
+
+    static let whisperDeleteTitle = String(localized: "dictation.whisper.deleteTitle", defaultValue: "Delete the Whisper model?")
+    static let clearTitle = String(localized: "dictation.settings.clearTitle", defaultValue: "Clear recent dictations?")
+    static let clearConfirm = String(localized: "dictation.settings.clearConfirm", defaultValue: "Clear")
+    static let clearMessage = String(
+        localized: "dictation.settings.clearMessage", defaultValue: "They're removed from this device and can't be brought back."
+    )
+
+    static func whisperDeleteMessage(size: String) -> String {
+        String(
+            localized: "dictation.whisper.deleteMessage",
+            defaultValue: "Dictation goes back to Apple speech. Using Whisper again means downloading \(size) again."
+        )
+    }
 
     static func whisperDownload(_ name: String, size: String) -> String {
         String(localized: "dictation.whisper.download", defaultValue: "Download \(name), \(size)")

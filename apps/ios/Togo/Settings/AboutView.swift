@@ -17,11 +17,17 @@ struct AboutView: View {
     var body: some View {
         List {
             Section {
-                LabeledContent(settingsText("settings.about.version", "Version"), value: appVersion)
+                // Values in mute: the system's secondary gray falls under 4.5:1 on the light rows.
+                LabeledContent {
+                    Text(verbatim: appVersion).foregroundStyle(Color.togoMute)
+                } label: {
+                    Text(settingsText("settings.about.version", "Version"))
+                }
                 Link(destination: Self.sourceURL) {
                     LabeledContent(settingsText("settings.about.source", "Source code")) {
                         HStack(spacing: 6) {
                             Text(verbatim: "github.com/gettogo/togo")
+                                .foregroundStyle(Color.togoMute)
                             Image(systemName: "arrow.up.forward")
                                 .font(.footnote.weight(.semibold))
                                 .accessibilityHidden(true)
@@ -34,7 +40,11 @@ struct AboutView: View {
             if !machines.isEmpty {
                 Section {
                     ForEach(machines) { machine in
-                        LabeledContent(machine.name, value: helperVersion(machine.helper))
+                        LabeledContent {
+                            Text(verbatim: helperVersion(machine.helper)).foregroundStyle(Color.togoMute)
+                        } label: {
+                            Text(verbatim: machine.name)
+                        }
                     }
                 } header: {
                     heading(settingsText("settings.about.helpers", "Helpers"))

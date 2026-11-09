@@ -59,7 +59,7 @@ struct ConnectingOverlay: View {
 
     var body: some View {
         content
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .modifier(OnePage())
             .background(Color.togoInk)
             // Every touch on the cover is its own; none reaches the terminal underneath.
             .contentShape(Rectangle())
@@ -102,6 +102,33 @@ struct ConnectingOverlay: View {
                 message: WorkspaceCopy.deviceOfflineMessage, action: .init(WorkspaceCopy.tryAgain, run: retry)
             )
         }
+    }
+}
+
+/// The cover spans the whole pane, but in book posture its words and button keep to the wider
+/// page, so Try again never sits on the fold of a pane that spans both pages.
+private struct OnePage: ViewModifier {
+    @Environment(\.fold) private var fold
+    @Environment(\.foldOrigin) private var anchor
+    /// Where the cover sits across the window, which the fold is measured against.
+    @State private var span = Span()
+
+    func body(content: Content) -> some View {
+        let page = fold.readingPage(from: anchor, minX: span.minX, width: span.width)
+        content
+            .frame(width: page.map { $0.upperBound - $0.lowerBound })
+            .padding(.leading, page?.lowerBound ?? 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: page == nil ? .center : .leading)
+            // The full-width frame outside the page, so placing the page never measures again.
+            .onGeometryChange(for: Span.self) { proxy in
+                let frame = proxy.frame(in: .global)
+                return Span(minX: frame.minX, width: frame.width)
+            } action: { span = $0 }
+    }
+
+    private struct Span: Equatable {
+        var minX: CGFloat = 0
+        var width: CGFloat = 0
     }
 }
 

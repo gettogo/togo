@@ -74,6 +74,17 @@ public struct NotificationServiceCore: Sendable {
         return content
     }
 
+    /// The text shown for a push that opened but is too old or seen already. The service
+    /// cannot drop it, so it claims nothing, makes no sound and stays out of the way.
+    public static func quiet() -> UNNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = "Togo"
+        content.body = String(localized: "notif.quiet", defaultValue: "Open Togo for the latest.")
+        content.interruptionLevel = .passive
+        content.threadIdentifier = "togo"
+        return content
+    }
+
     /// Opens the envelope in `userInfo`. The plaintext names no machine, so each pairing is
     /// tried with its own aad (`hostId|deviceId`) and only the sender's opens.
     public func open(userInfo: [AnyHashable: Any]) -> Opened? {
@@ -102,11 +113,11 @@ public struct NotificationServiceCore: Sendable {
         let age = clock().timeIntervalSince1970 - Double(p.ts) / 1000
         let limit = p.kind == .offline ? Self.offlineMaxAge : Self.maxAge
         guard age <= limit, age >= -Self.maxSkew else {
-            return Result(content: Self.generic(), pendingChanged: false)
+            return Result(content: Self.quiet(), pendingChanged: false)
         }
         if p.kind == .offline {
             guard pending.claimOffline(hostId: opened.pairing.hostId, ts: p.ts) else {
-                return Result(content: Self.generic(), pendingChanged: false)
+                return Result(content: Self.quiet(), pendingChanged: false)
             }
         } else {
             // Heard from the machine: its next silence is a new outage.
@@ -163,7 +174,9 @@ public struct NotificationServiceCore: Sendable {
             pending.upsert(PendingRequest(
                 requestId: requestId, hostId: opened.pairing.hostId, sessionId: p.sessionId, bib: p.bib, agent: p.agent,
                 host: p.host ?? opened.pairing.machineName, title: PromptText.clean(p.title, maxLines: 1),
-                subject: p.subject, options: p.options ?? [], receivedAt: clock(), answered: nil,
+                // The window runs from when the machine sent it: a push can arrive late.
+                subject: p.subject, options: p.options ?? [],
+                receivedAt: min(clock(), Date(timeIntervalSince1970: Double(p.ts) / 1000)), answered: nil,
                 allowText: p.allowText == true ? true : nil
             ))
             changed = true

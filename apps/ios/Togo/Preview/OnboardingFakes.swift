@@ -22,11 +22,14 @@ import TogoKit
         self.newKey = newKey
     }
 
+    /// The open discovery stream, so a test can send events after the scripted ones.
+    private(set) var discoveryFeed: AsyncStream<DiscoveryEvent>.Continuation?
+
     func discover() -> AsyncStream<DiscoveryEvent> {
-        let events = events
-        return AsyncStream { continuation in
-            for event in events { continuation.yield(event) }
-        }
+        let (stream, continuation) = AsyncStream.makeStream(of: DiscoveryEvent.self)
+        for event in events { continuation.yield(event) }
+        discoveryFeed = continuation
+        return stream
     }
 
     func deviceKey() async throws -> KeyInfo {

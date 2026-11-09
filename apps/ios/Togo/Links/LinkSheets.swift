@@ -125,6 +125,7 @@ struct OpenAskSheet: View {
 
 /// Every web link on a terminal's screen and recent scrollback, newest first.
 struct LinksSheet: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let urls: [URL]
     let handle: SheetHandle
     let open: @MainActor @Sendable (URL) -> Void
@@ -157,7 +158,13 @@ struct LinksSheet: View {
     }
 
     private func row(_ url: URL) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        // At accessibility sizes Copy and Open go under the address, so the address keeps the
+        // row's width instead of breaking a word per line beside them.
+        let large = dynamicTypeSize.isAccessibilitySize
+        let layout = large
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+        return layout {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: url.host(percentEncoded: false) ?? "")
                     .font(.subheadline.weight(.semibold))
@@ -170,18 +177,20 @@ struct LinksSheet: View {
                     .truncationMode(.middle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button {
-                UIPasteboard.general.url = url
-                copied = url
-            } label: {
-                Text(copied == url ? LinkCopy.copied : LinkCopy.copy)
-                    .contentTransition(.interpolate)
+            HStack(spacing: 12) {
+                Button {
+                    UIPasteboard.general.url = url
+                    copied = url
+                } label: {
+                    Text(copied == url ? LinkCopy.copied : LinkCopy.copy)
+                        .contentTransition(.interpolate)
+                }
+                .buttonStyle(.secondary(.fit))
+                // motion: cause → effect — the tapped Copy says Copied in place
+                .motion(.respond, value: copied == url)
+                Button(LinkCopy.open) { handle.close { open(url) } }
+                    .buttonStyle(.primary(.fit))
             }
-            .buttonStyle(.secondary(.fit))
-            // motion: cause → effect — the tapped Copy says Copied in place
-            .motion(.respond, value: copied == url)
-            Button(LinkCopy.open) { handle.close { open(url) } }
-                .buttonStyle(.primary(.fit))
         }
         .accessibilityElement(children: .contain)
     }

@@ -49,7 +49,9 @@ struct ScreenDone: Equatable {
 
     @ToolbarContentBuilder @MainActor var item: some ToolbarContent {
         ToolbarItem(placement: .confirmationAction) {
+            // Escape closes the screen too: Done here only dismisses.
             Button(PrimitiveCopy.done, systemImage: "checkmark", role: .confirm) { run() }
+                .keyboardShortcut(.cancelAction)
         }
     }
 }

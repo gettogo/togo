@@ -74,7 +74,7 @@ enum PresentationOpening: Equatable, Sendable {
 }
 
 /// The app's one presentation policy: content class times width, never device. Each row
-/// follows the HIG and the Duo rules.
+/// follows the HIG's sheet, popover and split view rules and the iPhone Duo layout rules.
 enum AdaptivePresentation {
     /// Narrower than this is compact whatever the size class says: two comfortable phone
     /// columns do not fit (a Duo's Split View half is about 475 pt, an outer display 466 pt).

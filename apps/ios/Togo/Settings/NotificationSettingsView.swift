@@ -152,7 +152,7 @@ struct NotificationSettingsView: View {
             } message: { _ in
                 Text(settingsText(
                     "settings.notifications.commands.message",
-                    "Live Activities can't be encrypted, so command text would pass through Togo's relay in plain text. Use this only with a relay you run yourself."
+                    "The command an agent wants to run will show on the Lock Screen and in the Dynamic Island, where anyone holding your locked \(DeviceName.model) can read it. It stays encrypted on the way."
                 ))
             }
         }
@@ -162,8 +162,13 @@ struct NotificationSettingsView: View {
 
     private var status: some View {
         Section {
-            LabeledContent(settingsText("settings.notifications.title", "Notifications"), value: statusText)
-                .frame(minHeight: 44)
+            LabeledContent {
+                // The system's secondary gray falls under 4.5:1 on the light grouped rows.
+                Text(statusText).foregroundStyle(Color.togoMute)
+            } label: {
+                Text(settingsText("settings.notifications.title", "Notifications"))
+            }
+            .frame(minHeight: 44)
             switch notifications.authorization {
             case .denied:
                 Button(settingsText("settings.notifications.openSettings", "Open settings")) {
@@ -229,7 +234,7 @@ struct NotificationSettingsView: View {
                 }
                 Text(settingsText(
                     "settings.notifications.relay.footer",
-                    "Notifications are sealed on your machine and opened on this \(DeviceName.model), so the relay can't read them. It does see when they're sent, this \(DeviceName.model)'s push address, and command text where you turn it on."
+                    "Notifications are sealed on your machine and your answers on this \(DeviceName.model), so the relay can't read either. It does see when they're sent, this \(DeviceName.model)'s push address, and each Live Activity's status: session number, agent, state, how many requests wait, when it started and the request's id."
                 ))
             }
         }
@@ -289,16 +294,20 @@ struct NotificationMachinesSection: View {
             ForEach(machines) { machine in
                 row(machine)
                 if machine.canShowCommands, liveActivitiesAvailable {
+                    let note = Self.commandNote(machine, showing: settings.liveActivityCommand(for: machine.id))
                     Toggle(isOn: Binding { settings.liveActivityCommand(for: machine.id) } set: { change(machine, $0) }) {
                         Text(settingsText("settings.notifications.commands", "Show command text"))
-                        if let note = Self.commandNote(machine, showing: settings.liveActivityCommand(for: machine.id)) {
+                        if let note {
                             Text(note)
                                 .font(.subheadline)
                                 .foregroundStyle(Color.togoMute)
                         }
                     }
                     .frame(minHeight: 44)
-                    .accessibilityHint(machine.name)
+                    // One switch per machine: the machine's name is in the label, so VoiceOver
+                    // and Voice Control tell them apart; the pending note follows as the hint.
+                    .accessibilityLabel(settingsText("settings.notifications.commands.for", "Show command text for \(machine.name)"))
+                    .accessibilityHint(note ?? "")
                 }
             }
         } header: {

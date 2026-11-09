@@ -83,6 +83,7 @@ struct ComposerNoticeLine: View {
                 .foregroundStyle(Color.togoSnow)
                 .fixedSize()
                 .frame(minHeight: 44)
+                .contentShape(.rect)
         }
     }
 }
@@ -144,6 +145,7 @@ struct ComposerChipStyle: ButtonStyle {
             }
             .frame(minHeight: 44)
             .contentShape(.capsule)
+            .hoverEffect(.highlight)
             .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }

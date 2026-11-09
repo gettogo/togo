@@ -53,20 +53,25 @@ private struct WebPreview: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
+                    // Escape closes the preview only, never the review under it.
                     Button(PortsCopy.done, systemImage: "checkmark", role: .confirm) { dismiss() }
+                        .keyboardShortcut(.cancelAction)
                 }
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button(PortsCopy.back, systemImage: "chevron.backward") {
                         activity()
                         page?.view.goBack()
                     }
+                    .keyboardShortcut("[", modifiers: .command)
                     .disabled(page?.canGoBack != true)
                     Button(PortsCopy.forward, systemImage: "chevron.forward") {
                         activity()
                         page?.view.goForward()
                     }
+                    .keyboardShortcut("]", modifiers: .command)
                     .disabled(page?.canGoForward != true)
                     Button(PortsCopy.reload, systemImage: "arrow.clockwise", action: reload)
+                        .keyboardShortcut("r", modifiers: .command)
                 }
             }
         }

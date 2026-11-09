@@ -24,7 +24,7 @@ struct FoldColumnSnapshotTests {
     @Test func tutorialKeepsToTheLeadingPage() {
         let model = model(on: .welcome)
         assertScreen(named: "tutorial-welcome", sizes: [.duoBook]) {
-            TutorialFlow(model: model, animated: false, now: Samples.now) { _ in }
+            TutorialFlow(model: model, now: Samples.now) { _ in }
         }
     }
 }

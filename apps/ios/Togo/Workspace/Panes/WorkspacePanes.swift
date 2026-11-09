@@ -221,3 +221,37 @@ private struct KeyboardOwner: Equatable {
     var focused: TabID?
     var twoPanes: Bool
 }
+
+/// The panes' last report, read only by the small views that place things around the panes, so
+/// a new report never rebuilds the whole workspace.
+@Observable final class PanesState {
+    var report = PanesReport.single
+}
+
+/// Content built from the panes' report.
+struct WithPanes<Content: View>: View {
+    let state: PanesState
+    @ViewBuilder let content: (PanesReport) -> Content
+
+    var body: some View {
+        content(state.report)
+    }
+}
+
+/// Keeps a full-width bar to the columns the panes give it, such as the leading page of a book,
+/// so nothing in it lands on the fold. Without columns it keeps the full width.
+struct PaneColumns: ViewModifier {
+    let state: PanesState
+    let pick: (PanesReport) -> CGRect?
+
+    func body(content: Content) -> some View {
+        if let frame = pick(state.report), frame.width > 0 {
+            content
+                .frame(width: frame.width)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .offset(x: frame.minX)
+        } else {
+            content
+        }
+    }
+}

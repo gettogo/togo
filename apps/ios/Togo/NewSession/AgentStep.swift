@@ -6,6 +6,7 @@ struct AgentStep: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The agents this machine lacks, folded away until asked for (spec §2.1, §2.2).
     @State private var missing = Disclosure()
+    @FocusState private var nameFocused: Bool
     let model: NewSessionModel
     let onStart: () async -> Void
 
@@ -188,8 +189,11 @@ struct AgentStep: View {
         TextField(NewSessionCopy.namePlaceholder, text: Bindable(model).name, axis: .vertical)
             .font(.body)
             .lineLimit(1...4)
-            .onChange(of: model.name) {
-                if model.name.contains(where: \.isNewline) { model.name = model.name.filter { !$0.isNewline } }
+            .focused($nameFocused)
+            .onChange(of: model.name) { old, new in
+                // The keyboard's Done ends the edit, as in a one-line field.
+                if FlagsField.typedReturn(from: old, to: new) { nameFocused = false }
+                if new.contains(where: \.isNewline) { model.name = new.filter { !$0.isNewline } }
             }
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()

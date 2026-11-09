@@ -188,10 +188,11 @@ private struct AnswerButtons: View {
             Task { await store.answer(request.requestId, "deny") }
         } label: {
             Text(WatchCopy.no)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                // The whole row answers, not just the word.
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .frame(minHeight: 36)
         .disabled(sending)
         // motion: cause → effect — the buttons give way to the result in the same place
         .transition(Motion.swap(reduce: reduceMotion))

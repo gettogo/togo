@@ -145,17 +145,26 @@ struct IntegrationsRows: View {
 /// One harness: its mark and name, the state word or the button that changes it, and a
 /// failure line in place when the last change didn't take.
 private struct IntegrationRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let report: IntegrationReport
     let busy: Bool
     let failure: String?
     let setUp: () -> Void
 
     var body: some View {
+        // At accessibility sizes the state and its button go under the name, and the mark
+        // leaves, so the name never breaks mid-word beside them.
+        let large = dynamicTypeSize.isAccessibilitySize
+        let layout = large
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
-                AgentGlyph(agent: report.id)
-                    .font(.title3)
-                    .frame(width: 28, alignment: .leading)
+            layout {
+                if !large {
+                    AgentGlyph(agent: report.id)
+                        .font(.title3)
+                        .frame(width: 28, alignment: .leading)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: report.name)
                         .foregroundStyle(Color.togoSnow)
@@ -165,7 +174,8 @@ private struct IntegrationRow: View {
                             .foregroundStyle(Color.togoMute)
                     }
                 }
-                Spacer(minLength: 8)
+                .frame(maxWidth: large ? .infinity : nil, alignment: .leading)
+                if !large { Spacer(minLength: 8) }
                 trailing
             }
             if let failure {

@@ -32,6 +32,8 @@ struct PortsView: View {
                     url: preview.url, title: PortsCopy.previewTitle(preview.remote),
                     activity: { model.touch() }
                 )
+                // A web page wants the room: full height on a phone, page-sized in a regular window.
+                .togoSheet(.page)
             }
     }
 

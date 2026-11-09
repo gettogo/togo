@@ -42,9 +42,12 @@ struct CommandMenuPanel: View {
                 .labelStyle(.iconOnly)
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(Color.togoMute)
-                .frame(width: 44, height: 36)
+                // A 44 pt target; the header keeps its 36 pt row.
+                .frame(width: 44, height: 44)
                 .contentShape(.rect)
+                .padding(.vertical, -4)
                 .buttonStyle(.plain)
+                .hoverEffect(.highlight)
                 .keyboardShortcut(.cancelAction)
                 .accessibilityIdentifier("composer.menu.close")
         }
@@ -68,6 +71,7 @@ struct CommandMenuPanel: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
                             if !isFiles, case let .choose(choices, _) = CommandKind.dispatch(item) {
                                 ChoiceCapsules(choices: choices, current: CommandKind.current(choices)?.id) { choice in
                                     model.closeMenu()

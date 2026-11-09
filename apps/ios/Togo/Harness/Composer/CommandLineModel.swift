@@ -44,6 +44,9 @@ import TogoKit
     /// What the palette's search starts with when it opens: a choice command typed in full.
     var paletteSeed: String?
     private(set) var sending = false
+    /// A typed command is being matched against the list, which may have to be read first.
+    /// A second Send or Return in that wait is dropped, so the line goes once.
+    @ObservationIgnored private var routing = false
     /// One quiet line about the last thing that did not work, or what an action said.
     var notice: String?
     /// What the notice offers: Open terminal after a failed stop, Try again after a failed send.
@@ -313,7 +316,13 @@ import TogoKit
     /// typed, for "Send as text" and for lines a command already resolved.
     func submit(asText: Bool = false) async {
         guard canSend else { return }
-        if !asText, await routeTyped() { return }
+        if !asText {
+            guard !routing else { return }
+            routing = true
+            let routed = await routeTyped()
+            routing = false
+            if routed { return }
+        }
         let text = CommandLineLogic.outgoing(draft) ?? ""
         let images = attachments.paths
         guard !text.isEmpty || !images.isEmpty else { return }

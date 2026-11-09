@@ -66,6 +66,7 @@ struct PromptRequestView: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.togoSnow)
                         .frame(minHeight: 44)
+                        .contentShape(.rect)
                 }
                 Group { outcome }
                     .settling(shownState)

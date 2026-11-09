@@ -21,6 +21,9 @@ extension View {
             .scrollContentBackground(.hidden)
             .background(Color.togoInk)
             .listRowSeparatorTint(Color.togoLine)
+            // Section footers and secondary values draw in the secondary level: the system gray
+            // is 3.3:1 on light ink, mute is 5.5:1 and follows Increase Contrast.
+            .foregroundStyle(Color.primary, Color.togoMute)
     }
 
     /// Puts a section's rows on the grouped card surface.

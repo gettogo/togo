@@ -35,9 +35,15 @@ func (f *fixture) register(t *testing.T, r wire.RegisterPlaintext, signer ed2551
 	if r.LiveActivityCommand == nil {
 		r.LiveActivityCommand = new(bool)
 	}
-	sig := ed25519.Sign(signer, wire.RegisterSignedBytes(f.keys.HostID, r.DeviceID, r.APNsToken,
-		r.LiveActivityToken, r.LiveActivityStartToken, *r.LiveActivityCommand, r.TS))
-	r.Sig = base64.RawURLEncoding.EncodeToString(sig)
+	msg := wire.RegisterSignedBytes(f.keys.HostID, r.DeviceID, r.APNsToken,
+		r.LiveActivityToken, r.LiveActivityStartToken, *r.LiveActivityCommand, r.TS)
+	if r.LiveActivityEnded != "" {
+		msg = wire.RegisterEndedSignedBytes(f.keys.HostID, r.DeviceID, r.APNsToken,
+			r.LiveActivityToken, r.LiveActivityStartToken, r.LiveActivityEnded, *r.LiveActivityCommand, r.TS)
+	}
+	if r.Sig == "" {
+		r.Sig = base64.RawURLEncoding.EncodeToString(ed25519.Sign(signer, msg))
+	}
 	pt, _ := json.Marshal(r)
 	ct, err := seal.Seal(f.hostPub, pt, seal.LabelAnswer, []byte(f.keys.HostID))
 	if err != nil {
@@ -212,5 +218,40 @@ func TestRegisterCommandChoiceIsSigned(t *testing.T) {
 	ct, _ := seal.Seal(f.hostPub, raw, seal.LabelAnswer, []byte(f.keys.HostID))
 	if _, err := f.verifier().Open(ct); !errors.Is(err, ErrSignature) {
 		t.Fatalf("flipped choice: %v", err)
+	}
+}
+
+// A registration that reports an ended Live Activity applies its tokens,
+// then forgets the ended one; the report must be signed as v3, so a v2
+// signature cannot be stretched to cover it.
+func TestRegisterReportsEndedLiveActivity(t *testing.T) {
+	f := newFixture(t, "")
+	r, got := registerRunner(t, f)
+	var ended [][2]string
+	r.cfg.EndLive = func(device, token string) error {
+		if len(*got) == 0 {
+			t.Error("ended before the tokens applied")
+		}
+		ended = append(ended, [2]string{device, token})
+		return nil
+	}
+	ct := f.register(t, wire.RegisterPlaintext{LiveActivityStartToken: regStart, LiveActivityEnded: regLive,
+		TS: f.now.UnixMilli()}, f.devPriv)
+	if !r.handle(context.Background(), frame{ID: "m1", Ciphertext: ct}) {
+		t.Fatal("registration not acked")
+	}
+	if len(ended) != 1 || ended[0] != [2]string{"phone-1", regLive} {
+		t.Fatalf("ended %+v", ended)
+	}
+
+	v2 := wire.RegisterPlaintext{LiveActivityEnded: regLive, TS: f.now.UnixMilli() + 1}
+	v2.Sig = base64.RawURLEncoding.EncodeToString(ed25519.Sign(f.devPriv,
+		wire.RegisterSignedBytes(f.keys.HostID, "phone-1", "", "", "", false, v2.TS)))
+	if _, err := f.verifier().Open(f.register(t, v2, f.devPriv)); !errors.Is(err, ErrSignature) {
+		t.Fatalf("v2 signature over an ended report: %v", err)
+	}
+	bad := wire.RegisterPlaintext{LiveActivityEnded: "abcd", TS: f.now.UnixMilli() + 2}
+	if _, err := f.verifier().Open(f.register(t, bad, f.devPriv)); !errors.Is(err, ErrMalformed) {
+		t.Fatalf("short ended token: %v", err)
 	}
 }

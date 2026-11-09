@@ -27,6 +27,8 @@ import TogoTerminal
         store.perform(.controlCenter)
         #expect(!store.sidebar.isHidden)
         #expect(store.sidebar.searchRequests == requests + 1)
+        // The sidebar comes on screen after the request; it is held until a roster takes it.
+        #expect(store.sidebar.searchPending)
         // The workspace stays beside the sidebar.
         #expect(store.workspaceOpen)
 

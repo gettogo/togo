@@ -44,11 +44,11 @@ struct HelperCheckView: View {
             message: needsTmux
                 ? String(
                     localized: "onboard.helper.needsTmux.message",
-                    defaultValue: "The Togo helper is running, but it starts every session in tmux 3.2 or newer. Install tmux on \(machine), then check again."
+                    defaultValue: "The Togo helper is installed, but it starts every session in tmux 3.2 or newer. Install tmux on \(machine), then check again."
                 )
                 : String(
                     localized: "onboard.helper.ready.message",
-                    defaultValue: "The Togo helper is running, so you'll see each session's status, answer requests and get notifications."
+                    defaultValue: "The Togo helper is installed, so each agent gets a chat, and you can answer its requests and get notifications."
                 )
         ) {
             if needsTmux {
@@ -143,18 +143,25 @@ struct HelperCheckView: View {
             title: outdated
                 ? String(localized: "onboard.helper.outdated.title", defaultValue: "Update the Togo helper")
                 : String(localized: "onboard.helper.missing.title", defaultValue: "Add the Togo helper"),
-            message: String(
-                localized: "onboard.helper.missing.message",
-                defaultValue: "A small program on \(machine) that adds:"
-            )
+            message: outdated
+                ? String(
+                    localized: "onboard.helper.outdated.message",
+                    defaultValue: "The helper on \(machine) is too old for this version of Togo. The current one adds:"
+                )
+                : String(
+                    localized: "onboard.helper.missing.message",
+                    defaultValue: "A small program on \(machine) that adds:"
+                )
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                benefit(String(localized: "onboard.helper.adds.status", defaultValue: "Each session's status at a glance"), "list.bullet")
-                benefit(String(localized: "onboard.helper.adds.requests", defaultValue: "Requests you can answer from here"), "checkmark.bubble")
+                benefit(String(localized: "onboard.helper.adds.status", defaultValue: "A chat for each agent, with its status"), "bubble.left.and.text.bubble.right")
+                benefit(String(localized: "onboard.helper.adds.requests", defaultValue: "Approvals from here, the Lock Screen or your Watch"), "checkmark.bubble")
                 benefit(String(localized: "onboard.helper.adds.notifications", defaultValue: "Notifications when an agent needs you"), "bell")
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text(String(localized: "onboard.helper.install", defaultValue: "To install it, run this on \(machine):"))
+                Text(outdated
+                    ? String(localized: "onboard.helper.update", defaultValue: "To update it, run this on \(machine):")
+                    : String(localized: "onboard.helper.install", defaultValue: "To install it, run this on \(machine):"))
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
                 CopyableText(text: install)

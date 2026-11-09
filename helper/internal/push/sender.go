@@ -56,13 +56,18 @@ type Message struct {
 	// Kind is the relay kind: alert, or background for clear.
 	Kind       string
 	CollapseID string
+	// watchAlert sends an alert to Watch devices as an alert rather than
+	// silently: a phone's Live Activity stands in for its own alert, so
+	// nothing is mirrored to the Watch.
+	watchAlert bool
 }
 
 // Sender turns hub events into sealed relay pushes for every live paired
 // device. Pushes other than clear are skipped while any app is in the
 // foreground (it gets the events directly) and for muted sessions. It also
 // drives one Live Activity per machine on iOS devices (see LiveTracker);
-// Watch devices get background pushes only.
+// Watch devices get background pushes, or the alert itself when a phone's
+// Live Activity stands in for it.
 type Sender struct {
 	Hub     Hub
 	Keys    func() (HostKeys, error)
@@ -207,7 +212,8 @@ var liveStartConfirm = 10 * time.Second
 // gets the activity update with an alert instead of the push; a device
 // just sent a start (which alerts itself) gets the push only if the
 // activity is not confirmed within liveStartConfirm. Every other device,
-// and every Watch, gets the push.
+// and every Watch, gets the push; while a phone's activity stands in, the
+// Watch's push is an alert, since there is no phone alert to mirror.
 func (s *Sender) send(ctx context.Context, m Message) []Result {
 	s.init()
 	sid := ""
@@ -216,6 +222,9 @@ func (s *Sender) send(ctx context.Context, m Message) []Result {
 	}
 	shows := m.Kind == relayAlert && s.Live.Shows(m.Plaintext.Kind, m.Plaintext.RequestID, sid)
 	alerted, started := s.pumpLiveAlert(ctx, shows)
+	if len(alerted)+len(started) > 0 {
+		m.watchAlert = true
+	}
 	res := s.deliver(ctx, m, func(d Device) bool { return !alerted[d.DeviceID] && !started[d.DeviceID] })
 	for id := range alerted {
 		res = append(res, Result{DeviceID: id})
@@ -223,6 +232,13 @@ func (s *Sender) send(ctx context.Context, m Message) []Result {
 	for id := range started {
 		s.confirmStart(m, id)
 		res = append(res, Result{DeviceID: id})
+	}
+	if m.Plaintext.Kind == wire.PushNeedsYou && len(alerted)+len(started) > 0 {
+		// No notification reaches those phones' service extension, so the request goes to
+		// the app silently too: its widget, Siri count and Watch replies know it is waiting.
+		bg := m
+		bg.Kind = relayBackground
+		s.deliver(ctx, bg, func(d Device) bool { return alerted[d.DeviceID] || started[d.DeviceID] })
 	}
 	return res
 }
@@ -505,9 +521,12 @@ func (s *Sender) deliverOne(ctx context.Context, hostID string, d Device, m Mess
 	body := relayPush{Token: d.APNsToken, Env: d.Env, Ciphertext: ct, CollapseID: m.CollapseID, Kind: m.Kind}
 	if d.EffectivePlatform() == wire.PlatformWatch {
 		// The phone's alert is mirrored to the Watch with its actions, so the Watch app gets
-		// silent pushes that only update its list and complication.
+		// silent pushes that only update its list and complication; when a phone's Live
+		// Activity stands in for that alert, the Watch gets the alert itself.
 		body.Target = targetWatch
-		body.Kind = relayBackground
+		if !m.watchAlert || m.Kind != relayAlert {
+			body.Kind = relayBackground
+		}
 	}
 	return s.post(ctx, d, body)
 }

@@ -180,6 +180,9 @@ public struct RegisterPlaintext: Codable, Sendable {
     public var apnsToken: String?
     public var liveActivityToken: String?
     public var liveActivityStartToken: String?
+    /// The update token of an activity that ended or was dismissed here, so the helper stops
+    /// letting it stand in for the push. Left out when nil, as older helpers refuse the key.
+    public var liveActivityEnded: String?
     public var liveActivityCommand: Bool
     public var ts: Int64
     /// Ed25519 over `Signing.registerBytes`, base64url without padding.
@@ -187,12 +190,13 @@ public struct RegisterPlaintext: Codable, Sendable {
 
     public init(
         deviceId: String, apnsToken: String?, liveActivityToken: String?, liveActivityStartToken: String?,
-        liveActivityCommand: Bool, ts: Int64, sig: String
+        liveActivityEnded: String? = nil, liveActivityCommand: Bool, ts: Int64, sig: String
     ) {
         self.deviceId = deviceId
         self.apnsToken = apnsToken
         self.liveActivityToken = liveActivityToken
         self.liveActivityStartToken = liveActivityStartToken
+        self.liveActivityEnded = liveActivityEnded
         self.liveActivityCommand = liveActivityCommand
         self.ts = ts
         self.sig = sig

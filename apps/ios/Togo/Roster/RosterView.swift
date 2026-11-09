@@ -29,6 +29,9 @@ struct RosterView: View {
     /// keep-awake switch, the tutorial's Done). Otherwise it goes: the roster's bar row is its
     /// search field with the menu beside it.
     var keepsNavigationBar = false
+    /// The roster is the sidebar column beside the terminal, so its bar offers to hide it: the
+    /// way to a full-width terminal by touch, as ⌃⌘S is by keyboard.
+    var sidebar = false
 
     @State private var killTarget: SessionRow?
     @State private var renameTarget: SessionRow?
@@ -75,7 +78,9 @@ struct RosterView: View {
     private var screen: some View {
         content
             .background(Color.togoInk)
-            .onChange(of: store.sidebar.searchRequests) { searching = true }
+            // `initial`: a roster that comes on screen with the ⌘K that showed it, as the
+            // sidebar does, still takes it.
+            .onChange(of: store.sidebar.searchRequests, initial: true) { takeSearchRequest() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
@@ -142,6 +147,13 @@ struct RosterView: View {
                             .listRowBackground(Color.togoInk)
                             .listRowSeparator(.hidden)
                     }
+                    // A filter hides lines, those that need the user included; it says so
+                    // where the lines start, with the way back.
+                    if store.filter != .all {
+                        RosterFilterRow(filter: store.filter) { store.filter = .all }
+                            .listRowBackground(Color.togoInk)
+                            .listRowSeparator(.hidden)
+                    }
                 }
                 .listSectionSeparator(.hidden)
                 ForEach(roster.groups) { group in
@@ -157,7 +169,13 @@ struct RosterView: View {
             .overlay {
                 if store.listNarrowed && roster.lines.isEmpty {
                     if store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        ContentUnavailableView(ControlCenterCopy.filterEmpty(store.filter), systemImage: "line.3.horizontal.decrease")
+                        ContentUnavailableView {
+                            Label(ControlCenterCopy.filterEmpty(store.filter), systemImage: "line.3.horizontal.decrease")
+                        } actions: {
+                            Button(RosterCopy.showAll) { store.filter = .all }
+                                .buttonStyle(.secondary(.fit))
+                                .accessibilityIdentifier("roster.filterEmpty.showAll")
+                        }
                     } else {
                         ContentUnavailableView.search(text: store.query)
                     }
@@ -192,6 +210,13 @@ struct RosterView: View {
     /// One button: everything that is not a session lives in its menu, so the roster has no
     /// bottom bar of its own; the prompt bar sits there.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if sidebar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(AppCommandCopy.hideSidebar, systemImage: "sidebar.leading") { store.toggleSidebar() }
+                    .foregroundStyle(Color.togoSnow)
+                    .accessibilityIdentifier("roster.hideSidebar")
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Menu { menuItems } label: {
                 Label(RosterCopy.more, systemImage: "line.3.horizontal")
@@ -298,6 +323,14 @@ struct RosterView: View {
         else { return .ignored }
         killTarget = row
         return .handled
+    }
+
+    /// Puts the caret in the search field for a ⌘K no roster has taken yet. A turn later, so a
+    /// roster that has just come on screen has its field in place first.
+    private func takeSearchRequest() {
+        guard store.sidebar.searchPending else { return }
+        store.sidebar.searchPending = false
+        Task { @MainActor in searching = true }
     }
 
     private func returnToTerminal() -> KeyPress.Result {

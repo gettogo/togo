@@ -264,6 +264,7 @@ struct QuestionRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
         .answerSource(AnswerMatch.id(item.id), in: answerSpace, active: source)
         .accessibilityAddTraits(chosen ? .isSelected : [])
     }

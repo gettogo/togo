@@ -67,6 +67,7 @@ struct DictationSettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var model: DictationSettingsModel
     @State private var engine: WhisperSettingsModel
+    @State private var confirmingClear = false
     let settings: AppSettings
     let update: (AppSettings) -> Void
     private let insertOverride: ((String) -> Void)?
@@ -121,6 +122,14 @@ struct DictationSettingsView: View {
         ])
         .navigationTitle(DictationCopy.title)
         .navigationBarTitleDisplayMode(.inline)
+        // Clearing can't be undone, so it asks first.
+        .coordinated("settings.clearDictations", .dialog, isPresented: $confirmingClear) { view, shown in
+            view.confirmationDialog(DictationCopy.clearTitle, isPresented: shown, titleVisibility: .visible) {
+                Button(DictationCopy.clearConfirm, role: .destructive, action: model.clear)
+            } message: {
+                Text(DictationCopy.clearMessage)
+            }
+        }
         .onChange(of: settings, initial: true) {
             engine.settings = settings
             SpeechEngines.select(settings)
@@ -229,7 +238,7 @@ struct DictationSettingsView: View {
             ForEach(model.history, id: \.self) { entry in
                 RecentDictationRow(text: entry, insert: insertAction.map { insert in { insert(entry) } })
             }
-            Button(DictationCopy.clear, role: .destructive, action: model.clear)
+            Button(DictationCopy.clear, role: .destructive) { confirmingClear = true }
                 .frame(minHeight: 44)
         }
     }

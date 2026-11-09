@@ -3,6 +3,7 @@ import TogoPush
 
 /// The status word. "Needs you" is the one state that takes the accent.
 struct LiveStatusText: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: LiveStatus
     var font: Font = .title3
     var reason: String?
@@ -14,8 +15,8 @@ struct LiveStatusText: View {
             .foregroundStyle(Self.color(status))
             // trunc-ok: a status word from a fixed short set
             .lineLimit(1)
-            // Between updates the system morphs one word into the next.
-            .contentTransition(.interpolate)
+            // Between updates the system morphs one word into the next; with Reduce Motion it swaps.
+            .contentTransition(reduceMotion ? .identity : .interpolate)
     }
 
     private static func color(_ status: LiveStatus) -> Color {
@@ -42,6 +43,9 @@ struct LiveLockScreenView: View {
 
     private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
 
+    /// Deny and Approve show: a request one tap may answer, still inside its window.
+    private var answerable: Bool { !hostId.isEmpty && !isStale && state.requestId != nil && card.answer != nil }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -57,7 +61,9 @@ struct LiveLockScreenView: View {
             }
             statusLine
             if card.phase == .needsYou {
-                if let ask = card.ask {
+                // The card is at most 160 pt tall: with buttons and a detail the question gives
+                // way, as in the island, since the status line already says "Needs you".
+                if let ask = card.ask, card.detail == nil || !answerable {
                     LiveAskText(ask: ask, alone: card.detail == nil)
                 }
                 if let detail = card.detail {
@@ -65,7 +71,7 @@ struct LiveLockScreenView: View {
                         // motion: state change — the system crossfades between entries in place; nothing moves.
                         .transition(.opacity)
                 }
-                if !hostId.isEmpty, !isStale, state.requestId != nil, card.answer != nil {
+                if answerable {
                     LiveAnswerButtons(state: state, card: card, hostId: hostId, link: nil)
                         .padding(.top, 2)
                 }

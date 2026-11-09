@@ -90,14 +90,8 @@ struct DiagnosticsPage: View {
     var body: some View {
         List {
             Section {
-                LabeledContent(
-                    settingsText("diagnostics.events", "Events recorded"), value: (summary?.events ?? 0).formatted()
-                )
-                .frame(minHeight: 44)
-                LabeledContent(
-                    settingsText("diagnostics.machines", "Machines"), value: (summary?.machines ?? 0).formatted()
-                )
-                .frame(minHeight: 44)
+                count(settingsText("diagnostics.events", "Events recorded"), summary?.events)
+                count(settingsText("diagnostics.machines", "Machines"), summary?.machines)
             } footer: {
                 Text(settingsText(
                     "diagnostics.included",
@@ -148,6 +142,23 @@ struct DiagnosticsPage: View {
             DiagnosticsPreview(text: summary?.text ?? "")
         }
     }
+
+    /// A count from the report, or a spinner while the report is still being read, so the page
+    /// never claims nothing was recorded before it knows.
+    private func count(_ title: String, _ value: Int?) -> some View {
+        LabeledContent {
+            if let value {
+                // The system's secondary gray falls under 4.5:1 on the light grouped rows.
+                Text(value.formatted()).foregroundStyle(Color.togoMute)
+            } else {
+                ProgressView()
+                    .accessibilityLabel(settingsText("diagnostics.loading", "Reading the report"))
+            }
+        } label: {
+            Text(title)
+        }
+        .frame(minHeight: 44)
+    }
 }
 
 /// The report as it would be sent, as text.
@@ -174,5 +185,7 @@ struct DiagnosticsPreview: View {
             }
         }
         .togoControls()
+        // Reading material: the full height on a phone, a page in a regular window.
+        .togoSheet(.page)
     }
 }

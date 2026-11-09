@@ -41,6 +41,9 @@ struct SidebarState: Equatable, Sendable {
     var prefersHidden = false
     /// Bumped by ⌘K beside the terminal.
     var searchRequests = 0
+    /// A ⌘K no roster has taken yet. A roster that comes on screen after it (the sidebar
+    /// shown by the same ⌘K) takes it when it appears, so the request is never lost.
+    var searchPending = false
 
     var isHidden: Bool { hidden ?? prefersHidden }
 
@@ -75,6 +78,7 @@ struct AdaptiveRoot<Destination: View>: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.fold) private var fold
     @Bindable var store: AppStore
     let terminals: TerminalPool
@@ -243,11 +247,11 @@ struct AdaptiveRoot<Destination: View>: View {
             HStack(spacing: 0) {
                 if sidebarShown ?? !store.sidebar.isHidden {
                     NavigationStack {
-                        RosterView(store: store, terminals: terminals, wide: true, now: now, launchTarget: true)
+                        RosterView(store: store, terminals: terminals, wide: true, now: now, launchTarget: true, sidebar: true)
                     }
                     .frame(width: PaneLayout.rosterWidth(fold: fold))
                     .overlay(alignment: .trailing) {
-                        Rectangle().fill(Color.togoLine).frame(width: 1 / displayScale).ignoresSafeArea()
+                        Rectangle().fill(Color.togoLine).frame(width: Contrast.hairline(displayScale, contrast)).ignoresSafeArea()
                     }
                     // motion: origin — the sidebar lives at the leading edge and comes from there
                     .transition(Motion.present(from: .leading, reduce: reduceMotion))

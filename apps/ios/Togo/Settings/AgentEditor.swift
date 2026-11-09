@@ -21,7 +21,11 @@ struct AgentEditor: View {
     /// "Other program" was just chosen: its field takes the keyboard as it appears.
     @State private var programRevealed = false
     @FocusState private var programFocused: Bool
+    /// Back was pressed with changes not saved: ask before they go.
+    @State private var confirmsDiscard = false
     private let isNew: Bool
+    private let original: AgentPreset
+    private let originalFlags: String
     let machines: [SettingsMachine]
     let save: (AgentPreset) -> Void
 
@@ -34,9 +38,14 @@ struct AgentEditor: View {
         _flags = State(initialValue: ArgsParser.join(start.args))
         _checks = State(initialValue: checks)
         isNew = preset == nil
+        original = start
+        originalFlags = ArgsParser.join(start.args)
         self.machines = machines
         self.save = save
     }
+
+    /// Something was changed since the editor opened and not saved yet.
+    private var hasChanges: Bool { draft != original || flags != originalFlags }
 
     /// The agents to pick from, favorites first.
     private var registry: [(id: String, name: String)] {
@@ -102,7 +111,18 @@ struct AgentEditor: View {
         .groupedList()
         .navigationTitle(isNew ? settingsText("settings.agents.new", "New agent") : draft.name)
         .navigationBarTitleDisplayMode(.inline)
+        // With unsaved changes Back asks first, as Cancel does in the app's other editors; the
+        // system Back (and its swipe) would drop them without a word.
+        .navigationBarBackButtonHidden(hasChanges)
         .toolbar {
+            if hasChanges {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(settingsText("settings.agents.back", "Back"), systemImage: "chevron.backward") {
+                        confirmsDiscard = true
+                    }
+                    .accessibilityIdentifier("settings.agents.back")
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button(settingsText("settings.agents.save", "Save"), systemImage: "checkmark", role: .confirm) {
                     guard let preset = finished else { return }
@@ -111,6 +131,13 @@ struct AgentEditor: View {
                 }
                 .disabled(finished == nil)
             }
+        }
+        .confirmationDialog(
+            settingsText("settings.agents.discardTitle", "Discard your changes?"),
+            isPresented: $confirmsDiscard, titleVisibility: .visible
+        ) {
+            Button(settingsText("settings.agents.discard", "Discard changes"), role: .destructive) { dismiss() }
+            Button(settingsText("settings.agents.keepEditing", "Keep editing"), role: .cancel) {}
         }
         .onChange(of: draft.agent) { checks = [:] }
         .onChange(of: draft.program) { checks = [:] }

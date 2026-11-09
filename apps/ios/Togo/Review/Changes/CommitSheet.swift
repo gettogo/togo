@@ -28,7 +28,9 @@ struct CommitSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // Escape closes this sheet only, never the review it sits on.
                     Button(ChangesCopy.cancel, systemImage: "xmark", role: .cancel) { model.isCommitSheetOpen = false }
+                        .keyboardShortcut(.cancelAction)
                 }
             }
             .coordinated("review.amend", .dialog, isPresented: $confirmingAmend) { view, shown in
@@ -65,16 +67,28 @@ struct CommitSheet: View {
                 .accessibilityLabel(ChangesCopy.messageLabel)
                 .listRowBackground(Color.togoGrouped)
         } footer: {
-            HStack(alignment: .firstTextBaseline) {
-                Text(ChangesCopy.stagedCount(model.stagedCount))
-                Spacer(minLength: 8)
-                if firstLineLength > Self.subjectLimit {
-                    Text(ChangesCopy.firstLineLength(firstLineLength))
-                        .monospacedDigit()
+            // The count and the first line's length side by side, one under the other when they
+            // do not fit.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(ChangesCopy.stagedCount(model.stagedCount))
+                    Spacer(minLength: 8)
+                    lineLength
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ChangesCopy.stagedCount(model.stagedCount))
+                    lineLength
                 }
             }
             .font(.footnote)
             .foregroundStyle(Color.togoMute)
+        }
+    }
+
+    @ViewBuilder private var lineLength: some View {
+        if firstLineLength > Self.subjectLimit {
+            Text(ChangesCopy.firstLineLength(firstLineLength))
+                .monospacedDigit()
         }
     }
 
@@ -143,6 +157,8 @@ struct CommitSheet: View {
                 .motion(.respond, value: model.amend)
             }
             .buttonStyle(.primary)
+            // Command-Return commits from the message field, as in a mail composer.
+            .keyboardShortcut(.return, modifiers: .command)
             .disabled(!model.canCommit)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())

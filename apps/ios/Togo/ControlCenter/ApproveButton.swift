@@ -14,7 +14,8 @@ struct ApproveButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        // While the answer is on its way a second tap sends nothing more.
+        Button { if !busy { action() } } label: {
             Text(title)
                 .opacity(busy ? 0 : 1)
                 .overlay {

@@ -32,6 +32,8 @@ const (
 	CapReply     = "reply.v1"
 	CapAuthkeys  = "authkeys.v1"
 	CapHostInfo  = "hostinfo.v1"
+	// CapDoneSilent: push.pair takes doneSilent.
+	CapDoneSilent = "donesilent.v1"
 )
 
 // App-facing methods.
@@ -562,6 +564,10 @@ type PairParams struct {
 	Platform               string `json:"platform,omitempty"`
 	LiveActivityStartToken string `json:"liveActivityStartToken,omitempty"`
 	LiveActivityCommand    bool   `json:"liveActivityCommand,omitempty"`
+	// DoneSilent is the user's choice to have done arrive without sound.
+	// The device's notification service applies it to pushes; the host
+	// applies it to the Live Activity update that stands in for one.
+	DoneSilent bool `json:"doneSilent,omitempty"`
 	// SSHKey is the public key the device signs in with over SSH; Device
 	// stores it under the same name.
 	SSHKey string `json:"sshKey,omitempty"`

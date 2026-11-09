@@ -161,7 +161,9 @@ import WidgetKit
             deps.pending.upsert(PendingRequest(
                 requestId: requestId, hostId: hostId, sessionId: push.sessionId, bib: push.bib, agent: push.agent,
                 host: push.host, title: PromptText.clean(push.title, maxLines: 2), subject: push.subject,
-                options: push.options ?? [], receivedAt: deps.clock(), answered: nil,
+                // From when the machine sent it: watchOS can hold a silent push for minutes.
+                options: push.options ?? [],
+                receivedAt: min(deps.clock(), Date(timeIntervalSince1970: Double(push.ts) / 1000)), answered: nil,
                 allowText: push.allowText == true ? true : nil
             ))
         case .clear:

@@ -23,6 +23,7 @@ enum FilesCopy {
     static let wrap = String(localized: "review.files.wrap", defaultValue: "Wrap lines")
     static let options = String(localized: "review.files.options", defaultValue: "Options")
     static let findPrompt = String(localized: "review.files.findPrompt", defaultValue: "Find in file")
+    static let closeFind = String(localized: "review.files.closeFind", defaultValue: "Close find")
     static let noMatches = String(localized: "review.files.noMatches", defaultValue: "No matches")
     static let previousMatch = String(localized: "review.files.previousMatch", defaultValue: "Previous match")
     static let nextMatch = String(localized: "review.files.nextMatch", defaultValue: "Next match")

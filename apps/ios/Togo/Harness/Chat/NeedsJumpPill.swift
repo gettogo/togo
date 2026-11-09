@@ -17,13 +17,16 @@ struct NeedsJumpPill: View {
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 36)
-            .contentShape(.capsule)
+            // Opaque, like the mission pill: the needs-you words sit over scrolling chat text and
+            // must read at once, not through glass.
+            .background(Capsule().fill(Color.togoRaised))
+            .overlay(Capsule().strokeBorder(Color.togoLine, lineWidth: 1))
+            // The capsule stays 36 pt tall; the target around it is 44.
+            .frame(minHeight: 44)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        // Opaque, like the mission pill: the needs-you words sit over scrolling chat text and
-        // must read at once, not through glass.
-        .background(Capsule().fill(Color.togoRaised))
-        .overlay(Capsule().strokeBorder(Color.togoLine, lineWidth: 1))
+        .hoverEffect(.highlight)
         .accessibilityLabel(ChatCopy.jumpToNeeds)
         .accessibilityHint(ChatCopy.jumpToNeedsHint)
         .accessibilityIdentifier("chat.needsJump")

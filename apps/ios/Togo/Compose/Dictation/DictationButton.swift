@@ -174,6 +174,7 @@ struct DictationLine: View {
                 .foregroundStyle(Color.togoSnow)
                 .frame(minHeight: 44)
                 .fixedSize()
+                .contentShape(.rect)
         }
     }
 
@@ -184,6 +185,7 @@ struct DictationLine: View {
                 .foregroundStyle(Color.togoSnow)
                 .frame(minHeight: 44)
                 .fixedSize()
+                .contentShape(.rect)
         }
     }
 

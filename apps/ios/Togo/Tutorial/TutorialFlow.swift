@@ -6,16 +6,15 @@ enum TutorialExit: Equatable, Sendable {
     case closed, addMachine
 }
 
-/// The guide: six pages that swipe or step with Back and Continue, Skip on every page, and the
+/// The guide: four pages that swipe or step with Back and Continue, Skip on every page, and the
 /// last page's way into adding a machine or the demo. Present it full screen and dismiss it
 /// when `onClose` is called.
 struct TutorialFlow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: TutorialModel
-    /// False draws the diagram and terminal demo finished and still, for snapshots.
-    var animated = true
-    /// A fixed clock for the demo machine in snapshots; nil follows the time of day.
+    /// A fixed clock for the Lock Screen picture and the demo machine in snapshots; nil follows
+    /// the time of day.
     var now: Date?
     let onClose: (TutorialExit) -> Void
 
@@ -23,9 +22,10 @@ struct TutorialFlow: View {
     /// The last page's buttons as the bar shows them. A swipe moves the page with no
     /// transaction, so the bar follows here: Continue gives way to the last page's two buttons
     /// at once, and back (buttons are controls, not news).
-    @State private var readyFollowed: Bool?
+    @State private var lastFollowed: Bool?
 
-    private var readyShown: Bool { readyFollowed ?? (model.page == .ready) }
+    private static let lastPage = TutorialPage.allCases.last ?? .setup
+    private var lastShown: Bool { lastFollowed ?? (model.page == Self.lastPage) }
 
     var body: some View {
         NavigationStack {
@@ -37,8 +37,8 @@ struct TutorialFlow: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .background(Color.togoInk)
             .safeAreaInset(edge: .bottom, spacing: 0) { controls }
-            .onChange(of: model.page == .ready) { _, ready in
-                withTransaction(Transaction(animation: nil)) { readyFollowed = ready }
+            .onChange(of: model.page == Self.lastPage) { _, last in
+                withTransaction(Transaction(animation: nil)) { lastFollowed = last }
             }
             .toolbar { toolbar }
             .navigationBarTitleDisplayMode(.inline)
@@ -55,12 +55,10 @@ struct TutorialFlow: View {
 
     @ViewBuilder private func content(_ page: TutorialPage) -> some View {
         switch page {
-        case .welcome: WelcomePage(animated: animated)
-        case .setup: SetupPage(model: model)
-        case .helper: HelperPage()
-        case .privacy: PrivacyPage()
-        case .session: SessionPage(playing: Self.playsSessionDemo(on: model.page, animated: animated))
-        case .ready: ReadyPage(onDemo: demoInPage)
+        case .welcome: WelcomePage()
+        case .approvals: ApprovalsPage(now: now)
+        case .sessions: SessionsPage()
+        case .setup: SetupPage(model: model, onDemo: demoInPage)
         }
     }
 
@@ -86,7 +84,7 @@ struct TutorialFlow: View {
         VStack(spacing: 16) {
             PageIndicator(page: model.page)
             VStack(spacing: 4) {
-                if readyShown {
+                if lastShown {
                     Group {
                         Button(String(localized: "tutorial.ready.add", defaultValue: "Add your first machine")) {
                             model.finish()
@@ -95,7 +93,7 @@ struct TutorialFlow: View {
                         .buttonStyle(.primary)
                         // At accessibility sizes the page carries this button, so the bar stays short.
                         if !dynamicTypeSize.isAccessibilitySize {
-                            Button(ReadyPage.demoTitle, action: openDemo)
+                            Button(SetupPage.demoTitle, action: openDemo)
                                 .buttonStyle(.secondary)
                         }
                     }
@@ -109,11 +107,6 @@ struct TutorialFlow: View {
         .padding(.top, 12)
         .padding(.bottom, 8)
         .background(Color.togoInk)
-    }
-
-    /// The session demo loops only while its page is the one on screen.
-    static func playsSessionDemo(on page: TutorialPage, animated: Bool) -> Bool {
-        animated && page == .session
     }
 
     private var demoInPage: (() -> Void)? {

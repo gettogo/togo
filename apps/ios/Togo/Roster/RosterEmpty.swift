@@ -58,6 +58,35 @@ struct RosterEmptyDetail: View {
     }
 }
 
+/// The filter the roster is narrowed by, at the top of its lines, with the way back to every
+/// session. At accessibility sizes the button goes under the words.
+struct RosterFilterRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let filter: SessionFilter
+    let showAll: () -> Void
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        layout {
+            Label(RosterCopy.filtered(ControlCenterCopy.filterName(filter)), systemImage: "line.3.horizontal.decrease")
+                .font(.subheadline)
+                .foregroundStyle(Color.togoMute)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(RosterCopy.showAll, action: showAll)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.togoSnow)
+                .buttonStyle(.borderless)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("roster.filter.showAll")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("roster.filter")
+    }
+}
+
 #if DEBUG
 #Preview("No machines") {
     RosterNoMachines {}

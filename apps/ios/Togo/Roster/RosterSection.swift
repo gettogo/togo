@@ -4,6 +4,7 @@ import TogoKit
 /// One machine in the roster: its name and count, a line for whatever keeps it from being live,
 /// then one line per session and the sessions a restart ended.
 struct RosterSection: View {
+    @Environment(\.colorSchemeContrast) private var contrast
     let group: RosterModel.Group
     var etAvailable = false
     let now: Date
@@ -240,9 +241,14 @@ struct RosterSection: View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
         return ZStack {
             Color.togoInk
-            // motion: cause → effect — the line the user picked lights in place
             if selected == id {
-                shape.fill(Color.togoRaised).padding(.horizontal, 6)
+                // Under Increase Contrast the raised surface gets an edge of its own.
+                shape.fill(Color.togoRaised)
+                    .overlay {
+                        if Contrast.outlinesSurfaces(contrast) { shape.strokeBorder(Color.togoLine, lineWidth: 1) }
+                    }
+                    .padding(.horizontal, 6)
+                    // motion: cause → effect — the line the user picked lights in place
                     .transition(.opacity)
             }
             // motion: cause → effect — the keyboard cursor lands on this line
@@ -279,26 +285,33 @@ struct RosterMachineHeading: View {
                     .foregroundStyle(Color.togoMute)
                     // A background count: it changes at once.
                     .monospacedDigit()
-                if let caption {
-                    Text(caption)
-                        .font(.footnote)
-                        .foregroundStyle(Color.togoMute)
-                        .fixedSize(horizontal: false, vertical: true)
-                        // Status text: it changes at once as the machine comes and goes.
-                        .transaction { $0.animation = nil }
+                if let caption, !typeSize.isAccessibilitySize {
+                    captionText(caption)
                 }
                 Spacer(minLength: 0)
                 if let onWake, !typeSize.isAccessibilitySize {
                     wakeButton(onWake)
                 }
             }
-            if let onWake, typeSize.isAccessibilitySize {
-                wakeButton(onWake)
+            // At accessibility sizes the caption and the button each take a line of their own,
+            // so the name keeps the row's width.
+            if typeSize.isAccessibilitySize {
+                if let caption { captionText(caption) }
+                if let onWake { wakeButton(onWake) }
             }
         }
         .textCase(nil)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    private func captionText(_ caption: String) -> some View {
+        Text(caption)
+            .font(.footnote)
+            .foregroundStyle(Color.togoMute)
+            .fixedSize(horizontal: false, vertical: true)
+            // Status text: it changes at once as the machine comes and goes.
+            .transaction { $0.animation = nil }
     }
 
     private func wakeButton(_ run: @escaping () -> Void) -> some View {

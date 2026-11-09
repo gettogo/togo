@@ -38,6 +38,20 @@ struct OnboardingStep<Content: View, Actions: View>: View {
     }
 }
 
+/// A full-screen state, such as a failed connection, that scrolls once its text is taller than
+/// the sheet, as it can be at accessibility sizes, so its button stays on screen.
+struct ScrollsWhenTall<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }
+                .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+}
+
 /// A key, fingerprint or command in monospace, never cut off. Lines break at spaces; a token
 /// too long for any line breaks between characters.
 struct CopyableText: View {

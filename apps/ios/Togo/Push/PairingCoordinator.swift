@@ -6,10 +6,20 @@ import UIKit
 
 /// Sends new push tokens and the command text choice to a paired machine through its relay mailbox.
 protocol PushTokenRegistering: Sendable {
+    /// `liveActivityEnded` is the update token of an activity that ended or was dismissed.
+    func send(
+        _ tokens: (apns: String?, liveActivity: String?, liveActivityStart: String?), liveActivityCommand: Bool,
+        liveActivityEnded: String?, pairing: Pairing
+    ) async throws
+}
+
+extension PushTokenRegistering {
     func send(
         _ tokens: (apns: String?, liveActivity: String?, liveActivityStart: String?), liveActivityCommand: Bool,
         pairing: Pairing
-    ) async throws
+    ) async throws {
+        try await send(tokens, liveActivityCommand: liveActivityCommand, liveActivityEnded: nil, pairing: pairing)
+    }
 }
 
 extension RelayRegisterSender: PushTokenRegistering {}
@@ -150,14 +160,17 @@ extension RelayRegisterSender: PushTokenRegistering {}
         let live = settings.liveActivities ? liveTokens(stored?.hostId) : (update: nil, start: nil)
         let watches = watch()
         let sshKey = capabilities.contains(Capability.authkeys) ? sshKey : nil
-        let hash = Self.tokenHash(apns: apnsToken, live: live, watches: watches, sshKey: sshKey)
+        let doneSilent = capabilities.contains(Capability.doneSilent) && settings.doneSilent
+        let hash = Self.tokenHash(apns: apnsToken, live: live, watches: watches, sshKey: sshKey, doneSilent: doneSilent)
         // A choice sent through the mailbox is confirmed over SSH, even when it matches the old one.
         if let stored, stored.tokenHash == hash, stored.relayURL == relay, stored.liveActivityCommand == command,
            sentChoice[stored.hostId] == nil {
             return
         }
 
-        guard let phone = try? params(apnsToken: apnsToken, live: live, relay: relay, command: command, sshKey: sshKey),
+        guard let phone = try? params(
+            apnsToken: apnsToken, live: live, relay: relay, command: command, sshKey: sshKey, doneSilent: doneSilent
+        ),
               let result = try? await pair(phone)
         else { return }
         var pairedWatches: [WatchDevice] = []
@@ -171,7 +184,9 @@ extension RelayRegisterSender: PushTokenRegistering {}
         }
         let fresh = Pairing(
             hostId: result.hostId, hostKey: result.hostKey, relayURL: relay, machineName: name, appHostID: hostID,
-            pairedAt: clock(), tokenHash: Self.tokenHash(apns: apnsToken, live: live, watches: pairedWatches, sshKey: sshKey),
+            pairedAt: clock(), tokenHash: Self.tokenHash(
+                apns: apnsToken, live: live, watches: pairedWatches, sshKey: sshKey, doneSilent: doneSilent
+            ),
             liveActivityCommand: command
         )
         if let removal = removedWhilePairing.removeValue(forKey: hostID) {
@@ -326,6 +341,19 @@ extension RelayRegisterSender: PushTokenRegistering {}
         }
     }
 
+    /// The machine's Live Activity ended or the user dismissed it. Its helper hears at once
+    /// through the relay mailbox, so the next event comes as a notification instead of an
+    /// update to an activity nobody sees; in front, the next pairing over SSH confirms it.
+    func liveActivityEnded(hostId: String, token: String) async {
+        guard let pairing = store.pairing(hostId: hostId) else { return }
+        let settings = settings()
+        let live = settings.liveActivities ? liveTokens(hostId) : (update: nil, start: nil)
+        let tokens = (apns: registrar.apnsToken, liveActivity: live.update, liveActivityStart: live.start)
+        let command = pairing.appHostID.map(settings.liveActivityCommand(for:)) ?? pairing.liveActivityCommand
+        try? await register.send(tokens, liveActivityCommand: command, liveActivityEnded: token, pairing: pairing)
+        if isForeground { onRepairNeeded() }
+    }
+
     /// The command text choice changed. Each paired machine hears a choice that differs from
     /// the last one it was sent (or, with none sent since SSH, the one it confirmed) through
     /// its relay mailbox at once, so turning it off does not wait for an SSH connection. The
@@ -361,7 +389,8 @@ extension RelayRegisterSender: PushTokenRegistering {}
     // MARK: Building requests
 
     private func params(
-        apnsToken: String, live: (update: String?, start: String?), relay: URL, command: Bool, sshKey: String?
+        apnsToken: String, live: (update: String?, start: String?), relay: URL, command: Bool, sshKey: String?,
+        doneSilent: Bool = false
     ) throws -> PushPairParams {
         PushPairParams(
             deviceId: try keys.deviceID(), name: deviceName,
@@ -369,7 +398,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
             approvalKey: Base64URL.encode(try keys.signingKey().publicKey.rawRepresentation),
             apnsToken: apnsToken, env: PushEnvironment.apns, relayUrl: relay.absoluteString,
             liveActivityToken: live.update, platform: .ios, liveActivityStartToken: live.start,
-            liveActivityCommand: command, sshKey: sshKey
+            liveActivityCommand: command, sshKey: sshKey, doneSilent: doneSilent
         )
     }
 
@@ -385,12 +414,15 @@ extension RelayRegisterSender: PushTokenRegistering {}
     /// Six hex characters of SHA-256 over every token the machine was given, enough to tell
     /// whether it is out of date without keeping the tokens. The SSH key counts only once it
     /// is sent, so pairings from before it existed stay current until the helper can take it.
+    /// "Done silent" counts only while on, for the same reason.
     static func tokenHash(
-        apns: String, live: (update: String?, start: String?), watches: [WatchDevice], sshKey: String? = nil
+        apns: String, live: (update: String?, start: String?), watches: [WatchDevice], sshKey: String? = nil,
+        doneSilent: Bool = false
     ) -> String {
         var parts = [apns, live.update ?? "", live.start ?? ""]
         parts += watches.map { "\($0.deviceId):\($0.apnsToken)" }
         if let sshKey { parts.append("ssh:" + sshKey) }
+        if doneSilent { parts.append("done-silent") }
         let digest = SHA256.hash(data: Data(parts.joined(separator: "|").utf8))
         return digest.prefix(3).map { String(format: "%02x", $0) }.joined()
     }

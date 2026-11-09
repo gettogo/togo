@@ -37,7 +37,13 @@ import TogoKit
                         for await hosts in browser.results { continuation.yield(.hosts(hosts)) }
                     }
                     group.addTask {
-                        for await status in browser.status where status == .denied { continuation.yield(.denied) }
+                        for await status in browser.status {
+                            switch status {
+                            case .denied: continuation.yield(.denied)
+                            case .browsing: continuation.yield(.browsing)
+                            case .failed: break
+                            }
+                        }
                     }
                 }
             }
@@ -81,10 +87,20 @@ import TogoKit
             prompter: prompter, connectTimeout: Self.connectTimeout, credentialFallback: !keyOnly
         )
         defer { Task { await connection.close() } }
+        var signedIn = false
         do {
             try await connection.connect()
+            signedIn = true
             return .ready(try await HelperProbe.run(on: connection))
         } catch {
+            // The machine answered and let Togo in; only the check after it was slow, so
+            // "asleep" would send the user the wrong way.
+            if signedIn, (error as? SSHError) == .timeout {
+                return .failed(String(
+                    localized: "onboard.connect.probeTimeout",
+                    defaultValue: "Signed in to \(profile.name), but checking it for the helper took too long. Try again."
+                ))
+            }
             let request = prompter.declinedPrompt.flatMap { SignInRequest($0, machine: profile.name) }
             return Self.outcome(for: error, promptDeclined: prompter.declined, request: request)
         }

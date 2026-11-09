@@ -34,15 +34,21 @@ struct WorkspaceFindBar: View {
                     // trunc-ok: the fixed words "No matches"
                     .lineLimit(1)
             }
+            // The 44 pt frame is the button's own hit area, not only room around a small symbol.
             Button(WorkspaceCopy.findPrevious, systemImage: "chevron.up") { find(backwards: true) }
                 .labelStyle(.iconOnly)
                 .frame(minWidth: 44, minHeight: 44)
+                .contentShape(.rect)
+                .keyboardShortcut("g", modifiers: [.command, .shift])
             Button(WorkspaceCopy.findNext, systemImage: "chevron.down") { find(backwards: false) }
                 .labelStyle(.iconOnly)
                 .frame(minWidth: 44, minHeight: 44)
+                .contentShape(.rect)
+                .keyboardShortcut("g", modifiers: .command)
             Button(WorkspaceCopy.findDone, action: onDone)
                 .font(.body.weight(.semibold))
                 .frame(minHeight: 44)
+                .contentShape(.rect)
         }
         .foregroundStyle(Color.togoSnow)
         .padding(.horizontal, 16)

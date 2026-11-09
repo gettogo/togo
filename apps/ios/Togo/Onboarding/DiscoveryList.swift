@@ -93,6 +93,10 @@ struct DiscoveryList: View {
     }
 
     private var denied: some View {
+        ScrollsWhenTall { deniedContent }
+    }
+
+    private var deniedContent: some View {
         VStack(spacing: 0) {
             StateView(
                 kind: .permission,

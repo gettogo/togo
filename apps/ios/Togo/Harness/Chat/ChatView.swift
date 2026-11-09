@@ -9,6 +9,9 @@ struct ChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: HarnessSessionStore
     var actions: ChatActions = .inert
+    /// The chat is on screen, so ⌘↩ and ⌘. answer from it; kept alive under the terminal it
+    /// answers nothing the person cannot see.
+    var answersKeys = true
 
     @State private var expanded: [String: Disclosure] = [:]
     @State private var detail: HarnessItem?
@@ -22,9 +25,10 @@ struct ChatView: View {
     @State private var live: WorkingState?
     @State private var showsEarlierButton: Bool
 
-    init(store: HarnessSessionStore, actions: ChatActions = .inert) {
+    init(store: HarnessSessionStore, actions: ChatActions = .inert, answersKeys: Bool = true) {
         self.store = store
         self.actions = actions
+        self.answersKeys = answersKeys
         _live = State(initialValue: store.liveWork)
         _showsEarlierButton = State(initialValue: Self.showsEarlier(store))
     }
@@ -148,7 +152,7 @@ struct ChatView: View {
             guard case .needs(let item) = row, case .approval(let approval) = item.body else { return nil }
             return approval.requestId
         }
-        if let target = ChatKeyAnswers.target(requestIDs: ids, card: actions.card) {
+        if answersKeys, let target = ChatKeyAnswers.target(requestIDs: ids, card: actions.card) {
             ZStack {
                 Button(ChatCopy.approve) { actions.answer(target.requestID, target.approve) }
                     .keyboardShortcut(.return, modifiers: .command)
@@ -425,45 +429,6 @@ private struct RowActions: ViewModifier {
                 Task { await host.store.cancelQueued(item: item) }
             }
         }
-    }
-}
-
-/// Speaks a finished reply once and a new needs row once, at high priority; never each
-/// streamed piece. What was on screen when the chat opened is not spoken.
-@MainActor final class ChatAnnouncer {
-    private var seen: Set<String>?
-    private var finished: Set<String> = []
-
-    func update(_ rows: [ChatRow]) {
-        defer { remember(rows) }
-        guard let seen, UIAccessibility.isVoiceOverRunning else { return }
-        for row in rows {
-            switch row {
-            case .needs(let item) where !seen.contains(item.id):
-                NeedsAnnouncement.post(ChatCopy.spokenNeeds(item.chatText ?? ""))
-            case .reply(let item):
-                if case .assistant(let text) = item.body, !text.partial, !finished.contains(item.id) {
-                    announce(ChatCopy.spokenReply(text.text), high: false)
-                }
-            default:
-                break
-            }
-        }
-    }
-
-    private func remember(_ rows: [ChatRow]) {
-        seen = Set(rows.map(\.id))
-        for row in rows {
-            if case .reply(let item) = row, case .assistant(let text) = item.body, !text.partial {
-                finished.insert(item.id)
-            }
-        }
-    }
-
-    private func announce(_ text: String, high: Bool) {
-        var line = AttributedString(text)
-        line.accessibilitySpeechAnnouncementPriority = high ? .high : .default
-        AccessibilityNotification.Announcement(line).post()
     }
 }
 

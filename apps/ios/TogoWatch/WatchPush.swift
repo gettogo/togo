@@ -7,8 +7,10 @@ import WatchKit
 /// keep the request list and complication current, and the actions on a phone notification
 /// shown on the Watch: Approve or Deny, Reply, and Run again, which the phone carries out.
 ///
-/// Request alerts come from the phone and are mirrored here with their actions; the Watch
-/// gets no alerts of its own. Approve carries `authenticationRequired`, so watchOS asks for
+/// Request alerts usually come from the phone and are mirrored here with their actions. While
+/// the phone's Live Activity stands in for its alert there is nothing to mirror, so the machine
+/// sends the Watch the alert itself, opened by the Watch's notification service; its clear then
+/// takes that alert away here. Approve carries `authenticationRequired`, so watchOS asks for
 /// the Watch to be unlocked first.
 @MainActor final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificationCenterDelegate {
     let store: WatchStore
@@ -58,7 +60,20 @@ import WatchKit
     func didReceiveRemoteNotification(_ userInfo: [AnyHashable: Any]) async -> WKBackgroundFetchResult {
         guard let opened = core.open(userInfo: userInfo) else { return .noData }
         store.ingest(opened.payload, hostId: opened.pairing.hostId)
+        if opened.payload.kind == .clear, let requestId = opened.payload.requestId {
+            await Self.removeDelivered(requestId: requestId)
+        }
         return .newData
+    }
+
+    /// Takes away the Watch's own alert for a request answered elsewhere.
+    private static func removeDelivered(requestId: String) async {
+        let center = UNUserNotificationCenter.current()
+        let ids = await center.deliveredNotifications().compactMap { notification -> String? in
+            let info = notification.request.content.userInfo[NotificationServiceCore.infoKey] as? [String: Any]
+            return info?["requestId"] as? String == requestId ? notification.request.identifier : nil
+        }
+        if !ids.isEmpty { center.removeDeliveredNotifications(withIdentifiers: ids) }
     }
 
     // MARK: UNUserNotificationCenterDelegate
@@ -147,7 +162,16 @@ import WatchKit
 
     private func answer(hostId: String, requestId: String, decision: String) async {
         await store.answerFromNotification(hostId: hostId, requestId: requestId, decision: decision)
-        guard let notice = store.failureNotice(requestId) else { return }
-        await post(notice: notice)
+        if let notice = store.failureNotice(requestId) {
+            await post(notice: notice)
+            return
+        }
+        // Nothing went: the desk or the phone answered first, or the window closed. Say so
+        // rather than leave the tap looking like it worked.
+        switch store.state(of: requestId) {
+        case .answeredElsewhere: await post(notice: WatchCopy.answeredElsewhere)
+        case .expired: await post(notice: WatchCopy.expired)
+        default: break
+        }
     }
 }

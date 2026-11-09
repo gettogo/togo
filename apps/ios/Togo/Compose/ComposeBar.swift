@@ -336,6 +336,7 @@ struct ComposeBar: View {
                 .fixedSize()
                 .contentShape(Rectangle())
         }
+        .hoverEffect(.highlight)
         .disabled(!model.canSend)
         .accessibilityLabel(ComposeCopy.send)
         // motion: state change — Send lights as there is something to send.
@@ -354,6 +355,7 @@ private struct BarIcon: View {
             // Without this the minimum frame stretches and takes width from the text field.
             .fixedSize()
             .contentShape(Rectangle())
+            .hoverEffect(.highlight)
     }
 }
 
@@ -427,6 +429,7 @@ private struct ImageStatusRow: View {
                 .foregroundStyle(Color.togoSnow)
                 .frame(minHeight: 44)
                 .fixedSize()
+                .contentShape(.rect)
         }
     }
 

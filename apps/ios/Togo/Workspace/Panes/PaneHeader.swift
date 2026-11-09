@@ -42,6 +42,7 @@ struct PaneHeader: View {
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
+            .hoverEffect(.highlight)
         }
         .padding(.leading, 12)
         .padding(.trailing, 2)

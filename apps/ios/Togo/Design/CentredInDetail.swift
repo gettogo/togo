@@ -5,18 +5,25 @@ extension View {
     /// vertical system bar on that side would otherwise push it off centre. The leading inset
     /// stays, since beside a floating sidebar it is the sidebar's width. In book
     /// posture, where the fold runs through the column, it centres on the trailing page so it
-    /// never sits on the fold. The content keeps itself narrow enough to clear the bars.
+    /// never sits on the fold. However wide the content grows, it keeps clear of the bars.
     func centredInDetail() -> some View {
         modifier(CentredInDetail())
     }
 }
 
 private struct CentredInDetail: ViewModifier {
+    /// The trailing inset given up for centring, such as a vertical bar's width.
+    @State private var trailingInset: CGFloat = 0
+
     func body(content: Content) -> some View {
         content
+            // Kept that far in on both sides, so content that grows wide (the largest text
+            // sizes) stays centred and still never runs under the bar.
+            .padding(.horizontal, trailingInset)
             .modifier(TrailingPage())
             .readsFold()
             .ignoresSafeArea(.container, edges: .trailing)
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.trailing } action: { trailingInset = $0 }
     }
 }
 

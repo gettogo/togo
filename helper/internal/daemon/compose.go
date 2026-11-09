@@ -49,6 +49,7 @@ var Capabilities = []string{
 	notify.Capability,
 	hostinfo.Capability,
 	wire.CapAuthkeys,
+	wire.CapDoneSilent,
 	api.RecentCapability,
 	wire.CapReply,
 	wire.CapLaunch,
@@ -372,7 +373,9 @@ func (c *Components) runMailbox(ctx context.Context) {
 		Answer:  c.Approvals.Answer,
 		// A device registers new tokens through the mailbox; the next push
 		// reads them from the store.
-		Register:   c.Push.Devices().UpdateTokens,
+		Register: c.Push.Devices().UpdateTokens,
+		// A dismissed or ended activity no longer stands in for a push.
+		EndLive:    c.Push.Devices().EndLiveActivity,
 		Logf:       c.logf,
 		Will:       c.Will,
 		StopMarker: c.stopMarker,

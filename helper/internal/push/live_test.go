@@ -71,7 +71,8 @@ func TestLiveStartOnFirstNeedsYou(t *testing.T) {
 		cs.Since != time.Date(2026, 11, 3, 11, 59, 0, 0, time.UTC).Unix() || cs.Agent != "claude" || *cs.Bib != "01" {
 		t.Fatalf("start content state %+v", cs)
 	}
-	if p.LiveActivity.StaleDate == nil || *p.LiveActivity.StaleDate != e.clock.Unix()+3600 {
+	// A request's buttons go stale with its answer window, before the hour any other state gets.
+	if p.LiveActivity.StaleDate == nil || *p.LiveActivity.StaleDate != cs.Since+600 {
 		t.Fatalf("staleDate %v", p.LiveActivity.StaleDate)
 	}
 	// No update token yet: a second request starts nothing new.

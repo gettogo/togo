@@ -74,10 +74,13 @@ struct TerminalSettingsView: View {
                     ForEach(fontOptions, id: \.self) { Text($0).tag($0) }
                 }
                 Stepper(value: settings.binding(\.fontSize, update), in: 9...24, step: 1) {
-                    LabeledContent(
-                        settingsText("settings.terminal.size", "Size"),
-                        value: settingsText("settings.terminal.points", "\(Int(settings.fontSize)) pt")
-                    )
+                    LabeledContent {
+                        // The system's secondary gray falls under 4.5:1 on the light grouped rows.
+                        Text(settingsText("settings.terminal.points", "\(Int(settings.fontSize)) pt"))
+                            .foregroundStyle(Color.togoMute)
+                    } label: {
+                        Text(settingsText("settings.terminal.size", "Size"))
+                    }
                 }
                 Picker(settingsText("settings.terminal.cursor", "Cursor"), selection: settings.binding(\.cursor, update)) {
                     ForEach(CursorShape.choices, id: \.rawValue) { shape in
@@ -98,6 +101,7 @@ struct TerminalSettingsView: View {
                     "With VoiceOver on, new output in the focused terminal is read aloud once it settles."
                 ))
             }
+            .groupedRows()
             Section {
                 Toggle(
                     settingsText("settings.terminal.singleKeys", "Answer with Y, N and R"),

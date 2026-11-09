@@ -68,19 +68,22 @@ public struct RelayRegisterSender: Sendable {
         self.clock = clock
     }
 
+    /// `liveActivityEnded` reports the update token of an activity that ended on this device.
     public func send(
         _ tokens: (apns: String?, liveActivity: String?, liveActivityStart: String?), liveActivityCommand: Bool,
-        pairing: Pairing
+        liveActivityEnded: String? = nil, pairing: Pairing
     ) async throws {
         let ts = Mailbox.milliseconds(clock())
         let deviceID = try keys.deviceID()
         let message = Signing.registerBytes(
             hostID: pairing.hostId, deviceID: deviceID, apnsToken: tokens.apns, liveActivityToken: tokens.liveActivity,
-            liveActivityStartToken: tokens.liveActivityStart, liveActivityCommand: liveActivityCommand, ts: ts
+            liveActivityStartToken: tokens.liveActivityStart, liveActivityEnded: liveActivityEnded,
+            liveActivityCommand: liveActivityCommand, ts: ts
         )
         let register = RegisterPlaintext(
             deviceId: deviceID, apnsToken: tokens.apns, liveActivityToken: tokens.liveActivity,
-            liveActivityStartToken: tokens.liveActivityStart, liveActivityCommand: liveActivityCommand, ts: ts,
+            liveActivityStartToken: tokens.liveActivityStart, liveActivityEnded: liveActivityEnded,
+            liveActivityCommand: liveActivityCommand, ts: ts,
             sig: Base64URL.encode(try keys.signingKey().signature(for: message))
         )
         try await mailbox.post(register, to: pairing)

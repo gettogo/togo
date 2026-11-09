@@ -110,18 +110,52 @@ extension SetupItem {
                     command: "sudo pacman -S mosh"
                 ),
             ]
-        case (.helper, _):
+        case (.helper, .macOS):
             [
                 SetupStep(
-                    text: String(localized: "tutorial.setup.helper.install", defaultValue: "Run this on the machine:"),
-                    command: HelperProbe.installCommand(os: os.unameName)
+                    text: String(
+                        localized: "tutorial.setup.helper.tmux.mac",
+                        defaultValue: "The helper runs each agent in tmux 3.2 or newer. With Homebrew:"
+                    ),
+                    command: "brew install tmux"
+                ),
+            ] + helperSteps(os)
+        case (.helper, .linux):
+            [
+                SetupStep(
+                    text: String(
+                        localized: "tutorial.setup.helper.tmux.linux",
+                        defaultValue: "The helper runs each agent in tmux 3.2 or newer. On Debian or Ubuntu:"
+                    ),
+                    command: "sudo apt install tmux"
                 ),
                 SetupStep(
-                    text: String(localized: "tutorial.setup.helper.uninstall", defaultValue: "To remove it later:"),
-                    command: "togo uninstall"
+                    text: String(localized: "tutorial.setup.helper.tmux.fedora", defaultValue: "On Fedora:"),
+                    command: "sudo dnf install tmux"
                 ),
-            ]
+                SetupStep(
+                    text: String(localized: "tutorial.setup.helper.tmux.arch", defaultValue: "On Arch:"),
+                    command: "sudo pacman -S tmux"
+                ),
+            ] + helperSteps(os)
         }
+    }
+
+    /// Installing the helper and keeping it running, the same on every machine.
+    private func helperSteps(_ os: MachineOS) -> [SetupStep] {
+        [
+            SetupStep(
+                text: String(localized: "tutorial.setup.helper.install.then", defaultValue: "Then install the helper:"),
+                command: HelperProbe.installCommand(os: os.unameName)
+            ),
+            SetupStep(
+                text: String(
+                    localized: "tutorial.setup.helper.service",
+                    defaultValue: "Then start it at login, so requests reach you while Togo is closed:"
+                ),
+                command: "togo service install"
+            ),
+        ]
     }
 }
 
@@ -283,7 +317,11 @@ private struct SetupItemRow: View {
         if detected {
             return String(localized: "tutorial.setup.detected", defaultValue: "Found on a machine you added")
         }
-        return item.isOptional ? String(localized: "tutorial.setup.optional", defaultValue: "Optional") : nil
+        switch item {
+        case .helper: return String(localized: "tutorial.setup.helper.why", defaultValue: "For chat, approvals and notifications")
+        case .mosh: return String(localized: "tutorial.setup.optional", defaultValue: "Optional")
+        default: return nil
+        }
     }
 }
 
@@ -324,13 +362,56 @@ struct SetupStepView: View {
     }
 }
 
+/// The last page: the checklist, what the helper may and may not do, and, at accessibility
+/// sizes where the bottom bar keeps only the main button, the way into the demo.
 struct SetupPage: View {
+    static let demoTitle = String(localized: "tutorial.ready.demo", defaultValue: "Explore with a demo machine")
     let model: TutorialModel
     var expanded: SetupItem?
+    /// Opens Learn more, for snapshots.
+    var moreExpanded = false
+    /// Set at accessibility sizes, where the demo button moves from the bottom bar into the page.
+    var onDemo: (() -> Void)?
 
     var body: some View {
         TutorialPageLayout(page: .setup, centered: false) {
             SetupChecklist(ticked: model.ticked, detected: model.detected, expanded: expanded, onToggle: model.toggle)
+            TutorialMore(expanded: moreExpanded) { HelperLimits() }
+            if let onDemo {
+                Button(Self.demoTitle, action: onDemo)
+                    .buttonStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// What the helper is not allowed to do, and how to take it off again.
+struct HelperLimits: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SectionHeading(String(localized: "tutorial.helper.limits", defaultValue: "What the helper does not do"))
+            TutorialPoint(
+                String(localized: "tutorial.helper.port.title", defaultValue: "It never opens a network port"),
+                systemImage: "network.slash",
+                String(localized: "tutorial.helper.port.detail", defaultValue: "Togo reaches it only through your SSH login.")
+            )
+            TutorialPoint(
+                String(localized: "tutorial.helper.user.title", defaultValue: "It runs as you"),
+                systemImage: "person",
+                String(localized: "tutorial.helper.user.detail", defaultValue: "No root, and nothing your own account could not do.")
+            )
+            TutorialPoint(
+                title: String(localized: "tutorial.helper.source.title", defaultValue: "It is open source"),
+                systemImage: "chevron.left.forwardslash.chevron.right"
+            ) {
+                SetupStepView(step: SetupStep(
+                    text: String(
+                        localized: "tutorial.helper.source.detail",
+                        defaultValue: "It is MIT licensed, so you can read its source. To remove it, run:"
+                    ),
+                    command: "togo uninstall"
+                ))
+            }
         }
     }
 }

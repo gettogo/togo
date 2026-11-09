@@ -28,6 +28,8 @@ struct NewSessionSheet: View {
             }
         }
         .togoSheet(.form, detent: $detent)
+        // A start on its way is not dropped by a swipe; Close still works.
+        .interactiveDismissDisabled(model.creating)
         .tint(.primary)
         .toggleStyle(.systemSwitch)
         .task { await model.start() }
@@ -47,6 +49,7 @@ struct NewSessionSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(role: .close) { dismiss() }
+                        .keyboardShortcut(.cancelAction)
                 }
             }
     }

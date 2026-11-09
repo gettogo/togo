@@ -28,7 +28,7 @@ struct PublicKeyView: View {
             title: String(localized: "onboard.publicKey.title", defaultValue: "Add this device's key"),
             message: String(
                 localized: "onboard.publicKey.message",
-                defaultValue: "Add this key to ~/.ssh/authorized_keys on \(machine)"
+                defaultValue: "Add this key to ~/.ssh/authorized_keys on \(machine)."
             )
         ) {
             CopyableText(text: publicKey)

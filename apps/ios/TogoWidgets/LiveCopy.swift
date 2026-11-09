@@ -120,6 +120,9 @@ enum LiveCopy {
     /// The system draws Live Activities and widgets no larger than this; capping here keeps
     /// the layout the same as what the lock screen shows.
     static let largestType = DynamicTypeSize.xxxLarge
+    /// The compact and minimal island sit beside the camera in a fixed slot, so their marks and
+    /// the clock stop growing sooner.
+    static let compactLargestType = DynamicTypeSize.large
 
     static func sinceDate(_ since: Int) -> Date { Date(timeIntervalSince1970: TimeInterval(since)) }
 }

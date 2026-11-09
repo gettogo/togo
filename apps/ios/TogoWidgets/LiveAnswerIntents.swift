@@ -9,6 +9,8 @@ import TogoPush
 enum LiveAnswer {
     enum Failure: Error {
         case unavailable
+        /// Approving without unlocking was turned off after the card was drawn.
+        case needsUnlock
     }
 
     static func send(_ decision: String, hostId: String, requestId: String) async throws {
@@ -75,6 +77,11 @@ struct ApproveUnlockedRequestIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
+        // A card drawn before the setting was turned off still carries this intent: the
+        // setting as it is now decides, so nothing is approved without unlocking against it.
+        guard SharedSettings.defaults?.bool(forKey: SharedSettings.approveWithoutUnlock) == true else {
+            throw LiveAnswer.Failure.needsUnlock
+        }
         try await LiveAnswer.send("approve", hostId: hostId, requestId: requestId)
         return .result()
     }

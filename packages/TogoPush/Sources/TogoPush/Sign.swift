@@ -9,13 +9,20 @@ public enum Signing {
     }
 
     /// `togo-register/v2\n<hostId>\n<deviceId>\n<apns>\n<live>\n<liveStart>\n<command>\n<ts>`; an
-    /// absent token is an empty line and the command text choice is `true` or `false`.
+    /// absent token is an empty line and the command text choice is `true` or `false`. With
+    /// `liveActivityEnded` it is v3 instead, the ended token on its own line after `<liveStart>`;
+    /// without one it stays v2, which helpers that predate v3 accept.
     public static func registerBytes(
         hostID: String, deviceID: String, apnsToken: String?, liveActivityToken: String?,
-        liveActivityStartToken: String?, liveActivityCommand: Bool, ts: Int64
+        liveActivityStartToken: String?, liveActivityEnded: String? = nil, liveActivityCommand: Bool, ts: Int64
     ) -> Data {
-        let lines = ["togo-register/v2", hostID, deviceID, apnsToken ?? "", liveActivityToken ?? "",
-                     liveActivityStartToken ?? "", String(liveActivityCommand), String(ts)]
+        var lines = ["togo-register/v2", hostID, deviceID, apnsToken ?? "", liveActivityToken ?? "",
+                     liveActivityStartToken ?? ""]
+        if let liveActivityEnded {
+            lines[0] = "togo-register/v3"
+            lines.append(liveActivityEnded)
+        }
+        lines += [String(liveActivityCommand), String(ts)]
         return Data(lines.joined(separator: "\n").utf8)
     }
 }

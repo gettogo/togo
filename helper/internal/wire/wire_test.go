@@ -332,6 +332,11 @@ func TestRegisterSignedBytesExact(t *testing.T) {
 	if got != want {
 		t.Errorf("one token:\ngot  %q\nwant %q", got, want)
 	}
+	got = string(RegisterEndedSignedBytes(host, dev, "", "", start, la, false, ts))
+	want = "togo-register/v3\nh_mmg42klgyqzwneiskrelxms3j7\ndev_test-1\n\n\n" + start + "\n" + la + "\nfalse\n1793707200000"
+	if got != want {
+		t.Errorf("ended:\ngot  %q\nwant %q", got, want)
+	}
 }
 
 func TestRegisterFixtureSignatureVerifies(t *testing.T) {

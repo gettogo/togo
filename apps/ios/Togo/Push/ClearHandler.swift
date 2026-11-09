@@ -3,7 +3,9 @@ import TogoPush
 import WidgetKit
 
 /// Removes what a request left behind once it is answered: on the `clear` background push the
-/// helper sends when the approval closes, and when the app comes to the foreground.
+/// helper sends when the approval closes, and when the app comes to the foreground. Also records
+/// a request whose notification a running Live Activity replaced, from the silent copy the
+/// helper sends alongside, so the widget, Siri and Watch replies know it is waiting.
 @MainActor final class ClearHandler {
     struct Dependencies {
         /// Opens background pushes; the same code the notification service extension uses.
@@ -30,8 +32,30 @@ import WidgetKit
             deps.pending.clearOfflineMark(hostId: opened.pairing.hostId)
             await deps.notifications.removeOffline(hostId: opened.pairing.hostId)
         }
+        if opened.payload.kind == .needsYou {
+            return record(opened.payload, hostId: opened.pairing.hostId, machine: opened.pairing.machineName)
+        }
         guard opened.payload.kind == .clear, let requestId = opened.payload.requestId else { return false }
         await clear([requestId])
+        return true
+    }
+
+    /// The same record the notification service keeps for a request it shows. Its window runs
+    /// from when the machine sent it, since a silent push can arrive late.
+    private func record(_ p: PushPayload, hostId: String, machine: String) -> Bool {
+        let now = Date()
+        let sent = Date(timeIntervalSince1970: Double(p.ts) / 1000)
+        let age = now.timeIntervalSince(sent)
+        guard let requestId = p.requestId, age <= NotificationServiceCore.maxAge,
+              age >= -NotificationServiceCore.maxSkew, deps.pending.request(requestId) == nil
+        else { return false }
+        deps.pending.upsert(PendingRequest(
+            requestId: requestId, hostId: hostId, sessionId: p.sessionId, bib: p.bib, agent: p.agent,
+            host: p.host ?? machine, title: PromptText.clean(p.title, maxLines: 1), subject: p.subject,
+            options: p.options ?? [], receivedAt: min(now, sent), answered: nil,
+            allowText: p.allowText == true ? true : nil
+        ))
+        deps.reloadWidgets()
         return true
     }
 

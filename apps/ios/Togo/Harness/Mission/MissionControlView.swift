@@ -280,6 +280,7 @@ struct MissionControlStack: View {
         if let onDone {
             ToolbarItem(placement: .confirmationAction) {
                 Button(MissionCopy.done, systemImage: "checkmark", role: .confirm, action: onDone)
+                    .keyboardShortcut(.cancelAction)
             }
         }
     }
