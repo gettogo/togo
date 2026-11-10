@@ -73,6 +73,8 @@ import UIKit
         engine.onPasteImage = { [weak handle] in handle?.onPasteImage($0) }
         handle.paste = { [weak engine] in engine?.paste($0) }
         handle.pressEnter = { [weak engine] in engine?.send(KeyStroke(.enter)) }
+        handle.sendKeys = { [weak engine] keys in keys.forEach { engine?.send($0) } }
+        handle.screenRows = { [weak engine] in engine?.screenRows() }
         engine.onOpenURL = { [weak handle] in handle?.onOpenURL($0) }
         handle.links = { [weak engine] in engine?.linksOnScreen() ?? [] }
         let gestures = controller.terminal.gestures
@@ -122,11 +124,11 @@ import UIKit
 
     private func installKeyBar() {
         let bar = KeyBarView(config: keyBarConfig, engine: engine)
-        bar.onCompose = { [weak handle] in handle?.onCompose() }
+        bar.onAttach = { [weak handle] in handle?.onAttach() }
         bar.onDictate = { [weak handle] in handle?.onDictate() }
         bar.onHaptic = { Haptic($0).play() }
-        bar.hidesCompose = handle.hidesComposeKeys
-        handle.onHidesComposeKeys = { [weak bar] in bar?.hidesCompose = $0 }
+        bar.hidesInputTools = handle.hidesInputKeys
+        handle.onHidesInputKeys = { [weak bar] in bar?.hidesInputTools = $0 }
     }
 
     private func shutDown() {
@@ -149,8 +151,7 @@ import UIKit
     }
 
     static func themeChoice(_ settings: AppSettings) -> ThemeChoice {
-        let choices = ThemeChoice.all(imported: settings.customThemes)
-        return choices.first { $0.id == settings.themeID } ?? choices[0]
+        ThemeChoice.current(settings)
     }
 
     /// Tap bindings are the text the tap types; an empty one gives the tap back to selection.
@@ -206,6 +207,9 @@ final class ThemedTerminalController: UIViewController, TerminalRefitting {
     init(terminal: TerminalViewController, choice: ThemeChoice) {
         self.terminal = terminal
         self.choice = choice
+        // The grid's first column starts where the chat's text does, so switching between the
+        // two layers keeps the text's leading edge in place.
+        terminal.gridMargins = UIEdgeInsets(top: 0, left: ChatLayout.inset, bottom: 0, right: ChatLayout.inset)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -244,6 +248,10 @@ final class ThemedTerminalController: UIViewController, TerminalRefitting {
 
     func holdFit(_ on: Bool) {
         terminal.holdsFit = on
+    }
+
+    func setCovered(_ on: Bool) {
+        terminal.isCovered = on
     }
 
     // MARK: Input paused

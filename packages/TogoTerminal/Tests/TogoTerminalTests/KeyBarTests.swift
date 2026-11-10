@@ -218,33 +218,46 @@ import UIKit
         #expect(bar.button(for: try item("Esc", in: .standard))?.accessibilityCustomActions?.isEmpty ?? true)
     }
 
-    @Test func composeItemRunsTheComposeClosureAndSendsNothing() throws {
+    @Test func attachItemRunsTheAttachClosureAndSendsNothing() throws {
         let h = EngineHarness()
         let bar = KeyBarView(config: .claude, engine: h.engine)
-        var toggles = 0
-        bar.onCompose = { toggles += 1 }
-        bar.perform(try item("Compose", in: .claude))
-        bar.perform(try item("Compose", in: .standard))
-        #expect(toggles == 2)
+        var requests = 0
+        bar.onAttach = { requests += 1 }
+        bar.perform(try item("Attach image", in: .claude))
+        bar.perform(try item("Attach image", in: .standard))
+        // A Compose key built by hand, as an older build saved it, asks for a picture too.
+        bar.perform(KeyBarItem(title: "Compose", action: .compose))
+        #expect(requests == 3)
         #expect(h.joinedInput.isEmpty)
     }
 
-    /// While the host keeps its compose bar away, the keys that open it go away too, and come
-    /// back where they were.
-    @Test func composeKeysHideWhileHostHidesCompose() throws {
+    /// While the host keeps its input tools away (zen), the Attach and Dictate keys go away
+    /// too, and come back where they were.
+    @Test func inputToolKeysHideWhileHostHidesThem() throws {
         let h = EngineHarness()
         let bar = KeyBarView(config: .standard, engine: h.engine)
-        let compose = try #require(bar.button(for: try item("Compose", in: .standard)))
+        let attach = try #require(bar.button(for: try item("Attach image", in: .standard)))
         let dictate = try #require(bar.button(for: try item("Dictate", in: .standard)))
         let escape = try #require(bar.button(for: try item("Esc", in: .standard)))
-        #expect(!compose.isHidden && !dictate.isHidden)
+        #expect(!attach.isHidden && !dictate.isHidden)
 
-        bar.hidesCompose = true
-        #expect(compose.isHidden && dictate.isHidden)
+        bar.hidesInputTools = true
+        #expect(attach.isHidden && dictate.isHidden)
         #expect(!escape.isHidden)
 
-        bar.hidesCompose = false
-        #expect(!compose.isHidden && !dictate.isHidden)
+        bar.hidesInputTools = false
+        #expect(!attach.isHidden && !dictate.isHidden)
+        #expect(KeyBarView.isInputTool(.compose) && KeyBarView.isInputTool(.attach) && KeyBarView.isInputTool(.dictate))
+        #expect(!KeyBarView.isInputTool(.paste) && !KeyBarView.isInputTool(.hideKeyboard))
+    }
+
+    /// A swipe down on the bar puts the keyboard away, as the Hide key does.
+    @Test func swipingTheBarDownHidesTheKeyboard() {
+        let h = EngineHarness()
+        let bar = KeyBarView(config: .standard, engine: h.engine)
+        #expect(bar.gestureRecognizers?.contains { ($0 as? UISwipeGestureRecognizer)?.direction == .down } == true)
+        bar.hideKeyboard()
+        #expect(h.joinedInput.isEmpty, "hiding the keyboard sends nothing")
     }
 
     @Test func keyBarDefaultHasDictateKey() throws {

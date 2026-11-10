@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import SwiftUI
-import TogoTerminal
 
 /// A place a new session could start: an agent in a folder on a machine.
 struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
@@ -19,8 +18,6 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
         case request(PromptRequest, position: Int, count: Int)
         /// The user is typing a reply to the request.
         case replying(PromptRequest)
-        /// A terminal is open; the bar is its input line.
-        case input(TabID)
         /// Nothing waits and no terminal is open: the bar starts a session.
         case start
         case hidden
@@ -30,7 +27,6 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
     enum Stage: Equatable {
         case request(PromptRequest, position: Int, count: Int)
         case replying(PromptRequest, position: Int, count: Int)
-        case input(TabID)
         case start(expanded: Bool)
         case hidden
 
@@ -60,19 +56,11 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
     var startSuggestions: [StartSuggestion] = []
 
     var onAnswer: (PromptRequest, PromptAnswer) -> Void = { _, _ in }
-    var onSend: (TabID, String) -> Void = { _, _ in }
     var onStart: (StartSuggestion) -> Void = { _ in }
     var onOpenStartSheet: () -> Void = {}
     /// Opens the session a request comes from, from its context line.
     var onOpen: (PromptRequest) -> Void = { _ in }
 
-    /// The open terminal's name, for the input line's placeholder ("Message api").
-    var tabName: (TabID) -> String = { $0.sessionID }
-    /// The keys under the input line. Only keys that send something are drawn; latches, the
-    /// pad, compose and dictation belong to the terminal's own key bar.
-    var keyBar: KeyBarConfig = .standard
-    /// Called when a key under the input line is tapped.
-    var onKey: (TabID, KeyBarItem) -> Void = { _, _ in }
     /// Set by the owner while a text field outside the bar holds the keyboard, such as the
     /// terminal, so typing y, n or r there is not taken as an answer.
     var otherTextFocused = false
@@ -83,16 +71,6 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
     /// Whether the start line is open into its field and suggestions.
     private(set) var startExpanded = false
     var replyDraft = ""
-    /// What is typed for the terminal on show. Each terminal keeps its own while the bar
-    /// shows something else.
-    var inputDraft: String {
-        get { inputTab.flatMap { inputDrafts[$0] } ?? "" }
-        set { if let inputTab { inputDrafts[inputTab] = newValue } }
-    }
-    private var inputDrafts: [TabID: String] = [:]
-    private var inputTab: TabID? {
-        if case let .input(tab) = mode { tab } else { nil }
-    }
     /// Goes up when the user puts away a reply whose request has gone, so the owner can show
     /// what comes next.
     private(set) var dismissals = 0
@@ -131,7 +109,6 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
         switch mode {
         case let .request(request, position, count): .request(request, position: position, count: count)
         case let .replying(request): .replying(request, position: replyQueue.position, count: replyQueue.count)
-        case let .input(tab): .input(tab)
         case .start: .start(expanded: startExpanded)
         case .hidden: .hidden
         }
@@ -244,37 +221,6 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
         onAnswer(request, .reply(text))
     }
 
-    /// Sends the line as typed, leading spaces and all; only the trailing line break goes.
-    func sendInput() {
-        guard case let .input(tab) = mode else { return }
-        let text = String(inputDraft.reversed().drop(while: \.isNewline).reversed())
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        inputDraft = ""
-        onSend(tab, text)
-    }
-
-    func tapKey(_ item: KeyBarItem) {
-        guard case let .input(tab) = mode else { return }
-        onKey(tab, item)
-    }
-
-    /// A hardware key pressed in the input line that the terminal needs (Esc, ⌃C, Tab, ⇧Tab,
-    /// arrows for history): sent to the session as its bytes. False leaves it to the field.
-    func hardwareKey(_ key: PromptHardwareKey) -> Bool {
-        guard case let .input(tab) = mode,
-              let bytes = key.bytes(draftEmpty: inputDraft.isEmpty) else { return false }
-        onKey(tab, KeyBarItem(title: key.title, action: .steps([.text(bytes)])))
-        return true
-    }
-
-    /// The keys drawn under the input line: the ones made only of text, which the bar can send.
-    var inputKeys: [KeyBarItem] {
-        keyBar.items.filter { item in
-            guard case .steps(let steps) = item.action, !steps.isEmpty else { return false }
-            return steps.allSatisfy { if case .text = $0 { true } else { false } }
-        }
-    }
-
     func openStart() {
         guard case .start = mode else { return }
         startExpanded = true
@@ -350,41 +296,6 @@ struct StartSuggestion: Identifiable, Equatable, Hashable, Sendable {
         switch mode {
         case let .request(request, _, _), let .replying(request): request
         default: nil
-        }
-    }
-}
-
-/// A key from a hardware keyboard in the prompt bar's input line, as the terminal would get it.
-struct PromptHardwareKey: Equatable {
-    enum Name: Equatable { case escape, tab, up, down, left, right, control(Character) }
-    let name: Name
-    var shift = false
-
-    var title: String {
-        switch name {
-        case .escape: "Esc"
-        case .tab: shift ? "Shift-Tab" : "Tab"
-        case .up: "Up"
-        case .down: "Down"
-        case .left: "Left"
-        case .right: "Right"
-        case .control(let letter): "Ctrl-" + String(letter).uppercased()
-        }
-    }
-
-    /// The bytes the terminal gets, or nil when the field keeps the key: left and right move
-    /// the caret while there is text to move through.
-    func bytes(draftEmpty: Bool) -> String? {
-        switch name {
-        case .escape: return "\u{1b}"
-        case .tab: return shift ? "\u{1b}[Z" : "\t"
-        case .up: return "\u{1b}[A"
-        case .down: return "\u{1b}[B"
-        case .right: return draftEmpty ? "\u{1b}[C" : nil
-        case .left: return draftEmpty ? "\u{1b}[D" : nil
-        case .control(let letter):
-            guard let ascii = letter.lowercased().first?.asciiValue, (97...122).contains(ascii) else { return nil }
-            return String(UnicodeScalar(ascii - 96))
         }
     }
 }

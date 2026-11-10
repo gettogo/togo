@@ -33,6 +33,34 @@ import UIKit
     public var holdsFit = false {
         didSet { if oldValue, !holdsFit { refit() } }
     }
+    /// Space kept between the safe area and the grid, so the grid's first column and row can
+    /// line up with a layer drawn over it. The cell remainder goes after the last column and
+    /// row, so the leading and top edges are exactly these.
+    public var gridMargins: UIEdgeInsets = .zero {
+        didSet { if gridMargins != oldValue { refit() } }
+    }
+    /// Another layer covers the terminal, as the chat does. The keyboard is then that layer's,
+    /// so the grid fits as if none were up: typing above never resizes the remote, and the
+    /// grid already has its size when the layer goes. Covering or uncovering keeps the grid it
+    /// has while the layer crossfades, and fits it after (`layerSettle`), so a keyboard
+    /// leaving with the switch never reflows the text mid-fade.
+    public var isCovered = false {
+        didSet {
+            guard isCovered != oldValue else { return }
+            layerFit?.cancel()
+            layerHeld = true
+            layerFit = Task { [weak self] in
+                try? await Task.sleep(for: Self.layerSettle)
+                guard !Task.isCancelled, let self else { return }
+                self.layerHeld = false
+                self.refit()
+            }
+        }
+    }
+    /// Longer than the layers' crossfade.
+    public static let layerSettle: Duration = .milliseconds(350)
+    private var layerHeld = false
+    private var layerFit: Task<Void, Never>?
 
     public init(engine: SwiftTermEngine, gestureConfig: GestureConfig = GestureConfig()) {
         self.engine = engine
@@ -102,9 +130,10 @@ import UIKit
     }
 
     private func fitTerminal() {
-        if holdsFit, !engine.view.bounds.isEmpty { return }
+        if holdsFit || layerHeld, !engine.view.bounds.isEmpty { return }
         let rect = TerminalFit.frame(
-            bounds: view.bounds, safeArea: view.safeAreaInsets, keyboard: keyboardFrame, visible: visibleBounds()
+            bounds: view.bounds, safeArea: view.safeAreaInsets, keyboard: isCovered ? nil : keyboardFrame,
+            visible: visibleBounds(), margins: gridMargins
         )
         let terminal = engine.view
         // A space that holds no grid, as for a moment in a fold or with a keyboard over a short
@@ -218,15 +247,19 @@ private enum RendererScale: RendererScaleSource {
 
 /// Where the grid goes inside its host view.
 enum TerminalFit {
-    /// The safe area above the keyboard, cut to the visible part of the view, in whole points
-    /// so the column count does not flicker on a fraction.
-    static func frame(bounds: CGRect, safeArea: UIEdgeInsets, keyboard: CGRect?, visible: CGRect) -> CGRect {
+    /// The safe area above the keyboard, cut to the visible part of the view and inset by
+    /// `margins`, in whole points so the column count does not flicker on a fraction.
+    static func frame(
+        bounds: CGRect, safeArea: UIEdgeInsets, keyboard: CGRect?, visible: CGRect, margins: UIEdgeInsets = .zero
+    ) -> CGRect {
         var rect = bounds.inset(by: safeArea)
         if let keyboard, keyboard.minY < rect.maxY {
             rect.size.height = max(0, keyboard.minY - rect.minY)
         }
         rect = rect.intersection(visible)
         guard !rect.isNull else { return .zero }
+        rect = rect.inset(by: margins)
+        guard rect.width > 0, rect.height > 0 else { return .zero }
         return CGRect(
             x: rect.minX.rounded(.up), y: rect.minY.rounded(.up),
             width: max(0, rect.width.rounded(.down)), height: max(0, rect.height.rounded(.down))

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 import TogoKit
 @testable import Togo
@@ -48,7 +49,6 @@ struct ChatScrollTests {
         #expect(ChatScroll.target(old: [], new: [a], dragging: true) == nil)
         #expect(ChatScroll.followsSend(dragging: true) == nil)
         #expect(ChatScroll.liveAppeared(was: false, now: true, afterSend: true, dragging: true) == nil)
-        #expect(!ChatScroll.repins(pinned: true, old: 60, new: 90, dragging: true))
     }
 
     @Test func theOwnSendAndItsLiveLineScrollToTheFoot() {
@@ -58,10 +58,7 @@ struct ChatScrollTests {
         #expect(ChatScroll.liveAppeared(was: true, now: true, afterSend: true, dragging: false) == nil)
     }
 
-    @Test func aComposerHeightChangeRepinsOnlyAtTheFoot() {
-        #expect(ChatScroll.repins(pinned: true, old: 60, new: 90, dragging: false))
-        #expect(!ChatScroll.repins(pinned: false, old: 60, new: 90, dragging: false))
-        #expect(!ChatScroll.repins(pinned: true, old: 60, new: 60, dragging: false))
+    @Test func theFootIsTheLastLineAboveTheComposer() {
         #expect(ChatScroll.isPinned(offset: 300, topInset: 116, container: 580, content: 1_000))
         #expect(!ChatScroll.isPinned(offset: 0, topInset: 116, container: 580, content: 1_000))
     }
@@ -90,6 +87,49 @@ struct ChatScrollTests {
         #expect(ChatScroll.isPinned(offset: 156, topInset: 116, container: container, content: 758))
     }
 
+    /// A rebuilt chat returns to the reader's row while it is there, to the foot once it has
+    /// gone, and does nothing at the foot (the default anchor gives it).
+    @Test func aRebuiltChatReturnsToTheRowOrFallsBackToTheFoot() {
+        let rows: Set<String> = ["p1", "r1"]
+        #expect(ChatScroll.restore(row: "r1", pinned: false, has: rows.contains) == .row("r1"))
+        #expect(ChatScroll.restore(row: "gone", pinned: false, has: rows.contains) == .bottom)
+        #expect(ChatScroll.restore(row: "r1", pinned: true, has: rows.contains) == nil)
+        #expect(ChatScroll.restore(row: nil, pinned: false, has: rows.contains) == nil)
+
+        let model = ChatScrollModel()
+        model.pinned = false
+        model.settle(at: "gone")
+        #expect(model.restoreTarget(has: rows.contains) == .bottom)
+    }
+
+    /// The settled row is written only when it changes, and never through observation: the
+    /// scroll view's own reports must not invalidate the views that drive it (the freeze).
+    @Test func settlingWritesOnlyAChange() {
+        let model = ChatScrollModel()
+        #expect(model.settle(at: "r1"))
+        #expect(!model.settle(at: "r1"))
+        #expect(model.settledRow == "r1")
+        #expect(model.settle(at: nil))
+        #expect(!model.settle(at: nil))
+
+        let changed = Flag()
+        withObservationTracking { _ = model.request; _ = model.visibleNeeds; _ = model.capsule } onChange: { changed.on = true }
+        model.settle(at: "r2")
+        model.pinned = false
+        model.dragging = true
+        #expect(!changed.on)
+    }
+
+    /// Each ask is a new request, even to the same place, so a second "go to the foot" moves.
+    @Test func everyAskIsANewRequest() {
+        let model = ChatScrollModel()
+        model.go(.bottom, reduce: true)
+        let first = model.request
+        model.go(.bottom, reduce: true)
+        #expect(model.request?.target == .bottom)
+        #expect(model.request != first)
+    }
+
     @Test func theCapsuleOffersTheOldestCardOffScreen() {
         let b = NeedsMark(id: "q-b", ready: true)
         #expect(ChatScroll.capsule(open: [a, b], visible: [], loaded: true) == "approval-a")
@@ -115,4 +155,9 @@ struct ChatScrollTests {
         #expect(chat.layer == .chat)
         #expect(chat.scrollRequest?.row == "approval-9")
     }
+}
+
+/// Set from an observation's change handler.
+private final class Flag: @unchecked Sendable {
+    var on = false
 }

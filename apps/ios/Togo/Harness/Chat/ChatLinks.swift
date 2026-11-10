@@ -384,8 +384,9 @@ extension AppStore {
         }
     }
 
-    /// The review on the file: Changes with its diff when the session changed it, the file
-    /// itself otherwise. False when the session is not listed (no folder to read from).
+    /// The file on its own, so Close goes back to the chat: its diff when the session changed
+    /// it, the file itself otherwise; "All changes" opens the rest of the review from there.
+    /// False when the session is not listed (no folder to read from).
     private func openChatFile(_ path: String, changed: Bool, from tab: TabID) -> Bool {
         guard let row = controlCenter.machines.first(where: { $0.id == tab.hostID })?.sessions
             .first(where: { $0.id == tab.sessionID }) else { return false }
@@ -411,7 +412,7 @@ extension AppStore {
         )
         openReview = ReviewSession(
             subject: subject, services: reviewServices, tab: reviewTab, machine: machineName(for: tab.hostID),
-            navigation: ReviewNavigation(tab: reviewTab, path: [route])
+            navigation: ReviewNavigation(tab: reviewTab, focus: route)
         )
         review(row, tab: reviewTab)
         return true

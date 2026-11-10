@@ -260,7 +260,22 @@ final class TogoTerminalView: TerminalView {
            pan.maximumNumberOfTouches == 1 {
             pan.isEnabled = false
         }
+        // SwiftTerm's own taps; its handler runs first, as its target was added first.
+        if let tap = gestureRecognizer as? UITapGestureRecognizer, tap.numberOfTouchesRequired == 1 {
+            tap.addTarget(self, action: #selector(tapEnded(_:)))
+        }
         super.addGestureRecognizer(gestureRecognizer)
+    }
+
+    /// Typing goes straight to the terminal, so a tap on it always brings the keyboard. SwiftTerm
+    /// spends a tap on an app that tracks the mouse as a click and leaves the keyboard down;
+    /// here the keyboard comes up after that handler ran, so the click still reaches the app.
+    @objc private func tapEnded(_ tap: UITapGestureRecognizer) {
+        guard tap.state == .ended, tap.numberOfTapsRequired == 1, !isFirstResponder, acceptsFocus, !covered else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isFirstResponder, self.window != nil else { return }
+            _ = self.becomeFirstResponder()
+        }
     }
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {

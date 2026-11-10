@@ -129,27 +129,14 @@ import Testing
         #expect(store.workspace.secondary == four)
     }
 
-    @Test func draftsLiveInStore() {
+    @Test func closingATabLetsGoOfWhatWaitedForIt() {
         let store = store()
         store.open(hostID: one.hostID, sessionID: one.sessionID)
-        let defaults = UserDefaults(suiteName: "panes-tests-\(UUID().uuidString)")!
-        func model() -> ComposeModel {
-            ComposeModel(
-                draft: Binding(get: { store.drafts[one] ?? "" }, set: { store.drafts[one] = $0 }),
-                history: ComposeHistory(hostID: one.hostID, sessionID: one.sessionID, defaults: defaults),
-                images: ImagePasteFlow(support: .available, upload: { _, _ in "" }, paste: { _ in }),
-                paste: { _ in }, pressEnter: {}
-            )
-        }
-        model().text = "half a thought"
-        let rebuilt = model()
-        #expect(rebuilt.text == "half a thought")
-        rebuilt.send()
-        #expect(store.drafts[one] ?? "" == "")
-
-        model().text = "left behind"
+        store.pendingInput[one] = "left behind"
+        store.attaching = one
         store.close(one)
-        #expect(store.drafts[one] == nil)
+        #expect(store.pendingInput[one] == nil)
+        #expect(store.attaching == nil)
     }
 
     @Test func secondarySurvivesCompactAndBack() {

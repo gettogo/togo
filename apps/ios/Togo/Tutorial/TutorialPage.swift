@@ -209,7 +209,7 @@ struct WelcomePage: View {
                     systemImage: "terminal",
                     String(
                         localized: "tutorial.chat.terminal.detail",
-                        defaultValue: "Tap Terminal at the top of a chat to see the agent's own screen, with Esc, Ctrl, Tab and the arrows above the keyboard."
+                        defaultValue: "In a chat, tap the Terminal button to see the agent's own screen, with Esc, Ctrl, Tab and arrow keys above the keyboard."
                     )
                 )
                 TutorialPoint(

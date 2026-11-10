@@ -66,7 +66,7 @@ struct ReplyTests {
             "id": .string("s_abcdefghij"), "text": .string("Now\nrun the tests"), "submit": .bool(true),
         ])])
         #expect(store.notice == Notice(text: "Sent to 01 Claude Code", isError: false))
-        #expect(store.replyDrafts.isEmpty)
+        #expect(store.pendingInput.isEmpty)
 
         let empty = await store.deliverReply(.prompt(host: Samples.studio, session: "s_abcdefghij", text: " \t\r\n "), via: sender(tools))
         #expect(empty == .refused("There's nothing to send."))
@@ -74,24 +74,25 @@ struct ReplyTests {
     }
 
     /// The agent ended, or an approval appeared, before the reply arrived: nothing is typed, the
-    /// app says why in words, and the words wait in the session's compose bar.
+    /// app says why in words, and the words wait for the session's input (`pendingInput`). Nothing
+    /// else changes: no screen opens and no pane takes focus.
     @Test func refusedReplyKeepsDraft() async {
         tools.fail("session.sendText", code: RPCErrorCode.conflict, data: #"{"reason":"ended"}"#)
         let raw = Reply.prompt(host: Samples.studio, session: "s_abcdefghij", text: "keep\u{1B}[0m going")
         #expect(await store.deliverReply(raw, via: sender(tools)) == .refused("Not sent: 01 Claude Code has ended."))
-        #expect(store.takeReplyDraft(tab) == "keep[0m going", "the draft never holds control characters")
+        #expect(store.takePendingInput(tab) == "keep[0m going", "the draft never holds control characters")
         let reply = Reply.prompt(host: Samples.studio, session: "s_abcdefghij", text: "keep going")
         #expect(await store.deliverReply(reply, via: sender(tools)) == .refused("Not sent: 01 Claude Code has ended."))
         #expect(store.notice == Notice(text: "Not sent: 01 Claude Code has ended.", isError: true))
-        #expect(store.replyDrafts[tab] == "keep going")
-        #expect(store.composing == tab)
-        #expect(store.takeReplyDraft(tab) == "keep going")
-        #expect(store.replyDrafts[tab] == nil)
+        #expect(store.pendingInput[tab] == "keep going")
+        #expect(store.attaching == nil)
+        #expect(store.takePendingInput(tab) == "keep going")
+        #expect(store.pendingInput[tab] == nil)
 
         tools.fail("session.sendText", code: RPCErrorCode.conflict, data: #"{"reason":"needs_you"}"#)
         #expect(await store.deliverReply(reply, via: sender(tools))
             == .refused("Not sent: 01 Claude Code is asking something. Open it to answer."))
-        #expect(store.replyDrafts[tab] == "keep going")
+        #expect(store.pendingInput[tab] == "keep going")
     }
 
     private func bridge(_ tools: any MachineTools, defaults: UserDefaults? = nil) -> WatchBridge {

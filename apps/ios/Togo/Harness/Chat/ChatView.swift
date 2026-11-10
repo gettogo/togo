@@ -80,18 +80,21 @@ struct ChatView: View {
                         .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
-            // The scroll position follows the row at the top as the reader scrolls, so a
-            // rebuilt chat can return to it (`ChatScrollModel.resume`).
+            // The scroll position follows the row at the bottom as the reader scrolls, so a
+            // rebuilt chat can return to it (`ChatScrollModel.restoreTarget`).
             .scrollTargetLayout()
-            .padding(.horizontal, ChatLayout.inset)
+            // The column owns its width and its edges: exactly the text width, its overflow
+            // trailing. One row that measured wider than it was offered (after a presentation,
+            // a code well, a long token) once widened the lazy stack, and the centring frames
+            // split the excess, pulling every row's leading edge to the pane's edge. Now
+            // replies, work lines and notices start `inset` in and the prompt bubble ends
+            // `inset` in, on every layout.
+            .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in ChatLayout.textWidth(in: width) }
             .padding(.vertical, 16)
-            .frame(maxWidth: ChatLayout.columnWidth)
             .frame(maxWidth: .infinity)
         }
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.bottom, for: .sizeChanges)
-        // A chat rebuilt by a fold, unfold or resize opens where the reader left it.
-        .onAppear { scroll.resume() }
         .scrollDismissesKeyboard(.interactively)
         // While the composer's / or @ menu is up, a tap on the conversation puts the keyboard
         // away, and the menu goes with it: a way out that needs no aim.
@@ -106,7 +109,9 @@ struct ChatView: View {
         }
         // Keeps the composer's height clear, scrolls to what needs the user and offers the
         // "Needs you" capsule while a card is off screen.
-        .modifier(ChatScrolling(store: store, marks: needsMarks, scroll: scroll))
+        // A chat rebuilt by a fold, unfold or resize opens where the reader left it, or at the
+        // foot if that row has gone.
+        .modifier(ChatScrolling(store: store, marks: needsMarks, scroll: scroll, has: { id in rows.contains { $0.id == id } }))
         .background(Color.togoInk)
         .environment(\.chatImageFetch, imageFetch)
         .accessibilityRotor(ChatCopy.rotorPrompts) { rotor(where: \.isPrompt) }
@@ -486,4 +491,9 @@ enum ChatLayout {
     static let inset: CGFloat = 16
     /// The composer's widest: the column's text width, so the field starts where replies do.
     static let composerWidth: CGFloat = columnWidth - 2 * inset
+
+    /// The text's width in a scroll view `width` wide: the column, less its padding.
+    static func textWidth(in width: CGFloat) -> CGFloat {
+        max(0, min(width, columnWidth) - 2 * inset)
+    }
 }

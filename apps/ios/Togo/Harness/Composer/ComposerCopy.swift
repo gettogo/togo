@@ -23,7 +23,6 @@ enum ComposerCopy {
     static let openTerminal = String(localized: "composer.openTerminal", defaultValue: "Open terminal")
     static let session = String(localized: "composer.session", defaultValue: "Session")
     static let sessionState = String(localized: "composer.sessionState", defaultValue: "Model, effort and mode")
-    static let addInstructions = String(localized: "composer.addInstructions", defaultValue: "Add instructions…")
     static let commandsFailed = String(localized: "composer.commandsFailed", defaultValue: "Couldn't read the commands")
     static let tryAgain = String(localized: "composer.tryAgain", defaultValue: "Try again")
     static let notCancelled = String(localized: "composer.notCancelled", defaultValue: "Couldn't take it back")
@@ -57,6 +56,25 @@ enum ComposerCopy {
     static func sendAsTyped(_ line: String) -> String {
         String(localized: "composer.sendAsTyped", defaultValue: "Send \u{201C}\(line)\u{201D} as typed")
     }
+
+    // MARK: Terminal peek
+
+    /// "In omp": the strip shows the agent's own menu, live from its terminal.
+    static func peekTitle(_ agent: String) -> String {
+        String(localized: "composer.peek.title", defaultValue: "In \(agent)")
+    }
+
+    /// For VoiceOver on a strip row: a tap picks it in the agent's own menu.
+    static func peekRowHint(_ agent: String) -> String {
+        String(localized: "composer.peek.rowHint", defaultValue: "Picks this in \(agent)")
+    }
+
+    /// For VoiceOver on the strip's close control.
+    static func peekCloseHint(_ agent: String) -> String {
+        String(localized: "composer.peek.closeHint", defaultValue: "Clears what was typed in \(agent)")
+    }
+
+    static let peekAgentFallback = String(localized: "composer.peek.agent", defaultValue: "the agent")
 
     // MARK: Pictures
 

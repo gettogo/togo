@@ -1,70 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// The microphone beside Send. Hold to talk and let go to add the words; a quick tap keeps it
-/// listening until the next tap. VoiceOver, Switch Control and Voice Control cannot hold, so
-/// their activation starts and stops it the same way a tap does.
-struct DictationButton: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ScaledMetric(relativeTo: .body) private var diameter: CGFloat = 32
-    /// True while a finger is down. Gesture state resets on its own when the system cancels
-    /// the touch (a call, Control Center, a sheet), which lifts the hold like a release.
-    @GestureState private var touching = false
-    let model: DictationModel
-
-    var body: some View {
-        let on = model.isActive
-        Image(systemName: on ? "mic.fill" : "mic")
-            .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
-            .font(.body.weight(on ? .semibold : .regular))
-            .foregroundStyle(on ? Color.togoInk : Color.togoMute)
-            .frame(width: diameter, height: diameter)
-            .background(Circle().fill(on ? Color.togoSnow : Color.clear))
-            .frame(minWidth: 44, minHeight: 44)
-            // Without this the minimum frame stretches and takes width from the text field.
-            .fixedSize()
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0).updating($touching) { _, touching, _ in touching = true })
-            .onChange(of: touching) { old, new in
-                switch HoldEdge(from: old, to: new) {
-                case .press?: Task { await model.press() }
-                case .release?: Task { await model.release() }
-                case nil: break
-                }
-            }
-            .onChange(of: reduceMotion, initial: true) { model.showsLevel = !reduceMotion }
-            .accessibilityElement()
-            .accessibilityLabel(on ? DictationCopy.stop : DictationCopy.dictate)
-            .accessibilityHint(on ? "" : DictationCopy.hint)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { Task { await model.toggle() } }
-            // motion: state change — the mic button lights while it listens.
-            .motion(.respond, value: on)
-            .haptic(.listen, trigger: model.isListening) { $0 }
-    }
-}
-
-/// A change in whether a finger is on the microphone.
-enum HoldEdge: Equatable {
-    case press, release
-
-    init?(from old: Bool, to new: Bool) {
-        switch (old, new) {
-        case (false, true): self = .press
-        case (true, false): self = .release
-        default: return nil
-        }
-    }
-}
-
-/// The line above the field while dictating: what has been heard so far, a download's
+/// The status line while dictating: what has been heard so far, a download's
 /// progress, or why dictation could not start and what to do about it.
 struct DictationLine: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
     let model: DictationModel
-    /// The phase as the compose bar shows it, so a line leaving keeps its words while it fades.
+    /// The phase as the input status shows it, so a line leaving keeps its words while it fades.
     var phase: DictationModel.Phase?
 
     var body: some View {

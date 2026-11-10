@@ -38,7 +38,7 @@ import TogoKit
     /// The model for `route`'s screen: the one already made while the route stays open, else
     /// a new one from `make`.
     func screen<Model: AnyObject>(for route: ReviewRoute, make: () -> Model) -> Model {
-        let open = Set(navigation.path + [navigation.detail].compactMap(\.self))
+        let open = Set(navigation.path + [navigation.detail, navigation.focus].compactMap(\.self))
         screens = screens.filter { open.contains($0.key) }
         if let kept = screens[route] as? Model { return kept }
         let made = make()

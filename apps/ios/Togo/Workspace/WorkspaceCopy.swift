@@ -12,6 +12,8 @@ enum WorkspaceCopy {
     static let cursorLine = String(localized: "ws.terminal.cursorLine", defaultValue: "Cursor line")
     static let blankLine = String(localized: "ws.terminal.blank", defaultValue: "blank")
     static let closeTab = String(localized: "ws.closeTab", defaultValue: "Close tab")
+    /// The title menu's way back to the roster, under a compact horizontal bar.
+    static let allSessions = String(localized: "ws.allSessions", defaultValue: "All sessions")
 
     static func ended(_ label: String) -> String {
         String(localized: "ws.ended", defaultValue: "\(label) ended")

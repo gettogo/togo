@@ -205,11 +205,14 @@ struct TerminalSettingsView: View {
     }
 }
 
-/// A theme as the list offers it. Default follows the system appearance; every other theme
-/// looks the same in light and dark.
+/// A theme as the list offers it. Every theme looks the same in light and dark, so a dark
+/// terminal stays dark in light mode, where programs that hard-code dark-friendly colours
+/// still read; "Match System Appearance" alone follows the system.
 struct ThemeChoice: Identifiable, Equatable {
+    /// What a new install and a removed imported theme fall back to.
+    static let defaultID = "togo-dark"
     /// The choice that follows the system appearance, built from Togo Dark and Togo Light.
-    static let defaultID = "default"
+    static let systemID = "system"
 
     var id: String
     var name: String
@@ -222,20 +225,27 @@ struct ThemeChoice: Identifiable, Equatable {
         scheme == .dark ? dark : light
     }
 
+    /// The built-in themes first, Togo Dark leading, then the one that follows the system,
+    /// then the imported ones.
     static func all(imported: [TerminalTheme]) -> [ThemeChoice] {
         let builtIn = BuiltInThemes.all
-        var choices: [ThemeChoice] = []
+        var choices = builtIn.map { ThemeChoice(id: $0.id, name: $0.name, dark: $0, light: $0) }
         if let dark = builtIn.first(where: { $0.id == "togo-dark" }),
            let light = builtIn.first(where: { $0.id == "togo-light" }) {
             choices.append(ThemeChoice(
-                id: defaultID, name: settingsText("settings.terminal.default", "Default"),
-                detail: settingsText("settings.terminal.default.detail", "Light or dark with the system"),
+                id: systemID, name: settingsText("settings.terminal.system", "Match System Appearance"),
+                detail: settingsText("settings.terminal.system.detail", "Togo Dark or Togo Light with the system"),
                 dark: dark, light: light
             ))
         }
-        choices += builtIn.map { ThemeChoice(id: $0.id, name: $0.name, dark: $0, light: $0) }
         choices += imported.map { ThemeChoice(id: $0.id, name: $0.name, dark: $0, light: $0, isImported: true) }
         return choices
+    }
+
+    /// The choice `settings` names, Togo Dark when it names none that is offered.
+    static func current(_ settings: AppSettings) -> ThemeChoice {
+        let choices = all(imported: settings.customThemes)
+        return choices.first { $0.id == settings.themeID } ?? choices[0]
     }
 }
 

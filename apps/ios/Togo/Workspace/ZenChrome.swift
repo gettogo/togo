@@ -69,11 +69,10 @@ enum ZenCopy {
 }
 
 extension AppStore {
-    /// ⌃⌘F and "Zen mode" in the workspace menu. Hides the header, tab strip and compose bar of
-    /// this window's workspace; a draft stays where it was.
+    /// ⌃⌘F and "Zen mode" in the workspace menu. Hides the header, the tab strip and the key
+    /// bar's Attach and Dictate keys of this window's workspace.
     func toggleZen() {
         guard zen || workspaceOpen else { return }
         zen.toggle()
-        if zen { composing = nil }
     }
 }

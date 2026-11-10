@@ -8,14 +8,15 @@ import UIKit
 /// The way back, the session's name and its actions are in the navigation bar of the stack
 /// around it, so on an iPhone Duo they sit in the vertical bar beside the status bar and the
 /// terminal starts at the top edge. Only the tab strip, with more than one tab, and the find
-/// field while it is open sit above the terminal. Requests wait in the prompt bar its presenter puts at its
+/// field while it is open sit above the terminal; under a compact horizontal bar the title's
+/// menu lists the tabs instead (`WorkspaceBarLayout`). Requests wait in the prompt bar its presenter puts at its
 /// foot. On a Duo held as a tabletop the terminal stays above the fold and the rest sits below.
 struct WorkspaceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.displayScale) private var displayScale
     @Environment(\.windowID) private var window
     @Environment(\.machineTools) private var machineTools
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.windowWidth) private var windowWidth
     @Bindable var store: AppStore
     let terminals: TerminalPool
@@ -49,6 +50,12 @@ struct WorkspaceView: View {
     }
 
     var body: some View {
+        BarEdgeReader { verticalBar in
+            workspace(.choose(horizontal: sizeClass, vertical: verticalSizeClass, verticalBar: verticalBar))
+        }
+    }
+
+    private func workspace(_ layout: WorkspaceBarLayout) -> some View {
         WorkspacePanes(store: store, terminals: terminals, window: window) { geometry, insets in
             ChatPanes(store: store, geometry: geometry, insets: insets)
         }
@@ -60,8 +67,9 @@ struct WorkspaceView: View {
             // A bar, not a plain inset: the chat scrolls under it behind the system's scroll edge
             // effect, as under the navigation bar, so no line shows above or through it.
             .safeAreaBar(edge: .top, spacing: 0) {
-                if rowsPlaced {
-                    rows.modifier(LeadingPageOnly())
+                if rowsPlaced(layout) {
+                    rows(layout).modifier(LeadingPageOnly())
+                        .modifier(WorkspaceRowsAppearance(store: store))
                         .opacity(chromeLayout.shown ? 1 : 0)
                         .allowsHitTesting(chromeLayout.shown)
                         .accessibilityHidden(!chromeLayout.shown)
@@ -70,7 +78,7 @@ struct WorkspaceView: View {
                         .transition(Motion.unfold(reduce: reduceMotion))
                 }
             }
-            .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar })
+            .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar(layout) })
             .modifier(TitleOffBesideVerticalBar())
             .modifier(TaskBarCompression())
             .onChange(of: store.zen, initial: true) { _, on in
@@ -92,19 +100,18 @@ struct WorkspaceView: View {
                     .background { Color.clear.tutorialTip(.workspace, arrowEdge: .bottom) }
                     .modifier(PaneColumns(state: panes) { [store] in $0.geometry.composeFrame(focused: store.workspace.focused) })
             }
-            .background(Color.togoInk)
+            // The terminal theme's canvas behind the bar while the terminal shows, the app's otherwise.
+            .modifier(WorkspaceBackdrop(store: store))
             // The bar item opens it: a sheet on a phone, an inspector when wide.
             .modifier(FocusedMissionControl(app: store))
             .modifier(MissionWorkspace(app: store, model: mission))
-            .background { shortcuts }
+            .background { shortcuts(layout) }
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
             // Sign-in questions and the review are the root's (`RootView`), above the split view
             // this column lives in, so a fold never swaps their host out mid-presentation.
             .onChange(of: store.focusedTab?.id) { _, id in
                 status = nil
-                // The Compose key in the other pane moves focus to it with its bar open.
-                if store.composing != id { store.composing = nil }
                 endFind()
             }
             .haptic(.tabSettle, trigger: PaneTabs(store.workspace), change: PaneTabs.settles)
@@ -118,7 +125,7 @@ struct WorkspaceView: View {
                 // in its place in the bar.
                 withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { barFollowed = liveBar }
             }
-            .onChange(of: showsStrip) { _, shows in
+            .onChange(of: showsStrip(layout)) { _, shows in
                 // motion: preventing a jump — the strip's row opens and the terminal lands once.
                 withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { stripFollowed = shows }
             }
@@ -162,12 +169,13 @@ struct WorkspaceView: View {
         store.openBeside(id)
     }
 
-    /// The compose bar under the focused pane and, on a tabletop, the Keyboard button.
+    /// The chat's composer or the terminal's input status under the focused pane and, on a
+    /// tabletop, the Keyboard button.
     private var bottomBar: some View {
         VStack(spacing: 0) {
             WorkspaceComposeBar(store: store, terminals: terminals)
             WithPanes(state: panes) { report in
-                if report.geometry.isTabletop, store.composing == nil {
+                if report.geometry.isTabletop {
                     TabletopDeck<EmptyView>.KeyboardButton {
                         store.focusedTab.flatMap { terminals.handle(for: $0.id) }?.raiseKeyboard()
                     }
@@ -183,12 +191,13 @@ struct WorkspaceView: View {
     }
 
     /// The tab strip or find field has a place above the terminal, shown or emptied by zen.
-    private var rowsPlaced: Bool { stripShown || finding }
+    private func rowsPlaced(_ layout: WorkspaceBarLayout) -> Bool { stripShown(layout) || finding }
 
-    /// One tab is already named in the title; the strip shows once there is a choice.
-    private var showsStrip: Bool { store.workspace.tabs.count > 1 }
+    /// One tab is already named in the title; the strip shows once there is a choice, and never
+    /// under a compact horizontal bar, where the title's menu lists the tabs.
+    private func showsStrip(_ layout: WorkspaceBarLayout) -> Bool { layout.showsRail && store.workspace.tabs.count > 1 }
 
-    private var stripShown: Bool { stripFollowed ?? showsStrip }
+    private func stripShown(_ layout: WorkspaceBarLayout) -> Bool { stripFollowed ?? showsStrip(layout) }
 
     private var focusedRow: SessionRow? { store.focusedTab.flatMap { store.session(for: $0) } }
 
@@ -203,9 +212,9 @@ struct WorkspaceView: View {
     }
 
     /// The tab strip and the find field, the only rows between the bar and the terminal.
-    private var rows: some View {
+    private func rows(_ layout: WorkspaceBarLayout) -> some View {
         VStack(spacing: 0) {
-            if stripShown {
+            if stripShown(layout) {
                 TabStrip(
                     chips: chips, selected: store.focusedTab?.id, beside: besideTab, canOpenBeside: panes.report.canSplit,
                     onSelect: show, onOpenBeside: openBeside, onClose: { store.close($0) }
@@ -217,31 +226,47 @@ struct WorkspaceView: View {
                     // and uncovers the field in place.
                     .transition(Motion.unfold(reduce: reduceMotion))
             }
-            Rectangle()
-                .fill(Color.togoLine)
-                .frame(height: 1 / displayScale)
         }
-        .background(Color.togoInk)
+        // No fill and no rule of their own: the rows are part of the top bar, one band with the
+        // navigation bar, and the chat scrolls under both behind the system's scroll edge
+        // effect. A painted band here drew a second strip under the bar's, cut the chat with a
+        // seam, and stopped short of a Duo's vertical bar.
         // Like the system bars, the rows stop growing at the third accessibility size so the
         // terminal keeps most of the screen.
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+    @ToolbarContentBuilder private func toolbar(_ layout: WorkspaceBarLayout) -> some ToolbarContent {
         if let tab = store.focusedTab {
+            if layout.titleMenu {
+                ToolbarTitleMenu {
+                    WorkspaceTabMenu(
+                        entries: store.tabMenuEntries, selected: tab.id,
+                        onSelect: show, onClose: { store.close($0) }, onAllSessions: leadingAction
+                    )
+                }
+            }
             WorkspaceToolbar(
                 leading: leading, onLeading: leadingAction, runAgain: bar.runAgain,
                 review: focusedRow.map {
-                    ReviewToolbarItems(store: store, row: $0, model: review, folded: ReviewFold(store.missionStore?.descriptor))
+                    ReviewToolbarItems(store: store, row: $0, model: review, folded: reviewFold(layout))
                 },
-                layer: bar.layer, mission: bar.mission,
+                layer: bar.layer, mission: layout.sessionItemsInBar ? bar.mission : nil,
                 settings: store.workspaceInline ? SettingsToolbarItem(store: store) : nil
             ) {
-                actions(for: tab, row: store.session(for: tab))
+                actions(for: tab, row: store.session(for: tab), layout: layout)
                     .onAppear { menuOpen = true }
                     .onDisappear { menuOpen = false }
             }
         }
+    }
+
+    /// Preview leaves the bar where mission control has Ports, and under a compact horizontal
+    /// bar, where the session menu has it.
+    private func reviewFold(_ layout: WorkspaceBarLayout) -> ReviewFold {
+        var fold = ReviewFold(store.missionStore?.descriptor)
+        if !layout.sessionItemsInBar { fold.preview = true }
+        return fold
     }
 
     private var bar: WorkspaceBarItems { barFollowed ?? liveBar }
@@ -286,7 +311,7 @@ struct WorkspaceView: View {
         }
     }
 
-    @ViewBuilder private func actions(for tab: WorkspaceTab, row: SessionRow?) -> some View {
+    @ViewBuilder private func actions(for tab: WorkspaceTab, row: SessionRow?, layout: WorkspaceBarLayout) -> some View {
         // The name and status, which the title says unless a vertical bar took it off screen,
         // and why the link fell back from the transport asked for.
         if let title {
@@ -296,6 +321,10 @@ struct WorkspaceView: View {
             } header: {
                 Text(title.title)
             }
+        }
+        // A compact horizontal bar keeps three items; mission control is the menu's first.
+        if !layout.sessionItemsInBar, let item = bar.mission {
+            MissionMenuSection(item: item)
         }
         let etAvailable = store.services.hosts.first { $0.id == tab.hostID }?.etAvailable ?? false
         ConnectWithMenu(etAvailable: etAvailable) { transport in
@@ -324,10 +353,18 @@ struct WorkspaceView: View {
         }
         if let row {
             let allowed = SessionActions.actions(for: row, on: store.machine(for: tab.hostID))
-            if store.reviewSubject(for: row).canRead {
+            let canRead = store.reviewSubject(for: row).canRead
+            // Preview, where the bar left it out for room and mission control does not carry it.
+            let preview = !layout.sessionItemsInBar && review.hasPorts && !ReviewFold(store.missionStore?.descriptor).preview
+            if canRead || preview {
                 Section {
-                    Button(ReviewCopy.tabName(.files), systemImage: "folder") { store.review(row, tab: .files) }
-                    Button(ReviewCopy.tabName(.history), systemImage: "clock") { store.review(row, tab: .history) }
+                    if canRead {
+                        Button(ReviewCopy.tabName(.files), systemImage: "folder") { store.review(row, tab: .files) }
+                        Button(ReviewCopy.tabName(.history), systemImage: "clock") { store.review(row, tab: .history) }
+                    }
+                    if preview {
+                        Button(ReviewEntryCopy.preview, systemImage: "safari") { store.review(row, tab: .ports) }
+                    }
                 }
             }
             // Run again is the bar's prominent item once the agent stopped; not repeated here.
@@ -393,14 +430,21 @@ struct WorkspaceView: View {
     // MARK: Shortcuts
 
     /// ⌘1 to ⌘9 while the terminal does not have focus. With focus the terminal claims the
-    /// keys first and passes them up through `TerminalHandle.onShortcut`.
-    private var shortcuts: some View {
-        ForEach(Array(chips.prefix(9).enumerated()), id: \.element.id) { index, chip in
-            Button(WorkspaceCopy.goTo([chip.bib, chip.name].compactMap(\.self).joined(separator: " "))) {
-                // A cut, like a chip tap (`show`).
-                store.selectTab(number: index + 1)
+    /// keys first and passes them up through `TerminalHandle.onShortcut`. ⌘I is mission
+    /// control's bar item's own; where the item is in the session menu, it is here.
+    private func shortcuts(_ layout: WorkspaceBarLayout) -> some View {
+        ZStack {
+            ForEach(Array(chips.prefix(9).enumerated()), id: \.element.id) { index, chip in
+                Button(WorkspaceCopy.goTo([chip.bib, chip.name].compactMap(\.self).joined(separator: " "))) {
+                    // A cut, like a chip tap (`show`).
+                    store.selectTab(number: index + 1)
+                }
+                .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
             }
-            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+            if !layout.sessionItemsInBar, let mission = store.missionStore {
+                Button(MissionCopy.title) { mission.showsMission.toggle() }
+                    .keyboardShortcut("i", modifiers: .command)
+            }
         }
         .opacity(0)
         .accessibilityHidden(true)
@@ -436,40 +480,6 @@ private struct LeadingPageOnly: ViewModifier {
             content
                 .frame(width: division.minX)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            content
-        }
-    }
-}
-
-/// Beside a vertical bar the system sets the title in a row of its own above the content, which
-/// would take back the height the bar gave the terminal. There the title leaves the screen; the
-/// window and VoiceOver keep it, and the session menu says the name and status at its top.
-private struct TitleOffBesideVerticalBar: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 27.1, *) {
-            content.modifier(VerticalEdgeTitle())
-        } else {
-            content
-        }
-    }
-}
-
-@available(iOS 27.1, *)
-private struct VerticalEdgeTitle: ViewModifier {
-    @Environment(\.toolbarVerticalEdge) private var edge
-
-    func body(content: Content) -> some View {
-        content.toolbar(removing: edge == nil ? nil : .title)
-    }
-}
-
-/// The workspace is a task screen: on a Duo the vertical bar keeps the session's items and lets
-/// the tab bar minimize first (HIG, iPhone Duo; `D14`).
-private struct TaskBarCompression: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 27.1, *) {
-            content.toolbarVerticalCompressionBehavior(.prefersToolbarItems)
         } else {
             content
         }

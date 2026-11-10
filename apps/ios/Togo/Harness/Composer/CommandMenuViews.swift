@@ -87,9 +87,6 @@ struct CommandMenuPanel: View {
                                 Button(starred ? ComposerCopy.unfavourite : ComposerCopy.favourite, systemImage: starred ? "star.slash" : "star") {
                                     model.toggleFavourite(item)
                                 }
-                                if case .run(let run) = CommandKind.dispatch(item), run.instructions != nil, !run.destructive {
-                                    Button(ComposerCopy.addInstructions, systemImage: "text.cursor") { model.addInstructions(item) }
-                                }
                             }
                         }
                     }

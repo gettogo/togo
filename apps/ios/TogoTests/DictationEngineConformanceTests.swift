@@ -142,19 +142,17 @@ struct DictationEngineConformanceTests {
     @Test(arguments: Kind.allCases) func neverPressesEnter(_ kind: Kind) async throws {
         let driver = try await Driver(kind)
         var events: [String] = []
-        let compose = ComposeModel(
-            history: ComposeHistory(hostID: Samples.studio, sessionID: "s-04", defaults: UserDefaults(suiteName: "conformance-compose-\(UUID().uuidString)")!),
+        let tools = TerminalInputModel(
             images: ImagePasteFlow(support: .available, upload: { _, _ in "" }, paste: { _ in }),
             paste: { events.append("paste:\($0)") },
-            pressEnter: { events.append("enter") },
             speech: DictationSpeech(engine: driver.engine, locale: Locale(identifier: "en-US"), history: history, clock: clock.clock)
         )
-        let dictation = try #require(compose.dictation)
+        let dictation = try #require(tools.dictation)
         await hold(dictation)
         driver.say("deploy to staging\n")
         await dictation.release()
-        #expect(compose.text == "deploy to staging")
-        #expect(events.isEmpty)
+        // Typed at the prompt as one paste, the line break cleaned away: Enter is never pressed.
+        #expect(events == ["paste:deploy to staging"])
     }
 
     @Test(arguments: Kind.allCases) func longTranscriptInserted(_ kind: Kind) async throws {

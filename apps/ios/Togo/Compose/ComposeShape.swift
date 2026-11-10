@@ -1,24 +1,20 @@
 import SwiftUI
 
-/// What the compose bar shows around its field, as the bar follows its model. A change of
-/// stage, such as a row arriving, leaving or giving way to another, or a button appearing,
-/// moves the bar in one `resize` transaction while the rows reveal and conceal; a change within
-/// a stage, such as the words heard so far or the meter's level, lands at once.
+/// The rows the terminal's input status shows, as it follows its model. A change of stage,
+/// such as a row arriving, leaving or giving way to another, moves the status in one `resize`
+/// transaction while the rows reveal and conceal; a change within a stage, such as the words
+/// heard so far or the meter's level, lands at once.
 struct ComposeShape: Equatable {
     var image: ImagePasteFlow.Phase = .idle
     var dictation: DictationModel.Phase?
-    var photo = false
-    var history = false
 
     struct Stage: Equatable {
         var image = 0
         var dictation = 0
-        var photo = false
-        var history = false
     }
 
     var stage: Stage {
-        Stage(image: Self.stage(of: image), dictation: Self.stage(of: dictation), photo: photo, history: history)
+        Stage(image: Self.stage(of: image), dictation: Self.stage(of: dictation))
     }
 
     /// Which image row shows: 0 for none, then one number per row, so two different messages
@@ -55,7 +51,7 @@ extension ComposeShape {
             shown.wrappedValue = next
             return
         }
-        // motion: preventing a jump — the bar opens or closes its room with its rows, so nothing above it jumps.
+        // motion: preventing a jump — the status opens or closes its room with its rows, so nothing above it jumps.
         withAnimation(Motion.animation(.resize, reduce: reduce)) { shown.wrappedValue = next }
     }
 }

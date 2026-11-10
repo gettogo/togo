@@ -19,14 +19,15 @@ import UIKit
     let latch = ModifierLatch()
     let presence = KeyboardPresence()
     private(set) var isShowingDPad = false
-    /// Called by a `.compose` item. The bar has no compose UI of its own; the host shows it.
-    public var onCompose: (() -> Void)?
-    /// Called by a `.dictate` item. The host opens its compose bar and listens there.
+    /// Called by an `.attach` item (or a `.compose` one an older build saved). The bar has no
+    /// picker of its own; the host shows it.
+    public var onAttach: (() -> Void)?
+    /// Called by a `.dictate` item. The host listens and types what it heard.
     public var onDictate: (() -> Void)?
-    /// Hides the Compose and Dictate keys while the host keeps its compose bar away, as in a
+    /// Hides the Attach and Dictate keys while the host keeps its input tools away, as in a
     /// mode that shows the terminal alone.
-    public var hidesCompose = false {
-        didSet { refreshComposeKeys() }
+    public var hidesInputTools = false {
+        didSet { refreshInputToolKeys() }
     }
 
     private weak var engine: SwiftTermEngine?
@@ -65,6 +66,7 @@ import UIKit
         dpad.onStroke = { [weak self] in self?.send($0) }
         engine.latch = latch
         engine.inputAccessory = self
+        installSwipeDown()
         refreshVisibility()
     }
 
@@ -142,12 +144,12 @@ import UIKit
         case .paste:
             engine.pasteFromClipboard()
         case .hideKeyboard:
-            engine.endEditing()
+            hideKeyboard()
         case .dpad:
             isShowingDPad.toggle()
             refreshDPad()
-        case .compose:
-            onCompose?()
+        case .compose, .attach:
+            onAttach?()
         case .dictate:
             onDictate?()
         }
@@ -268,11 +270,38 @@ import UIKit
         setNeedsLayout()
     }
 
-    private func refreshComposeKeys() {
-        for item in config.items where item.action == .compose || item.action == .dictate {
-            buttons[item.id]?.isHidden = hidesCompose
+    private func refreshInputToolKeys() {
+        for item in config.items where Self.isInputTool(item.action) {
+            buttons[item.id]?.isHidden = hidesInputTools
         }
         setNeedsLayout()
+    }
+
+    static func isInputTool(_ action: KeyAction) -> Bool {
+        switch action {
+        case .compose, .attach, .dictate: true
+        default: false
+        }
+    }
+
+    /// A swipe down on the bar puts the keyboard away, as the Hide key does: the bar sits on the
+    /// keyboard's top edge, so the gesture pushes both down. It runs beside the row's sideways
+    /// paging and cancels a key it started on.
+    private func installSwipeDown() {
+        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(swipedDown(_:)))
+        swipe.direction = .down
+        swipe.delegate = self
+        addGestureRecognizer(swipe)
+    }
+
+    @objc private func swipedDown(_ swipe: UISwipeGestureRecognizer) {
+        guard swipe.state == .ended else { return }
+        hideKeyboard()
+    }
+
+    func hideKeyboard() {
+        repeater.stop()
+        engine?.endEditing()
     }
 
     private func refreshVisibility() {
@@ -300,4 +329,13 @@ public enum KeyHaptic: Sendable {
     case lock
     /// A terminal key such as Esc, ^C, Tab or an arrow. Repeats are silent.
     case key
+}
+
+extension KeyBarView: UIGestureRecognizerDelegate {
+    public func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
 }

@@ -44,6 +44,7 @@ var Capabilities = []string{
 	"session.v1", "agents.v1", "fs.v1", "capture.v1",
 	"events.v1", "approvals.v1", "mute.v1", "push.v1", "git.v1", "ports.v1", "upload.v1", "image.v1",
 	"gitwrite.v1",
+	wire.CapGitFiles,
 	awake.Capability,
 	browser.Capability,
 	notify.Capability,
@@ -68,7 +69,7 @@ var Concurrent = append(append(append(append([]string{}, local.Concurrent...), b
 
 var readOnlySlow = []string{
 	wire.MethodPortsList,
-	wire.MethodGitStatus, wire.MethodGitDiff, wire.MethodGitLog, wire.MethodGitBranches,
+	wire.MethodGitStatus, wire.MethodGitDiff, wire.MethodGitLog, wire.MethodGitBranches, wire.MethodGitFiles,
 	wire.MethodFsRead, wire.MethodFsImage,
 	harness.MethodDescribe, harness.MethodHistory,
 }

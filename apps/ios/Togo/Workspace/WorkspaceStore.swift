@@ -102,7 +102,7 @@ extension AppStore {
         controlCenter.archived.removeAll { $0.hostID == hostID }
         // A sign-in or edit for the machine has nothing left to act on; closing it cancels it.
         if sheet == .signIn(hostID) || sheet == .editMachine(hostID) || sheet == .setUpHere(hostID) { sheet = nil }
-        if composing?.hostID == hostID { composing = nil }
+        if attaching?.hostID == hostID { attaching = nil }
         for tab in workspace.tabs where tab.hostID == hostID {
             close(tab.id)
         }
@@ -254,7 +254,8 @@ extension AppStore {
     /// Keeps the panes apart when a tab leaves: the secondary's tab just goes, and the
     /// primary's is replaced by the secondary's.
     func releasePanes(closing id: TabID) {
-        drafts[id] = nil
+        pendingInput[id] = nil
+        if attaching == id { attaching = nil }
         recentTabs.removeAll { $0 == id }
         if id == workspace.secondary {
             workspace.secondary = nil

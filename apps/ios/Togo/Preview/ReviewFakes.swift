@@ -28,7 +28,7 @@ extension HelperError {
 /// be made to fail or wait, and the calls are recorded.
 @MainActor final class FakeReviewServices: ReviewServices {
     enum Call: Hashable {
-        case status, diff, read, listDir, log, branches, stage, unstage, discard, commit, ports, forward, stopForward
+        case status, diff, read, listDir, log, branches, files, stage, unstage, discard, commit, ports, forward, stopForward
     }
 
     enum Write: Hashable {
@@ -53,6 +53,8 @@ extension HelperError {
     var commits = ReviewFixtures.log
     var branchList = ReviewFixtures.branches
     var refLogs: [String: [GitCommit]] = [:]
+    /// What `files` answers: every file of the fixtures' tree.
+    var fileIndex = ReviewFixtures.allFiles
     /// What `ports` answers.
     var portList = ReviewFixtures.ports
     private(set) var logRequests: [(ref: String?, limit: Int)] = []
@@ -143,6 +145,11 @@ extension HelperError {
     func branches(_ s: ReviewSubject) async throws -> GitBranches {
         try await enter(.branches)
         return branchList
+    }
+
+    func files(_ s: ReviewSubject, ref: String?) async throws -> GitFiles {
+        try await enter(.files)
+        return GitFiles(paths: fileIndex, truncated: false)
     }
 
     func stage(_ s: ReviewSubject, paths: [String], seen: [String: GitSeen]) async throws -> GitStatus {

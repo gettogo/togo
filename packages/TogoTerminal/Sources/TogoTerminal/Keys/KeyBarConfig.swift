@@ -40,6 +40,14 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         // A bar synced from a newer build can hold a key this build does not know; that key
         // is dropped rather than losing the whole bar.
         items = (try c.decodeIfPresent([Droppable<KeyBarItem>].self, forKey: .items) ?? []).compactMap(\.value)
+            .map(Self.migrated)
+    }
+
+    /// The Compose key opened a composer the terminal no longer has; it comes back as Attach,
+    /// in the same place, so a customised bar keeps a key for pictures.
+    static func migrated(_ item: KeyBarItem) -> KeyBarItem {
+        guard item.action == .compose else { return item }
+        return KeyBarItem(id: item.id, title: attach.title, symbol: attach.symbol, action: .attach)
     }
 
     public static let standard = KeyBarConfig(items: [
@@ -50,7 +58,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         KeyBarItem(title: "Shift", symbol: "shift", action: .shiftLatch),
         .keys("Tab", "Tab"),
         .keys("Back Tab", "S-Tab"),
-    ] + arrows + [compose, dictate, paste, hide])
+    ] + arrows + [attach, dictate, paste, hide])
 
     public static let claude = KeyBarConfig(items: [
         .keys("Esc", "Esc"),
@@ -58,7 +66,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         .keys("Mode", "S-Tab"),
         .keys("Interrupt", "C-c"),
         .keys("Ctrl O", "C-o"),
-    ] + arrows + [compose, dictate, paste, hide])
+    ] + arrows + [attach, dictate, paste, hide])
 
     /// The bar for OMP sessions: the standard bar with Interrupt repeated at the end.
     public static let omp = KeyBarConfig(items: standard.items + [.keys("Interrupt", "C-c")])
@@ -72,7 +80,7 @@ public struct KeyBarConfig: Hashable, Codable, Sendable {
         arrowItems.map { .keys($0.0, $0.2, symbol: $0.1) }
     }
 
-    private static let compose = KeyBarItem(title: "Compose", symbol: "square.and.pencil", action: .compose)
+    static let attach = KeyBarItem(title: "Attach image", symbol: "photo", action: .attach)
     private static let dictate = KeyBarItem(title: "Dictate", symbol: "mic", action: .dictate)
     private static let paste = KeyBarItem(title: "Paste", symbol: "doc.on.clipboard", action: .paste)
     private static let hide = KeyBarItem(title: "Hide keyboard", symbol: "keyboard.chevron.compact.down", action: .hideKeyboard)

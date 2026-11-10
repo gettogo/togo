@@ -66,9 +66,36 @@ struct KeySequenceTests {
     /// A bar synced from a newer build may hold a key this build does not know: that key is
     /// dropped and the rest of the bar stays.
     @Test func unknownKeyActionIsDropped() throws {
-        let json = #"{"items":[{"title":"Esc","action":{"compose":{}}},{"title":"Beam","action":{"teleport":{}}},"#
+        let json = #"{"items":[{"title":"Hide","action":{"hideKeyboard":{}}},{"title":"Beam","action":{"teleport":{}}},"#
             + #"{"title":"Paste","action":{"paste":{}}}]}"#
         let config = try JSONDecoder().decode(KeyBarConfig.self, from: Data(json.utf8))
-        #expect(config.items.map(\.title) == ["Esc", "Paste"])
+        #expect(config.items.map(\.title) == ["Hide", "Paste"])
+    }
+
+    /// The Compose key opened a composer the terminal no longer has. A bar saved with it comes
+    /// back with Attach in its place, under the same id, so a customised bar keeps a key for
+    /// pictures and nothing else moves.
+    @Test func legacyComposeKeyComesBackAsAttach() throws {
+        let id = UUID()
+        let json = #"{"items":[{"id":"\#(id.uuidString)","title":"Compose","symbol":"square.and.pencil","action":{"compose":{}}},"#
+            + #"{"title":"Paste","action":{"paste":{}}}]}"#
+        let config = try JSONDecoder().decode(KeyBarConfig.self, from: Data(json.utf8))
+        let attach = try #require(config.items.first)
+        #expect(attach.id == id)
+        #expect(attach.action == .attach)
+        #expect(attach.title == KeyBarConfig.attach.title)
+        #expect(attach.symbol == KeyBarConfig.attach.symbol)
+        #expect(config.items.map(\.title) == ["Attach image", "Paste"])
+        // Saved again, it stays Attach.
+        let again = try JSONDecoder().decode(KeyBarConfig.self, from: JSONEncoder().encode(config))
+        #expect(again == config)
+    }
+
+    /// No preset offers the old Compose key.
+    @Test func presetsOfferAttachNotCompose() {
+        for preset in [KeyBarConfig.standard, .claude, .omp] {
+            #expect(preset.items.contains { $0.action == .attach })
+            #expect(!preset.items.contains { $0.action == .compose })
+        }
     }
 }

@@ -310,9 +310,9 @@ private final class PreviewTerminalController: UIViewController {
         applyTheme()
     }
 
+    /// Togo Dark in either appearance, as the app's default theme is.
     private func applyTheme() {
-        let light = traitCollection.userInterfaceStyle == .light
-        engine.apply(BuiltInThemes.all[light ? 1 : 0])
+        engine.apply(BuiltInThemes.all[0])
         view.backgroundColor = engine.backgroundColor
     }
 }

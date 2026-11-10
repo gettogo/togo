@@ -140,20 +140,26 @@ extension AppServices {
     var onEdgeSwipe: () -> Void = {}
     /// The point size a pinch settled on.
     var onFontSize: (Double) -> Void = { _ in }
-    /// The key bar's Compose key.
-    var onCompose: () -> Void = {}
+    /// The key bar's Attach key.
+    var onAttach: () -> Void = {}
     /// The key bar's Dictate key.
     var onDictate: () -> Void = {}
-    /// Hides the key bar's Compose and Dictate keys while zen mode keeps the compose bar away.
-    var hidesComposeKeys = false {
-        didSet { if hidesComposeKeys != oldValue { onHidesComposeKeys(hidesComposeKeys) } }
+    /// Hides the key bar's Attach and Dictate keys while zen mode shows the terminal alone.
+    var hidesInputKeys = false {
+        didSet { if hidesInputKeys != oldValue { onHidesInputKeys(hidesInputKeys) } }
     }
-    var onHidesComposeKeys: (Bool) -> Void = { _ in }
+    var onHidesInputKeys: (Bool) -> Void = { _ in }
     /// An image pasted into the terminal, as the pasteboard encoded it.
     var onPasteImage: (Data) -> Void = { _ in }
-    /// Text into the session as a paste, and the Enter key, for the compose bar.
+    /// Text into the session as a paste: dictated words, a sent picture's path, a reply that
+    /// could not be delivered. Nothing the app types presses Enter.
     var paste: (String) -> Void = { _ in }
     var pressEnter: () -> Void = {}
+    /// Keys into the session as typed, for the chat composer's terminal peek.
+    var sendKeys: ([KeyStroke]) -> Void = { _ in }
+    /// The live screen's rows, for the chat composer's terminal peek. Nil when the engine
+    /// cannot read them.
+    var screenRows: (() -> TerminalScreenRows?)?
     /// A web link the user tapped or chose in the terminal, already checked as http or https.
     var onOpenURL: (URL) -> Void = { _ in }
     /// "Links on screen" from a link's long-press menu.

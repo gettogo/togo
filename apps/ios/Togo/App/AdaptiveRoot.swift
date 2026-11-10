@@ -108,7 +108,7 @@ struct AdaptiveRoot<Destination: View>: View {
         }
         .onChange(of: windowSize) { KeyboardWatch.shared.refresh() }
         .onChange(of: panesFit(windowSize), initial: true) { _, fit in store.panesFit = fit }
-        .feedsPromptBar(promptModel, store: store, terminals: terminals, focused: typingInto)
+        .feedsPromptBar(promptModel, store: store, focused: typingInto)
         // Answered requests show their outcome in the bar for a moment, then leave, whatever
         // the window shows.
         .modifier(RequestCollapse(store: store))

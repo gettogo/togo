@@ -35,6 +35,105 @@ import UIKit
         }
     }
 
+    // MARK: Tree
+
+    @Test func foldersOpenInPlaceAndCloseKeepingWhatTheyRead() async {
+        let services = FakeReviewServices()
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        await model.load()
+        #expect(model.children(of: "src") == nil)
+        await model.setExpanded("src", true)
+        #expect(model.isExpanded("src"))
+        #expect(model.children(of: "src")?.map(\.name) == ["handlers", "router.ts", "store.ts"])
+        #expect(model.children(of: "src")?.first?.path == "src/handlers")
+        let reads = services.calls.filter { $0 == .listDir }.count
+        await model.setExpanded("src", false)
+        await model.setExpanded("src", true)
+        #expect(services.calls.filter { $0 == .listDir }.count == reads)
+    }
+
+    @Test func refreshReadsOpenFoldersAgainAndForgetsClosedOnes() async {
+        let services = FakeReviewServices()
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        await model.load()
+        await model.setExpanded("src", true)
+        await model.setExpanded("newpkg", true)
+        await model.setExpanded("newpkg", false)
+        await model.load()
+        #expect(model.folders["src"] != nil)
+        #expect(model.folders["newpkg"] == nil)
+    }
+
+    @Test func changedFilesAndTheirFoldersAreMarked() async {
+        let model = FilesModel(subject: subject, services: FakeReviewServices(), path: "", ref: nil)
+        await model.load()
+        #expect(model.marks.mark("src/router.ts") == .modified)
+        #expect(model.marks.mark("src/handlers/health.ts") == .added)
+        #expect(model.marks.mark("notes.txt") == .untracked)
+        #expect(model.marks.mark("README.md") == nil)
+        #expect(model.marks.holdsChanges("src"))
+        #expect(model.marks.holdsChanges("src/handlers"))
+        #expect(!model.marks.holdsChanges("docs"))
+        let untracked = FilesModel.Item(name: "notes.txt", path: "notes.txt", kind: .file, size: 3, route: nil)
+        #expect(model.changesRoute(for: untracked) == .diff(.untracked(path: "notes.txt")))
+        let staged = FilesModel.Item(name: "router.ts", path: "src/router.ts", kind: .file, size: 3, route: nil)
+        #expect(model.changesRoute(for: staged) == .diff(.staged(path: "src/router.ts")))
+    }
+
+    @Test func commitsAndSubfoldersMapMarksToTheirOwnPaths() async {
+        let atCommit = FilesModel(subject: subject, services: FakeReviewServices(), path: "", ref: ReviewFixtures.log[0].hash)
+        await atCommit.load()
+        #expect(atCommit.marks == ChangeMarks())
+
+        var status = ReviewFixtures.status
+        status.root = "/Users/sam"
+        let marks = ChangeMarks(status, prefix: "src")
+        #expect(marks.mark("router.ts") == .modified)
+        #expect(marks.mark("notes.txt") == nil)
+        #expect(ChangeMarks.sessionPrefix(cwd: "/Users/sam/src/api", root: "/Users/sam/src") == "api")
+        #expect(ChangeMarks.sessionPrefix(cwd: "/Users/sam/src/api/", root: "/Users/sam/src/api") == "")
+        #expect(ChangeMarks.sessionPrefix(cwd: "/var/tmp/x", root: "/private/var/tmp") == "x")
+        #expect(ChangeMarks.sessionPrefix(cwd: "/Users/sam/other", root: "/Users/sam/src") == nil)
+    }
+
+    // MARK: Search
+
+    @Test func searchRanksNamesBeforePaths() {
+        let paths = ["src/handlers/items.ts", "docs/items/guide.md", "items.ts", "src/itemsStore.ts", ".hidden/items.ts"]
+        #expect(FileSearch.rank(paths, query: "items.ts", hidden: false, limit: 10) == ["items.ts", "src/handlers/items.ts"])
+        #expect(FileSearch.rank(paths, query: "ITEMS", hidden: false, limit: 10) == [
+            "items.ts", "src/itemsStore.ts", "src/handlers/items.ts", "docs/items/guide.md",
+        ])
+        #expect(FileSearch.rank(paths, query: "items", hidden: true, limit: 10).contains(".hidden/items.ts"))
+        #expect(FileSearch.rank(paths, query: "items", hidden: false, limit: 2).count == 2)
+    }
+
+    @Test func searchLooksThroughTheWholeRepository() async {
+        let services = FakeReviewServices()
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        model.search.query = "health"
+        await model.search.settle()
+        #expect(model.search.hits.map(\.path) == ["src/handlers/health.ts"])
+        #expect(model.search.hits.first?.route == .file(path: "src/handlers/health.ts", ref: nil, base: .repository))
+        #expect(!model.search.partial)
+        model.search.query = ""
+        #expect(model.search.hits.isEmpty)
+        #expect(!model.search.isActive)
+    }
+
+    @Test func searchWithoutTheFileListUsesOpenedFolders() async {
+        let services = FakeReviewServices()
+        services.failures[.files] = HelperError.unsupported(capability: Capability.gitFiles)
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        await model.load()
+        await model.setExpanded("src", true)
+        model.search.query = "store"
+        await model.search.settle()
+        #expect(model.search.partial)
+        #expect(model.search.hits.map(\.path) == ["src/store.ts"])
+        #expect(model.search.hits.first?.route == .file(path: "src/store.ts", ref: nil, base: .session))
+    }
+
     @Test func browserSortsFoldersFirst() async {
         let model = await folder([
             DirEntry(name: "zeta.txt", dir: false, kind: .file, size: 10),

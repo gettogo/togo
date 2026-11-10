@@ -23,9 +23,8 @@ extension SessionLayer {
 }
 
 /// What takes the typing under a session, from the layer it shows (S4). The chat has its
-/// composer; the terminal has the prompt bar or the compose bar; while it is not known yet which
-/// one the session gets (`pending`), neither shows, only the loader, so the terminal's one-line
-/// bar never flashes under a session that is about to show its chat.
+/// composer; the terminal takes the typing itself, with no composer under it; while it is not
+/// known yet which one the session gets (`pending`), neither does, only the loader shows.
 enum SessionInput: Equatable {
     case composer
     case terminal

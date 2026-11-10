@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import TogoTerminal
 
-/// Hold-to-talk dictation for one compose bar.
+/// Dictation for one terminal's input tools; the Dictate key toggles it.
 ///
 /// A press starts listening; letting go after `tapThreshold` ends it and hands the words to
 /// `insert`. A shorter press latches, and the next press ends it. The words only ever reach
@@ -238,7 +238,10 @@ import TogoTerminal
             limit?.cancel()
             await engine.stop()
             await session?.value
-        case .idle, .failed, .finishing:
+        case .finishing:
+            // Already stopping: wait for the words, so whoever asked (a Send) gets them first.
+            await session?.value
+        case .idle, .failed:
             break
         }
     }

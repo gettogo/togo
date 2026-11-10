@@ -2,7 +2,7 @@ import CoreGraphics
 import SwiftUI
 
 /// What the workspace needs to know about the panes to place the chrome, the requests and the
-/// compose bar around them. Published by `WorkspacePanes` as a preference.
+/// composer around them. Published by `WorkspacePanes` as a preference.
 struct PanesReport: Equatable {
     var arrangement: PaneArrangement
     var geometry: PaneGeometry
@@ -41,7 +41,7 @@ struct PaneGeometry: Equatable {
     var band: CGRect?
     /// True when `band` is a fold, where nothing interactive may sit.
     var bandIsFold = false
-    /// Tabletop: the region under the fold for requests, the compose bar and the keyboard.
+    /// Tabletop: the region under the fold for requests, the composer and the keyboard.
     var deck: CGRect?
     /// Book: the page before the fold, where the chrome and the bars go when one pane spans
     /// both pages.
@@ -105,7 +105,7 @@ struct PaneGeometry: Equatable {
                       height: max(0, pane.height - Self.headerHeight))
     }
 
-    /// The columns the compose bar and the Keyboard button keep to: under the focused pane, or
+    /// The columns the composer and the Keyboard button keep to: under the focused pane, or
     /// on the leading page of a book. Nil leaves them the full width.
     func composeFrame(focused: Pane) -> CGRect? {
         if deck != nil { return nil }
@@ -115,7 +115,7 @@ struct PaneGeometry: Equatable {
 
     /// Where a pane's chat column and mission pill go: the pane itself, or the leading page of
     /// a book when one pane spans both pages, so no prompt, button or pill sits on the fold. The
-    /// same page the compose bar keeps to.
+    /// same page the composer keeps to.
     func chatFrame(of pane: Pane) -> CGRect? {
         guard let frame = frame(of: pane) else { return nil }
         guard !showsTwoPanes, let leadingPage else { return frame }

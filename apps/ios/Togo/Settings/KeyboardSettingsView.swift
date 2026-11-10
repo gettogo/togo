@@ -178,7 +178,7 @@ private struct KeyBarItemRow: View {
         case .ctrlLatch: settingsText("settings.keyboard.latch.ctrl", "Holds Ctrl for the next key")
         case .altLatch: settingsText("settings.keyboard.latch.alt", "Holds Alt (Option) for the next key")
         case .shiftLatch: settingsText("settings.keyboard.latch.shift", "Holds Shift for the next key")
-        case .paste, .hideKeyboard, .dpad, .compose, .dictate: nil
+        case .paste, .hideKeyboard, .dpad, .compose, .dictate, .attach: nil
         }
     }
 }

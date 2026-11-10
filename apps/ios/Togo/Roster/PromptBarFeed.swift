@@ -1,37 +1,28 @@
 import SwiftUI
 import TogoKit
-import TogoTerminal
 
 extension View {
-    /// Keeps `model` in step with the store and wires its answers, messages and starts to the
-    /// app's own paths. `focused` is the terminal the bar types into, nil when none is on screen.
-    func feedsPromptBar(_ model: PromptBarModel, store: AppStore, terminals: TerminalPool, focused: TabID?) -> some View {
-        modifier(PromptBarFeed(model: model, store: store, terminals: terminals, focused: focused))
+    /// Keeps `model` in step with the store and wires its answers and starts to the app's own
+    /// paths. `focused` is the tab on screen, nil when none is.
+    func feedsPromptBar(_ model: PromptBarModel, store: AppStore, focused: TabID?) -> some View {
+        modifier(PromptBarFeed(model: model, store: store, focused: focused))
     }
 }
 
 private struct PromptBarFeed: ViewModifier {
-    @Environment(\.machineTools) private var machineTools
     @Environment(\.agentLibrary) private var agentLibrary
     let model: PromptBarModel
     let store: AppStore
-    let terminals: TerminalPool
     let focused: TabID?
 
     private struct Inputs: Equatable {
         var requests: [PromptRequest]
-        var focused: TabID?
-        var composing: Bool
         var hasMachines: Bool
         /// The on-screen keyboard types into the terminal, not into a field.
         var terminalTyping: Bool
-        /// The terminal the bar would type into has a live link.
-        var focusedConnected: Bool
         /// Something else holds the keyboard or covers the bar: a sheet, a pushed screen such as
-        /// Settings, a dialog, the compose bar or the terminal.
+        /// Settings, a dialog or the terminal.
         var keyboardElsewhere: Bool
-        /// The focused tab shows its chat, which has its own composer and inline requests.
-        var chatShown: Bool
         /// The on-screen keyboard types into the chat's composer.
         var composerTyping: Bool
     }
@@ -45,26 +36,18 @@ private struct PromptBarFeed: ViewModifier {
 
     private var inputs: Inputs {
         let chat = focused.flatMap { store.layer(for: $0) == .chat ? $0 : nil }
-        // A session still deciding between chat and terminal takes no bar either (S4).
+        // A session showing its chat, or still deciding between chat and terminal (S4), types
+        // into its composer when anything does.
         let typesElsewhere = focused.map { SessionInput(store.layer(for: $0)).hidesPromptBar } ?? false
         return Inputs(
-            requests: PromptFeed.requests(in: store, inlineIn: chat), focused: focused, composing: store.composing != nil,
+            requests: PromptFeed.requests(in: store, inlineIn: chat),
             hasMachines: !store.services.hosts.isEmpty,
             terminalTyping: focused != nil && KeyboardWatch.shared.terminalTyping && !model.barTextFocused,
-            focusedConnected: focused.map(isConnected) ?? true,
-            keyboardElsewhere: focused != nil || store.composing != nil || store.sheet != nil || !store.path.isEmpty
+            keyboardElsewhere: focused != nil || store.sheet != nil || !store.path.isEmpty
                 || store.dialogOpen || store.reviewing != nil,
-            chatShown: typesElsewhere,
             composerTyping: typesElsewhere && KeyboardWatch.shared.keyboardUp && !KeyboardWatch.shared.terminalTyping
                 && !model.barTextFocused
         )
-    }
-
-    private func isConnected(_ id: TabID) -> Bool {
-        switch store.workspace.tabs.first(where: { $0.id == id })?.link {
-        case .live?, .roaming?: true
-        default: false
-        }
     }
 
     func body(content: Content) -> some View {
@@ -78,9 +61,6 @@ private struct PromptBarFeed: ViewModifier {
             }
             .onChange(of: suggestions, initial: true) { _, found in
                 model.startSuggestions = found
-            }
-            .onChange(of: store.services.settings.keyBarConfig, initial: true) { _, bar in
-                model.keyBar = bar
             }
             .onChange(of: store.services.settings.singleKeyAnswers, initial: true) { _, on in
                 model.singleKeyAnswers = on
@@ -97,9 +77,7 @@ private struct PromptBarFeed: ViewModifier {
 
     private func update(_ inputs: Inputs, current: PromptBarModel.Mode) {
         let next = PromptFeed.mode(
-            requests: inputs.requests, current: current, focused: inputs.focused,
-            composing: inputs.composing, hasMachines: inputs.hasMachines, terminalTyping: inputs.terminalTyping,
-            focusedConnected: inputs.focusedConnected, chatShown: inputs.chatShown,
+            requests: inputs.requests, current: current, hasMachines: inputs.hasMachines,
             composerTyping: inputs.composerTyping
         )
         if next != model.mode { model.mode = next }
@@ -111,8 +89,6 @@ private struct PromptBarFeed: ViewModifier {
 
     private func wire() {
         let store = self.store
-        let terminals = self.terminals
-        let tools = machineTools
         let library = agentLibrary
         model.onAnswer = { request, answer in
             // Words for a prompt that takes none are never typed into it: Enter would pick its
@@ -120,21 +96,6 @@ private struct PromptBarFeed: ViewModifier {
             guard let card = store.controlCenter.requests.first(where: { $0.id == request.id }),
                   let decision = PromptFeed.decision(answer, for: card) else { return }
             Task { await store.answer(card.id, decision) }
-        }
-        model.onSend = { tab, text in
-            send(text, to: tab, store: store, terminals: terminals, tools: tools)
-        }
-        model.tabName = { tab in
-            let open = store.workspace.tabs.first { $0.id == tab }
-            return open.flatMap { store.session(for: $0) }.map { $0.name.isEmpty ? $0.agentName : $0.name }
-                ?? open?.title ?? tab.sessionID
-        }
-        model.onKey = { tab, item in
-            // The handle types text; keystrokes go through the terminal's own key bar.
-            guard case .steps(let steps) = item.action, let handle = terminals.handle(for: tab) else { return }
-            for case .text(let text) in steps {
-                handle.paste(text)
-            }
         }
         model.onStart = { suggestion in
             guard let target = PromptFeed.target(of: suggestion) else {
@@ -158,21 +119,5 @@ private struct PromptBarFeed: ViewModifier {
                 store.open(hostID: card.hostID, sessionID: sessionID)
             }
         }
-    }
-}
-
-/// Types `text` into the session's terminal when this app holds one, the way the compose bar
-/// does; otherwise it goes through the helper like a reply from a notification.
-@MainActor private func send(_ text: String, to tab: TabID, store: AppStore, terminals: TerminalPool, tools: any MachineTools) {
-    let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !message.isEmpty else { return }
-    if let handle = terminals.handle(for: tab) {
-        handle.paste(message)
-        handle.pressEnter()
-        return
-    }
-    let sender = ReplySender(tools: tools, label: { store.replyLabel($0) })
-    Task {
-        await store.deliverReply(.prompt(host: tab.hostID, session: tab.sessionID, text: message), session: tab.sessionID, via: sender)
     }
 }

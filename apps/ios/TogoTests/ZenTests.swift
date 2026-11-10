@@ -22,13 +22,11 @@ import UIKit
 
     @Test func zenHidesChromeKeepsRequests() {
         let store = store()
-        store.composing = one
         let requests = store.incomingRequests
         #expect(!requests.isEmpty)
 
         store.toggleZen()
         #expect(store.zen)
-        #expect(store.composing == nil)
         #expect(store.incomingRequests == requests)
 
         let hidden = WorkspaceChrome(zen: true, revealed: false)
@@ -93,30 +91,29 @@ import UIKit
         #expect(sizes == [before])
     }
 
-    /// In zen the compose bar stays shut: the key bar's Compose key does nothing until zen ends.
-    @Test func composeToggleWaitsForZenToEnd() {
+    /// Zen keeps the input tools away: the key bar's Attach key does nothing until zen ends.
+    @Test func attachWaitsForZenToEnd() {
         let store = store()
         store.toggleZen()
-        store.toggleCompose(one)
-        #expect(store.composing == nil)
+        store.attach(one)
+        #expect(store.attaching == nil)
         store.toggleZen()
-        store.toggleCompose(one)
-        #expect(store.composing == one)
+        store.attach(one)
+        #expect(store.attaching == one)
     }
 
-    /// The Dictate key opens the compose bar too, so it waits for zen to end like Compose does.
+    /// The Dictate key waits for zen to end like Attach does.
     @Test func dictateWaitsForZenToEnd() {
         let store = store()
         store.toggleZen()
         store.dictate(one)
-        #expect(store.composing == nil)
         #expect(store.dictationRequest == nil)
         store.toggleZen()
         store.dictate(one)
-        #expect(store.composing == one)
+        #expect(store.dictationRequest == one)
     }
 
-    /// Zen in one window leaves the Compose and Dictate keys alone on a terminal another window
+    /// Zen in one window leaves the Attach and Dictate keys alone on a terminal another window
     /// shows, and a terminal moving into a zen window takes that window's setting.
     @Test func zenKeysStayInTheirWindow() throws {
         let pool = TerminalPool()
@@ -129,12 +126,12 @@ import UIKit
         #expect(a.zen)
         pool.zenChanged(true, in: left)
         let handle = try #require(pool.handle(for: one))
-        #expect(!handle.hidesComposeKeys, "the terminal is on screen in the other window")
+        #expect(!handle.hidesInputKeys, "the terminal is on screen in the other window")
 
         pool.show(one, in: left)
-        #expect(handle.hidesComposeKeys)
+        #expect(handle.hidesInputKeys)
         pool.show(one, in: right)
-        #expect(!handle.hidesComposeKeys)
+        #expect(!handle.hidesInputKeys)
     }
 
     /// The chrome stays while it is pinned, such as while find is open, and hides three seconds

@@ -294,8 +294,10 @@ private func eventually(_ condition: @Sendable () async -> Bool) async -> Bool {
     }
 
     /// Theme ids from before the built-in themes were renamed still pick the same theme.
+    /// "default" followed the system; it lands on Togo Dark, the default in either appearance.
     @Test(arguments: [
-        ("lan" + "tern", "default"),
+        ("lan" + "tern", "togo-dark"),
+        ("default", "togo-dark"),
         ("lan" + "tern-dark", "togo-dark"),
         ("lan" + "tern-light", "togo-light"),
     ])
@@ -306,12 +308,12 @@ private func eventually(_ condition: @Sendable () async -> Bool) async -> Bool {
     }
 
     @Test func currentAndImportedThemeIDsPassThrough() throws {
-        for id in ["default", "togo-dark", "togo-light", "plain", "paper", "lan"] {
+        for id in ["system", "togo-dark", "togo-light", "plain", "paper", "lan"] {
             #expect(AppSettings.migratedThemeID(id) == id)
         }
-        #expect(AppSettings().themeID == "default")
+        #expect(AppSettings().themeID == "togo-dark")
         let missing = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
-        #expect(missing.themeID == "default")
+        #expect(missing.themeID == "togo-dark")
     }
 
     @Test func settingsRoundTripAndSyncSwitch() async {

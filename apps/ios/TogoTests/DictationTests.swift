@@ -3,7 +3,7 @@ import Testing
 import TogoKit
 @testable import Togo
 
-/// Dictation into the compose field, driven by the fake engine and a clock the test moves.
+/// Dictation typed into the terminal, driven by the fake engine and a clock the test moves.
 @MainActor
 struct DictationTests {
     private let engine = FakeSpeechEngine()
@@ -16,12 +16,10 @@ struct DictationTests {
         )
     }
 
-    private func compose(log: Log) -> ComposeModel {
-        ComposeModel(
-            history: ComposeHistory(hostID: Samples.studio, sessionID: "s-04", defaults: UserDefaults(suiteName: "dictation-compose-\(UUID().uuidString)")!),
+    private func tools(log: Log) -> TerminalInputModel {
+        TerminalInputModel(
             images: ImagePasteFlow(support: .available, upload: { _, _ in "" }, paste: { _ in }),
             paste: { log.events.append("paste:\($0)") },
-            pressEnter: { log.events.append("enter") },
             speech: DictationSpeech(engine: engine, locale: Locale(identifier: "en-US"), history: history, clock: clock.clock)
         )
     }
@@ -79,15 +77,16 @@ struct DictationTests {
         #expect(history.load() == ["ls[201~ x2J"])
     }
 
+    /// The words are typed at the session's prompt as a paste; the line break said with them
+    /// is cleaned away and nothing presses Enter.
     @Test func neverPressesEnter() async throws {
         let log = Log()
-        let compose = compose(log: log)
-        let dictation = try #require(compose.dictation)
+        let tools = tools(log: log)
+        let dictation = try #require(tools.dictation)
         await hold(dictation)
         engine.finalOnStop = "deploy to staging\n"
         await dictation.release()
-        #expect(compose.text == "deploy to staging")
-        #expect(log.events.isEmpty)
+        #expect(log.events == ["paste:deploy to staging"])
     }
 
     @Test func longTranscriptInserted() async {
@@ -188,22 +187,11 @@ struct DictationTests {
         #expect(engine.stopCalls == 1)
     }
 
-    @Test func spaceAddedAfterWord() async {
-        let compose = compose(log: Log())
-        compose.text = "git"
-        compose.insertDictated("status")
-        #expect(compose.text == "git status")
-        compose.insertDictated("now")
-        #expect(compose.text == "git status now")
-        compose.text = "git "
-        compose.selection = nil
-        compose.insertDictated("log")
-        #expect(compose.text == "git log")
-        compose.text = "one three"
-        compose.selection = NSRange(location: 3, length: 0)
-        compose.insertDictated("two")
-        #expect(compose.text == "one two three")
-        #expect(compose.selection == NSRange(location: 7, length: 0))
+    @Test func spaceOnlyBetweenWords() {
+        #expect(DictationModel.needsSpace(between: "git", and: "status"))
+        #expect(!DictationModel.needsSpace(between: "git ", and: "log"))
+        #expect(!DictationModel.needsSpace(between: "done", and: "."))
+        #expect(!DictationModel.needsSpace(between: "", and: "start"))
     }
 
     @Test func historyKeepsTwentyNewestFirst() {
@@ -221,20 +209,32 @@ struct DictationTests {
         #expect(history.load().isEmpty)
     }
 
-    @Test func dictateKeyOpensComposeAndListens() async {
+    @Test func dictateKeyListensThenTypesIntoTheTerminal() async {
         let store = AppStore(services: FakeAppServices())
         store.open(hostID: Samples.studio, sessionID: "s-04")
         let id = TabID(hostID: Samples.studio, sessionID: "s-04")
         store.dictate(id)
-        #expect(store.composing == id)
         #expect(store.dictationRequest == id)
-        let compose = compose(log: Log())
-        await compose.takeDictation(for: id, from: store, shown: true)
+        let log = Log()
+        let tools = tools(log: log)
+        await tools.takeDictation(for: id, from: store, shown: true)
         #expect(store.dictationRequest == nil)
-        #expect(compose.dictation?.phase == .listening(partial: "", level: 0))
+        #expect(tools.dictation?.phase == .listening(partial: "", level: 0))
         // Latched: lifting a finger ends nothing; the next tap does.
-        await compose.dictation?.release()
-        #expect(compose.dictation?.phase == .listening(partial: "", level: 0))
+        await tools.dictation?.release()
+        #expect(tools.dictation?.phase == .listening(partial: "", level: 0))
+        engine.emit("run the tests", final: true)
+        await tools.dictation?.toggle()
+        #expect(log.events == ["paste:run the tests"])
+    }
+
+    @Test func zenKeepsTheDictateKeyAway() {
+        let store = AppStore(services: FakeAppServices())
+        store.open(hostID: Samples.studio, sessionID: "s-04")
+        let id = TabID(hostID: Samples.studio, sessionID: "s-04")
+        store.zen = true
+        store.dictate(id)
+        #expect(store.dictationRequest == nil)
     }
 
     @Test func composeTargetsFocusedTab() {
@@ -252,14 +252,20 @@ struct DictationTests {
         #expect(store.composeTab?.id == second)
     }
 
-    @Test func historyInsertGoesToTheDraft() {
+    /// Insert from Settings waits for the tab on screen, after anything already waiting, and
+    /// brings the workspace forward; the workspace types it where that tab takes words.
+    @Test func historyInsertWaitsForTheTabOnScreen() {
         let store = AppStore(services: FakeAppServices())
         store.open(hostID: Samples.studio, sessionID: "s-04")
         let id = TabID(hostID: Samples.studio, sessionID: "s-04")
-        store.drafts[id] = "then"
+        store.pendingInput[id] = "then"
+        store.workspaceOpen = false
         store.insertDictation("run\u{1b} it")
-        #expect(store.drafts[id] == "then run it")
-        #expect(store.composing == id)
+        #expect(store.pendingInput[id] == "then run it")
+        #expect(store.workspaceOpen)
+        #expect(store.path.isEmpty)
+        store.insertDictation("\u{1b}")
+        #expect(store.pendingInput[id] == "then run it", "nothing left after cleaning adds nothing")
     }
 }
 

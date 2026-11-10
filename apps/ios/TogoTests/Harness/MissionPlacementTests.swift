@@ -117,6 +117,11 @@ struct MissionPlacementTests {
         #expect(MissionMenu.items(needsYou: 2, working: false, canCompact: true) == [.goToRequest, .compact, .terminal])
     }
 
+    @Test func overTheTerminalTheLongPressDropsTerminal() {
+        #expect(MissionMenu.items(needsYou: 0, working: false, canCompact: false, chatShows: false).isEmpty)
+        #expect(MissionMenu.items(needsYou: 1, working: true, canCompact: true, chatShows: false) == [.goToRequest, .stop, .compact])
+    }
+
     @Test func theLongPressSaysWhatEachItemDoes() {
         #expect(MissionMenu.title(.goToRequest) == "Go to request")
         #expect(MissionMenu.title(.stop) == "Stop")
@@ -126,26 +131,27 @@ struct MissionPlacementTests {
 
     // MARK: Review items on the chat layer
 
-    @Test func previewAndChangesFoldIntoMissionControlOnlyWhereItHasThem() {
+    /// Preview folds into mission control where it has Ports; Changes never folds, since the
+    /// bar's Changes item is the way into the review.
+    @Test func onlyPreviewFoldsIntoMissionControlWhereItHasPorts() {
         let both = HarnessDescriptor(
             adapter: .init(id: "claude", name: "Claude Code", harnessVersion: "2.1.319", revision: 1),
             capabilities: [HarnessCapability.ports, HarnessCapability.changes], screens: []
         )
-        #expect(ReviewFold(both) == ReviewFold(preview: true, changes: true))
+        #expect(ReviewFold(both) == ReviewFold(preview: true))
         let none = HarnessDescriptor(
             adapter: .init(id: "aider", name: "Aider", harnessVersion: "1", revision: 1),
             capabilities: [HarnessCapability.chat], screens: []
         )
-        #expect(ReviewFold(none) == ReviewFold(preview: false, changes: false))
+        #expect(ReviewFold(none) == ReviewFold(preview: false))
         // The terminal layer, or no mission: nothing folds.
-        #expect(ReviewFold(nil) == ReviewFold(preview: false, changes: false))
+        #expect(ReviewFold(nil) == ReviewFold(preview: false))
     }
 }
 
 extension ReviewFold {
-    init(preview: Bool, changes: Bool) {
+    init(preview: Bool) {
         self.init(nil)
         self.preview = preview
-        self.changes = changes
     }
 }

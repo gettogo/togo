@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// The lower half of a Duo held as a tabletop, under the fold. Request cards sit at its top,
-/// just below the fold; the compose bar and the Keyboard button sit at its foot, where the
+/// just below the fold; the input status and the Keyboard button sit at its foot, where the
 /// software keyboard and key bar rise as usual, leaving the terminal above the fold in view.
 struct TabletopDeck<Requests: View>: View {
     private let requests: Requests

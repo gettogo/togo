@@ -131,6 +131,32 @@ let esc = "\u{1b}"
         #expect(TerminalFit.holdsGrid(CGSize(width: 1, height: 1), cell: .zero))
     }
 
+    @Test func marginsSetTheGridsLeadingAndTopEdges() {
+        let bounds = CGRect(x: 0, y: 0, width: 402, height: 700)
+        let margins = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        let rect = TerminalFit.frame(bounds: bounds, safeArea: .zero, keyboard: nil, visible: bounds, margins: margins)
+        #expect(rect == CGRect(x: 16, y: 0, width: 370, height: 700))
+        let tiny = TerminalFit.frame(bounds: CGRect(x: 0, y: 0, width: 20, height: 20), safeArea: .zero, keyboard: nil,
+                                     visible: bounds, margins: margins)
+        #expect(tiny == .zero)
+    }
+
+    @Test func coveredTerminalKeepsItsGridThroughTheSwitch() async {
+        let h = EngineHarness()
+        let controller = TerminalViewController(engine: h.engine)
+        controller.view.frame = CGRect(x: 0, y: 0, width: 480, height: 320)
+        controller.refit()
+        await settle()
+        let before = h.engine.size
+        controller.isCovered = true
+        controller.view.frame = CGRect(x: 0, y: 0, width: 480, height: 200)
+        controller.refit()
+        #expect(h.engine.size.rows == before.rows)
+        try? await Task.sleep(for: TerminalViewController.layerSettle + .milliseconds(100))
+        await settle()
+        #expect(h.engine.size.rows < before.rows)
+    }
+
     @Test func insertTextEmitsInput() async {
         let h = EngineHarness()
         h.engine.textInputView.insertText("a")

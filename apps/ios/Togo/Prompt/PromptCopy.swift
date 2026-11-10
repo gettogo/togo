@@ -44,11 +44,6 @@ enum PromptCopy {
         String(localized: "prompt.replyTo", defaultValue: "Reply to \(name)")
     }
 
-    /// "Message api".
-    static func message(_ name: String) -> String {
-        String(localized: "prompt.message", defaultValue: "Message \(name)")
-    }
-
     /// "Claude Code on Studio", a start suggestion's first line.
     static func agentOn(_ agent: String, machine: String) -> String {
         String(localized: "prompt.agentOn", defaultValue: "\(agent) on \(machine)")

@@ -72,7 +72,17 @@ struct ReviewHistorySnapshotTests {
         ]
         let model = FilesModel.preview(services: services)
         await model.load()
+        await model.setExpanded("src", true)
+        await model.setExpanded("src/handlers", true)
         assertScreen(named: "browser") { NavigationStack { FileBrowserView(model: model, onOpen: { _ in }) } }
+    }
+
+    @Test func browserSearch() async {
+        let model = FilesModel.preview()
+        await model.load()
+        model.search.query = "ts"
+        await model.search.settle()
+        assertScreen(named: "browser-search") { NavigationStack { FileBrowserView(model: model, onOpen: { _ in }) } }
     }
 
     @Test func browserAtCommit() async {

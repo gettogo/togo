@@ -213,6 +213,19 @@ import TogoKit
         #expect(model.canSend)
     }
 
+    /// A command that would run goes to the field too, with the cursor after it, and Send is
+    /// there at once: its words are optional.
+    @Test func choosingARunCommandPutsItInTheFieldWithoutSending() {
+        let session = Session()
+        let model = make(session)
+        model.draft = "/rev"
+        model.choose(HarnessSamples.commands[5])
+        #expect(model.draft == "/review ")
+        #expect(model.menu == .none)
+        #expect(model.canSend)
+        #expect(session.sends.isEmpty)
+    }
+
     @Test func choosingAFileReplacesTheWord() {
         let model = make()
         model.draft = "explain @pa"

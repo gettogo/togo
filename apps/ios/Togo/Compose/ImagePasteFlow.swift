@@ -78,7 +78,8 @@ struct PendingImage: Identifiable, Equatable {
         self.now = now
     }
 
-    var showsPhotoButton: Bool { support != .none }
+    /// The Attach key opens the photo picker only where the picture can go.
+    var picksPhotos: Bool { support == .available }
 
     var isAnnotating: Bool {
         if case .annotating = phase { true } else { false }
@@ -146,9 +147,14 @@ struct PendingImage: Identifiable, Equatable {
         }
     }
 
-    /// The photo button stays visible without `upload.v1` so tapping it can say why it does nothing.
+    /// The Attach key stays on the bar without `upload.v1` or a helper, so tapping it can say
+    /// why it does nothing.
     func explainUnsupported() {
-        if support == .unsupported { phase = .unsupported }
+        switch support {
+        case .unsupported: phase = .unsupported
+        case .none: phase = .noHelper
+        case .available: break
+        }
     }
 
     func dismiss() {

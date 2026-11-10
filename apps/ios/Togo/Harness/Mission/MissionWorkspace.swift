@@ -13,7 +13,7 @@ import TogoKit
 
     init() {}
 
-    /// The bar item for `app`'s focused session, while its chat shows and it has a mission.
+    /// The bar item for `app`'s focused session while it has a mission, on either layer.
     func item(
         for app: AppStore, presentation: MissionPresentation, report: @escaping @MainActor (String?) -> Void
     ) -> MissionToolbarItem? {

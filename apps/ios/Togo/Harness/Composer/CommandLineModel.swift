@@ -22,7 +22,17 @@ import TogoKit
 
     static let debounce: Duration = .milliseconds(150)
 
-    var draft = ""
+    var draft = "" {
+        // While the peek runs, the agent's own input line follows the field (`syncPeek`).
+        didSet { if draft != oldValue { syncPeek() } }
+    }
+    /// The agent's terminal under the chat, for the terminal peek; set by the view that shows
+    /// this composer. Nil where there is none (previews, tests that do not ask for one).
+    var peekTerminal: PeekTerminal?
+    /// What the terminal peek holds between keystrokes.
+    let peek = TerminalPeek()
+    /// How long the TUI gets to draw after keys before the peek reads its screen again.
+    @ObservationIgnored var peekSettle: Duration = .milliseconds(300)
     private(set) var menu: Menu = .none {
         // The chat reads it: a tap on the conversation puts the menu away while it is up.
         didSet { if (menu != .none) != store.composerMenuOpen { store.composerMenuOpen = menu != .none } }
@@ -66,6 +76,8 @@ import TogoKit
     /// another mode than that one.
     private var modeOverride: (id: String, over: String)?
     private var historyIndex: Int?
+    /// The last Send's words, so a late dictation result does not put them back (`SentEcho`).
+    @ObservationIgnored private var sentEcho: SentEcho?
     private var cache: (kind: HarnessCompleteParams.Kind, query: String, items: [HarnessCompletion])?
 
     @ObservationIgnored let store: HarnessSessionStore
@@ -212,12 +224,12 @@ import TogoKit
         return items.indices.contains(highlight) ? items[highlight] : nil
     }
 
-    /// A command does its job by kind, as in the palette (`CommandKind`): a list opens its
-    /// screen, words go to the field, a run runs. A choice lands in the draft, its values
-    /// under it in the menu. A file replaces the word that called the menu.
+    /// A command is picked as in the palette (`CommandKind.picking`): a list opens its screen,
+    /// any other command goes to the field with the cursor after it. A choice lands in the
+    /// draft, its values under it in the menu. A file replaces the word that called the menu.
     func choose(_ completion: HarnessCompletion) {
         let trigger = CommandLineLogic.trigger(in: draft)
-        if case .command = trigger, let runs = takeFromMenu(completion) {
+        if case .command = trigger, let runs = takeFromMenu(completion, typed: false) {
             if runs { Task { await self.perform(completion) } }
             return
         }
@@ -237,19 +249,26 @@ import TogoKit
             choose(highlighted)
             return
         }
-        if menu != .none, let highlighted, case .command = CommandLineLogic.trigger(in: draft), let runs = takeFromMenu(highlighted) {
-            // Typed in full: the command still does its job by kind (a destructive one asks).
-            if runs { await perform(highlighted) }
+        // Typed in full while the agent's line mirrors it: Send decides (`submitThroughPeek`).
+        if peekActive {
+            await submit()
+            return
+        }
+        if menu != .none, let highlighted, case .command = CommandLineLogic.trigger(in: draft),
+           let runs = takeFromMenu(highlighted, typed: true) {
+            // Typed in full: Return sends it, and it does its job by kind (a destructive one asks).
+            if runs { await perform(highlighted, typed: true) }
             return
         }
         await submit()
     }
 
-    /// A command from the `/` menu does its job by kind, as in the palette. nil for a choice,
-    /// which the caller inserts (its values show under it); false when it opened its screen;
-    /// true when the caller should `perform` it.
-    private func takeFromMenu(_ completion: HarnessCompletion) -> Bool? {
-        let dispatch = CommandKind.dispatch(completion)
+    /// A command from the `/` menu: picked (`typed` false) as in the palette, or sent when it
+    /// was typed in full. nil for a choice, which the caller inserts (its values show under
+    /// it); false when it opened its screen or went to the field; true when the caller should
+    /// `perform` it.
+    private func takeFromMenu(_ completion: HarnessCompletion, typed: Bool) -> Bool? {
+        let dispatch = typed ? CommandKind.dispatch(completion) : CommandKind.picking(completion)
         if case .choose = dispatch { return nil }
         closeMenu()
         cache = nil
@@ -261,7 +280,7 @@ import TogoKit
             return false
         case let .compose(line, files):
             memory.record(CommandMemory.commandWord(line), scope: scope)
-            pendingArgs = line
+            pendingArgs = CommandKind.needsArgument(completion) ? line : nil
             compose(files ? line + "@" : line)
             return false
         default:
@@ -319,6 +338,11 @@ import TogoKit
         if !asText {
             guard !routing else { return }
             routing = true
+            // The agent's own line holds the command while the peek runs: Enter sends it.
+            if await submitThroughPeek() {
+                routing = false
+                return
+            }
             let routed = await routeTyped()
             routing = false
             if routed { return }
@@ -328,7 +352,9 @@ import TogoKit
         guard !text.isEmpty || !images.isEmpty else { return }
         sending = true
         defer { sending = false }
+        let written = draft
         draft = ""
+        sentEcho = SentEcho(text: written, at: .now)
         closeMenu()
         historyIndex = nil
         notice = nil
@@ -352,8 +378,36 @@ import TogoKit
         }
     }
 
+    /// What the keyboard writes into the field. A late dictation result that brings back the
+    /// words just sent is dropped; what was said after them stays.
+    func typed(_ text: String, now: ContinuousClock.Instant = .now) {
+        if let echo = sentEcho {
+            switch echo.outcome(of: text, previous: draft, now: now) {
+            case .waiting:
+                break
+            case .other:
+                sentEcho = nil
+            case .echo(let kept):
+                // The field shows what the keyboard wrote: it is let in, then replaced on the next
+                // turn, so the field is told of the change even when `kept` is what the draft holds.
+                draft = text
+                Task { @MainActor [weak self] in
+                    guard let self, self.draft == text else { return }
+                    self.draft = kept
+                }
+                return
+            }
+        }
+        draft = text
+    }
+
     /// Sends a whole line from the palette, such as "/compact focus on tests".
     func send(line: String) async {
+        // The helper types this line itself: the agent's line lets go of what the peek typed.
+        if peekActive {
+            peek.dismissed = true
+            syncPeek()
+        }
         draft = line
         await submit(asText: true)
     }
@@ -374,6 +428,7 @@ import TogoKit
     /// A refusal that says why ("Aider is asking “Login to OpenRouter…”. Nothing was typed")
     /// shows the reason; Try again sends once it is answered.
     private func restore(_ text: String, _ error: any Error) {
+        sentEcho = nil
         if draft.isEmpty { draft = text }
         notice = CommandLineLogic.notSentNotice(error)
         noticeAction = .retry

@@ -7,7 +7,8 @@ import TogoKit
 ///
 /// Hardware keys: Return sends (or takes the highlighted completion), Shift-Return breaks the
 /// line, Up and Down move through the menu or the history, Tab takes a completion, Esc closes
-/// the menu or interrupts, Command-K focuses the field.
+/// the menu, the terminal peek or interrupts, Control-U empties a peeked command, Command-K
+/// focuses the field.
 ///
 /// Motion: what the bar shows besides the field (the menu, the queued count, notices, the
 /// pictures) is mirrored in `shown`, so each change runs in one explicit transaction that moves
@@ -68,6 +69,12 @@ struct SmartCommandLine: View {
                     // motion: origin — the menu opens upward from the composer's edge, where `/` was typed.
                     .transition(.asymmetric(insertion: reduceMotion ? .opacity : AnyTransition(UnfoldingUp()),
                                             removal: Motion.conceal(reduce: reduceMotion)))
+            } else if shown.peek {
+                TerminalPeekStrip(model: model)
+                    .opacity(fades(.peek))
+                    // motion: origin — the agent's menu opens upward from the composer, as the `/` menu does.
+                    .transition(.asymmetric(insertion: reduceMotion ? .opacity : AnyTransition(UnfoldingUp()),
+                                            removal: Motion.conceal(reduce: reduceMotion)))
             }
             bar
                 // The field always shows: the menu gives up its height first when room is short,
@@ -81,6 +88,16 @@ struct SmartCommandLine: View {
         }
         .haptic(.error, trigger: model.notice) { _, notice in notice != nil }
         .task(id: model.draft) { await model.draftChanged() }
+        // The terminal peek reads the agent's screen while it runs, and lets go of the agent's
+        // line when it stops for any reason (a turn starts, a picture is added).
+        .task(id: model.peekActive) {
+            guard model.peekActive, !loopsPaused else { return }
+            while !Task.isCancelled {
+                model.refreshPeek()
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+        .onChange(of: model.peekActive) { model.syncPeek() }
         // The screen's class (from the descriptor, before it loads) picks its presentation.
         .harnessPresent(
             item: Binding(
@@ -194,7 +211,9 @@ struct SmartCommandLine: View {
             PromptChevron()
                 .padding(.bottom, 12)
             TextField(
-                text: $model.draft,
+                // What the keyboard writes goes through `typed`, which drops a late dictation
+                // result that would put the words just sent back in the field.
+                text: Binding(get: { model.draft }, set: { model.typed($0) }),
                 prompt: Text(placeholder).foregroundStyle(Color.togoMute),
                 axis: .vertical
             ) { Text(placeholder) }
@@ -205,7 +224,7 @@ struct SmartCommandLine: View {
             .textInputAutocapitalization(assists ? .sentences : .never)
             .autocorrectionDisabled(!assists)
             // Prompts hold commands, flags and paths an agent may run: `--` stays two hyphens
-            // and quotes stay straight, as in the UIKit compose bar.
+            // and quotes stay straight, as the terminal takes them.
             .straightPunctuation($model.draft)
             .focused($focused)
             .accessibilityIdentifier("composer.field")
@@ -228,6 +247,8 @@ struct SmartCommandLine: View {
             if stops {
                 Task { await model.interrupt() }
             } else {
+                // The keyboard's dictation stops with the Send, not after it.
+                KeyboardDictation.end()
                 Task { await model.submit() }
             }
         } label: {
@@ -311,9 +332,16 @@ struct SmartCommandLine: View {
 
     private func key(_ press: KeyPress) -> KeyPress.Result {
         let menuOpen = model.menu != .none
+        // Control-U empties the field and, while the peek runs, the agent's line with it.
+        let controlU = (press.key == KeyEquivalent("u") && press.modifiers.contains(.control)) || press.characters == "\u{15}"
+        if controlU, model.peekActive {
+            model.draft = ""
+            return .handled
+        }
         switch press.key {
         case .return:
             if press.modifiers.contains(.shift) { return .ignored }
+            KeyboardDictation.end()
             Task { await model.returnPressed() }
             return .handled
         case .upArrow:
@@ -340,6 +368,7 @@ struct SmartCommandLine: View {
             return .handled
         case .escape:
             if menuOpen { model.closeMenu(); return .handled }
+            if model.peekActive { model.cancelPeek(); return .handled }
             if model.canInterrupt { Task { await model.interrupt() }; return .handled }
             return .ignored
         default:

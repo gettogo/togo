@@ -110,6 +110,8 @@ private let deviceSafeArea = ScreenSize.iPhone17.safeArea
                 .environment(\.loopsPaused, true)
                 .environment(\.horizontalSizeClass, size.sizeClass)
                 .environment(\.fold, size.inSafeArea(fold == .flat ? size.fold : fold))
+                // The folded Duo's system bar is vertical; a host window here cannot draw one.
+                .environment(\.barIsVerticalOverride, size == .duoFolded ? true : nil)
             assertSnapshot(
                 of: render(UIHostingController(rootView: content), in: variant, size: size),
                 as: .image(precision: precision, perceptualPrecision: perceptualPrecision, scale: 3),

@@ -34,6 +34,24 @@ private struct Tokens: Decodable {
 }
 
 struct ThemeTests {
+    /// Hosts set the chrome's appearance from this, so every shipped theme must say the
+    /// truth about itself, and a near-midpoint grey must land on the side text reads better on.
+    @Test func darknessFollowsTheBackground() {
+        #expect(BuiltInThemes.togoDark.isDark)
+        #expect(!BuiltInThemes.togoLight.isDark)
+        #expect(BuiltInThemes.plain.isDark)
+        var theme = BuiltInThemes.togoDark
+        theme.background = "#FFFFFF"
+        #expect(!theme.isDark)
+        theme.background = "#000000"
+        #expect(theme.isDark)
+        // Mid grey: white text and black text are about equally readable; black wins just above.
+        theme.background = "#737373"
+        #expect(theme.isDark)
+        theme.background = "#7A7A7A"
+        #expect(!theme.isDark)
+    }
+
     @Test(arguments: ["sample.itermcolors", "sample.ghostty", "sample.Xresources"])
     func importersParseSamples(_ name: String) throws {
         let theme = try ThemeImporter.load(try fixture(name), filename: name)

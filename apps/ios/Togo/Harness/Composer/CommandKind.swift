@@ -25,8 +25,6 @@ enum CommandKind {
         var line: String
         var action: String?
         var destructive: Bool
-        /// "/compact ", when the command takes optional words ("With instructions…").
-        var instructions: String?
         /// "Start a new conversation", for the dialog's title.
         var detail: String?
     }
@@ -63,10 +61,25 @@ enum CommandKind {
             break
         }
         if requiresArgument(command.hint) { return .compose(line: line + " ", files: takesFile(command.hint)) }
-        return .run(Run(
-            line: line, action: command.action, destructive: command.role == .destructive,
-            instructions: takesOptionalArgument(command.hint) ? line + " " : nil, detail: command.detail
-        ))
+        return .run(Run(line: line, action: command.action, destructive: command.role == .destructive, detail: command.detail))
+    }
+
+    /// What a pick from the palette or the `/` menu does. Choices, lists and native homes are as
+    /// `dispatch` says; a command that would be typed or run goes to the field first, the
+    /// cursor after it ("/compact "), so its words can follow as at the desk. No helper says
+    /// which commands take none, so none is sent on the pick: Send sends it, by `dispatch`.
+    static func picking(_ command: HarnessCompletion) -> Dispatch {
+        let dispatch = dispatch(command)
+        switch dispatch {
+        case .run(let run): return .compose(line: run.line + " ", files: false)
+        case .terminal(let line): return .compose(line: line + " ", files: false)
+        default: return dispatch
+        }
+    }
+
+    /// The command cannot go without words ("<file>", or kind args): Send waits for them.
+    static func needsArgument(_ command: HarnessCompletion) -> Bool {
+        kind(of: command) == .args || requiresArgument(command.hint)
     }
 
     /// "/compact": the command word, without a trailing space.
@@ -84,11 +97,6 @@ enum CommandKind {
     /// "<file>": the command needs words before it can go.
     static func requiresArgument(_ hint: String?) -> Bool {
         hint?.trimmingCharacters(in: .whitespaces).hasPrefix("<") ?? false
-    }
-
-    /// "[instructions]": the command takes optional words.
-    static func takesOptionalArgument(_ hint: String?) -> Bool {
-        hint?.trimmingCharacters(in: .whitespaces).hasPrefix("[") ?? false
     }
 
     /// "<file>" or "<files…>": the argument is a path, so the @ menu opens with the cursor.

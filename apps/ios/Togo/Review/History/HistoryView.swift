@@ -1,13 +1,12 @@
 import SwiftUI
 import TogoKit
+import UIKit
 
-/// Local branches and the log of one of them. Choosing a branch filters the log to it; choosing a
-/// commit opens it.
+/// The commit graph of one branch, the current one unless the branch menu picks another. A
+/// commit opens on its diff; its menu lists its files or copies its hash.
 struct HistoryView: View {
     @State private var model: HistoryModel
     private let onOpen: (ReviewRoute) -> Void
-
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(model: HistoryModel, onOpen: @escaping (ReviewRoute) -> Void) {
         _model = State(initialValue: model)
@@ -39,30 +38,38 @@ struct HistoryView: View {
     private var list: some View {
         List {
             if !model.branches.isEmpty {
-                HeadedSection(HistoryCopy.branches) {
-                    ForEach(model.branches, id: \.name) { branch in
-                        BranchRow(
-                            branch: branch,
-                            chosen: model.selectedRef == branch.name
-                        ) {
-                            Task { await model.select(branch: branch.name) }
-                        }
-                    }
-                    .groupedRows()
+                Section {
+                    BranchPicker(model: model)
+                        .groupedRows()
                 }
             }
-            HeadedSection(model.selectedRef.map(HistoryCopy.commitsOn) ?? HistoryCopy.commits) {
+            Section {
                 if model.commits.isEmpty {
                     Text(HistoryCopy.emptyMessage)
                         .foregroundStyle(Color.togoMute)
                         .groupedRows()
                 }
-                ForEach(model.commits, id: \.hash) { commit in
+                let width = model.graphWidth
+                ForEach(Array(model.commits.enumerated()), id: \.element.hash) { index, commit in
                     Button { onOpen(model.route(for: commit)) } label: {
-                        CommitRow(commit: commit, when: model.when(commit))
+                        CommitRow(
+                            commit: commit, graph: model.graph.indices.contains(index) ? model.graph[index] : nil,
+                            graphWidth: width, when: model.when(commit)
+                        )
                     }
                     .buttonStyle(.plain)
-                    .groupedRows()
+                    .reviewRow(opening: model.route(for: commit))
+                    // The lanes run through the rows unbroken, so rows sit edge to edge.
+                    .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .contextMenu {
+                        Button(HistoryCopy.showFiles, systemImage: "list.bullet") { onOpen(model.filesRoute(for: commit)) }
+                        Button(HistoryCopy.browse, systemImage: "folder") {
+                            onOpen(.folder(path: "", ref: commit.hash))
+                        }
+                        Button(HistoryCopy.copyHash, systemImage: "doc.on.doc") { UIPasteboard.general.string = commit.hash }
+                    }
+                    .accessibilityAction(named: HistoryCopy.showFiles) { onOpen(model.filesRoute(for: commit)) }
                 }
                 footer
             }
@@ -104,41 +111,47 @@ struct HistoryView: View {
     }
 }
 
-private struct BranchRow: View {
-    let branch: GitBranches.Branch
-    let chosen: Bool
-    let choose: () -> Void
+/// "Branch  main" as a menu row: the current branch first and marked, then the others.
+private struct BranchPicker: View {
+    let model: HistoryModel
 
     var body: some View {
-        Button(action: choose) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: branch.displayName)
-                        .font(.body)
-                        .foregroundStyle(Color.togoSnow)
-                    Text(HistoryCopy.upstream(branch.upstream, current: branch.current))
-                        .font(.footnote)
-                        .foregroundStyle(Color.togoMute)
-                }
-                Spacer(minLength: 0)
-                if chosen {
-                    Image(systemName: "checkmark")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Color.togoSnow)
-                        .accessibilityHidden(true)
-                }
-            }
-            .frame(minHeight: 44)
-            .contentShape(.rect)
+        let selection = Binding<String> {
+            model.shownBranch ?? ""
+        } set: { branch in
+            Task { await model.select(branch: branch) }
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(chosen ? .isSelected : [])
+        Picker(HistoryCopy.branch, selection: selection) {
+            if model.currentBranch == nil {
+                Text(HistoryCopy.detached).tag("")
+            }
+            ForEach(model.branches, id: \.name) { branch in
+                Text(verbatim: branch.name == model.currentBranch ? HistoryCopy.current(branch.displayName) : branch.displayName)
+                    .tag(branch.name)
+            }
+        }
+        .pickerStyle(.menu)
+        .foregroundStyle(Color.togoSnow)
+        .frame(minHeight: 44)
     }
 }
 
 private struct CommitRow: View {
     let commit: GitCommit
+    let graph: HistoryGraph.Row?
+    let graphWidth: Int
     let when: String
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Room per lane, and how far down the dot sits: level with the subject's first line.
+    @ScaledMetric(relativeTo: .body) private var laneWidth: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var dotY: CGFloat = 23
+
+    /// Past this many lanes the graph is cut at its edge, so the words keep their room.
+    private static let maxLanes = 6
+
+    private var showsGraph: Bool { graph != nil && !typeSize.isAccessibilitySize }
+    private var graphColumn: CGFloat { laneWidth * CGFloat(min(graphWidth, Self.maxLanes)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -146,24 +159,97 @@ private struct CommitRow: View {
                 .font(.body)
                 .foregroundStyle(Color.togoSnow)
                 .multilineTextAlignment(.leading)
+                // trunc-ok: a commit subject, two lines in the list; the diff it opens is titled with it in full
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { hash; Text(verbatim: commit.displayAuthor); Text(when) }
-                VStack(alignment: .leading, spacing: 2) { hash; Text(verbatim: commit.displayAuthor); Text(when) }
+                HStack(spacing: 8) { meta }
+                VStack(alignment: .leading, spacing: 2) { meta }
             }
             .font(.footnote)
             .foregroundStyle(Color.togoMute)
         }
+        .padding(.vertical, 10)
+        .padding(.leading, showsGraph ? graphColumn + 8 : 4)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        // The graph fills the row's whole height, so its lanes meet the rows above and below.
+        .background(alignment: .leading) {
+            if showsGraph, let graph {
+                LaneGraph(row: graph, laneWidth: laneWidth, dotY: dotY)
+                    .frame(width: graphColumn)
+                    .clipped()
+                    .accessibilityHidden(true)
+            }
+        }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: "\(commit.displaySubject), \(commit.displayAuthor), \(when)"))
+        .accessibilityLabel(Text(verbatim: spoken))
         .accessibilityAddTraits(.isButton)
     }
 
-    private var hash: some View {
+    @ViewBuilder private var meta: some View {
         Text(verbatim: commit.short)
             .font(.system(.footnote, design: .monospaced))
+        Text(verbatim: commit.displayAuthor)
+        Text(when)
+        if let files = commit.files {
+            Text(HistoryCopy.filesChanged(files))
+        } else if graph?.merge == true {
+            Text(HistoryCopy.merge)
+        }
     }
+
+    private var spoken: String {
+        var words = [commit.displaySubject, commit.displayAuthor, when]
+        if let files = commit.files { words.append(HistoryCopy.filesChanged(files)) }
+        if graph?.merge == true { words.append(HistoryCopy.merge) }
+        return words.joined(separator: ", ")
+    }
+}
+
+/// One row of the commit graph: the lanes passing through, those meeting at this commit, and
+/// its dot, hollow for a merge. Each lane keeps its color down the list.
+private struct LaneGraph: View {
+    let row: HistoryGraph.Row
+    let laneWidth: CGFloat
+    let dotY: CGFloat
+
+    static let colors: [Color] = [
+        .togoSyntaxType, .togoSyntaxString, .togoSyntaxKeyword, .togoSyntaxNumber, .togoSyntaxAttribute,
+    ]
+
+    var body: some View {
+        Canvas { context, size in
+            func x(_ lane: Int) -> CGFloat { laneWidth * (CGFloat(lane) + 0.5) }
+            func line(_ edge: HistoryGraph.Edge, from y0: CGFloat, to y1: CGFloat) {
+                var path = Path()
+                path.move(to: CGPoint(x: x(edge.from), y: y0))
+                if edge.from == edge.to {
+                    path.addLine(to: CGPoint(x: x(edge.to), y: y1))
+                } else {
+                    let mid = (y0 + y1) / 2
+                    path.addCurve(
+                        to: CGPoint(x: x(edge.to), y: y1),
+                        control1: CGPoint(x: x(edge.from), y: mid),
+                        control2: CGPoint(x: x(edge.to), y: mid)
+                    )
+                }
+                context.stroke(path, with: .color(Self.color(edge.lane)), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            }
+            for edge in row.top { line(edge, from: 0, to: dotY) }
+            for edge in row.bottom { line(edge, from: dotY, to: size.height) }
+            let radius: CGFloat = 5
+            let dot = CGRect(x: x(row.lane) - radius, y: dotY - radius, width: radius * 2, height: radius * 2)
+            let color = Self.color(row.lane)
+            if row.merge {
+                context.fill(Path(ellipseIn: dot), with: .color(.togoGrouped))
+                context.stroke(Path(ellipseIn: dot.insetBy(dx: 1, dy: 1)), with: .color(color), lineWidth: 2)
+            } else {
+                context.fill(Path(ellipseIn: dot), with: .color(color))
+            }
+        }
+    }
+
+    static func color(_ lane: Int) -> Color { colors[lane % colors.count] }
 }
 
 /// One commit: who made it, the files it changed and a way into the tree as it was.

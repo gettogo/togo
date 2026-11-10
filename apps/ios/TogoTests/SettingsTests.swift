@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 import TogoKit
 import TogoTerminal
@@ -49,9 +50,56 @@ import TogoTerminal
         let offered = Set(ThemeChoice.all(imported: []).map(\.id))
         #expect(ThemeChoice.all(imported: []).first?.id == ThemeChoice.defaultID)
         #expect(AppSettings().themeID == ThemeChoice.defaultID)
-        for old in ["", "-dark", "-light"].map({ "lan" + "tern" + $0 }) {
+        for old in ["", "-dark", "-light"].map({ "lan" + "tern" + $0 }) + ["default"] {
             #expect(offered.contains(AppSettings.migratedThemeID(old)))
         }
+        #expect(offered.contains(ThemeChoice.systemID))
+    }
+
+    /// Only "Match System Appearance" changes with the appearance; the default stays Togo Dark
+    /// in light mode, where programs that hard-code dark-friendly colours still read.
+    @Test func onlyTheSystemChoiceFollowsTheAppearance() throws {
+        let choices = ThemeChoice.all(imported: [])
+        for choice in choices where choice.id != ThemeChoice.systemID {
+            #expect(choice.theme(for: .light) == choice.theme(for: .dark), "\(choice.id) changed with the appearance")
+        }
+        let system = try #require(choices.first { $0.id == ThemeChoice.systemID })
+        #expect(system.theme(for: .dark).id == "togo-dark")
+        #expect(system.theme(for: .light).id == "togo-light")
+        #expect(ThemeChoice.current(AppSettings()).theme(for: .light).id == "togo-dark")
+    }
+
+    @Test func unknownThemeFallsBackToTogoDark() {
+        var settings = AppSettings()
+        settings.themeID = "gone"
+        #expect(ThemeChoice.current(settings).id == ThemeChoice.defaultID)
+    }
+
+    /// Chrome over the terminal takes the theme's appearance, not the system's.
+    @Test(arguments: [
+        ("togo-dark", ColorScheme.light, ColorScheme.dark),
+        ("togo-dark", ColorScheme.dark, ColorScheme.dark),
+        ("togo-light", ColorScheme.dark, ColorScheme.light),
+        ("plain", ColorScheme.light, ColorScheme.dark),
+        ("system", ColorScheme.light, ColorScheme.light),
+        ("system", ColorScheme.dark, ColorScheme.dark),
+    ])
+    func backdropFollowsTheTheme(_ id: String, _ system: ColorScheme, _ expected: ColorScheme) {
+        var settings = AppSettings()
+        settings.themeID = id
+        let backdrop = TerminalBackdrop.resolve(settings, system: system)
+        #expect(backdrop.scheme == expected)
+        #expect(backdrop.background == Color(terminalHex: ThemeChoice.current(settings).theme(for: system).background))
+    }
+
+    /// Leaving the terminal hands the bar an explicit scheme, never nil, which left it dark.
+    @Test func theBarFollowsTheLayerBackToTheSystem() {
+        var settings = AppSettings()
+        settings.themeID = "togo-dark"
+        let terminal = TerminalBackdrop.resolve(settings, system: .light)
+        #expect(TerminalBackdrop.barScheme(terminal, system: .light) == .dark)
+        #expect(TerminalBackdrop.barScheme(nil, system: .light) == .light)
+        #expect(TerminalBackdrop.barScheme(nil, system: .dark) == .dark)
     }
 
     @Test func settingsDropOnlyTheBadImportedTheme() throws {

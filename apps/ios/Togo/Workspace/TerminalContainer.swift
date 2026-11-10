@@ -6,6 +6,13 @@ import UIKit
     /// Keeps the grid at its size while on, as while an animation resizes the terminal every
     /// frame; turning it off fits the grid to the space it has then.
     func holdFit(_ on: Bool)
+    /// Another layer covers the terminal (the chat) or no longer does: the grid keeps its size
+    /// through the crossfade and ignores a keyboard that belongs to the layer above.
+    func setCovered(_ on: Bool)
+}
+
+extension TerminalRefitting {
+    func setCovered(_ on: Bool) {}
 }
 
 final class TerminalContainer: UIViewController {
@@ -63,6 +70,7 @@ final class TerminalContainer: UIViewController {
         view.isUserInteractionEnabled = !on
         view.accessibilityElementsHidden = on
         if on { clearBand() }
+        if let child = wanted, child.parent === self { (child as? TerminalRefitting)?.setCovered(on) }
     }
 
     /// Marks `rect` (in this view's coordinates) for a moment, then lets it go: a fade, or
@@ -164,6 +172,7 @@ final class TerminalContainer: UIViewController {
         if holding { hold(child) } else { child.view.frame = view.bounds }
         view.insertSubview(child.view, at: 0)
         child.didMove(toParent: self)
+        (child as? TerminalRefitting)?.setCovered(covered)
         // A hold another container put on it ends here, with a fit to this one.
         if !holding {
             fits += 1

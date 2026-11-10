@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The one floating bar: it holds whatever an agent needs from the user, and when nothing waits
-/// it is where the user types into the open terminal or starts a session. System glass at
+/// it is away. It is never a terminal's input: the terminal takes the typing itself. System glass at
 /// radius 28; a waiting request brings a faint beacon light into it.
 ///
 /// A new request rises in: the old content conceals as it settles down, and when it has gone
@@ -75,8 +75,6 @@ struct PromptBar: View {
             PromptRequestView(model: model, request: request, position: position, count: count, replying: false)
         case let .replying(request, position, count):
             PromptRequestView(model: model, request: request, position: position, count: count, replying: true)
-        case let .input(tab):
-            PromptInputView(model: model, tab: tab)
         case let .start(expanded):
             PromptStartView(model: model, expanded: expanded)
         case .hidden:
@@ -107,7 +105,6 @@ struct PromptBar: View {
     static func contentID(_ stage: PromptBarModel.Stage) -> String {
         switch stage {
         case let .request(request, _, _), let .replying(request, _, _): "request-\(request.id)"
-        case let .input(tab): "input-\(tab.hostID.uuidString)-\(tab.sessionID)"
         case .start: "start"
         case .hidden: "hidden"
         }

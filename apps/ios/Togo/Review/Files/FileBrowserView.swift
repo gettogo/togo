@@ -1,8 +1,11 @@
 import SwiftUI
 import TogoKit
+import UIKit
 
-/// One folder of the working tree, or of a commit: folders first, then files. Hidden files are
-/// behind a toggle, and a banner says when the folder is as a commit had it.
+/// The working tree, or a commit's, as a tree: folders open in place, a file opens in the viewer.
+/// Changed files carry a letter and the folders holding them a dot. The search field looks
+/// through every file of the repository. Hidden files are behind a toggle, and a banner says
+/// when the tree is as a commit had it.
 struct FileBrowserView: View {
     @State private var model: FilesModel
     private let onOpen: (ReviewRoute) -> Void
@@ -14,12 +17,13 @@ struct FileBrowserView: View {
 
     var body: some View {
         content
-            .phaseSwap(model.items.isEmpty ? "\(CaseName.of(model.state)) empty" : CaseName.of(model.state))
+            .phaseSwap(phase)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.togoInk)
             .safeAreaInset(edge: .top, spacing: 0) { banner }
             .navigationTitle(Text(verbatim: model.title))
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: Bindable(model.search).query, prompt: FileTreeCopy.searchPrompt)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -32,38 +36,40 @@ struct FileBrowserView: View {
             .task { await model.loadIfNeeded() }
     }
 
+    private var phase: String {
+        if model.search.isActive { return "search" }
+        return model.items.isEmpty ? "\(CaseName.of(model.state)) empty" : CaseName.of(model.state)
+    }
+
     @ViewBuilder private var content: some View {
-        switch model.state {
-        case .loading:
-            StateView(kind: .loading, title: FilesCopy.loading, message: model.breadcrumb.isEmpty ? model.subject.title : model.breadcrumb)
-        case .failed(let message):
-            StateView(kind: .error, title: FilesCopy.failed, message: message, action: .init(FilesCopy.tryAgain) {
-                Task { await model.load() }
-            })
-        case .ready:
-            if model.items.isEmpty {
-                StateView(
-                    kind: .empty, title: FilesCopy.emptyFolder,
-                    message: model.hiddenCount > 0 ? FilesCopy.onlyHidden : FilesCopy.emptyMessage
-                )
-            } else {
-                list
+        if model.search.isActive {
+            FileSearchResults(search: model.search, onOpen: onOpen)
+        } else {
+            switch model.state {
+            case .loading:
+                StateView(kind: .loading, title: FilesCopy.loading, message: model.breadcrumb.isEmpty ? model.subject.title : model.breadcrumb)
+            case .failed(let message):
+                StateView(kind: .error, title: FilesCopy.failed, message: message, action: .init(FilesCopy.tryAgain) {
+                    Task { await model.load() }
+                })
+            case .ready:
+                if model.items.isEmpty {
+                    StateView(
+                        kind: .empty, title: FilesCopy.emptyFolder,
+                        message: model.hiddenCount > 0 ? FilesCopy.onlyHidden : FilesCopy.emptyMessage
+                    )
+                } else {
+                    tree
+                }
             }
         }
     }
 
-    private var list: some View {
+    private var tree: some View {
         List {
             Section {
                 ForEach(model.items) { item in
-                    if let route = item.route {
-                        Button { onOpen(route) } label: { ItemRow(item: item) }
-                            .buttonStyle(.plain)
-                            .reviewRow(opening: route)
-                    } else {
-                        ItemRow(item: item)
-                            .groupedRows()
-                    }
+                    TreeNode(model: model, item: item, onOpen: onOpen)
                 }
             } header: {
                 if !model.breadcrumb.isEmpty { PathText(model.breadcrumb) }
@@ -77,6 +83,135 @@ struct FileBrowserView: View {
         if let text = model.refBanner {
             RefBanner(text: text) { onOpen(model.workingTreeRoute) }
         }
+    }
+}
+
+/// A folder that opens in place, or a file that opens in the viewer.
+private struct TreeNode: View {
+    let model: FilesModel
+    let item: FilesModel.Item
+    let onOpen: (ReviewRoute) -> Void
+
+    var body: some View {
+        switch item.kind {
+        case .folder:
+            DisclosureGroup(isExpanded: expanded) {
+                children
+            } label: {
+                ItemRow(item: item, mark: nil, holdsChanges: model.marks.holdsChanges(item.path), expanded: model.isExpanded(item.path))
+            }
+            .groupedRows()
+        case .file:
+            if let route = item.route {
+                Button { onOpen(route) } label: {
+                    ItemRow(item: item, mark: model.marks.mark(item.path), holdsChanges: false, expanded: nil)
+                }
+                .buttonStyle(.plain)
+                .reviewRow(opening: route)
+                .contextMenu {
+                    if let diff = model.changesRoute(for: item) {
+                        Button(FileTreeCopy.showChanges, systemImage: "plus.forwardslash.minus") { onOpen(diff) }
+                    }
+                }
+            }
+        case .link:
+            ItemRow(item: item, mark: nil, holdsChanges: false, expanded: nil)
+                .groupedRows()
+        }
+    }
+
+    private var expanded: Binding<Bool> {
+        Binding {
+            model.isExpanded(item.path)
+        } set: { open in
+            // motion: cause → effect — the folder's rows grow out of it as it opens
+            withAnimation(Motion.animation(.rowGrow, reduce: UIAccessibility.isReduceMotionEnabled)) {
+                if open { _ = model.expanded.insert(item.path) } else { _ = model.expanded.remove(item.path) }
+            }
+            if open { Task { await model.setExpanded(item.path, true) } }
+        }
+    }
+
+    @ViewBuilder private var children: some View {
+        switch model.folders[item.path] {
+        case .ready?:
+            let rows = model.children(of: item.path) ?? []
+            if rows.isEmpty {
+                Text(FilesCopy.emptyFolder)
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
+                    .groupedRows()
+            }
+            ForEach(rows) { child in
+                TreeNode(model: model, item: child, onOpen: onOpen)
+            }
+        case .failed(let message)?:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(message).font(.footnote).foregroundStyle(Color.togoMute)
+                Button(FilesCopy.tryAgain) { Task { await model.read(item.path) } }
+                    .buttonStyle(.secondary(.fit))
+            }
+            .groupedRows()
+        case .loading?, nil:
+            HStack(spacing: 8) {
+                ProgressView()
+                Text(FileTreeCopy.opening).font(.footnote).foregroundStyle(Color.togoMute)
+            }
+            .frame(minHeight: 44)
+            .groupedRows()
+        }
+    }
+}
+
+/// Files whose name or path holds the query, best first, each opening in the viewer.
+private struct FileSearchResults: View {
+    let search: FileSearch
+    let onOpen: (ReviewRoute) -> Void
+
+    var body: some View {
+        switch search.state {
+        case .idle:
+            StateView(kind: .loading, title: FileTreeCopy.searching, message: search.query)
+        case .searching where search.hits.isEmpty:
+            StateView(kind: .loading, title: FileTreeCopy.searching, message: search.query)
+        case .failed(let message):
+            StateView(kind: .error, title: FileTreeCopy.searchFailed, message: message)
+        default:
+            if search.hits.isEmpty {
+                StateView(kind: .empty, title: FileTreeCopy.noResults, message: FileTreeCopy.noResultsMessage(search.query))
+            } else {
+                list
+            }
+        }
+    }
+
+    private var list: some View {
+        List {
+            Section {
+                ForEach(search.hits) { hit in
+                    Button { onOpen(hit.route) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: hit.name)
+                                .font(.body)
+                                .foregroundStyle(Color.togoSnow)
+                            if !hit.folder.isEmpty { PathText(hit.folder) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(.rect)
+                        .accessibilityElement(children: .combine)
+                    }
+                    .buttonStyle(.plain)
+                    .reviewRow(opening: hit.route)
+                }
+            } footer: {
+                if search.partial {
+                    Text(FileTreeCopy.partial)
+                } else if search.more {
+                    Text(FileTreeCopy.moreResults(FileSearch.limit))
+                }
+            }
+        }
+        .groupedList()
     }
 }
 
@@ -112,6 +247,12 @@ struct RefBanner: View {
 
 private struct ItemRow: View {
     let item: FilesModel.Item
+    /// A changed file's mark.
+    let mark: ChangeMarks.Mark?
+    /// A folder with a change somewhere inside it.
+    let holdsChanges: Bool
+    /// A folder's state, for its symbol; nil for a file.
+    let expanded: Bool?
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 24
@@ -123,6 +264,7 @@ private struct ItemRow: View {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         icon
                         name
+                        changeMark
                     }
                     detail.padding(.leading, iconWidth + 12)
                 }
@@ -132,7 +274,7 @@ private struct ItemRow: View {
                     name
                     Spacer(minLength: 8)
                     detail
-                    if item.kind == .folder { chevron }
+                    changeMark
                 }
             }
         }
@@ -141,7 +283,7 @@ private struct ItemRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: spoken))
         .accessibilityHint(item.kind == .link ? FilesCopy.linkHint : "")
-        .accessibilityAddTraits(item.route == nil ? [] : .isButton)
+        .accessibilityAddTraits(item.kind == .file && item.route != nil ? .isButton : [])
     }
 
     private var icon: some View {
@@ -160,11 +302,28 @@ private struct ItemRow: View {
             .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
     }
 
-    private var chevron: some View {
-        Image(systemName: "chevron.right")
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(Color.togoMute)
-            .accessibilityHidden(true)
+    /// "M", "A", "U" or "!" beside a changed file, as editors mark them; a dot on a folder
+    /// holding changes.
+    @ViewBuilder private var changeMark: some View {
+        if let mark {
+            Text(verbatim: mark.letter)
+                .font(.system(.footnote, design: .monospaced).weight(.bold))
+                .foregroundStyle(Self.color(mark))
+                .accessibilityHidden(true)
+        } else if holdsChanges {
+            Circle()
+                .fill(Color.togoSnow)
+                .frame(width: 6, height: 6)
+                .accessibilityHidden(true)
+        }
+    }
+
+    static func color(_ mark: ChangeMarks.Mark) -> Color {
+        switch mark {
+        case .added, .untracked: .togoDiffAddedWord
+        case .conflicted: .togoDiffRemovedWord
+        case .modified: .togoSnow
+        }
     }
 
     @ViewBuilder private var detail: some View {
@@ -177,7 +336,7 @@ private struct ItemRow: View {
 
     private var symbol: String {
         switch item.kind {
-        case .folder: "folder"
+        case .folder: expanded == true ? "folder.fill" : "folder"
         case .file: "doc"
         case .link: "link"
         }
@@ -185,10 +344,11 @@ private struct ItemRow: View {
 
     private var spoken: String {
         switch item.kind {
-        case .folder: "\(item.name), \(FilesCopy.folder)"
+        case .folder: holdsChanges ? "\(item.name), \(FilesCopy.folder), \(FileTreeCopy.holdsChanges)" : "\(item.name), \(FilesCopy.folder)"
         case .link: "\(item.name), \(FilesCopy.link)"
         // A bare name such as "notes.txt" reads as a word; the kind says it is a file.
-        case .file: "\(item.name), \(item.size.map(FilesCopy.size) ?? FilesCopy.file)"
+        case .file:
+            [item.name, mark?.words, item.size.map(FilesCopy.size) ?? FilesCopy.file].compactMap(\.self).joined(separator: ", ")
         }
     }
 }

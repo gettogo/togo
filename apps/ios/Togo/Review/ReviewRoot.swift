@@ -3,12 +3,20 @@ import TogoKit
 
 /// Where the review screens are and what is open in them. On a phone every route is pushed. In
 /// a split view, folders and commits go down the sidebar and a diff or file replaces the detail.
+/// A link tapped in the chat opens one diff or file on its own (`focus`): no lists behind it, so
+/// Close goes back to the chat, and "All changes" turns it into the whole review.
 struct ReviewNavigation: Equatable {
     var tab: ReviewTab
     var path: [ReviewRoute] = []
     var detail: ReviewRoute?
+    /// The one screen the review was opened for. While set, `path` is pushed on top of it.
+    var focus: ReviewRoute?
 
     mutating func open(_ route: ReviewRoute, layout: ReviewRoot.Layout) {
+        if focus != nil {
+            path.append(route)
+            return
+        }
         // "Back to working tree" from a folder as a commit had it: the Files tab, from its root.
         if case .folder(let folder, nil, .session) = route, folder.isEmpty {
             tab = .files
@@ -27,6 +35,8 @@ struct ReviewNavigation: Equatable {
     /// diff or file open beside the list is pushed onto the stack, and one pushed last moves
     /// beside the list. Running it again changes nothing.
     mutating func relayout(to layout: ReviewRoot.Layout) {
+        // A focused screen is one stack on every width.
+        guard focus == nil else { return }
         switch layout {
         case .stack:
             guard let detail else { return }
@@ -41,10 +51,27 @@ struct ReviewNavigation: Equatable {
 
     /// Another tab starts from its list, with nothing from the last tab open beside it.
     mutating func select(_ tab: ReviewTab) {
-        guard tab != self.tab else { return }
+        guard tab != self.tab || focus != nil else { return }
         self.tab = tab
         path = []
         detail = nil
+        focus = nil
+    }
+
+    /// From a focused diff or file to the whole review on Changes. Where the list has a detail
+    /// column beside it, what was focused stays open there.
+    mutating func showAll(layout: ReviewRoot.Layout) {
+        let was = focus
+        tab = .changes
+        path = []
+        detail = nil
+        focus = nil
+        if let was {
+            switch layout {
+            case .split: detail = was
+            case .stack: path = [was]
+            }
+        }
     }
 }
 
@@ -59,6 +86,7 @@ struct ReviewRoot: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let subject: ReviewSubject
     private let services: any ReviewServices
@@ -141,9 +169,13 @@ struct ReviewRoot: View {
 
     var body: some View {
         Group {
-            switch layout {
-            case .stack: stack
-            case .split: split
+            if let focus = navigation.focus {
+                focused(focus)
+            } else {
+                switch layout {
+                case .stack: stack
+                case .split: split
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -168,6 +200,32 @@ struct ReviewRoot: View {
     }
 
     // MARK: Layouts
+
+    /// One diff or file, opened from a link in the chat. Close goes back to the chat; "All
+    /// changes" opens the rest of the review with this screen still open.
+    private func focused(_ route: ReviewRoute) -> some View {
+        NavigationStack(path: Bindable(session).navigation.path) {
+            destination(route)
+                .id(route)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(ReviewEntryCopy.close, systemImage: "xmark", role: .close) { dismiss() }
+                    }
+                    if subject.canRead {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button(ReviewEntryCopy.allChanges, systemImage: "plus.forwardslash.minus") {
+                                // motion: cause → effect — the lone screen opens out into the review around it
+                                withAnimation(Motion.animation(.respond, reduce: reduceMotion)) {
+                                    navigation.showAll(layout: layout)
+                                }
+                            }
+                            .accessibilityHint(ReviewEntryCopy.allChangesHint)
+                        }
+                    }
+                }
+                .navigationDestination(for: ReviewRoute.self) { destination($0) }
+        }
+    }
 
     private var stack: some View {
         NavigationStack(path: Bindable(session).navigation.path) {

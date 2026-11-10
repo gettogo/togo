@@ -31,6 +31,52 @@ import TogoKit
         #expect(navigation.path.count == 1)
     }
 
+    // MARK: Focus (a file link from the chat)
+
+    @Test func focusedScreenIgnoresLayoutAndStacksWhatItOpens() {
+        let diff = ReviewRoute.diff(.worktree(path: "a.ts"))
+        var navigation = ReviewNavigation(tab: .changes, focus: diff)
+        navigation.relayout(to: .split)
+        #expect(navigation.detail == nil)
+        #expect(navigation.path.isEmpty)
+        navigation.open(.file(path: "a.ts", ref: nil, base: .repository), layout: .split)
+        #expect(navigation.path == [.file(path: "a.ts", ref: nil, base: .repository)])
+        #expect(navigation.focus == diff)
+    }
+
+    @Test func showAllKeepsTheFocusedScreenOpen() {
+        let diff = ReviewRoute.diff(.worktree(path: "a.ts"))
+        var split = ReviewNavigation(tab: .files, focus: diff)
+        split.showAll(layout: .split)
+        #expect(split.tab == .changes)
+        #expect(split.focus == nil)
+        #expect(split.detail == diff)
+        #expect(split.path.isEmpty)
+
+        var stack = ReviewNavigation(tab: .changes, focus: diff)
+        stack.showAll(layout: .stack)
+        #expect(stack.focus == nil)
+        #expect(stack.path == [diff])
+    }
+
+    @Test func choosingATabLeavesTheFocus() {
+        var navigation = ReviewNavigation(tab: .changes, focus: .diff(.worktree(path: "a.ts")))
+        navigation.select(.changes)
+        #expect(navigation.focus == nil)
+        #expect(navigation.tab == .changes)
+    }
+
+    @Test func focusedScreenKeepsItsModel() {
+        let route = ReviewRoute.diff(.worktree(path: "a.ts"))
+        let session = ReviewSession(
+            subject: subject(), services: FakeReviewServices(), tab: .changes, machine: "Studio",
+            navigation: ReviewNavigation(tab: .changes, focus: route)
+        )
+        let made = session.screen(for: route) { DiffModel.preview(.worktree(path: "a.ts")) }
+        let again = session.screen(for: route) { DiffModel.preview(.worktree(path: "a.ts")) }
+        #expect(again === made)
+    }
+
     @Test func foldPushesTheDetailOntoTheStack() {
         var navigation = ReviewNavigation(tab: .changes)
         navigation.open(.diff(.worktree(path: "a.ts")), layout: .split)

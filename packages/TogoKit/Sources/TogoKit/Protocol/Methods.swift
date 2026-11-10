@@ -22,6 +22,7 @@ public enum Method: String, Sendable {
     case gitDiff = "git.diff"
     case gitLog = "git.log"
     case gitBranches = "git.branches"
+    case gitFiles = "git.files"
     case gitStage = "git.stage"
     case gitUnstage = "git.unstage"
     case gitDiscard = "git.discard"

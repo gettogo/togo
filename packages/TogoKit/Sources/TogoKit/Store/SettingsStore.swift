@@ -32,7 +32,9 @@ public struct GestureBindings: Codable, Sendable, Equatable {
 /// App-wide preferences. Fields missing from older or newer payloads fall back
 /// to their defaults.
 public struct AppSettings: Codable, Sendable, Equatable {
-    public var themeID: String = "default"
+    /// Togo Dark whatever the system appearance: many terminal programs hard-code colours that
+    /// only read on a dark background. "system" follows the appearance (Settings › Terminal).
+    public var themeID: String = "togo-dark"
     public var fontName: String = "SF Mono"
     public var fontSize: Double = 13
     public var cursor: String = "block"
@@ -102,10 +104,12 @@ public struct AppSettings: Codable, Sendable, Equatable {
 
     /// Theme ids saved before the built-in themes took their current names, mapped to those
     /// names so a stored or synced choice keeps working. Any other id passes through.
+    /// "default" followed the system appearance; the default is now Togo Dark in either
+    /// appearance, and following the system is the "system" choice the user picks.
     public static func migratedThemeID(_ id: String) -> String {
         let old = "lan" + "tern"
         switch id {
-        case old: return "default"
+        case old, "default": return "togo-dark"
         case old + "-dark": return "togo-dark"
         case old + "-light": return "togo-light"
         default: return id

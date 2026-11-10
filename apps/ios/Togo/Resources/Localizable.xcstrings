@@ -3311,7 +3311,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hold the microphone in the compose bar to talk. The words go into the message, and nothing is sent until you tap Send."
+            "value" : "Tap Dictate on the terminal's key bar to talk, and tap it again to stop. The words are typed at the session's prompt, and nothing is sent until you press Return."
           }
         }
       }
@@ -3344,7 +3344,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The last 20, kept on this device only. Insert puts one in the compose bar of the session on screen."
+            "value" : "The last 20, kept on this device only. Insert puts one in the session on screen: in its chat's composer, or at its terminal's prompt."
           }
         }
       }
@@ -6451,28 +6451,6 @@
         }
       }
     },
-    "settings.terminal.default" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Default"
-          }
-        }
-      }
-    },
-    "settings.terminal.default.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Light or dark with the system"
-          }
-        }
-      }
-    },
     "settings.terminal.font" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6634,6 +6612,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Size"
+          }
+        }
+      }
+    },
+    "settings.terminal.system" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match System Appearance"
+          }
+        }
+      }
+    },
+    "settings.terminal.system.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Togo Dark or Togo Light with the system"
           }
         }
       }
@@ -7414,7 +7414,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Write to the agent here. Terminal at the top shows its own screen, with Esc, Ctrl and the arrows above the keyboard."
+            "value" : "Write to the agent here. The Terminal button shows the agent's own screen, with Esc, Ctrl and arrow keys above the keyboard."
           }
         }
       }
@@ -7425,7 +7425,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chat and terminal"
+            "value" : "Chat or terminal"
           }
         }
       }
@@ -7492,6 +7492,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Session actions"
+          }
+        }
+      }
+    },
+    "ws.allSessions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All sessions"
           }
         }
       }
@@ -8470,7 +8481,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tap Terminal at the top of a chat to see the agent's own screen, with Esc, Ctrl, Tab and the arrows above the keyboard."
+            "value" : "In a chat, tap the Terminal button to see the agent's own screen, with Esc, Ctrl, Tab and arrow keys above the keyboard."
           }
         }
       }

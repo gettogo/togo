@@ -198,9 +198,6 @@ private struct PaletteCommandRow: View {
             Button(starred ? ComposerCopy.unfavourite : ComposerCopy.favourite, systemImage: starred ? "star.slash" : "star") {
                 model.toggleFavourite(item)
             }
-            if case .run(let run) = CommandKind.dispatch(item), run.instructions != nil, !run.destructive {
-                Button(ComposerCopy.addInstructions, systemImage: "text.cursor") { model.addInstructions(item) }
-            }
         }
     }
 
@@ -269,16 +266,21 @@ private struct SettingRow: View {
     let glyph: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.togoSnow)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize()
+            Spacer(minLength: 12)
             if let value {
+                // One line, trimmed in the middle, so a long model id ("anthropic/claude-sonnet-5")
+                // keeps both ends and sits level with its title instead of wrapping.
                 Text(verbatim: value)
                     .font(.mono(.subheadline))
                     .foregroundStyle(Color.togoMute)
-                    .multilineTextAlignment(.trailing)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .layoutPriority(1)
             }
             Image(systemName: glyph)
                 .font(.footnote.weight(.semibold))

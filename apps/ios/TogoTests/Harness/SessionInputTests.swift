@@ -3,9 +3,8 @@ import Testing
 import TogoKit
 @testable import Togo
 
-/// Which input a session shows: the chat's composer, the terminal's bar, or, while it is not
-/// known yet, neither (the loader). The one-line prompt bar never shows under a session that is
-/// about to show its chat.
+/// Which input a session shows: the chat's composer, the terminal itself, or, while it is not
+/// known yet, neither (the loader). The prompt bar is never an input line under any of them.
 @MainActor struct SessionInputTests {
     @Test func eachLayerHasOneInput() {
         #expect(SessionInput(.chat) == .composer)
@@ -16,18 +15,16 @@ import TogoKit
         #expect(!SessionInput(.terminal).hidesPromptBar)
     }
 
-    @Test func aPendingSessionHasNoTerminalBar() {
-        let tab = TabID(hostID: UUID(), sessionID: "s1")
-        let pending = PromptFeed.mode(
-            requests: [], current: .start, focused: tab, composing: false, hasMachines: true,
-            chatShown: SessionInput(.pending).hidesPromptBar
-        )
-        #expect(pending == .hidden)
-        let terminal = PromptFeed.mode(
-            requests: [], current: .start, focused: tab, composing: false, hasMachines: true,
-            chatShown: SessionInput(.terminal).hidesPromptBar
-        )
-        #expect(terminal == .input(tab))
+    @Test func noSessionHasAnInputLineInThePromptBar() {
+        // The terminal takes the typing itself and the chat has its composer: with nothing
+        // waiting, the bar is away whichever layer shows.
+        for layer in [SessionLayer.chat, .terminal, .pending] {
+            let mode = PromptFeed.mode(
+                requests: [], current: .start, hasMachines: true,
+                composerTyping: SessionInput(layer).hidesPromptBar
+            )
+            #expect(mode == .hidden)
+        }
     }
 
     @Test func beforeTheMachinesAreReadASessionWaits() {
@@ -68,5 +65,13 @@ import TogoKit
         let other = HarnessDescriptor.Adapter(id: "newcomer", name: "Newcomer", harnessVersion: "1", revision: 1)
         #expect(HarnessSessionStore.displayName(other) == "Newcomer")
         #expect(HarnessSessionStore.displayName(nil) == "")
+    }
+
+    /// The chat's text column is the same width wherever it sits, so its edges never depend on
+    /// what a row measured: `inset` in on a phone, centred at the column's widest when wide.
+    @Test func theChatColumnOwnsItsWidth() {
+        #expect(ChatLayout.textWidth(in: 402) == 402 - 2 * ChatLayout.inset)
+        #expect(ChatLayout.textWidth(in: 1180) == ChatLayout.composerWidth)
+        #expect(ChatLayout.textWidth(in: 20) == 0)
     }
 }

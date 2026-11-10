@@ -119,10 +119,20 @@ struct ImageShrinkerTests {
         #expect(flow.isAnnotating)
     }
 
-    @Test func noHelperHidesThePhotoButton() {
-        let flow = ImagePasteFlow(support: .none, upload: { _, _ in "" }, paste: { _ in })
-        #expect(!flow.showsPhotoButton)
-        #expect(ImagePasteFlow(support: .unsupported, upload: { _, _ in "" }, paste: { _ in }).showsPhotoButton)
+    /// The Attach key opens the picker only where a picture can go; elsewhere it says why.
+    @Test func attachExplainsWhereAPictureCannotGo() {
+        let none = ImagePasteFlow(support: .none, upload: { _, _ in "" }, paste: { _ in })
+        #expect(!none.picksPhotos)
+        none.explainUnsupported()
+        #expect(none.phase == .noHelper)
+        let old = ImagePasteFlow(support: .unsupported, upload: { _, _ in "" }, paste: { _ in })
+        #expect(!old.picksPhotos)
+        old.explainUnsupported()
+        #expect(old.phase == .unsupported)
+        let ready = ImagePasteFlow(support: .available, upload: { _, _ in "" }, paste: { _ in })
+        #expect(ready.picksPhotos)
+        ready.explainUnsupported()
+        #expect(ready.phase == .idle)
     }
 }
 

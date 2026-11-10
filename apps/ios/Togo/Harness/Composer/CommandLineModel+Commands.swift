@@ -76,11 +76,13 @@ extension CommandLineModel {
         requestFocus()
     }
 
-    /// Does what the command is for, by kind (`CommandKind`).
+    /// Does what the command is for, by kind (`CommandKind`). A pick (`typed` false) puts a
+    /// command that would be typed or run in the field first (`CommandKind.picking`); a typed
+    /// one being sent does its job (`CommandKind.dispatch`).
     @discardableResult
-    func perform(_ command: HarnessCompletion) async -> Outcome {
+    func perform(_ command: HarnessCompletion, typed: Bool = false) async -> Outcome {
         memory.record(CommandMemory.commandWord(CommandKind.line(command)), scope: scope)
-        switch CommandKind.dispatch(command) {
+        switch typed ? CommandKind.dispatch(command) : CommandKind.picking(command) {
         case .choose:
             return .stay
         case .push(let screen), .open(.screen(let screen)):
@@ -90,7 +92,8 @@ extension CommandLineModel {
             routes.showMission()
             return .close
         case let .compose(line, files):
-            pendingArgs = line
+            // Send waits only for words the command cannot go without.
+            pendingArgs = CommandKind.needsArgument(command) ? line : nil
             compose(files ? line + "@" : line)
             return .close
         case .terminal(let line):
@@ -104,18 +107,14 @@ extension CommandLineModel {
         }
     }
 
-    /// Runs a run-kind command. A destructive one, one with a confirm line, or one that takes
-    /// optional words through an action ("With instructions…") asks first in a system dialog.
+    /// Runs a run-kind command that was sent. A destructive one, or one whose action carries a
+    /// confirm line, asks first in a system dialog; its words were already in the field.
     private func runCommand(_ run: CommandKind.Run) async -> Outcome {
         let ref = run.action.flatMap(routes.actionRef)
         let label = ref?.label ?? Self.label(run.line)
-        var confirm = ref?.confirm
-        if confirm == nil, run.action != nil, run.instructions != nil {
-            confirm = run.detail.map(PrimitiveCopy.asking) ?? PrimitiveCopy.asking(label)
-        }
         let decision = ActionGate.decide(
-            confirm: confirm, effect: nil, working: working, label: label, agent: routes.agent(),
-            destructive: run.destructive, instructions: run.instructions
+            confirm: ref?.confirm, effect: nil, working: working, label: label, agent: routes.agent(),
+            destructive: run.destructive
         )
         guard case .confirm(var dialog) = decision else {
             paletteOpen = false
@@ -128,8 +127,7 @@ extension CommandLineModel {
             run: { [weak self] in
                 self?.paletteOpen = false
                 await self?.execute(run)
-            },
-            instructions: { [weak self] line in self?.compose(line) }
+            }
         )
         return .stay
     }
@@ -154,11 +152,6 @@ extension CommandLineModel {
         default:
             break
         }
-    }
-
-    /// "Add instructions…": the command in the field, the cursor after it.
-    func addInstructions(_ command: HarnessCompletion) {
-        compose(CommandKind.line(command) + " ")
     }
 
     // MARK: Session values

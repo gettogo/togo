@@ -167,12 +167,35 @@ enum ReviewFixtures {
 
     static let log = makeLog(60)
 
-    /// `count` commits, newest first, each with its own 40-digit hash.
+    /// `count` commits, newest first, each with its own 40-digit hash. Each is the child of
+    /// the next, except that the second merges a side branch: the third and fourth both come
+    /// from the fifth, so the graph shows two lanes meeting.
     static func makeLog(_ count: Int) -> [GitCommit] {
-        (0..<count).map { n in commit(n) }
+        (0..<count).map { n in
+            var entry = Self.commit(n)
+            let parents: [Int] = switch n {
+            case 1 where count > 4: [2, 3]
+            case 2 where count > 4: [4]
+            default: n + 1 < count ? [n + 1] : []
+            }
+            entry.parents = parents.map { Self.hash($0) }
+            entry.files = parents.count > 1 ? nil : n % 4 + 1
+            return entry
+        }
     }
 
-    private static func commit(_ n: Int) -> GitCommit {
+    /// Every file path in `tree`, as `git.files` lists them.
+    static let allFiles: [String] = {
+        func walk(_ folder: String) -> [String] {
+            (tree[folder] ?? []).flatMap { entry -> [String] in
+                let path = folder.isEmpty ? entry.name : folder + "/" + entry.name
+                return entry.dir ? walk(path) : [path]
+            }
+        }
+        return walk("").sorted()
+    }()
+
+    private static func hash(_ n: Int) -> String {
         var hash = ""
         for part in 0..<5 {
             var z = UInt64(n * 5 + part + 1) &* 0x9E37_79B9_7F4A_7C15
@@ -180,6 +203,11 @@ enum ReviewFixtures {
             z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
             hash += String(format: "%08x", UInt32(truncatingIfNeeded: z ^ (z >> 31)))
         }
+        return hash
+    }
+
+    private static func commit(_ n: Int) -> GitCommit {
+        let hash = Self.hash(n)
         let subjects = [
             "Return 404 for unknown ids", "Validate ids before the lookup", "Add the health route",
             "Move the store behind a module", "Fix flaky pagination test", "Bump dependencies",

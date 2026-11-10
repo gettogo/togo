@@ -15,13 +15,19 @@ enum MissionMenu {
         case terminal
     }
 
-    static func items(needsYou: Int, working: Bool, canCompact: Bool) -> [Item] {
+    /// Terminal only while the chat shows: over the terminal it would go nowhere.
+    static func items(needsYou: Int, working: Bool, canCompact: Bool, chatShows: Bool = true) -> [Item] {
         var items: [Item] = []
         if needsYou > 0 { items.append(.goToRequest) }
         if working { items.append(.stop) }
         if canCompact { items.append(.compact) }
-        items.append(.terminal)
+        if chatShows { items.append(.terminal) }
         return items
+    }
+
+    /// The choices the session menu's mission section repeats: all but Terminal.
+    static func inSessionMenu(_ items: [Item]) -> [Item] {
+        items.filter { $0 != .terminal }
     }
 
     static func title(_ item: Item) -> String {
@@ -55,8 +61,14 @@ struct MissionToolbarItem: ToolbarContent {
     /// Stops the turn; the host reports a failure.
     var stop: () -> Void = {}
 
-    private var summary: MissionSummary { store.mission.summary }
-    private var badge: Int { MissionPlacement.badge(summary) }
+    var summary: MissionSummary { store.mission.summary }
+    var badge: Int { MissionPlacement.badge(summary) }
+    /// The long press's choices for the session now.
+    var menuItems: [MissionMenu.Item] {
+        MissionMenu.items(
+            needsYou: badge, working: summary.working, canCompact: compact != nil, chatShows: store.shownLayer == .chat
+        )
+    }
 
     var body: some ToolbarContent {
         if #available(iOS 27.0, *) {
@@ -69,7 +81,7 @@ struct MissionToolbarItem: ToolbarContent {
     private var item: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                ForEach(MissionMenu.items(needsYou: badge, working: summary.working, canCompact: compact != nil), id: \.self) { entry in
+                ForEach(menuItems, id: \.self) { entry in
                     Button(MissionMenu.title(entry), systemImage: MissionMenu.symbol(entry), role: entry == .stop ? .destructive : nil) {
                         perform(entry)
                     }
@@ -87,7 +99,7 @@ struct MissionToolbarItem: ToolbarContent {
         }
     }
 
-    private func perform(_ entry: MissionMenu.Item) {
+    func perform(_ entry: MissionMenu.Item) {
         switch entry {
         case .goToRequest:
             if presentation == .sheet { store.showsMission = false }
@@ -103,6 +115,29 @@ struct MissionToolbarItem: ToolbarContent {
             // the same as the Terminal switch beside it.
             withAnimation(Motion.animation(.fade, reduce: UIAccessibility.isReduceMotionEnabled)) {
                 store.layer = .terminal
+            }
+        }
+    }
+}
+
+/// Mission control as a section of the session menu, where a compact horizontal bar keeps three
+/// items: the same toggle and the long press's choices, without Terminal, which the layer switch
+/// beside the menu already is. ⌘I is the workspace's (`WorkspaceView.shortcuts`).
+struct MissionMenuSection: View {
+    let item: MissionToolbarItem
+
+    var body: some View {
+        Section {
+            Button(MissionCopy.title, systemImage: MissionPlacement.symbol(item.presentation)) {
+                item.store.showsMission.toggle()
+            }
+            .accessibilityValue(MissionText.spoken(item.summary))
+            .accessibilityHint(MissionCopy.openHint)
+            .accessibilityIdentifier("mission.menuItem")
+            ForEach(MissionMenu.inSessionMenu(item.menuItems), id: \.self) { entry in
+                Button(MissionMenu.title(entry), systemImage: MissionMenu.symbol(entry), role: entry == .stop ? .destructive : nil) {
+                    item.perform(entry)
+                }
             }
         }
     }
@@ -129,11 +164,14 @@ private struct MissionItemLabel: View {
 }
 
 extension AppStore {
-    /// The focused tab's chat store while its chat shows and it has mission control: the one
-    /// session the bar item stands for.
+    /// The focused tab's chat store while it can show its chat and has mission control: the one
+    /// session the bar item stands for. On either layer, so the bar, its subtitle (the glance)
+    /// and the session menu are the same in the chat and the terminal. Gated on the chat
+    /// showing, the terminal's subtitle fell back to the status line, which took the width the
+    /// layer switch and the session menu need and sent both to the system's overflow.
     var missionStore: HarnessSessionStore? {
         guard let tab = focusedTab, let harness = harness(for: tab.id),
-              harness.shownLayer == .chat, harness.hasMission else { return nil }
+              harness.chatAvailable, harness.hasMission else { return nil }
         return harness
     }
 

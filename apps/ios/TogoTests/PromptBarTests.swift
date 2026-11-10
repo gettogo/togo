@@ -1,12 +1,9 @@
 import Foundation
 import Testing
-import TogoTerminal
 @testable import Togo
 
 /// The prompt bar's model: what it shows, when it moves, and what it hands back.
 @MainActor struct PromptBarTests {
-    private static let tab = TabID(hostID: UUID(), sessionID: "s-api")
-
     private static func request(_ id: String = "r-04", bib: String = "04", question: String = "Run npm test?") -> PromptRequest {
         PromptRequest(
             id: id, sessionID: "s-\(bib)", bib: bib, sessionName: "app", agentName: "Claude Code",
@@ -28,8 +25,6 @@ import TogoTerminal
         #expect(model.stage == .hidden)
         model.mode = .start
         #expect(model.stage == .start(expanded: false))
-        model.mode = .input(Self.tab)
-        #expect(model.stage == .input(Self.tab))
         let request = Self.request()
         model.mode = .request(request, position: 1, count: 3)
         #expect(model.stage == .request(request, position: 1, count: 3))
@@ -63,7 +58,7 @@ import TogoTerminal
     }
 
     @Test func startOpensOnlyInStartMode() {
-        let model = PromptBarModel(mode: .input(Self.tab))
+        let model = PromptBarModel(mode: .hidden)
         model.openStart()
         model.mode = .start
         #expect(model.stage == .start(expanded: false))
@@ -105,7 +100,7 @@ import TogoTerminal
         #expect(model.arrivals == 1)
         model.beginReply()
         #expect(model.arrivals == 1)
-        model.mode = .input(Self.tab)
+        model.mode = .hidden
         model.mode = .request(Self.request("r-3"), position: 1, count: 1)
         #expect(model.arrivals == 2)
     }
@@ -256,48 +251,6 @@ import TogoTerminal
         #expect(model.acceptsKeyAnswers)
     }
 
-    @Test func inputSendsItsTextAndClears() {
-        let model = PromptBarModel(mode: .input(Self.tab))
-        var sent: [String] = []
-        model.onSend = { tab, text in
-            #expect(tab == Self.tab)
-            sent.append(text)
-        }
-        model.inputDraft = "  "
-        model.sendInput()
-        model.inputDraft = "  ls -la\n"
-        model.sendInput()
-        #expect(sent == ["  ls -la"])
-        #expect(model.inputDraft.isEmpty)
-    }
-
-    /// Each terminal keeps what was typed for it while a request takes the bar.
-    @Test func inputDraftsStayWithTheirTerminal() {
-        let other = TabID(hostID: UUID(), sessionID: "s-web")
-        let model = PromptBarModel(mode: .input(Self.tab))
-        model.inputDraft = "git status"
-        model.mode = .request(Self.request(), position: 1, count: 1)
-        model.mode = .input(other)
-        #expect(model.inputDraft.isEmpty)
-        model.mode = .input(Self.tab)
-        #expect(model.inputDraft == "git status")
-    }
-
-    /// Only keys made of text can be sent from the bar; the rest stay on the terminal's own bar.
-    @Test func inputKeysAreOnlyKeysThatSend() {
-        let model = PromptBarModel(mode: .input(Self.tab))
-        let esc = KeyBarItem(title: "Esc", action: .steps([.text("\u{1B}")]))
-        let up = KeyBarItem(title: "Up", action: .steps([.stroke(KeyStroke(.up))]))
-        model.keyBar = KeyBarConfig(items: [
-            esc, up, KeyBarItem(title: "Ctrl", action: .ctrlLatch), KeyBarItem(title: "Paste", action: .paste),
-        ])
-        #expect(model.inputKeys == [esc])
-        var tapped: [String] = []
-        model.onKey = { _, item in tapped.append(item.title) }
-        model.tapKey(esc)
-        #expect(tapped == ["Esc"])
-    }
-
     /// Single letters can be turned off; ⌘↩ and ⌘. keep working, even while a field types.
     @Test func singleKeyAnswersCanBeTurnedOff() async {
         let model = await Self.armed()
@@ -376,11 +329,11 @@ import TogoTerminal
         typealias Stage = PromptBarModel.Stage
         func change(_ old: Stage, _ new: Stage) -> PromptBarModel.Change { PromptBarModel.change(from: old, to: new) }
         #expect(change(.start(expanded: false), .request(a, position: 1, count: 1)) == .rise(.dropIn))
-        #expect(change(.input(Self.tab), .request(a, position: 1, count: 1)) == .rise(.dropIn))
+        #expect(change(.hidden, .request(a, position: 1, count: 1)) == .rise(.dropIn))
         #expect(change(.request(a, position: 1, count: 2), .request(b, position: 1, count: 1)) == .rise(.dropIn))
         #expect(change(.replying(a, position: 1, count: 1), .request(b, position: 1, count: 1)) == .rise(.dropIn))
         #expect(change(.request(a, position: 1, count: 1), .start(expanded: false)) == .rise(.collapse))
-        #expect(change(.request(a, position: 1, count: 1), .input(Self.tab)) == .rise(.collapse))
+        #expect(change(.request(a, position: 1, count: 1), .hidden) == .rise(.collapse))
         #expect(change(.request(a, position: 1, count: 2), .request(a, position: 1, count: 3)) == .none)
         #expect(change(.request(a, position: 1, count: 1), .replying(a, position: 1, count: 1)) == .resize)
         #expect(change(.start(expanded: false), .start(expanded: true)) == .resize)
@@ -396,18 +349,5 @@ import TogoTerminal
         #expect(!model.introPending(.command, for: "a"))
         #expect(model.introPending(.beacon, for: "a"))
         #expect(model.introPending(.command, for: "b"))
-    }
-
-    /// With a hardware keyboard the key row is gone: Esc, ⌃C, Tab, ⇧Tab and the arrows still
-    /// reach the terminal from the input line, as its bytes.
-    @Test func hardwareKeysReachTheTerminal() {
-        #expect(PromptHardwareKey(name: .escape).bytes(draftEmpty: false) == "\u{1b}")
-        #expect(PromptHardwareKey(name: .control("c")).bytes(draftEmpty: false) == "\u{03}")
-        #expect(PromptHardwareKey(name: .tab).bytes(draftEmpty: true) == "\t")
-        #expect(PromptHardwareKey(name: .tab, shift: true).bytes(draftEmpty: true) == "\u{1b}[Z")
-        #expect(PromptHardwareKey(name: .up).bytes(draftEmpty: false) == "\u{1b}[A")
-        // Left and right move the caret while there is text.
-        #expect(PromptHardwareKey(name: .left).bytes(draftEmpty: false) == nil)
-        #expect(PromptHardwareKey(name: .left).bytes(draftEmpty: true) == "\u{1b}[D")
     }
 }

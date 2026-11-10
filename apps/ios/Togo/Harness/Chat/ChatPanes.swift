@@ -4,7 +4,7 @@ import UIKit
 
 /// The chat layer over each pane whose tab shows it. The terminal stays attached underneath,
 /// so switching layers never reconnects. Drawn in the panes' own layout pass, so it sits on the
-/// pane from the first frame and keeps clear of a pane's header, the compose bar and the
+/// pane from the first frame and keeps clear of a pane's header, the composer and the
 /// keyboard (`insets.bottom`).
 struct ChatPanes: View {
     /// Loops held from above (a snapshot, a UI test) stay held in a shown chat too.
@@ -30,10 +30,12 @@ struct ChatPanes: View {
             let top = geometry.showsTwoPanes ? PaneGeometry.headerHeight : 0
             let layer = store.layer(for: id)
             let harness = store.harness(for: id)
-            // The composer's own height is reserved inside the chat (`composerClearance`); what
-            // is left here is the keyboard and the home indicator.
-            let below = max(0, rect.maxY - (height - insets.bottom))
-            let bottom = max(0, below - (harness?.composerClearance ?? 0))
+            // The chat ends at the composer's top edge, above the keyboard. `insets` come from
+            // this same layout pass, so the chat's height follows the composer and the keyboard
+            // in the frame they change. (A height measured after layout and reserved inside the
+            // chat lagged a frame: every new line shrank the chat and grew it back, and the
+            // scroll position fought the anchor each time.)
+            let bottom = max(0, rect.maxY - (height - insets.bottom))
             // In book posture with one pane, the chat keeps to the leading page; the rest of the
             // pane stays ink so the terminal underneath does not show beside it.
             let page = geometry.chatFrame(of: pane) ?? rect
@@ -132,10 +134,14 @@ struct LayerToolbarItem: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Button {
-                // The terminal under the chat must not keep the keyboard.
-                if layer == .terminal { Self.resignKeyboard() }
+                // Neither layer keeps the keyboard across the switch: the terminal under the
+                // chat may not have it, and the composer stays, hidden, under the terminal.
+                Self.resignKeyboard()
                 // motion: cause → effect — the user's toggle crossfades the layers in place and
-                // turns the symbol into the other layer's; nothing else ever fades them.
+                // turns the symbol into the other layer's; nothing else ever fades them. Only
+                // opacity changes: both layers keep their frames (the composer keeps its place
+                // under the terminal, the terminal its grid under the chat), so no text moves.
+                // Under Reduce Motion the layers swap at once (`MotionTokens` .fade).
                 withAnimation(Motion.animation(.fade, reduce: reduceMotion)) { toggle() }
             } label: {
                 Label(title, systemImage: symbol)

@@ -22,6 +22,8 @@ struct TabStrip: View {
     let canOpenBeside: Bool
     /// The focused chip's surface slides from chip to chip.
     @Namespace private var selection
+    /// Which ends of the strip have chips past them, so that end fades out.
+    @State private var overflow = TabStripOverflow()
     let onSelect: (TabID) -> Void
     let onOpenBeside: (TabID) -> Void
     let onClose: (TabID) -> Void
@@ -55,6 +57,14 @@ struct TabStrip: View {
                 .motion(.tabSettle, value: selected)
             }
             .scrollIndicators(.hidden)
+            .onScrollGeometryChange(for: TabStripOverflow.self) { geometry in
+                TabStripOverflow(visible: geometry.visibleRect, contentWidth: geometry.contentSize.width)
+            } action: { _, new in
+                overflow = new
+            }
+            // Chips that run past an end fade into it rather than being cut, and the strip ends
+            // at the window's safe area, short of a Duo's vertical bar.
+            .mask { TabStripFade(overflow: overflow) }
             .onChange(of: selected) { _, id in
                 guard let id else { return }
                 // motion: continuity — the strip scrolls the chosen chip toward its centre.
@@ -112,6 +122,39 @@ struct TabStrip: View {
             }
             OpenInWindowButton(tab: chip.id)
             Button(WorkspaceCopy.closeTab, systemImage: "xmark") { onClose(chip.id) }
+        }
+    }
+}
+
+/// Whether chips lie past the strip's leading or trailing end.
+struct TabStripOverflow: Equatable {
+    var leading = false
+    var trailing = false
+
+    init(leading: Bool = false, trailing: Bool = false) {
+        self.leading = leading
+        self.trailing = trailing
+    }
+
+    /// `visible` is the strip's visible part in content coordinates.
+    init(visible: CGRect, contentWidth: CGFloat) {
+        leading = visible.minX > 1
+        trailing = visible.maxX < contentWidth - 1
+    }
+}
+
+/// The strip's mask: opaque, with a fade at each end that has chips past it.
+private struct TabStripFade: View {
+    static let width: CGFloat = 28
+    let overflow: TabStripOverflow
+
+    var body: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: overflow.leading ? Self.width : 0)
+            Color.black
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: overflow.trailing ? Self.width : 0)
         }
     }
 }

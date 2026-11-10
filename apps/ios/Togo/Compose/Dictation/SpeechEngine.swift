@@ -42,7 +42,7 @@ enum DictationError: Error, Equatable {
     var onLevel: (@MainActor (Float) -> Void)? { get set }
 }
 
-/// The engine the app dictates with. One microphone, so one engine for every compose bar: it
+/// The engine the app dictates with. One microphone, so one engine for every dictation: it
 /// runs Apple's speech or Whisper, as this device's settings choose.
 @MainActor enum SpeechEngines {
     static let selected = SelectedSpeechEngine(choice: .shared)

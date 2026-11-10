@@ -52,8 +52,10 @@ enum FilesCopy {
     }
 }
 
-/// A folder of the working tree, or of a commit when `ref` is set. Folders come first, then
-/// files, each by name; names starting with a dot stay behind a toggle.
+/// A folder of the working tree, or of a commit when `ref` is set, as a tree: folders open in
+/// place (`FilesTree.swift`). Folders come first, then files, each by name; names starting with
+/// a dot stay behind a toggle. In the working tree, changed files and the folders holding them
+/// are marked. A search looks through every file of the repository.
 @MainActor @Observable final class FilesModel {
     enum State: Equatable {
         case loading, ready
@@ -82,13 +84,26 @@ enum FilesCopy {
     private(set) var entries: [DirEntry] = []
     var showsHidden = false
 
+    /// Folders opened in place, by path.
+    var expanded: Set<String> = []
+    /// What each opened folder holds, by path; the root's is `entries`.
+    var folders: [String: FolderListing] = [:]
+    /// The working tree's changes, by path as this tree names them.
+    var marks = ChangeMarks()
+    let search: FileSearch
+
     init(subject: ReviewSubject, services: any ReviewServices, path: String, ref: String?, base: ReviewPathBase = .session) {
         self.subject = subject
         self.services = services
         self.path = path
         self.ref = ref
         self.base = base
+        search = FileSearch(subject: subject, services: services, ref: ref)
+        connectSearch()
     }
+
+    /// For the tree's own reads, in `FilesTree.swift`.
+    var reviewServices: any ReviewServices { services }
 
     var title: String {
         path.isEmpty ? DisplayText.clean(subject.title) : DisplayText.clean(String(path.split(separator: "/").last ?? ""))
@@ -102,9 +117,12 @@ enum FilesCopy {
 
     var hiddenCount: Int { entries.filter { $0.name.hasPrefix(".") }.count }
 
-    var items: [Item] {
+    var items: [Item] { items(of: entries, in: path) }
+
+    /// `entries` of `folder` as rows: hidden names left out unless asked for, folders first.
+    func items(of entries: [DirEntry], in folder: String) -> [Item] {
         let shown = showsHidden ? entries : entries.filter { !$0.name.hasPrefix(".") }
-        return shown.map(item).sorted { a, b in
+        return shown.map { item($0, in: folder) }.sorted { a, b in
             if (a.kind == .folder) != (b.kind == .folder) { return a.kind == .folder }
             return a.name.localizedStandardCompare(b.name) == .orderedAscending
         }
@@ -115,17 +133,21 @@ enum FilesCopy {
         await load()
     }
 
+    /// Reads the root again, the folders open in it, and what changed.
     func load() async {
         do {
             entries = try await services.listDir(subject, path: path, ref: ref, base: base).entries
             state = .ready
         } catch {
             state = .failed(ServiceErrors.message(error))
+            return
         }
+        await reloadOpenFolders()
+        await loadMarks()
     }
 
-    private func item(_ entry: DirEntry) -> Item {
-        let full = Self.join(path, entry.name)
+    private func item(_ entry: DirEntry, in folder: String) -> Item {
+        let full = Self.join(folder, entry.name)
         let kind: Item.Kind
         switch entry.kind {
         case .symlink?: kind = .link

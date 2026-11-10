@@ -214,13 +214,21 @@ public actor HelperClient {
         try await readyCall(.gitDiff, params, needs: params.commit == nil ? Capability.git : Capability.gitWrite)
     }
 
+    /// A graph log needs `gitfiles.v1`; asked of an older helper the flag is dropped, so the
+    /// log still comes, in date order and without parents.
     public func gitLog(_ params: GitLogParams) async throws -> [GitCommit] {
+        var params = params
+        if params.graph != nil, !(capabilities?.contains(Capability.gitFiles) ?? false) { params.graph = nil }
         let log: GitLog = try await readyCall(.gitLog, params, needs: Capability.git)
         return log.commits
     }
 
     public func gitBranches(id: String) async throws -> GitBranches {
         try await readyCall(.gitBranches, SessionIDParams(id: id), needs: Capability.git)
+    }
+
+    public func gitFiles(_ params: GitFilesParams) async throws -> GitFiles {
+        try await readyCall(.gitFiles, params, needs: Capability.gitFiles)
     }
 
     // Writes throw `.conflict` with the helper's reason (see `HelperError.gitConflict`)

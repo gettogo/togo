@@ -4,6 +4,7 @@ import TogoKit
 /// One pane of the workspace: a tab's terminal, under its own header while two panes are on
 /// screen. A tap anywhere in it gives it focus, and a tab chip dropped on it opens there.
 struct PaneView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let tab: WorkspaceTab?
     let pane: Pane
     let store: AppStore
@@ -111,7 +112,9 @@ struct PaneView: View {
         )
         let reconnecting = tab.link.isReconnecting
         return ZStack {
-            Color.togoInk
+            // The theme's own background, so a dimmed or not yet drawn terminal shows its
+            // canvas rather than the app's (a dark theme dimmed over light ink read as grey).
+            TerminalBackdrop.resolve(store.services.settings, system: colorScheme).background
             TerminalSlot(tab: tab.id, terminals: terminals)
                 .id(tab.id)
                 .opacity(Self.terminalOpacity(for: tab.link))

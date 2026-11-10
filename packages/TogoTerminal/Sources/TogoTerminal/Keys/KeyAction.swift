@@ -16,10 +16,13 @@ public enum KeyAction: Hashable, Codable, Sendable {
     case paste
     case hideKeyboard
     case dpad
-    /// Opens or closes the app's compose bar; the bar itself sends nothing.
+    /// Saved by earlier builds for the key that opened a compose bar. The terminal has no
+    /// composer any more: a bar that still holds it reads it back as `attach`.
     case compose
-    /// Opens the compose bar and listens; the words land in the bar, never in the terminal.
+    /// Listens, then types the words it heard into the terminal. It never presses Enter.
     case dictate
+    /// Opens the app's photo picker; the picture goes to the machine and its path is typed.
+    case attach
 }
 
 @MainActor

@@ -4,7 +4,7 @@ import TogoKit
 @testable import Togo
 
 /// What the prompt bar holds: the oldest request first with its place in the queue, a reply
-/// kept while its request waits, then the focused terminal's input, then the start line.
+/// kept while its request waits, and otherwise nothing: the bar is never a terminal's input.
 @MainActor struct PromptFeedTests {
     private let services = FakeAppServices(hosts: Samples.hosts)
     private let four = TabID(hostID: Samples.studio, sessionID: "s-04")
@@ -17,10 +17,10 @@ import TogoKit
     }
 
     private func mode(
-        _ requests: [PromptRequest], current: PromptBarModel.Mode = .start, focused: TabID? = nil,
-        composing: Bool = false, hasMachines: Bool = true
+        _ requests: [PromptRequest], current: PromptBarModel.Mode = .start, hasMachines: Bool = true,
+        composerTyping: Bool = false
     ) -> PromptBarModel.Mode {
-        PromptFeed.mode(requests: requests, current: current, focused: focused, composing: composing, hasMachines: hasMachines)
+        PromptFeed.mode(requests: requests, current: current, hasMachines: hasMachines, composerTyping: composerTyping)
     }
 
     // MARK: Queue
@@ -88,30 +88,18 @@ import TogoKit
 
     // MARK: Chat
 
-    /// Over a chat the chat's composer is the one place to type: no terminal line, no start line.
-    @Test func aChatHasNoTerminalLineUnderIt() {
-        let over = PromptFeed.mode(requests: [], current: .start, focused: four, composing: false, hasMachines: true, chatShown: true)
-        #expect(over == .hidden)
+    /// Over a chat the chat's composer is the one place to type: no input line, no start line.
+    @Test func aChatHasNoInputLineUnderIt() {
+        #expect(mode([]) == .hidden)
         // Another session's request still rises.
-        let other = PromptFeed.mode(
-            requests: [request("a")], current: .start, focused: four, composing: false, hasMachines: true, chatShown: true
-        )
-        #expect(other == .request(request("a"), position: 1, count: 1))
+        #expect(mode([request("a")]) == .request(request("a"), position: 1, count: 1))
     }
 
     /// While the chat's composer holds the keyboard, another session's request waits off screen
     /// so it never covers the field or its @ menu; a reply already being typed stays.
     @Test func aRequestWaitsWhileTheComposerTypes() {
-        let typing = PromptFeed.mode(
-            requests: [request("a")], current: .start, focused: four, composing: false, hasMachines: true,
-            chatShown: true, composerTyping: true
-        )
-        #expect(typing == .hidden)
-        let replying = PromptFeed.mode(
-            requests: [request("a")], current: .replying(request("a")), focused: four, composing: false,
-            hasMachines: true, chatShown: true, composerTyping: true
-        )
-        #expect(replying == .replying(request("a")))
+        #expect(mode([request("a")], composerTyping: true) == .hidden)
+        #expect(mode([request("a")], current: .replying(request("a")), composerTyping: true) == .replying(request("a")))
     }
 
     /// The bar leaves out a chat's own request only when the chat draws it (A1 C3); a chat with
@@ -150,19 +138,11 @@ import TogoKit
         #expect(mode([request("a")], current: .hidden) == .request(request("a"), position: 1, count: 1))
     }
 
-    @Test func requestsWinOverTheTerminalAndTheComposeBar() {
-        #expect(mode([request("a")], focused: four) == .request(request("a"), position: 1, count: 1))
-        #expect(mode([request("a")], composing: true) == .request(request("a"), position: 1, count: 1))
-    }
-
-    /// New session is a bar button wherever the roster is, so with no terminal the bar goes.
-    @Test func nothingWaitingIsTheTerminalsInputOrNothing() {
-        #expect(mode([], focused: four) == .input(four))
-        #expect(mode([], focused: nil) == .hidden)
-    }
-
-    @Test func theComposeBarTakesOverTheInput() {
-        #expect(mode([], focused: four, composing: true) == .hidden)
+    /// A terminal takes the typing itself, so with nothing waiting the bar goes, terminal or
+    /// not; New session is a bar button wherever the roster is.
+    @Test func nothingWaitingIsNothing() {
+        #expect(mode([]) == .hidden)
+        #expect(mode([], current: .hidden) == .hidden)
     }
 
     @Test func noMachineHidesTheBar() {

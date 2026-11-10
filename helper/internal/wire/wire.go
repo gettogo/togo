@@ -25,6 +25,8 @@ const (
 	CapGit       = "git.v1"
 	CapPorts     = "ports.v1"
 	CapGitWrite  = "gitwrite.v1"
+	// CapGitFiles: git.files, and git.log takes graph and answers parents.
+	CapGitFiles  = "gitfiles.v1"
 	CapLaunch    = "launch.v1"
 	CapLifecycle = "lifecycle.v1"
 	CapRestore   = "restore.v1"
@@ -49,6 +51,7 @@ const (
 	MethodGitDiff         = "git.diff"
 	MethodGitLog          = "git.log"
 	MethodGitBranches     = "git.branches"
+	MethodGitFiles        = "git.files"
 	MethodGitStage        = "git.stage"
 	MethodGitUnstage      = "git.unstage"
 	MethodGitDiscard      = "git.discard"

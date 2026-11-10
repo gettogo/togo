@@ -8,14 +8,6 @@ struct PanePromotion: Equatable, Sendable {
 }
 
 extension AppStore {
-    /// How the compose bar names where its text goes while two panes are on screen, such as
-    /// "04". With one pane the header already says it.
-    var composeTarget: String? {
-        guard panesVisible, workspace.secondary != nil, let tab = focusedTab else { return nil }
-        let label = chipLabel(for: tab)
-        return label.bib ?? label.name
-    }
-
     /// Called by the workspace when its arrangement changes. Folding to one pane shows the
     /// focused one, so a focused secondary trades places with the primary; opening again puts
     /// both back where they were, unless the user has moved on to other tabs meanwhile.

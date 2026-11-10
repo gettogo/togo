@@ -5,8 +5,11 @@ import TogoKit
 /// Words on the history screens, under `review.history.`.
 enum HistoryCopy {
     static let title = String(localized: "review.history.title", defaultValue: "History")
-    static let branches = String(localized: "review.history.branches", defaultValue: "Branches")
-    static let commits = String(localized: "review.history.commits", defaultValue: "Commits")
+    static let branch = String(localized: "review.history.branch", defaultValue: "Branch")
+    static let detached = String(localized: "review.history.detached", defaultValue: "Detached HEAD")
+    static let showFiles = String(localized: "review.history.showFiles", defaultValue: "Show changed files")
+    static let copyHash = String(localized: "review.history.copyHash", defaultValue: "Copy hash")
+    static let merge = String(localized: "review.history.merge", defaultValue: "Merge")
     static let loading = String(localized: "review.history.loading", defaultValue: "Reading the history")
     static let loadingFiles = String(localized: "review.history.loadingFiles", defaultValue: "Listing the files")
     static let failed = String(localized: "review.history.failed", defaultValue: "Couldn't read the history")
@@ -45,8 +48,15 @@ enum HistoryCopy {
         }
     }
 
-    static func commitsOn(_ branch: String) -> String {
-        String(localized: "review.history.commitsOn", defaultValue: "Commits on \(branch)")
+    static func filesChanged(_ count: Int) -> String {
+        count == 1
+            ? String(localized: "review.history.fileChanged", defaultValue: "1 file")
+            : String(localized: "review.history.filesChanged", defaultValue: "\(count) files")
+    }
+
+    /// "main (current)" in the branch menu.
+    static func current(_ branch: String) -> String {
+        String(localized: "review.history.currentBranch", defaultValue: "\(branch) (current)")
     }
 
     static func added(_ count: Int) -> String {
@@ -82,9 +92,9 @@ extension GitBranches.Branch {
     var displayName: String { DisplayText.clean(name) }
 }
 
-/// The log of the session's repository: local branches, and the commits of one of them.
-/// Commits come in pages of 50, up to the 200 the helper serves; each page asks for the whole
-/// log so far, since the helper takes a limit and no offset.
+/// The log of one branch of the session's repository, the current one unless another is picked,
+/// with the lanes of its commit graph. Commits come in pages of 50, up to the 200 the helper
+/// serves; each page asks for the whole log so far, since the helper takes a limit and no offset.
 @MainActor @Observable final class HistoryModel {
     enum State: Equatable {
         case loading, ready
@@ -99,11 +109,17 @@ extension GitBranches.Branch {
     private let now: () -> Date
 
     private(set) var state: State = .loading
-    /// The current branch first, then the others by name.
+    /// The current branch first, then the others by name, for the branch menu.
     private(set) var branches: [GitBranches.Branch] = []
-    private(set) var commits: [GitCommit] = []
-    /// The branch the log is filtered to; nil follows the current one.
+    private(set) var commits: [GitCommit] = [] {
+        didSet { graph = HistoryGraph.rows(commits) }
+    }
+    /// One row of lanes per commit, in step with `commits`.
+    private(set) var graph: [HistoryGraph.Row] = []
+    /// The branch picked in the menu; nil follows the current one.
     private(set) var selectedRef: String?
+    /// The checked-out branch; nil on a detached HEAD.
+    private(set) var currentBranch: String?
     private(set) var limit = HistoryModel.pageSize
     private(set) var loadingMore = false
     private(set) var moreFailed = false
@@ -135,6 +151,7 @@ extension GitBranches.Branch {
             let page = try await services.log(subject, ref: ref, limit: limit)
             guard mine == generation else { return }
             branches = Self.ordered(result)
+            currentBranch = result.current ?? result.branches.first(where: \.current)?.name
             commits = page
             state = .ready
         } catch {
@@ -143,9 +160,17 @@ extension GitBranches.Branch {
         }
     }
 
-    /// Filters the log to a branch; choosing the one already chosen goes back to the current branch.
+    /// The branch the log shows, for the menu's label: the one picked, else the current one.
+    var shownBranch: String? { selectedRef ?? currentBranch }
+
+    /// The widest row of lanes, so every row draws its graph in one column width.
+    var graphWidth: Int { graph.map(\.width).max() ?? 1 }
+
+    /// Shows the log of `branch`; the current branch is followed as HEAD moves.
     func select(branch: String) async {
-        selectedRef = selectedRef == branch ? nil : branch
+        let ref = branch == currentBranch ? nil : branch
+        guard ref != selectedRef else { return }
+        selectedRef = ref
         await reloadLog()
     }
 
@@ -167,7 +192,11 @@ extension GitBranches.Branch {
         }
     }
 
-    func route(for commit: GitCommit) -> ReviewRoute { .commit(commit) }
+    /// A commit opens on its diff, every file it changed one after another.
+    func route(for commit: GitCommit) -> ReviewRoute { .diff(.commit(hash: commit.hash, path: nil)) }
+
+    /// The list of the files a commit changed, with a way into the tree as it was.
+    func filesRoute(for commit: GitCommit) -> ReviewRoute { .commit(commit) }
 
     /// "3 hours ago", measured from the model's clock.
     func when(_ commit: GitCommit) -> String {

@@ -17,6 +17,8 @@ import TogoKit
     func listDir(_ s: ReviewSubject, path: String, ref: String?, base: ReviewPathBase) async throws -> ListDirResult
     func log(_ s: ReviewSubject, ref: String?, limit: Int) async throws -> [GitCommit]
     func branches(_ s: ReviewSubject) async throws -> GitBranches
+    /// Every file of the repository, or of the commit `ref`, by repository path (`gitfiles.v1`).
+    func files(_ s: ReviewSubject, ref: String?) async throws -> GitFiles
     func stage(_ s: ReviewSubject, paths: [String], seen: [String: GitSeen]) async throws -> GitStatus
     func unstage(_ s: ReviewSubject, paths: [String], seen: [String: GitSeen]) async throws -> GitStatus
     func discard(_ s: ReviewSubject, paths: [String], seen: [String: GitSeen]) async throws -> GitStatus
@@ -31,6 +33,9 @@ import TogoKit
 }
 
 extension ReviewServices {
+    /// Services without a file list: the search falls back to the folders already read.
+    func files(_ s: ReviewSubject, ref: String?) async throws -> GitFiles { throw ReviewUnavailable() }
+
     func read(_ s: ReviewSubject, path: String, ref: String?) async throws -> FsReadResult {
         try await read(s, path: path, ref: ref, base: .session)
     }

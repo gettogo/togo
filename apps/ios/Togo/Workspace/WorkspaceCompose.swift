@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import TogoKit
 import TogoTerminal
@@ -15,40 +16,47 @@ struct PastedImage: Equatable {
 }
 
 extension AppStore {
-    /// The Compose key opens the bar for its tab, or closes it when it is already open.
-    func toggleCompose(_ id: TabID) {
-        // Zen mode hides the compose bar; the Compose key waits until zen ends.
-        guard !zen || composing == id else { return }
-        composing = composing == id ? nil : id
+    /// The Attach key: the photo picker for the tab's terminal, the picture then sent to its
+    /// machine and its path typed. Zen mode keeps the key away.
+    func attach(_ id: TabID) {
+        guard !zen else { return }
+        focusPane(showing: id)
+        attaching = id
         TutorialTip.workspace.done()
     }
 
-    /// A pasted image goes to the compose bar's image flow, which uploads it or, on a machine
-    /// that cannot take one, says so. The pasteboard is only read, never changed.
+    /// A pasted image goes to the tab's image flow, which uploads it or, on a machine that
+    /// cannot take one, says so. The pasteboard is only read, never changed.
     func pasteImage(_ data: Data, into id: TabID) {
-        composing = id
+        focusPane(showing: id)
         pastedImage = PastedImage(tab: id, data: data)
     }
 
-    /// The tab the compose bar writes to: the focused pane's while two are on screen.
+    /// The tab the workspace's input belongs to: the focused pane's while two are on screen.
     var composeTab: WorkspaceTab? {
         panesVisible ? focusedTab : selectedTab
     }
 
-    /// The Dictate key: opens the tab's compose bar and starts a dictation that listens until
-    /// the next tap. The words land in the bar; nothing reaches the session until Send.
+    /// The Dictate key: listens until the next tap, then types the words into the tab's
+    /// terminal. Nothing presses Enter; the session's own prompt holds them.
     func dictate(_ id: TabID) {
-        // Dictation listens in the compose bar, which zen mode keeps away.
+        // Zen mode keeps the input tools away.
         guard !zen else { return }
-        if panesVisible {
-            if id == workspace.secondary { workspace.focused = .secondary }
-            if id == workspace.selected { workspace.focused = .primary }
-        }
-        composing = id
+        focusPane(showing: id)
         DictationRequests.shared.set(DictationRequests.Request(tab: id, at: .now), for: self)
     }
 
-    /// The tab whose compose bar the Dictate key asked to listen, until a bar takes it.
+    /// A key pressed in the other pane's terminal moves focus there, so what it starts shows.
+    private func focusPane(showing id: TabID) {
+        guard panesVisible else { return }
+        if id == workspace.secondary {
+            focus(.secondary)
+        } else if id == workspace.selected {
+            focus(.primary)
+        }
+    }
+
+    /// The tab whose input tools the Dictate key asked to listen, until they take it.
     var dictationRequest: TabID? {
         DictationRequests.shared.request(for: self)?.tab
     }
@@ -62,13 +70,13 @@ extension AppStore {
         return request.tab == id && shown && now - request.at <= DictationRequests.lifetime
     }
 
-    /// Puts dictated words from Settings into the draft of the tab on screen and opens its bar.
+    /// Dictated words from Settings wait for the tab on screen (`pendingInput`): its chat's
+    /// composer takes them, or its terminal has them typed. The workspace comes forward.
     func insertDictation(_ words: String) {
         let clean = PasteText.sanitize(words)
         guard let tab = composeTab, !clean.isEmpty else { return }
-        let draft = drafts[tab.id] ?? ""
-        drafts[tab.id] = DictationModel.needsSpace(between: draft, and: clean) ? draft + " " + clean : draft + clean
-        composing = tab.id
+        let waiting = pendingInput[tab.id] ?? ""
+        pendingInput[tab.id] = DictationModel.needsSpace(between: waiting, and: clean) ? waiting + " " + clean : waiting + clean
         path = []
         workspaceOpen = true
     }
@@ -79,7 +87,7 @@ extension AppStore {
     }
 }
 
-/// Dictate key presses waiting for a compose bar, one per window store. Kept beside the store
+/// Dictate key presses waiting for a terminal's input tools, one per window store. Kept beside the store
 /// rather than in it so the store's own file stays as it is. Stores are held weakly, so a
 /// closed window's request goes with it.
 @MainActor @Observable final class DictationRequests {
@@ -112,7 +120,7 @@ extension AppStore {
     }
 }
 
-extension ComposeModel {
+extension TerminalInputModel {
     /// Starts the dictation the Dictate key asked for, if it asked for this tab just now.
     func takeDictation(for id: TabID, from store: AppStore, shown: Bool) async {
         guard store.takeDictationRequest(for: id, shown: shown) else { return }
@@ -120,22 +128,35 @@ extension ComposeModel {
     }
 }
 
-/// The compose bar under the tab on screen while it is open, or the smart command line under a
-/// tab showing its chat. Each tab's draft lives in the store until it is sent or the tab closes.
+/// The input under the tab on screen. A tab showing its chat has the smart command line, always
+/// at its foot. A tab showing its terminal has no composer: the terminal takes the typing, with
+/// the key bar on the keyboard, and only the status of its input tools (dictation, a picture on
+/// its way) floats over its foot while they work. Words waiting for a tab (`pendingInput`) go
+/// to its composer or are typed into its terminal.
 struct WorkspaceComposeBar: View {
     @Environment(\.windowID) private var window
+    @Environment(\.loopsPaused) private var loopsPaused
     let store: AppStore
     let terminals: TerminalPool
-    @State private var models: [TabID: ComposeModel] = [:]
+    @State private var tools: [TabID: TerminalInputModel] = [:]
+    @State private var photo: PhotosPickerItem?
+    /// The tab the open photo picker sends to.
+    @State private var picking: TabID?
 
     var body: some View {
-        Group {
-            // A tab showing its chat has the smart command line instead, always at its foot.
+        ZStack(alignment: .bottom) {
             // While the chat is still expected (the loader) nothing shows: no composer that
-            // cannot type, no terminal bar that is about to go (S4).
-            if let tab = store.composeTab, SessionInput(store.layer(for: tab.id)) == .composer,
-               let model = store.harnessTabs.composer(for: tab.id) {
+            // cannot type, no terminal status that is about to go (S4).
+            // Under the terminal layer the composer keeps its place, only hidden, so the bar's
+            // height, and with it the chat's frame, never changes when the layers switch: the
+            // chat's text stays put while it crossfades instead of sliding by the composer's
+            // height. The terminal reaches under the bar (`WorkspacePanes`), so the hidden
+            // composer takes nothing from it.
+            if let tab = store.composeTab, let model = chatComposer(for: tab.id) {
+                let shown = SessionInput(store.layer(for: tab.id)) == .composer
                 SmartCommandLine(model: model)
+                    // The terminal under the chat, for the composer's terminal peek.
+                    .onAppear { model.peekTerminal = .live { [terminals] in terminals.handle(for: tab.id) } }
                     // The palette and the screens it opens follow links as the chat does.
                     .environment(\.openURL, OpenURLAction { [store] url in store.openChatLink(url, from: tab.id) })
                     // Under the chat's centred column on a wide window, not at the pane's edge.
@@ -144,66 +165,146 @@ struct WorkspaceComposeBar: View {
                     .modifier(ComposerMargins())
                     // A little air above the keyboard, and above the home indicator.
                     .padding(.bottom, ComposerMargins.bottom)
-                    // The chat keeps its last card clear of this height (`composerClearance`).
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                        guard let harness = store.harness(for: tab.id), harness.composerClearance != height else { return }
-                        harness.composerClearance = height
-                    }
+                    // motion: cause → effect — fades with the chat in the toggle's own
+                    // transaction; opacity only, so nothing above it moves.
+                    .opacity(shown ? 1 : 0)
+                    // Hidden, it takes no touches, keys, focus or VoiceOver, and its loops hold.
+                    .disabled(!shown)
+                    .allowsHitTesting(shown)
+                    .accessibilityHidden(!shown)
+                    .environment(\.loopsPaused, loopsPaused || !shown)
                     .id(tab.id)
                     // motion: state change — another tab's composer replaces this one as a cut.
                     .transition(.identity)
-            } else if let tab = store.composeTab, SessionInput(store.layer(for: tab.id)) == .terminal,
-               store.composing == tab.id, terminals.shows(tab.id, in: window),
-               let handle = terminals.handle(for: tab.id) {
-                // With two panes on screen the bar says which one it writes to.
-                ComposeBar(model: model(for: tab, handle: handle), focusOnAppear: true, target: store.composeTarget)
-                    .id(tab.id)
             }
+            if let id = terminalTab, let model = tools[id] {
+                // Over the terminal's last rows, never resizing it: the grid and the remote keep
+                // their size while dictation listens or a picture goes.
+                TerminalInputStatus(model: model)
+                    .frame(maxWidth: ChatLayout.composerWidth)
+                    .frame(maxWidth: .infinity)
+                    .modifier(ComposerMargins())
+                    .padding(.bottom, ComposerMargins.bottom)
+                    .id(id)
+                    // motion: state change — another tab's status replaces this one as a cut.
+                    .transition(.identity)
+            }
+        }
+        .photosPicker(isPresented: pickerShown, selection: $photo, matching: .images)
+        .onChange(of: photo) { _, item in
+            guard let item, let id = picking, let model = tools[id] else { return }
+            photo = nil
+            picking = nil
+            Task { await model.images.load { try await item.loadTransferable(type: Data.self) } }
+        }
+        .onChange(of: store.attaching, initial: true) { _, id in
+            guard let id else { return }
+            store.attaching = nil
+            guard let model = model(for: id) else { return }
+            if model.images.picksPhotos {
+                picking = id
+            } else {
+                model.images.explainUnsupported()
+            }
+        }
+        .onChange(of: terminalTab) { old, _ in
+            // A terminal that leaves the screen, or goes under its chat, stops listening; what
+            // was heard is still typed.
+            if let old { tools[old]?.dictation?.relinquish() }
         }
         .onChange(of: store.dictationRequest, initial: true) {
             guard let id = store.dictationRequest else { return }
-            guard let tab = store.workspace.tabs.first(where: { $0.id == id }), terminals.shows(id, in: window),
-                  let handle = terminals.handle(for: id) else {
+            guard terminals.shows(id, in: window), let model = model(for: id) else {
                 // Not on screen here: drop the request rather than keep it for later.
                 _ = store.takeDictationRequest(for: id, shown: false)
                 return
             }
             // Taken here, before any await, so the request is used exactly once.
             guard store.takeDictationRequest(for: id, shown: true) else { return }
-            let dictation = model(for: tab, handle: handle).dictation
+            let dictation = model.dictation
             Task { await dictation?.toggle() }
         }
         .onChange(of: store.services.settings, initial: true) { _, settings in
             SpeechEngines.select(settings)
         }
         .onChange(of: store.services.settings.dictationLocale) { _, identifier in
-            for model in models.values {
+            for model in tools.values {
                 model.dictation?.locale = SpeechEngines.locale(identifier)
             }
         }
         .onChange(of: store.pastedImage) {
-            guard let pasted = store.pastedImage, let tab = store.workspace.tabs.first(where: { $0.id == pasted.tab }),
-                  let handle = terminals.handle(for: tab.id) else { return }
+            guard let pasted = store.pastedImage, let model = model(for: pasted.tab) else { return }
             store.pastedImage = nil
-            let model = model(for: tab, handle: handle)
             Task { await model.images.begin(pasted.data) }
         }
-        .onChange(of: store.replyDrafts) {
-            // A reply that was not delivered lands in an open bar too, after what is typed there.
-            for (id, model) in models {
-                guard let draft = store.takeReplyDraft(id) else { continue }
-                model.text = model.text.isEmpty ? draft : model.text + "\n" + draft
+        .onChange(of: waitingKey, initial: true) { deliverPendingInput() }
+    }
+
+    /// The tab whose terminal takes the typing on screen here: the focused one, showing its
+    /// terminal layer in this window.
+    private var terminalTab: TabID? {
+        guard let tab = store.composeTab, SessionInput(store.layer(for: tab.id)) == .terminal,
+              terminals.shows(tab.id, in: window) else { return nil }
+        return tab.id
+    }
+
+    private var pickerShown: Binding<Bool> {
+        Binding(get: { picking != nil }, set: { if !$0 { picking = nil } })
+    }
+
+    /// The chat's composer for a tab whose session has a chat, whichever layer shows.
+    private func chatComposer(for id: TabID) -> CommandLineModel? {
+        guard store.harness(for: id)?.chatAvailable == true, store.layer(for: id) != .pending else { return nil }
+        return store.harnessTabs.composer(for: id)
+    }
+
+    // MARK: Waiting words
+
+    /// What decides whether waiting words can go: each waiting tab's layer and link.
+    private var waitingKey: [String] {
+        store.pendingInput.keys.sorted { $0.sessionID < $1.sessionID }.map { id in
+            "\(id.hostID.uuidString)/\(id.sessionID)/\(store.layer(for: id).rawValue)/\(isLive(id))"
+        }
+    }
+
+    /// Words waiting for a tab on screen here go to the input it shows: the chat's composer,
+    /// after what is typed there, or the terminal once it is live. Typed as a paste, never with
+    /// Enter, so they wait at the session's prompt. A tab still deciding keeps them.
+    private func deliverPendingInput() {
+        for id in Array(store.pendingInput.keys) where terminals.shows(id, in: window) {
+            switch store.layer(for: id) {
+            case .chat:
+                guard let composer = chatComposer(for: id), let text = store.takePendingInput(id) else { continue }
+                composer.draft = composer.draft.isEmpty ? text : composer.draft + "\n" + text
+            case .terminal:
+                guard isLive(id), let handle = terminals.handle(for: id), let text = store.takePendingInput(id) else { continue }
+                handle.paste(text)
+            case .pending:
+                continue
             }
         }
     }
 
-    private func model(for tab: WorkspaceTab, handle: TerminalHandle) -> ComposeModel {
-        if let model = models[tab.id] { return model }
+    private func isLive(_ id: TabID) -> Bool {
+        switch store.workspace.tabs.first(where: { $0.id == id })?.link {
+        case .live?, .roaming?: true
+        default: false
+        }
+    }
+
+    // MARK: Tools
+
+    /// The tab's input tools, made the first time they are needed. Nil when the tab is gone or
+    /// has no terminal attached.
+    private func model(for id: TabID) -> TerminalInputModel? {
+        if let model = tools[id] { return model }
+        guard let tab = store.workspace.tabs.first(where: { $0.id == id }), let handle = terminals.handle(for: id) else {
+            return nil
+        }
         let store = self.store
-        let id = tab.id
-        // The model outlives the terminal it was made for: Try again, a transport change or a
+        // The tools outlive the terminal they were made for: Try again, a transport change or a
         // tab let go past the pool's limit attaches a new one. Text goes to the terminal the
-        // tab has when it is sent, never to a stopped one that would drop it.
+        // tab has when it is typed, never to a stopped one that would drop it.
         let current: @MainActor () -> TerminalHandle = { [terminals] in terminals.handle(for: id) ?? handle }
         let images = ImagePasteFlow(
             support: store.imageSupport(for: tab.hostID),
@@ -212,21 +313,12 @@ struct WorkspaceComposeBar: View {
             },
             paste: { current().paste($0) }
         )
-        let draft = Binding(get: { store.drafts[id] ?? "" }, set: { store.drafts[id] = $0.isEmpty ? nil : $0 })
         let speech = DictationSpeech(
             engine: SpeechEngines.shared, locale: SpeechEngines.locale(store.services.settings.dictationLocale),
             history: DictationHistory()
         )
-        // A reply that was not delivered waits here, after any draft already kept for the tab.
-        if let reply = store.takeReplyDraft(id) {
-            let kept = store.drafts[id] ?? ""
-            store.drafts[id] = kept.isEmpty ? reply : kept + "\n" + reply
-        }
-        let model = ComposeModel(
-            draft: draft, history: ComposeHistory(hostID: tab.hostID, sessionID: tab.sessionID), images: images,
-            paste: { current().paste($0) }, pressEnter: { current().pressEnter() }, speech: speech
-        )
-        models[tab.id] = model
+        let model = TerminalInputModel(images: images, paste: { current().paste($0) }, speech: speech)
+        tools[id] = model
         return model
     }
 }

@@ -9,6 +9,7 @@ import UIKit
 /// terminal controllers, so folding, unfolding or resizing the window moves terminals without
 /// rebuilding or reconnecting them.
 struct WorkspacePanes<Overlay: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.fold) private var fold
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,7 +63,7 @@ struct WorkspacePanes<Overlay: View>: View {
                 }
                 .overlay {
                     // A new cover for each settle: it arrives dimming the panes and lifts away.
-                    PaneCover().id(settle.generation)
+                    PaneCover(color: canvas(report.geometry)).id(settle.generation)
                 }
                 .preference(key: PanesReport.Key.self, value: report)
                 .onChange(of: report.geometry.showsTwoPanes, initial: true) { _, visible in
@@ -87,15 +88,6 @@ struct WorkspacePanes<Overlay: View>: View {
         // the bottom edge and a keyboard never rearranges them.
         .ignoresSafeArea(.container, edges: .bottom)
         .ignoresSafeArea(.keyboard)
-        // A Compose key pressed in the other pane's terminal moves focus there with it.
-        .onChange(of: store.composing) { _, id in
-            guard let id, store.panesVisible else { return }
-            if id == store.workspace.secondary {
-                store.focus(.secondary)
-            } else if id == store.workspace.selected {
-                store.focus(.primary)
-            }
-        }
     }
 
     /// Typing goes to the focused pane. When the other pane's terminal has the keyboard, as
@@ -109,8 +101,9 @@ struct WorkspacePanes<Overlay: View>: View {
     }
 
     private func panes(_ geometry: PaneGeometry, width: CGFloat, handle: Bool) -> some View {
-        ZStack(alignment: .topLeading) {
-            Color.togoInk
+        let ground = canvas(geometry)
+        return ZStack(alignment: .topLeading) {
+            ground
             pane(.primary, in: geometry.primary, header: geometry.showsTwoPanes)
             if let rect = geometry.secondary {
                 // Leaves at once rather than fading: a pane on its way out still holds a terminal
@@ -122,7 +115,7 @@ struct WorkspacePanes<Overlay: View>: View {
             if let band = geometry.band {
                 if geometry.bandIsFold {
                     // The fold itself: nothing is drawn or placed in it.
-                    Color.togoInk
+                    ground
                         .frame(width: band.width, height: band.height)
                         .offset(x: band.minX, y: band.minY)
                         .allowsHitTesting(false)
@@ -133,6 +126,15 @@ struct WorkspacePanes<Overlay: View>: View {
                 }
             }
         }
+    }
+
+    /// What shows between and under the panes: the terminal theme's background while every
+    /// pane on screen shows its terminal, so no app-coloured strip runs down the fold; ink
+    /// beside a chat.
+    private func canvas(_ geometry: PaneGeometry) -> Color {
+        let shown = geometry.secondary == nil ? [store.workspace.selected] : [store.workspace.selected, store.workspace.secondary]
+        guard shown.allSatisfy(store.showsTerminal) else { return .togoInk }
+        return TerminalBackdrop.resolve(store.services.settings, system: colorScheme).background
     }
 
     @ViewBuilder private func pane(_ pane: Pane, in rect: CGRect, header: Bool) -> some View {
@@ -207,8 +209,11 @@ struct PaneSettle: Equatable {
 /// Ink over the panes as a new arrangement lands. Its resting state is clear; it arrives at
 /// full strength and lifts away on the inserting transaction, so the panes brighten into place.
 private struct PaneCover: View {
+    /// The panes' canvas, so the cover dims a terminal toward its own background.
+    let color: Color
+
     var body: some View {
-        Color.togoInk
+        color
             .opacity(1 - PaneSettle.coverOpacity)
             // motion: preventing a jump — ink over the panes lifts away as they settle, so the resize is never seen.
             .transition(CoverLift())

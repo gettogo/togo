@@ -2,8 +2,7 @@ import Foundation
 import TogoKit
 
 /// Keeps the prompt bar in step with the store. What waits on the user comes first, oldest
-/// first, one at a time with its place in the queue; with nothing waiting the bar is the focused
-/// terminal's input, or the line that starts work.
+/// first, one at a time with its place in the queue; with nothing waiting the bar is away.
 enum PromptFeed {
     /// The requests as the bar shows them, oldest first. The store keeps cards in the order
     /// they arrived, across machines. An answered one stays, with its outcome, until the store
@@ -59,16 +58,13 @@ enum PromptFeed {
         }
     }
 
-    /// The mode the bar should be in. A reply being written stays, so a new arrival never takes
-    /// the field away mid-sentence; if its request goes, or is answered elsewhere, the reply
-    /// stays with its words until the user puts it away. While the terminal itself takes the
-    /// typing the input line steps aside, so the terminal has the height and one place to type.
-    /// While the focused tab shows its chat, the chat's composer is the one place to type, so
-    /// the bar keeps only requests (from other sessions: the chat answers its own inline).
+    /// The mode the bar should be in: what waits on the user, oldest first, or nothing. A reply
+    /// being written stays, so a new arrival never takes the field away mid-sentence; if its
+    /// request goes, or is answered elsewhere, the reply stays with its words until the user
+    /// puts it away. The bar is never a terminal's input: the terminal takes the typing itself,
+    /// and a chat has its own composer.
     static func mode(
-        requests: [PromptRequest], current: PromptBarModel.Mode, focused: TabID?, composing: Bool, hasMachines: Bool,
-        terminalTyping: Bool = false, focusedConnected: Bool = true, chatShown: Bool = false,
-        composerTyping: Bool = false
+        requests: [PromptRequest], current: PromptBarModel.Mode, hasMachines: Bool, composerTyping: Bool = false
     ) -> PromptBarModel.Mode {
         guard hasMachines else { return .hidden }
         if case .replying(let writing) = current {
@@ -83,10 +79,6 @@ enum PromptFeed {
         if let first = requests.first {
             return .request(first, position: 1, count: requests.count)
         }
-        // The compose bar is the terminal's input while it is open.
-        if composing || chatShown { return .hidden }
-        // Nothing typed reaches a terminal that is not connected, so the bar does not offer to.
-        if let focused { return terminalTyping || !focusedConnected ? .hidden : .input(focused) }
         // No start line: every roster and empty detail has a New session button in its bar,
         // and ⌘T opens the sheet when the bar is not on its start line.
         return .hidden

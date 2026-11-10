@@ -58,6 +58,16 @@ public struct TerminalTheme: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
+extension TerminalTheme {
+    /// The background is dark: its WCAG relative luminance sits below the midpoint between
+    /// black and white by contrast (0.179). Hosts use it to set the appearance of chrome drawn
+    /// over the terminal, so a dark theme keeps dark chrome in light mode and a light one light.
+    public var isDark: Bool {
+        guard let rgb = RGB(hex: background) else { return true }
+        return rgb.relativeLuminance < 0.179
+    }
+}
+
 /// Red, green and blue in 0...255, parsed from `#RRGGBB` or `RRGGBB`.
 struct RGB: Equatable, Sendable {
     var red: UInt8
@@ -83,5 +93,14 @@ struct RGB: Equatable, Sendable {
 
     var hex: String {
         String(format: "#%02X%02X%02X", red, green, blue)
+    }
+
+    /// WCAG 2 relative luminance, 0 for black and 1 for white.
+    var relativeLuminance: Double {
+        func channel(_ value: UInt8) -> Double {
+            let c = Double(value) / 255
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
     }
 }

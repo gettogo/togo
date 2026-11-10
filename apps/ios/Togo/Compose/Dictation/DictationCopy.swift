@@ -50,7 +50,7 @@ enum DictationCopy {
     static let automatic = String(localized: "dictation.settings.automatic", defaultValue: "Automatic")
     static let languageFooter = String(
         localized: "dictation.settings.languageFooter",
-        defaultValue: "Hold the microphone in the compose bar to talk. The words go into the message, and nothing is sent until you tap Send."
+        defaultValue: "Tap Dictate on the terminal's key bar to talk, and tap it again to stop. The words are typed at the session's prompt, and nothing is sent until you press Return."
     )
     static let speech = String(localized: "dictation.settings.speech", defaultValue: "Speech")
     static let installed = String(localized: "dictation.settings.installed", defaultValue: "Installed")
@@ -65,7 +65,7 @@ enum DictationCopy {
     static let noneYet = String(localized: "dictation.settings.none", defaultValue: "Nothing dictated yet.")
     static let recentFooter = String(
         localized: "dictation.settings.recentFooter",
-        defaultValue: "The last 20, kept on this device only. Insert puts one in the compose bar of the session on screen."
+        defaultValue: "The last 20, kept on this device only. Insert puts one in the session on screen: in its chat's composer, or at its terminal's prompt."
     )
     static func speechFor(_ language: String) -> String {
         String(localized: "dictation.settings.speechFor", defaultValue: "Speech for \(language)")

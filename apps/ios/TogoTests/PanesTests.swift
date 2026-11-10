@@ -72,29 +72,31 @@ import UIKit
         #expect(store.focusedTab?.id == four)
     }
 
-    @Test func composeTargetsFocusedPane() {
+    @Test func inputFollowsTheFocusedPane() {
         let store = store([one, four], beside: four)
         store.setPanesVisible(true)
         store.focus(.secondary)
         #expect(store.composeTab?.id == four)
-        #expect(store.composeTarget == "04")
         store.focus(.primary)
         #expect(store.composeTab?.id == one)
-        #expect(store.composeTarget == "01")
-        // One pane on screen: the header already names the session.
-        store.setPanesVisible(false)
-        #expect(store.composeTarget == nil)
     }
 
-    @Test func composeKeyInTheOtherPaneFocusesIt() {
+    /// Attach, Dictate and a pasted picture in the other pane's terminal move focus there, so
+    /// what they start shows under that pane.
+    @Test func inputToolsInTheOtherPaneFocusIt() {
         let store = store([one, four], beside: four)
-        let host = PanesHost(store: store, terminals: TerminalPool(), size: Self.iPad, sizeClass: .regular)
-        defer { host.close() }
+        store.setPanesVisible(true)
         store.focus(.primary)
-        store.toggleCompose(four)
-        host.settle()
+        store.attach(four)
         #expect(store.workspace.focused == .secondary)
-        #expect(store.composeTab?.id == four)
+        #expect(store.attaching == four)
+        store.focus(.primary)
+        store.dictate(four)
+        #expect(store.workspace.focused == .secondary)
+        store.focus(.secondary)
+        store.pasteImage(Data([1, 2, 3]), into: one)
+        #expect(store.workspace.focused == .primary)
+        #expect(store.pastedImage?.tab == one)
     }
 
     @Test func requestsHideForVisiblePanes() {

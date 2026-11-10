@@ -124,11 +124,15 @@ import TogoKit
     }
 
     func log(_ s: ReviewSubject, ref: String?, limit: Int) async throws -> [GitCommit] {
-        try await call(s) { try await $0.gitLog(GitLogParams(id: s.sessionID, ref: ref, limit: limit)) }
+        try await call(s) { try await $0.gitLog(GitLogParams(id: s.sessionID, ref: ref, limit: limit, graph: true)) }
     }
 
     func branches(_ s: ReviewSubject) async throws -> GitBranches {
         try await call(s) { try await $0.gitBranches(id: s.sessionID) }
+    }
+
+    func files(_ s: ReviewSubject, ref: String?) async throws -> GitFiles {
+        try await call(s) { try await $0.gitFiles(GitFilesParams(id: s.sessionID, ref: ref)) }
     }
 
     func stage(_ s: ReviewSubject, paths: [String], seen: [String: GitSeen]) async throws -> GitStatus {

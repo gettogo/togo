@@ -16,6 +16,12 @@ enum ReviewEntryCopy {
     static let previewHint = String(localized: "review.entry.previewHint", defaultValue: "Opens the servers this session's machine is running")
     static let changesHint = String(localized: "review.entry.changesHint", defaultValue: "Opens the changes in this session's folder")
     static let close = String(localized: "review.entry.close", defaultValue: "Close")
+    /// The bar item that opens the review on its Changes list, like an editor's source control.
+    static let changesItem = String(localized: "review.entry.changesItem", defaultValue: "Changes")
+    static let allChanges = String(localized: "review.entry.allChanges", defaultValue: "All changes")
+    static let allChangesHint = String(
+        localized: "review.entry.allChangesHint", defaultValue: "Shows every change in this session's folder"
+    )
     static let sections = String(localized: "review.entry.sections", defaultValue: "Section")
     static let nothingOpen = String(localized: "review.entry.nothingOpen", defaultValue: "Nothing open")
     static let nothingOpenMessage = String(
@@ -61,6 +67,9 @@ enum ReviewEntryCopy {
     /// The list was cut short, so there are more changes than `changes`.
     private(set) var moreChanges = false
     private(set) var hasPorts = false
+    /// A read found the session's folder outside any repository, so there is nothing to review.
+    /// A failed read leaves it as it was.
+    private(set) var notRepository = false
     private var subject: ReviewSubject?
     /// Only the newest read may change what the header shows.
     private var generation = 0
@@ -79,6 +88,7 @@ enum ReviewEntryCopy {
             changes = 0
             moreChanges = false
             hasPorts = false
+            notRepository = false
         }
         self.subject = subject
         await refresh()
@@ -103,15 +113,20 @@ enum ReviewEntryCopy {
         }
     }
 
-    /// A failed read hides the button rather than showing a count that may be wrong.
+    /// A failed read drops the badge rather than showing a count that may be wrong; the
+    /// Changes item stays, since the review says what went wrong.
     func refresh() async {
         guard let subject else { return }
         generation += 1
         let generation = generation
         var changes = 0, more = false
-        if subject.canRead, let status = try? await services.status(subject), status.repo {
-            changes = status.files.count
-            more = status.isTruncated
+        var notRepository = self.notRepository
+        if subject.canRead, let status = try? await services.status(subject) {
+            notRepository = !status.repo
+            if status.repo {
+                changes = status.files.count
+                more = status.isTruncated
+            }
         }
         var hasPorts = false
         if subject.canPorts, let ports = try? await services.ports(subject) {
@@ -121,12 +136,14 @@ enum ReviewEntryCopy {
         // The bar's items come and go, and the count changes, in a `respond` transaction, so
         // the system bar crossfades them rather than snapping.
         let changed = changes != self.changes || more != moreChanges || hasPorts != self.hasPorts
+            || notRepository != self.notRepository
         guard changed else { return }
         // motion: state change — the bar's items come and go by a crossfade rather than snapping.
         withAnimation(Motion.animation(.respond, reduce: UIAccessibility.isReduceMotionEnabled)) {
             self.changes = changes
             moreChanges = more
             self.hasPorts = hasPorts
+            self.notRepository = notRepository
         }
     }
 }

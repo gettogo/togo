@@ -122,7 +122,8 @@ import XCTest
         let hash = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "[0-9a-f]{7}")).firstMatch
         XCTAssertTrue(hash.exists, "The history shows no short hash")
         let short = hash.label
-        commit.tap()
+        // A tap opens the commit's diff; its menu leads to the files as they were.
+        commit.press(forDuration: 1.0)
 
         let browse = app.buttons["Browse files at this commit"]
         XCTAssertTrue(browse.waitForExistence(timeout: 5), "The commit offers no way to its files")
@@ -287,8 +288,11 @@ import XCTest
         XCTAssertTrue(reveal(row, in: app), "The control center has no session \(bib)")
         row.tap()
 
-        let header = app.buttons["\(count) changes"]
-        XCTAssertTrue(header.waitForExistence(timeout: 10), "The workspace header has no \(count) changes")
+        // The bar's Changes item, its count a badge VoiceOver reads as the value.
+        let header = app.buttons["workspace.changes"]
+        XCTAssertTrue(header.waitForExistence(timeout: 10), "The workspace bar has no Changes item")
+        XCTAssertEqual(header.label, "Changes")
+        XCTAssertEqual(header.value as? String, "\(count) changes", "The Changes item does not count \(count) changes")
         if largeType {
             assertTappable(header)
             if app.buttons["Preview"].exists { assertTappable(app.buttons["Preview"]) }

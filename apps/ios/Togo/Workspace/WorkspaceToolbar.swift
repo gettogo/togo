@@ -4,10 +4,14 @@ import TogoKit
 /// The workspace's bar items, in the navigation bar its stack supplies, so on an iPhone Duo they
 /// move into the vertical bar beside the status bar and the terminal keeps the whole height.
 /// Every item has a symbol and a title: the symbol shows in the bar, the title in overflow and
-/// to VoiceOver. Order: the way back first, then the session's buttons (the layer switch
-/// leading them), its menu, and beside the sidebar the app's Settings last (root.md). When the
-/// bar runs out of room the items stay in this order of priority: mission control while it has
-/// a badge, the session menu, the layer switch, the rest, Settings first to go.
+/// to VoiceOver. Order (D13, D14): the way back first, then Run again once the agent stopped,
+/// then Changes, the session's way into its git review, then the layer switch, mission control,
+/// Preview, the session menu, and beside the sidebar the app's Settings last (root.md). When
+/// the bar runs out of room the items stay in this order of priority: mission control while it
+/// has a badge, Changes and the session menu, the layer switch, the rest, Settings first to go.
+/// Under a compact horizontal bar (`WorkspaceBarLayout.compact`) the workspace passes no mission
+/// item and folds Preview: both are in the session menu, leaving Changes, the layer switch and
+/// the menu.
 struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     let leading: WorkspaceLeading
     let onLeading: () -> Void
@@ -16,7 +20,7 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     let review: ReviewToolbarItems?
     /// "Terminal" or "Chat", for a session an adapter serves.
     let layer: LayerToolbarItem?
-    /// Mission control, on every size class while the chat shows and the session has one.
+    /// Mission control, on every size class and either layer while the session has one.
     var mission: MissionToolbarItem? = nil
     /// Settings, while the workspace is the detail column beside the sidebar; a compact window
     /// has it in the roster's bar.
@@ -35,6 +39,13 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
                     .disabled(runAgain.running)
             }
         }
+        if let review {
+            if #available(iOS 27.0, *) {
+                review.changesItem.visibilityPriority(.high)
+            } else {
+                review.changesItem
+            }
+        }
         if let layer {
             if #available(iOS 27.0, *) {
                 layer.visibilityPriority(ToolbarItemVisibilityPriority(lowerThan: .high))
@@ -46,7 +57,7 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
             mission
         }
         if let review {
-            review
+            review.previewItem
         }
         // Not the ellipsis: that symbol belongs to the system's own overflow.
         if #available(iOS 27.0, *) {
@@ -113,43 +124,73 @@ enum WorkspaceLeading: Equatable {
     }
 }
 
-/// Which review items mission control already carries. On the chat layer of a session whose
-/// mission has Ports or Changes, those sections are one tap away in mission control, so the
-/// bar leaves Preview or Changes out; on the terminal layer, and for sessions without the
-/// capability, they stay.
+/// Which review items mission control already carries. For a session whose mission has Ports,
+/// on either layer, that section is one tap away in mission control, so the bar leaves Preview
+/// out; for sessions without the capability it stays.
+/// Changes is never folded: the bar's Changes item is the way into the review, and mission
+/// control's Changes section is a glance at it.
 struct ReviewFold: Equatable {
     var preview = false
-    var changes = false
 
-    /// `descriptor` is the focused session's while its chat shows with a mission, else nil.
+    /// `descriptor` is the focused session's while it has a mission, else nil.
     init(_ descriptor: HarnessDescriptor?) {
         guard let descriptor else { return }
         preview = descriptor.has(HarnessCapability.ports)
-        changes = descriptor.has(HarnessCapability.changes)
     }
 }
 
-/// "Preview" and "3 changes", each its own bar item so both can go vertical. The count is a
-/// badge on the symbol; the words stay the item's title.
-struct ReviewToolbarItems: ToolbarContent {
+/// "Changes" and "Preview", each its own bar item so both can go vertical, and placed apart:
+/// Changes leads the session's items, Preview follows mission control.
+struct ReviewToolbarItems {
     let store: AppStore
     let row: SessionRow
     let model: ReviewHeaderModel
     var folded = ReviewFold(nil)
+
+    /// Shown for every session whose machine can read git, until a read finds no repository.
+    /// The changed-file count is a badge on the symbol; the title stays "Changes", so the item
+    /// never changes width and VoiceOver hears the count as "Changes, 3 changes".
+    var changesItem: some ToolbarContent {
+        ChangesToolbarItem(store: store, row: row, model: model)
+    }
+
+    var previewItem: some ToolbarContent {
+        PreviewToolbarItem(store: store, row: row, model: model, folded: folded)
+    }
+}
+
+private struct ChangesToolbarItem: ToolbarContent {
+    let store: AppStore
+    let row: SessionRow
+    let model: ReviewHeaderModel
+
+    var body: some ToolbarContent {
+        if store.reviewSubject(for: row).canRead, !model.notRepository {
+            ToolbarItem(placement: .primaryAction) {
+                Button(ReviewEntryCopy.changesItem, systemImage: "plus.forwardslash.minus") {
+                    store.review(row, tab: .changes)
+                }
+                .badge(model.changes)
+                .accessibilityLabel(ReviewEntryCopy.changesItem)
+                .accessibilityValue(model.changesLabel ?? "")
+                .accessibilityHint(ReviewEntryCopy.changesHint)
+                .accessibilityIdentifier("workspace.changes")
+            }
+        }
+    }
+}
+
+private struct PreviewToolbarItem: ToolbarContent {
+    let store: AppStore
+    let row: SessionRow
+    let model: ReviewHeaderModel
+    let folded: ReviewFold
 
     var body: some ToolbarContent {
         if model.hasPorts, !folded.preview {
             ToolbarItem(placement: .primaryAction) {
                 Button(ReviewEntryCopy.preview, systemImage: "safari") { store.review(row, tab: .ports) }
                     .accessibilityHint(ReviewEntryCopy.previewHint)
-            }
-        }
-        if let label = model.changesLabel, !folded.changes {
-            ToolbarItem(placement: .primaryAction) {
-                Button(label, systemImage: "plus.forwardslash.minus") { store.review(row, tab: .changes) }
-                    .badge(model.changes)
-                    .accessibilityLabel(label)
-                    .accessibilityHint(ReviewEntryCopy.changesHint)
             }
         }
     }
@@ -159,7 +200,8 @@ struct ReviewToolbarItems: ToolbarContent {
 /// the session's name, then its bib, status, agent, machine and the link while it has something
 /// to say. A passing message such as "Copied" takes the subtitle until the next one. A session
 /// with mission control shows its glance there instead ("2 agents  plan 3/7", nothing when
-/// nothing is counted); the session menu keeps the status line at its top.
+/// nothing is counted) on either layer, so the bar is the same in the chat and the terminal;
+/// the session menu keeps the status line at its top.
 struct WorkspaceTitle: Equatable {
     var title: String
     /// The bar's subtitle.

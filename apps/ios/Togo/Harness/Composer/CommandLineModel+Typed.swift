@@ -26,7 +26,7 @@ extension CommandLineModel {
     }
 
     /// The command list to match against: the palette's, the session's, or read now.
-    private func routingCommands() async -> [HarnessCompletion] {
+    func routingCommands() async -> [HarnessCompletion] {
         if !palette.isEmpty { return palette }
         if !store.commandList.isEmpty { return store.commandList }
         await loadPalette()
@@ -60,12 +60,12 @@ extension CommandLineModel {
                 await send(line: text)
             } else {
                 taken(text)
-                await perform(command)
+                await perform(command, typed: true)
             }
         case .run:
             if args.isEmpty {
                 taken(text)
-                await perform(command)
+                await perform(command, typed: true)
             } else {
                 // "/compact focus on tests": the words go with the command, typed.
                 await send(line: text)
@@ -73,14 +73,14 @@ extension CommandLineModel {
         case .terminal:
             if args.isEmpty {
                 taken(text)
-                await perform(command)
+                await perform(command, typed: true)
             } else {
                 routes.showTerminal()
                 await send(line: text)
             }
         case .open(.mission):
             taken(text)
-            await perform(command)
+            await perform(command, typed: true)
         }
     }
 

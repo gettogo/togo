@@ -7,8 +7,6 @@ import TogoTerminal
 /// The prompt bar in each of its modes, at iPhone width and in a 500 pt column, light and dark.
 @MainActor
 struct PromptBarSnapshotTests {
-    private static let tab = TabID(hostID: UUID(uuidString: "6F1D2B7C-2A55-4C1E-9D7A-0C1B2D3E4F50")!, sessionID: "s-api")
-
     private static let request = PromptRequest(
         id: "r-04", sessionID: "s-04", bib: "04", sessionName: "app", agentName: "Claude Code",
         machineName: "Studio", question: "Run npm test?", command: "npm test -- --watch=false"
@@ -61,15 +59,6 @@ struct PromptBarSnapshotTests {
             let model = PromptBarModel(mode: .request(Self.request, position: 1, count: 3))
             model.beginReply()
             model.replyDraft = "Only run the date tests first"
-            return screen(model)
-        }
-    }
-
-    @Test func input() {
-        assertScreen(named: "prompt-input", sizes: Self.sizes) {
-            let model = PromptBarModel(mode: .input(Self.tab))
-            model.tabName = { _ in "api" }
-            model.keyBar = .claude
             return screen(model)
         }
     }

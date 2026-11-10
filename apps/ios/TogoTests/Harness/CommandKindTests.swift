@@ -31,14 +31,29 @@ import TogoKit
             return
         }
         #expect(run.action == "compact")
-        #expect(run.instructions == "/compact ")
         #expect(!run.destructive)
         guard case .run(let wipe) = CommandKind.dispatch(clear) else {
             Issue.record("clear runs")
             return
         }
         #expect(wipe.destructive)
-        #expect(wipe.instructions == nil)
+    }
+
+    /// A pick never sends a command that may take words: it goes to the field first. Choices,
+    /// lists and native homes are as they were.
+    @Test func aPickPutsTypedAndRunCommandsInTheField() {
+        #expect(CommandKind.picking(compact) == .compose(line: "/compact ", files: false))
+        #expect(CommandKind.picking(clear) == .compose(line: "/clear ", files: false))
+        #expect(CommandKind.picking(tools) == .compose(line: "/tools ", files: false))
+        #expect(CommandKind.picking(add) == .compose(line: "/add ", files: true))
+        #expect(CommandKind.picking(effort) == CommandKind.dispatch(effort))
+        #expect(CommandKind.picking(resume) == .push(screen: "resume"))
+        #expect(CommandKind.picking(stats) == .open(.mission("status")))
+        #expect(CommandKind.picking(settings) == .open(.screen("settings")))
+        // Only words a command cannot go without hold Send back.
+        #expect(CommandKind.needsArgument(add))
+        #expect(!CommandKind.needsArgument(compact))
+        #expect(!CommandKind.needsArgument(clear))
     }
 
     @Test func olderHelpersGetADerivedKind() {
@@ -117,15 +132,19 @@ import TogoKit
         return CommandLineModel(store: .preview(), memory: CommandMemory(defaults: defaults), routes: session.routes())
     }
 
-    @Test func aTerminalCommandSwitchesToTheTerminalAsItSends() async {
+    @Test func aTerminalCommandGoesToTheFieldThenSwitchesToTheTerminalAsItSends() async {
         let session = Session()
+        session.commands = [tools]
         let model = make(session)
         model.paletteOpen = true
         let outcome = await model.perform(tools)
         #expect(outcome == .close)
+        #expect(!model.paletteOpen)
+        #expect(model.draft == "/tools ")
+        #expect(session.sends.isEmpty)
+        await model.submit()
         #expect(session.terminal == 1)
         #expect(session.sends == ["/tools"])
-        #expect(!model.paletteOpen)
     }
 
     @Test func opensGoesToItsNativeHome() async {
@@ -149,8 +168,12 @@ import TogoKit
 
     @Test func aDestructiveCommandAsksFirst() async {
         let session = Session()
+        session.commands = [clear]
         let model = make(session)
-        #expect(await model.perform(clear) == .stay)
+        #expect(await model.perform(clear) == .close)
+        #expect(model.draft == "/clear ")
+        #expect(model.gate.asking == nil)
+        await model.submit()
         #expect(session.sends.isEmpty)
         let request = model.gate.asking
         #expect(request?.dialog.title == PrimitiveCopy.asking("Start a new conversation"))
@@ -159,25 +182,37 @@ import TogoKit
         #expect(session.sends == ["/clear"])
     }
 
-    @Test func compactAsksWithInstructions() async {
+    /// The owner's report: /compact takes words (omp's soft, remote, snapcompact and a focus),
+    /// so a pick puts it in the field rather than asking in a dialog. Sent with words it goes
+    /// as typed; sent bare it runs its action, without a dialog either.
+    @Test func compactGoesToTheFieldWithoutADialog() async {
         let session = Session()
+        session.commands = [compact]
         let model = make(session)
-        #expect(await model.perform(compact) == .stay)
-        #expect(session.runs.isEmpty)
-        let request = model.gate.asking
-        #expect(request?.dialog.instructions == "/compact ")
-        #expect(request?.dialog.confirmLabel == PrimitiveCopy.runNow("Compact"))
-        request?.instructions?("/compact ")
+        #expect(await model.perform(compact) == .close)
+        #expect(model.gate.asking == nil)
         #expect(model.draft == "/compact ")
-        await request?.run()
+        #expect(model.canSend)
+        model.draft = "/compact snapcompact"
+        await model.submit()
+        #expect(session.sends == ["/compact snapcompact"])
+        #expect(session.runs.isEmpty)
+
+        model.draft = "/compact"
+        await model.submit()
+        #expect(model.gate.asking == nil)
         #expect(session.runs.map(\.0) == ["compact"])
     }
 
-    @Test func aPlainRunSendsAtOnce() async {
+    @Test func aPlainRunWaitsInTheFieldForSend() async {
         let session = Session()
-        let model = make(session)
         let review = HarnessCompletion(insert: "/review", title: "/review", kind: .run)
+        session.commands = [review]
+        let model = make(session)
         #expect(await model.perform(review) == .close)
+        #expect(model.draft == "/review ")
+        #expect(session.sends.isEmpty)
+        await model.submit()
         #expect(session.sends == ["/review"])
         #expect(model.gate.asking == nil)
     }

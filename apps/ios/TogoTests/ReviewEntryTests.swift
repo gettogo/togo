@@ -44,6 +44,27 @@ import UIKit
         #expect(many.changesLabel == "3+ changes")
     }
 
+    @Test func changesItemLeavesOnlyOutsideARepository() async {
+        var outside = ReviewFixtures.status
+        outside.repo = false
+        outside.files = []
+        let services = FakeReviewServices(status: outside)
+        let model = ReviewHeaderModel(services: services)
+        #expect(!model.notRepository)
+        await model.select(subject())
+        #expect(model.notRepository)
+        #expect(model.changes == 0)
+
+        // A failed read keeps the item, without a count.
+        let failing = FakeReviewServices(status: status(2))
+        let kept = ReviewHeaderModel(services: failing)
+        await kept.select(subject())
+        failing.failures[.status] = ReviewFixtureError.offline
+        await kept.refresh()
+        #expect(!kept.notRepository)
+        #expect(kept.changes == 0)
+    }
+
     @Test func headerHiddenWithoutGit() async {
         let services = FakeReviewServices(status: status(3))
         let model = ReviewHeaderModel(services: services)
@@ -202,15 +223,13 @@ import UIKit
             engineView: UIViewController(), phases: AsyncStream { $0.finish() }, onStop: {}
         )
         var pasted: [String] = []
-        var enters = 0
         handle.paste = { pasted.append($0) }
-        handle.pressEnter = { enters += 1 }
 
         let pool = HandleBox(handle)
         let send = try #require(ReviewRoot.sendToSession { pool.handle })
         #expect(send("src/router.ts:12: check\u{1b}[31m this\r\nfirst"))
+        // A paste only: the handle has no way to press Enter at all.
         #expect(pasted == ["src/router.ts:12: check[31m this first"])
-        #expect(enters == 0)
 
         // A reconnect replaces the handle; the next comment goes to the new one.
         let replacement = TerminalHandle(engineView: UIViewController(), phases: AsyncStream { $0.finish() }, onStop: {})

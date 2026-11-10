@@ -29,11 +29,13 @@ import TogoKit
     var wakeNotes: [HostID: String] = [:]
     /// Sends a wake packet; tests replace it.
     @ObservationIgnored var sendWake: @Sendable (WakeTarget) async throws -> Void = { try await WakeOnLAN.send($0) }
-    /// The tab whose compose bar is open, if any.
-    var composing: TabID?
-    /// Words a reply could not deliver, waiting for their tab's compose bar to take them.
-    var replyDrafts: [TabID: String] = [:]
-    /// An image pasted into a terminal, waiting for that tab's compose bar to take it.
+    /// The tab whose photo picker the key bar's Attach key opened, if any.
+    var attaching: TabID?
+    /// Words waiting for their tab to take them: a reply that could not be delivered, or a
+    /// dictation inserted from Settings. The chat's composer takes them while the chat shows;
+    /// otherwise they are typed into the terminal, never with Enter, once it is live.
+    var pendingInput: [TabID: String] = [:]
+    /// An image pasted into a terminal, waiting for that tab's input tools to send it.
     var pastedImage: PastedImage?
     /// A session link waiting for its machine to report.
     var pendingLink: DeepLink?
@@ -57,8 +59,6 @@ import TogoKit
     var reviewHasDraft = false
     /// The open review's screens and models, kept while a fold moves it between presenters.
     @ObservationIgnored var openReview: ReviewSession?
-    /// Compose text per tab. Cleared when it is sent and when the tab closes.
-    var drafts: [TabID: String] = [:]
     /// The workspace with its chrome hidden.
     var zen = false
     /// Both panes are on screen. The workspace sets it from its arrangement; while false the

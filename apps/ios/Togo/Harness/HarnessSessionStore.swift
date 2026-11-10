@@ -77,8 +77,6 @@ import UIKit
     /// The first `.opened` has been applied: what shows from here on arrives, what showed
     /// before it was simply there (first load is a cut).
     private(set) var hasLoaded = false
-    /// The composer's height under this tab's chat, measured where the composer is drawn.
-    var composerClearance: CGFloat = 0
     /// Where the reader is in this session's chat. Kept with the session rather than the view,
     /// so a fold, unfold or window resize that rebuilds the workspace returns to the same place.
     @ObservationIgnored let chatScroll = ChatScrollModel()

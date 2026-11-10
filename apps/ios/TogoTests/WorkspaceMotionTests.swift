@@ -95,9 +95,9 @@ import UIKit
         #expect(container.fits - before == 1)
     }
 
-    // MARK: Compose bar
+    // MARK: Terminal input status
 
-    @Test func theComposeBarAnimatesOnlyWhenItsRowsChange() {
+    @Test func theInputStatusAnimatesOnlyWhenItsRowsChange() {
         let heard = ComposeShape(dictation: .listening(partial: "run the", level: 0.2))
         let more = ComposeShape(dictation: .listening(partial: "run the tests", level: 0.6))
         #expect(heard.stage == more.stage)

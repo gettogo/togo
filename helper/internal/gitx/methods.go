@@ -37,6 +37,7 @@ func (s *Service) Methods() map[string]api.Method {
 		wire.MethodGitDiff:     s.diff,
 		wire.MethodGitLog:      s.log,
 		wire.MethodGitBranches: s.branches,
+		wire.MethodGitFiles:    s.files,
 		wire.MethodGitStage:    s.stage,
 		wire.MethodGitUnstage:  s.unstage,
 		wire.MethodGitDiscard:  s.discard,
@@ -107,6 +108,8 @@ type logParams struct {
 	idParams
 	Ref   string `json:"ref"`
 	Limit *int   `json:"limit"`
+	// Graph asks for topological order and changed-file counts (see LogOptions).
+	Graph bool `json:"graph"`
 }
 
 func (s *Service) log(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -122,7 +125,7 @@ func (s *Service) log(ctx context.Context, raw json.RawMessage) (any, error) {
 		}
 		limit = *p.Limit
 	}
-	commits, err := s.Git.Log(ctx, dir, p.Ref, limit)
+	commits, err := s.Git.Log(ctx, dir, p.Ref, limit, LogOptions{Graph: p.Graph})
 	if err != nil {
 		return nil, err
 	}

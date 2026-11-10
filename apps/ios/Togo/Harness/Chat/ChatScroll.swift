@@ -48,11 +48,6 @@ enum ChatScroll {
         !was && now && afterSend && !dragging ? .bottom : nil
     }
 
-    /// The composer changed height while the chat sat at its foot: it stays there.
-    static func repins(pinned: Bool, old: CGFloat, new: CGFloat, dragging: Bool) -> Bool {
-        pinned && old != new && !dragging
-    }
-
     /// What the chat's scroll view reports: whether it is at the foot, and its height.
     struct Frame: Equatable {
         var pinned: Bool
@@ -67,10 +62,16 @@ enum ChatScroll {
     }
 
     /// At the foot, within a few points: the last line shows above the composer. The visible
-    /// foot is where the content insets begin (the top inset, then the container), not the
-    /// frame's edge, which lies behind the composer and the keyboard.
+    /// region starts below the top inset (the tab strip's bar the chat scrolls under).
     static func isPinned(offset: CGFloat, topInset: CGFloat, container: CGFloat, content: CGFloat) -> Bool {
         offset + topInset + container >= content - 8
+    }
+
+    /// Where a rebuilt chat returns to: nothing at the foot (the default anchor gives it), the
+    /// reader's row while it is still in the chat, the foot once it is gone.
+    static func restore(row: String?, pinned: Bool, has: (String) -> Bool) -> Target? {
+        guard !pinned, let row else { return nil }
+        return has(row) ? .row(row) : .bottom
     }
 
     /// The card the "Needs you" capsule jumps to: the oldest open card off screen. Nothing
@@ -81,58 +82,62 @@ enum ChatScroll {
     }
 }
 
-/// What the chat's scrolling keeps between renders.
+/// What the chat's scrolling keeps between renders. It never holds the scroll view's own
+/// `ScrollPosition`: bound to an observed property, the scroll view wrote it while committing a
+/// scroll, the write invalidated the modifier that binds it, the binding re-applied it, and the
+/// scroll view committed again, forever (a hard freeze on the Terminal toggle, and on relaunch).
+/// The position lives in `NeedsScrolling`'s own state; this keeps requests going in and the
+/// settled row coming out.
 @MainActor @Observable final class ChatScrollModel {
-    var position = ScrollPosition(edge: .bottom)
+    /// A scroll asked of the chat. `seed` tells two asks for the same place apart.
+    struct Request: Equatable {
+        var target: ChatScroll.Target
+        var reduce: Bool
+        var seed: Int
+    }
+
+    /// The latest scroll asked for; the chat applies it to its own position.
+    private(set) var request: Request?
     /// Needs cards on screen now.
     private(set) var visibleNeeds: Set<String> = []
     /// The card the capsule offers, once it has stayed off screen a moment.
     var capsule: String?
     @ObservationIgnored var dragging = false
     @ObservationIgnored var pinned = true
+    /// The row at the chat's bottom edge when the reader's last scroll came to rest, so a
+    /// rebuilt chat returns to it. Unobserved: nothing draws from it.
+    @ObservationIgnored private(set) var settledRow: String?
 
     /// Scrolls on `resize`, the same role that grows a card, so the chat makes room and brings
     /// the card up as one movement. A card still growing is followed once more when it has
     /// grown (`settle`), unless the user has taken the scroll meanwhile.
     func go(_ target: ChatScroll.Target, reduce: Bool, settle: Bool = false) {
-        perform(target, reduce: reduce)
+        ask(target, reduce: reduce)
         guard settle else { return }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(400))
             guard let self, !self.dragging else { return }
-            self.perform(target, reduce: reduce)
+            self.ask(target, reduce: reduce)
         }
     }
 
-    private func perform(_ target: ChatScroll.Target, reduce: Bool) {
-        let move = { [self] in
-            switch target {
-            case .row(let id): position.scrollTo(id: id, anchor: .bottom)
-            case .bottom: position.scrollTo(edge: .bottom)
-            }
-        }
-        guard !reduce else {
-            var transaction = Transaction(animation: nil)
-            transaction.disablesAnimations = true
-            withTransaction(transaction, move)
-            return
-        }
-        // motion: preventing a jump — the chat glides to the card that needs you (or to your
-        // own prompt) instead of teleporting; under Reduce Motion it lands at once.
-        withAnimation(Motion.animation(.resize, reduce: false), move)
+    private func ask(_ target: ChatScroll.Target, reduce: Bool) {
+        request = Request(target: target, reduce: reduce, seed: (request?.seed ?? 0) &+ 1)
     }
 
-    /// A chat view made again for the same session (a fold or unfold moves the workspace to
-    /// another presenter) returns to the row the reader had at the top. At the foot it stays at
-    /// the foot, which the default anchor already gives.
-    func resume() {
-        guard !pinned, let id = position.viewID(type: String.self) else { return }
-        Task { @MainActor [weak self] in
-            guard let self, !self.dragging else { return }
-            var transaction = Transaction(animation: nil)
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { self.position.scrollTo(id: id, anchor: .top) }
-        }
+    /// The reader's scroll came to rest with `row` at the bottom edge. Writes only a change.
+    /// Returns whether it changed.
+    @discardableResult func settle(at row: String?) -> Bool {
+        guard settledRow != row else { return false }
+        settledRow = row
+        return true
+    }
+
+    /// Where a chat made again for the same session (a fold or unfold moves the workspace to
+    /// another presenter) returns to: the row the reader had at the bottom, if it is still
+    /// there, else the foot. Nil at the foot, which the default anchor already gives.
+    func restoreTarget(has: (String) -> Bool) -> ChatScroll.Target? {
+        ChatScroll.restore(row: settledRow, pinned: pinned, has: has)
     }
 
     func setVisible(_ id: String, _ visible: Bool) {
@@ -144,47 +149,40 @@ enum ChatScroll {
     }
 }
 
-/// Scrolls a conversation to a needs card when one arrives or its answers land, and keeps
-/// track of the user's finger. The main chat and a subagent's chat both use it.
+/// Scrolls a conversation to a needs card when one arrives or its answers land, keeps track
+/// of the user's finger, and keeps a reader at the foot at the foot when the chat changes
+/// height. The main chat and a subagent's chat both use it.
+///
+/// The scroll position is this modifier's own state: only the scroll view, the model's
+/// requests and the one restore write it, and the model hears of it only when a scroll comes
+/// to rest, and only if the row changed.
 struct NeedsScrolling: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let marks: [NeedsMark]
     /// Arrivals before the first load are not arrivals.
     let loaded: Bool
     let scroll: ChatScrollModel
+    /// Whether a row is in the chat, for returning to the reader's place once. Nil: nothing to return to.
+    var has: ((String) -> Bool)?
+
+    @State private var position = ScrollPosition(edge: .bottom)
+    @State private var restored = false
 
     func body(content: Content) -> some View {
-        @Bindable var scroll = scroll
         content
-            .scrollPosition($scroll.position)
-            .onScrollPhaseChange { _, phase in
-                scroll.dragging = phase == .interacting || phase == .tracking
+            // The position is the row at the chat's bottom edge, and that row is what a size
+            // change keeps in place: the latest lines stay right above the composer as it grows
+            // or shrinks and as the keyboard comes or goes. Anchored at the top (the default),
+            // the top row stayed put and the latest lines slid under the composer.
+            .scrollPosition($position, anchor: .bottom)
+            .onScrollPhaseChange { old, phase in
+                let dragging = phase == .interacting || phase == .tracking
+                if scroll.dragging != dragging { scroll.dragging = dragging }
+                // Once a scroll has come to rest, never while it moves; an unobserved write.
+                if phase == .idle, old != .idle {
+                    scroll.settle(at: position.viewID(type: String.self))
+                }
             }
-            .onChange(of: marks) { old, new in
-                guard loaded, let id = ChatScroll.target(old: old, new: new, dragging: scroll.dragging) else { return }
-                scroll.go(.row(id), reduce: reduceMotion, settle: true)
-            }
-            // A field a card just revealed rises above the composer, and once more after the
-            // keyboard has come up (`settle`).
-            .environment(\.revealRow, RevealRowAction { [reduceMotion] id in
-                scroll.go(.row(id), reduce: reduceMotion, settle: true)
-            })
-    }
-}
-
-/// The main chat's scrolling: needs cards (`NeedsScrolling`), the user's own sends, "Go to
-/// request", the composer's height kept clear, and the "Needs you" capsule while a card is off
-/// screen.
-struct ChatScrolling: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let store: HarnessSessionStore
-    let marks: [NeedsMark]
-    let scroll: ChatScrollModel
-
-    func body(content: Content) -> some View {
-        let candidate = ChatScroll.capsule(open: marks, visible: scroll.visibleNeeds, loaded: store.hasLoaded)
-        content
-            .modifier(NeedsScrolling(marks: marks, loaded: store.hasLoaded, scroll: scroll))
             .onScrollGeometryChange(for: ChatScroll.Frame.self) { geometry in
                 ChatScroll.Frame(
                     pinned: ChatScroll.isPinned(
@@ -196,31 +194,82 @@ struct ChatScrolling: ViewModifier {
             } action: { old, new in
                 // The keyboard (or a fold, or the composer growing) shrank or grew the chat: a
                 // reader at the foot stays at the foot, the latest line right above the composer.
-                // Without this the scroll position keeps its top row and the latest lines slide
-                // behind the keyboard.
+                // The bottom anchor already keeps it there; this only lands a reader whose foot
+                // was reached by a scroll the anchor has not caught up with.
                 if ChatScroll.repinsOnResize(old: old, new: new, dragging: scroll.dragging) {
-                    var transaction = Transaction(animation: nil)
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) { scroll.position.scrollTo(edge: .bottom) }
-                    scroll.pinned = true
-                } else {
+                    move(.bottom, reduce: true)
+                    if !scroll.pinned { scroll.pinned = true }
+                } else if scroll.pinned != new.pinned {
                     scroll.pinned = new.pinned
                 }
             }
-            // The scroll view itself keeps the composer's height clear, so the last card is
-            // never under it, whatever the keyboard does. The capsule sits just above it.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear
-                    .frame(height: store.composerClearance)
-                    .accessibilityHidden(true)
-                    .overlay(alignment: .top) {
-                        if let target = scroll.capsule {
-                            // motion: attention — fades in place, never rises (timed by the task below).
-                            NeedsJumpPill { store.revealNeeds(id: target) }
-                                .alignmentGuide(.top) { $0[.bottom] + 10 }
-                                .transition(.opacity)
-                        }
-                    }
+            .onChange(of: scroll.request) { _, request in
+                guard let request else { return }
+                move(request.target, reduce: request.reduce)
+            }
+            // A chat made again returns to the reader's row once, after its first layout; a
+            // row that has gone sends it to the foot.
+            .task {
+                guard !restored else { return }
+                restored = true
+                guard let has else { return }
+                await Task.yield()
+                guard !scroll.dragging, let target = scroll.restoreTarget(has: has) else { return }
+                move(target, reduce: true)
+            }
+            .onChange(of: marks) { old, new in
+                guard loaded, let id = ChatScroll.target(old: old, new: new, dragging: scroll.dragging) else { return }
+                scroll.go(.row(id), reduce: reduceMotion, settle: true)
+            }
+            // A field a card just revealed rises above the composer, and once more after the
+            // keyboard has come up (`settle`).
+            .environment(\.revealRow, RevealRowAction { [reduceMotion, scroll] id in
+                scroll.go(.row(id), reduce: reduceMotion, settle: true)
+            })
+    }
+
+    private func move(_ target: ChatScroll.Target, reduce: Bool) {
+        let apply = {
+            switch target {
+            case .row(let id): position.scrollTo(id: id, anchor: .bottom)
+            case .bottom: position.scrollTo(edge: .bottom)
+            }
+        }
+        guard !reduce else {
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction, apply)
+            return
+        }
+        // motion: preventing a jump — the chat glides to the card that needs you (or to your
+        // own prompt) instead of teleporting; under Reduce Motion it lands at once.
+        withAnimation(Motion.animation(.resize, reduce: false), apply)
+    }
+}
+
+/// The main chat's scrolling: needs cards (`NeedsScrolling`), the user's own sends, "Go to
+/// request", the composer's height kept clear, and the "Needs you" capsule while a card is off
+/// screen.
+struct ChatScrolling: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let store: HarnessSessionStore
+    let marks: [NeedsMark]
+    let scroll: ChatScrollModel
+    /// Whether a row is in the chat, for returning to the reader's place (`NeedsScrolling`).
+    let has: (String) -> Bool
+
+    func body(content: Content) -> some View {
+        let candidate = ChatScroll.capsule(open: marks, visible: scroll.visibleNeeds, loaded: store.hasLoaded)
+        content
+            .modifier(NeedsScrolling(marks: marks, loaded: store.hasLoaded, scroll: scroll, has: has))
+            // The chat ends at the composer's top edge (`ChatPanes`); the capsule sits just above it.
+            .overlay(alignment: .bottom) {
+                if let target = scroll.capsule {
+                    // motion: attention — fades in place, never rises (timed by the task below).
+                    NeedsJumpPill { store.revealNeeds(id: target) }
+                        .padding(.bottom, 10)
+                        .transition(.opacity)
+                }
             }
             .onChange(of: store.sends) {
                 guard let target = ChatScroll.followsSend(dragging: scroll.dragging) else { return }
@@ -230,12 +279,6 @@ struct ChatScrolling: ViewModifier {
                 guard let request else { return }
                 scroll.go(.row(request.row), reduce: reduceMotion, settle: true)
                 store.scrollRequest = nil
-            }
-            .onChange(of: store.composerClearance) { old, new in
-                guard ChatScroll.repins(pinned: scroll.pinned, old: old, new: new, dragging: scroll.dragging) else { return }
-                var transaction = Transaction(animation: nil)
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { scroll.position.scrollTo(edge: .bottom) }
             }
             .task(id: candidate) {
                 guard let candidate else {

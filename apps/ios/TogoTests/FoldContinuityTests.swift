@@ -71,18 +71,17 @@ import UIKit
         }
     }
 
-    @Test func draftSurvivesArrangementChange() {
+    /// Words waiting for a tab (an undelivered reply, a dictation from Settings) are not lost to
+    /// a fold.
+    @Test func waitingWordsSurviveArrangementChange() {
         let store = store()
         let host = PanesHost(store: store, terminals: TerminalPool(), size: Self.open, sizeClass: .regular, fold: Self.book)
         defer { host.close() }
-        store.drafts[one] = "half a thought"
-        store.drafts[four] = "and another"
-        store.composing = one
+        store.pendingInput[one] = "half a thought"
+        store.pendingInput[four] = "and another"
         foldTwice(host) {
-            #expect(store.drafts[one] == "half a thought")
-            #expect(store.drafts[four] == "and another")
-            #expect(store.composing == one)
-            #expect(store.composeTab?.id == one)
+            #expect(store.pendingInput[one] == "half a thought")
+            #expect(store.pendingInput[four] == "and another")
         }
     }
 

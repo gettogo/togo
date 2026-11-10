@@ -282,11 +282,12 @@ import UIKit
         #expect(store.incomingRequests.map(\.id) == ["r9"])
     }
 
-    @Test func pastedImageAlwaysReachesTheComposeBar() {
+    /// A pasted picture always reaches the tab's image flow, which sends it or says why not.
+    @Test func pastedImageAlwaysReachesTheImageFlow() {
         let tab = TabID(hostID: Samples.studio, sessionID: "s-04")
         let without = store()
         without.pasteImage(Data([1, 2, 3]), into: tab)
-        #expect(without.composing == tab)
+        #expect(without.pastedImage?.tab == tab)
         #expect(without.pastedImage?.data == Data([1, 2, 3]))
         #expect(without.imageSupport(for: Samples.studio) == .unsupported)
 
@@ -294,18 +295,15 @@ import UIKit
         state.machines[0].capabilities = [Capability.upload]
         let with = store(state)
         with.pasteImage(Data([1, 2, 3]), into: tab)
-        #expect(with.composing == tab)
         #expect(with.pastedImage?.data == Data([1, 2, 3]))
         #expect(with.imageSupport(for: Samples.build) == .unsupported)
     }
 
-    @Test func composeKeyTogglesTheBar() {
+    @Test func attachKeyAsksForAPicture() {
         let store = store()
         let tab = TabID(hostID: Samples.studio, sessionID: "s-01")
-        store.toggleCompose(tab)
-        #expect(store.composing == tab)
-        store.toggleCompose(tab)
-        #expect(store.composing == nil)
+        store.attach(tab)
+        #expect(store.attaching == tab)
     }
 
     /// Every window runs the same store; the snapshot stream still has one reader.

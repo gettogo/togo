@@ -6,12 +6,12 @@ import TogoKit
 
 @MainActor
 struct DictationSnapshotTests {
-    private func bar(text: String = "", phase: DictationModel.Phase, target: String? = nil) -> some View {
+    /// The status over the terminal's foot while the Dictate key listens.
+    private func status(phase: DictationModel.Phase) -> some View {
         let defaults = UserDefaults(suiteName: "dictation-snapshots-\(UUID().uuidString)")!
-        let model = ComposeModel(
-            text: text, history: ComposeHistory(hostID: Samples.studio, sessionID: "s-04", defaults: defaults),
+        let model = TerminalInputModel(
             images: ImagePasteFlow(support: .available, upload: { _, _ in "" }, paste: { _ in }),
-            paste: { _ in }, pressEnter: {},
+            paste: { _ in },
             speech: DictationSpeech(
                 engine: FakeSpeechEngine(), locale: Locale(identifier: "en-US"),
                 history: DictationHistory(defaults: defaults)
@@ -20,26 +20,24 @@ struct DictationSnapshotTests {
         model.dictation?.show(phase)
         return VStack(spacing: 0) {
             Spacer()
-            ComposeBar(model: model, focusOnAppear: false, target: target)
+            TerminalInputStatus(model: model)
+                .modifier(ComposerMargins())
+                .padding(.bottom, ComposerMargins.bottom)
         }
-    }
-
-    @Test func idle() {
-        assertScreen(named: "dictation-idle") { bar(text: "Fix the flaky upload test", phase: .idle, target: "04") }
     }
 
     @Test func listeningWithPartial() {
         assertScreen(named: "dictation-listening") {
-            bar(text: "Then", phase: .listening(partial: "run the whole suite again and tell me", level: 0.6))
+            status(phase: .listening(partial: "run the whole suite again and tell me", level: 0.6))
         }
     }
 
     @Test func listeningEmpty() {
-        assertScreen(named: "dictation-listening-empty") { bar(phase: .listening(partial: "", level: 0.2)) }
+        assertScreen(named: "dictation-listening-empty") { status(phase: .listening(partial: "", level: 0.2)) }
     }
 
     @Test func failedDenied() {
-        assertScreen(named: "dictation-denied") { bar(phase: .failed(DictationCopy.denied)) }
+        assertScreen(named: "dictation-denied") { status(phase: .failed(DictationCopy.denied)) }
     }
 
     @Test func settingsPage() {

@@ -47,6 +47,7 @@
         { "if": { "properties": { "method": { "const": "git.diff" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitDiffParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.log" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitLogParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.branches" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/SessionRefParams" } }, "required": ["params"] } },
+        { "if": { "properties": { "method": { "const": "git.files" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitFilesParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.stage" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitPathsParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.unstage" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitPathsParams" } }, "required": ["params"] } },
         { "if": { "properties": { "method": { "const": "git.discard" } } }, "then": { "properties": { "params": { "$ref": "#/$defs/GitPathsParams", "properties": { "seen": true }, "required": ["seen"] } }, "required": ["params"] } },
@@ -344,7 +345,7 @@
       "additionalProperties": false
     },
     "HelloResult": {
-      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"image.v1\" (fs.image), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission), \"integrations.v1\" (integrations.status, integrations.install, integrations.uninstall), \"recent.v1\" (fs.forgetRecentDir). local.* methods are never advertised.",
+      "description": "Base helper capabilities: [\"session.v1\", \"agents.v1\", \"fs.v1\", \"capture.v1\"]; capture.v1 adds session.capture. A helper adds, only when the running process serves them: \"events.v1\" (events.subscribe, events.keepalive and the event notification), \"approvals.v1\" (approval.list, approval.answer), \"mute.v1\" (session.setMute), \"push.v1\" (push.pair, push.unpair), \"git.v1\" (git.status, git.diff, git.log, git.branches, fs.read, fs.listDir with ref), \"gitwrite.v1\" (git.stage, git.unstage, git.discard, git.commit and git.diff with commit; only alongside git.v1), \"gitfiles.v1\" (git.files, git.log graph and commit parents; only alongside git.v1), \"ports.v1\" (ports.list), \"upload.v1\" (fs.upload), \"image.v1\" (fs.image), \"awake.v1\" (awake.status, awake.set and the awake event), \"launch.v1\" (session.create program and args, agents.check, session.relaunch, Session.command), \"lifecycle.v1\" (Session statuses ended and failed with Session.exit, push kinds ended and failed, local.signal kind exit), \"restore.v1\" (session.restorable, session.restore, session.dismiss), \"notify.v1\" (notify.get, notify.set), \"reply.v1\" (session.sendText), \"authkeys.v1\" (authkeys.remove), \"hostinfo.v1\" (host.info), \"browser.v1\" (browser.openOnMac and the browser.open event), \"harness.v1\" (harness.describe, harness.open, harness.close, harness.history, harness.screen, harness.action, harness.send, harness.interrupt, harness.complete, harness.locate, the harness notification and Session.mission), \"integrations.v1\" (integrations.status, integrations.install, integrations.uninstall), \"recent.v1\" (fs.forgetRecentDir). local.* methods are never advertised.",
       "type": "object",
       "properties": {
         "protocol": { "const": 1 },
@@ -1603,7 +1604,7 @@
       "additionalProperties": false
     },
     "GitLogParams": {
-      "description": "git.log. ref defaults to HEAD, limit to 50. A ref starting with - or not resolving: -32003.",
+      "description": "git.log. ref defaults to HEAD, limit to 50. A ref starting with - or not resolving: -32003. graph (gitfiles.v1) orders the log topologically, so a commit always comes before its parents, and adds files to each commit.",
       "type": "object",
       "properties": {
         "id": {
@@ -1616,6 +1617,9 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 200
+        },
+        "graph": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1646,6 +1650,19 @@
               },
               "subject": {
                 "type": "string"
+              },
+              "parents": {
+                "description": "gitfiles.v1: full hashes of the parents, first parent first; empty for a root commit.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40,64}$"
+                }
+              },
+              "files": {
+                "description": "Only with graph: how many files the commit changes against its first parent. Absent for merges and empty commits.",
+                "type": "integer",
+                "minimum": 1
               }
             },
             "required": [
@@ -1661,6 +1678,42 @@
       },
       "required": [
         "commits"
+      ],
+      "additionalProperties": false
+    },
+    "GitFilesParams": {
+      "description": "git.files (gitfiles.v1). Without ref: tracked files and untracked files git does not ignore; with ref: the files of that commit. A ref starting with - or not resolving: -32003.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SessionIdParam"
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "GitFilesResult": {
+      "description": "git.files. Paths relative to the repository root, at most 50000; truncated when more were left out. Outside a repository: no paths.",
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "paths",
+        "truncated"
       ],
       "additionalProperties": false
     },
@@ -3597,6 +3650,7 @@
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.diff" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitDiffResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.log" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitLogResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.branches" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitBranchesResult" } } } } } },
+        { "if": { "properties": { "request": { "properties": { "method": { "const": "git.files" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitFilesResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.stage" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitStatusResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.unstage" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitStatusResult" } } } } } },
         { "if": { "properties": { "request": { "properties": { "method": { "const": "git.discard" } } } } }, "then": { "properties": { "response": { "properties": { "result": { "$ref": "#/$defs/GitStatusResult" } } } } } },

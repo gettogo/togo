@@ -72,13 +72,6 @@ struct DictationSafetyTests {
         #expect(!dictation.isActive)
     }
 
-    @Test func cancelledGestureReleasesTheHold() {
-        #expect(HoldEdge(from: false, to: true) == .press)
-        #expect(HoldEdge(from: true, to: false) == .release)
-        #expect(HoldEdge(from: true, to: true) == nil)
-        #expect(HoldEdge(from: false, to: false) == nil)
-    }
-
     @Test func dictateRequestIsTakenOnce() {
         let store = AppStore(services: FakeAppServices())
         let id = TabID(hostID: Samples.studio, sessionID: "s-04")

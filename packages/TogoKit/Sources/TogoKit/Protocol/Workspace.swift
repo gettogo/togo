@@ -237,11 +237,37 @@ public struct GitLogParams: Codable, Hashable, Sendable {
     public var id: String
     public var ref: String?
     public var limit: Int?
+    /// `gitfiles.v1`: topological order, so a commit always comes before its parents, and a
+    /// changed-file count on each commit. An older helper refuses the unknown field.
+    public var graph: Bool?
 
-    public init(id: String, ref: String? = nil, limit: Int? = nil) {
+    public init(id: String, ref: String? = nil, limit: Int? = nil, graph: Bool? = nil) {
         self.id = id
         self.ref = ref
         self.limit = limit
+        self.graph = graph
+    }
+}
+
+/// `git.files` (`gitfiles.v1`): the repository's files, or a commit's with `ref`.
+public struct GitFilesParams: Codable, Hashable, Sendable {
+    public var id: String
+    public var ref: String?
+
+    public init(id: String, ref: String? = nil) {
+        self.id = id
+        self.ref = ref
+    }
+}
+
+/// Paths relative to the repository root, sorted; `truncated` when the helper left some out.
+public struct GitFiles: Codable, Hashable, Sendable {
+    public var paths: [String]
+    public var truncated: Bool
+
+    public init(paths: [String], truncated: Bool) {
+        self.paths = paths
+        self.truncated = truncated
     }
 }
 
@@ -251,17 +277,27 @@ public struct GitCommit: Codable, Hashable, Sendable {
     public var author: String
     public var date: Date
     public var subject: String
+    /// Full hashes, first parent first; empty for a root commit, and from a helper before
+    /// `gitfiles.v1`, which does not send them.
+    public var parents: [String]
+    /// How many files the commit changes, when the log was asked for as a graph. Nil for
+    /// merges, empty commits and older helpers.
+    public var files: Int?
 
-    public init(hash: String, short: String, author: String, date: Date, subject: String) {
+    public init(
+        hash: String, short: String, author: String, date: Date, subject: String, parents: [String] = [], files: Int? = nil
+    ) {
         self.hash = hash
         self.short = short
         self.author = author
         self.date = date
         self.subject = subject
+        self.parents = parents
+        self.files = files
     }
 
     private enum CodingKeys: String, CodingKey {
-        case hash, short, author, date, subject
+        case hash, short, author, date, subject, parents, files
     }
 
     public init(from decoder: any Decoder) throws {
@@ -271,6 +307,8 @@ public struct GitCommit: Codable, Hashable, Sendable {
         author = try container.decode(String.self, forKey: .author)
         date = try container.decodeTimestamp(forKey: .date)
         subject = try container.decode(String.self, forKey: .subject)
+        parents = try container.decodeIfPresent([String].self, forKey: .parents) ?? []
+        files = try container.decodeIfPresent(Int.self, forKey: .files)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -280,6 +318,8 @@ public struct GitCommit: Codable, Hashable, Sendable {
         try container.encode(author, forKey: .author)
         try container.encodeTimestamp(date, forKey: .date)
         try container.encode(subject, forKey: .subject)
+        if !parents.isEmpty { try container.encode(parents, forKey: .parents) }
+        try container.encodeIfPresent(files, forKey: .files)
     }
 }
 

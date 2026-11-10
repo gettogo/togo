@@ -38,6 +38,18 @@ struct ReviewRootSnapshotTests {
         }
     }
 
+    /// A file link tapped in the chat: its diff alone, with Close and All Changes.
+    @Test func rootFocusedOnIPhone() {
+        assertScreen(named: "root-focused") {
+            ReviewRoot(
+                subject: subject, services: FakeReviewServices(), initialTab: .changes, machine: "Studio",
+                sendToSession: { _ in true },
+                navigation: ReviewNavigation(tab: .changes, focus: .diff(.worktree(path: "src/handlers/items.ts")))
+            )
+            .tint(Color.togoSnow)
+        }
+    }
+
     /// iPad Pro 13-inch in landscape: the changes list in the sidebar, a diff in the detail.
     @Test func rootOnIPad() async {
         var navigation = ReviewNavigation(tab: .changes)

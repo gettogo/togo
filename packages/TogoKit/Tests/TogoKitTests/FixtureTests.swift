@@ -179,6 +179,7 @@ struct FixtureTests {
         case .approvalAnswer: (ApprovalAnswerParams.self, ApprovalAnswerResult.self)
         case .gitStatus: (SessionIDParams.self, GitStatus.self)
         case .gitBranches: (SessionIDParams.self, GitBranches.self)
+        case .gitFiles: (GitFilesParams.self, GitFiles.self)
         case .portsList: (SessionIDParams.self, PortList.self)
         case .gitDiff: (GitDiffParams.self, GitDiff.self)
         case .gitStage, .gitUnstage, .gitDiscard: (GitPathsParams.self, GitStatus.self)

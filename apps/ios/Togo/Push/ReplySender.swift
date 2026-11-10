@@ -199,7 +199,7 @@ extension AppStore {
     }
 
     /// Sends a reply typed in a notification and says how it went. Words that were not typed
-    /// wait in the session's compose bar, which opens with them.
+    /// wait for the session's input (`pendingInput`): its chat composer, or its terminal.
     @discardableResult
     func deliverReply(_ reply: Reply, session: String? = nil, via sender: ReplySender) async -> ReplyOutcome {
         let outcome = await sender.send(reply)
@@ -216,9 +216,9 @@ extension AppStore {
         return outcome
     }
 
-    /// The draft kept for a tab's compose bar, taken once.
-    func takeReplyDraft(_ id: TabID) -> String? {
-        replyDrafts.removeValue(forKey: id)
+    /// The words waiting for a tab's input, taken once.
+    func takePendingInput(_ id: TabID) -> String? {
+        pendingInput.removeValue(forKey: id)
     }
 
     private func keepDraft(_ reply: Reply, session: String?) {
@@ -229,12 +229,11 @@ extension AppStore {
             session ?? controlCenter.requests.first { $0.id == requestID && $0.hostID == host }?.sessionID
         }
         guard let target else {
-            // A request with no session has no compose bar; the notice says what happened.
+            // A request with no session has no input to wait in; the notice says what happened.
             Self.replyLog.notice("Reply to a request with no session kept no draft")
             return
         }
         let id = TabID(hostID: reply.host, sessionID: target)
-        replyDrafts[id] = ReplyText.clean(reply.text)
-        composing = id
+        pendingInput[id] = ReplyText.clean(reply.text)
     }
 }

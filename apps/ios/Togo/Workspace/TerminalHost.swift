@@ -1,6 +1,7 @@
 import Observation
 import SwiftUI
 import TogoKit
+import TogoTerminal
 import UIKit
 
 /// The running terminal for each open tab, shared by every window. It belongs to the app
@@ -99,11 +100,11 @@ import UIKit
         settle()
     }
 
-    /// Zen in `window` hides the Compose and Dictate keys on the terminals that window shows,
+    /// Zen in `window` hides the Attach and Dictate keys on the terminals that window shows,
     /// and on no other. A terminal that moves to another window takes that window's setting.
     func zenChanged(_ on: Bool, in window: WindowID) {
         for (id, entry) in entries where hosts[id] == window {
-            entry.handle.hidesComposeKeys = on
+            entry.handle.hidesInputKeys = on
         }
     }
 
@@ -274,9 +275,9 @@ import UIKit
         handle.onShortcut = { [weak store] in store?.perform($0) }
         handle.onSwipe = { [weak store] in store?.step($0, from: id) }
         handle.onEdgeSwipe = { [weak store] in store?.edgeSwipe() }
-        handle.onCompose = { [weak store] in store?.toggleCompose(id) }
+        handle.onAttach = { [weak store] in store?.attach(id) }
         handle.onDictate = { [weak store] in store?.dictate(id) }
-        handle.hidesComposeKeys = store.zen
+        handle.hidesInputKeys = store.zen
         handle.onPasteImage = { [weak store] in store?.pasteImage($0, into: id) }
     }
 
@@ -311,6 +312,7 @@ struct TerminalSlot: View {
                 GeometryReader { proxy in
                     TabTerminalView(
                         handle: handle, fit: proxy.size, covered: covered,
+                        focused: store?.focusedTab?.id == tab,
                         jump: covered ? nil : harness?.pendingJump.flatMap { $0.sessionID == tab.sessionID ? $0 : nil },
                         onJump: { jump, landed in
                             if harness?.pendingJump == jump { harness?.pendingJump = nil }
@@ -349,6 +351,8 @@ struct TabTerminalView: UIViewControllerRepresentable {
     var fit: CGSize = .zero
     /// The chat covers the terminal: it takes no touches, no keyboard and no VoiceOver focus.
     var covered = false
+    /// The tab is the focused one, where a hardware keyboard types.
+    var focused = true
     /// A line to scroll to and mark, once.
     var jump: TerminalJump?
     /// The jump was handled: `landed` false when the phone does not hold the line.
@@ -356,6 +360,7 @@ struct TabTerminalView: UIViewControllerRepresentable {
 
     final class Coordinator {
         var handled: TerminalJump?
+        var covered: Bool?
     }
 
     func makeCoordinator() -> Coordinator {
@@ -371,6 +376,13 @@ struct TabTerminalView: UIViewControllerRepresentable {
         container.setCovered(covered)
         handle.engine?.isCovered = covered
         container.refit(for: fit)
+        let uncovered = context.coordinator.covered == true && !covered
+        context.coordinator.covered = covered
+        if uncovered, focused, KeyboardPresence.shared.hardwareKeyboardConnected {
+            // Back from the chat, a hardware keyboard types straight into the terminal again.
+            // No software keyboard comes up for it; without one, the next tap raises it.
+            Task { @MainActor in handle.raiseKeyboard() }
+        }
         guard let jump, context.coordinator.handled != jump else {
             if jump == nil { context.coordinator.handled = nil }
             return

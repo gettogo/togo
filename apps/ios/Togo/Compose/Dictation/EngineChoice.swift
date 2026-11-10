@@ -33,7 +33,7 @@ import TogoKit
     }
 }
 
-/// The engine every compose bar dictates with: whichever this device's settings choose. One
+/// The engine every dictation listens with: whichever this device's settings choose. One
 /// object for all of them, so there is one owner of the microphone whichever engine runs.
 @MainActor final class SelectedSpeechEngine: SpeechEngine {
     private let choice: EngineChoice

@@ -212,6 +212,119 @@ func TestLogLimitAndOrder(t *testing.T) {
 	}
 }
 
+func TestLogParentsAndGraph(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, "a.txt", "a")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-qm", "root")
+	git(t, dir, "checkout", "-qb", "side")
+	write(t, dir, "b.txt", "b")
+	write(t, dir, "c.txt", "c")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-qm", "side")
+	git(t, dir, "checkout", "-q", "main")
+	write(t, dir, "d.txt", "d")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-qm", "mainline")
+	git(t, dir, "merge", "-q", "--no-ff", "--no-edit", "side")
+	git(t, dir, "commit", "-q", "--allow-empty", "-m", "empty")
+
+	// Without graph: parents always, no counts, so older clients see what they saw.
+	var plain struct{ Commits []gitx.Commit }
+	if err := call(t, service(dir), "git.log", `{`+sid+`}`, &plain); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range plain.Commits {
+		if c.Files != 0 {
+			t.Errorf("%s counted without graph: %d", c.Subject, c.Files)
+		}
+	}
+
+	var lg struct{ Commits []gitx.Commit }
+	if err := call(t, service(dir), "git.log", `{`+sid+`,"graph":true}`, &lg); err != nil {
+		t.Fatal(err)
+	}
+	if len(lg.Commits) != 5 {
+		t.Fatalf("commits %+v", lg.Commits)
+	}
+	by := map[string]gitx.Commit{}
+	index := map[string]int{}
+	for i, c := range lg.Commits {
+		by[c.Subject] = c
+		index[c.Hash] = i
+	}
+	if p := by["root"].Parents; len(p) != 0 {
+		t.Errorf("root parents %v", p)
+	}
+	merge := by["Merge branch 'side'"]
+	if len(merge.Parents) != 2 || merge.Parents[0] != by["mainline"].Hash || merge.Parents[1] != by["side"].Hash {
+		t.Errorf("merge parents %v", merge.Parents)
+	}
+	if by["side"].Files != 2 || by["mainline"].Files != 1 || by["root"].Files != 1 {
+		t.Errorf("files side %d mainline %d root %d", by["side"].Files, by["mainline"].Files, by["root"].Files)
+	}
+	if merge.Files != 0 || by["empty"].Files != 0 {
+		t.Errorf("merge %d empty %d", merge.Files, by["empty"].Files)
+	}
+	// Topological: no commit comes after one of its parents.
+	for i, c := range lg.Commits {
+		for _, p := range c.Parents {
+			if j, ok := index[p]; ok && j <= i {
+				t.Errorf("%s listed before its child %s", lg.Commits[j].Subject, c.Subject)
+			}
+		}
+	}
+
+	var raw struct {
+		Commits []map[string]json.RawMessage
+	}
+	if err := call(t, service(dir), "git.log", `{`+sid+`,"limit":5}`, &raw); err != nil {
+		t.Fatal(err)
+	}
+	last := raw.Commits[len(raw.Commits)-1]
+	if string(last["parents"]) != "[]" {
+		t.Errorf("root commit parents encode as %s", last["parents"])
+	}
+	if _, ok := last["files"]; ok {
+		t.Error("files sent without graph")
+	}
+}
+
+func TestFilesListsTrackedUntrackedAndCommit(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, ".gitignore", "build/\n")
+	write(t, dir, "src/a.txt", "a")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-qm", "one")
+	write(t, dir, "src/new.txt", "n")
+	write(t, dir, "build/out.o", "o")
+	sub := filepath.Join(dir, "src")
+
+	var fs gitx.Files
+	// The session runs in a subfolder; paths are still the repository's.
+	s := &gitx.Service{Sessions: fakeSessions{cwd: sub}}
+	if err := call(t, s, "git.files", `{`+sid+`}`, &fs); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(fs.Paths, ",") != ".gitignore,src/a.txt,src/new.txt" || fs.Truncated {
+		t.Errorf("working tree %+v", fs)
+	}
+	head := strings.TrimSpace(git(t, dir, "rev-parse", "HEAD"))
+	if err := call(t, s, "git.files", `{`+sid+`,"ref":"`+head+`"}`, &fs); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(fs.Paths, ",") != ".gitignore,src/a.txt" {
+		t.Errorf("at commit %+v", fs)
+	}
+	if err := call(t, s, "git.files", `{`+sid+`,"ref":"--output=/tmp/x"}`, nil); !errors.Is(err, fsx.ErrInvalidPath) {
+		t.Errorf("option ref: %v", err)
+	}
+	outside, _ := filepath.EvalSymlinks(t.TempDir())
+	if err := call(t, service(outside), "git.files", `{`+sid+`}`, &fs); err != nil || len(fs.Paths) != 0 {
+		t.Errorf("outside a repo %+v %v", fs, err)
+	}
+}
+
 func TestLogEmptyRepoIsEmpty(t *testing.T) {
 	var lg struct{ Commits []gitx.Commit }
 	if err := call(t, service(newRepo(t)), "git.log", `{`+sid+`}`, &lg); err != nil || len(lg.Commits) != 0 {

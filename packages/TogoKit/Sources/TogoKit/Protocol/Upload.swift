@@ -11,6 +11,8 @@ public enum Capability {
     public static let git = "git.v1"
     /// `git.stage`, `git.unstage`, `git.discard`, `git.commit` and `git.diff` with a commit.
     public static let gitWrite = "gitwrite.v1"
+    /// `git.files`, and `git.log` with `graph` and commit parents.
+    public static let gitFiles = "gitfiles.v1"
     public static let ports = "ports.v1"
     public static let push = "push.v1"
     public static let capture = "capture.v1"
