@@ -52,7 +52,13 @@ export type SendResult =
   | { status: "sent"; apnsId: string }
   | { status: "limited"; retryAfter: number }
   | { status: "unregistered" }
+  // APNs refused the push. `apnsStatus` is its HTTP status: 4xx other than 429
+  // will fail the same way again, 429 and 5xx may pass later.
+  | { status: "rejected"; apnsStatus: number; reason: string }
   | { status: "failed"; reason: string };
+
+// How long a sender waits after APNs answers 429, which carries no Retry-After.
+export const APNS_RETRY_AFTER_S = 60;
 
 export async function handlePush(request: Request, env: Env): Promise<Response> {
   let body: PushBody;
@@ -76,6 +82,17 @@ export async function handlePush(request: Request, env: Env): Promise<Response> 
       return limited(result.retryAfter);
     case "unregistered":
       return json(410, { error: "unregistered" });
+    case "rejected": {
+      // APNs's own status, so the sender can tell a push that will never go
+      // through (4xx) from one worth trying again (429, 5xx).
+      const body: Record<string, unknown> = { error: "apns", reason: result.reason, apnsStatus: result.apnsStatus };
+      if (result.apnsStatus === 429) {
+        const res = json(429, { ...body, retryAfter: APNS_RETRY_AFTER_S });
+        res.headers.set("retry-after", String(APNS_RETRY_AFTER_S));
+        return res;
+      }
+      return json(result.apnsStatus, body);
+    }
     case "failed":
       return json(502, { error: "apns", reason: result.reason });
   }
@@ -94,7 +111,7 @@ export async function sendOne(env: Env, body: PushBody): Promise<SendResult> {
 
   let result: ApnsResult;
   try {
-    result = await apnsSend(env, {
+    const request = {
       token: body.token,
       environment: body.env,
       pushType: body.kind,
@@ -102,7 +119,10 @@ export async function sendOne(env: Env, body: PushBody): Promise<SendResult> {
       collapseId: body.collapseId,
       priority: body.kind === "liveactivity" ? liveActivityPriority(body.liveActivity!) : undefined,
       payload: apnsPayload(body),
-    });
+    };
+    result = await apnsSend(env, request);
+    // The cached JWT was dropped; one more try with a fresh one goes through.
+    if (result.reason === "ExpiredProviderToken") result = await apnsSend(env, request);
   } catch (err) {
     if (err instanceof ConfigError) {
       console.error("apns config invalid", err.message);
@@ -118,7 +138,9 @@ export async function sendOne(env: Env, body: PushBody): Promise<SendResult> {
     await tokLimiter.markUnregistered();
     return { status: "unregistered" };
   }
-  return { status: "failed", reason: result.reason ?? `status_${result.status}` };
+  const reason = result.reason ?? `status_${result.status}`;
+  if (result.status >= 400 && result.status <= 599) return { status: "rejected", apnsStatus: result.status, reason };
+  return { status: "failed", reason };
 }
 
 function apnsPayload(body: PushBody): unknown {

@@ -58,7 +58,7 @@ func (r *runner) stopping() bool {
 }
 
 // disarmOnStop withdraws the will when the daemon is being stopped on
-// purpose, or when this relay was dropped because no live device uses it
+// purpose, or when this relay was dropped because no paired device uses it
 // any more while the daemon keeps running. The connection's context has
 // already ended, so the write gets its own short deadline.
 func (r *runner) disarmOnStop(conn *websocket.Conn) {

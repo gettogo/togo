@@ -403,6 +403,7 @@ import UIKit
 
     private func received(_ snapshot: HostSnapshot) {
         guard let record = records[snapshot.hostID] else { return }
+        let reconnected = snapshot.reach == .online && latest[snapshot.hostID]?.reach != .online
         latest[snapshot.hostID] = snapshot
         if snapshot.reach == .online { deviceMachines.signedIn(to: record.id) }
         deps.diagnostics.reached(snapshot, record: record)
@@ -411,7 +412,7 @@ import UIKit
         learnRoutes(from: snapshot, record: record)
         askToOpen(from: snapshot)
         if snapshot.reach == .online, !record.noHelper {
-            pair(record, capabilities: snapshot.capabilities)
+            pair(record, capabilities: snapshot.capabilities, reconnected: reconnected)
             if foreground, unreported.remove(record.id) != nil {
                 deps.reported(record.id, Set(snapshot.approvals.map(\.requestId)))
             }

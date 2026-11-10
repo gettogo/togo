@@ -46,6 +46,9 @@ import WidgetKit
         pending = PendingStore(directory: directory, clock: { Date() }) {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
         }
+        // A notification action or Live Activity button stopped mid-send leaves its request on
+        // "Sending", refusing every later tap; one past its time is given back now.
+        pending.releaseAbandonedClaims()
         registrar = PushRegistrar()
         let source = self.source
         let watch = self.watch

@@ -166,7 +166,10 @@ public struct HarnessOpenResult: Codable, Hashable, Sendable {
 struct LenientItems: Decodable {
     var items: [HarnessItem] = []
 
-    private struct Skip: Decodable {}
+    /// Any value at all, so a null or a bare string in the array is stepped over too.
+    private struct Skip: Decodable {
+        init(from decoder: any Decoder) throws {}
+    }
 
     init(from decoder: any Decoder) throws {
         var c = try decoder.unkeyedContainer()
@@ -424,5 +427,21 @@ public struct HarnessNotification: Codable, Hashable, Sendable {
         self.items = items
         self.mission = mission
         self.reason = reason
+    }
+
+    private enum CodingKeys: String, CodingKey { case sessionId, kind, ts, epoch, items, mission, reason }
+
+    /// Items decode one by one, as in an open result: one item this client cannot read is
+    /// skipped instead of dropping the whole notification, and with it the items beside it
+    /// (a turn's last reply and its end), which an idle session would never send again.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sessionId = try c.decode(String.self, forKey: .sessionId)
+        kind = try c.decode(Kind.self, forKey: .kind)
+        ts = try c.decode(WireDate.self, forKey: .ts)
+        epoch = try c.decode(String.self, forKey: .epoch)
+        items = try c.decodeIfPresent(LenientItems.self, forKey: .items)?.items
+        mission = try c.decodeIfPresent(HarnessDelta.self, forKey: .mission)
+        reason = try c.decodeIfPresent(String.self, forKey: .reason)
     }
 }

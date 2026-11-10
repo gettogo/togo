@@ -1,6 +1,7 @@
 import AppIntents
 import Foundation
 import TogoPush
+import WidgetKit
 
 /// Answers a request from the Live Activity's buttons, the same one-tap way a notification
 /// does: approve or deny, signed with this device's key and sealed through the machine's relay
@@ -17,7 +18,11 @@ enum LiveAnswer {
         guard let directory = SharedGroup.storeDirectory(SharedGroup.ios),
               let pairing = PairingStore(directory: directory).pairing(hostId: hostId)
         else { throw Failure.unavailable }
-        let pending = PendingStore(directory: directory, clock: { Date() })
+        // The waiting widget counts open requests: an answer here takes one off at once,
+        // rather than when the widget's next entry is due, up to ten minutes later.
+        let pending = PendingStore(directory: directory, clock: { Date() }) {
+            WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
+        }
         guard pending.claim(requestId, hostId: hostId) else { return }
         #if DEBUG
         // The app's recorded demo (`-ui-demo-live`) has no relay: it reads the answer from the store.

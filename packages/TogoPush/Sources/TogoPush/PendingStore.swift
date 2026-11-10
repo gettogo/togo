@@ -21,11 +21,19 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public var answered: Answered?
     /// The request takes a typed answer, as its push said. Absent in older records.
     public var allowText: Bool?
+    /// When this device took the request's one answer (`PendingStore.claim`); set only while
+    /// `answered` is `sending`. Absent in older records.
+    public var claimedAt: Date?
+
+    /// How long a claim holds. A send is over well before this (the relay post and the live
+    /// channel give up sooner), so a claim still sending after it was left by a process that
+    /// was stopped mid-send: the app, a notification action or a Live Activity button.
+    public static let claimTimeout: TimeInterval = 120
 
     public init(
         requestId: String, hostId: String, sessionId: String?, bib: String?, agent: String?, host: String?,
         title: String, subject: PushSubject?, options: [PushOption], receivedAt: Date, answered: Answered?,
-        allowText: Bool? = nil
+        allowText: Bool? = nil, claimedAt: Date? = nil
     ) {
         self.requestId = requestId
         self.hostId = hostId
@@ -39,6 +47,26 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
         self.receivedAt = receivedAt
         self.answered = answered
         self.allowText = allowText
+        self.claimedAt = claimedAt
+    }
+
+    /// A claim nobody is finishing: still `sending` past `claimTimeout`, or a sending record
+    /// from before claims had a time. Left as it is, the request would read "Sending" and
+    /// refuse every later answer until it aged out.
+    public func claimAbandoned(at now: Date) -> Bool {
+        guard answered == .sending else { return false }
+        guard let claimedAt else { return true }
+        return abs(now.timeIntervalSince(claimedAt)) >= Self.claimTimeout
+    }
+
+    /// Nothing has answered it and no answer is on its way: it still waits on the user.
+    public func isOpen(at now: Date) -> Bool {
+        answered == nil || claimAbandoned(at: now)
+    }
+
+    /// A record `claim` made for an id this device never got a push for: nothing to show.
+    public var isPlaceholder: Bool {
+        title.isEmpty && options.isEmpty && sessionId == nil && bib == nil && agent == nil && host == nil
     }
 }
 
@@ -85,17 +113,20 @@ public final class PendingStore: Sendable {
 
     /// Takes the one answer a request gets: marks it `sending` under the file lock and returns
     /// true, or returns false when it is already sending or answered, from any process. An id
-    /// the store never saw is recorded so it too is answered once.
+    /// the store never saw is recorded so it too is answered once. A claim abandoned by a
+    /// process stopped mid-send (`claimAbandoned`) is taken over.
     public func claim(_ requestId: String, hostId: String) -> Bool {
         var claimed = false
+        let now = clock()
         update { values in
             if let index = values.firstIndex(where: { $0.requestId == requestId }) {
-                guard values[index].answered == nil else { return }
+                guard values[index].isOpen(at: now) else { return }
                 values[index].answered = .sending
+                values[index].claimedAt = now
             } else {
                 values.append(PendingRequest(
                     requestId: requestId, hostId: hostId, sessionId: nil, bib: nil, agent: nil, host: nil, title: "",
-                    subject: nil, options: [], receivedAt: clock(), answered: .sending
+                    subject: nil, options: [], receivedAt: now, answered: .sending, claimedAt: now
                 ))
             }
             claimed = true
@@ -110,6 +141,7 @@ public final class PendingStore: Sendable {
                   values[index].answered == .sending
             else { return }
             values[index].answered = nil
+            values[index].claimedAt = nil
         }
     }
 
@@ -117,6 +149,23 @@ public final class PendingStore: Sendable {
         update { values in
             guard let index = values.firstIndex(where: { $0.requestId == requestId }) else { return }
             values[index].answered = answered
+            values[index].claimedAt = answered == .sending ? clock() : nil
+        }
+    }
+
+    /// Gives back every abandoned claim (`claimAbandoned`), as the Watch does at launch: the
+    /// request opens again, and a placeholder `claim` made for an id never pushed here goes
+    /// rather than open as a blank request. Claims still inside their time are left alone,
+    /// since another process may be sending.
+    public func releaseAbandonedClaims() {
+        let now = clock()
+        guard blob.read().contains(where: { $0.claimAbandoned(at: now) }) else { return }
+        update { values in
+            values.removeAll { $0.claimAbandoned(at: now) && $0.isPlaceholder }
+            for index in values.indices where values[index].claimAbandoned(at: now) {
+                values[index].answered = nil
+                values[index].claimedAt = nil
+            }
         }
     }
 

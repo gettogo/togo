@@ -195,6 +195,19 @@ import UIKit
         #expect(!rig.h.engine.isSelecting)
     }
 
+    /// The bottom line has no row below for the end to run to; a drag to its edge still
+    /// copies what the drag covered, not the text left of where it began.
+    @Test func dragToTheEdgeOfTheBottomLineCopiesIt() async {
+        let rig = Rig()
+        let rows = rig.h.engine.size.rows
+        let cols = rig.h.engine.size.cols
+        rig.h.feed(String(repeating: "\r\n", count: rows - 1) + "last line")
+        let picked1 = await drag(rig, from: (0, rows - 1), to: (cols - 1, rows - 1))
+        #expect(picked1 == "last line")
+        let picked2 = await drag(rig, from: (5, rows - 1), to: (cols - 1, rows - 1))
+        #expect(picked2 == "line")
+    }
+
     @Test func pointerIsAnIBeamOverTheGrid() {
         let rig = Rig()
         let style = rig.pointer.style

@@ -54,12 +54,12 @@ struct ThemeTests {
         }
     }
 
-    @Test func beaconThemesMatchTokens() throws {
+    @Test func togoThemesMatchTokens() throws {
         let tokens = try JSONDecoder().decode(
             Tokens.self, from: Data(contentsOf: repoRoot.appending(path: "brand/tokens.json")))
-        let dark = try #require(BuiltInThemes.all.first { $0.id == "beacon-dark" })
-        let light = try #require(BuiltInThemes.all.first { $0.id == "beacon-light" })
-        #expect(BuiltInThemes.all.map(\.id) == ["beacon-dark", "beacon-light", "plain"])
+        let dark = try #require(BuiltInThemes.all.first { $0.id == "togo-dark" })
+        let light = try #require(BuiltInThemes.all.first { $0.id == "togo-light" })
+        #expect(BuiltInThemes.all.map(\.id) == ["togo-dark", "togo-light", "plain"])
 
         #expect(dark.background == tokens.color.ink)
         #expect(dark.foreground == tokens.color.snow)
@@ -121,7 +121,7 @@ struct ThemeTests {
         expected.fontSize = 15
         #expect(settings == expected)
         #expect(expected.scrollback == 10_000)
-        #expect(expected.themeID == "beacon-dark")
+        #expect(expected.themeID == "togo-dark")
         #expect(!expected.allowClipboardRead)
         #expect(expected.readNewOutput)
     }

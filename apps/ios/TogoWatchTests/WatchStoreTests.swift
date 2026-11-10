@@ -253,6 +253,88 @@ private final class Clock: Sendable {
         #expect(store.state(of: "r_1") == .approved)
     }
 
+    /// The app stopped mid-send (watchOS ended it in the background, or it crashed): its claim
+    /// must not leave the request on "Sending", refusing every tap, until it ages out.
+    @Test func claimLeftByAStoppedAppIsGivenBackAtLaunch() async {
+        let first = store()
+        first.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
+        #expect(pending.claim("r_1", hostId: "h_studio"))
+        // A notification action for a request this Watch never got a push for.
+        #expect(pending.claim("r_mirrored", hostId: "h_studio"))
+
+        let relaunched = store()
+        #expect(relaunched.state(of: "r_1") == .open)
+        #expect(relaunched.requests.map(\.requestId) == ["r_1"])
+        // The record the claim made holds nothing to show: it goes rather than open blank.
+        #expect(pending.request("r_mirrored") == nil)
+        await relaunched.answer("r_1", "approve")
+        #expect(sender.decisions == ["approve"])
+        #expect(relaunched.state(of: "r_1") == .approved)
+    }
+
+    /// A failed send for a request the Watch never got a push for must not leave a blank
+    /// request on the Waiting page.
+    @Test func failedNotificationAnswerLeavesNoBlankRequest() async {
+        let store = store()
+        sender.fails.withLock { $0 = true }
+        let notice = await store.answerFromNotification(
+            hostId: "h_studio", requestId: "r_mirrored", decision: "deny", deliveredAt: clock.date
+        )
+        #expect(notice == store.failureNotice("r_mirrored"))
+        #expect(notice != nil)
+        #expect(pending.request("r_mirrored") == nil)
+        #expect(store.requests.isEmpty)
+
+        // It can be answered again.
+        sender.fails.withLock { $0 = false }
+        let again = await store.answerFromNotification(
+            hostId: "h_studio", requestId: "r_mirrored", decision: "deny", deliveredAt: clock.date
+        )
+        #expect(again == nil)
+        #expect(sender.decisions == ["deny"])
+    }
+
+    /// Past ten minutes the store has pruned the request, so only the notification's own date
+    /// tells that it ran out. The tap sends nothing and says it expired, not that it went.
+    @Test func notificationAnswerAfterPruneSaysExpired() async {
+        let store = store()
+        let delivered = clock.date
+        store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
+        clock.advance(601)
+        store.apply(context: context(closed: [], at: clock.date))
+        #expect(pending.request("r_1") == nil)
+
+        let notice = await store.answerFromNotification(
+            hostId: "h_studio", requestId: "r_1", decision: "approve", deliveredAt: delivered
+        )
+        #expect(notice == WatchCopy.expired)
+        #expect(sender.decisions.isEmpty)
+        #expect(pending.request("r_1") == nil)
+
+        // A recent notification for a request the Watch never got still goes.
+        let fresh = await store.answerFromNotification(
+            hostId: "h_studio", requestId: "r_2", decision: "approve", deliveredAt: clock.date.addingTimeInterval(-30)
+        )
+        #expect(fresh == nil)
+        #expect(sender.decisions == ["approve"])
+    }
+
+    /// A send that failed earlier, then the request ran out: the notice says it expired, not
+    /// that it could not send.
+    @Test func expiredAfterAFailureSaysExpired() async {
+        let store = store()
+        store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
+        sender.fails.withLock { $0 = true }
+        await store.answer("r_1", "approve")
+        #expect(store.state(of: "r_1") == .failed)
+        sender.fails.withLock { $0 = false }
+        clock.advance(601)
+        let notice = await store.answerFromNotification(hostId: "h_studio", requestId: "r_1", decision: "approve")
+        #expect(notice == WatchCopy.expired)
+        #expect(store.failureNotice("r_1") == nil)
+        #expect(sender.decisions.isEmpty)
+    }
+
     /// Before the phone sends this Watch its pairings, or for a machine added since, an answer
     /// cannot go anywhere. It says so instead of doing nothing.
     @Test func answerWithoutPairingSaysWhy() async {

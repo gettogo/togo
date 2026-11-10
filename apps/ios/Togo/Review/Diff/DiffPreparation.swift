@@ -78,7 +78,8 @@ enum DiffPreparation {
         var result: [ModeChange?] = []
         var old: String?
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            if line.hasPrefix("diff --git ") {
+            // Every file header the parser starts a file at, combined diffs' included.
+            if line.hasPrefix("diff --git ") || line.hasPrefix("diff --cc ") || line.hasPrefix("diff --combined ") {
                 result.append(nil)
                 old = nil
             } else if line.hasPrefix("old mode ") {

@@ -119,8 +119,11 @@ final class ScriptedConnect: Sendable {
     }
 }
 
-/// Polls until `condition` holds; the link works on its own tasks.
-func eventually(_ timeout: Duration = .seconds(3), _ condition: () async -> Bool) async -> Bool {
+/// Polls until `condition` holds; the link works on its own tasks. Only a bound on waiting,
+/// never a timing check: a condition that holds returns at once. It is generous because the
+/// whole suite runs in parallel, subprocess tests included, and a loaded machine can take
+/// seconds to schedule the tasks a condition waits on.
+func eventually(_ timeout: Duration = .seconds(15), _ condition: () async -> Bool) async -> Bool {
     let deadline = ContinuousClock.now + timeout
     while ContinuousClock.now < deadline {
         if await condition() { return true }

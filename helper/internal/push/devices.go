@@ -162,28 +162,6 @@ func (d *Devices) UpdateTokens(id, apnsToken, laToken, laStartToken string, comm
 	return d.write(list)
 }
 
-// ForgetLiveActivities drops every stored Live Activity update token. The
-// Sender calls it on start: what was live before a restart is unknown, so
-// a device counts as having an activity again only once it registers one.
-func (d *Devices) ForgetLiveActivities() error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	list, err := d.read()
-	if err != nil {
-		return err
-	}
-	changed := false
-	for i := range list {
-		if list[i].LiveActivityToken != "" {
-			list[i].LiveActivityToken, changed = "", true
-		}
-	}
-	if !changed {
-		return nil
-	}
-	return d.write(list)
-}
-
 // EndLiveActivity forgets id's Live Activity update token after the
 // activity was ended, if it is still token.
 func (d *Devices) EndLiveActivity(id, token string) error {

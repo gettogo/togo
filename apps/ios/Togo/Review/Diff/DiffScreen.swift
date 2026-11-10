@@ -258,7 +258,7 @@ extension DiffModel {
     )
 
     static func preview(_ source: DiffSource, services: FakeReviewServices = FakeReviewServices()) -> DiffModel {
-        DiffModel(subject: previewSubject, services: services, source: source, sendToSession: { _ in })
+        DiffModel(subject: previewSubject, services: services, source: source, sendToSession: { _ in true })
     }
 }
 

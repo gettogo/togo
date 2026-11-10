@@ -51,9 +51,11 @@ type Keys struct {
 	MailboxSecret []byte   // 32 bytes; the Bearer credential for the mailbox
 }
 
-// Device is a paired device as the reader sees it. Dead covers both revoked
-// devices and devices the relay reported as unregistered. RegisterTS is the
-// ts of the last registration applied for it.
+// Device is a paired device as the reader sees it. Dead marks a device the
+// relay reported as unregistered (an unpaired device is absent): its answers
+// are refused, but its registrations are not, since a new APNs token sent
+// through the mailbox is how it comes back. RegisterTS is the ts of the last
+// registration applied for it.
 type Device struct {
 	DeviceID    string
 	ApprovalKey ed25519.PublicKey
@@ -156,7 +158,7 @@ func (v *Verifier) verifyAnswer(pt []byte) (wire.AnswerPlaintext, error) {
 	if !requestIDRe.MatchString(a.RequestID) || !deviceIDRe.MatchString(a.DeviceID) {
 		return a, ErrMalformed
 	}
-	dev, ok := v.device(a.DeviceID)
+	dev, ok := v.device(a.DeviceID, false)
 	if !ok {
 		return a, ErrUnknownDevice
 	}
@@ -186,12 +188,13 @@ func fresh(ts, now time.Time) bool {
 	return d <= FreshnessWindow && d >= -FreshnessWindow
 }
 
-func (v *Verifier) device(id string) (Device, bool) {
+// device looks up a paired device; a dead one only when allowDead.
+func (v *Verifier) device(id string, allowDead bool) (Device, bool) {
 	if v.devices == nil {
 		return Device{}, false
 	}
 	for _, d := range v.devices() {
-		if d.DeviceID == id && !d.Dead && len(d.ApprovalKey) == ed25519.PublicKeySize {
+		if d.DeviceID == id && (allowDead || !d.Dead) && len(d.ApprovalKey) == ed25519.PublicKeySize {
 			return d, true
 		}
 	}

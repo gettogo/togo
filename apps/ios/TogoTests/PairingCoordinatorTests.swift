@@ -196,6 +196,30 @@ private final class RecordingRegister: PushTokenRegistering {
         #expect(helper.pairs.count == 1)
     }
 
+    /// A helper that restarted may have lost the activity's token: reconnecting sends it again,
+    /// and only while an activity runs.
+    @Test func reconnectingReportsARunningActivityAgain() async {
+        let inputs = Inputs()
+        let (coordinator, _) = await coordinator(inputs)
+        let helper = self.helper
+        let online: (Bool) async -> Void = { reconnected in
+            await coordinator.machineOnline(
+                hostID: machine, name: "Studio", capabilities: ["push.v1"], reconnected: reconnected
+            ) { try await helper.pair($0) }
+        }
+        await online(true)
+        await online(true)
+        #expect(helper.pairs.count == 1, "no activity: nothing to report again")
+
+        inputs.updateTokens["h_studio"] = "aaaa"
+        await online(false)
+        await online(false)
+        #expect(helper.pairs.count == 2)
+        await online(true)
+        #expect(helper.pairs.count == 3)
+        #expect(helper.pairs.last?.liveActivityToken == "aaaa")
+    }
+
     @Test func commandTextToggleRepairs() async throws {
         let inputs = Inputs()
         let (coordinator, _) = await coordinator(inputs)

@@ -109,4 +109,16 @@ struct HarnessLenientItemsTests {
         #expect(page.items.map(\.id) == ["m"])
         #expect(page.more)
     }
+
+    @Test func notificationSkipsAMalformedItem() throws {
+        let json = #"{"sessionId":"s","kind":"items","ts":"2026-01-01T00:00:00Z","epoch":"e1","items":["# + Self.bad + "," + Self.good + "]}"
+        let note = try JSONDecoder().decode(HarnessNotification.self, from: Data(json.utf8))
+        #expect(note.items?.map(\.id) == ["m"])
+    }
+
+    @Test func aNullItemIsSteppedOver() throws {
+        let json = #"{"more":false,"items":[null,"x","# + Self.good + "]}"
+        let page = try JSONDecoder().decode(HarnessPage.self, from: Data(json.utf8))
+        #expect(page.items.map(\.id) == ["m"])
+    }
 }

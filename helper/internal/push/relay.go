@@ -48,11 +48,41 @@ type liveAttributes struct {
 	HostID string `json:"hostId"`
 }
 
-// errStatus is a relay answer that is not 202. Retryable marks server errors.
+// errStatus is a relay answer that is not 202. Retryable marks failures that
+// may pass on a later try; deadToken marks a token APNs refused for good,
+// which is forgotten (or its device marked dead) at once.
 type errStatus struct {
 	code      int
 	reason    string
 	retryable bool
+	deadToken bool
+}
+
+// deadTokenReasons are the APNs reasons that condemn the token itself.
+var deadTokenReasons = map[string]bool{
+	"BadDeviceToken": true, "DeviceTokenNotForTopic": true, "Unregistered": true,
+}
+
+// permanentReasons are APNs reasons for a push that fails the same way every
+// time. A relay from before APNs statuses were passed through answers them
+// as 502, so they are told apart by name too.
+var permanentReasons = map[string]bool{
+	"BadCollapseId": true, "BadDeviceToken": true, "BadExpirationDate": true, "BadMessageId": true,
+	"BadPriority": true, "BadTopic": true, "DeviceTokenNotForTopic": true, "DuplicateHeaders": true,
+	"InvalidPushType": true, "MissingDeviceToken": true, "MissingTopic": true, "PayloadEmpty": true,
+	"TopicDisallowed": true, "BadCertificate": true, "BadCertificateEnvironment": true, "Forbidden": true,
+	"InvalidProviderToken": true, "MissingProviderToken": true, "UnrelatedKeyIdInToken": true,
+	"BadPath": true, "MethodNotAllowed": true, "PayloadTooLarge": true, "Unregistered": true,
+}
+
+// retryableAnswer says whether a relay answer may pass on a later try: a
+// server error or an expired provider token (the relay fetches a new one),
+// never a reason APNs gives for a push that cannot go through.
+func retryableAnswer(code int, reason string) bool {
+	if permanentReasons[reason] {
+		return false
+	}
+	return code >= 500 || reason == "ExpiredProviderToken"
 }
 
 func (e *errStatus) Error() string {
@@ -124,10 +154,8 @@ func (s *Sender) postOnce(ctx context.Context, url string, data []byte, d Device
 	case code == http.StatusAccepted:
 		return nil
 	case code == http.StatusGone:
-		if err := s.Devices.MarkDead(d.DeviceID, token); err != nil {
-			s.logf("push: %v", err)
-		}
-		return &errStatus{code: code, reason: "unregistered"}
+		s.markDead(d, token)
+		return &errStatus{code: code, reason: "unregistered", deadToken: true}
 	case code == http.StatusTooManyRequests:
 		wait := time.Duration(answer.RetryAfter) * time.Second
 		if v, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && wait == 0 {
@@ -135,10 +163,25 @@ func (s *Sender) postOnce(ctx context.Context, url string, data []byte, d Device
 		}
 		s.pause(token, wait)
 		return &errStatus{code: code, reason: "rate_limited"}
-	case code == http.StatusBadRequest:
+	case code == http.StatusBadRequest && answer.Error != "apns":
+		// The relay refused the request itself, naming the field.
 		return &errStatus{code: code, reason: printable(answer.Field)}
 	default:
-		return &errStatus{code: code, reason: printable(answer.Reason), retryable: code >= 500}
+		// APNs's answer: its own status from this relay, 502 from an older one.
+		reason := printable(answer.Reason)
+		if deadTokenReasons[reason] {
+			s.markDead(d, token)
+			return &errStatus{code: code, reason: reason, deadToken: true}
+		}
+		return &errStatus{code: code, reason: reason, retryable: retryableAnswer(code, reason)}
+	}
+}
+
+// markDead forgets a token APNs refused for good: a Live Activity token
+// goes, an APNs token marks its device dead until it registers a new one.
+func (s *Sender) markDead(d Device, token string) {
+	if err := s.Devices.MarkDead(d.DeviceID, token); err != nil {
+		s.logf("push: %v", err)
 	}
 }
 

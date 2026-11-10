@@ -216,6 +216,34 @@ import TogoKit
         #expect(model.notice?.message == "Someone else committed at the same time. Your commit is 1234567.")
     }
 
+    /// Two taps on Commit before the first answers make one commit.
+    @Test func secondCommitTapWhileCommittingIsIgnored() async {
+        let (model, services) = await loaded()
+        model.openCommitSheet()
+        services.delays[.commit] = .milliseconds(200)
+        let first = Task { await model.commit(message: "Add the health route", amend: false) }
+        while !model.isWorking { await Task.yield() }
+        #expect(await model.commit(message: "Add the health route", amend: false) == false)
+        #expect(await first.value)
+        #expect(services.calls.filter { $0 == .commit }.count == 1)
+        #expect(model.commitError == nil)
+    }
+
+    /// A stage that ends while a commit is still running leaves the commit marked as running.
+    @Test func stageEndingDoesNotClearARunningCommit() async {
+        let (model, services) = await loaded()
+        model.openCommitSheet()
+        model.message = "Add the health route"
+        services.delays[.commit] = .milliseconds(300)
+        let commit = Task { await model.commit(message: "Add the health route", amend: false) }
+        while !model.isWorking { await Task.yield() }
+        await model.stage(["src/handlers/items.ts"])
+        #expect(model.isWorking)
+        #expect(!model.canCommit)
+        #expect(await commit.value)
+        #expect(!model.isWorking)
+    }
+
     @Test func truncatedListHasNoAllActions() async {
         let (model, services) = await loaded(ReviewFixtures.truncatedStatus)
         #expect(!model.canActOnAll)

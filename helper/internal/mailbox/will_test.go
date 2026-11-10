@@ -170,7 +170,7 @@ func TestDroppedRelayDisarms(t *testing.T) {
 	w.set(armed)
 	h := newWillHarness(t, w, "")
 	h.nextWill(t)
-	h.setDead(true)
+	h.setPaired(false)
 	if got := h.nextWill(t); got != DisarmFrame {
 		t.Fatalf("frame when the relay was dropped %s", got)
 	}
@@ -190,13 +190,13 @@ func TestReaddedRelayWaitsForOldDisarm(t *testing.T) {
 		}
 	})
 	h.nextWill(t)
-	h.setDead(true)
+	h.setPaired(false)
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("dropped relay never disarmed")
 	}
-	h.setDead(false) // wanted again while the old connection is disarming
+	h.setPaired(true) // wanted again while the old connection is disarming
 	if got := h.nextWill(t); got != DisarmFrame {
 		t.Fatalf("first frame after the drop %s, want the disarm", got)
 	}

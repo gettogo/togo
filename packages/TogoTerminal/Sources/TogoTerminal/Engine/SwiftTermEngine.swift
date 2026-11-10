@@ -318,7 +318,15 @@ import UIKit
         }
     }
 
+    /// The smallest grid SwiftTerm keeps. Its view reports the counts it measured from the
+    /// frame, which are 0 for a frame narrower than a cell or shorter than a row, while the
+    /// emulator itself never goes below these; the remote gets what the emulator holds.
+    nonisolated static let minimumCols = 2
+    nonisolated static let minimumRows = 1
+
     func reportSize(cols: Int, rows: Int) {
+        let cols = max(cols, Self.minimumCols)
+        let rows = max(rows, Self.minimumRows)
         guard cols != size.cols || rows != size.rows else { return }
         size = (cols, rows)
         onResize(size)

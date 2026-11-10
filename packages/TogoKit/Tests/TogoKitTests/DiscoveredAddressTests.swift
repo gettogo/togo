@@ -98,4 +98,36 @@ import TogoKit
         #expect(hosts == ["Mac": "mac.local", "Box": "build.local", "Pad": "fe80::99%en0"])
         #expect(flagged == [pad.id])
     }
+
+    /// The name lookup is slow. A machine removed while it runs stays removed, and one that
+    /// changed meanwhile keeps the change.
+    @Test func tidyingKeepsChangesMadeDuringTheLookup() async {
+        let store = HostStore(records: SyncedRecordStore(
+            prefix: "host.", local: MemoryBackend(), remote: nil, deviceID: "a", clock: { Date(timeIntervalSince1970: 0) }
+        ))
+        func record(_ name: String, _ host: String) -> HostRecord {
+            HostRecord(
+                id: UUID(), profile: HostProfile(id: UUID(), name: name, endpoint: HostEndpoint(host: host, user: "sam"), auth: .password),
+                symbol: "laptop"
+            )
+        }
+        let mac = record("Mac", "fe80::1c2b%en0")
+        let pad = record("Pad", "fe80::99%en0")
+        for item in [mac, pad] { await store.save(item) }
+
+        _ = await store.tidyAddresses { address in
+            if address == "fe80::1c2b%en0" {
+                var renamed = mac
+                renamed.symbol = "desktopcomputer"
+                await store.save(renamed)
+                return "mac.local."
+            }
+            await store.remove(pad.id)
+            return "pad.local."
+        }
+        let hosts = await store.hosts()
+        #expect(hosts.map(\.id) == [mac.id], "the removed machine is not saved back")
+        #expect(hosts.first?.profile.endpoint.host == "mac.local")
+        #expect(hosts.first?.symbol == "desktopcomputer", "the change made during the lookup stays")
+    }
 }

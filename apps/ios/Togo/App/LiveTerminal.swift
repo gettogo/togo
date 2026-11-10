@@ -40,10 +40,15 @@ import UIKit
         self.link = link
         let ticker = DisplayLinkTicker()
         ticker.recordsFrameStats = diagnostics != nil
+        let controller = self.controller
         binding = TerminalBinding(
             engine: engine, ticker: ticker,
             read: { await link.read() },
-            send: { await link.send($0) },
+            // Typing while the link is between attachments is not kept for the next one, whose
+            // screen may be another prompt by then; the terminal says the typing went nowhere.
+            send: { [weak controller] data in
+                if await !link.send(data) { await controller?.inputDropped() }
+            },
             resize: { cols, rows in await link.resize(cols: cols, rows: rows) }
         )
         let (phases, sink) = AsyncStream.makeStream(of: LinkPhase.self)
@@ -77,12 +82,15 @@ import UIKit
         gestures.onShowLinks = { [weak handle] in handle?.onShowLinks() }
         // Nothing can be typed until the link is live, so the keyboard waits for it.
         engine.acceptsFocus = false
-        feed = Task { [weak engine] in
+        feed = Task { [weak engine, weak controller] in
             var wasLive = false
             for await state in link.states {
                 onState(state)
                 let phase = Self.phase(state, asked: wasAsked(), wasLive: wasLive)
-                if case .live = state { wasLive = true }
+                if case .live = state {
+                    wasLive = true
+                    controller?.inputResumed()
+                }
                 if let accepts = Self.acceptsFocus(phase) { engine?.acceptsFocus = accepts }
                 sink.yield(phase)
             }
@@ -238,9 +246,78 @@ final class ThemedTerminalController: UIViewController, TerminalRefitting {
         terminal.holdsFit = on
     }
 
+    // MARK: Input paused
+
+    /// How long the notice stays after the last keystroke that went nowhere.
+    static let pausedNoticeTime: Duration = .seconds(2.5)
+    private var pausedNotice: UILabel?
+    private var pausedHide: Task<Void, Never>?
+
+    /// A keystroke went nowhere because the link is reconnecting. The notice shows over the
+    /// terminal where the person is typing, with a haptic and a VoiceOver announcement once per
+    /// burst, and goes when the link is live again or the typing stops.
+    func inputDropped() {
+        guard isViewLoaded else { return }
+        let notice = pausedNotice ?? makePausedNotice()
+        if notice.isHidden {
+            notice.isHidden = false
+            Haptic.error.play()
+            UIAccessibility.post(notification: .announcement, argument: WorkspaceCopy.typingPaused)
+        }
+        pausedHide?.cancel()
+        pausedHide = Task { [weak self] in
+            try? await Task.sleep(for: Self.pausedNoticeTime)
+            guard !Task.isCancelled else { return }
+            self?.inputResumed()
+        }
+    }
+
+    func inputResumed() {
+        pausedHide?.cancel()
+        pausedHide = nil
+        pausedNotice?.isHidden = true
+    }
+
+    private func makePausedNotice() -> UILabel {
+        let label = PaddedLabel()
+        label.text = WorkspaceCopy.typingPaused
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .togoSnow
+        label.backgroundColor = .togoRaised
+        label.layer.cornerRadius = 8
+        label.layer.cornerCurve = .continuous
+        label.clipsToBounds = true
+        label.isUserInteractionEnabled = false
+        label.isHidden = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            label.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -32),
+        ])
+        pausedNotice = label
+        return label
+    }
+
     private func applyTheme() {
         let dark = traitCollection.userInterfaceStyle != .light
         terminal.engine.apply(dark ? choice.dark : choice.light)
         view.backgroundColor = terminal.engine.view.backgroundColor
+    }
+}
+
+/// A label with room around its text, for the paused-typing notice.
+private final class PaddedLabel: UILabel {
+    private let insets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.inset(by: insets))
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let size = super.intrinsicContentSize
+        return CGSize(width: size.width + insets.left + insets.right, height: size.height + insets.top + insets.bottom)
     }
 }

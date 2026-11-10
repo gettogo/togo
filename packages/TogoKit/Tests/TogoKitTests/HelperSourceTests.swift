@@ -60,7 +60,8 @@ struct HelperSourceTests {
         let second = try #require(await channel.nextRequest())
         #expect(second.method == "events.keepalive")
         for await _ in source.events {}
-        #expect(channel.isClosed)
+        // The events end as the client shuts down; the channel closes right after.
+        #expect(await eventually { channel.isClosed })
     }
 
     @Test func oneAnsweredKeepaliveKeepsTheConnection() async throws {
@@ -81,7 +82,8 @@ struct HelperSourceTests {
         let (channel, source) = try await Self.subscribed(clock: clock, callTimeout: .milliseconds(50))
         await #expect(throws: HelperError.timeout(method: "session.kill")) { _ = try await source.call(.kill("s1")) }
         for await _ in source.events {}
-        #expect(channel.isClosed)
+        // The events end as the client shuts down; the channel closes right after.
+        #expect(await eventually { channel.isClosed })
     }
 
     @Test func timedOutCallOnALiveConnectionKeepsIt() async throws {

@@ -196,18 +196,30 @@ struct PresentationLedger: Sendable {
 
     /// The asking view went away. `stillWanted`: its state still asked for the presentation, so
     /// something other than the user or its flow ended it.
-    mutating func hostGone(_ id: PresentationRequest.ID, stillWanted: Bool) {
-        guard let index = entries.firstIndex(where: { $0.request.id == id }) else { return }
+    ///
+    /// Nothing of it stays behind: its entry, whatever it held up inside it, a side context's
+    /// place in line and a replacement its owner never acknowledged all go, so the slot frees
+    /// at once. Returns the ids that were removed, the host's own first; their owners let go of
+    /// their state (`CoordinatedSlot`), so a host rebuilt in the same update (a size class
+    /// change swapping a branch) does not present the same thing again while the old one is
+    /// still being torn down.
+    @discardableResult
+    mutating func hostGone(_ id: PresentationRequest.ID, stillWanted: Bool) -> [PresentationRequest.ID] {
+        suspended.remove(id)
+        retired.remove(id)
+        guard let index = entries.firstIndex(where: { $0.request.id == id }) else { return [] }
         let entry = entries[index]
         if stillWanted, entry.phase != .leaving {
             record(.hostVanished, entry.request.name,
                    entry.phase == .queued ? "its request was waiting and is now lost" : "taken down by a state change")
         }
         entries.remove(at: index)
+        var removed = [id]
         // Whatever it held up inside it went with it.
         let orphans = entries.filter { $0.request.parent == id }.map(\.request.id)
-        for orphan in orphans { hostGone(orphan, stillWanted: false) }
+        for orphan in orphans { removed += hostGone(orphan, stillWanted: false) }
         promote()
+        return removed
     }
 
     // MARK: Rules

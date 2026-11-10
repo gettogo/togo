@@ -83,8 +83,9 @@ func (c *Config) defaults() {
 	}
 }
 
-// Run keeps one mailbox connection per distinct relay URL among live paired
-// devices, and none while no live device is paired. It returns nil when ctx
+// Run keeps one mailbox connection per distinct relay URL among paired
+// devices, and none while no device is paired. A device the relay reported
+// dead keeps its relay read, so the new token it registers can revive it. It returns nil when ctx
 // ends, or an error at once if the keys are unusable.
 func Run(ctx context.Context, cfg Config) error {
 	return run(ctx, cfg, nil)
@@ -180,7 +181,7 @@ func (r *runner) supervise(ctx context.Context) error {
 func relayURLs(devs []Device) map[string]bool {
 	out := map[string]bool{}
 	for _, d := range devs {
-		if !d.Dead && d.RelayURL != "" {
+		if d.RelayURL != "" {
 			out[strings.TrimRight(d.RelayURL, "/")] = true
 		}
 	}

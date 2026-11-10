@@ -231,11 +231,16 @@ func (h *harness) setDevices(d []Device) {
 	h.devMu.Unlock()
 }
 
-// setDead marks the first device dead or alive under the lock.
-func (h *harness) setDead(dead bool) {
-	h.devMu.Lock()
-	h.devs[0].Dead = dead
-	h.devMu.Unlock()
+// setPaired unpairs every device, or pairs the harness's first device again.
+func (h *harness) setPaired(paired bool) {
+	if paired {
+		h.setDevices(h.f.devices[:1])
+		h.devMu.Lock()
+		h.devs[0].RelayURL = h.relay.srv.URL + "/"
+		h.devMu.Unlock()
+		return
+	}
+	h.setDevices(nil)
 }
 
 func (h *harness) waitAck(t *testing.T, id string) {
@@ -391,27 +396,63 @@ func TestReconnectsWithBackoff(t *testing.T) {
 }
 
 func TestNoConnectionWithoutDevices(t *testing.T) {
+	var paired []Device
 	h := newHarness(t, func(h *harness) {
-		h.devs[0].Dead = true
+		paired, h.devs = h.devs, nil
 	})
 	time.Sleep(100 * time.Millisecond)
 	if n := h.relay.dialCount(); n != 0 {
-		t.Fatalf("%d dials with no live device", n)
+		t.Fatalf("%d dials with no paired device", n)
 	}
-	h.setDead(false)
+	h.setDevices(paired)
 	select {
 	case <-h.relay.conned:
 	case <-time.After(5 * time.Second):
-		t.Fatal("no connection after a live device appeared")
+		t.Fatal("no connection after a device was paired")
 	}
-	// Revoking the last device closes the connection and stops redialing.
-	h.setDead(true)
+	// Unpairing the last device closes the connection and stops redialing.
+	h.setDevices(nil)
 	time.Sleep(100 * time.Millisecond)
 	n := h.relay.dialCount()
 	time.Sleep(150 * time.Millisecond)
 	if m := h.relay.dialCount(); m != n {
 		t.Fatalf("redialed (%d -> %d) after the last device was revoked", n, m)
 	}
+}
+
+// The relay reported the only paired phone's APNs token gone, so it is dead.
+// The phone's new token, registered through the mailbox, must still be read
+// and applied: it is how the device comes back. It used to be refused as an
+// unknown device, and with no live device the relay was not even dialed.
+func TestDeadDeviceRegistrationRevivesIt(t *testing.T) {
+	registered := make(chan string, 1)
+	h := newHarness(t, func(h *harness) {
+		h.devs[0].Dead = true
+		h.config = func(c *Config) {
+			c.Register = func(device, apns, _, _ string, _ bool, _ int64) error {
+				registered <- device + " " + apns
+				return nil
+			}
+		}
+	})
+	select {
+	case <-h.relay.conned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no connection for a paired device marked dead")
+	}
+	ct := h.f.register(t, wire.RegisterPlaintext{APNsToken: regAPNs, TS: h.f.now.UnixMilli()}, h.f.devPriv)
+	h.waitAck(t, h.relay.post(ct))
+	select {
+	case got := <-registered:
+		if got != "phone-1 "+regAPNs {
+			t.Fatalf("registered %q", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("dead device's registration not applied")
+	}
+	// Its answers stay refused until the new token revives it.
+	h.waitAck(t, h.relay.post(h.f.good(t, "approve")))
+	h.noAnswer(t)
 }
 
 func TestPingKeepsConnection(t *testing.T) {

@@ -99,6 +99,8 @@ struct SilentTranscriber: WhisperTranscribing {
 /// A microphone the test speaks into by the second.
 @MainActor final class FakeWhisperMicrophone: WhisperMicrophone {
     var isDenied = false
+    /// Runs as `start` waits, before the microphone is running, as a permission alert does.
+    var whileStarting: (@MainActor () -> Void)?
     private(set) var isRunning = false
     private var samples: (@MainActor ([Float]) -> Void)?
     private var ended: (@MainActor (DictationError) -> Void)?
@@ -108,6 +110,7 @@ struct SilentTranscriber: WhisperTranscribing {
         ended: @escaping @MainActor (DictationError) -> Void
     ) async throws {
         if isDenied { throw DictationError.denied }
+        whileStarting?()
         isRunning = true
         self.samples = samples
         self.ended = ended

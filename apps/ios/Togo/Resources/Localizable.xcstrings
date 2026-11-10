@@ -6451,6 +6451,28 @@
         }
       }
     },
+    "settings.terminal.default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        }
+      }
+    },
+    "settings.terminal.default.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light or dark with the system"
+          }
+        }
+      }
+    },
     "settings.terminal.font" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6546,17 +6568,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn't read %@. Choose an iTerm2, Ghostty or Xresources theme."
-          }
-        }
-      }
-    },
-    "settings.terminal.beacon.detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Light or dark with the system"
           }
         }
       }
@@ -7712,6 +7723,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shows why"
+          }
+        }
+      }
+    },
+    "ws.link.typingPaused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnecting. Typing isn't sent until it's back."
           }
         }
       }

@@ -15,12 +15,14 @@ private final class Log: Sendable {
 struct RouteRaceTests {
     private static let stagger: Duration = .milliseconds(40)
 
+    /// The stagger runs on `clock`, which only the test moves: a next route starts when the
+    /// test says the stagger passed, or at once after a failure, never because a machine was slow.
     private func race(
-        _ routes: [String], log: Log = Log(),
+        _ routes: [String], log: Log = Log(), clock: ManualClock = ManualClock(),
         _ outcome: @escaping @Sendable (String) async throws -> String
     ) async throws -> RouteRace.Win<String> {
         try await RouteRace.run(
-            routes, stagger: Self.stagger,
+            routes, stagger: Self.stagger, clock: clock,
             // As the connection races: a mismatch only drops its route.
             isFatal: { _ in false },
             isNetwork: { $0 is Unreachable },
@@ -34,10 +36,8 @@ struct RouteRaceTests {
 
     @Test func firstSuccessWinsEvenIfALaterRouteIsFaster() async throws {
         let log = Log()
-        let win = try await race(["lan", "tailscale"], log: log) { route in
-            try await Task.sleep(for: route == "lan" ? .milliseconds(10) : .milliseconds(1))
-            return route
-        }
+        // The stagger never passes, so the faster route is never even started.
+        let win = try await race(["lan", "tailscale"], log: log) { route in route }
         #expect(win.route == "lan")
         #expect(win.index == 0)
         #expect(log.started.withLock { $0 } == ["lan"])
@@ -45,34 +45,46 @@ struct RouteRaceTests {
 
     @Test func slowRouteLosesToTheNextStaggeredOne() async throws {
         let log = Log()
-        let win = try await race(["lan", "tailscale"], log: log) { route in
-            if route == "lan" { try await Task.sleep(for: .seconds(5)) }
-            return route
+        let clock = ManualClock()
+        let racing = Task {
+            try await race(["lan", "tailscale"], log: log, clock: clock) { route in
+                // Silent until the race is over and cancels it.
+                if route == "lan" { try await Task.sleep(for: .seconds(60)) }
+                return route
+            }
         }
+        #expect(await clock.runSleep(Self.stagger))
+        let win = try await racing.value
         #expect(win.route == "tailscale")
         #expect(log.started.withLock { $0 } == ["lan", "tailscale"])
     }
 
     @Test func failureStartsTheNextRouteAtOnce() async throws {
-        let clock = ContinuousClock()
-        let start = clock.now
-        let win = try await race(["a", "b", "c"]) { route in
+        let clock = ManualClock()
+        // The clock never moves: only failures can start "b" and "c".
+        let win = try await race(["a", "b", "c"], clock: clock) { route in
             if route != "c" { throw Unreachable() }
             return route
         }
         #expect(win.route == "c")
-        #expect(clock.now - start < Self.stagger * 2)
     }
 
     @Test func lateWinnerIsDiscarded() async throws {
         let log = Log()
-        let win = try await race(["a", "b"], log: log) { route in
-            try? await Task.sleep(for: route == "a" ? .milliseconds(150) : .milliseconds(1))
-            return route
+        let clock = ManualClock()
+        let gate = Gate()
+        let racing = Task {
+            try await race(["a", "b"], log: log, clock: clock) { route in
+                // "a" answers only after "b" has won, and does not stop when cancelled.
+                if route == "a" { await gate.passIfOpen() }
+                return route
+            }
         }
+        #expect(await clock.runSleep(Self.stagger))
+        let win = try await racing.value
         #expect(win.route == "b")
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(log.discarded.withLock { $0 } == ["a"])
+        gate.open()
+        #expect(await eventually { log.discarded.withLock { $0 } == ["a"] })
     }
 
     @Test func mismatchedRoutePlusGoodRouteConnects() async throws {
@@ -86,11 +98,20 @@ struct RouteRaceTests {
     }
 
     @Test func goodRouteStillWinsWhenTheMismatchComesLater() async throws {
-        let win = try await race(["lan", "stale"]) { route in
-            if route == "stale" { throw Mismatch() }
-            try await Task.sleep(for: .milliseconds(80))
-            return route
+        let log = Log()
+        let clock = ManualClock()
+        let gate = Gate()
+        let racing = Task {
+            try await race(["lan", "stale"], log: log, clock: clock) { route in
+                if route == "stale" { throw Mismatch() }
+                await gate.passIfOpen()
+                return route
+            }
         }
+        #expect(await clock.runSleep(Self.stagger))
+        #expect(await eventually { log.started.withLock { $0 } == ["lan", "stale"] })
+        gate.open()
+        let win = try await racing.value
         #expect(win.route == "lan")
     }
 

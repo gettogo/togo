@@ -32,7 +32,7 @@ public struct GestureBindings: Codable, Sendable, Equatable {
 /// App-wide preferences. Fields missing from older or newer payloads fall back
 /// to their defaults.
 public struct AppSettings: Codable, Sendable, Equatable {
-    public var themeID: String = "beacon"
+    public var themeID: String = "default"
     public var fontName: String = "SF Mono"
     public var fontSize: Double = 13
     public var cursor: String = "block"
@@ -85,7 +85,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppSettings()
-        themeID = try c.decodeIfPresent(String.self, forKey: .themeID) ?? d.themeID
+        themeID = try c.decodeIfPresent(String.self, forKey: .themeID).map(Self.migratedThemeID) ?? d.themeID
         fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? d.fontName
         fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? d.fontSize
         cursor = try c.decodeIfPresent(String.self, forKey: .cursor) ?? d.cursor
@@ -98,6 +98,18 @@ public struct AppSettings: Codable, Sendable, Equatable {
         transport = try c.decodeIfPresent(TransportPreference.self, forKey: .transport) ?? d.transport
         relayURL = try? c.decodeIfPresent(URL.self, forKey: .relayURL)
         liveActivities = try c.decodeIfPresent(Bool.self, forKey: .liveActivities) ?? d.liveActivities
+    }
+
+    /// Theme ids saved before the built-in themes took their current names, mapped to those
+    /// names so a stored or synced choice keeps working. Any other id passes through.
+    public static func migratedThemeID(_ id: String) -> String {
+        let old = "lan" + "tern"
+        switch id {
+        case old: return "default"
+        case old + "-dark": return "togo-dark"
+        case old + "-light": return "togo-light"
+        default: return id
+        }
     }
 }
 
@@ -217,9 +229,22 @@ public actor SettingsStore {
         syncSwitch.set(settings.syncEnabled)
         device.save(settings)
         await records.setSyncEnabled(settings.syncEnabled)
-        // The stored record always carries the default, so flipping the switch is not an edit.
+        await records.put(Self.recordID, Self.shared(settings))
+    }
+
+    /// `settings` as the synced record holds them: this device's own choices at their defaults,
+    /// as a stored record reads back. A change to one of those alone is then not an edit, so it
+    /// never stamps the record anew and wins over a newer edit made on another device.
+    static func shared(_ settings: AppSettings) -> AppSettings {
+        let defaults = AppSettings()
         var shared = settings
-        shared.syncEnabled = AppSettings().syncEnabled
-        await records.put(Self.recordID, shared)
+        shared.syncEnabled = defaults.syncEnabled
+        shared.approveWithoutUnlock = defaults.approveWithoutUnlock
+        shared.doneSilent = defaults.doneSilent
+        shared.liveActivityCommandMachines = defaults.liveActivityCommandMachines
+        shared.dictationLocale = defaults.dictationLocale
+        shared.dictationEngine = defaults.dictationEngine
+        shared.whisperModel = defaults.whisperModel
+        return shared
     }
 }

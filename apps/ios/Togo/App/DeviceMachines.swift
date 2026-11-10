@@ -70,6 +70,20 @@ import TogoKit
         return record
     }
 
+    /// An edit of a machine, made from the record as `resolve` showed it. A sign-in left as it
+    /// was shown goes back to the one the synced record names, so editing the name or address
+    /// here never hands this device's key to the other devices, which have no such key. A
+    /// sign-in the user changed is saved as chosen.
+    func editedVersion(of record: HostRecord) -> HostRecord {
+        guard let auth = synced[record.id] else { return record }
+        let shown = Self.key(for: auth, chosen: keys[record.id], hasKey: hasKey, deviceKeyID: deviceKeyID())
+            .map { AuthMethodRef.key(id: $0) } ?? auth
+        guard record.profile.auth == shown else { return record }
+        var record = record
+        record.profile.auth = auth
+        return record
+    }
+
     // MARK: Set up here
 
     /// Whether `reach` means the machine is waiting for this device's key rather than for a

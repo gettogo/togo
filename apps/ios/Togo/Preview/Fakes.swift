@@ -131,7 +131,11 @@ import UIKit
     /// The answers sign-in got, nil where the user cancelled.
     private(set) var signInAnswers: [AuthAnswer?] = []
 
+    /// Runs as sign-in starts, before the machine asks anything.
+    var beforeSignInPrompts: () -> Void = {}
+
     func signIn(hostID: HostID, prompter: any ConnectionPrompter) async throws {
+        beforeSignInPrompts()
         for prompt in signInPrompts {
             let answer = await prompter.answer(prompt)
             signInAnswers.append(answer)
@@ -246,7 +250,7 @@ enum Samples {
 
 extension TerminalHandle {
     /// A real terminal engine showing `text`, for previews and snapshots. It follows the
-    /// appearance with the Beacon theme, as the app does by default.
+    /// appearance with the Default theme, as the app does by default.
     static func preview(
         text: String, phases: [LinkPhase] = [.live(transport: "SSH", note: nil)],
         onStop: @escaping @MainActor () -> Void = {}
@@ -271,7 +275,7 @@ extension TerminalHandle {
 }
 
 /// Lays the engine out the way `TerminalViewController` does, minus the switch to Metal, whose
-/// frames never reach a snapshot. Swaps the Beacon theme between its dark and light builds
+/// frames never reach a snapshot. Swaps the Default theme between its dark and light builds
 /// with the appearance.
 private final class PreviewTerminalController: UIViewController {
     private let engine: SwiftTermEngine

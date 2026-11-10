@@ -199,16 +199,17 @@ struct TerminalSettingsView: View {
         var changed = settings
         changed.customThemes.removeAll { $0.id == id }
         if changed.themeID == id {
-            changed.themeID = ThemeChoice.beacon
+            changed.themeID = ThemeChoice.defaultID
         }
         update(changed)
     }
 }
 
-/// A theme as the list offers it. Beacon follows the system appearance; every other theme
+/// A theme as the list offers it. Default follows the system appearance; every other theme
 /// looks the same in light and dark.
 struct ThemeChoice: Identifiable, Equatable {
-    static let beacon = "beacon"
+    /// The choice that follows the system appearance, built from Togo Dark and Togo Light.
+    static let defaultID = "default"
 
     var id: String
     var name: String
@@ -224,11 +225,11 @@ struct ThemeChoice: Identifiable, Equatable {
     static func all(imported: [TerminalTheme]) -> [ThemeChoice] {
         let builtIn = BuiltInThemes.all
         var choices: [ThemeChoice] = []
-        if let dark = builtIn.first(where: { $0.id == "beacon-dark" }),
-           let light = builtIn.first(where: { $0.id == "beacon-light" }) {
+        if let dark = builtIn.first(where: { $0.id == "togo-dark" }),
+           let light = builtIn.first(where: { $0.id == "togo-light" }) {
             choices.append(ThemeChoice(
-                id: beacon, name: "Beacon",
-                detail: settingsText("settings.terminal.beacon.detail", "Light or dark with the system"),
+                id: defaultID, name: settingsText("settings.terminal.default", "Default"),
+                detail: settingsText("settings.terminal.default.detail", "Light or dark with the system"),
                 dark: dark, light: light
             ))
         }

@@ -105,6 +105,28 @@ import TogoKit
         #expect(services.hostRecord(synced)?.profile.auth == .key(id: "phone-key"), "this device's key choice moves over")
     }
 
+    /// Another device merged a record into one this device has, and its deletion arrived before
+    /// the merged record: the machine is still here, so what this device keeps for it moves over
+    /// instead of being forgotten as for a removed machine.
+    @Test func aMergeDeletionArrivingFirstIsNotARemoval() async throws {
+        let local = MemoryBackend()
+        let services = services(local: local)
+        await services.start()
+        try await services.saveHost(record(synced, "Studio", host: "studio.local", key: "ipad-key"))
+        try await services.saveHost(record(added, "Studio", host: "192.168.1.20", key: "ipad-key"))
+        services.deviceMachines.setUp(added, keyID: "phone-key")
+        #expect(services.hosts.count == 2)
+
+        let deletion = Stamped<HostRecord>(
+            value: nil, updatedAt: now.addingTimeInterval(1), deviceID: "pad", mergedInto: synced.uuidString
+        )
+        local.set(try JSONEncoder().encode(deletion), forKey: "host.\(added.uuidString)")
+        services.reconcile(await services.hostStore.hosts())
+
+        #expect(services.hosts.map(\.id) == [synced])
+        #expect(!services.deviceMachines.needsSetUp(synced, reach: .authNeeded), "this device's set-up moved to the kept record")
+    }
+
     @Test func twoMachinesWithTheSameNameStayTwo() async throws {
         let trusted = ["192.168.1.20": [Self.macKey], "192.168.1.30": ["SHA256:another-mac"]]
         let services = services(trusted: trusted)

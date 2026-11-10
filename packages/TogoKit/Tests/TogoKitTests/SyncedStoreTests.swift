@@ -293,6 +293,27 @@ private func eventually(_ condition: @Sendable () async -> Bool) async -> Bool {
         #expect(partial.keyBar == nil)
     }
 
+    /// Theme ids from before the built-in themes were renamed still pick the same theme.
+    @Test(arguments: [
+        ("lan" + "tern", "default"),
+        ("lan" + "tern-dark", "togo-dark"),
+        ("lan" + "tern-light", "togo-light"),
+    ])
+    func legacyThemeIDsMigrateOnDecode(_ stored: String, _ current: String) throws {
+        #expect(AppSettings.migratedThemeID(stored) == current)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"themeID":"\#(stored)"}"#.utf8))
+        #expect(decoded.themeID == current)
+    }
+
+    @Test func currentAndImportedThemeIDsPassThrough() throws {
+        for id in ["default", "togo-dark", "togo-light", "plain", "paper", "lan"] {
+            #expect(AppSettings.migratedThemeID(id) == id)
+        }
+        #expect(AppSettings().themeID == "default")
+        let missing = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        #expect(missing.themeID == "default")
+    }
+
     @Test func settingsRoundTripAndSyncSwitch() async {
         let clock = StoreClock()
         let remote = MemoryBackend()
@@ -455,4 +476,34 @@ private func eventually(_ condition: @Sendable () async -> Bool) async -> Bool {
     #expect(hosts.localHosts().map(\.profile.name) == ["ada", "bea"], "sorted, without removed or iCloud-only machines")
     #expect(local.allKeys().count == 3, "reading changes nothing")
     #expect(await hosts.hosts().map(\.profile.name) == ["ada", "bea", "cyd"], "the store's first use still merges")
+}
+
+/// A merge's deletion says which record it went into, so a device that receives it before that
+/// record knows the machine is still there. A plain removal says nothing of the kind.
+@Test func mergeDeletionNamesTheRecordItWentInto() async throws {
+    let clock = StoreClock()
+    let remote = MemoryBackend()
+    let phoneLocal = MemoryBackend()
+    let phone = HostStore(records: makeStore(local: phoneLocal, remote: remote, device: "phone", clock: clock))
+    let kept = record("studio"), dropped = record("studio-ip"), removed = record("old")
+    for item in [kept, dropped, removed] { await phone.save(item) }
+    let found = await phone.mergeDuplicates(identity: { record in
+        MachineIdentity(hostKeys: record.id == removed.id ? ["other"] : ["SHA256:mac"], user: "dev")
+    }, older: { a, _ in a.id == kept.id })
+    #expect(found.map(\.dropped) == [[dropped.id]])
+    await phone.remove(removed.id)
+    #expect(phone.mergedAway() == [dropped.id: kept.id])
+
+    // The pad has all three; only the deletions reach it, not the merged record.
+    let padLocal = MemoryBackend()
+    for item in [kept, dropped, removed] {
+        padLocal.set(try stamp(item, at: clock.read().addingTimeInterval(-60), device: "pad"), forKey: "host.\(item.id.uuidString)")
+    }
+    let pad = HostStore(records: makeStore(local: padLocal, remote: MemoryBackend(), device: "pad", clock: clock))
+    #expect(await pad.hosts().count == 3)
+    for id in [dropped.id, removed.id] {
+        padLocal.set(phoneLocal.data(forKey: "host.\(id.uuidString)"), forKey: "host.\(id.uuidString)")
+    }
+    #expect(pad.mergedAway() == [dropped.id: kept.id])
+    #expect(await pad.hosts().map(\.id) == [kept.id], "both deletions still delete")
 }

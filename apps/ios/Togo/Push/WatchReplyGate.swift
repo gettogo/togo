@@ -34,7 +34,7 @@ enum WatchReplyGate {
 
     static func windowlessAllows(_ reply: Reply, pending: PendingStore, pairings: PairingStore) -> Bool {
         guard case .answer(let host, let requestID, _) = reply,
-              let request = pending.request(requestID), request.allowText == true, request.answered == nil
+              let request = pending.request(requestID), request.allowText == true, request.isOpen(at: Date())
         else { return false }
         return pairings.pairing(hostId: request.hostId)?.appHostID == host
     }
@@ -66,7 +66,7 @@ extension AppStore {
             }
             // The push said the request takes text, nothing has answered it here, and it came
             // from the machine the answer goes to.
-            if let request = pending.request(requestID), request.allowText == true, request.answered == nil,
+            if let request = pending.request(requestID), request.allowText == true, request.isOpen(at: Date()),
                pairings.pairing(hostId: request.hostId)?.appHostID == host {
                 return nil
             }

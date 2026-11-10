@@ -365,10 +365,25 @@ final class TogoTerminalView: TerminalView {
     /// A pointer click-drag: selects from `start` up to, not including, `end`. SwiftTerm keeps
     /// an end column inside the row, so an end past the last column runs to the next row's
     /// start and the copy drops the line break that brings.
+    ///
+    /// The last line of the buffer has no next row: SwiftTerm would clamp the end back to that
+    /// line's first column, before the start, and copy the text left of the drag instead. There
+    /// the end stays in the last column, which only a row filled to the edge loses.
     func select(from start: GridCell, to end: GridCell) {
         let top = terminalStateSnapshot().viewportRow
-        selectionThroughLineEnd = end.col >= terminalDimensions.cols
-        let stop = selectionThroughLineEnd ? Position(col: 0, row: end.row + top + 1) : Position(col: end.col, row: end.row + top)
+        let dimensions = terminalDimensions
+        let throughLineEnd = end.col >= dimensions.cols
+        let scrolledBack = !(terminalInputStateSnapshot()?.isAlternateBuffer ?? false) && canScroll && scrollPosition < 1
+        let hasNextLine = end.row + 1 < dimensions.rows || scrolledBack
+        selectionThroughLineEnd = throughLineEnd && hasNextLine
+        let stop: Position
+        if selectionThroughLineEnd {
+            stop = Position(col: 0, row: end.row + top + 1)
+        } else if throughLineEnd {
+            stop = Position(col: max(0, dimensions.cols - 1), row: end.row + top)
+        } else {
+            stop = Position(col: end.col, row: end.row + top)
+        }
         setSelectionRange(start: Position(col: start.col, row: start.row + top), end: stop)
     }
 

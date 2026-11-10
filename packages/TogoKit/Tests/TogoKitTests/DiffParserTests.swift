@@ -266,6 +266,67 @@ struct DiffParserTests {
         #expect(elapsed < .seconds(30))
     }
 
+    /// A file with unresolved conflicts diffs as `diff --cc`: it shows its lines, not "No changes".
+    @Test func combinedDiffOfConflictedFile() throws {
+        let text = """
+        diff --cc f.txt
+        index 36c8e56,230cef0..0000000
+        --- a/f.txt
+        +++ b/f.txt
+        @@@ -1,5 -1,3 +1,8 @@@ top
+          one
+        ++<<<<<<< HEAD
+         +TWO-main
+        ++=======
+        + TWO-other
+        ++>>>>>>> other
+          three
+         +four
+        - gone
+        diff --git a/next.txt b/next.txt
+        --- a/next.txt
+        +++ b/next.txt
+        @@ -1 +1 @@
+        -a
+        +b
+
+        """
+        let files = parse(text)
+        #expect(files.count == 2)
+        let file = try #require(files.first)
+        #expect(file.oldPath == "f.txt" && file.newPath == "f.txt")
+        #expect(file.change == .modified)
+        let hunk = try #require(file.hunks.first)
+        #expect(hunk.section == "top")
+        #expect(hunk.lines.map(\.text) == [
+            "one", "<<<<<<< HEAD", "TWO-main", "=======", "TWO-other", ">>>>>>> other", "three", "four", "gone",
+        ])
+        #expect(hunk.lines.map(\.kind) == [
+            .context, .added, .added, .added, .added, .added, .context, .added, .removed,
+        ])
+        #expect(hunk.lines.map(\.newNumber) == [1, 2, 3, 4, 5, 6, 7, 8, nil])
+        // The old side is the first parent: "one", "TWO-main", "three", "four", "gone" are its lines 1-5.
+        #expect(hunk.lines.map(\.oldNumber) == [1, nil, nil, nil, nil, nil, 3, nil, 5])
+        #expect(file.additions == 6 && file.deletions == 1)
+        #expect(files[1].newPath == "next.txt" && files[1].hunks.first?.lines.count == 2)
+    }
+
+    /// The marks are dropped as bytes: a joiner or combining mark opening the text stays in it.
+    @Test func leadingJoinerAndCombiningMarkKept() throws {
+        let text = "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@\n \u{301}keep\n-x\n+\u{200D}y\n"
+        let lines = try #require(parse(text).first?.hunks.first?.lines)
+        #expect(lines.map(\.text) == ["\u{301}keep", "x", "\u{200D}y"])
+        #expect(lines.map(\.kind) == [.context, .removed, .added])
+    }
+
+    /// With `core.quotepath=off` names arrive raw; one opening with a combining mark is still read.
+    @Test func renameOfNamesOpeningWithCombiningMark() {
+        let text = "diff --git a/\u{301}x b/\u{301}y\nsimilarity index 100%\nrename from \u{301}x\nrename to \u{301}y\n"
+        let file = parse(text).first
+        #expect(file?.change == .renamed(similarity: 100))
+        #expect(file?.oldPath == "\u{301}x" && file?.newPath == "\u{301}y")
+    }
+
     @Test func hostileInputNeverTraps() {
         var rng = SplitMix(seed: 0x7060_2026)
         let alphabet = Array("diff --git a/ b/\n@@ -+ ,0123456789\\\"\t\r rename from to similarity index%Binary files differ\u{FFFD}é😀".utf8)

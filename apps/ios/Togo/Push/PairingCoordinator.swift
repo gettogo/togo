@@ -157,9 +157,11 @@ extension RelayRegisterSender: PushTokenRegistering {}
     /// A machine's helper connected: pairs it once notifications are allowed. It never asks for
     /// permission itself; the question follows a tap, after adding a machine or in Settings.
     /// `sshKey` is this device's public key on the machine, which only a helper that can
-    /// remove it is given.
+    /// remove it is given. `reconnected` marks the first report after the machine was out of
+    /// reach: a running Live Activity's token then goes again even when nothing changed here,
+    /// since a helper that restarted may have lost it.
     func machineOnline(
-        hostID: HostID, name: String, capabilities: Set<String>, sshKey: String? = nil,
+        hostID: HostID, name: String, capabilities: Set<String>, sshKey: String? = nil, reconnected: Bool = false,
         pair: (PushPairParams) async throws -> PushPairResult
     ) async {
         guard capabilities.contains(Capability.push), !pairing.contains(hostID) else { return }
@@ -180,8 +182,9 @@ extension RelayRegisterSender: PushTokenRegistering {}
         let doneSilent = capabilities.contains(Capability.doneSilent) && settings.doneSilent
         let hash = Self.tokenHash(apns: apnsToken, live: live, watches: watches, sshKey: sshKey, doneSilent: doneSilent)
         // A choice sent through the mailbox is confirmed over SSH, even when it matches the old one.
+        let reportsLive = reconnected && live.update != nil
         if let stored, stored.tokenHash == hash, stored.relayURL == relay, stored.liveActivityCommand == command,
-           sentChoice[stored.hostId] == nil {
+           sentChoice[stored.hostId] == nil, !reportsLive {
             return
         }
 

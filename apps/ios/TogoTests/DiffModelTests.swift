@@ -63,7 +63,7 @@ import UIKit
 
     private func model(
         _ source: DiffSource, services: any ReviewServices = FakeReviewServices(), managed: Bool = true,
-        send: ((String) -> Void)? = nil
+        send: ((String) -> Bool)? = nil
     ) -> DiffModel {
         DiffModel(subject: subject(managed: managed), services: services, source: source, sendToSession: send)
     }
@@ -123,6 +123,24 @@ import UIKit
         #expect(model.rows(split: false) == [.notice("Only the file mode changed (644 to 755).")])
     }
 
+    /// A conflicted file comes as a combined diff; it shows its lines instead of "No changes".
+    @Test func conflictedFileShowsCombinedDiff() async {
+        let services = ScriptedDiffServices()
+        services.diffs["f.txt"] = GitDiff(
+            diff: "diff --cc f.txt\nindex 1,2..0\n--- a/f.txt\n+++ b/f.txt\n@@@ -1,1 -1,1 +1,4 @@@\n++<<<<<<< HEAD\n +a\n+ b\n++>>>>>>> other\n",
+            truncated: false, binary: []
+        )
+        let model = model(.worktree(path: "f.txt"), services: services)
+        await model.load()
+        #expect(model.state == .ready)
+    }
+
+    /// Mode notices line up with their files when a combined diff comes first.
+    @Test func modeChangesCountCombinedHeaders() {
+        let text = "diff --cc f.txt\n@@@ -1 -1 +1 @@@\n  x\ndiff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\n"
+        #expect(DiffPreparation.modeChanges(text) == [nil, DiffPreparation.ModeChange(old: "644", new: "755")])
+    }
+
     @Test func emptyDiffIsEmpty() async {
         let model = model(.worktree(path: "src/unchanged.ts"))
         await model.load()
@@ -178,7 +196,7 @@ import UIKit
 
     @Test func commentFormatsPathAndLine() async {
         var sent: [String] = []
-        let model = model(.worktree(path: "src/router.ts"), send: { sent.append($0) })
+        let model = model(.worktree(path: "src/router.ts"), send: { sent.append($0); return true })
         await model.load()
         let rows = model.rows(split: false)
         let added = rows.firstIndex { $0.copyText == "  app.get(\"/health\", health)" }!
@@ -203,7 +221,7 @@ import UIKit
         +let a = 2
 
         """, truncated: false, binary: [])
-        let model = model(.worktree(path: "src/app.ts"), services: services, send: { sent.append($0) })
+        let model = model(.worktree(path: "src/app.ts"), services: services, send: { sent.append($0); return true })
         await model.load()
         model.showsSplit = true
         let row = model.rows(split: true).firstIndex { if case .split = $0 { true } else { false } }!
@@ -228,7 +246,7 @@ import UIKit
         +new
 
         """, truncated: false, binary: [])
-        let model = model(.worktree(path: "evil"), services: services, send: { sent.append($0) })
+        let model = model(.worktree(path: "evil"), services: services, send: { sent.append($0); return true })
         await model.load()
         #expect(model.path.unicodeScalars.contains("\u{1B}"))
         let row = model.rows(split: false).firstIndex { $0.copyText == "new" }!
@@ -244,9 +262,29 @@ import UIKit
         await model.load()
         #expect(!model.canSendComments)
         #expect(model.commentActionTitle == "Open the session to send comments")
-        let withSession = self.model(.worktree(path: "src/router.ts"), send: { _ in })
+        let withSession = self.model(.worktree(path: "src/router.ts"), send: { _ in true })
         #expect(withSession.canSendComments)
         #expect(withSession.commentActionTitle == "Send to session")
+    }
+
+    @Test func commentThatDidNotReachTheSessionSaysSo() async {
+        var reachable = false
+        var sent: [String] = []
+        let model = model(.worktree(path: "src/router.ts"), send: { text in
+            guard reachable else { return false }
+            sent.append(text)
+            return true
+        })
+        await model.load()
+        let row = model.rows(split: false).firstIndex { $0.copyText == "  app.get(\"/health\", health)" }!
+        let draft = model.commentDraft(row: row)!
+        // The terminal went after the review opened: the sheet must not close as if it sent.
+        #expect(!model.comment(draft, text: "Add a test"))
+        #expect(sent.isEmpty)
+        // Try again once the session is open.
+        reachable = true
+        #expect(model.comment(draft, text: "Add a test"))
+        #expect(sent == ["src/router.ts:12: Add a test"])
     }
 
     // MARK: Navigation

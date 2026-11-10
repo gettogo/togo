@@ -18,7 +18,7 @@ func TestTapRecordsHashesAndRelayRefusal(t *testing.T) {
 	e.sender.Tap = FileTap(path)
 	e.sender.Sleep = func(context.Context, time.Duration) error { return nil }
 	e.relay.status.Store(http.StatusBadGateway)
-	e.relay.answer.Store(`{"error":"apns","reason":"InvalidProviderToken"}`)
+	e.relay.answer.Store(`{"error":"apns","reason":"InternalServerError"}`)
 	e.handle(approvalOpen("r_abcdefghij"))
 
 	raw, err := os.ReadFile(path)
@@ -33,7 +33,7 @@ func TestTapRecordsHashesAndRelayRefusal(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[0]), &r); err != nil {
 		t.Fatal(err)
 	}
-	if r.Path != "/v1/push" || r.Kind != relayAlert || r.Status != http.StatusBadGateway || r.Reason != "InvalidProviderToken" {
+	if r.Path != "/v1/push" || r.Kind != relayAlert || r.Status != http.StatusBadGateway || r.Reason != "InternalServerError" {
 		t.Fatalf("tap record %+v", r)
 	}
 	if len(r.Sha) != 6 || r.Len == 0 || !slices.Contains(r.Words, WordHash("ciphertext")) {

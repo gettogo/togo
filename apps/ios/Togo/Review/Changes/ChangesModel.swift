@@ -94,7 +94,9 @@ struct ChangeRow: Identifiable, Hashable {
     private(set) var lastCommit: GitCommit?
     private(set) var notice: Notice?
     var pendingConfirmation: Confirmation?
-    private(set) var isWorking = false
+    /// A write or commit is in flight. Counted, so one that ends does not clear another's.
+    var isWorking: Bool { working > 0 }
+    private var working = 0
     /// Bumped on a stage, unstage or commit that went through, for the success haptic.
     private(set) var successes = 0
     /// Bumped when the user confirms a discard, for the warning haptic.
@@ -248,8 +250,8 @@ struct ChangeRow: Identifiable, Hashable {
         pendingConfirmation = nil
         discards += 1
         let files = confirmation.files
-        isWorking = true
-        defer { isWorking = false }
+        working += 1
+        defer { working -= 1 }
         do {
             let selection = confirmation.selection
             show(try await services.discard(subject, paths: selection.paths, seen: selection.seen))
@@ -277,8 +279,8 @@ struct ChangeRow: Identifiable, Hashable {
         _ body: (ReviewSubject, ReviewSelection) async throws -> GitStatus
     ) async {
         guard canWrite, let status else { return }
-        isWorking = true
-        defer { isWorking = false }
+        working += 1
+        defer { working -= 1 }
         do {
             let selection = try ReviewSelection(status, paths: paths)
             show(try await body(subject, selection))
@@ -336,14 +338,15 @@ struct ChangeRow: Identifiable, Hashable {
     /// Commits what is staged. True when a commit was made, and the sheet closes.
     func commit(message: String, amend: Bool) async -> Bool {
         let text = trimmed(message)
-        guard canWrite, !text.isEmpty else { return false }
+        // A second tap or Command-Return before the first commit answers must not commit again.
+        guard canWrite, !isWorking, !text.isEmpty else { return false }
         let head = amend ? lastCommit?.hash : nil
         guard amend ? head != nil : stagedCount > 0 else {
             commitError = ChangesCopy.refusal(HelperError.conflict(GitConflict.nothingStaged.rawValue), machine: machine)
             return false
         }
-        isWorking = true
-        defer { isWorking = false }
+        working += 1
+        defer { working -= 1 }
         do {
             _ = try await services.commit(subject, message: text, amend: amend, head: head)
             notice = nil

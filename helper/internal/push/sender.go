@@ -159,11 +159,9 @@ func (s *Sender) Run(ctx context.Context) {
 			s.logf("push: queue full, dropped %s event", ev.Kind)
 		}
 	})
-	// Activities from before this process are unknown; a device counts as
-	// having one again once it registers an update token.
-	if err := s.Devices.ForgetLiveActivities(); err != nil {
-		s.logf("push: %v", err)
-	}
+	// Update tokens stored before this process stay: an activity that ended
+	// meanwhile is reported through the mailbox or refused by APNs, and the
+	// app reports its running activities again when it reconnects.
 	t := time.NewTicker(liveTick)
 	defer t.Stop()
 	for {

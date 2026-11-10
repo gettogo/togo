@@ -200,14 +200,18 @@ struct WorkspaceComposeBar: View {
     private func model(for tab: WorkspaceTab, handle: TerminalHandle) -> ComposeModel {
         if let model = models[tab.id] { return model }
         let store = self.store
+        let id = tab.id
+        // The model outlives the terminal it was made for: Try again, a transport change or a
+        // tab let go past the pool's limit attaches a new one. Text goes to the terminal the
+        // tab has when it is sent, never to a stopped one that would drop it.
+        let current: @MainActor () -> TerminalHandle = { [terminals] in terminals.handle(for: id) ?? handle }
         let images = ImagePasteFlow(
             support: store.imageSupport(for: tab.hostID),
             upload: { name, data in
                 try await store.services.upload(hostID: tab.hostID, sessionID: tab.sessionID, name: name, data: data)
             },
-            paste: { handle.paste($0) }
+            paste: { current().paste($0) }
         )
-        let id = tab.id
         let draft = Binding(get: { store.drafts[id] ?? "" }, set: { store.drafts[id] = $0.isEmpty ? nil : $0 })
         let speech = DictationSpeech(
             engine: SpeechEngines.shared, locale: SpeechEngines.locale(store.services.settings.dictationLocale),
@@ -220,7 +224,7 @@ struct WorkspaceComposeBar: View {
         }
         let model = ComposeModel(
             draft: draft, history: ComposeHistory(hostID: tab.hostID, sessionID: tab.sessionID), images: images,
-            paste: { handle.paste($0) }, pressEnter: { handle.pressEnter() }, speech: speech
+            paste: { current().paste($0) }, pressEnter: { current().pressEnter() }, speech: speech
         )
         models[tab.id] = model
         return model

@@ -14,6 +14,8 @@ import UIKit
     /// How often the partial line is brought up to date.
     private let interval: Duration
     private var transcriber: (any WhisperTranscribing)?
+    /// The load under way, which a second start joins rather than loading a second copy.
+    private var loading: Task<any WhisperTranscribing, any Error>?
     /// The one session allowed to use the microphone, as in `AppleSpeechEngine`.
     private var current: WhisperSession?
     private var installing = false
@@ -96,15 +98,20 @@ import UIKit
         }
         let session = WhisperSession(language: language(for: locale))
         current = session
+        // Kept here as well as on the session: a cancel while the microphone starts takes it off
+        // the session before it is running, and it must still be stopped once it is.
+        var started: (any WhisperMicrophone)?
         do {
             guard session.language != nil else { throw DictationError.engine(DictationCopy.unsupported) }
             guard isInstalled else { throw DictationError.engine(DictationCopy.whisperMissing) }
             let transcriber = try await loaded()
             try check(session)
+            session.transcriber = transcriber
             let (stream, output) = AsyncThrowingStream.makeStream(of: Transcript.self)
             session.output = output
             let microphone = makeMicrophone()
             session.microphone = microphone
+            started = microphone
             try await microphone.start(
                 samples: { [weak session] in session?.samples += $0 },
                 level: { [weak self, weak session] level in
@@ -125,6 +132,7 @@ import UIKit
         } catch {
             if current === session { current = nil }
             session.close()
+            started?.stop()
             throw error
         }
     }
@@ -155,6 +163,14 @@ import UIKit
     /// intact but will not start stays, and the next dictation tries again.
     private func loaded() async throws -> any WhisperTranscribing {
         if let transcriber { return transcriber }
+        if let loading { return try await loading.value }
+        let task = Task { try await self.load() }
+        loading = task
+        defer { if loading == task { loading = nil } }
+        return try await task.value
+    }
+
+    private func load() async throws -> any WhisperTranscribing {
         let fullCheck = store.needsFullCheck(model)
         let loaded: any WhisperTranscribing
         do {
@@ -205,7 +221,9 @@ import UIKit
         let samples = session.samples
         session.samples = []
         var failure = error
-        if !samples.isEmpty, let transcriber {
+        // The session's own copy: the engine's goes when memory runs short or the app leaves
+        // the screen, which can happen while this waits for the partial line to stop.
+        if !samples.isEmpty, let transcriber = session.transcriber {
             do {
                 let text = Self.clean(try await transcriber.transcribe(samples, language: session.language))
                 if !text.isEmpty { session.output?.yield(Transcript(text: text, isFinal: true)) }
@@ -228,6 +246,7 @@ import UIKit
 @MainActor private final class WhisperSession {
     let language: String?
     var microphone: (any WhisperMicrophone)?
+    var transcriber: (any WhisperTranscribing)?
     var output: AsyncThrowingStream<Transcript, any Error>.Continuation?
     var partials: Task<Void, Never>?
     var samples: [Float] = []

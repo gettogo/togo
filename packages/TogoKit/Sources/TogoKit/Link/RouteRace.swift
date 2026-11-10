@@ -26,6 +26,7 @@ public enum RouteRace {
     public static func run<T: Sendable>(
         _ routes: [String],
         stagger: Duration = stagger,
+        clock: any LinkClock = SystemClock(),
         isFatal: @escaping @Sendable (any Error) -> Bool,
         isNetwork: @escaping @Sendable (any Error) -> Bool = { _ in false },
         attempt: @escaping @Sendable (_ index: Int, _ route: String) async throws -> T,
@@ -35,7 +36,7 @@ public enum RouteRace {
         let race = Race<T>(routes: routes, isFatal: isFatal, isNetwork: isNetwork, attempt: attempt, discard: discard)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                race.begin(continuation, stagger: stagger)
+                race.begin(continuation, stagger: stagger, clock: clock)
             }
         } onCancel: {
             race.finish(.failure(CancellationError()))
@@ -71,7 +72,7 @@ private final class Race<T: Sendable>: Sendable {
         self.discard = discard
     }
 
-    func begin(_ continuation: CheckedContinuation<RouteRace.Win<T>, any Error>, stagger: Duration) {
+    func begin(_ continuation: CheckedContinuation<RouteRace.Win<T>, any Error>, stagger: Duration, clock: any LinkClock) {
         let cancelledEarly = state.withLock { state -> Bool in
             if state.done { return true }
             state.continuation = continuation
@@ -84,7 +85,7 @@ private final class Race<T: Sendable>: Sendable {
         launchNext()
         let pacer = Task { [weak self] in
             while true {
-                try? await Task.sleep(for: stagger)
+                try? await clock.sleep(for: stagger)
                 guard let self, !Task.isCancelled, self.launchNext() else { return }
             }
         }

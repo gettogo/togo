@@ -567,3 +567,51 @@ func TestDoneSilentLiveActivityUpdateDoesNotAlert(t *testing.T) {
 	e.handle(notifyEv("s_abcdefghij", wire.LevelDone))
 	check(n, wire.PushDone, false)
 }
+
+// APNs refusing the token itself, through this relay (its 400) or an older
+// one (502 with the reason): no retry, and the device waits for a new token.
+func TestRelayBadDeviceTokenMarksDeadWithoutRetry(t *testing.T) {
+	for _, status := range []int32{http.StatusBadRequest, http.StatusBadGateway} {
+		e := newEnv(t, 1)
+		e.sender.Sleep = func(context.Context, time.Duration) error { return nil }
+		e.relay.status.Store(status)
+		e.relay.answer.Store(`{"error":"apns","reason":"BadDeviceToken","apnsStatus":400}`)
+		e.handle(approvalOpen("r_abcdefghij"))
+		if n := len(e.relay.received()); n != 1 {
+			t.Fatalf("status %d: relay got %d attempts, want 1", status, n)
+		}
+		list, err := e.svc.Devices().List()
+		if err != nil || len(list) != 1 || !list[0].Dead {
+			t.Fatalf("status %d: devices after BadDeviceToken: %+v, %v", status, list, err)
+		}
+	}
+}
+
+// A push APNs refuses for good, whatever the token, is tried once and the
+// device stays live; one that may pass later is retried.
+func TestRelayPermanentAPNsErrorsAreNotRetried(t *testing.T) {
+	cases := []struct {
+		status int32
+		reason string
+		tries  int
+	}{
+		{http.StatusForbidden, "InvalidProviderToken", 1},
+		{http.StatusRequestEntityTooLarge, "PayloadTooLarge", 1},
+		{http.StatusBadGateway, "TopicDisallowed", 1}, // an older relay's answer
+		{http.StatusServiceUnavailable, "ServiceUnavailable", maxAttempts},
+		{http.StatusForbidden, "ExpiredProviderToken", maxAttempts},
+	}
+	for _, c := range cases {
+		e := newEnv(t, 1)
+		e.sender.Sleep = func(context.Context, time.Duration) error { return nil }
+		e.relay.status.Store(c.status)
+		e.relay.answer.Store(`{"error":"apns","reason":"` + c.reason + `"}`)
+		e.handle(approvalOpen("r_abcdefghij"))
+		if n := len(e.relay.received()); n != c.tries {
+			t.Errorf("%d %s: %d attempts, want %d", c.status, c.reason, n, c.tries)
+		}
+		if list, _ := e.svc.Devices().List(); len(list) != 1 || list[0].Dead {
+			t.Errorf("%d %s: device marked dead: %+v", c.status, c.reason, list)
+		}
+	}
+}

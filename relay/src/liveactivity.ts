@@ -130,7 +130,8 @@ const URGENT_STATUSES: readonly ContentState["status"][] = ["needs_you", "done",
  * at 10. A sender may mark an update urgent, such as the one that clears an answered request.
  */
 export function liveActivityPriority(la: LiveActivity): "5" | "10" {
-  if (la.event !== "update" || la.urgent) return "10";
+  // An alerting update stands in for an alert push, so it may not wait.
+  if (la.event !== "update" || la.urgent || la.alert) return "10";
   return URGENT_STATUSES.includes(la.contentState.status) ? "10" : "5";
 }
 

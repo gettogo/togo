@@ -242,6 +242,11 @@ describe("live activity priority", () => {
     expect(await priority({ event: "update", contentState: { ...state, status: "working" }, urgent: true })).toBe("10");
   });
 
+  it("an update that alerts goes at priority 10 whatever its status", async () => {
+    // An alerting update stands in for an alert push; at 5 iOS may hold it back.
+    expect(await priority({ event: "update", contentState: { ...state, status: "working" }, alert: true })).toBe("10");
+  });
+
   it("urgent must be a boolean", async () => {
     await expectField(live({ event: "update", contentState: state, urgent: "yes" }), "liveActivity.urgent");
   });

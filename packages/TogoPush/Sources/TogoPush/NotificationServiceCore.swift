@@ -158,7 +158,7 @@ public struct NotificationServiceCore: Sendable {
 
         var changed = false
         if p.kind == .needsYou, let requestId = p.requestId {
-            if let known = pending.request(requestId), known.answered != nil {
+            if let known = pending.request(requestId), !known.isOpen(at: clock()) {
                 // Answered already, here or in another process: show it, offer nothing.
                 content.categoryIdentifier = NotificationCategoryID.info
                 return Result(content: content, pendingChanged: false, clearsOfflineOf: clearsOffline)

@@ -26,7 +26,7 @@ public struct TerminalSettings: Codable, Equatable, Sendable {
         cursorBlinks: Bool = true,
         scrollback: Int = 10_000,
         optionAsMeta: Bool = true,
-        themeID: String = "beacon-dark",
+        themeID: String = "togo-dark",
         allowClipboardRead: Bool = false,
         readNewOutput: Bool = true
     ) {

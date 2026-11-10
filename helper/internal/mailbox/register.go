@@ -45,7 +45,8 @@ func (v *Verifier) verifyRegister(pt []byte) (wire.RegisterPlaintext, error) {
 			return r, ErrMalformed
 		}
 	}
-	dev, ok := v.device(r.DeviceID)
+	// A dead device may register: a new APNs token is what revives it.
+	dev, ok := v.device(r.DeviceID, true)
 	if !ok {
 		return r, ErrUnknownDevice
 	}

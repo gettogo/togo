@@ -133,7 +133,7 @@ public enum RequestLifetime {
     /// Requests still waiting on the user at `now`, oldest first.
     public static func waiting(_ requests: [PendingRequest], now: Date) -> [PendingRequest] {
         requests
-            .filter { $0.answered == nil && now.timeIntervalSince($0.receivedAt) < seconds }
+            .filter { $0.isOpen(at: now) && now.timeIntervalSince($0.receivedAt) < seconds }
             .sorted { $0.receivedAt < $1.receivedAt }
     }
 }

@@ -36,7 +36,7 @@ struct WaitingSummary: Equatable {
     /// Unanswered requests still inside their window, oldest first.
     static func open(_ requests: [PendingRequest], now: Date) -> [PendingRequest] {
         requests
-            .filter { $0.answered == nil && now.timeIntervalSince($0.receivedAt) < openFor }
+            .filter { $0.isOpen(at: now) && now.timeIntervalSince($0.receivedAt) < openFor }
             .sorted { $0.receivedAt < $1.receivedAt }
     }
 }

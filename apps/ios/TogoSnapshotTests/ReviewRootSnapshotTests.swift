@@ -22,7 +22,7 @@ struct ReviewRootSnapshotTests {
         assertScreen(named: "root-changes") {
             ReviewRoot(
                 subject: subject, services: FakeReviewServices(), initialTab: .changes, machine: "Studio",
-                sendToSession: { _ in }
+                sendToSession: { _ in true }
             )
             .tint(Color.togoSnow)
         }
@@ -32,7 +32,7 @@ struct ReviewRootSnapshotTests {
         assertScreen(named: "root-history") {
             ReviewRoot(
                 subject: subject, services: FakeReviewServices(), initialTab: .history, machine: "Studio",
-                sendToSession: { _ in }
+                sendToSession: { _ in true }
             )
             .tint(Color.togoSnow)
         }
@@ -45,7 +45,7 @@ struct ReviewRootSnapshotTests {
         for variant in ScreenVariant.allCases {
             let view = ReviewRoot(
                 subject: subject, services: FakeReviewServices(), initialTab: .changes, machine: "Studio",
-                sendToSession: { _ in }, navigation: navigation
+                sendToSession: { _ in true }, navigation: navigation
             )
             .tint(Color.togoSnow)
             .environment(\.colorScheme, variant.colorScheme)

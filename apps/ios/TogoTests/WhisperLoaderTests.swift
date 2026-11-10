@@ -188,6 +188,50 @@ struct WhisperLoaderTests {
         #expect(settings.dictationEngine == .apple)
     }
 
+    /// Cancelled while the microphone waits to start, as behind the permission alert: once it
+    /// does start, it is stopped again rather than left listening.
+    @Test func cancelWhileTheMicrophoneStartsStopsIt() async throws {
+        let microphone = FakeWhisperMicrophone()
+        let whisper = WhisperEngine(store: WhisperModelStore(root: root), loader: FakeWhisperLoader(), microphone: { microphone })
+        try await whisper.installModel(locale: Locale(identifier: "en-US")) { _ in }
+        microphone.whileStarting = { whisper.cancel() }
+        await #expect(throws: CancellationError.self) { _ = try await whisper.start(locale: Locale(identifier: "en-US")) }
+        #expect(!microphone.isRunning)
+    }
+
+    /// A second dictation while the model still loads waits for that load: one copy in memory.
+    @Test func secondStartJoinsTheLoad() async throws {
+        let fake = FakeWhisperLoader()
+        let whisper = WhisperEngine(store: WhisperModelStore(root: root), loader: fake, microphone: { FakeWhisperMicrophone() })
+        try await whisper.installModel(locale: Locale(identifier: "en-US")) { _ in }
+        fake.holdsLoad = true
+        let first = Task { _ = try await whisper.start(locale: Locale(identifier: "en-US")) }
+        while fake.loads < 1 { await Task.yield() }
+        fake.holdsLoad = false
+        let second = Task { _ = try await whisper.start(locale: Locale(identifier: "en-US")) }
+        for _ in 0..<20 { await Task.yield() }
+        fake.finishLoading()
+        try? await first.value
+        try await second.value
+        whisper.cancel()
+        #expect(fake.loads == 1)
+    }
+
+    /// The model let go for memory while listening ends still hears the final pass.
+    @Test func finalPassSurvivesTheModelBeingReleased() async throws {
+        let fake = FakeWhisperLoader()
+        let microphone = FakeWhisperMicrophone()
+        let whisper = WhisperEngine(store: WhisperModelStore(root: root), loader: fake, microphone: { microphone })
+        try await whisper.installModel(locale: Locale(identifier: "en-US")) { _ in }
+        _ = try await whisper.start(locale: Locale(identifier: "en-US"))
+        microphone.hear(seconds: 1)
+        let stopping = Task { await whisper.stop() }
+        await Task.yield()
+        whisper.releaseModelIfIdle()
+        await stopping.value
+        #expect(fake.transcriber.calls.last?.samples == WhisperModel.sampleRate)
+    }
+
     @Test func leftoverDownloadIsCleared() throws {
         let staging = root.appending(path: "\(WhisperModel.base.id).download", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)

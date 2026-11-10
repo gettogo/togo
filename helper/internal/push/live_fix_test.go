@@ -127,7 +127,9 @@ func TestLiveFailedStartRetriedOnce(t *testing.T) {
 	}
 }
 
-func TestRunForgetsLiveTokens(t *testing.T) {
+// A helper restart keeps the update token of the activity running on the
+// phone, so the next request updates it instead of starting a second one.
+func TestRunKeepsLiveTokensAcrossARestart(t *testing.T) {
 	e := newEnv(t, 0)
 	e.pairWith(t, "dev_a", func(p *wire.PairParams) {
 		p.LiveActivityToken = updateToken
@@ -136,26 +138,16 @@ func TestRunForgetsLiveTokens(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { e.sender.Run(ctx); close(done) }()
-	t.Cleanup(func() { cancel(); <-done })
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if list, _ := e.svc.Devices().List(); list[0].LiveActivityToken == "" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("update token believed live after a restart")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	if list, _ := e.svc.Devices().List(); list[0].LiveActivityStartToken != startToken {
-		t.Fatal("start token dropped")
-	}
+	time.Sleep(20 * time.Millisecond)
 	cancel()
 	<-done
-	ctx = context.Background()
-	e.sender.process(ctx, approvalOpen("r_abcdefghij"))
+	list, _ := (&Devices{Home: e.svc.Home}).List()
+	if list[0].LiveActivityToken != updateToken || list[0].LiveActivityStartToken != startToken {
+		t.Fatalf("tokens after a restart: %+v", list[0].Device)
+	}
+	e.sender.process(context.Background(), approvalOpen("r_abcdefghij"))
 	la, _ := e.livePushes()
-	if len(la) != 1 || la[0].Token != startToken || la[0].LiveActivity.Event != liveStart {
+	if len(la) != 1 || la[0].Token != updateToken || la[0].LiveActivity.Event != liveUpdate {
 		t.Fatalf("after restart: %+v", la)
 	}
 }

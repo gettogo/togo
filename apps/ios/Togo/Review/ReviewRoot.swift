@@ -64,7 +64,7 @@ struct ReviewRoot: View {
     private let services: any ReviewServices
     private let initialTab: ReviewTab
     private let machine: String
-    private let sendToSession: ((String) -> Void)?
+    private let sendToSession: ((String) -> Bool)?
     private let onSelectTab: (ReviewTab) -> Void
     private let onWrite: () -> Void
     /// Why nothing can be changed any more, once the session or machine is gone.
@@ -81,7 +81,7 @@ struct ReviewRoot: View {
     /// store's open review, which outlives this view when a fold moves the review.
     init(
         subject: ReviewSubject, services: any ReviewServices, initialTab: ReviewTab, machine: String = "",
-        sendToSession: ((String) -> Void)?, navigation: ReviewNavigation? = nil, session: ReviewSession? = nil,
+        sendToSession: ((String) -> Bool)?, navigation: ReviewNavigation? = nil, session: ReviewSession? = nil,
         onSelectTab: @escaping (ReviewTab) -> Void = { _ in }, onWrite: @escaping () -> Void = {},
         ended: String? = nil, onDraft: @escaping (Bool) -> Void = { _ in }
     ) {
@@ -121,13 +121,17 @@ struct ReviewRoot: View {
 
     /// A comment from the diff goes into the session's input as a paste, cleaned for a terminal.
     /// Enter is never pressed: the user reads it there and sends it.
-    /// The handle is looked up again on each send, since a reconnect replaces it.
-    static func sendToSession(_ handle: @escaping @MainActor () -> TerminalHandle?) -> ((String) -> Void)? {
+    /// The handle is looked up again on each send, since a reconnect replaces it. A send
+    /// answers false when the terminal has gone since (the tab closed, or was let go past the
+    /// pool's limit), so the comment is not lost without a word.
+    static func sendToSession(_ handle: @escaping @MainActor () -> TerminalHandle?) -> ((String) -> Bool)? {
         guard handle() != nil else { return nil }
         return { text in
             let clean = SessionText.clean(text)
-            guard !clean.isEmpty else { return }
-            handle()?.paste(clean)
+            guard !clean.isEmpty else { return true }
+            guard let terminal = handle() else { return false }
+            terminal.paste(clean)
+            return true
         }
     }
 
@@ -425,7 +429,7 @@ private struct ReviewEntrance: ViewModifier {
 #Preview("Review") {
     ReviewRoot(
         subject: DiffModel.previewSubject, services: FakeReviewServices(), initialTab: .changes, machine: "Studio",
-        sendToSession: { _ in }
+        sendToSession: { _ in true }
     )
 }
 #endif

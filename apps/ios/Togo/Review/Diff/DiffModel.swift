@@ -62,7 +62,8 @@ enum DiffMode: String, CaseIterable, Sendable {
 
     let subject: ReviewSubject
     private let services: any ReviewServices
-    private let sendToSession: ((String) -> Void)?
+    /// Pastes into the session's terminal; false when it is gone and nothing went.
+    private let sendToSession: ((String) -> Bool)?
     /// The machine's name, for refusals that send the user to it.
     private let machine: String
 
@@ -100,7 +101,7 @@ enum DiffMode: String, CaseIterable, Sendable {
     private var started = false
 
     init(
-        subject: ReviewSubject, services: any ReviewServices, source: DiffSource, sendToSession: ((String) -> Void)?,
+        subject: ReviewSubject, services: any ReviewServices, source: DiffSource, sendToSession: ((String) -> Bool)?,
         machine: String = ""
     ) {
         self.subject = subject
@@ -325,16 +326,21 @@ enum DiffMode: String, CaseIterable, Sendable {
 
     /// Sends "path:line: text" to the session. Both the path and the text come from outside the
     /// app, so each is cleaned for a terminal and kept on one line.
-    func comment(row: Int, text: String) {
-        guard let draft = commentDraft(row: row) else { return }
-        comment(draft, text: text)
+    @discardableResult
+    func comment(row: Int, text: String) -> Bool {
+        guard let draft = commentDraft(row: row) else { return false }
+        return comment(draft, text: text)
     }
 
-    /// Comments on the line the draft quotes, even if the diff has reloaded since.
-    func comment(_ draft: CommentDraft, text: String) {
+    /// Comments on the line the draft quotes, even if the diff has reloaded since. False when
+    /// the comment did not reach the session (its terminal is gone): the sheet keeps the
+    /// words and says so, rather than closing as if it went.
+    @discardableResult
+    func comment(_ draft: CommentDraft, text: String) -> Bool {
         let flat = SessionText.clean(text)
-        guard let sendToSession, !flat.isEmpty else { return }
-        sendToSession("\(SessionText.clean(draft.location)): \(flat)")
+        guard !flat.isEmpty else { return true }
+        guard let sendToSession else { return false }
+        return sendToSession("\(SessionText.clean(draft.location)): \(flat)")
     }
 
     // MARK: Writes

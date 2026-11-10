@@ -3,9 +3,7 @@ import TogoKit
 
 extension AppStore {
     /// The workspace is what the window shows: pushed over the roster in a compact window, or
-    /// the terminal column beside it (which shows the empty detail while no tab is open). The
-    /// workspace presents reviews and sign-in questions only while it is mounted; otherwise the
-    /// root does.
+    /// the terminal column beside it (which shows the empty detail while no tab is open).
     var workspaceOnScreen: Bool {
         guard workspaceOpen else { return false }
         return !workspaceInline || !workspace.tabs.isEmpty

@@ -181,9 +181,8 @@ struct SSHConfigImportTests {
     @Test func pathologicalGlobFinishesFast() throws {
         let pattern = String(repeating: "*a", count: 40) + "*b"
         let text = "Host \(pattern)\n User x\nHost \(String(repeating: "a", count: 200))\n"
-        let clock = ContinuousClock()
         var result = ImportResult()
-        let elapsed = try clock.measure { result = try SSHConfigImport.parse(text) }
+        let elapsed = try cpuTime { result = try SSHConfigImport.parse(text) }
         #expect(elapsed < .seconds(1))
         #expect(result.hosts.count == 1)
         #expect(result.hosts[0].user == nil)
@@ -334,16 +333,22 @@ struct SSHConfigImportTests {
         for _ in 0..<400 { text += "Host \(pattern)\n" }
         for i in 0..<400 { text += "Host \(String(repeating: "a", count: 250))\(String(format: "%05d", i))\n" }
         #expect(text.utf8.count <= SSHConfigImport.maxBytes)
-        let clock = ContinuousClock()
-        let elapsed = try clock.measure { _ = try SSHConfigImport.parse(text) }
+        let elapsed = try cpuTime { _ = try SSHConfigImport.parse(text) }
         #expect(elapsed < .milliseconds(500))
     }
 
     @Test func thirtyKilobytePathologicalConfigIsFast() throws {
         let text = "Host *" + String(repeating: "a*", count: 100) + "b\nHost " + String(repeating: "a", count: 255) + "\n"
             + String(repeating: "# padding\n", count: 3_000)
-        let clock = ContinuousClock()
-        let elapsed = try clock.measure { _ = try SSHConfigImport.parse(text) }
+        let elapsed = try cpuTime { _ = try SSHConfigImport.parse(text) }
         #expect(elapsed < .seconds(1))
     }
+}
+
+/// CPU time this thread spent in `body`, which is synchronous and stays on one thread. Unlike
+/// wall time it does not grow while other tests running in parallel hold the cores.
+func cpuTime(_ body: () throws -> Void) rethrows -> Duration {
+    let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+    try body()
+    return .nanoseconds(Int64(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start))
 }

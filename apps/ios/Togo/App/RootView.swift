@@ -21,6 +21,8 @@ struct RootView: View {
     @State private var launchShown = LaunchGate.app.claim()
     /// A form opened from the Settings sheet takes the window's one sheet; Settings comes back after.
     @State private var settingsHandover = SettingsHandover()
+    /// The window's width, for the presenters attached here (`AdaptiveRoot` measures its own).
+    @State private var windowWidth: CGFloat?
 
     init(store: AppStore, terminals: TerminalPool, onboarding: any OnboardingServices, tutorial: TutorialModel? = nil) {
         _store = State(initialValue: store)
@@ -66,14 +68,25 @@ struct RootView: View {
             guard sheet == nil, let back = settingsHandover.closed() else { return }
             store.sheet = back
         }
-        // From the sessions list, the board or the empty detail; while the workspace is on
-        // screen, the workspace presents it.
-        .reviewPresentation(store: store, terminals: terminals, active: !store.workspaceOnScreen)
+        // The window's one host for the review, above the split view: the workspace is a
+        // column of it now, never a cover, so nothing needs a second host. A second host in the
+        // workspace column handed an open review between the two whenever the workspace came on
+        // or off screen, and sat in a column a fold collapses or expands.
+        .reviewPresentation(store: store, terminals: terminals, active: true)
         // Terminals follow the tabs even while the workspace is closed, so a session that ends
         // or is killed from the list lets go of its connection at once.
         .onChange(of: store.workspace, initial: true) { terminals.sync(window: window, with: store) }
-        // While a sheet is up, the sheet carries the questions itself; one presenter shows one sheet.
-        .attachPrompts(store.services.attachPrompts, host: "root", active: !store.workspaceOnScreen && store.sheet == nil)
+        // While a form sheet is up, the sheet carries the questions itself; one presenter shows
+        // one sheet. Otherwise this is their one host, for the roster and the workspace alike
+        // (behind a review, a question waits for it to close).
+        .attachPrompts(store.services.attachPrompts, host: "root", active: formSheet.wrappedValue == nil)
+        // Presenters at the root decide by the window's room too (`AdaptivePresentation`).
+        .environment(\.windowWidth, windowWidth)
+        .background {
+            Color.clear
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
+                .ignoresSafeArea()
+        }
         .focusedSceneValue(\.appStore, store)
         .togoControls()
         .readsFold()

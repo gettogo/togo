@@ -6,7 +6,7 @@ import UIKit
 /// renderer every terminal starts on and that previews and snapshots keep.
 @MainActor
 struct BackgroundTests {
-    @Test(arguments: ["beacon-dark", "beacon-light"])
+    @Test(arguments: ["togo-dark", "togo-light"])
     func emptyCellsShowTheThemeBackground(themeID: String) throws {
         let theme = try #require(BuiltInThemes.all.first { $0.id == themeID })
         let harness = EngineHarness(width: 240, height: 160)
@@ -19,11 +19,11 @@ struct BackgroundTests {
 
     @Test func themeSwitchKeepsTheBackground() throws {
         let harness = EngineHarness(width: 240, height: 160)
-        harness.engine.apply(BuiltInThemes.beaconLight)
-        harness.engine.apply(BuiltInThemes.beaconDark)
+        harness.engine.apply(BuiltInThemes.togoLight)
+        harness.engine.apply(BuiltInThemes.togoDark)
 
         let pixel = try renderedPixel(of: harness.engine.view, at: CGPoint(x: 200, y: 120))
-        #expect(pixel == RGB(hex: BuiltInThemes.beaconDark.background))
+        #expect(pixel == RGB(hex: BuiltInThemes.togoDark.background))
         #expect(harness.engine.backgroundColor == harness.engine.view.layer.backgroundColor.map(UIColor.init))
     }
 

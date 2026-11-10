@@ -94,6 +94,26 @@ import TogoKit
         #expect(machines.syncedVersion(of: resolved[0]).profile.auth == .key(id: other))
     }
 
+    /// Editing a machine set up here, such as renaming it, starts from the record with this
+    /// device's key in it. The saved record keeps the key it named for the other devices.
+    @Test func anEditLeavingTheSignInAloneKeepsTheSyncedKey() {
+        let machines = make(here: [mine], deviceKey: mine)
+        machines.setUp(Samples.studio, keyID: mine)
+        var edited = machines.resolve([record(.key(id: other))])[0]
+        #expect(edited.profile.auth == .key(id: mine))
+        edited.profile.name = "Studio Mac"
+        let saved = machines.editedVersion(of: edited)
+        #expect(saved.profile.auth == .key(id: other))
+        #expect(saved.profile.name == "Studio Mac")
+    }
+
+    @Test func anEditThatChangesTheSignInSavesIt() {
+        let machines = make(here: [mine], deviceKey: mine)
+        var edited = machines.resolve([record(.key(id: other))])[0]
+        edited.profile.auth = .password
+        #expect(machines.editedVersion(of: edited).profile.auth == .password)
+    }
+
     // MARK: Kept on this device
 
     @Test func whatThisDeviceLearnedSurvivesARelaunch() {

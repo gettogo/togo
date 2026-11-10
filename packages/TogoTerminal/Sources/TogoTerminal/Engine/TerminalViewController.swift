@@ -107,6 +107,10 @@ import UIKit
             bounds: view.bounds, safeArea: view.safeAreaInsets, keyboard: keyboardFrame, visible: visibleBounds()
         )
         let terminal = engine.view
+        // A space that holds no grid, as for a moment in a fold or with a keyboard over a short
+        // pane, keeps the grid it has: fitted, it would reflow every line and the scrollback to
+        // two columns and tell the remote it has no rows.
+        if !terminal.bounds.isEmpty, !TerminalFit.holdsGrid(rect.size, cell: engine.cellSize) { return }
         // Bounds and center, not frame: a pinch in flight scales the view with a transform, and
         // a scroll view's bounds origin is its scroll position.
         if terminal.bounds.size != rect.size {
@@ -227,6 +231,14 @@ enum TerminalFit {
             x: rect.minX.rounded(.up), y: rect.minY.rounded(.up),
             width: max(0, rect.width.rounded(.down)), height: max(0, rect.height.rounded(.down))
         )
+    }
+
+    /// True when `size` fits the smallest grid the emulator keeps, two columns by one row of
+    /// `cell`. Before the cell is known any size that is not empty counts.
+    static func holdsGrid(_ size: CGSize, cell: CGSize) -> Bool {
+        guard cell.width > 0, cell.height > 0 else { return size.width > 0 && size.height > 0 }
+        return size.width >= cell.width * CGFloat(SwiftTermEngine.minimumCols)
+            && size.height >= cell.height * CGFloat(SwiftTermEngine.minimumRows)
     }
 }
 

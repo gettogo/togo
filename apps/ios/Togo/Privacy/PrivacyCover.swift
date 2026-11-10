@@ -17,13 +17,14 @@ enum PrivacyCoverRule {
     }
 }
 
+/// The app-switcher cover: the launch screen's own ink and mark, at the launch screen's size and
+/// place, so the switcher card and a cold launch look the same.
 struct PrivacySurface: View {
     var body: some View {
         ZStack {
             Color.togoInk
-            Text(verbatim: "togo")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color.togoMute)
+            LaunchMark()
+                .frame(width: LaunchMark.launchScreenSide, height: LaunchMark.launchScreenSide)
                 .accessibilityHidden(true)
         }
         .ignoresSafeArea()
@@ -36,9 +37,11 @@ struct ResumeLockScreen: View {
     var body: some View {
         ZStack {
             PrivacySurface()
+            // Below the centred mark, clear of it.
             Button("Unlock with \(BiometryName.current)", action: unlock)
-                .foregroundStyle(Color.togoSnow)
-                .padding(.top, 80)
+                .buttonStyle(.glass)
+                .controlSize(.large)
+                .offset(y: LaunchMark.launchScreenSide / 2 + 56)
         }
     }
 }

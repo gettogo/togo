@@ -117,47 +117,50 @@ private struct MissionControlPresenter: ViewModifier {
 /// Applied to the detail column's `NavigationStack`, never inside it: an `inspector` inside the
 /// stack wraps the workspace in an inspector container of its own, whose bar items are no longer
 /// the stack's, so an iPhone Duo's vertical bar showed only the status, and on a tight window
-/// the container overlaid and dimmed the chat. Narrower windows get no inspector at all, only
-/// the sheet (`missionControl`). Crossing the width (an iPad rotated or resized) rebuilds the
-/// detail stack; the workspace's durable state lives in the store and survives it.
+/// the container overlaid and dimmed the chat. Narrower windows never show it, only the sheet
+/// (`missionControl`).
+///
+/// Attached on every width, shown only where it fits: a branch on the width here would swap the
+/// whole detail stack out when an iPad rotates or a window resizes across the threshold, taking
+/// down every sheet and question the workspace had up mid-presentation (the orphaned dimming
+/// view that leaves a window taking no touches).
 struct MissionInspectorColumn: ViewModifier {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.windowWidth) private var windowWidth
     let app: AppStore
 
     func body(content: Content) -> some View {
-        if MissionPresentation.choose(sizeClass, windowWidth: windowWidth) == .inspector {
-            let tab = app.focusedTab?.id
-            let store = tab.flatMap { app.harness(for: $0) }
-            content.coordinated("mission.inspector", .inspector, isPresented: shown(store)) { view, shown in
-                view.inspector(isPresented: shown) {
-                    if let store, let tab {
-                        MissionControlStack(
-                            store: store, actions: app.chatActions(for: tab),
-                            openExternal: { [app] target in app.followMissionTarget(target, from: tab) },
-                            showChat: { needs in
-                                if store.chatAvailable, needs != nil || store.oldestOpenNeeds != nil {
-                                    store.revealNeeds(id: needs)
-                                } else {
-                                    store.layer = .chat
-                                }
-                            },
-                            onDone: nil
-                        )
-                        .inspectorColumnWidth(min: 280, ideal: MissionPlacement.inspectorIdeal, max: 440)
-                    }
+        let fits = MissionPresentation.choose(sizeClass, windowWidth: windowWidth) == .inspector
+        let tab = app.focusedTab?.id
+        let store = tab.flatMap { app.harness(for: $0) }
+        content.coordinated("mission.inspector", .inspector, isPresented: shown(store, fits: fits)) { view, shown in
+            view.inspector(isPresented: shown) {
+                if fits, let store, let tab {
+                    MissionControlStack(
+                        store: store, actions: app.chatActions(for: tab),
+                        openExternal: { [app] target in app.followMissionTarget(target, from: tab) },
+                        showChat: { needs in
+                            if store.chatAvailable, needs != nil || store.oldestOpenNeeds != nil {
+                                store.revealNeeds(id: needs)
+                            } else {
+                                store.layer = .chat
+                            }
+                        },
+                        onDone: nil
+                    )
+                    .inspectorColumnWidth(min: 280, ideal: MissionPlacement.inspectorIdeal, max: 440)
                 }
             }
-        } else {
-            content
         }
     }
 
-    private func shown(_ store: HarnessSessionStore?) -> Binding<Bool> {
+    /// Up only where the column fits; elsewhere the sheet (`missionControl`) shows the same state,
+    /// so a close from here never clears what the sheet shows.
+    private func shown(_ store: HarnessSessionStore?, fits: Bool) -> Binding<Bool> {
         Binding(
-            get: { store?.showsMission == true },
+            get: { fits && store?.showsMission == true },
             set: { shown in
-                guard let store, store.showsMission != shown else { return }
+                guard fits, let store, store.showsMission != shown else { return }
                 store.showsMission = shown
             }
         )

@@ -208,7 +208,7 @@ import UIKit
 
         let pool = HandleBox(handle)
         let send = try #require(ReviewRoot.sendToSession { pool.handle })
-        send("src/router.ts:12: check\u{1b}[31m this\r\nfirst")
+        #expect(send("src/router.ts:12: check\u{1b}[31m this\r\nfirst"))
         #expect(pasted == ["src/router.ts:12: check[31m this first"])
         #expect(enters == 0)
 
@@ -217,9 +217,14 @@ import UIKit
         var replaced: [String] = []
         replacement.paste = { replaced.append($0) }
         pool.handle = replacement
-        send("again")
+        #expect(send("again"))
         #expect(replaced == ["again"])
         #expect(ReviewRoot.sendToSession { nil } == nil)
+
+        // The terminal went after the review opened: the send says nothing went.
+        pool.handle = nil
+        #expect(!send("lost?"))
+        #expect(replaced == ["again"])
     }
 
     // MARK: Shortcuts

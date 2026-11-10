@@ -17,12 +17,26 @@ struct HelperIntegrationTests {
         environment["TOGO_TMUX_LABEL"] = label
         environment["TMUX_TMPDIR"] = sandbox.appending(path: "tmux").path
         environment["TMUX"] = nil
-        defer {
+        do {
+            try await exercise(binary: binary, sandbox: sandbox, environment: environment)
+        } catch {
+            await cleanUp(sandbox: sandbox, label: label, environment: environment)
+            throw error
+        }
+        await cleanUp(sandbox: sandbox, label: label, environment: environment)
+    }
+
+    /// Stopping the daemon and tmux waits on processes, so it runs off the shared pool: a
+    /// blocked pool thread would hold up the tests running beside this one.
+    private func cleanUp(sandbox: URL, label: String, environment: [String: String]) async {
+        await offPool {
             stopDaemon(home: sandbox.appending(path: "home"))
             stopTmux(label: label, environment: environment)
             try? FileManager.default.removeItem(at: sandbox)
         }
+    }
 
+    private func exercise(binary: URL, sandbox: URL, environment: [String: String]) async throws {
         let channel = try ProcessChannel(executable: binary, arguments: ["serve", "--stdio"], environment: environment)
         let client = HelperClient(channel: channel)
         let hello = try await client.hello(client: HelperClient.testClient)
@@ -64,8 +78,7 @@ struct HelperIntegrationTests {
             .deletingLastPathComponent().deletingLastPathComponent()
         let binary = repo.appending(path: "helper/bin/togo")
         guard FileManager.default.isExecutableFile(atPath: binary.path) else {
-            Issue.record("helper binary missing at \(binary.path): run `make build` (or `make togokit-test`, which does), or set TOGO_BIN to a built togo")
-            throw CancellationError()
+            throw HelperBinaryMissing(path: binary.path)
         }
         return binary
     }
@@ -95,6 +108,13 @@ struct HelperIntegrationTests {
 
     /// `serve --stdio` starts a detached daemon for the TOGO_HOME, which outlives the
     /// test unless stopped. The daemon is the process holding its lock file open.
+    private struct HelperBinaryMissing: Error, CustomStringConvertible {
+        let path: String
+        var description: String {
+            "helper binary missing at \(path): run `make build` (or `make togokit-test`, which does), or set TOGO_BIN to a built togo"
+        }
+    }
+
     private func stopDaemon(home: URL) {
         let lsof = Process()
         let output = Pipe()
@@ -142,11 +162,19 @@ private final class ProcessChannel: ExecChannel {
         try process.run()
         let handle = output.fileHandleForReading
         let incoming = incoming
-        // availableData blocks; a detached task keeps that off the caller and ends at EOF.
-        Task.detached {
+        // availableData blocks, so it runs on a thread of its own rather than on the shared
+        // pool, which the tests running beside this one need. It ends at EOF.
+        let (chunks, sink) = AsyncStream.makeStream(of: Data.self)
+        Thread {
             while true {
                 let chunk = handle.availableData
                 guard !chunk.isEmpty else { break }
+                sink.yield(chunk)
+            }
+            sink.finish()
+        }.start()
+        Task {
+            for await chunk in chunks {
                 guard await incoming.write(chunk) else { break }
             }
             incoming.finish()
@@ -159,7 +187,18 @@ private final class ProcessChannel: ExecChannel {
 
     func close() async {
         try? input.fileHandleForWriting.close()
-        process.waitUntilExit()
+        let process = process
+        await offPool { process.waitUntilExit() }
         incoming.finish()
+    }
+}
+
+/// Runs blocking work on a dispatch thread, so it never holds a thread of the shared pool.
+private func offPool(_ work: @escaping @Sendable () -> Void) async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        DispatchQueue.global().async {
+            work()
+            continuation.resume()
+        }
     }
 }

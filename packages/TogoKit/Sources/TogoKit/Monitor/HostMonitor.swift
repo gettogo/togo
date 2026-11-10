@@ -51,6 +51,12 @@ public actor HostMonitor {
     private var attemptGeneration = 0
     /// Counts trips to the background, so an attempt can tell it was interrupted by one.
     private var backgroundings = 0
+    /// When the current source was adopted, and how many in a row dropped before
+    /// `TerminalLink.stableLive`. A connection that keeps dropping straight after it comes up,
+    /// such as a helper that exits once subscribed, waits longer each time instead of
+    /// reconnecting at once in a loop.
+    private var liveSince: ContinuousClock.Instant?
+    private var quickDrops = 0
     private var feed: Task<Void, Never>?
     private var backgroundClose: Task<Void, Never>?
     private var pathTask: Task<Void, Never>?
@@ -174,10 +180,10 @@ public actor HostMonitor {
 
     // MARK: - Connecting
 
-    private func beginAttempts() {
+    private func beginAttempts(failures: Int = 0) {
         cancelAttempts()
         let run = attemptGeneration
-        attempt = Task { await self.runAttempts(run) }
+        attempt = Task { await self.runAttempts(run, failures: failures) }
     }
 
     private func cancelAttempts() {
@@ -196,8 +202,8 @@ public actor HostMonitor {
 
     /// Runs only in the foreground. In the background a key unlock can be refused by the
     /// system rather than the user, which must not read as needing sign-in.
-    private func runAttempts(_ run: Int) async {
-        var failures = 0
+    private func runAttempts(_ run: Int, failures start: Int) async {
+        var failures = start
         while isCurrent(run), isForeground {
             let delay = failures >= Self.failuresBeforeOffline
                 ? Self.offlineRetry : Self.backoff[min(failures, Self.backoff.count - 1)]
@@ -297,6 +303,7 @@ public actor HostMonitor {
         generation += 1
         let tag = generation
         source = connected.source
+        liveSince = clock.now
         hasEvents = connected.capabilities.contains(Capability.events)
         state.helper = connected.helper
         state.capabilities = connected.capabilities
@@ -324,6 +331,7 @@ public actor HostMonitor {
     /// Detaches the current source and closes it. Its late events and errors are ignored.
     private func retire() {
         generation += 1
+        liveSince = nil
         feed?.cancel()
         feed = nil
         held = []
@@ -336,7 +344,9 @@ public actor HostMonitor {
 
     private func connectionLost(_ tag: Int) {
         guard tag == generation, !isStopped else { return }
-        reconnect()
+        let quick = liveSince.map { clock.now - $0 < TerminalLink.stableLive } ?? false
+        quickDrops = quick ? quickDrops + 1 : 0
+        reconnect(failures: quickDrops)
     }
 
     private func pathChanged() {
@@ -345,10 +355,10 @@ public actor HostMonitor {
     }
 
     /// In the background the dead source is only dropped; `setForeground(true)` reconnects.
-    private func reconnect() {
+    private func reconnect(failures: Int = 0) {
         retire()
         if isForeground {
-            beginAttempts()
+            beginAttempts(failures: failures)
         } else {
             cancelAttempts()
         }

@@ -65,7 +65,9 @@ struct SubagentThread: Equatable {
         timeline.items.filter { item in
             guard item.parent != nil else { return false }
             switch item.body {
-            case .approval(let approval): return approval.resolved == nil
+            // An approval a question owns is that question at the terminal: the question's
+            // card answers it, so it never bubbles up as a second card (as in `TurnFold`).
+            case .approval(let approval): return approval.resolved == nil && approval.owner == nil
             case .question(let question): return question.answered == nil
             default: return false
             }

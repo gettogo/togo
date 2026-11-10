@@ -131,9 +131,11 @@ public enum NotificationCategorySet {
     /// One category per unanswered question in `pending`, a button per option. Picking one
     /// sends input to the agent, so it needs the device unlocked unless the user turned that
     /// off, like Approve. Reply joins them when the request takes a typed answer.
-    public static func choices(_ pending: [PendingRequest], approveWithoutUnlock: Bool) -> Set<UNNotificationCategory> {
+    public static func choices(
+        _ pending: [PendingRequest], approveWithoutUnlock: Bool, now: Date = Date()
+    ) -> Set<UNNotificationCategory> {
         var out = Set<UNNotificationCategory>()
-        for request in pending where request.answered == nil && offersChoices(request.options) {
+        for request in pending where request.isOpen(at: now) && offersChoices(request.options) {
             var actions: [UNNotificationAction] = request.options.map { option in
                 UNNotificationAction(
                     identifier: NotificationActionID.option(option.n),

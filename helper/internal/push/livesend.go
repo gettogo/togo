@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/gettogo/togo/helper/internal/approval"
-	"net/http"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/agents"
@@ -222,7 +221,7 @@ func holdFor(last, next LiveState) time.Duration {
 }
 
 // sendLive posts one Live Activity push, masking st for d's current
-// command setting and sealing its context for d. A 410 on the update
+// command setting and sealing its context for d. A token APNs refused on the update
 // token makes a start due.
 func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev string, st LiveState, attrs *liveAttributes, now time.Time) error {
 	token := dl.token
@@ -257,8 +256,8 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 		return nil
 	}
 	s.logf("push: device %s live activity %s: %v", idHash(d.DeviceID), ev, err)
-	var st410 *errStatus
-	if ev != liveStart && errors.As(err, &st410) && st410.code == http.StatusGone {
+	var refused *errStatus
+	if ev != liveStart && errors.As(err, &refused) && refused.deadToken {
 		dl.token, dl.startDue, dl.started = "", true, false
 	}
 	return err

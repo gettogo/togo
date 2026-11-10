@@ -6,10 +6,16 @@ import SwiftUI
 /// list with the pane pushed. It is one tree for every layout, so a fold, an unfold or a window
 /// resize keeps the pane: the selection lives in scene storage and picks the column on top when
 /// the split view collapses (N11, N13, P11).
+///
+/// Nothing here writes state when the size class changes. The sheet's own size class flips when
+/// a Duo folds part way (the system moves the sheet onto one page) and back when it opens; the
+/// split view collapses and expands by itself then. Writing the pane or the top column in that
+/// same update (as this view once did, defaulting the pane on regular) re-identifies the detail
+/// stack and pushes into a split view that is mid-expand inside a sheet mid-resize: the sheet
+/// stayed at its folded size over a dimmed window that took no touches. Only the user picks a
+/// pane; the wide detail shows the first pane until they do, as a view, not as a selection.
 struct SettingsSplitView: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @SceneStorage("settings.pane") private var pane: SettingsPane?
-    @State private var compactColumn = NavigationSplitViewColumn.sidebar
 
     let values: SettingsValues
     let actions: SettingsActions
@@ -17,7 +23,8 @@ struct SettingsSplitView: View {
     var close: (() -> Void)?
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $compactColumn) {
+        let detail = Self.detail(for: pane)
+        NavigationSplitView(preferredCompactColumn: compactColumn) {
             SettingsView(values: values, actions: actions, selection: $pane)
                 .toolbar {
                     if let close {
@@ -29,32 +36,40 @@ struct SettingsSplitView: View {
                 }
         } detail: {
             NavigationStack {
-                if let pane {
-                    SettingsView(values: values, actions: actions).pane(pane)
-                }
+                SettingsView(values: values, actions: actions).pane(detail)
             }
             // Another pane starts its own stack; what the last one pushed does not carry over.
-            .id(pane)
+            .id(detail)
         }
-        .onChange(of: sizeClass, initial: true) { _, size in
-            pane = SettingsSplitView.pane(pane, sizeClass: size)
-        }
-        .onChange(of: pane, initial: true) { _, pane in
-            compactColumn = SettingsSplitView.column(for: pane)
+    }
+
+    /// The column on top while collapsed, read from the pane, so a collapse or an expand never
+    /// needs a write to agree with it. Back (or a swipe) from the pane clears the pick.
+    private var compactColumn: Binding<NavigationSplitViewColumn> {
+        Binding {
+            Self.column(for: pane)
+        } set: { column in
+            let next = Self.pick(after: column, pane: pane)
+            if next != pane { pane = next }
         }
     }
 
     /// Side by side, the detail is never blank: it shows the first pane until one is picked.
-    /// Collapsed, nothing is picked for the user; the list comes first.
-    static func pane(_ pane: SettingsPane?, sizeClass: UserInterfaceSizeClass?) -> SettingsPane? {
-        guard pane == nil, sizeClass == .regular else { return pane }
-        return .machines
+    /// Collapsed it is not on screen until the user picks one, so the list comes first.
+    static func detail(for pane: SettingsPane?) -> SettingsPane {
+        pane ?? .machines
     }
 
     /// The column on top once the split view collapses (a fold, a narrower window): the pane the
     /// user is in, or the list when there is none.
     static func column(for pane: SettingsPane?) -> NavigationSplitViewColumn {
         pane == nil ? .sidebar : .detail
+    }
+
+    /// The pick after the collapsed split view shows `column`: back on the list, nothing is
+    /// picked; anything else leaves the pick as it is.
+    static func pick(after column: NavigationSplitViewColumn, pane: SettingsPane?) -> SettingsPane? {
+        column == .sidebar ? nil : pane
     }
 }
 

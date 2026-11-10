@@ -246,6 +246,77 @@ struct PresentationLedgerTests {
         #expect(showsNow2)
         #expect(ledger.violations.map(\.rule) == [.kindChanged])
     }
+
+    // MARK: A size class change
+
+    /// A fold or unfold under an open sheet: the same site asks again (with the kind its policy
+    /// picks now). It stays one presentation, shown throughout, never closed and reopened.
+    @Test func aSizeClassChangeKeepsTheOnePresentation() {
+        var ledger = PresentationLedger()
+        ledger.request(sheet("settings"))
+        for kind in [PresentationKind.sheet, .popover, .sheet, .cover, .sheet] {
+            #expect(ledger.request(of(kind, "settings")))
+            #expect(ledger.modalDepth <= 1)
+            #expect(ledger.entries.count == 1)
+        }
+        #expect(ledger.isShown("settings"))
+        #expect(ledger.dismissals.isEmpty)
+        #expect(ledger.violations.isEmpty)
+    }
+
+    /// A host swapped out by a size class change while its sheet was up, and rebuilt at once: the
+    /// new host's request waits behind the old one instead of stacking, and the old one's going
+    /// frees the slot in the same step (nothing left leaving or waiting on a dismissal that
+    /// will never be reported).
+    @Test func aHostRebuiltMidPresentationNeverStacksTwo() {
+        var ledger = PresentationLedger()
+        ledger.request(sheet("old"))
+        ledger.request(sheet("new"))
+        #expect(ledger.modalDepth == 1)
+        let removed = ledger.hostGone("old", stillWanted: true)
+        #expect(removed == ["old"])
+        #expect(ledger.modalDepth == 1)
+        #expect(ledger.shown.map(\.id) == ["new"])
+        #expect(ledger.violations.map(\.rule) == [.hostVanished])
+    }
+
+    // MARK: A host that goes clears its state
+
+    @Test func aHostThatGoesTakesEverythingItHeldWithIt() {
+        var ledger = PresentationLedger()
+        ledger.request(sheet("outer"))
+        ledger.request(of(.alert, "question", parent: "outer"))
+        let removed = ledger.hostGone("outer", stillWanted: true)
+        #expect(removed == ["outer", "question"])
+        #expect(ledger.entries.isEmpty)
+        #expect(ledger.topModal == nil)
+    }
+
+    @Test func aHostThatGoesWhileLeavingFreesTheSlotAtOnce() {
+        var ledger = PresentationLedger()
+        ledger.request(sheet("a"))
+        ledger.request(sheet("b"))
+        ledger.userDismissed("a")
+        #expect(!ledger.isShown("b"))
+        // Its content will never report that it left: the host took it down.
+        ledger.hostGone("a", stillWanted: false)
+        #expect(ledger.isShown("b"))
+    }
+
+    @Test func aSteppedAsideSideContextWhoseHostGoesNeverComesBack() {
+        var ledger = PresentationLedger()
+        ledger.request(sheet("mission", yields: true))
+        ledger.request(sheet("review"))
+        ledger.hostGone("mission", stillWanted: true)
+        ledger.didLeave("mission")
+        #expect(ledger.shown.map(\.id) == ["review"])
+        #expect(ledger.queued.isEmpty)
+    }
+
+    @Test func aHostThatHadNothingUpRemovesNothing() {
+        var ledger = PresentationLedger()
+        #expect(ledger.hostGone("nobody", stillWanted: false).isEmpty)
+    }
 }
 
 /// The coordinator over the ledger: violations reach the log hook, a dismissal that never
@@ -270,6 +341,25 @@ struct PresentationCoordinatorTests {
         #expect(!coordinator.isShown("b"))
         try await Task.sleep(for: PresentationCoordinator.leaveTimeout + .milliseconds(300))
         #expect(coordinator.isShown("b"))
+    }
+
+    /// The guard: a host that goes while its presentation is up tells its owner to let go, and
+    /// leaves no timer or slot behind; one with nothing up does not.
+    @Test func aHostThatGoesClearsTheCoordinatorsState() async throws {
+        let coordinator = PresentationCoordinator(strict: false)
+        coordinator.request(PresentationRequest(id: "a", name: "a", kind: .sheet, parent: nil))
+        coordinator.request(PresentationRequest(id: "b", name: "b", kind: .sheet, parent: nil))
+        coordinator.userDismissed("a")
+        #expect(coordinator.hostGone("a", stillWanted: false))
+        #expect(coordinator.isShown("b"))
+        #expect(coordinator.hostGone("b", stillWanted: true))
+        #expect(coordinator.ledger.entries.isEmpty)
+        #expect(!coordinator.hostGone("b", stillWanted: true))
+        // The cancelled leave timer of "a" never fires into a ledger that moved on.
+        coordinator.request(PresentationRequest(id: "c", name: "c", kind: .sheet, parent: nil))
+        try await Task.sleep(for: PresentationCoordinator.leaveTimeout + .milliseconds(300))
+        #expect(coordinator.isShown("c"))
+        #expect(coordinator.ledger.entries.count == 1)
     }
 
     @Test func theStyleComesFromThePolicyNeverTheDevice() {

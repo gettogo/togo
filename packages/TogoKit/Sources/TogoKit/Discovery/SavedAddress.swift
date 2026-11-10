@@ -51,13 +51,19 @@ extension HostStore {
         hostName: @Sendable (String) async -> String? = SavedAddress.reverseName
     ) async -> [UUID] {
         var flagged: [UUID] = []
-        for var record in await hosts() where SavedAddress.hasZone(record.profile.endpoint.host) {
-            switch await SavedAddress.tidied(record.profile.endpoint.host, hostName: hostName) {
+        for record in await hosts() where SavedAddress.hasZone(record.profile.endpoint.host) {
+            let saved = record.profile.endpoint.host
+            switch await SavedAddress.tidied(saved, hostName: hostName) {
             case .unchanged:
                 break
             case .replaced(let host):
-                record.profile.endpoint.host = host
-                await save(record)
+                // The lookup can take seconds, and the machine may have been edited, learned
+                // routes or been removed meanwhile: only the address changes, on the record as
+                // it is now, and a removed or readdressed machine is left alone.
+                guard var current = await hosts().first(where: { $0.id == record.id }),
+                      current.profile.endpoint.host == saved else { continue }
+                current.profile.endpoint.host = host
+                await save(current)
             case .needsAttention:
                 flagged.append(record.id)
             }

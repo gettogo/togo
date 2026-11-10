@@ -99,8 +99,8 @@ struct WorkspaceView: View {
             .background { shortcuts }
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
-            .attachPrompts(store.services.attachPrompts, host: "workspace", active: true)
-            .reviewPresentation(store: store, terminals: terminals, active: true)
+            // Sign-in questions and the review are the root's (`RootView`), above the split view
+            // this column lives in, so a fold never swaps their host out mid-presentation.
             .onChange(of: store.focusedTab?.id) { _, id in
                 status = nil
                 // The Compose key in the other pane moves focus to it with its bar open.

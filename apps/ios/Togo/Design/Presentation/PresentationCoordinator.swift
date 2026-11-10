@@ -65,9 +65,15 @@ import UIKit
         mutate { $0.acknowledgeRetired(id) }
     }
 
-    func hostGone(_ id: PresentationRequest.ID, stillWanted: Bool) {
-        leaveTimers.removeValue(forKey: id)?.cancel()
-        mutate { $0.hostGone(id, stillWanted: stillWanted) }
+    /// The asking view went away. Clears everything the coordinator kept for it (and for what it
+    /// held up), so no slot, timer or waiting request outlives its host. Answers whether the
+    /// window had anything up or waiting for it: then its owner lets go of its state too.
+    @discardableResult
+    func hostGone(_ id: PresentationRequest.ID, stillWanted: Bool) -> Bool {
+        var removed: [PresentationRequest.ID] = []
+        mutate { removed = $0.hostGone(id, stillWanted: stillWanted) }
+        for gone in removed + [id] { leaveTimers.removeValue(forKey: gone)?.cancel() }
+        return !removed.isEmpty
     }
 
     // MARK: Policy

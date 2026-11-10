@@ -139,8 +139,9 @@ func TestRegisterRejects(t *testing.T) {
 			t.Errorf("%s: err = %v, want %v", c.name, err, c.want)
 		}
 	}
+	// A dead device registers its new token: that is how it comes back.
 	f.devices[0].Dead = true
-	if _, err := f.verifier().Open(f.register(t, wire.RegisterPlaintext{APNsToken: regAPNs, TS: now}, f.devPriv)); !errors.Is(err, ErrUnknownDevice) {
+	if _, err := f.verifier().Open(f.register(t, wire.RegisterPlaintext{APNsToken: regAPNs, TS: now}, f.devPriv)); err != nil {
 		t.Errorf("dead device: %v", err)
 	}
 }

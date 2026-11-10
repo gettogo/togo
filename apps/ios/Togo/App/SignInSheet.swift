@@ -18,6 +18,10 @@ import TogoKit
     private let services: any AppServices
     private let finish: @MainActor () -> Void
     @ObservationIgnored private var pending: CheckedContinuation<AuthAnswer?, Never>?
+    /// False once the sheet has gone. Sign-in runs on in a task of its own after the sheet
+    /// closes, and a question it asks then would wait for an answer nobody can give, keeping
+    /// every later Sign in for the machine waiting on it too.
+    @ObservationIgnored private var isOpen = true
 
     init(hostID: HostID, machine: String, services: any AppServices, finish: @escaping @MainActor () -> Void) {
         self.hostID = hostID
@@ -31,6 +35,7 @@ import TogoKit
     static let minimumAttempt: Duration = .milliseconds(700)
 
     func run() async {
+        isOpen = true
         phase = .connecting
         let started = ContinuousClock.now
         let prompter = SheetPrompter { [weak self] prompt in await self?.ask(prompt) }
@@ -53,11 +58,12 @@ import TogoKit
 
     /// Leaving the sheet answers a waiting question with nothing, which ends the attempt.
     func cancel() {
+        isOpen = false
         resume(nil)
     }
 
     private func ask(_ prompt: AuthPrompt) async -> AuthAnswer? {
-        guard let request = SignInRequest(prompt, machine: machine) else { return nil }
+        guard isOpen, let request = SignInRequest(prompt, machine: machine) else { return nil }
         resume(nil)
         phase = .asking(request)
         return await withCheckedContinuation { pending = $0 }

@@ -80,6 +80,24 @@ struct AdaptivePresentationTests {
         #expect(style(.sideContext, .compact, 390, inspector: true) == .mediumSheet)
     }
 
+    /// A presenter keeps the style it opened with until it closes: a fold under an open popover
+    /// or page sheet never hands it to a sheet or a cover (two presentations racing in UIKit),
+    /// and the next opening follows the room the window has then.
+    @Test func anOpenPresentationKeepsItsStyleAcrossASizeClassChange() {
+        let regular = AdaptivePresentation.style(for: .smallForm, sizeClass: .regular, containerWidth: 951, anchored: true)
+        let compact = AdaptivePresentation.style(for: .smallForm, sizeClass: .compact, containerWidth: 475, anchored: true)
+        #expect(regular == .popover)
+        #expect(compact == .mediumSheet)
+        var kept = AdaptivePresentation.kept(nil, live: regular, open: true)
+        kept = AdaptivePresentation.kept(kept, live: compact, open: true)
+        #expect(kept == .popover)
+        kept = AdaptivePresentation.kept(kept, live: regular, open: true)
+        #expect(kept == .popover)
+        kept = AdaptivePresentation.kept(kept, live: compact, open: false)
+        #expect(kept == nil)
+        #expect(AdaptivePresentation.kept(kept, live: compact, open: true) == .mediumSheet)
+    }
+
     @Test func sheetStylesAreSheets() {
         #expect(PresentationStyle.mediumSheet.isSheet)
         #expect(PresentationStyle.formSheet.isSheet)

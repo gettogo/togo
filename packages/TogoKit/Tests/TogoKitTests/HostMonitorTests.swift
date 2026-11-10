@@ -149,11 +149,13 @@ struct HostMonitorTests {
         // s2 was killed at the desk while the connection was down.
         let second = FakeSource(snapshots: [EventSnapshot(seq: 9, sessions: [F.session("s1")], approvals: [])])
         let factory = ScriptedFactory([.source(first), .source(second)])
-        let monitor = F.monitor(factory, clock: ManualClock())
+        let clock = ManualClock()
+        let monitor = F.monitor(factory, clock: clock)
         let log = SnapshotLog(monitor)
         await monitor.start()
         #expect(await eventually { log.sessionIDs == ["s1", "s2"] })
 
+        clock.advance(TerminalLink.stableLive)
         first.drop()
         #expect(await eventually { factory.calls == 2 && log.reach == .online && log.sessionIDs == ["s1"] })
         #expect(await eventually { first.isClosed })
@@ -176,6 +178,7 @@ struct HostMonitorTests {
         #expect(await eventually { log.reach == .online })
 
         wall.set(F.epoch + 600)
+        clock.advance(TerminalLink.stableLive)
         source.drop()
         #expect(await eventually { factory.calls == 2 })
         #expect(await clock.runSleep(.milliseconds(500)))
@@ -191,6 +194,35 @@ struct HostMonitorTests {
         #expect(await clock.runSleep(.seconds(8)))
         #expect(await eventually { factory.calls == 5 })
         #expect(await eventually { clock.pending == [.seconds(8)] })
+        await monitor.stop()
+    }
+
+    /// A connection that drops straight after it came up, as when the helper exits once
+    /// subscribed, does not reconnect at once in a loop: each quick drop waits longer.
+    @Test func quickDropsBackOff() async throws {
+        let snapshot = EventSnapshot(seq: 1, sessions: [F.session("s1")], approvals: [])
+        let sources = (0..<3).map { _ in FakeSource(snapshots: [snapshot]) }
+        let factory = ScriptedFactory(sources.map { .source($0) })
+        let clock = ManualClock()
+        let monitor = F.monitor(factory, clock: clock)
+        let log = SnapshotLog(monitor)
+        await monitor.start()
+        #expect(await eventually { log.reach == .online && factory.calls == 1 })
+
+        sources[0].drop()
+        #expect(await eventually { clock.pending == [.milliseconds(500)] })
+        #expect(factory.calls == 1)
+        #expect(await clock.runSleep(.milliseconds(500)))
+        #expect(await eventually { factory.calls == 2 && log.reach == .online })
+
+        sources[1].drop()
+        #expect(await clock.runSleep(.seconds(1)))
+        #expect(await eventually { factory.calls == 3 && log.reach == .online })
+
+        // A connection that stayed up a good while starts over without waiting.
+        clock.advance(TerminalLink.stableLive)
+        sources[2].drop()
+        #expect(await eventually { factory.calls == 4 })
         await monitor.stop()
     }
 

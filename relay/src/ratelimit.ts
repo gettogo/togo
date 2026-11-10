@@ -8,6 +8,8 @@ export type Admission =
 interface Window {
   start: number;
   count: number;
+  /** When the window closes; absent on windows stored before it was kept. */
+  end?: number;
 }
 
 export const UNREGISTERED_TTL_MS = 24 * 60 * 60 * 1000;
@@ -23,7 +25,12 @@ export class RateLimiter extends DurableObject<Env> {
       await this.ctx.storage.delete("unregisteredUntil");
     }
     let win = await this.ctx.storage.get<Window>("window");
-    if (!win || now - win.start >= windowMs) win = { start: now, count: 0 };
+    if (!win || now - win.start >= windowMs) {
+      win = { start: now, count: 0, end: now + windowMs };
+      // Every token and address gets its own object; the alarm clears it
+      // once the window is over so idle keys do not pile up in storage.
+      await this.ctx.storage.setAlarm(win.end!);
+    }
     if (win.count >= limit) {
       const retryAfter = Math.max(1, Math.ceil((win.start + windowMs - now) / 1000));
       return { status: "limited", retryAfter };
@@ -34,6 +41,23 @@ export class RateLimiter extends DurableObject<Env> {
   }
 
   async markUnregistered(): Promise<void> {
-    await this.ctx.storage.put("unregisteredUntil", Date.now() + UNREGISTERED_TTL_MS);
+    const until = Date.now() + UNREGISTERED_TTL_MS;
+    await this.ctx.storage.put("unregisteredUntil", until);
+    await this.ctx.storage.setAlarm(until);
+  }
+
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    const until = await this.ctx.storage.get<number>("unregisteredUntil");
+    if (until !== undefined && now < until) {
+      await this.ctx.storage.setAlarm(until);
+      return;
+    }
+    const win = await this.ctx.storage.get<Window>("window");
+    if (win?.end !== undefined && now < win.end) {
+      await this.ctx.storage.setAlarm(win.end);
+      return;
+    }
+    await this.ctx.storage.deleteAll();
   }
 }

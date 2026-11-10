@@ -265,12 +265,3 @@ extension AppSettings {
         return encoder
     }
 }
-
-/// An array element that decodes to nil instead of failing its array.
-private struct Lenient<Value: Decodable>: Decodable {
-    var value: Value?
-
-    init(from decoder: any Decoder) throws {
-        value = try? Value(from: decoder)
-    }
-}

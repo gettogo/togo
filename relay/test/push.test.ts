@@ -155,14 +155,48 @@ describe("POST /v1/push", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("BadDeviceToken returns an error without tombstoning the token", async () => {
+  it("BadDeviceToken passes APNs's 400 through without tombstoning the token", async () => {
     const { calls } = mockApns(() => Response.json({ reason: "BadDeviceToken" }, { status: 400 }));
     const token = randomToken();
     for (let i = 0; i < 2; i++) {
       const res = await push(alert(token));
-      expect(res.status).toBe(502);
-      expect(await res.json()).toEqual({ error: "apns", reason: "BadDeviceToken" });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "apns", reason: "BadDeviceToken", apnsStatus: 400 });
     }
+    expect(calls).toHaveLength(2);
+  });
+
+  it("passes APNs's status through for permanent and transient rejections", async () => {
+    const cases: [number, string][] = [
+      [403, "InvalidProviderToken"],
+      [413, "PayloadTooLarge"],
+      [500, "InternalServerError"],
+      [503, "ServiceUnavailable"],
+    ];
+    for (const [status, reason] of cases) {
+      mockApns(() => Response.json({ reason }, { status }));
+      const res = await push(alert(randomToken()));
+      expect(res.status).toBe(status);
+      expect(await res.json()).toEqual({ error: "apns", reason, apnsStatus: status });
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("APNs 429 becomes a 429 with a retry-after", async () => {
+    mockApns(() => Response.json({ reason: "TooManyRequests" }, { status: 429 }));
+    const res = await push(alert(randomToken()));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("60");
+    expect(await res.json()).toEqual({ error: "apns", reason: "TooManyRequests", apnsStatus: 429, retryAfter: 60 });
+  });
+
+  it("an expired provider token is retried once with a fresh one", async () => {
+    let n = 0;
+    const { calls } = mockApns(() =>
+      n++ === 0 ? Response.json({ reason: "ExpiredProviderToken" }, { status: 403 }) : new Response(null, { status: 200 }),
+    );
+    const res = await push(alert(randomToken()));
+    expect(res.status).toBe(202);
     expect(calls).toHaveLength(2);
   });
 
@@ -187,11 +221,18 @@ describe("POST /v1/push", () => {
     expect((await push(alert(randomToken()), null)).status).toBe(202);
   });
 
-  it("other APNs errors return 502 with the reason", async () => {
+  it("other APNs errors carry the reason and APNs's status", async () => {
     mockApns(() => Response.json({ reason: "TopicDisallowed" }, { status: 400 }));
     const res = await push(alert(randomToken()));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "apns", reason: "TopicDisallowed", apnsStatus: 400 });
+  });
+
+  it("an unreachable APNs is a 502 from the relay", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network"));
+    const res = await push(alert(randomToken()));
     expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ error: "apns", reason: "TopicDisallowed" });
+    expect(await res.json()).toEqual({ error: "apns", reason: "unreachable" });
   });
 
   it("console output contains no token or ciphertext", async () => {

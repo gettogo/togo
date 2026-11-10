@@ -27,6 +27,10 @@ enum WorkspaceCopy {
     static let waking = String(localized: "ws.link.waking", defaultValue: "Waking")
     static let roaming = String(localized: "ws.link.roaming", defaultValue: "Roaming")
     static let reconnecting = String(localized: "ws.link.reconnecting", defaultValue: "Reconnecting")
+    /// Shown over the terminal when typing goes nowhere because the link is reconnecting.
+    static let typingPaused = String(
+        localized: "ws.link.typingPaused", defaultValue: "Reconnecting. Typing isn't sent until it's back."
+    )
     static let notConnected = String(localized: "ws.link.notConnected", defaultValue: "Not connected")
     static let showFallback = String(localized: "ws.link.showFallback", defaultValue: "Shows why")
 

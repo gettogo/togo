@@ -223,6 +223,21 @@ struct TerminalSyncTests {
         #expect(SubagentThread.mainRows(plain) == TurnFold.rows(plain.conversation()))
     }
 
+    @Test func aSubagentQuestionBubblesUpAsOneCardNotTwo() {
+        let question = HarnessItem.Question(questions: [
+            HarnessQuestion(id: "q", prompt: "Which?", options: [HarnessChoice(id: "a", label: "A")], multi: false, allowText: false)
+        ], requestId: "r9")
+        let timeline = Self.timeline([
+            Self.item("u1", seq: 1, turn: "t1", .user(.init(text: "go", queued: false, source: "phone"))),
+            Self.agent("a1", seq: 2),
+            Self.item("a1.q", seq: 3, parent: "a1", .question(question)),
+            Self.item("a1.ap", seq: 4, parent: "a1", .approval(.init(requestId: "r9", owner: "a1.q"))),
+        ])
+        #expect(SubagentThread.waitingNeeds(in: timeline).map(\.id) == ["a1.q"])
+        let needs = SubagentThread.mainRows(timeline).filter { if case .needs = $0 { true } else { false } }
+        #expect(needs.map(\.id) == ["a1.q"])
+    }
+
     // MARK: Background
 
     @Test func backgroundJobJoinsItsRowAndItem() throws {

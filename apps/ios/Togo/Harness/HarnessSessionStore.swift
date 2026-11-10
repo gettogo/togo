@@ -431,9 +431,13 @@ import UIKit
     func loadOlder() async {
         guard has(HarnessCapability.history), feed.timeline.hasOlder, !loadingOlder,
               let before = feed.timeline.oldestSeq else { return }
+        let epoch = feed.timeline.epoch
         loadingOlder = true
         defer { loadingOlder = false }
         guard let page = try? await services.history(subject, before: before) else { return }
+        // The session was opened again meanwhile (a reset, a new epoch): the page belongs to a
+        // conversation that is gone, and its items must not land above the new one.
+        guard feed.timeline.epoch == epoch else { return }
         feed.prepend(page)
         // Rows from "Earlier" land without animation; the scroll keeps its place.
         setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: false)
@@ -496,6 +500,9 @@ import UIKit
 
     func cancelQueued(_ id: UUID) {
         changeQueue { _ = $0.cancel(id) }
+        // A failed prompt holds the ones after it; taking it away lets them go now, rather
+        // than wait for a change an idle session may never send.
+        pump()
     }
 
     /// Takes back a prompt the harness holds in its own queue: `stop` aimed at the queued user

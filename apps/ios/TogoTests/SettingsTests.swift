@@ -43,6 +43,17 @@ import TogoTerminal
         #expect(settings.readNewOutput)
     }
 
+    /// The default and every id a legacy theme migrates to is a choice the list offers, so a
+    /// stored theme from before the rename still selects the same theme, not the first one.
+    @Test func migratedThemeIDsAreOfferedChoices() {
+        let offered = Set(ThemeChoice.all(imported: []).map(\.id))
+        #expect(ThemeChoice.all(imported: []).first?.id == ThemeChoice.defaultID)
+        #expect(AppSettings().themeID == ThemeChoice.defaultID)
+        for old in ["", "-dark", "-light"].map({ "lan" + "tern" + $0 }) {
+            #expect(offered.contains(AppSettings.migratedThemeID(old)))
+        }
+    }
+
     @Test func settingsDropOnlyTheBadImportedTheme() throws {
         var settings = AppSettings()
         let good = BuiltInThemes.all[0]

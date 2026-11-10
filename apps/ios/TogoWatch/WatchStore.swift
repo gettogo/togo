@@ -73,7 +73,32 @@ import WidgetKit
 
     init(dependencies: Dependencies) {
         deps = dependencies
+        releaseAbandonedClaims()
         reload()
+    }
+
+    /// Only this app claims requests on the Watch, so at launch nothing is being sent: a claim
+    /// still marked sending was left by an app stopped mid-send, and would keep its request on
+    /// "Sending" and refuse every tap until it aged out. It is given back.
+    private func releaseAbandonedClaims() {
+        for request in deps.pending.all() where request.answered == .sending {
+            giveBack(request)
+        }
+    }
+
+    /// Undoes a claim. A record that `claim` made for an id the Watch never got a push for holds
+    /// nothing to show, so it goes rather than open as a blank request.
+    private func giveBack(_ request: PendingRequest) {
+        if Self.isPlaceholder(request) {
+            deps.pending.remove(request.requestId)
+        } else {
+            deps.pending.release(request.requestId)
+        }
+    }
+
+    private static func isPlaceholder(_ request: PendingRequest) -> Bool {
+        request.title.isEmpty && request.options.isEmpty && request.sessionId == nil && request.bib == nil
+            && request.agent == nil && request.host == nil
     }
 
     func outcome(_ requestId: String) -> Outcome? { outcomes[requestId] }
@@ -246,9 +271,27 @@ import WidgetKit
     }
 
     /// Approve or deny from a phone notification shown on the Watch. The notification's
-    /// category already offered only the actions its options allow.
-    func answerFromNotification(hostId: String, requestId: String, decision: String) async {
+    /// category already offered only the actions its options allow. Returns the notice to show
+    /// when the answer did not go, or nil when it went or another answer is on its way.
+    /// `deliveredAt` is the notification's date: a request this Watch no longer holds, pruned
+    /// after its ten minutes or never pushed here, is refused once its notice is that old.
+    @discardableResult
+    func answerFromNotification(
+        hostId: String, requestId: String, decision: String, deliveredAt: Date? = nil
+    ) async -> String? {
+        if deps.pending.request(requestId) == nil, let deliveredAt,
+           deps.clock().timeIntervalSince(deliveredAt) >= RequestLifetime.seconds {
+            return WatchCopy.expired
+        }
         await send(hostId: hostId, requestId: requestId, decision: decision)
+        if let notice = failureNotice(requestId) { return notice }
+        // Nothing went: the desk or the phone answered first, or the window closed. Say so
+        // rather than leave the tap looking like it worked.
+        switch state(of: requestId) {
+        case .answeredElsewhere: return WatchCopy.answeredElsewhere
+        case .expired: return WatchCopy.expired
+        default: return nil
+        }
     }
 
     /// Sends one answer through the relay. The shared store's claim makes it the only one,
@@ -257,7 +300,11 @@ import WidgetKit
         // A request this Watch knows is refused once it is past its ten minutes: the helper
         // would drop the answer, and the screen must not say it went through.
         if let known = deps.pending.request(requestId), known.answered == nil,
-           Self.expired(known, at: deps.clock()) { return }
+           Self.expired(known, at: deps.clock()) {
+            // An earlier failure no longer applies: the request ran out, which is what to say.
+            outcomes[requestId] = nil
+            return
+        }
         guard decision == "approve" || decision == "deny" else { return }
         guard let pairing = deps.pairings.pairing(hostId: hostId) else {
             outcomes[requestId] = .notSetUp
@@ -269,7 +316,7 @@ import WidgetKit
         do {
             try await deps.sender.send(requestId: requestId, decision: decision, pairing: pairing)
         } catch {
-            deps.pending.release(requestId)
+            if let claimed = deps.pending.request(requestId), claimed.answered == .sending { giveBack(claimed) }
             outcomes[requestId] = .failed
             reload()
             return

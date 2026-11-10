@@ -177,6 +177,52 @@ struct ChatTests {
         #expect(services.sent.map(\.text) == ["hello"])
     }
 
+    @Test func cancellingAFailedPromptSendsTheOneItHeld() async throws {
+        let services = FakeHarnessServices(descriptor: Self.claude)
+        services.feeds = [.init(elements: [.opened(try HarnessFixtures.open())], end: .hold)]
+        services.sendFailures = 1
+        let chat = store(services)
+        chat.launch()
+        defer { chat.stop() }
+        try await until { chat.phase == .live }
+        try await chat.send("first")
+        try await chat.send("second")
+        #expect(chat.queue.prompts.count == 2)
+        // The idle session sends no further change, so only the cancel can let "second" go.
+        chat.cancelQueued(chat.queue.prompts[0].id)
+        try await until { chat.queue.isEmpty }
+        #expect(services.sent.map(\.text) == ["second"])
+    }
+
+    @Test func olderPageFromAReplacedEpochIsDropped() async throws {
+        var descriptor = Self.claude
+        descriptor.capabilities.append(HarnessCapability.history)
+        let services = FakeHarnessServices(descriptor: descriptor)
+        var first = try HarnessFixtures.open()
+        first.more = true
+        var second = first
+        second.epoch = first.epoch + "-next"
+        let stream = AsyncThrowingStream<HarnessFeed, any Error>.makeStream()
+        stream.continuation.yield(.opened(first))
+        services.feeds = [.init(stream: stream.stream)]
+        let chat = store(services)
+        chat.launch()
+        defer { chat.stop() }
+        try await until { chat.phase == .live }
+        let held = chat.timeline.items.map(\.id)
+        let old = HarnessItem(id: "old-epoch", seq: 1, at: WireDate(.now), body: .notice(.init(level: "info", code: "x", text: "old")))
+        services.historyPage = {
+            // The session opens again under a new epoch while the page is on its way.
+            stream.continuation.yield(.opened(second))
+            while chat.timeline.epoch != second.epoch { try? await Task.sleep(for: .milliseconds(5)) }
+            return HarnessPage(items: [old], more: false)
+        }
+        await chat.loadOlder()
+        #expect(chat.timeline.epoch == second.epoch)
+        #expect(chat.timeline.item("old-epoch") == nil)
+        #expect(chat.timeline.items.map(\.id) == held)
+    }
+
     @Test func showInTerminalSetsTheJumpAndSwitchesLayer() async throws {
         let services = FakeHarnessServices(descriptor: Self.claude)
         services.feeds = [.init(elements: [.opened(try HarnessFixtures.open())], end: .hold)]
@@ -428,7 +474,10 @@ final class Flag: @unchecked Sendable {
         return feeds.removeFirst().stream
     }
 
-    func history(_ s: HarnessSubject, before: Int) async throws -> HarnessPage { HarnessPage(items: [], more: false) }
+    /// Answers `history`; the default is an empty last page.
+    var historyPage: @MainActor () async -> HarnessPage = { HarnessPage(items: [], more: false) }
+
+    func history(_ s: HarnessSubject, before: Int) async throws -> HarnessPage { await historyPage() }
 
     func screen(_ s: HarnessSubject, id: String, query: [String: String]?) async throws -> HarnessScreen {
         throw HarnessUnavailable()

@@ -55,9 +55,19 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
     let name: String
     let make: (Item) -> Presented
 
+    /// The style chosen when it opened, kept until it closes (as the review keeps its own).
+    @State private var opened: PresentationStyle?
+
+    /// What shows: the style it opened with while it is up, else the style now. A fold or an
+    /// unfold under an open presentation never hands it to another kind (a sheet dismissed and
+    /// a popover or cover presented in the same update) and never changes a live sheet's
+    /// detents or sizing; the system adapts the one it has (a popover becomes a sheet when
+    /// compact, an inspector becomes a sheet, a page sheet fills a compact width).
+    private var style: PresentationStyle { opened ?? liveStyle }
+
     /// The style now. A detail with no stack to push into (it is the root of what opens) is
     /// shown as the small form it then is.
-    private var style: PresentationStyle {
+    private var liveStyle: PresentationStyle {
         let chosen = AdaptivePresentation.style(
             for: content, sizeClass: sizeClass, containerWidth: windowWidth,
             anchored: anchored, hostsInspector: hostsInspector
@@ -77,6 +87,9 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
         ) { view, shown, closed, inside in
             presentations(view, style: style, shown: shown, closed: closed, inside: inside)
         }
+        .onChange(of: item != nil, initial: true) { _, open in
+            opened = AdaptivePresentation.kept(opened, live: liveStyle, open: open)
+        }
     }
 
     @ViewBuilder private func presentations(
@@ -86,7 +99,8 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
             .popover(item: gated(style, shown: shown, closed: closed) { $0 == .popover }, arrowEdge: .bottom) { item in
                 inside(make(item)
                     .frame(minWidth: 360, idealWidth: 420, minHeight: 420, idealHeight: 560)
-                    // A compact width the popover lands in after all (a fold) gets a sheet.
+                    // A compact width the popover lands in after all (a fold) gets a sheet: the
+                    // system adapts the same presentation, nothing is handed over.
                     .presentationCompactAdaptation(.sheet))
             }
             .sheet(item: gated(style, shown: shown, closed: closed, \.isSheet), onDismiss: onDismiss) { item in
@@ -108,8 +122,8 @@ private struct AdaptivePresenter<Item: Identifiable, Presented: View>: ViewModif
         }
     }
 
-    /// The item, for the presentation `matches` picks. A size change hands the open item over
-    /// to the other presentation, so only a close from the current one clears it.
+    /// The item, for the presentation `matches` picks. Only a close from that presentation
+    /// clears it; the style is kept while it is up, so no other one takes it over.
     private func gated(
         _ style: PresentationStyle, shown: Bool, closed: @escaping () -> Void,
         _ matches: @escaping (PresentationStyle) -> Bool

@@ -125,7 +125,9 @@ import WatchKit
               let requestId = info?["requestId"] as? String, let hostId = info?["hostId"] as? String
         else { return }
         let decision = action == NotificationActionID.approve ? "approve" : "deny"
-        await answer(hostId: hostId, requestId: requestId, decision: decision)
+        await answer(
+            hostId: hostId, requestId: requestId, decision: decision, deliveredAt: response.notification.date
+        )
     }
 
     nonisolated func userNotificationCenter(
@@ -175,18 +177,11 @@ import WatchKit
         router.open(link)
     }
 
-    private func answer(hostId: String, requestId: String, decision: String) async {
-        await store.answerFromNotification(hostId: hostId, requestId: requestId, decision: decision)
-        if let notice = store.failureNotice(requestId) {
+    private func answer(hostId: String, requestId: String, decision: String, deliveredAt: Date) async {
+        if let notice = await store.answerFromNotification(
+            hostId: hostId, requestId: requestId, decision: decision, deliveredAt: deliveredAt
+        ) {
             await post(notice: notice)
-            return
-        }
-        // Nothing went: the desk or the phone answered first, or the window closed. Say so
-        // rather than leave the tap looking like it worked.
-        switch store.state(of: requestId) {
-        case .answeredElsewhere: await post(notice: WatchCopy.answeredElsewhere)
-        case .expired: await post(notice: WatchCopy.expired)
-        default: break
         }
     }
 }

@@ -458,4 +458,16 @@ struct SignInModelTests {
             return
         }
     }
+
+    /// Sign-in goes on after the sheet closes; a question it asks then is declined at once
+    /// rather than waiting for an answer nobody can give.
+    @Test(.timeLimit(.minutes(1))) func questionAfterTheSheetClosedIsDeclined() async {
+        let services = FakeAppServices()
+        services.signInPrompts = [OnboardingSamples.codePrompt]
+        let model = SignInModel(hostID: Samples.studio, machine: "Studio", services: services) {}
+        services.beforeSignInPrompts = { model.cancel() }
+        await model.run()
+        #expect(services.signInAnswers.count == 1)
+        if case .some(.some) = services.signInAnswers.first { Issue.record("expected no answer") }
+    }
 }

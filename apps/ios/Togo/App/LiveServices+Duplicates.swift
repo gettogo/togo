@@ -23,7 +23,7 @@ extension LiveServices {
         let stored = await hostStore.hosts()
         var record = record
         let current = stored.first { $0.id == record.id }
-        if let current { record = Self.keepingIdentity(record, from: current) }
+        if let current { record = Self.keepingIdentity(deviceMachines.editedVersion(of: record), from: current) }
         record.helperHostID = record.helperHostID ?? deps.pairing?.helperHostID(for: record.id)
         record.hostKeys = Self.union(record.hostKeys, await trustedHostKeys(for: record))
         // An edit saves under its own id and is never merged, so only a new machine is compared.
@@ -99,7 +99,13 @@ extension LiveServices {
                 result[id] = record.id
             }
         }
-        // A deletion that syncs in before its merged record still finds its machine.
+        // A deletion from a merge names the record it went into, which may not be here yet: the
+        // machine is still in Togo, so nothing of it is unpaired or removed, and it is adopted
+        // under that id when it arrives.
+        for (id, kept) in hostStore.mergedAway() where !present.contains(id) && result[id] == nil {
+            result[id] = kept
+        }
+        // A deletion from an older build that syncs in before its merged record.
         for (id, gone) in records where !present.contains(id) && result[id] == nil {
             let identity = MachineIdentity(gone)
             if let kept = stored.first(where: { MachineIdentity($0).isSameMachine(as: identity) }) {

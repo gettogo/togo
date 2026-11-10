@@ -18,14 +18,15 @@ extension LiveServices {
         latest[id]?.reach == .online && watches[id] != nil
     }
 
-    /// Pairs the machine when its helper sends pushes and its pairing is out of date.
-    func pair(_ record: HostRecord, capabilities: Set<String>) {
+    /// Pairs the machine when its helper sends pushes and its pairing is out of date, or, just
+    /// `reconnected`, when an activity of its runs here, so a restarted helper has its token.
+    func pair(_ record: HostRecord, capabilities: Set<String>, reconnected: Bool = false) {
         guard let pairing = deps.pairing else { return }
         let helpers = deps.helpers
         Task {
             await pairing.machineOnline(
                 hostID: record.id, name: record.profile.name, capabilities: capabilities,
-                sshKey: pairing.deviceKey(record)?.publicKey
+                sshKey: pairing.deviceKey(record)?.publicKey, reconnected: reconnected
             ) { params in
                 try await helpers.call(record, prompter: nil) { try await $0.pair(params) }
             }

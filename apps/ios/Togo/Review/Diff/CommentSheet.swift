@@ -5,10 +5,14 @@ struct CommentSheet: View {
     let draft: DiffModel.CommentDraft
     let actionTitle: String
     let canSend: Bool
-    let send: (String) -> Void
+    /// False when the comment did not reach the session: the sheet stays, words and all.
+    let send: (String) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
+    /// The last Send did not reach the session; Try again sends the same words.
+    @State private var notSent = false
+    @State private var failures = 0
     @FocusState private var focused: Bool
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -25,14 +29,26 @@ struct CommentSheet: View {
                         .padding(12)
                         .background(Color.togoRaised, in: .rect(cornerRadius: 12))
                         .disabled(!canSend)
-                    Button(actionTitle) {
-                        send(text)
-                        dismiss()
+                    Button(notSent ? DiffCopy.tryAgain : actionTitle) {
+                        if send(text) {
+                            dismiss()
+                        } else {
+                            notSent = true
+                            failures += 1
+                            AccessibilityNotification.Announcement(DiffCopy.commentNotSent).post()
+                        }
                     }
                     .buttonStyle(.primary)
                     // Command-Return sends from the field; Return there starts a new line.
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(!canSend || trimmed.isEmpty)
+                    if notSent {
+                        Text(DiffCopy.commentNotSent)
+                            .font(.footnote)
+                            .foregroundStyle(Color.togoSnow)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("review.comment.notSent")
+                    }
                 }
                 .padding(Layout.margin)
             }
@@ -48,6 +64,7 @@ struct CommentSheet: View {
             }
         }
         .tint(.primary)
+        .haptic(.error, trigger: failures)
         .togoSheet(.prompt)
     }
 
@@ -78,6 +95,6 @@ struct CommentSheet: View {
     CommentSheet(
         draft: .init(row: 4, quote: "  app.get(\"/health\", health)", location: "src/router.ts:12"),
         actionTitle: DiffCopy.sendToSession, canSend: true
-    ) { _ in }
+    ) { _ in true }
 }
 #endif

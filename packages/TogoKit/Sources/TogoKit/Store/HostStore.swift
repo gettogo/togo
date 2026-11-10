@@ -33,6 +33,16 @@ public actor HostStore {
         Self.ordered(records.localRecords())
     }
 
+    /// Machines deleted because they were folded into another record, by the id each went
+    /// into. That record may not have arrived from iCloud yet.
+    public nonisolated func mergedAway() -> [UUID: UUID] {
+        var result: [UUID: UUID] = [:]
+        for (dropped, kept) in records.mergedAway() {
+            if let dropped = UUID(uuidString: dropped), let kept = UUID(uuidString: kept) { result[dropped] = kept }
+        }
+        return result
+    }
+
     public func save(_ record: HostRecord) async {
         await records.put(Self.key(record.id), record)
     }

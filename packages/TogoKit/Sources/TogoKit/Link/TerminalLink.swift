@@ -131,9 +131,18 @@ public actor TerminalLink {
         }
     }
 
-    public func send(_ data: Data) async {
-        guard isLive, let transport = current?.transport else { return }
-        try? await transport.send(data)
+    /// False when the input went nowhere: the link is between attachments, or the transport
+    /// refused it. It is never kept for the next attachment, whose screen may be another one
+    /// (a different prompt, a confirmation) by then, so the caller says the input was dropped.
+    @discardableResult
+    public func send(_ data: Data) async -> Bool {
+        guard isLive, let transport = current?.transport else { return false }
+        do {
+            try await transport.send(data)
+            return true
+        } catch {
+            return false
+        }
     }
 
     public func resize(cols: Int, rows: Int) async {

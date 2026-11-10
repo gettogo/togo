@@ -76,6 +76,61 @@ let esc = "\u{1b}"
         #expect(h.engine.size.rows == before.rows)
     }
 
+    /// A frame narrower than a cell measures no columns, but the emulator keeps two and one
+    /// row: the remote is never told of an empty grid.
+    @Test func narrowFrameNeverReportsAnEmptyGrid() async {
+        let h = EngineHarness()
+        await settle()
+        h.resizes.removeAll()
+        var frame = h.engine.view.frame
+        frame.size.width = 1
+        h.engine.view.frame = frame
+        h.engine.view.layoutIfNeeded()
+        await settle()
+        #expect(h.resizes.allSatisfy { $0.cols >= 2 && $0.rows >= 1 })
+        #expect(h.engine.size.cols >= 2)
+
+        h.engine.reportSize(cols: 0, rows: 0)
+        #expect(h.engine.size.cols == 2 && h.engine.size.rows == 1)
+        #expect(h.resizes.allSatisfy { $0.cols >= 2 && $0.rows >= 1 })
+    }
+
+    /// A fold can leave the host, for a moment, too small for one row: the grid, and the
+    /// scrollback that would reflow to two columns, keep their size until there is room again.
+    @Test func hostTooSmallForAGridKeepsTheGrid() async {
+        let h = EngineHarness()
+        let controller = TerminalViewController(engine: h.engine)
+        controller.view.frame = CGRect(x: 0, y: 0, width: 480, height: 320)
+        controller.refit()
+        await settle()
+        let before = h.engine.size
+        h.resizes.removeAll()
+
+        for width in [CGFloat(1), 0, 2] {
+            controller.view.frame = CGRect(x: 0, y: 0, width: width, height: 320)
+            controller.refit()
+        }
+        controller.view.frame = CGRect(x: 0, y: 0, width: 480, height: 2)
+        controller.refit()
+        await settle()
+        #expect(h.engine.size.cols == before.cols && h.engine.size.rows == before.rows)
+        #expect(h.resizes.isEmpty)
+
+        controller.view.frame = CGRect(x: 0, y: 0, width: 480, height: 320)
+        controller.refit()
+        await settle()
+        #expect(h.engine.size.cols == before.cols && h.engine.size.rows == before.rows)
+    }
+
+    @Test func holdsGridNeedsTwoColumnsAndARow() {
+        let cell = CGSize(width: 8, height: 16)
+        #expect(TerminalFit.holdsGrid(CGSize(width: 16, height: 16), cell: cell))
+        #expect(!TerminalFit.holdsGrid(CGSize(width: 15, height: 400), cell: cell))
+        #expect(!TerminalFit.holdsGrid(CGSize(width: 400, height: 15), cell: cell))
+        #expect(!TerminalFit.holdsGrid(.zero, cell: .zero))
+        #expect(TerminalFit.holdsGrid(CGSize(width: 1, height: 1), cell: .zero))
+    }
+
     @Test func insertTextEmitsInput() async {
         let h = EngineHarness()
         h.engine.textInputView.insertText("a")

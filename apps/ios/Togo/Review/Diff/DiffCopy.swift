@@ -62,5 +62,9 @@ enum DiffCopy {
         localized: "review.diff.openSessionToSend", defaultValue: "Open the session to send comments"
     )
     static let commentField = String(localized: "review.diff.commentField", defaultValue: "Your comment")
+    static let commentNotSent = String(
+        localized: "review.diff.commentNotSent",
+        defaultValue: "Not sent: the session's terminal is closed. Open the session, then try again."
+    )
     static let cancel = String(localized: "review.diff.cancel", defaultValue: "Cancel")
 }

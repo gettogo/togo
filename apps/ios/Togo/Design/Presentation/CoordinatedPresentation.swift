@@ -73,7 +73,14 @@ struct CoordinatedSlot<Base: View, Presented: View>: View {
                 release()
             }
             .onAppear { if wanted { coordinator.request(request) } }
-            .onDisappear { [wanted] in coordinator.hostGone(id, stillWanted: wanted) }
+            // The host went (a branch swapped out by a size class change, a row scrolled away):
+            // its presentation went with it, so its owner's state lets go as well. Otherwise the
+            // state keeps asking, and a host rebuilt in the same update presents it again while
+            // UIKit is still tearing the old one down, which leaves the dimming view over a
+            // window that takes no touches.
+            .onDisappear { [wanted, release] in
+                if coordinator.hostGone(id, stillWanted: wanted), wanted { release() }
+            }
         } else {
             // Outside a window (previews, snapshot tests): as the state says.
             present(base, wanted, release, inside)

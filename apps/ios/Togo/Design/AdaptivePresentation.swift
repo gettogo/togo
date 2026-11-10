@@ -132,6 +132,14 @@ enum AdaptivePresentation {
         }
     }
 
+    /// The style a presenter keeps: the one it opened with until it closes, then none, so the
+    /// next opening follows the room the window has then. A size class change while it is up
+    /// leaves it alone: one presentation, adapted by the system, never a hand-over between two.
+    static func kept(_ kept: PresentationStyle?, live: PresentationStyle, open: Bool) -> PresentationStyle? {
+        guard open else { return nil }
+        return kept ?? live
+    }
+
     /// The layout of a browse list in its own sheet. A split view needs room, more than one
     /// group to put in its sidebar, and to own the navigation: a list pushed into another stack
     /// stays a stack (a split view never nests in a stack).

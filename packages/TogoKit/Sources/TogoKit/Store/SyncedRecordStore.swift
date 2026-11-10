@@ -6,11 +6,15 @@ public struct Stamped<Value: Codable & Sendable>: Codable, Sendable {
     public var value: Value?
     public var updatedAt: Date
     public var deviceID: String
+    /// On a deletion marker: the id of the record this one was folded into. The deletion then
+    /// says on its own that nothing was removed, even when it syncs in before that record.
+    public var mergedInto: String?
 
-    public init(value: Value?, updatedAt: Date, deviceID: String) {
+    public init(value: Value?, updatedAt: Date, deviceID: String, mergedInto: String? = nil) {
         self.value = value
         self.updatedAt = updatedAt
         self.deviceID = deviceID
+        self.mergedInto = mergedInto
     }
 
     /// Newest edit wins; equal timestamps fall back to the larger device id so
@@ -91,6 +95,19 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
         return result
     }
 
+    /// The records deleted because they were folded into another, by the id each went into,
+    /// read from this device's copy as it is now.
+    public nonisolated func mergedAway() -> [String: String] {
+        var result: [String: String] = [:]
+        for key in local.allKeys() where key.hasPrefix(prefix) {
+            guard let data = local.data(forKey: key),
+                  let stamped = try? Self.decoder.decode(Stamped<Value>.self, from: data),
+                  stamped.value == nil, let kept = stamped.mergedInto else { continue }
+            result[String(key.dropFirst(prefix.count))] = kept
+        }
+        return result
+    }
+
     public func put(_ id: String, _ value: Value) {
         prepare()
         let key = prefix + id
@@ -106,7 +123,8 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
     }
 
     /// Writes `value` and deletes the `deleted` records as one change: one notification here,
-    /// and one upload, so other devices receive them together.
+    /// and one upload. Each deletion names `id` as the record it went into, so a device that
+    /// receives it before `value` still knows it as a merge, not a removal.
     public func put(_ id: String, _ value: Value, deleting deleted: [String]) {
         prepare()
         var changed = false
@@ -118,7 +136,7 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
         for other in deleted where other != id {
             let key = prefix + other
             guard read(key, from: local)?.value != nil else { continue }
-            store(Stamped(value: nil, updatedAt: nextStamp(for: key), deviceID: deviceID), key: key)
+            store(Stamped(value: nil, updatedAt: nextStamp(for: key), deviceID: deviceID, mergedInto: id), key: key)
             changed = true
         }
         if changed { notify() }

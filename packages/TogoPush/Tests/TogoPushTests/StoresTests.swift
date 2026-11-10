@@ -105,6 +105,51 @@ struct StoresTests {
         #expect(!b.claim("r_unknownxyz", hostId: Self.hostID))
     }
 
+    /// A process stopped mid-send leaves its claim behind: past `claimTimeout` it no longer
+    /// holds the request on "Sending", another process may answer, and launch gives it back.
+    @Test func abandonedClaimIsTakenOverAndGivenBack() {
+        let dir = directory()
+        let clock = Mutex(Self.now)
+        let a = PendingStore(directory: dir, clock: { clock.withLock { $0 } })
+        let b = PendingStore(directory: dir, clock: { clock.withLock { $0 } })
+        a.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now))
+        #expect(a.claim("r_aaaaaaaaaa", hostId: Self.hostID))
+        #expect(b.request("r_aaaaaaaaaa")?.claimedAt == Self.now)
+        clock.withLock { $0 = Self.now.addingTimeInterval(PendingRequest.claimTimeout - 1) }
+        #expect(!b.claim("r_aaaaaaaaaa", hostId: Self.hostID), "a claim inside its time still holds")
+        #expect(RequestLifetime.waiting(b.all(), now: clock.withLock { $0 }).isEmpty)
+        clock.withLock { $0 = Self.now.addingTimeInterval(PendingRequest.claimTimeout) }
+        #expect(RequestLifetime.waiting(b.all(), now: clock.withLock { $0 }).map(\.requestId) == ["r_aaaaaaaaaa"])
+        #expect(b.claim("r_aaaaaaaaaa", hostId: Self.hostID), "an abandoned claim is taken over")
+        b.mark("r_aaaaaaaaaa", .approved)
+        #expect(b.request("r_aaaaaaaaaa")?.claimedAt == nil)
+
+        // Given back at launch: a real request opens again, a placeholder goes.
+        a.upsert(request("r_bbbbbbbbbb", receivedAt: Self.now))
+        #expect(a.claim("r_bbbbbbbbbb", hostId: Self.hostID))
+        #expect(a.claim("r_placehold", hostId: Self.hostID))
+        a.releaseAbandonedClaims()
+        #expect(a.request("r_bbbbbbbbbb")?.answered == .sending, "a fresh claim is left alone")
+        clock.withLock { $0 = $0.addingTimeInterval(PendingRequest.claimTimeout) }
+        a.releaseAbandonedClaims()
+        #expect(a.request("r_bbbbbbbbbb")?.answered == nil)
+        #expect(a.request("r_bbbbbbbbbb")?.claimedAt == nil)
+        #expect(a.request("r_placehold") == nil)
+        #expect(a.request("r_aaaaaaaaaa")?.answered == .approved)
+    }
+
+    /// Records written before claims had a time still decode; one left sending is abandoned.
+    @Test func olderRecordWithoutClaimTimeDecodes() throws {
+        let json = #"{"requestId":"r_aaaaaaaaaa","hostId":"h","title":"Run?","options":[],"receivedAt":0,"answered":"sending"}"#
+        let old = try JSONDecoder().decode(PendingRequest.self, from: Data(json.utf8))
+        #expect(old.claimedAt == nil)
+        #expect(old.claimAbandoned(at: Self.now))
+        #expect(old.isOpen(at: Self.now))
+        var answered = old
+        answered.answered = .approved
+        #expect(!answered.isOpen(at: Self.now))
+    }
+
     @Test func pairingRoundTripOnDisk() {
         let dir = directory()
         let p = pairing(hostKey: Curve25519.KeyAgreement.PrivateKey().publicKey)
