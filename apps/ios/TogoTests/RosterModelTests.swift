@@ -151,7 +151,5 @@ import TogoKit
         store.open(hostID: one.hostID, sessionID: one.sessionID)
         let focused = store.workspaceOnScreen ? store.focusedTab?.id : nil
         #expect(RosterModel.selection(focused: focused, wide: true, in: store.roster) == one)
-        store.monitorShown = true
-        #expect(!store.workspaceOnScreen)
     }
 }

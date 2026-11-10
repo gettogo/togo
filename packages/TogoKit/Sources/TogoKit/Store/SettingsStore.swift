@@ -64,8 +64,6 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// A "done" notification arrives without a sound. This device's choice, like the one above.
     public var doneSilent = false
     public var liveActivities = true
-    /// The screen stays on while the workspace is open. This device's choice: never encoded.
-    public var keepScreenOn = false
     /// The language dictation listens for; nil follows the system. This device's choice.
     public var dictationLocale: String?
     /// Which engine turns speech into text. This device's choice.
@@ -135,7 +133,6 @@ public struct DeviceSettings: Sendable {
     private static let approveKey = "push.approveWithoutUnlock"
     private static let doneSilentKey = "push.doneSilent"
     private static let commandsKey = "push.liveActivityCommandMachines"
-    private static let keepScreenOnKey = "device.keepScreenOn"
     private static let dictationLocaleKey = "device.dictationLocale"
     private static let dictationEngineKey = "device.dictationEngine"
     private static let whisperModelKey = "device.whisperModel"
@@ -151,7 +148,6 @@ public struct DeviceSettings: Sendable {
         settings.doneSilent = backend.data(forKey: Self.doneSilentKey) == Data([1])
         settings.liveActivityCommandMachines = backend.data(forKey: Self.commandsKey)
             .flatMap { try? JSONDecoder().decode(Set<UUID>.self, from: $0) } ?? []
-        settings.keepScreenOn = backend.data(forKey: Self.keepScreenOnKey) == Data([1])
         settings.dictationLocale = string(Self.dictationLocaleKey)
         settings.dictationEngine = string(Self.dictationEngineKey).flatMap(DictationEngineChoice.init) ?? .apple
         settings.whisperModel = string(Self.whisperModelKey)
@@ -162,7 +158,6 @@ public struct DeviceSettings: Sendable {
         backend.set(Data([settings.doneSilent ? 1 : 0]), forKey: Self.doneSilentKey)
         backend.set(try? JSONEncoder().encode(settings.liveActivityCommandMachines.sorted { $0.uuidString < $1.uuidString }),
                     forKey: Self.commandsKey)
-        backend.set(Data([settings.keepScreenOn ? 1 : 0]), forKey: Self.keepScreenOnKey)
         backend.set(settings.dictationLocale.map { Data($0.utf8) }, forKey: Self.dictationLocaleKey)
         backend.set(Data(settings.dictationEngine.rawValue.utf8), forKey: Self.dictationEngineKey)
         backend.set(settings.whisperModel.map { Data($0.utf8) }, forKey: Self.whisperModelKey)

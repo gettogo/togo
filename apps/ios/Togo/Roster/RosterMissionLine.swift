@@ -88,7 +88,7 @@ struct RosterMissionMenuButton: View {
 
     var body: some View {
         if let openMission, line.mission != nil {
-            Button(MissionCopy.title, systemImage: "gauge.with.dots.needle.33percent") { openMission(line.id) }
+            Button(MissionCopy.title, systemImage: MissionPlacement.sheetSymbol) { openMission(line.id) }
         }
     }
 }

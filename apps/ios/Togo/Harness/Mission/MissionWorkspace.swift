@@ -76,7 +76,7 @@ struct MissionWorkspace: ViewModifier {
     private var nudge: MissionNudge.Snapshot {
         let store = app.missionStore
         return MissionNudge.Snapshot(
-            session: store.map { MissionInspectorMemory.key($0.subject) },
+            session: store.map { MissionKey.of($0.subject) },
             needsYou: store.map { MissionPlacement.badge($0.mission.summary) } ?? 0
         )
     }

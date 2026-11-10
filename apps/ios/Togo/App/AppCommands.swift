@@ -51,9 +51,6 @@ struct AppCommands: Commands {
         Button(hidden ? AppCommandCopy.showSidebar : AppCommandCopy.hideSidebar) { store?.toggleSidebar() }
             .keyboardShortcut("s", modifiers: [.command, .control])
             .disabled(!inline)
-        Toggle(MonitorCopy.toggle, isOn: Binding(get: { store?.monitorShown ?? false }, set: { _ in store?.toggleMonitor() }))
-            .keyboardShortcut("b", modifiers: [.command, .control])
-            .disabled(store == nil || reviewOpen)
         Toggle(String(localized: "cmd.zenMode", defaultValue: "Zen Mode"), isOn: Binding(get: { store?.zen ?? false }, set: { _ in store?.toggleZen() }))
             .keyboardShortcut("f", modifiers: [.command, .control])
             .disabled(!zenAvailable || reviewOpen)
@@ -80,10 +77,10 @@ struct AppCommands: Commands {
 
     private var reviewOpen: Bool { store?.reviewing != nil }
 
-    /// Zen needs the workspace on screen, not open behind the monitor.
+    /// Zen needs the workspace open.
     private var zenAvailable: Bool {
         guard let store else { return false }
-        return store.zen || (store.workspaceOpen && !store.workspaceBehindMonitor)
+        return store.zen || store.workspaceOpen
     }
 }
 
@@ -134,10 +131,7 @@ extension AppStore {
         guard reviewing == nil, workspace.tabs.indices.contains(number - 1) else { return }
         selectTab(number: number)
         workspaceOpen = true
-        if workspaceInline {
-            monitorShown = false
-            path = []
-        }
+        if workspaceInline { path = [] }
     }
 
     func requestFind() {
@@ -153,7 +147,7 @@ extension AppStore {
 
     /// ⌘\ needs a window wide enough for two panes and a second tab to put beside the first.
     var canToggleSplit: Bool {
-        workspaceInline && !workspaceBehindMonitor && reviewing == nil && (panesFit || workspace.secondary != nil) && (workspace.secondary != nil || workspace.tabs.count > 1)
+        workspaceInline && reviewing == nil && (panesFit || workspace.secondary != nil) && (workspace.secondary != nil || workspace.tabs.count > 1)
     }
 
     /// ⌘\: closes the second pane, or opens the tab after the focused one beside it. The only

@@ -224,7 +224,7 @@ struct MissionControlView: View {
                         .transition(Motion.swap(reduce: reduceMotion))
                 case .live, .terminalOnly:
                     ContentUnavailableView {
-                        Label(MissionCopy.unavailable, systemImage: "gauge.with.dots.needle.33percent")
+                        Label(MissionCopy.unavailable, systemImage: MissionPlacement.sheetSymbol)
                     } description: {
                         Text(MissionCopy.unavailableDetail)
                     }

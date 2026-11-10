@@ -74,7 +74,7 @@ enum MissionCopy {
         case .plan: "checklist"
         case .changes: "plusminus"
         case .ports: "network"
-        case .status: "gauge.with.dots.needle.33percent"
+        case .status: "info.circle"
         default: "square.grid.2x2"
         }
     }

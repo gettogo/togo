@@ -115,6 +115,23 @@ extension RelayRegisterSender: PushTokenRegistering {}
         Set(store.all().compactMap(\.appHostID))
     }
 
+    /// The id of the helper the machine is paired with, for telling its records apart.
+    func helperHostID(for id: HostID) -> String? {
+        store.all().first { $0.appHostID == id }?.hostId
+    }
+
+    /// `dropped` was a second record of `kept`'s machine. Its pairing moves to `kept` when that
+    /// has none; the helper is never told to forget this device, which would end both.
+    func machineMerged(_ dropped: HostID, into kept: HostID) {
+        let all = store.all()
+        guard var moved = all.first(where: { $0.appHostID == dropped }),
+              !all.contains(where: { $0.appHostID == kept }) else { return }
+        moved.appHostID = kept
+        store.put(moved)
+        onChange()
+        onPairingsChanged(store.all())
+    }
+
     /// Machines paired or being paired now. A removed one among them needs its helper told to
     /// forget this device, so what reaches it, such as a saved password, has to stay.
     var pairedOrPairing: Set<HostID> {

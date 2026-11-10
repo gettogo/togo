@@ -75,9 +75,9 @@ struct MissionToolbarItem: ToolbarContent {
                     }
                 }
             } label: {
-                MissionItemLabel(session: MissionInspectorMemory.key(store.subject), needsYou: badge)
+                MissionItemLabel(session: MissionKey.of(store.subject), needsYou: badge, symbol: MissionPlacement.symbol(presentation))
             } primaryAction: {
-                MissionInspectorMemory.shared.toggle(store, in: presentation)
+                store.showsMission.toggle()
             }
             .badge(badge)
             .keyboardShortcut("i", modifiers: .command)
@@ -114,10 +114,12 @@ private struct MissionItemLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let session: String
     let needsYou: Int
+    let symbol: String
     @State private var bounces = 0
 
     var body: some View {
-        Label(MissionCopy.title, systemImage: "gauge.with.dots.needle.33percent")
+        // The title is what VoiceOver says and what the overflow shows.
+        Label(MissionCopy.title, systemImage: symbol)
             // motion: attention — one bounce as the badge rises: look here, something needs you.
             .symbolEffect(.bounce, value: bounces)
             .onChange(of: MissionNudge.Snapshot(session: session, needsYou: needsYou)) { old, new in

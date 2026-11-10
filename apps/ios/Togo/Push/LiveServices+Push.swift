@@ -29,6 +29,7 @@ extension LiveServices {
             ) { params in
                 try await helpers.call(record, prompter: nil) { try await $0.pair(params) }
             }
+            await self.learnHelper(record.id)
         }
     }
 

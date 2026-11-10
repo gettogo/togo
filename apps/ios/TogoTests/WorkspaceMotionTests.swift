@@ -38,7 +38,7 @@ import UIKit
         #expect(settle.generation == 0)
     }
 
-    @Test func aFoldTheSidebarAndADividerEachSettle() {
+    @Test func aFoldAndADividerSettleButTheSidebarDoesNot() {
         var settle = PaneSettle()
         // Folding moves the split of two panes to the fold. One pane spanning the fold keeps its
         // frame, so its terminal is not resized and nothing settles.
@@ -48,9 +48,15 @@ import UIKit
         let spanning = key(size: CGSize(width: 951, height: 669))
         let foldedSpanning = key(size: CGSize(width: 951, height: 669), fold: Self.book)
         #expect(spanning == foldedSpanning)
-        // The sidebar narrows the panes.
+        // The sidebar or the inspector narrows the panes: the split view's column animation is
+        // the motion, so no cover dims over it.
         let began5 = settle.begin(from: key(size: Self.iPad), to: key(size: CGSize(width: 712, height: 1376)))
-        #expect(began5)
+        #expect(!began5)
+        let twoNarrowed = settle.begin(
+            from: key(size: CGSize(width: 1376, height: 1032), secondary: true),
+            to: key(size: CGSize(width: 1056, height: 1032), secondary: true)
+        )
+        #expect(!twoNarrowed)
         // A divider released at a new split. The divider snaps to thirds and halves where both
         // panes keep their minimum width, so it moves on a landscape iPad; portrait has only half.
         let landscape = CGSize(width: 1376, height: 1032)
@@ -58,7 +64,7 @@ import UIKit
         #expect(began6)
         let snapped = settle.begin(from: key(size: Self.iPad, secondary: true), to: key(size: Self.iPad, secondary: true, fraction: 0.6))
         #expect(!snapped)
-        #expect(settle.generation == 3)
+        #expect(settle.generation == 2)
     }
 
     // MARK: The terminal's grid

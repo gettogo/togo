@@ -12,8 +12,6 @@ public enum ShortcutAction: Hashable, Sendable {
     case focusLeft, focusRight
     /// ⇧⌘[ and ⇧⌘]: the tab before or after the focused one.
     case previousTab, nextTab
-    /// ⌃⌘B: shows or hides the board of every session.
-    case toggleBoard
     /// ⌃⌘F: hides or shows the workspace's chrome.
     case toggleZen
 
@@ -35,7 +33,6 @@ public enum ShortcutAction: Hashable, Sendable {
         case .focusRight: "focusRight"
         case .previousTab: "previousTab"
         case .nextTab: "nextTab"
-        case .toggleBoard: "toggleBoard"
         case .toggleZen: "toggleZen"
         }
     }
@@ -43,7 +40,7 @@ public enum ShortcutAction: Hashable, Sendable {
     private static let named: [String: ShortcutAction] = Dictionary(
         uniqueKeysWithValues: [
             ShortcutAction.newSession, .controlCenter, .detach, .paste, .toggleSidebar, .splitToggle,
-            .focusLeft, .focusRight, .previousTab, .nextTab, .toggleBoard, .toggleZen,
+            .focusLeft, .focusRight, .previousTab, .nextTab, .toggleZen,
         ].map { ($0.raw, $0) }
     )
 
@@ -77,7 +74,6 @@ public enum ShortcutAction: Hashable, Sendable {
             command("Focus Right Pane", input: UIKeyCommand.inputRightArrow, modifiers: [.command, .alternate], .focusRight, action),
             command("Previous Tab", input: "[", modifiers: [.command, .shift], .previousTab, action),
             command("Next Tab", input: "]", modifiers: [.command, .shift], .nextTab, action),
-            command("Board", input: "b", modifiers: [.command, .control], .toggleBoard, action),
             command("Zen mode", input: "f", modifiers: [.command, .control], .toggleZen, action),
         ]
     }

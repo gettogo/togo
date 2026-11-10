@@ -2,9 +2,10 @@ import SwiftUI
 import TogoKit
 
 extension View {
-    /// Presents `store`'s mission control while `store.showsMission` is set: a sheet with
-    /// medium and large detents that leaves the chat usable behind it on a compact width, a
-    /// trailing inspector beside the chat on a regular one, open by default where both fit.
+    /// Presents `store`'s mission control as a sheet while `store.showsMission` is set, where the
+    /// window is too narrow for an inspector column: medium and large detents, the chat usable
+    /// behind it. Where the window holds sidebar, chat and inspector, `MissionInspectorColumn`
+    /// on the detail column's stack shows it instead. It opens only when the user asks.
     /// Diffs and previews leave through `openExternal`; a sheet closes first so the review can
     /// take the screen.
     func missionControl(
@@ -15,9 +16,9 @@ extension View {
     }
 }
 
-/// Mission control for the workspace's focused tab: a sheet on a compact width, an inspector
-/// beside the panes on iPad and an unfolded Duo. Its targets leave through
-/// `AppStore.followMissionTarget`.
+/// Mission control's sheet for the workspace's focused tab, on every window too narrow for the
+/// inspector column (phones, an iPhone Duo folded or open, an iPad in portrait). Its targets
+/// leave through `AppStore.followMissionTarget`.
 struct FocusedMissionControl: ViewModifier {
     let app: AppStore
 
@@ -44,25 +45,8 @@ private struct MissionControlPresenter: ViewModifier {
     @State private var detent: PresentationDetent = .medium
     /// A diff or preview asked for from the sheet, opened once the sheet has gone.
     @State private var pending: HarnessOpen?
-    /// The workspace's width with the inspector's column and the bars included.
-    @State private var width: CGFloat = 0
-
+    /// From the window's width, so a sidebar shown or hidden never switches it.
     private var presentation: MissionPresentation { MissionPresentation.choose(sizeClass, windowWidth: windowWidth) }
-
-    /// What decides whether the inspector opens by itself.
-    private struct DefaultKey: Equatable {
-        var session: String?
-        var presentation: MissionPresentation
-        var wide: Bool
-        var hasMission: Bool
-    }
-
-    private var defaultKey: DefaultKey {
-        DefaultKey(
-            session: store.map { MissionInspectorMemory.key($0.subject) }, presentation: presentation,
-            wide: width >= MissionPlacement.openByDefaultWidth, hasMission: store?.hasMission ?? false
-        )
-    }
 
     func body(content: Content) -> some View {
         content
@@ -78,27 +62,9 @@ private struct MissionControlPresenter: ViewModifier {
                         .presentationDragIndicator(.visible)
                 }
             }
-            .coordinated("mission.inspector", .inspector, isPresented: shown(.inspector)) { view, shown in
-                view.inspector(isPresented: shown) {
-                    if let store {
-                        stack(store, inSheet: false)
-                            .inspectorColumnWidth(min: 280, ideal: MissionPlacement.inspectorIdeal, max: 440)
-                    }
-                }
-            }
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing
-            } action: { width = $0 }
             .onChange(of: presentation) { old, new in
                 // Folding a Duo with the inspector open does not raise a sheet nobody asked for.
                 if old == .inspector, new == .sheet, let store, store.showsMission { store.showsMission = false }
-            }
-            .onChange(of: defaultKey, initial: true) { _, key in
-                guard let store, !store.showsMission else { return }
-                let closed = MissionInspectorMemory.shared.closedByUser(store.subject)
-                if MissionPlacement.opensByDefault(key.presentation, width: width, hasMission: key.hasMission, closedByUser: closed) {
-                    store.showsMission = true
-                }
             }
     }
 
@@ -110,7 +76,6 @@ private struct MissionControlPresenter: ViewModifier {
                 // only a close from this one's own presentation clears it.
                 guard presentation == kind, let store, store.showsMission != shown else { return }
                 store.showsMission = shown
-                MissionInspectorMemory.shared.record(shown: shown, for: store.subject, in: kind)
                 if !shown { detent = .medium }
             }
         )
@@ -143,5 +108,58 @@ private struct MissionControlPresenter: ViewModifier {
         guard let target = pending else { return }
         pending = nil
         openExternal(target)
+    }
+}
+
+/// Mission control as the split view's inspector column, for the focused tab, where the window
+/// holds the sidebar, a usable chat and the inspector (`AdaptivePresentation.inspectorMinimumWidth`).
+///
+/// Applied to the detail column's `NavigationStack`, never inside it: an `inspector` inside the
+/// stack wraps the workspace in an inspector container of its own, whose bar items are no longer
+/// the stack's, so an iPhone Duo's vertical bar showed only the status, and on a tight window
+/// the container overlaid and dimmed the chat. Narrower windows get no inspector at all, only
+/// the sheet (`missionControl`). Crossing the width (an iPad rotated or resized) rebuilds the
+/// detail stack; the workspace's durable state lives in the store and survives it.
+struct MissionInspectorColumn: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.windowWidth) private var windowWidth
+    let app: AppStore
+
+    func body(content: Content) -> some View {
+        if MissionPresentation.choose(sizeClass, windowWidth: windowWidth) == .inspector {
+            let tab = app.focusedTab?.id
+            let store = tab.flatMap { app.harness(for: $0) }
+            content.coordinated("mission.inspector", .inspector, isPresented: shown(store)) { view, shown in
+                view.inspector(isPresented: shown) {
+                    if let store, let tab {
+                        MissionControlStack(
+                            store: store, actions: app.chatActions(for: tab),
+                            openExternal: { [app] target in app.followMissionTarget(target, from: tab) },
+                            showChat: { needs in
+                                if store.chatAvailable, needs != nil || store.oldestOpenNeeds != nil {
+                                    store.revealNeeds(id: needs)
+                                } else {
+                                    store.layer = .chat
+                                }
+                            },
+                            onDone: nil
+                        )
+                        .inspectorColumnWidth(min: 280, ideal: MissionPlacement.inspectorIdeal, max: 440)
+                    }
+                }
+            }
+        } else {
+            content
+        }
+    }
+
+    private func shown(_ store: HarnessSessionStore?) -> Binding<Bool> {
+        Binding(
+            get: { store?.showsMission == true },
+            set: { shown in
+                guard let store, store.showsMission != shown else { return }
+                store.showsMission = shown
+            }
+        )
     }
 }

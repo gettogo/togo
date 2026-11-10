@@ -105,7 +105,6 @@ public struct DiagnosticsReport: Codable, Sendable {
             "sync": .bool(settings.syncEnabled),
             "resume_lock": .bool(settings.resumeLock),
             "live_activities": .bool(settings.liveActivities),
-            "keep_screen_on": .bool(settings.keepScreenOn),
             "approve_without_unlock": .bool(settings.approveWithoutUnlock),
             "dictation_engine": .word(settings.dictationEngine.rawValue),
             "custom_relay": .bool(settings.relayURL != nil),

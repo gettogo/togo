@@ -57,7 +57,9 @@ struct WorkspaceView: View {
             }
             // The rows above the terminal keep to the page before the fold in book posture. In
             // zen they keep their place, only emptied, so the terminal is never resized by them.
-            .safeAreaInset(edge: .top, spacing: 0) {
+            // A bar, not a plain inset: the chat scrolls under it behind the system's scroll edge
+            // effect, as under the navigation bar, so no line shows above or through it.
+            .safeAreaBar(edge: .top, spacing: 0) {
                 if rowsPlaced {
                     rows.modifier(LeadingPageOnly())
                         .opacity(chromeLayout.shown ? 1 : 0)
@@ -232,7 +234,8 @@ struct WorkspaceView: View {
                 review: focusedRow.map {
                     ReviewToolbarItems(store: store, row: $0, model: review, folded: ReviewFold(store.missionStore?.descriptor))
                 },
-                layer: bar.layer, mission: bar.mission
+                layer: bar.layer, mission: bar.mission,
+                settings: store.workspaceInline ? SettingsToolbarItem(store: store) : nil
             ) {
                 actions(for: tab, row: store.session(for: tab))
                     .onAppear { menuOpen = true }

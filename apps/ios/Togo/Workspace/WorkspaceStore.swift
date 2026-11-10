@@ -74,8 +74,6 @@ extension AppStore {
             stepTab(-1)
         case .nextTab:
             stepTab(1)
-        case .toggleBoard:
-            toggleMonitor()
         case .toggleZen:
             toggleZen()
         }

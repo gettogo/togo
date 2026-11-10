@@ -87,6 +87,12 @@ enum AdaptivePresentation {
     /// The narrowest sheet that shows a sidebar beside its list: an unfolded Duo held tall
     /// (669 pt) and every iPad page sheet qualify.
     static let splitMinimumWidth: CGFloat = 640
+    /// The narrowest window that takes side context as an inspector column: the sidebar (320),
+    /// a chat worth reading (540) and the inspector (320) side by side. An iPad in landscape
+    /// qualifies; an unfolded Duo (951 pt) and an iPad in portrait get the sheet, so neither the
+    /// sidebar is hidden nor the chat crushed to make room (placement contract, "never hide to
+    /// fit").
+    static let inspectorMinimumWidth: CGFloat = 1180
 
     static func width(sizeClass: UserInterfaceSizeClass?, containerWidth: CGFloat?) -> PresentationWidth {
         guard sizeClass == .regular else { return .compact }
@@ -115,7 +121,10 @@ enum AdaptivePresentation {
         case .destructive:
             return .confirmationDialog
         case .sideContext:
-            return regular && hostsInspector ? .inspector : .mediumSheet
+            // An unmeasured window (nil or zero) follows the size class alone.
+            let measured = containerWidth ?? 0
+            let roomy = measured <= 0 || measured >= inspectorMinimumWidth
+            return regular && hostsInspector && roomy ? .inspector : .mediumSheet
         case .walkthrough:
             // A phone-shaped flow fills a compact window; a wide one gets a page that floats
             // over the app, not the flow stretched edge to edge (P13, P14).

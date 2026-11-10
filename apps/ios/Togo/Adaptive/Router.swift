@@ -1,7 +1,7 @@
 import Foundation
 
 /// Where a window is in the app's one navigation tree, as a value: what the stacks have pushed,
-/// whether a session is up, the status display, and the user's sidebar choice. The store keeps
+/// whether a session is up, and the user's sidebar choice. The store keeps
 /// it across a fold, unfold or resize (the scene stays); the window saves it with its tabs
 /// (`WindowRestoration`) so a relaunch comes back to the same place.
 ///
@@ -12,9 +12,37 @@ struct Router: Codable, Equatable, Sendable {
     var path: [AppRoute] = []
     /// A session is on screen: the cover in a compact window, the detail column in a regular one.
     var workspaceOpen = false
-    /// The status display: the roster across the window.
-    var monitorShown = false
     var sidebar = SidebarState()
+
+    init(path: [AppRoute] = [], workspaceOpen: Bool = false, sidebar: SidebarState = SidebarState()) {
+        self.path = path
+        self.workspaceOpen = workspaceOpen
+        self.sidebar = sidebar
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case path, workspaceOpen, sidebar
+    }
+
+    /// Saved by any version, so no saved value may stop a launch: a key it no longer knows (the
+    /// removed status display's `monitorShown`) is ignored, a route that no longer decodes drops
+    /// out of the path, and a field that fails takes its default.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        path = (try? c.decodeIfPresent([Lenient<AppRoute>].self, forKey: .path))?.compactMap(\.value) ?? []
+        workspaceOpen = (try? c.decodeIfPresent(Bool.self, forKey: .workspaceOpen)) ?? false
+        sidebar = (try? c.decodeIfPresent(SidebarState.self, forKey: .sidebar)) ?? SidebarState()
+    }
+}
+
+/// One element of a saved list, nil when it no longer decodes, so one stale value costs only
+/// itself.
+struct Lenient<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: any Decoder) throws {
+        value = try? Value(from: decoder)
+    }
 }
 
 enum AppRoute: Hashable, Codable, Sendable {

@@ -53,6 +53,19 @@ enum ChatScroll {
         pinned && old != new && !dragging
     }
 
+    /// What the chat's scroll view reports: whether it is at the foot, and its height.
+    struct Frame: Equatable {
+        var pinned: Bool
+        var height: Int
+    }
+
+    /// The scroll view changed height (the keyboard came or went) while the reader was at the
+    /// foot and not dragging: it returns to the foot. A scroll alone, at the same height, never
+    /// pulls the reader down.
+    static func repinsOnResize(old: Frame, new: Frame, dragging: Bool) -> Bool {
+        old.pinned && old.height != new.height && !dragging
+    }
+
     /// At the foot, within a few points: the last line shows above the composer. The visible
     /// foot is where the content insets begin (the top inset, then the container), not the
     /// frame's edge, which lies behind the composer and the keyboard.
@@ -172,13 +185,27 @@ struct ChatScrolling: ViewModifier {
         let candidate = ChatScroll.capsule(open: marks, visible: scroll.visibleNeeds, loaded: store.hasLoaded)
         content
             .modifier(NeedsScrolling(marks: marks, loaded: store.hasLoaded, scroll: scroll))
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                ChatScroll.isPinned(
-                    offset: geometry.contentOffset.y, topInset: geometry.contentInsets.top,
-                    container: geometry.containerSize.height, content: geometry.contentSize.height
+            .onScrollGeometryChange(for: ChatScroll.Frame.self) { geometry in
+                ChatScroll.Frame(
+                    pinned: ChatScroll.isPinned(
+                        offset: geometry.contentOffset.y, topInset: geometry.contentInsets.top,
+                        container: geometry.containerSize.height, content: geometry.contentSize.height
+                    ),
+                    height: Int(geometry.containerSize.height.rounded())
                 )
-            } action: { _, pinned in
-                scroll.pinned = pinned
+            } action: { old, new in
+                // The keyboard (or a fold, or the composer growing) shrank or grew the chat: a
+                // reader at the foot stays at the foot, the latest line right above the composer.
+                // Without this the scroll position keeps its top row and the latest lines slide
+                // behind the keyboard.
+                if ChatScroll.repinsOnResize(old: old, new: new, dragging: scroll.dragging) {
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { scroll.position.scrollTo(edge: .bottom) }
+                    scroll.pinned = true
+                } else {
+                    scroll.pinned = new.pinned
+                }
             }
             // The scroll view itself keeps the composer's height clear, so the last card is
             // never under it, whatever the keyboard does. The capsule sits just above it.

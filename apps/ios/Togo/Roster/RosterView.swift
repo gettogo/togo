@@ -2,7 +2,8 @@ import SwiftUI
 import TogoKit
 import UIKit
 
-/// The home: a small status row with its tally, then every machine's sessions, one line each.
+/// The home: the filter and tally row, then every machine's sessions, one line each, then Add
+/// machine and the archive.
 /// On a phone a tap zooms into the terminal; beside a terminal it shows the session there and
 /// its line stays selected. There is no title: the status row says what the user needs to know,
 /// and scrolls away with the lines.
@@ -44,14 +45,16 @@ struct RosterView: View {
         withSearch(screen.toolbar { toolbar })
     }
 
-    /// Nothing to search before there is a machine. A column searches in the sidebar's own
-    /// field; a phone at the foot, beside New session, as iOS puts search there.
+    /// Nothing to search before there is a machine. A column searches in a field that stays
+    /// at the top of the sidebar (a drawer that hides until pulled would leave no visible
+    /// search, roster.md); a phone at the foot, as iOS puts search there.
     @ViewBuilder private func withSearch(_ view: some View) -> some View {
         if hasNoMachines {
             view
         } else {
             view.searchable(
-                text: $store.query, isPresented: $searching, placement: wide ? .sidebar : .automatic,
+                text: $store.query, isPresented: $searching,
+                placement: wide ? .navigationBarDrawer(displayMode: .always) : .automatic,
                 prompt: RosterCopy.searchPrompt
             )
         }
@@ -70,7 +73,8 @@ struct RosterView: View {
             .navigationTitle(WorkspaceCopy.sessions)
             .toolbar(removing: .title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+            // The bar keeps the system's scroll edge effect, so the list fades under it rather
+            // than showing through behind its buttons. The sidebar column has no bottom bar.
             .modifier(SessionDialogs(store: store, kill: $killTarget, rename: $renameTarget))
             .environment(\.openSessionMission, OpenSessionMission { missionTarget = RosterMissionTarget(tab: $0) })
             // Mission control beside nothing here: the side context's sheet on every width.
@@ -106,19 +110,15 @@ struct RosterView: View {
         let selected = RosterModel.selection(focused: shownTab, wide: wide, in: roster)
         return ScrollViewReader { scroller in
             List {
-                // The status is the first row and scrolls with the lines; nothing is pinned above.
+                // The filter and tally are the first row and scroll with the lines; nothing is
+                // pinned above. Notices share its section, apart from the machines', so a notice
+                // coming and going never lands in the same update as a line leaving a machine,
+                // and no empty section adds a gap above the first machine.
                 Section {
-                    if RosterHeadline.shows(roster) {
-                        RosterHeadline(roster: roster, launchTarget: launchTarget)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 8, trailing: 20))
-                            .listRowBackground(Color.togoInk)
-                            .listRowSeparator(.hidden)
-                    }
-                }
-                .listSectionSeparator(.hidden)
-                // The notice has a section of its own that is always there, so its row coming
-                // and going never lands in the same update as a line leaving a machine.
-                Section {
+                    RosterFilterHeader(store: store, roster: roster, launchTarget: launchTarget)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                        .listRowBackground(Color.togoInk)
+                        .listRowSeparator(.hidden)
                     if roster.deviceOffline {
                         Label(ControlCenterCopy.deviceOffline(DeviceName.model), systemImage: "wifi.slash")
                             .font(.subheadline)
@@ -135,13 +135,6 @@ struct RosterView: View {
                             .listRowBackground(Color.togoInk)
                             .listRowSeparator(.hidden)
                     }
-                    // A filter hides lines, those that need the user included; it says so
-                    // where the lines start, with the way back.
-                    if store.filter != .all {
-                        RosterFilterRow(filter: store.filter) { store.filter = .all }
-                            .listRowBackground(Color.togoInk)
-                            .listRowSeparator(.hidden)
-                    }
                 }
                 .listSectionSeparator(.hidden)
                 ForEach(roster.groups) { group in
@@ -151,8 +144,19 @@ struct RosterView: View {
                         restoring: store.restoring, wakeNote: shown.wakeNotes[group.id], perform: perform
                     )
                 }
+                // What used to wait in a "more" menu, where the list ends.
+                Section {
+                    ForEach(RosterListEnd.rows(archived: store.controlCenter.archived.count), id: \.self) { row in
+                        RosterListEndRow(row: row, store: store)
+                            .foregroundStyle(Color.togoSnow)
+                            .listRowBackground(Color.togoInk)
+                            .listRowSeparator(.hidden)
+                    }
+                }
+                .listSectionSeparator(.hidden)
             }
             .listStyle(.plain)
+            .listSectionSpacing(.compact)
             .scrollDismissesKeyboard(.immediately)
             .overlay {
                 if store.listNarrowed && roster.lines.isEmpty {
@@ -190,43 +194,47 @@ struct RosterView: View {
                 press.modifiers.contains(.command) ? askToEndCursor(roster) : .ignored
             }
             .onKeyPress(.escape) { returnToTerminal() }
+            // A machine the user tried to add again comes into view, once.
+            .onChange(of: store.revealMachine, initial: true) { _, id in
+                guard let id else { return }
+                store.revealMachine = nil
+                // motion: state change — the list moves to the machine the user was sent to
+                withAnimation(Motion.animation(.paneFlow, reduce: reduceMotion)) {
+                    scroller.scrollTo(SessionRotors.Target.machine(id), anchor: .top)
+                }
+            }
         }
     }
 
     // MARK: Toolbar
 
-    /// Each control once per layout (roster.md). A phone, iPhone Duo folded and a narrow
-    /// window: Settings and the filter in the bar at the top, search and New session at the foot;
-    /// folded, the Duo puts them all in one vertical bar. The sidebar column (iPad, iPhone Duo
-    /// open): the filter and New session over the list they act on, Settings at its foot,
-    /// search in the sidebar's field. The rarer things go in the system's overflow everywhere.
+    /// Each control once per layout (roster.md, `RosterBar`). A phone, iPhone Duo folded and a
+    /// narrow window: New session then Settings at the trailing end, search at the foot;
+    /// folded, the Duo stands them in its vertical bar in that order, search last. The sidebar
+    /// column (iPad, iPhone Duo open): New session beside the split view's own toggle, search
+    /// in the field at its top; Settings is the detail column's (root.md), and there is no
+    /// bottom bar. The filter is the list's first row everywhere, so no bar carries it.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        if wide {
-            if !hasNoMachines {
-                ToolbarItem(placement: .topBarTrailing) { RosterFilterMenu(store: store) }
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                ToolbarItem(placement: .topBarTrailing) { RosterNewSessionButton(store: store) }
-            }
-            ToolbarItem(placement: .bottomBar) { RosterSettingsButton(store: store) }
-        } else {
-            ToolbarItem(placement: .topBarLeading) { RosterSettingsButton(store: store) }
-            if !hasNoMachines {
-                ToolbarItem(placement: .topBarTrailing) { RosterFilterMenu(store: store) }
-                DefaultToolbarItem(kind: .search, placement: .bottomBar)
-                ToolbarSpacer(.fixed, placement: .bottomBar)
-                ToolbarItem(placement: .bottomBar) { RosterNewSessionButton(store: store) }
+        let bar = RosterBar.layout(wide: wide, hasMachines: !hasNoMachines)
+        // Each its own item, so the prominent New session keeps its own glass.
+        if let first = bar.topTrailing.first {
+            ToolbarItem(placement: .topBarTrailing) { item(first) }
+        }
+        if bar.topTrailing.count > 1 {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                ForEach(bar.topTrailing.dropFirst(), id: \.self) { item($0) }
             }
         }
-        rareItems
+        if bar.bottom.contains(.search) {
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
+        }
     }
 
-    /// The status display, adding a machine and the archive: the system's overflow, so the
-    /// ellipsis means overflow only and no hamburger stands in a bar.
-    @ToolbarContentBuilder private var rareItems: some ToolbarContent {
-        if #available(iOS 27.0, *) {
-            ToolbarOverflowMenu { RosterRareActions(store: store) }
-        } else {
-            ToolbarItem(placement: .topBarTrailing) { RosterMoreMenu(store: store) }
+    @ViewBuilder private func item(_ item: RosterBarItem) -> some View {
+        switch item {
+        case .settings: RosterSettingsButton(store: store)
+        case .newSession: RosterNewSessionButton(store: store)
+        case .search: EmptyView()
         }
     }
 
@@ -254,8 +262,6 @@ struct RosterView: View {
     /// Beside a terminal the column flows to the session; on a phone the terminal zooms out of
     /// the line.
     private func open(_ row: SessionRow, transport: TransportPreference?) {
-        // A line tapped on the monitor leaves it for the terminal.
-        store.monitorShown = false
         guard wide else {
             store.open(hostID: row.hostID, sessionID: row.id, transport: transport)
             return
@@ -319,28 +325,31 @@ struct RosterView: View {
     }
 }
 
-/// One small row in one voice: "1 needs you" and the tally after it ("2 working  2 idle"),
-/// all in the same mono at the same size on one baseline. "Needs you" stands out the way it
-/// does on a line, by its status colour and weight, with the lit dot before it; with nothing
-/// waiting only the tally shows.
+/// One small row in one voice: the filter in force, then "1 needs you" and the tally after it
+/// ("All · 2 working  2 idle"), and the chevron of the menu it opens, all in the same mono at
+/// the same size on one baseline. "Needs you" stands out the way it does on a line, by its
+/// status colour and weight, with the lit dot before it.
 struct RosterHeadline: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let roster: RosterModel
+    var filter: SessionFilter = .all
     /// Marks the leading edge, where the launch mark shrinks to on its way out.
     var launchTarget = false
 
     /// The one font for every count in the row.
     static let font = Font.system(.footnote, design: .monospaced)
 
-    /// Nothing to say with no sessions and nothing waiting.
-    static func shows(_ roster: RosterModel) -> Bool {
-        roster.waiting > 0 || !roster.tallyText.isEmpty
+    /// What VoiceOver says for the row: "All, 1 needs you, 2 working  2 idle".
+    static func spoken(roster: RosterModel, filter: SessionFilter) -> String {
+        var parts = [ControlCenterCopy.filterName(filter)]
+        if roster.waiting > 0 { parts.append(roster.headline) }
+        if !roster.tallyText.isEmpty { parts.append(roster.tallyText) }
+        return parts.joined(separator: ", ")
     }
 
     var body: some View {
-        // One line where it fits; at the largest text sizes the tally goes under the needs.
+        // One line where it fits; at the largest text sizes the tally goes under the filter.
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) { parts }
+            HStack(alignment: .firstTextBaseline, spacing: 8) { parts }
             VStack(alignment: .leading, spacing: 4) { parts }
         }
         // motion: attention — the dot lights when something needs you, and goes out after
@@ -352,13 +361,26 @@ struct RosterHeadline: View {
                     .launchTarget(fades: true)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(.rect)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("roster.headline")
     }
 
     @ViewBuilder private var parts: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(ControlCenterCopy.filterName(filter))
+                .font(Self.font)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.togoSnow)
+                // trunc-ok: a filter name is one or two words
+                .lineLimit(1)
+                .fixedSize()
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.togoMute)
+                .accessibilityHidden(true)
+        }
         if roster.waiting > 0 {
             // Centred on the words; the row lines up on their baseline.
             HStack(alignment: .center, spacing: 8) {

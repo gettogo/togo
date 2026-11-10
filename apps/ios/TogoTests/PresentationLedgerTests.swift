@@ -276,7 +276,7 @@ struct PresentationCoordinatorTests {
         let coordinator = PresentationCoordinator(strict: false)
         #expect(coordinator.style(for: .browse, sizeClass: .regular, containerWidth: 475) == .fullHeightSheet)
         #expect(coordinator.style(for: .browse, sizeClass: .regular, containerWidth: 956) == .pageSheet)
-        #expect(coordinator.style(for: .sideContext, sizeClass: .regular, containerWidth: 956, hostsInspector: true) == .inspector)
+        #expect(coordinator.style(for: .sideContext, sizeClass: .regular, containerWidth: 1194, hostsInspector: true) == .inspector)
         #expect(PresentationCoordinator.kind(of: .inspector) == .inspector)
         #expect(PresentationCoordinator.kind(of: .popover) == .popover)
         #expect(PresentationCoordinator.kind(of: .mediumSheet) == .sheet)

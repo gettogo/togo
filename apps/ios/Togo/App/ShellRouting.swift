@@ -7,7 +7,7 @@ extension AppStore {
     /// workspace presents reviews and sign-in questions only while it is mounted; otherwise the
     /// root does.
     var workspaceOnScreen: Bool {
-        guard workspaceOpen, !workspaceBehindMonitor else { return false }
+        guard workspaceOpen else { return false }
         return !workspaceInline || !workspace.tabs.isEmpty
     }
 
@@ -17,7 +17,6 @@ extension AppStore {
         if let row = rows.first(where: { $0.hostID == id.hostID && $0.id == id.sessionID }) {
             showFromSidebar(row)
         } else {
-            monitorShown = false
             if workspaceInline { path = [] }
             open(hostID: id.hostID, sessionID: id.sessionID)
         }
@@ -27,7 +26,6 @@ extension AppStore {
     /// screen that is the primary, so the column shows one large terminal unless the user
     /// opened a second.
     func showFromSidebar(_ row: SessionRow, transport: TransportPreference? = nil) {
-        monitorShown = false
         // Whatever the detail had pushed would otherwise stay on top of the session.
         if workspaceInline { path = [] }
         let id = TabID(hostID: row.hostID, sessionID: row.id)

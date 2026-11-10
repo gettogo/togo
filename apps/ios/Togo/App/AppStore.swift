@@ -23,6 +23,8 @@ import TogoKit
     }
     var firstRun: Bool
     var notice: Notice?
+    /// A machine the roster scrolls to once, such as one the user tried to add again.
+    var revealMachine: HostID?
     /// What the last wake signal to a machine said, shown under its name.
     var wakeNotes: [HostID: String] = [:]
     /// Sends a wake packet; tests replace it.
@@ -57,11 +59,6 @@ import TogoKit
     @ObservationIgnored var openReview: ReviewSession?
     /// Compose text per tab. Cleared when it is sent and when the tab closes.
     var drafts: [TabID: String] = [:]
-    /// Monitor mode: the roster full screen as a status display, over the workspace.
-    var monitorShown: Bool {
-        get { router.monitorShown }
-        set { router.monitorShown = newValue }
-    }
     /// The workspace with its chrome hidden.
     var zen = false
     /// Both panes are on screen. The workspace sets it from its arrangement; while false the
@@ -426,5 +423,19 @@ import TogoKit
 
     private static func label(_ row: SessionRow) -> String {
         row.bib ?? row.name
+    }
+}
+
+extension AppStore {
+    /// The machine being added was already in Togo as `record`, which now holds what was
+    /// added. The sheet closes on that machine, saying so.
+    func alreadyAdded(_ record: HostRecord) {
+        sheet = nil
+        notice = Notice(text: Self.alreadyAddedNotice(record.profile.name), isError: false)
+        revealMachine = record.id
+    }
+
+    static func alreadyAddedNotice(_ name: String) -> String {
+        String(localized: "machines.alreadyAdded", defaultValue: "\(name) is already in your machines")
     }
 }

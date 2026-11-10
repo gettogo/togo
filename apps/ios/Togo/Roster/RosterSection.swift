@@ -25,7 +25,11 @@ struct RosterSection: View {
     private var machine: MachineSection { group.machine }
 
     var body: some View {
+        // The heading is the section's first row, not its header: a plain list puts a padding of
+        // its own above every section header, which SwiftUI cannot remove and which opened a
+        // gap under the filter row (roster.md). As a row its spacing is the rows' insets.
         Section {
+            headingRow
             status
             ForEach(group.lines) { line in
                 sessionLine(line)
@@ -41,17 +45,22 @@ struct RosterSection: View {
                     .dismissesRestorable { perform(.dismissRestorable(machine.id, session)) }
                 }
             }
-        } header: {
-            Group {
-                if case .offline = machine.reachability {
-                    heading.tutorialTip(.offline)
-                } else {
-                    heading
-                }
-            }
-            .contextMenu { MachineMenuItems(machine: machine, perform: perform) }
-            .id(SessionRotors.Target.machine(machine.id))
         }
+    }
+
+    private var headingRow: some View {
+        Group {
+            if case .offline = machine.reachability {
+                heading.tutorialTip(.offline)
+            } else {
+                heading
+            }
+        }
+        .contextMenu { MachineMenuItems(machine: machine, perform: perform) }
+        .id(SessionRotors.Target.machine(machine.id))
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 4, trailing: 20))
+        .listRowBackground(Color.togoInk)
+        .listRowSeparator(.hidden)
     }
 
     private var heading: some View {

@@ -72,15 +72,8 @@ extension AppStore {
     /// ⌃⌘F and "Zen mode" in the workspace menu. Hides the header, tab strip and compose bar of
     /// this window's workspace; a draft stays where it was.
     func toggleZen() {
-        guard zen || (workspaceOpen && !workspaceBehindMonitor) else { return }
+        guard zen || workspaceOpen else { return }
         zen.toggle()
         if zen { composing = nil }
-    }
-}
-
-extension AppStore {
-    /// Monitor mode fills a regular-width window, so the workspace is open but not on screen.
-    var workspaceBehindMonitor: Bool {
-        monitorShown && workspaceInline
     }
 }

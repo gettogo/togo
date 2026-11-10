@@ -60,6 +60,11 @@ extension HostRecord {
         copy.wake = nil
         copy.profile.routes = []
         copy.profile.lastRoute = nil
+        // What tells the machine's records apart is no reason to reconnect either.
+        copy.hostKeys = nil
+        copy.helperHostID = nil
+        copy.addedAt = nil
+        copy.mergedIDs = nil
         return copy
     }
 }

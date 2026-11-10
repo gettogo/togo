@@ -69,8 +69,13 @@ struct AdaptivePresentationTests {
     }
 
     @Test func sideContextIsAnInspectorOnlyBesideContentWithRoom() {
-        #expect(style(.sideContext, .regular, 951, inspector: true) == .inspector)
-        #expect(style(.sideContext, .regular, 951) == .mediumSheet)
+        // An iPad in landscape keeps the sidebar, the chat and the inspector side by side.
+        #expect(style(.sideContext, .regular, 1194, inspector: true) == .inspector)
+        // An unfolded Duo and an iPad in portrait would crush the chat or hide the sidebar.
+        #expect(style(.sideContext, .regular, 951, inspector: true) == .mediumSheet)
+        #expect(style(.sideContext, .regular, 1032, inspector: true) == .mediumSheet)
+        #expect(AdaptivePresentation.inspectorMinimumWidth == 1180)
+        #expect(style(.sideContext, .regular, 1194) == .mediumSheet)
         #expect(style(.sideContext, .regular, 475, inspector: true) == .mediumSheet)
         #expect(style(.sideContext, .compact, 390, inspector: true) == .mediumSheet)
     }
@@ -143,7 +148,8 @@ struct AdaptivePresentationTests {
     }
 
     @Test func missionControlFollowsThePolicy() {
-        #expect(MissionPresentation.choose(.regular, windowWidth: 951) == .inspector)
+        #expect(MissionPresentation.choose(.regular, windowWidth: 1194) == .inspector)
+        #expect(MissionPresentation.choose(.regular, windowWidth: 951) == .sheet)
         #expect(MissionPresentation.choose(.regular, windowWidth: 475) == .sheet)
         #expect(MissionPresentation.choose(.compact, windowWidth: 951) == .sheet)
     }

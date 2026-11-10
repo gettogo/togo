@@ -5,8 +5,9 @@ import TogoKit
 /// move into the vertical bar beside the status bar and the terminal keeps the whole height.
 /// Every item has a symbol and a title: the symbol shows in the bar, the title in overflow and
 /// to VoiceOver. Order: the way back first, then the session's buttons (the layer switch
-/// leading them), its menu last. When the bar runs out of room the items stay in this order of
-/// priority: mission control while it has a badge, the session menu, the layer switch, the rest.
+/// leading them), its menu, and beside the sidebar the app's Settings last (root.md). When the
+/// bar runs out of room the items stay in this order of priority: mission control while it has
+/// a badge, the session menu, the layer switch, the rest, Settings first to go.
 struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     let leading: WorkspaceLeading
     let onLeading: () -> Void
@@ -17,6 +18,9 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     let layer: LayerToolbarItem?
     /// Mission control, on every size class while the chat shows and the session has one.
     var mission: MissionToolbarItem? = nil
+    /// Settings, while the workspace is the detail column beside the sidebar; a compact window
+    /// has it in the roster's bar.
+    var settings: SettingsToolbarItem? = nil
     @ViewBuilder let actions: () -> Actions
 
     var body: some ToolbarContent {
@@ -49,6 +53,9 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
             menu.visibilityPriority(.high)
         } else {
             menu
+        }
+        if let settings {
+            settings
         }
     }
 

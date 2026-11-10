@@ -150,7 +150,8 @@ import TogoMosh
                 registrar: push?.registrar,
                 pairing: push?.pairing,
                 shareSettings: { push?.share($0) },
-                reported: { id, open in push?.reported(id, open: open) }
+                reported: { id, open in push?.reported(id, open: open) },
+                trustedHostKeys: { (try? await hostKeys.fingerprints(for: HostKeyTrust.hostID($0))) ?? [] }
             )
         )
         live = services

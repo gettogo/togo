@@ -20,27 +20,25 @@ extension XCUIApplication {
         )).firstMatch
     }
 
-    /// The roster's overflow: Status display, Add machine, Archive. On iOS 27 it is the bar's
-    /// system overflow menu; before, a menu of the app's own. New session, Settings and the
-    /// filter are buttons in the roster's bars.
+    /// A control the window always shows once the roster has loaded: Settings, in the roster's
+    /// top bar on a phone and in the detail column's bar beside the sidebar.
     var rosterMenu: XCUIElement {
-        let own = buttons["roster.more"]
-        return own.exists ? own : navigationBars.buttons["More"].firstMatch
+        buttons["roster.settings"]
     }
 
-    /// Taps a roster action: the bar button when there is one, else the item in the menu.
+    /// Taps a roster control by its title or identifier. New session and Settings are bar
+    /// buttons; Add machine and Archive are rows at the end of the list, so the
+    /// list is scrolled to them when they are not on screen. There is no "more" menu.
     func pickFromRosterMenu(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(buttons["roster.settings"].waitForExistence(timeout: 10), "The roster never loaded", file: file, line: line)
-        let direct = buttons[label]
-        if direct.exists && direct.isHittable {
-            direct.tap()
-            return
+        let direct = buttons.matching(NSPredicate(format: "label == %@ OR identifier == %@", label, label)).firstMatch
+        var swipes = 0
+        while !(direct.exists && direct.isHittable), swipes < 6 {
+            collectionViews.firstMatch.swipeUp()
+            swipes += 1
         }
-        rosterMenu.tap()
-        let item = buttons.matching(identifier: label).allElementsBoundByIndex.last { $0.exists && $0.isHittable }
-            ?? buttons[label]
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "The roster has no \(label)", file: file, line: line)
-        item.tap()
+        XCTAssertTrue(direct.waitForExistence(timeout: 5), "The roster has no \(label)", file: file, line: line)
+        direct.tap()
     }
 
     /// The prompt bar arms a new request's answers about half a second after it shows.
@@ -151,7 +149,7 @@ extension XCTestCase {
             format: "label BEGINSWITH %@ AND label CONTAINS %@", "04, ", "Studio"
         )).firstMatch
         XCTAssertTrue(context.exists, "The bar does not say whose request it is")
-        audit(app, glass: ["Yes", "No", "Reply", "More", "roster.more"])
+        audit(app, glass: ["Yes", "No", "Reply", "More", "roster.settings"])
     }
 
     func testRequestAnswersMeetTheMinimumSize() {

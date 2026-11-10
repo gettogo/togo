@@ -66,6 +66,19 @@ struct ChatScrollTests {
         #expect(!ChatScroll.isPinned(offset: 0, topInset: 116, container: 580, content: 1_000))
     }
 
+    @Test func theKeyboardKeepsAReaderAtTheFootAtTheFoot() {
+        // The keyboard shrinks the chat by its height: a reader at the foot stays there, the
+        // latest line right above the composer.
+        let foot = ChatScroll.Frame(pinned: true, height: 640)
+        #expect(ChatScroll.repinsOnResize(old: foot, new: .init(pinned: false, height: 330), dragging: false))
+        // And when it goes, the same.
+        #expect(ChatScroll.repinsOnResize(old: .init(pinned: true, height: 330), new: .init(pinned: true, height: 640), dragging: false))
+        // A reader up in the history keeps their place; so does a drag, and a scroll at the same height.
+        #expect(!ChatScroll.repinsOnResize(old: .init(pinned: false, height: 640), new: .init(pinned: false, height: 330), dragging: false))
+        #expect(!ChatScroll.repinsOnResize(old: foot, new: .init(pinned: false, height: 330), dragging: true))
+        #expect(!ChatScroll.repinsOnResize(old: foot, new: .init(pinned: false, height: 640), dragging: false))
+    }
+
     /// Measured on an iPhone 18 Pro with a five-line draft and the keyboard down: 758 pt of
     /// conversation, 116 pt of bar above, 272 pt of composer and home indicator below. Scrolled
     /// to the top, the frame's edge is past the content's end, yet its last 272 pt sit under the

@@ -73,23 +73,67 @@ import UserNotifications
         #expect(WindowRestoration(restored) == saved)
     }
 
-    /// The window comes back to the same place: what was pushed, the status display and the
-    /// sidebar the user hid. A ⌘K in flight is not saved.
+    /// The window comes back to the same place: what was pushed and the sidebar the user hid.
+    /// A ⌘K in flight is not saved.
     @Test func restorationKeepsThePlace() throws {
         let composition = AppComposition(services: services)
         let store = composition.makeStore(window: WindowID(), restoring: nil)
         store.open(hostID: Samples.studio, sessionID: "s-01")
         store.showArchive()
-        store.monitorShown = true
         store.sidebar.hidden = true
         store.sidebar.searchRequests = 3
         let data = try JSONEncoder().encode(WindowRestoration(store))
         let decoded = try JSONDecoder().decode(WindowRestoration.self, from: data)
         let restored = composition.makeStore(window: WindowID(), restoring: decoded)
         #expect(restored.path == [.archive])
-        #expect(restored.monitorShown)
         #expect(restored.sidebar.isHidden)
         #expect(restored.sidebar.searchRequests == 0)
+        #expect(restored.workspaceOpen)
+    }
+
+    /// A window saved by an older version with the status display up (the folded Duo launched
+    /// straight into it): the stale key is ignored, a route this version does not know drops
+    /// out, and the tabs and the rest of the place come back.
+    @Test func restorationIgnoresWhatThisVersionNoLongerKnows() throws {
+        let composition = AppComposition(services: services)
+        let store = composition.makeStore(window: WindowID(), restoring: nil)
+        store.open(hostID: Samples.studio, sessionID: "s-01")
+        store.showArchive()
+        store.sidebar.hidden = true
+        var json = try #require(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(WindowRestoration(store))) as? [String: Any]
+        )
+        var router = try #require(json["router"] as? [String: Any])
+        router["monitorShown"] = true
+        router["path"] = [["monitor": [String: Any]()], ["archive": [String: Any]()]]
+        json["router"] = router
+        json["labels"] = [["id": "not a tab"]]
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        let decoded = try #require(WindowRestoration(data: data))
+        #expect(decoded.tabs == [tab("s-01")])
+        #expect(decoded.labels == [])
+        let restored = composition.makeStore(window: WindowID(), restoring: decoded)
+        #expect(restored.path == [.archive])
+        #expect(restored.sidebar.isHidden)
+        #expect(restored.workspaceOpen)
+        #expect(restored.workspace.selected == tab("s-01"))
+    }
+
+    /// A place in the tree that does not decode at all costs only itself, never the tabs.
+    @Test func restorationKeepsTheTabsWhenThePlaceIsUnreadable() throws {
+        let composition = AppComposition(services: services)
+        let store = composition.makeStore(window: WindowID(), restoring: nil)
+        store.open(hostID: Samples.studio, sessionID: "s-01")
+        var json = try #require(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(WindowRestoration(store))) as? [String: Any]
+        )
+        json["router"] = "status display"
+        let decoded = try #require(WindowRestoration(data: try JSONSerialization.data(withJSONObject: json)))
+        #expect(decoded.router == nil)
+        let restored = composition.makeStore(window: WindowID(), restoring: decoded)
+        #expect(restored.workspace.tabs.map(\.id) == [tab("s-01")])
+        #expect(restored.path.isEmpty)
         #expect(restored.workspaceOpen)
     }
 

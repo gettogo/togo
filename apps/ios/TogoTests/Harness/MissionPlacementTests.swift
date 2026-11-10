@@ -4,9 +4,9 @@ import Testing
 import TogoKit
 @testable import Togo
 
-/// Mission control's place on every size class: sheet or inspector, the inspector open by
-/// default where both fit, a remembered close, the bar item's visibility, badge, bounce,
-/// subtitle and long-press menu.
+/// Mission control's place on every size class: sheet or inspector by the window's room, closed
+/// until the user opens it, the bar item's visibility, badge, bounce, subtitle and long-press
+/// menu.
 @MainActor
 struct MissionPlacementTests {
     // MARK: Presentation
@@ -17,53 +17,38 @@ struct MissionPlacementTests {
         #expect(MissionPresentation.choose(nil) == .sheet)
     }
 
-    @Test func theInspectorOpensByDefaultOnlyWhereChatAndInspectorFit() {
-        func opens(_ width: CGFloat, _ presentation: MissionPresentation = .inspector) -> Bool {
-            MissionPlacement.opensByDefault(presentation, width: width, hasMission: true, closedByUser: false)
-        }
-        #expect(MissionPlacement.openByDefaultWidth == 860)
-        // An unfolded Duo held wide and an iPad in landscape.
-        #expect(opens(951))
-        #expect(opens(1194))
-        // An iPad 11" in portrait and a Duo's inner display held tall.
-        #expect(!opens(834))
-        #expect(!opens(669))
-        // Never a sheet by itself.
-        #expect(!opens(1194, .sheet))
+    @Test func theWindowNotTheSidebarDecidesInspectorOrSheet() {
+        // The choice reads the window's width, which a sidebar shown or hidden does not change,
+        // so collapsing the sidebar can never switch it, let alone open it.
+        #expect(MissionPresentation.choose(.regular, windowWidth: 1194) == .inspector)
+        #expect(MissionPresentation.choose(.regular, windowWidth: 1366) == .inspector)
+        // An unfolded Duo held wide or tall, and an iPad in portrait: a sheet over the chat.
+        #expect(MissionPresentation.choose(.regular, windowWidth: 951) == .sheet)
+        #expect(MissionPresentation.choose(.regular, windowWidth: 669) == .sheet)
+        #expect(MissionPresentation.choose(.regular, windowWidth: 1032) == .sheet)
     }
 
-    @Test func theInspectorStaysClosedWithoutAMissionOrAfterTheUserClosedIt() {
-        #expect(!MissionPlacement.opensByDefault(.inspector, width: 1194, hasMission: false, closedByUser: false))
-        #expect(!MissionPlacement.opensByDefault(.inspector, width: 1194, hasMission: true, closedByUser: true))
-    }
-
-    @Test func aCloseIsRememberedPerSessionAndForgottenOnReopen() {
-        let memory = MissionInspectorMemory()
-        let one = HarnessSubject(hostID: UUID(), sessionID: "s_one", capabilities: [])
-        let two = HarnessSubject(hostID: UUID(), sessionID: "s_two", capabilities: [])
-        memory.record(shown: false, for: one, in: .inspector)
-        #expect(memory.closedByUser(one))
-        #expect(!memory.closedByUser(two))
-        memory.record(shown: true, for: one, in: .inspector)
-        #expect(!memory.closedByUser(one))
-    }
-
-    @Test func closingTheSheetIsNotRemembered() {
-        let memory = MissionInspectorMemory()
-        let one = HarnessSubject(hostID: UUID(), sessionID: "s_one", capabilities: [])
-        memory.record(shown: false, for: one, in: .sheet)
-        #expect(!memory.closedByUser(one))
-    }
-
-    @Test func theItemsTapTogglesAndRemembersTheInspectorsClose() {
-        let memory = MissionInspectorMemory()
+    @Test func missionControlStartsClosedAndOnlyTheUserOpensIt() {
         let store = HarnessSessionStore(subject: ChatTests.subject, services: FakeHarnessServices(descriptor: ChatTests.claude))
-        memory.toggle(store, in: .inspector)
-        #expect(store.showsMission)
-        #expect(!memory.closedByUser(store.subject))
-        memory.toggle(store, in: .inspector)
         #expect(!store.showsMission)
-        #expect(memory.closedByUser(store.subject))
+        store.showsMission.toggle()
+        #expect(store.showsMission)
+        store.showsMission.toggle()
+        #expect(!store.showsMission)
+    }
+
+    @Test func missionControlNeverWearsAGauge() {
+        #expect(MissionPlacement.symbol(.inspector) == "sidebar.trailing")
+        #expect(MissionPlacement.symbol(.sheet) == "list.bullet.rectangle")
+        for presentation in [MissionPresentation.inspector, .sheet] {
+            #expect(!MissionPlacement.symbol(presentation).hasPrefix("gauge"))
+        }
+    }
+
+    @Test func aSessionKeyNamesTheMachineAndTheSession() {
+        let host = UUID()
+        let subject = HarnessSubject(hostID: host, sessionID: "s_one", capabilities: [])
+        #expect(MissionKey.of(subject) == "\(host.uuidString)/s_one")
     }
 
     // MARK: The bar item

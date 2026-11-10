@@ -41,6 +41,40 @@ public actor HostStore {
         await records.delete(Self.key(id))
     }
 
+    /// What saving a machine did.
+    public enum SaveOutcome: Equatable, Sendable {
+        case saved(HostRecord)
+        /// The machine was already stored under another record, which now holds what was saved.
+        case merged(into: HostRecord)
+    }
+
+    /// Saves `record`, or folds it into the stored record for the same machine when one is
+    /// there under another id. An edit, under its own id, is saved as it is.
+    public func save(_ record: HostRecord, identity: @Sendable (HostRecord) -> MachineIdentity) async -> SaveOutcome {
+        if let existing = MachineMerge.existing(for: record, in: await hosts(), identity: identity) {
+            let merged = MachineMerge.merged(existing, absorbing: record)
+            await records.put(Self.key(merged.id), merged)
+            return .merged(into: merged)
+        }
+        await records.put(Self.key(record.id), record)
+        return .saved(record)
+    }
+
+    /// Folds every group of records for one machine into its oldest record; the others are
+    /// deleted here and, through sync, everywhere. Records never merge on a name or an address
+    /// alone. Returns the merges made; safe to run every launch.
+    @discardableResult
+    public func mergeDuplicates(
+        identity: @Sendable (HostRecord) -> MachineIdentity,
+        older: @Sendable (HostRecord, HostRecord) -> Bool = MachineMerge.addedFirst
+    ) async -> [MachineMerge.Duplicates] {
+        let found = MachineMerge.duplicates(in: await hosts(), identity: identity, older: older)
+        for duplicates in found {
+            await records.put(Self.key(duplicates.kept.id), duplicates.kept, deleting: duplicates.dropped.map(Self.key))
+        }
+        return found
+    }
+
     private static func key(_ id: UUID) -> String { id.uuidString }
 
     private static func ordered(_ all: [String: HostRecord]) -> [HostRecord] {

@@ -181,16 +181,24 @@ struct PaneSettle: Equatable {
             self.height = height
             self.split = split
         }
+
+        /// The split as a share of the panes' width, in thousandths: what the user or the fold
+        /// chose, apart from how wide the window or column is.
+        var share: Int { width > 0 ? Int((Double(split) / Double(width) * 1000).rounded()) : 0 }
     }
 
     /// How many settles began. Each one is a new cover, and lands each terminal's grid once.
     private(set) var generation = 0
 
-    /// Starts a settle for a move from `old` to `new`. False when nothing that resizes a
-    /// terminal changed, or when the panes had no size yet (the first layout lands bare).
+    /// Starts a settle for a move from `old` to `new`: a second pane, a released divider or a
+    /// fold moving the split. False when only the room changed (the sidebar or the inspector
+    /// column coming or going, a window resize): the split view's own column animation is the
+    /// motion then, and a cover dimming over it would fight it. False too when the panes had no
+    /// size yet (the first layout lands bare).
     @discardableResult
     mutating func begin(from old: Key, to new: Key) -> Bool {
-        guard old != new, old.width > 0, old.height > 0 else { return false }
+        guard old.width > 0, old.height > 0 else { return false }
+        guard old.kind != new.kind || abs(old.share - new.share) > 5 else { return false }
         generation += 1
         return true
     }

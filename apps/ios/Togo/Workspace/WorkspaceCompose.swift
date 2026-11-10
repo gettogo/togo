@@ -227,25 +227,16 @@ struct WorkspaceComposeBar: View {
     }
 }
 
-/// The same breathing room on both sides of the composer. An edge that meets a safe-area inset
-/// (a vertical bar on an iPhone Duo, a sensor housing in landscape) already has its gap there;
-/// an open edge (the screen edge, the roster column's divider) gets `margin`. Each edge is read
-/// on its own, as the insets are not symmetric.
+/// The same breathing room on both sides of the composer, on every layout: the iPhone's margin.
+/// A safe-area inset is not a gap: beside the split view's sidebar the detail column's leading
+/// inset is the sidebar itself, so a composer that trusted it sat flush against the divider.
+/// A vertical bar or a sensor housing keeps its own inset, and the margin comes on top.
 struct ComposerMargins: ViewModifier {
     static let margin: CGFloat = 12
     /// The gap between the composer and the keyboard or the bottom safe area.
     static let bottom: CGFloat = 8
-    @State private var insets = EdgeInsets()
 
     func body(content: Content) -> some View {
-        content
-            .padding(.leading, insets.leading > 0 ? 0 : Self.margin)
-            .padding(.trailing, insets.trailing > 0 ? 0 : Self.margin)
-            .background {
-                Color.clear
-                    .ignoresSafeArea(.container, edges: .horizontal)
-                    .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets = $0 }
-                    .accessibilityHidden(true)
-            }
+        content.padding(.horizontal, Self.margin)
     }
 }

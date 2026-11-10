@@ -29,6 +29,9 @@ import UIKit
         /// Whether wake targets are learned from what machines report; off while the app
         /// cannot send wake packets.
         var wakeEnabled = WakeFeature.isEnabled
+        /// The host key fingerprints this device trusts for an address, which tell a second
+        /// record for a machine apart from another machine.
+        var trustedHostKeys: @Sendable (HostEndpoint) async -> [String] = { _ in [] }
     }
 
     private(set) var hosts: [HostRecordView] = []
@@ -115,6 +118,8 @@ import UIKit
         applyStored(await settingsStore.load())
         deps.shareSettings(settings)
         await hostRecords.setSyncEnabled(settings.syncEnabled)
+        // Before any monitor starts, so a second record of a machine never connects.
+        await mergeDuplicates()
         reconcile(await hostStore.hosts())
         // Addresses saved with an interface zone (`fe80::…%en0`) become the machine's name when
         // it answers to one; the others keep theirs and the edit form explains. Off the launch
@@ -319,16 +324,6 @@ import UIKit
         try await task.value
     }
 
-    func saveHost(_ record: HostRecord) async throws {
-        await hostStore.save(record)
-        reconcile(await hostStore.hosts())
-    }
-
-    func removeHost(_ id: HostID) async throws {
-        await hostStore.remove(id)
-        reconcile(await hostStore.hosts())
-    }
-
     /// The stored record behind a machine, for editing it.
     func hostRecord(_ id: HostID) -> HostRecord? {
         records[id]
@@ -338,7 +333,8 @@ import UIKit
 
     /// Brings monitors in line with the stored machines: new ones start, removed ones stop,
     /// and an edited one starts over with its new address or credentials.
-    private func reconcile(_ stored: [HostRecord]) {
+    func reconcile(_ stored: [HostRecord]) {
+        let mergedInto = handOverMerged(stored)
         let all = deviceMachines.resolve(stored)
         let incoming = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         let removed = records.keys.filter { incoming[$0] == nil }
@@ -347,7 +343,10 @@ import UIKit
         let rewoken = records.keys.filter { incoming[$0] != nil && incoming[$0]?.wake != records[$0]?.wake && !changed.contains($0) }
         // A removed machine's channel and saved password stay until its helper is told to stop pushing.
         let paired = deps.pairing?.pairedOrPairing ?? []
-        let unpairing = Set(removed.filter { id in records[id].map { unpair($0, reachable: latest[id]?.reach == .online) } ?? false })
+        // A merged record's machine is still here: its helper keeps this device, and its key stays.
+        let unpairing = Set(removed.filter { id in
+            mergedInto[id] == nil && (records[id].map { unpair($0, reachable: latest[id]?.reach == .online) } ?? false)
+        })
         for id in removed + changed {
             stopWatching(id, dropChannel: !unpairing.contains(id))
         }
@@ -361,7 +360,8 @@ import UIKit
             mapper.forget(id)
             deviceMachines.forget(id)
             attachPrompts.withdraw(hostID: id)
-            if !paired.contains(id) { deps.forgetPassword(id) }
+            if let kept = mergedInto[id] { deps.pairing?.machineMerged(id, into: kept) }
+            if mergedInto[id] != nil || !paired.contains(id) { deps.forgetPassword(id) }
             onMachineRemoved(id)
         }
         changed.forEach(onMachineChanged)

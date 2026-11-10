@@ -11,18 +11,15 @@ enum ShellLayout: Equatable, Sendable {
     enum Detail: Equatable, Sendable {
         /// The workspace, or with no tab open the empty detail, beside the roster.
         case workspace, empty
-        /// The roster across the window as a status display; the sidebar steps aside for it.
-        case monitor
     }
 
     /// Reads the size class only: it is what the split view collapses on. The window's state is
     /// the same either way, so a Stage Manager resize, Split View or fold only changes where it
-    /// is shown. In a compact window the monitor takes the roster's place under the workspace.
+    /// is shown.
     static func resolve(
-        sizeClass: UserInterfaceSizeClass?, workspaceOpen: Bool, hasTabs: Bool, monitorShown: Bool = false
+        sizeClass: UserInterfaceSizeClass?, workspaceOpen: Bool, hasTabs: Bool
     ) -> ShellLayout {
         guard sizeClass == .regular else { return .stack(workspaceShown: workspaceOpen && hasTabs) }
-        if monitorShown { return .split(detail: .monitor) }
         return .split(detail: workspaceOpen && hasTabs ? .workspace : .empty)
     }
 
@@ -56,8 +53,6 @@ struct AdaptiveRoot<Destination: View>: View {
     var zoom: Namespace.ID?
     /// A fixed clock for snapshots; nil follows the time of day.
     var now: Date?
-    /// What monitor mode runs on; nil for the device's own.
-    var monitor: MonitorServices?
     /// The bar under the roster and the terminal. Snapshots pass one in a fixed mode.
     var bar: PromptBarModel?
     @ViewBuilder let destination: (AppRoute) -> Destination
@@ -78,7 +73,7 @@ struct AdaptiveRoot<Destination: View>: View {
     var body: some View {
         let layout = ShellLayout.resolve(
             sizeClass: sizeClass, workspaceOpen: store.workspaceOpen,
-            hasTabs: !store.workspace.tabs.isEmpty, monitorShown: store.monitorShown
+            hasTabs: !store.workspace.tabs.isEmpty
         )
         NavigationSplitView(columnVisibility: columns, preferredCompactColumn: compactColumn) {
             NavigationStack(path: rosterPath) {
@@ -93,6 +88,10 @@ struct AdaptiveRoot<Destination: View>: View {
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
             .modifier(WorkspaceEntrance(sourceID: zoomSource, namespace: zoom))
+            // Mission control's inspector column belongs to the split view, on the detail's
+            // stack and not inside it, so the workspace's items stay this stack's bar items: in
+            // the vertical bar on an iPhone Duo, across the top on iPad (workspace-chat.md).
+            .modifier(MissionInspectorColumn(app: store))
         }
         .navigationSplitViewStyle(.balanced)
         // Presenters below decide by the room the window has (`AdaptivePresentation`).
@@ -154,13 +153,13 @@ struct AdaptiveRoot<Destination: View>: View {
 
     // MARK: Navigation state
 
-    /// The sidebar shows unless the user hid it, or the status display stepped it aside. The
-    /// app never hides it to make room.
+    /// The sidebar shows unless the user hid it. The app never hides it to make room, and
+    /// nothing else follows from hiding it.
     private var columns: Binding<NavigationSplitViewVisibility> {
         Binding {
-            store.monitorShown || store.sidebar.isHidden ? .detailOnly : .all
+            store.sidebar.isHidden ? .detailOnly : .all
         } set: { visibility in
-            guard inline, !store.monitorShown else { return }
+            guard inline else { return }
             let hidden = visibility == .detailOnly
             if store.sidebar.isHidden != hidden { store.sidebar.hidden = hidden }
         }
@@ -219,34 +218,24 @@ struct AdaptiveRoot<Destination: View>: View {
             promptBar
         }
         .background(Color.togoInk)
+        // The session's items are the detail column's own bar: across the top on iPad and
+        // iPhone, in the vertical bar on an iPhone Duo. Never hidden with the empty detail.
+        .toolbarVisibility(.visible, for: .navigationBar)
     }
 
     /// The sidebar column, and the whole compact window. The same `RosterView` at every width,
-    /// so a fold keeps its scroll, search and cursor. In compact the monitor takes its place as
-    /// a whole layer on `fade`; in regular the monitor is the detail.
+    /// so a fold keeps its scroll, search and cursor.
     private var rosterLayer: some View {
-        ZStack {
-            if store.monitorShown && !inline {
-                // motion: state change — the whole layer changed (roster ↔ monitor)
-                RosterMonitor(store: store, services: monitor, now: now)
-                    .transition(.opacity)
-            } else {
-                RosterView(store: store, terminals: terminals, zoom: zoom, wide: inline, now: now, launchTarget: true)
-                    // One live bar at a time: in regular it is the detail's; in compact, while
-                    // the terminal covers the roster, it is the cover's.
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if !inline, rosterBarShown ?? !store.workspaceOpen {
-                            // motion: continuity — the same bar the user left, simply there (a cut)
-                            promptBar
-                                .transition(.identity)
-                        }
-                    }
-                    // motion: state change — the whole layer changed (monitor ↔ roster)
-                    .transition(.opacity)
+        RosterView(store: store, terminals: terminals, zoom: zoom, wide: inline, now: now, launchTarget: true)
+            // One live bar at a time: in regular it is the detail's; in compact, while the
+            // terminal covers the roster, it is the cover's.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !inline, rosterBarShown ?? !store.workspaceOpen {
+                    // motion: continuity — the same bar the user left, simply there (a cut)
+                    promptBar
+                        .transition(.identity)
+                }
             }
-        }
-        // motion: state change — the user switched the root layer; it crossfades whole
-        .motion(.fade, value: store.monitorShown && !inline)
     }
 
     @ViewBuilder private func detailRoot(_ layout: ShellLayout) -> some View {
@@ -264,23 +253,21 @@ struct AdaptiveRoot<Destination: View>: View {
         case .stack:
             // Collapsed with no workspace open, this column is not on screen.
             Color.togoInk.ignoresSafeArea()
-        case .split(.monitor):
-            RosterMonitor(store: store, services: monitor, now: now)
-                // Done is the way back; a sidebar toggle here would show the roster twice.
-                .toolbar(removing: .sidebarToggle)
         case .split(.empty), .split(.workspace):
             RosterEmptyDetail(waiting: store.roster.waiting > 0)
                 .safeAreaInset(edge: .bottom, spacing: 0) { promptBar }
-                // With the sidebar out, its bar holds New session; the empty detail has no bar
-                // then, so nothing is offered twice and an iPhone Duo draws no blank vertical
-                // strip. With the sidebar hidden by the user, the split view's toggle and New
-                // session are here.
+                // The detail keeps its native bar: hiding it here hid it for the workspace too,
+                // which shares this stack's root, and left an iPhone Duo's vertical bar with the
+                // status only. Settings is always here, as it is in the workspace's bar, so the
+                // unfolded Duo's dock is never empty (root.md). New session is the sidebar's,
+                // so it comes first here only while the user has hidden the sidebar (each
+                // control once, P3; the prominent action leads, D13).
                 .toolbar {
                     if store.sidebar.isHidden {
                         ToolbarItem(placement: .primaryAction) { RosterNewSessionButton(store: store) }
                     }
+                    SettingsToolbarItem(store: store)
                 }
-                .toolbarVisibility(store.sidebar.isHidden ? .automatic : .hidden, for: .navigationBar)
         }
     }
 }

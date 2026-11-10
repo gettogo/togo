@@ -77,11 +77,7 @@ extension AddMachineFlow {
     static func filled(
         _ draft: MachineDraft, store: AppStore, services: any OnboardingServices, tutorial: TutorialModel?
     ) -> AddMachineFlow {
-        let flow = AddMachineFlow(
-            services: services,
-            save: { try await store.services.saveHost($0) },
-            finish: { _ in store.sheet = nil }
-        )
+        let flow = adding(store: store, services: services)
         if let tutorial { flow.onDetected = { tutorial.record($0) } }
         flow.notificationAsk = .asking(store.services)
         flow.draft = draft

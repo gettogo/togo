@@ -11,9 +11,27 @@ struct WindowRestoration: Codable, Equatable {
     /// What each tab was last called, so a tab put back while its machine is away still shows
     /// its number, name and agent rather than its id. Absent in data from older versions.
     var labels: [TabLabel]? = nil
-    /// Where the window was in the navigation tree: what was pushed, the status display and
-    /// the sidebar choice. Absent in data from older versions.
+    /// Where the window was in the navigation tree: what was pushed and the sidebar choice.
+    /// Absent in data from older versions.
     var router: Router? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case tabs, selected, secondary, workspaceOpen, labels, router
+    }
+}
+
+extension WindowRestoration {
+    /// The tabs are what matters: a label or a place in the tree that no longer decodes is
+    /// dropped rather than costing the window its tabs.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tabs = try c.decode([TabID].self, forKey: .tabs)
+        selected = try? c.decodeIfPresent(TabID.self, forKey: .selected)
+        secondary = try? c.decodeIfPresent(TabID.self, forKey: .secondary)
+        workspaceOpen = (try? c.decodeIfPresent(Bool.self, forKey: .workspaceOpen)) ?? false
+        labels = (try? c.decodeIfPresent([Lenient<TabLabel>].self, forKey: .labels))?.compactMap(\.value)
+        router = try? c.decodeIfPresent(Router.self, forKey: .router)
+    }
 }
 
 /// A tab's number, name and agent as its machine last listed them.
@@ -70,7 +88,6 @@ extension AppStore {
         recentTabs = [selected, workspace.secondary].compactMap { $0 }
         if let place = saved.router {
             path = place.path
-            monitorShown = place.monitorShown
             sidebar.hidden = place.sidebar.hidden
         }
         workspaceOpen = saved.workspaceOpen && !ids.isEmpty

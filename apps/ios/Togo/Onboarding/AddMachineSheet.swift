@@ -1,4 +1,5 @@
 import SwiftUI
+import TogoKit
 
 /// The add-machine sheet: discovery, the form, then the connection step, in one stack.
 struct AddMachineSheet: View {
@@ -71,14 +72,24 @@ struct AddMachineSheet: View {
 extension AddMachineSheet {
     /// Saves through the app's services and closes the sheet once the machine is stored.
     init(store: AppStore, services: any OnboardingServices, tutorial: TutorialModel? = nil) {
-        let flow = AddMachineFlow(
-            services: services,
-            save: { try await store.services.saveHost($0) },
-            finish: { _ in store.sheet = nil }
-        )
+        let flow = AddMachineFlow.adding(store: store, services: services)
         if let tutorial { flow.onDetected = { tutorial.record($0) } }
         flow.notificationAsk = .asking(store.services)
         self.init(flow: flow)
+    }
+}
+
+extension AddMachineFlow {
+    /// A new machine. One already in Togo, by its host key or helper, is not listed twice:
+    /// the sheet closes on the machine that was there, saying so.
+    static func adding(store: AppStore, services: any OnboardingServices) -> AddMachineFlow {
+        let flow = AddMachineFlow(
+            services: services,
+            add: { try await store.services.addHost($0) },
+            finish: { _ in store.sheet = nil }
+        )
+        flow.alreadyAdded = { store.alreadyAdded($0) }
+        return flow
     }
 }
 

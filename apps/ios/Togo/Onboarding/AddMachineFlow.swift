@@ -119,8 +119,13 @@ enum ConnectPhase: Equatable, Sendable {
     private(set) var saving = false
 
     private let services: any OnboardingServices
-    private let save: @MainActor (HostRecord) async throws -> Void
+    private let save: @MainActor (HostRecord) async throws -> HostStore.SaveOutcome
     private let finish: @MainActor (HostRecord) -> Void
+    /// Runs instead of `finish` when the machine was already in Togo under another record,
+    /// which now holds what was added. Nil finishes as usual.
+    var alreadyAdded: (@MainActor (HostRecord) -> Void)?
+    /// Set when saving merged into a machine that was already here.
+    private var mergedInto: HostRecord?
     private let id: UUID
     private var pendingTrust: CheckedContinuation<Bool, Never>?
     private var profile: HostProfile?
@@ -133,13 +138,23 @@ enum ConnectPhase: Equatable, Sendable {
     /// The saved machine, held while the notification question is on screen.
     private var savedRecord: HostRecord?
 
-    init(
+    convenience init(
         services: any OnboardingServices, id: UUID = UUID(),
         save: @escaping @MainActor (HostRecord) async throws -> Void, finish: @escaping @MainActor (HostRecord) -> Void
     ) {
+        self.init(services: services, id: id, add: { try await save($0); return .saved($0) }, finish: finish)
+    }
+
+    /// `add` says whether the machine was saved as it is or merged into the record already
+    /// here for it.
+    init(
+        services: any OnboardingServices, id: UUID = UUID(),
+        add: @escaping @MainActor (HostRecord) async throws -> HostStore.SaveOutcome,
+        finish: @escaping @MainActor (HostRecord) -> Void
+    ) {
         self.services = services
         self.id = id
-        self.save = save
+        self.save = add
         self.finish = finish
     }
 
@@ -334,9 +349,10 @@ enum ConnectPhase: Equatable, Sendable {
         if let reported = report?.routes { profile.routes = RoutePlan.refreshed(profile.routes, reported: reported) }
         // ET is offered only for a machine whose probe found etserver.
         profile.etAvailable = report?.et ?? false
-        let record = HostRecord(
+        // An edit keeps the stored date; the store keeps it whatever this says.
+        var record = HostRecord(
             id: profile.id, profile: profile, symbol: draft.symbol.rawValue,
-            helperPath: withHelper ? report?.path : nil, noHelper: !withHelper, wake: draft.wake
+            helperPath: withHelper ? report?.path : nil, noHelper: !withHelper, wake: draft.wake, addedAt: Date()
         )
         saving = true
         saveError = nil
@@ -344,7 +360,11 @@ enum ConnectPhase: Equatable, Sendable {
         do {
             // Stored before the record, so the machine's first sign-in finds it.
             try savePassword(for: profile.id)
-            try await save(record)
+            if case .merged(let kept) = try await save(record) {
+                movePassword(from: profile.id, to: kept)
+                mergedInto = kept
+                record = kept
+            }
         } catch {
             saveError = String(
                 localized: "onboard.save.failed", defaultValue: "Couldn't save \(machineName). Try again."
@@ -356,7 +376,25 @@ enum ConnectPhase: Equatable, Sendable {
             savedRecord = record
             path.append(.notifications)
         } else {
+            complete(record)
+        }
+    }
+
+    private func complete(_ record: HostRecord) {
+        if mergedInto != nil, let alreadyAdded {
+            alreadyAdded(record)
+        } else {
             finish(record)
+        }
+    }
+
+    /// The machine was already here as `kept`: a password saved for the new record moves to
+    /// it when it signs in with a password, and goes otherwise.
+    private func movePassword(from added: UUID, to kept: HostRecord) {
+        guard added != kept.id else { return }
+        try? services.setSavedPassword(nil, for: added)
+        if kept.profile.auth == .password, draft.auth == .password, draft.savePassword, !draft.password.isEmpty {
+            try? services.setSavedPassword(draft.password, for: kept.id)
         }
     }
 
@@ -366,6 +404,6 @@ enum ConnectPhase: Equatable, Sendable {
         guard let record = savedRecord else { return }
         savedRecord = nil
         if turnOn { await notificationAsk?.turnOn() }
-        finish(record)
+        complete(record)
     }
 }

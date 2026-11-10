@@ -99,8 +99,7 @@ import TogoKit
         #expect(!store.workspaceOnScreen)
         store.open(hostID: one.hostID, sessionID: one.sessionID)
         #expect(store.workspaceOnScreen)
-        // The monitor covers the open workspace, so the root presents for it.
-        store.monitorShown = true
+        store.workspaceOpen = false
         #expect(!store.workspaceOnScreen)
 
         let compact = self.store(inline: false)
@@ -112,10 +111,8 @@ import TogoKit
 
     @Test func showingASessionRowShowsIt() {
         let store = store()
-        store.monitorShown = true
         store.path = [.archive]
         store.showSession(four)
-        #expect(!store.monitorShown)
         #expect(store.path.isEmpty)
         #expect(store.workspace.selected == four)
         #expect(store.workspaceOpen)

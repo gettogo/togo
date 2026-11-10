@@ -104,6 +104,34 @@ import TogoKit
         signedIn(to: id)
     }
 
+    /// `dropped` was folded into `kept`, a record for the same machine. What this device knew
+    /// about `dropped` moves over unless `kept` has its own: the key chosen here, and that
+    /// this device signed in.
+    func merged(_ dropped: HostID, into kept: HostID) {
+        if let key = keys.removeValue(forKey: dropped) {
+            if keys[kept] == nil { keys[kept] = key }
+            saveKeys()
+        }
+        if signedInIDs.remove(dropped) != nil {
+            signedInIDs.insert(kept)
+            saveSignedIn()
+        }
+    }
+
+    /// `dropped`, folded into `kept`, signed in with a key on this device: this device goes on
+    /// signing in to the machine with it, unless it chose a key for `kept` already.
+    func keepKey(of dropped: HostRecord, for kept: HostID) {
+        guard keys[kept] == nil, case .key(let id) = dropped.profile.auth, hasKey(id) else { return }
+        keys[kept] = id
+        saveKeys()
+    }
+
+    /// Whether the record's synced sign-in is this device's own key, so this device added it.
+    func addedHere(_ record: HostRecord) -> Bool {
+        guard case .key(let named) = record.profile.auth, let own = deviceKeyID() else { return false }
+        return named == own
+    }
+
     func forget(_ id: HostID) {
         if keys.removeValue(forKey: id) != nil { saveKeys() }
         if signedInIDs.remove(id) != nil { saveSignedIn() }

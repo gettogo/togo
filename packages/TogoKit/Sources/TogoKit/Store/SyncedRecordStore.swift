@@ -105,6 +105,25 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
         write(Stamped(value: nil, updatedAt: nextStamp(for: key), deviceID: deviceID), key: key)
     }
 
+    /// Writes `value` and deletes the `deleted` records as one change: one notification here,
+    /// and one upload, so other devices receive them together.
+    public func put(_ id: String, _ value: Value, deleting deleted: [String]) {
+        prepare()
+        var changed = false
+        let key = prefix + id
+        if read(key, from: local)?.value != value {
+            store(Stamped(value: value, updatedAt: nextStamp(for: key), deviceID: deviceID), key: key)
+            changed = true
+        }
+        for other in deleted where other != id {
+            let key = prefix + other
+            guard read(key, from: local)?.value != nil else { continue }
+            store(Stamped(value: nil, updatedAt: nextStamp(for: key), deviceID: deviceID), key: key)
+            changed = true
+        }
+        if changed { notify() }
+    }
+
     /// Turning sync on pulls what other devices wrote and uploads local records.
     public func setSyncEnabled(_ on: Bool) {
         prepare()
@@ -151,9 +170,13 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
     }
 
     private func write(_ stamped: Stamped<Value>, key: String) {
+        store(stamped, key: key)
+        notify()
+    }
+
+    private func store(_ stamped: Stamped<Value>, key: String) {
         local.set(encode(stamped), forKey: key)
         markDirty(key)
-        notify()
     }
 
     private func markDirty(_ key: String) {

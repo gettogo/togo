@@ -16,7 +16,6 @@ struct SettingsStoreTests {
             syncSwitch: SyncSwitch(backend: MemoryBackend()), device: DeviceSettings(backend: deviceBackend)
         )
         var value = AppSettings()
-        value.keepScreenOn = true
         value.dictationLocale = "pt-BR"
         value.dictationEngine = .whisper
         value.whisperModel = "base.en-q5"
@@ -24,7 +23,7 @@ struct SettingsStoreTests {
         await records.flush()
 
         let stored = String(decoding: try #require(local.data(forKey: "settings.app")), as: UTF8.self)
-        for text in ["keepScreenOn", "dictation", "whisper", "pt-BR", "base.en-q5"] {
+        for text in ["dictation", "whisper", "pt-BR", "base.en-q5"] {
             #expect(!stored.contains(text))
         }
         for key in remote.allKeys() {
@@ -35,7 +34,6 @@ struct SettingsStoreTests {
 
         var other = AppSettings()
         DeviceSettings(backend: MemoryBackend()).apply(to: &other)
-        #expect(!other.keepScreenOn)
         #expect(other.dictationLocale == nil)
         #expect(other.dictationEngine == .apple)
         #expect(other.whisperModel == nil)

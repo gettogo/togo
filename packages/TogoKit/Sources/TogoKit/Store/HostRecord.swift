@@ -10,10 +10,21 @@ public struct HostRecord: Codable, Sendable, Equatable, Identifiable {
     public var noHelper: Bool
     /// Where to send a Wake-on-LAN packet, as the machine last reported it.
     public var wake: WakeTarget?
+    /// The SSH host key fingerprints the machine presented, so every device can tell a second
+    /// record for the same machine apart from a different machine with the same name.
+    public var hostKeys: [String]?
+    /// The id of the Togo helper on the machine, from pairing it for notifications.
+    public var helperHostID: String?
+    /// When the machine was added; nil on records saved before it was kept.
+    public var addedAt: Date?
+    /// Records for this same machine that were folded into this one. Each device moves what it
+    /// alone keeps for them, such as its key choice, instead of treating them as removed.
+    public var mergedIDs: [UUID]?
 
     public init(
         id: UUID, profile: HostProfile, symbol: String, helperPath: String? = nil, noHelper: Bool = false,
-        wake: WakeTarget? = nil
+        wake: WakeTarget? = nil, hostKeys: [String]? = nil, helperHostID: String? = nil, addedAt: Date? = nil,
+        mergedIDs: [UUID]? = nil
     ) {
         self.id = id
         self.profile = profile
@@ -21,6 +32,10 @@ public struct HostRecord: Codable, Sendable, Equatable, Identifiable {
         self.helperPath = helperPath
         self.noHelper = noHelper
         self.wake = wake
+        self.hostKeys = hostKeys
+        self.helperHostID = helperHostID
+        self.addedAt = addedAt
+        self.mergedIDs = mergedIDs
     }
 }
 
