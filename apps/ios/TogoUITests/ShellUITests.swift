@@ -18,7 +18,8 @@ import XCTest
         return app
     }
 
-    /// New session is a button in the roster's bar on every size.
+    /// New session asks for the machine: the roster's bar button in a compact window, ⌘T beside
+    /// the sidebar.
     func testMenuOpensNewSession() {
         let app = launchTogo()
         app.pickFromRosterMenu("New session")
@@ -26,16 +27,30 @@ import XCTest
     }
 
     /// New session, Settings and the filter show once each; there is no status display.
+    /// Beside the sidebar the roster's bar has no New session: each machine's "+" starts one.
     func testEachControlShowsOnce() {
         let app = launchTogo()
         XCTAssertTrue(app.buttons["roster.settings"].waitForExistence(timeout: 10))
         assertTappable(app.rosterMenu)
-        for id in ["roster.newSession", "roster.settings", "roster.filter"] {
+        let wide = app.windows.firstMatch.frame.width >= 700
+        XCTAssertEqual(app.buttons.matching(identifier: "roster.newSession").count, wide ? 0 : 1, "New session is not where it belongs")
+        for id in ["roster.settings", "roster.filter"] {
             XCTAssertEqual(app.buttons.matching(identifier: id).count, 1, "\(id) is not there once")
         }
+        XCTAssertTrue(app.buttons["New Session on Studio"].exists, "Studio's heading has no +")
         XCTAssertFalse(app.buttons["Debug tools"].exists, "Debug lives in Settings")
         XCTAssertFalse(app.buttons["Status display"].exists, "The status display is gone")
         XCTAssertFalse(app.buttons["roster.statusDisplay"].exists, "The status display is gone")
+    }
+
+    /// A machine's "+" opens New session on that machine: the sheet skips the machine step.
+    func testMachinePlusStartsOnThatMachine() {
+        let app = launchTogo()
+        let plus = app.buttons["New Session on Studio"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 10), "Studio's heading has no +")
+        plus.tap()
+        XCTAssertTrue(app.navigationBars["Folder"].waitForExistence(timeout: 5), "The sheet did not open on Studio's folders")
+        XCTAssertFalse(app.navigationBars["Machine"].exists, "The sheet asked for the machine again")
     }
 
     /// Beside the sidebar Settings is the detail column's, with no session open and with one:

@@ -36,6 +36,10 @@ struct RosterView: View {
     /// Where that mission control handed off to, acted on once its sheet has gone.
     @State private var missionExit: (tab: TabID, exit: RosterMissionExit)?
     @FocusState private var listFocused: Bool
+    /// The sidebar header's own search field, on regular width.
+    @FocusState private var fieldFocused: Bool
+    /// The detail column's dock carries the sidebar toggle (root.md), so the header does not.
+    @Environment(\.sidebarToggleInDock) private var toggleInDock
 
     /// One body at every width: the bar's items and the search field's place change with
     /// `wide`, the view tree does not, so a fold or resize keeps the list's scroll, search and
@@ -43,11 +47,19 @@ struct RosterView: View {
     /// an iPhone Duo stands them on their side beside its status bar.
     var body: some View {
         withSearch(screen.toolbar { toolbar })
+            // Regular width: the sidebar column has no bar items left (the toggle is the dock's
+            // or the header's, New session is each machine's "+"), and iOS set any search
+            // placement in a row of its own under an empty band. So the column's bar goes and
+            // its header is one pinned row with the search field, level with the detail's tab
+            // rail; a bar, so the list scrolls under it behind the system's scroll edge effect.
+            // Modifier values, not branches, so a fold keeps the list's scroll (P11). The
+            // stack's title stays for compact, where the system Back reads "Sessions".
+
     }
 
-    /// Nothing to search before there is a machine. A column searches in a field that stays
-    /// at the top of the sidebar (a drawer that hides until pulled would leave no visible
-    /// search, roster.md); a phone at the foot, as iOS puts search there.
+    /// Nothing to search before there is a machine. A phone searches at the foot, as iOS puts
+    /// search there. On regular width the system field would sit in the hidden bar's drawer and
+    /// never show; the header's own field searches the same `query` instead.
     @ViewBuilder private func withSearch(_ view: some View) -> some View {
         if hasNoMachines {
             view
@@ -115,8 +127,11 @@ struct RosterView: View {
                 // coming and going never lands in the same update as a line leaving a machine,
                 // and no empty section adds a gap above the first machine.
                 Section {
+                    // Its 44-point target is laid out in 28, so the first machine follows close.
                     RosterFilterHeader(store: store, roster: roster, launchTarget: launchTarget)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, -8)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 0, trailing: 20))
                         .listRowBackground(Color.togoInk)
                         .listRowSeparator(.hidden)
                     if roster.deviceOffline {
@@ -139,7 +154,8 @@ struct RosterView: View {
                 .listSectionSeparator(.hidden)
                 ForEach(roster.groups) { group in
                     RosterSection(
-                        group: group, etAvailable: store.etAvailable(group.id), now: now, zoom: zoom,
+                        group: group, first: group.id == roster.groups.first?.id,
+                        etAvailable: store.etAvailable(group.id), now: now, zoom: zoom,
                         selected: selected, cursor: keyboardNavigates && listFocused ? keys.cursor : nil, draggable: linesDrag,
                         restoring: store.restoring, wakeNote: shown.wakeNotes[group.id], perform: perform
                     )
@@ -156,7 +172,12 @@ struct RosterView: View {
                 .listSectionSeparator(.hidden)
             }
             .listStyle(.plain)
-            .listSectionSpacing(.compact)
+            // The gap under the filter row was the list's: its 44-point minimum row height
+            // padding the short filter and heading rows, and the space it adds between
+            // sections. Both are zero; each row sets its own height and the headings their
+            // own space above (8 under the filter, 24 between machines).
+            .listSectionSpacing(0)
+            .environment(\.defaultMinListRowHeight, 0)
             .scrollDismissesKeyboard(.immediately)
             .overlay {
                 if store.listNarrowed && roster.lines.isEmpty {
@@ -211,9 +232,9 @@ struct RosterView: View {
     /// Each control once per layout (roster.md, `RosterBar`). A phone, iPhone Duo folded and a
     /// narrow window: New session then Settings at the trailing end, search at the foot;
     /// folded, the Duo stands them in its vertical bar in that order, search last. The sidebar
-    /// column (iPad, iPhone Duo open): New session beside the split view's own toggle, search
-    /// in the field at its top; Settings is the detail column's (root.md), and there is no
-    /// bottom bar. The filter is the list's first row everywhere, so no bar carries it.
+    /// column (iPad, iPhone Duo open): no bar items, only the search field in the bar; New
+    /// session is each machine's "+", Settings is the detail column's (root.md), and there is
+    /// no bottom bar. The filter is the list's first row everywhere, so no bar carries it.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         let bar = RosterBar.layout(wide: wide, hasMachines: !hasNoMachines)
         // Each its own item, so the prominent New session keeps its own glass.
@@ -227,6 +248,15 @@ struct RosterView: View {
         }
         if bar.bottom.contains(.search) {
             DefaultToolbarItem(kind: .search, placement: .bottomBar)
+        }
+        // Regular width: the header is the column's own bar, so the system places it, with the
+        // safe area and bar height the detail column's tab rail gets, on every device.
+        if wide, !hasNoMachines || !toggleInDock {
+            ToolbarItem(placement: .principal) {
+                RosterSidebarHeader(store: store, search: !hasNoMachines, toggle: !toggleInDock, focused: $fieldFocused)
+                    .frame(maxWidth: .infinity)
+            }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 
@@ -313,7 +343,9 @@ struct RosterView: View {
     private func takeSearchRequest() {
         guard store.sidebar.searchPending else { return }
         store.sidebar.searchPending = false
-        Task { @MainActor in searching = true }
+        Task { @MainActor in
+            if wide { fieldFocused = true } else { searching = true }
+        }
     }
 
     private func returnToTerminal() -> KeyPress.Result {

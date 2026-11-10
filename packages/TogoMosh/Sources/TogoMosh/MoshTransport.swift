@@ -15,6 +15,7 @@ public actor MoshTransport: ByteTransport {
     private let endpoint: MoshEndpoint
     private let predict: String
     private let firstReplyTimeout: Duration
+    private let stopServer: (@Sendable () async -> Void)?
     private var size: (cols: Int, rows: Int)
     private var client: MoshClient?
     private var firstReply: CheckedContinuation<FirstReply, Never>?
@@ -33,6 +34,9 @@ public actor MoshTransport: ByteTransport {
     private static let silenceText = Data("mosh: Last contact ".utf8)
     private static let barBackground = Data(";44m".utf8)
     private static let bannerPrefix = Data("mosh: ".utf8)
+    /// mosh's notification bar is bold white on blue; every repaint of it, even a diff of a
+    /// few characters, sets this rendition first.
+    private static let barRendition = Data("37;44m".utf8)
     /// The startup frame ends by switching off every mouse mode, the last being UTF-8 mouse.
     private static let startupFrameEnd = Data("\u{1B}[?1005l".utf8)
     /// While roaming, mosh repaints the banner's seconds counter every second; a pause
@@ -41,11 +45,13 @@ public actor MoshTransport: ByteTransport {
     private static let bannerTickBytes = 32
 
     public init(
-        endpoint: MoshEndpoint, cols: Int, rows: Int, predict: String = "adaptive", firstReplyTimeout: Duration = .seconds(5)
+        endpoint: MoshEndpoint, cols: Int, rows: Int, predict: String = "adaptive", firstReplyTimeout: Duration = .seconds(5),
+        stopServer: (@Sendable () async -> Void)? = nil
     ) {
         self.endpoint = endpoint
         self.predict = predict
         self.firstReplyTimeout = firstReplyTimeout
+        self.stopServer = stopServer
         size = (cols, rows)
         (state, stateSink) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
@@ -82,6 +88,9 @@ public actor MoshTransport: ByteTransport {
         timer.cancel()
         guard reply == .output, phase == .connecting else {
             await shutDown(reason: .failed("no reply from mosh-server"))
+            // The server this start launched never heard from the client; stop it now
+            // instead of leaving it to wait out its network timeout.
+            await stopServer?()
             throw MoshConnectError.noUDPReply(address: endpoint.host)
         }
         phase = .live
@@ -131,6 +140,18 @@ public actor MoshTransport: ByteTransport {
         return false
     }
 
+    /// True for a chunk that repaints mosh's notification bar, such as its "Nothing received
+    /// from server" text changing to a send error or its seconds counter ticking. Such a
+    /// diff can leave out the "mosh: " prefix, so it must not pass for the server's output.
+    static func paintsNotificationBar(_ chunk: Data) -> Bool {
+        var searchStart = chunk.startIndex
+        while let match = chunk.range(of: barRendition, in: searchStart..<chunk.endIndex) {
+            if endsWithBarRendition(chunk[chunk.startIndex..<match.upperBound]) { return true }
+            searchStart = match.upperBound
+        }
+        return false
+    }
+
     /// Whether `prefix` ends with `ESC [ <digits and ;> 44 m`.
     private static func endsWithBarRendition(_ prefix: Data) -> Bool {
         guard prefix.count >= 4, prefix.suffix(barBackground.count).elementsEqual(barBackground) else { return false }
@@ -150,7 +171,12 @@ public actor MoshTransport: ByteTransport {
         startupOutput += chunk
         guard let end = startupOutput.range(of: Self.startupFrameEnd) else { return false }
         sawStartupFrame = true
-        return end.upperBound < startupOutput.endIndex && chunk.range(of: Self.bannerPrefix) == nil
+        return end.upperBound < startupOutput.endIndex && Self.isServerPaint(chunk)
+    }
+
+    /// Output after the startup frame that is neither a banner nor a repaint of the bar.
+    static func isServerPaint(_ chunk: Data) -> Bool {
+        chunk.range(of: bannerPrefix) == nil && !paintsNotificationBar(chunk)
     }
 
     private func setRoaming(_ value: Bool) {

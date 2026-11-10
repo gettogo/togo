@@ -22,14 +22,16 @@ struct RosterBar: Equatable, Sendable {
     static func layout(wide: Bool, hasMachines: Bool) -> RosterBar {
         switch (wide, hasMachines) {
         case (true, true):
-            // The split view's own toggle sits beside New session. Settings is in the detail
-            // column's bar (root.md), so the sidebar has no bottom bar.
-            RosterBar(topTrailing: [.newSession])
+            // Nothing in the sidebar's bar but its search field: New session is each machine's
+            // "+" in the list (and ⌘T), Settings and the sidebar toggle are the detail column's
+            // (root.md), so the sidebar has no bottom bar either.
+            RosterBar()
         case (true, false):
             RosterBar()
         case (false, true):
-            // A phone: New session, the prominent action, then Settings, search at the foot as
-            // iOS puts it. Folded, a Duo stands them in its vertical bar in that order (D13).
+            // A phone: New session, the prominent action that picks the machine in the sheet,
+            // then Settings, search at the foot as iOS puts it. Each machine's "+" in the list
+            // starts on that machine. Folded, a Duo stands them in its vertical bar (D13).
             RosterBar(topTrailing: [.newSession, .settings], bottom: [.search])
         case (false, false):
             RosterBar(topTrailing: [.settings])
@@ -115,6 +117,8 @@ struct RosterFilterHeader: View {
             .pickerStyle(.inline)
         } label: {
             RosterHeadline(roster: roster, filter: store.filter, launchTarget: launchTarget)
+                .frame(minHeight: 44)
+                .contentShape(.rect)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -134,6 +138,8 @@ struct RosterListEndRow: View {
         case .addMachine:
             Button { store.showSheet(.addMachine) } label: {
                 Label(RosterCopy.addMachine, systemImage: "plus.circle")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(.rect)
             }
             .accessibilityIdentifier("roster.addMachine")
         case .archive(let count):
@@ -149,9 +155,90 @@ struct RosterListEndRow: View {
                 } icon: {
                     Image(systemName: "archivebox")
                 }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(.rect)
             }
             .accessibilityValue(Text(verbatim: "\(count)"))
             .accessibilityIdentifier("roster.archive")
+        }
+    }
+}
+
+/// The sidebar column's header on regular width, in place of its navigation bar (roster.md):
+/// the search field, pinned, its 44-point row level with the detail column's tab rail. Where
+/// the split view's toggle would have stood in that bar (a horizontal detail bar: iPad, the
+/// upright Duo), "Hide Sidebar" leads the row; beside a vertical bar the dock has it.
+struct RosterSidebarHeader: View {
+    @Bindable var store: AppStore
+    var search: Bool
+    var toggle: Bool
+    var focused: FocusState<Bool>.Binding
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if toggle {
+                Button(AppCommandCopy.hideSidebar, systemImage: "sidebar.leading") {
+                    withAnimation { store.toggleSidebar() }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityIdentifier("sidebar.hide")
+            }
+            if search {
+                RosterSearchField(query: $store.query, focused: focused)
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+/// A search field drawn as the system's: magnifier, "Search", a clear button once there is
+/// text, on the system's search fill. The same `query` the phone's `.searchable` binds, so the
+/// list narrows the same way. ⌘K focuses it (RosterView); Esc clears it, then leaves it.
+struct RosterSearchField: View {
+    @Binding var query: String
+    var focused: FocusState<Bool>.Binding
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField(RosterCopy.searchPrompt, text: $query)
+                .focused(focused)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .accessibilityLabel(RosterCopy.searchPrompt)
+                .accessibilityAddTraits(.isSearchField)
+                .accessibilityIdentifier("roster.search")
+            if !query.isEmpty {
+                Button(RosterCopy.clearSearch, systemImage: "xmark.circle.fill") { query = "" }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 28, minHeight: 44)
+                    .contentShape(.rect)
+            }
+        }
+        .font(.body)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 36)
+        .background(.fill.tertiary, in: .capsule)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(.rect)
+        .onTapGesture { focused.wrappedValue = true }
+        .onKeyPress(.escape) {
+            if query.isEmpty {
+                focused.wrappedValue = false
+            } else {
+                query = ""
+            }
+            return .handled
         }
     }
 }

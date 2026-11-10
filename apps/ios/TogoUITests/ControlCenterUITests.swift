@@ -29,8 +29,14 @@ extension XCUIApplication {
     /// Taps a roster control by its title or identifier. New session and Settings are bar
     /// buttons; Add machine and Archive are rows at the end of the list, so the
     /// list is scrolled to them when they are not on screen. There is no "more" menu.
+    /// Beside the sidebar the roster's bar has no New session (each machine has its "+"), so
+    /// New session there is ⌘T, which, like the phone's bar button, asks for the machine.
     func pickFromRosterMenu(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(buttons["roster.settings"].waitForExistence(timeout: 10), "The roster never loaded", file: file, line: line)
+        if label == "New session", !buttons["roster.newSession"].exists {
+            typeKey("t", modifierFlags: .command)
+            return
+        }
         let direct = buttons.matching(NSPredicate(format: "label == %@ OR identifier == %@", label, label)).firstMatch
         var swipes = 0
         while !(direct.exists && direct.isHittable), swipes < 6 {
@@ -221,7 +227,7 @@ extension XCTestCase {
 
         // The form names the machine from its Bonjour name without the owner.
         XCTAssertTrue(app.staticTexts["MacBook Pro"].waitForExistence(timeout: 5), "The new machine has no section")
-        XCTAssertTrue(app.buttons["machine.newSession"].exists, "The new machine offers no new session")
+        XCTAssertTrue(app.buttons["New Session on MacBook Pro"].exists, "The new machine's heading has no +")
     }
 
     func testSettingsPassesTheAudit() {

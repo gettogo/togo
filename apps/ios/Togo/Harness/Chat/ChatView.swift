@@ -39,13 +39,14 @@ struct ChatView: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 // "Earlier" is a navigation affordance at the top: it is simply there or not.
                 if showsEarlierButton {
-                    earlier
+                    earlier.chatColumn()
                 }
                 let gaps = store.gaps
                 // Rows arriving while the chat is open land in the store's `resize`
                 // transaction; rows on first render, from Earlier or by scrolling land at once.
                 ForEach(rows) { row in
                     gapped(row, gap: gaps[row.id])
+                        .chatColumn()
                         .id(row.id)
                         .modifier(NeedsVisibility(id: row.isNeeds ? row.id : nil, scroll: scroll))
                         .accessibilityRotorEntry(id: row.id, in: rotorSpace)
@@ -56,6 +57,7 @@ struct ChatView: View {
                 // so waiting and working morph in place. Stop lives in the composer.
                 if let live {
                     LiveLine(state: live)
+                        .chatColumn()
                         .id("chat.working")
                         .accessibilityIdentifier("chat.working")
                         // motion: continuity — the line is simply there when a turn starts (the spinner starting is the signal) and leaves as the work line above turns into "Worked … ✓".
@@ -68,6 +70,7 @@ struct ChatView: View {
                         onCancel: { store.cancelQueued(prompt.id) },
                         onRetry: { store.retryQueued(prompt.id) }
                     )
+                    .chatColumn()
                     // motion: cause → effect — the sent prompt lands in the send's own transaction as the draft clears; it only fades, nothing flies.
                     .transition(Motion.arrive(reduce: reduceMotion))
                 }
@@ -75,6 +78,7 @@ struct ChatView: View {
                 // dismissed or expired, however the sheet that asked went.
                 ForEach(LinkCenter.shared.requests.pending(for: TabID(hostID: store.subject.hostID, sessionID: store.subject.sessionID))) { open in
                     PendingOpenBanner(open: open)
+                        .chatColumn()
                         .id("chat.open." + open.id.uuidString)
                         // motion: state change — the banner fades in at the foot and fades out once used; nothing moves.
                         .transition(Motion.arrive(reduce: reduceMotion))
@@ -83,18 +87,14 @@ struct ChatView: View {
             // The scroll position follows the row at the bottom as the reader scrolls, so a
             // rebuilt chat can return to it (`ChatScrollModel.restoreTarget`).
             .scrollTargetLayout()
-            // The column owns its width and its edges: exactly the text width, its overflow
-            // trailing. One row that measured wider than it was offered (after a presentation,
-            // a code well, a long token) once widened the lazy stack, and the centring frames
-            // split the excess, pulling every row's leading edge to the pane's edge. Now
-            // replies, work lines and notices start `inset` in and the prompt bubble ends
-            // `inset` in, on every layout.
-            .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in ChatLayout.textWidth(in: width) }
+            // No horizontal padding here: each row spans the scroll view and keeps the reading
+            // column inside it (`chatColumn()`), so replies, work lines, notices and cards start
+            // `textLeading` in and the prompt bubble ends as far in, whatever the scroll anchor.
             .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
         }
-        .defaultScrollAnchor(.bottom)
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        .defaultScrollAnchor(ChatScroll.foot)
+        .defaultScrollAnchor(ChatScroll.foot, for: .sizeChanges)
         .scrollDismissesKeyboard(.interactively)
         // While the composer's / or @ menu is up, a tap on the conversation puts the keyboard
         // away, and the menu goes with it: a way out that needs no aim.
@@ -479,21 +479,5 @@ private struct NeedsVisibility: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-/// The chat's reading column, shared by everything that sits in it or under it (the composer,
-/// a helper's thread, a background terminal), so on a wide window they line up.
-enum ChatLayout {
-    /// The column's widest, centred in wider panes.
-    static let columnWidth: CGFloat = 720
-    /// The column's own side padding; text starts this far inside it.
-    static let inset: CGFloat = 16
-    /// The composer's widest: the column's text width, so the field starts where replies do.
-    static let composerWidth: CGFloat = columnWidth - 2 * inset
-
-    /// The text's width in a scroll view `width` wide: the column, less its padding.
-    static func textWidth(in width: CGFloat) -> CGFloat {
-        max(0, min(width, columnWidth) - 2 * inset)
     }
 }

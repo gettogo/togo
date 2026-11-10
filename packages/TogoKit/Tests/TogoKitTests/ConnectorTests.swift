@@ -90,6 +90,29 @@ struct ConnectorTests {
         #expect(attachment.notes == [FallbackNote(kind: .mosh, reason: "Mosh got no reply from h; the network may block UDP")])
     }
 
+    @Test func linkLocalOnlyReachFallsBackToSSHQuietly() async throws {
+        let calls = Calls()
+        let connector = Connector(factories: [
+            Self.factory(.mosh, calls: calls, makeError: TransportAddressError.linkLocalOnly(host: "h")),
+            Self.factory(.ssh, calls: calls),
+        ])
+        let attachment = try await connector.attach(Self.request(Self.profile()))
+        #expect(attachment.kind == .ssh)
+        #expect(attachment.notes == [FallbackNote(kind: .mosh, reason: "Mosh can't use h's link-local IPv6 address")])
+    }
+
+    @Test func explicitKindOnALinkLocalOnlyReachUsesSSHWithANote() async throws {
+        let calls = Calls()
+        let connector = Connector(factories: [
+            Self.factory(.et, calls: calls, makeError: TransportAddressError.linkLocalOnly(host: "h")),
+            Self.factory(.ssh, calls: calls),
+        ])
+        let attachment = try await connector.attach(Self.request(Self.profile(transport: .et, etAvailable: true)))
+        #expect(attachment.kind == .ssh)
+        #expect(attachment.notes == [FallbackNote(kind: .et, reason: "ET can't use h's link-local IPv6 address")])
+        #expect(calls.all == [.et, .ssh])
+    }
+
     @Test func failedConnectClosesTransport() async throws {
         let failing = FakeTransport(connectError: MoshConnectError.noUDPReply(address: "a"))
         let connector = Connector(factories: [

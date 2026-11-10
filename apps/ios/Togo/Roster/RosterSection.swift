@@ -6,6 +6,8 @@ import TogoKit
 struct RosterSection: View {
     @Environment(\.colorSchemeContrast) private var contrast
     let group: RosterModel.Group
+    /// The first machine: its heading sits close under the filter row.
+    var first = false
     var etAvailable = false
     let now: Date
     var zoom: Namespace.ID?
@@ -48,17 +50,26 @@ struct RosterSection: View {
         }
     }
 
+    /// The heading, then the machine's own "+" at the trailing edge, on every layout and for a
+    /// machine with no sessions too (roster.md). The "+" stays outside the heading's combined
+    /// accessibility element, so VoiceOver reaches it as a button of its own.
     private var headingRow: some View {
-        Group {
-            if case .offline = machine.reachability {
-                heading.tutorialTip(.offline)
-            } else {
-                heading
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Group {
+                if case .offline = machine.reachability {
+                    heading.tutorialTip(.offline)
+                } else {
+                    heading
+                }
             }
+            MachineNewSessionButton(
+                machine: machine.name, reachable: machine.reachability == .online,
+                reason: caption
+            ) { perform(.newSession(machine.id)) }
         }
         .contextMenu { MachineMenuItems(machine: machine, perform: perform) }
         .id(SessionRotors.Target.machine(machine.id))
-        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 4, trailing: 20))
+        .listRowInsets(EdgeInsets(top: first ? 8 : 24, leading: 20, bottom: 4, trailing: 20))
         .listRowBackground(Color.togoInk)
         .listRowSeparator(.hidden)
     }
@@ -66,12 +77,13 @@ struct RosterSection: View {
     private var heading: some View {
         RosterMachineHeading(
             name: machine.name, count: group.count,
-            caption: AwakeCopy.caption(
-                reach: Self.caption(machine.reachability, helper: machine.helper, lastSeen: machine.lastSeen, now: now),
-                awake: machine.awake
-            ),
+            caption: AwakeCopy.caption(reach: caption, awake: machine.awake),
             onWake: WakeCopy.showsButton(for: machine, enabled: wakeEnabled) ? { perform(.wake(machine.id)) } : nil
         )
+    }
+
+    private var caption: String? {
+        Self.caption(machine.reachability, helper: machine.helper, lastSeen: machine.lastSeen, now: now)
     }
 
     /// The words after a machine's name unless it is online with the helper.
@@ -165,18 +177,6 @@ struct RosterSection: View {
                     MachineMessage(ControlCenterCopy.helperOutdated(found), action: ControlCenterCopy.update) {
                         perform(.installHelper(machine.id))
                     }
-                }
-                if machine.sessions.isEmpty && machine.restorable.isEmpty {
-                    Button { perform(.newSession(machine.id)) } label: {
-                        Label(RosterCopy.newSession, systemImage: "plus")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.togoSnow)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(Color.togoInk)
-                    .accessibilityIdentifier("machine.newSession")
                 }
             }
         }
@@ -353,6 +353,34 @@ struct MachineHeading: View {
     }
 }
 
+/// A machine's "+": New session with the machine already chosen, so the sheet opens on its
+/// folders. Small and quiet beside the heading; its hit area is the full 44 points, laid out in
+/// less so the heading row keeps its height. Disabled while Togo cannot reach the machine,
+/// with the reason in its hint.
+struct MachineNewSessionButton: View {
+    let machine: String
+    let reachable: Bool
+    /// The heading's caption ("Offline, seen 5 min ago"), said as the reason when disabled.
+    var reason: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(SidebarCopy.newSessionOn(machine), systemImage: "plus", action: action)
+            .labelStyle(.iconOnly)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(reachable ? Color.togoSnow : Color.togoMute)
+            .buttonStyle(.borderless)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(.rect)
+            .hoverEffect(.highlight)
+            .padding(.vertical, -12)
+            .padding(.trailing, -12)
+            .disabled(!reachable)
+            .accessibilityHint(reachable ? "" : SidebarCopy.newSessionUnavailable(machine, reason: reason))
+            .accessibilityIdentifier("machine.newSession")
+    }
+}
+
 /// What a machine's heading offers on a long press, whatever state the machine is in.
 struct MachineMenuItems: View {
     let machine: MachineSection
@@ -369,6 +397,17 @@ struct MachineMenuItems: View {
 }
 
 enum SidebarCopy {
+    static func newSessionOn(_ machine: String) -> String {
+        String(localized: "sidebar.machine.newSessionOn", defaultValue: "New Session on \(machine)")
+    }
+
+    static func newSessionUnavailable(_ machine: String, reason: String?) -> String {
+        if let reason {
+            return String(localized: "sidebar.machine.newSessionUnavailable.reason", defaultValue: "\(machine) can't be reached: \(reason).")
+        }
+        return String(localized: "sidebar.machine.newSessionUnavailable", defaultValue: "Togo can't reach \(machine) right now.")
+    }
+
     static let newSessionHere = String(localized: "sidebar.machine.newSession", defaultValue: "New session here")
     static let installHelper = String(localized: "sidebar.machine.installHelper", defaultValue: "Install or update helper")
     static let signInAgain = String(localized: "sidebar.machine.signIn", defaultValue: "Sign in again")

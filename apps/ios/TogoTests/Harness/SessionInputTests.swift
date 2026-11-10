@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 import TogoKit
 @testable import Togo
@@ -73,5 +74,24 @@ import TogoKit
         #expect(ChatLayout.textWidth(in: 402) == 402 - 2 * ChatLayout.inset)
         #expect(ChatLayout.textWidth(in: 1180) == ChatLayout.composerWidth)
         #expect(ChatLayout.textWidth(in: 20) == 0)
+    }
+
+    /// Replies, work lines, notices and cards start as far in as the prompt bubble ends, on a
+    /// phone (`inset`), a Duo folded or on one page, and an iPad (the column centred).
+    @Test func theChatTextHasOneMirroredInset() {
+        for width: CGFloat in [320, 375, 402, 440, 540, 744, 820, 1024, 1366] {
+            let leading = ChatLayout.textLeading(in: width)
+            #expect(leading >= ChatLayout.inset)
+            #expect(leading + ChatLayout.textWidth(in: width) + leading == width)
+            if width <= ChatLayout.columnWidth { #expect(leading == ChatLayout.inset) }
+        }
+    }
+
+    /// The chat's scroll anchor keeps no horizontal pull: at x 0 over rows as wide as the
+    /// scroll view, no scroll, rest at the foot or size change offsets the column sideways.
+    /// (`.bottom`, x 0.5, left the resting chat 16 pt to the left, text flush with the edge.)
+    @Test func theChatScrollAnchorIsTheLeadingFoot() {
+        #expect(ChatScroll.foot.x == 0)
+        #expect(ChatScroll.foot.y == 1)
     }
 }

@@ -5,11 +5,15 @@ public struct MoshEndpoint: Sendable, Equatable, CustomStringConvertible {
     public var host: String
     public var port: Int
     public var key: String
+    /// The detached server's process id, when it reported one, so a start that never
+    /// reached the client can be stopped instead of waiting out its timeout.
+    public var serverPID: Int32?
 
-    public init(host: String, port: Int, key: String) {
+    public init(host: String, port: Int, key: String, serverPID: Int32? = nil) {
         self.host = host
         self.port = port
         self.key = key
+        self.serverPID = serverPID
     }
 
     public var description: String { "MoshEndpoint(\(host):\(port), key: <redacted>)" }
@@ -50,10 +54,15 @@ public enum MoshBootstrap {
     /// under fish (which unescapes `\\` and `\'` inside single quotes) and csh (which
     /// rejects newlines inside quotes). Backslashes and newlines inside argv are
     /// rebuilt on the machine from shell variables instead.
-    public static func command(argv: [String], serverPath: String?, ports: PortRange?) -> String {
+    public static func command(argv: [String], serverPath: String?, ports: PortRange?, bind: MoshBind = .sshAddress) -> String {
         let candidates = serverPath.map { [quoteBackslashFree($0)] }
             ?? searchPath.map(quoteBackslashFree) + [#""$HOME/.nix-profile/bin/mosh-server""#]
-        var arguments = ["new", "-s", "-c", "256", "-l", "LANG=en_US.UTF-8"]
+        var arguments = ["new"]
+        switch bind {
+        case .sshAddress: arguments.append("-s")
+        case .address(let address): arguments += ["-i", address]
+        }
+        arguments += ["-c", "256", "-l", "LANG=en_US.UTF-8"]
         if let ports { arguments += ["-p", "\(ports.lower):\(ports.upper)"] }
         let joined = argv.joined()
         var steps = ["MOSH_SERVER_NETWORK_TMOUT=3600", "export MOSH_SERVER_NETWORK_TMOUT"]
@@ -81,9 +90,25 @@ public enum MoshBootstrap {
             let key = String(match.2)
             // A mosh key is 16 random bytes in unpadded base64.
             guard Data(base64Encoded: key + "==")?.count == 16 else { throw MoshBootstrapError.malformedKey }
-            return MoshEndpoint(host: host, port: port, key: key)
+            return MoshEndpoint(host: host, port: port, key: key, serverPID: serverPID(stderr))
         }
         throw MoshBootstrapError.noConnectLine(lastError)
+    }
+
+    /// mosh-server's parent prints `[mosh-server detached, pid = N]` before it exits.
+    static func serverPID(_ stderr: Data) -> Int32? {
+        for line in lines(stderr) {
+            guard let match = line.firstMatch(of: /\[mosh-server detached, pid = (\d+)\]/),
+                  let pid = Int32(match.1), pid > 1 else { continue }
+            return pid
+        }
+        return nil
+    }
+
+    /// Stops the server a failed start left behind. It checks the process is still a
+    /// mosh-server first, so a recycled pid is never signalled.
+    public static func stopCommand(pid: Int32) -> String {
+        shellCommand("case \"$(ps -p \(pid) -o comm= 2>/dev/null)\" in *mosh-server*) kill \(pid) ;; esac; exit 0")
     }
 
     private static func lines(_ data: Data) -> [String] {

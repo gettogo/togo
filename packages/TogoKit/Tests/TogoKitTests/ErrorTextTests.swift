@@ -17,6 +17,7 @@ struct ErrorTextTests {
         MoshBootstrapError.noConnectLine(""),
         MoshBootstrapError.malformedKey,
         MoshConnectError.noUDPReply(address: "100.64.0.5"),
+        TransportAddressError.linkLocalOnly(host: "mbp.local"),
         HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "not_found")),
         HelperError.rpc(RPCErrorObject(code: RPCErrorCode.tmuxUnavailable, message: "tmux_unavailable")),
         HelperError.rpc(RPCErrorObject(code: -1, message: "weird_thing")),

@@ -30,6 +30,7 @@ public actor ETTransport: ByteTransport, CustomStringConvertible, CustomDebugStr
     private let session: ETTerminalSession
     private let stateContinuation: AsyncStream<TransportState>.Continuation
     private let startInput: Data?
+    private let stopServer: (@Sendable () async -> Void)?
     private var cols: Int
     private var rows: Int
     private var pump: Task<Void, Never>?
@@ -37,22 +38,29 @@ public actor ETTransport: ByteTransport, CustomStringConvertible, CustomDebugStr
     private var closed = false
 
     public init(session: ETTerminalSession, cols: Int, rows: Int) {
-        self.init(session: session, startInput: nil, label: "ETTransport", cols: cols, rows: rows)
+        self.init(session: session, startInput: nil, label: "ETTransport", cols: cols, rows: rows, stopServer: nil)
     }
 
-    public init(endpoint: ETEndpoint, argv: [String], cols: Int, rows: Int) throws {
+    /// `stopServer` runs when `connect` fails, to stop the etterminal this start launched.
+    public init(
+        endpoint: ETEndpoint, argv: [String], cols: Int, rows: Int, stopServer: (@Sendable () async -> Void)? = nil
+    ) throws {
         let session = try ETTerminalSession(
             host: endpoint.host, port: endpoint.port, clientID: endpoint.clientID, passkey: endpoint.passkey
         )
         self.init(
             session: session, startInput: ETFactory.attachInput(argv),
-            label: "ETTransport(\(endpoint))", cols: cols, rows: rows
+            label: "ETTransport(\(endpoint))", cols: cols, rows: rows, stopServer: stopServer
         )
     }
 
-    private init(session: ETTerminalSession, startInput: Data?, label: String, cols: Int, rows: Int) {
+    private init(
+        session: ETTerminalSession, startInput: Data?, label: String, cols: Int, rows: Int,
+        stopServer: (@Sendable () async -> Void)?
+    ) {
         self.session = session
         self.startInput = startInput
+        self.stopServer = stopServer
         self.description = label
         self.cols = cols
         self.rows = rows
@@ -68,6 +76,7 @@ public actor ETTransport: ByteTransport, CustomStringConvertible, CustomDebugStr
             if let startInput { try await session.send(startInput) }
         } catch {
             await finish(.failed(String(describing: error)))
+            await stopServer?()
             throw error
         }
         let output = session.output

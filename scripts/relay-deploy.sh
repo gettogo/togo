@@ -54,7 +54,7 @@ npx tsc --noEmit
 out="$(npx wrangler deploy ${env_args[@]+"${env_args[@]}"} 2>&1)" || { printf '%s\n' "$out" >&2; exit 1; }
 printf '%s\n' "$out"
 if [ "$env_name" = production ]; then
-  url="https://relay.togo.app"
+  url="https://relay.togoapp.dev"
 else
   url="$(printf '%s\n' "$out" | grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' | head -n 1)"
 fi

@@ -41,6 +41,8 @@ struct WorkspaceView: View {
     @State private var review: ReviewHeaderModel
     /// Mission control's bar item, its long-press Compact and the session menu's screens.
     @State private var mission = MissionWorkspaceModel()
+    /// The root moved the sidebar toggle into this bar (`SidebarTogglePlace.dock`).
+    @Environment(\.sidebarToggleInDock) private var sidebarInDock
 
     init(store: AppStore, terminals: TerminalPool, zen: ZenChrome? = nil) {
         self.store = store
@@ -252,7 +254,8 @@ struct WorkspaceView: View {
                     ReviewToolbarItems(store: store, row: $0, model: review, folded: reviewFold(layout))
                 },
                 layer: bar.layer, mission: layout.sessionItemsInBar ? bar.mission : nil,
-                settings: store.workspaceInline ? SettingsToolbarItem(store: store) : nil
+                settings: store.workspaceInline ? SettingsToolbarItem(store: store) : nil,
+                sidebar: sidebarInDock ? SidebarToggleToolbarItem(store: store) : nil
             ) {
                 actions(for: tab, row: store.session(for: tab), layout: layout)
                     .onAppear { menuOpen = true }

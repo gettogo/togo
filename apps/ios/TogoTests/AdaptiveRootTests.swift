@@ -146,6 +146,16 @@ import Testing
         #expect(SessionRotors.machines(Samples.controlCenter.machines).map(\.label) == ["Studio", "Build box"])
     }
 
+    /// Beside a vertical bar the app's item replaces the system toggle, sidebar shown or hidden;
+    /// everywhere else the system's toggle is the only one (each control once, P3).
+    @Test func sidebarToggleLivesInTheVerticalBar() {
+        #expect(SidebarTogglePlace.resolve(inline: true, detailBarVertical: true) == .dock)
+        // iPad and the upright unfolded Duo: horizontal bars keep the system toggle.
+        #expect(SidebarTogglePlace.resolve(inline: true, detailBarVertical: false) == .system)
+        // Compact (folded Duo): no sidebar to show.
+        #expect(SidebarTogglePlace.resolve(inline: false, detailBarVertical: true) == .system)
+    }
+
     @Test func needsYouRotorOnlyNeedsYou() {
         let entries = SessionRotors.needsYou(Samples.controlCenter.machines, requests: Samples.controlCenter.requests)
         #expect(entries.map(\.target) == [.row(four)])

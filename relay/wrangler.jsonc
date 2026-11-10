@@ -5,6 +5,7 @@
   // Default environment: a workers.dev sandbox for development and for
   // self-hosting. Use `--env production` for the custom-domain deployment.
   "workers_dev": true,
+  "routes": [{ "pattern": "relay.togoapp.dev", "custom_domain": true }],
   // Logs never hold tokens or ciphertext.
   "observability": { "enabled": true, "head_sampling_rate": 0.1 },
   "vars": {
@@ -30,7 +31,7 @@
   "env": {
     "production": {
       "workers_dev": false,
-      "routes": [{ "pattern": "relay.togo.app", "custom_domain": true }],
+      "routes": [{ "pattern": "relay.togoapp.dev", "custom_domain": true }],
       "observability": { "enabled": true, "head_sampling_rate": 0.1 },
       "vars": { "APNS_TOPIC": "app.togo.Togo" },
       "durable_objects": {

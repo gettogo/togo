@@ -6,12 +6,17 @@ import TogoKit
 /// Where the roster's controls sit on each layout (roster.md): each once, the filter in the
 /// list rather than a bar, no "more" menu, the archive only when it holds something.
 @MainActor struct RosterChromeTests {
-    @Test func theSidebarHoldsOnlyNewSessionAndNoBottomBar() {
+    /// The sidebar's bar holds only its search field: New session is each machine's "+",
+    /// Settings and the sidebar toggle are the detail column's (root.md).
+    @Test func theSidebarBarHoldsNothingButSearch() {
         let bar = RosterBar.layout(wide: true, hasMachines: true)
-        #expect(bar.topTrailing == [.newSession])
-        // Settings is the detail column's (root.md); nothing is left for a bottom bar.
-        #expect(bar.bottom.isEmpty)
-        #expect(!bar.all.contains(.settings))
+        #expect(bar.all.isEmpty)
+    }
+
+    @Test func aMachineHeadingPlusNamesItsMachineAndWhyItIsOff() {
+        #expect(SidebarCopy.newSessionOn("Studio") == "New Session on Studio")
+        #expect(SidebarCopy.newSessionUnavailable("Studio", reason: "Offline").contains("Offline"))
+        #expect(SidebarCopy.newSessionUnavailable("Studio", reason: nil).contains("Studio"))
     }
 
     /// The folded Duo's vertical bar reads New session, Settings, then search at the foot (D13).

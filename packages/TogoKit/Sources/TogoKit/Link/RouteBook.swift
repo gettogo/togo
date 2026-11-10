@@ -38,6 +38,11 @@ public actor RouteBook {
         return RoutePlan.candidates(profile, routes: known, last: used[profile.id]?.route)
     }
 
+    /// Every route known for `profile`, with its kind, newest knowledge first.
+    public func routes(for profile: HostProfile) -> [HostRoute] {
+        RoutePlan.droppingMismatched(routes[profile.id] ?? profile.routes, mismatched[profile.id] ?? [])
+    }
+
     /// Routes that showed another key on a connect that succeeded over a different route.
     public func recordMismatches(_ hosts: [String], for id: UUID) {
         guard !hosts.isEmpty else { return }

@@ -1,3 +1,3 @@
 // Copy to Relay.xcconfig (ignored by git) and set the host of the relay
 // you deployed with scripts/relay-deploy.sh, without https://.
-TOGO_RELAY_HOST = togo-relay.<your-subdomain>.workers.dev
+TOGO_RELAY_HOST = relay.togoapp.dev

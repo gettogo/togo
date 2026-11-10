@@ -25,22 +25,23 @@ struct SubagentChatView: View {
         let thread = SubagentThread(id: agentID, timeline: store.timeline)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                header(thread)
+                header(thread).chatColumn()
                 let waiting = WorkingLogic.hasOpenNeeds(rows: thread.rows)
                 // Rows that arrive while open land in the store's arrival transaction.
                 ForEach(thread.rows) { row in
                     rowView(row, waiting: waiting)
+                        .chatColumn()
                         .id(row.id)
                         // motion: preventing a jump — the thread glides up to make room while the new row only fades in place; a needs card grows in place instead (attention).
                         .transition(row.isNeeds ? Motion.unfold(reduce: reduceMotion) : Motion.arrive(reduce: reduceMotion))
                 }
             }
-            .padding(16)
-            .frame(maxWidth: ChatLayout.columnWidth)
+            // Each row keeps the reading column itself (`chatColumn()`), as in the main chat.
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
         }
-        .defaultScrollAnchor(.bottom)
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        .defaultScrollAnchor(ChatScroll.foot)
+        .defaultScrollAnchor(ChatScroll.foot, for: .sizeChanges)
         // A card that needs the user scrolls into view as it arrives, as in the main chat.
         .modifier(NeedsScrolling(
             marks: ChatScroll.marks(thread.rows) { approval in actions.card(approval.requestId) != nil },

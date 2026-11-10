@@ -19,6 +19,15 @@ enum ChatScroll {
         case bottom
     }
 
+    /// The point every scroll of a chat keeps: the bottom edge, at the leading side. Its x is
+    /// not neutral: the anchor lines a point of the content up with the same point of the
+    /// scroll view on both axes, and nothing in a vertical scroll view takes a horizontal offset
+    /// back. With `.bottom` (x 0.5) a chat resting at its foot sat 16 pt left, the column's
+    /// inset, text flush with the pane's edge, until a needs card was scrolled to (the same
+    /// build, the approval state, had its margins). At x 0, with every row exactly as wide as
+    /// the scroll view (`chatColumn()`), every scroll lands at horizontal offset 0.
+    static let foot = UnitPoint(x: 0, y: 1)
+
     /// The open needs cards in row order. `ready` says whether an approval's card has arrived.
     static func marks(_ rows: [ChatRow], ready: (HarnessItem.Approval) -> Bool) -> [NeedsMark] {
         rows.compactMap { row in
@@ -174,7 +183,7 @@ struct NeedsScrolling: ViewModifier {
             // change keeps in place: the latest lines stay right above the composer as it grows
             // or shrinks and as the keyboard comes or goes. Anchored at the top (the default),
             // the top row stayed put and the latest lines slid under the composer.
-            .scrollPosition($position, anchor: .bottom)
+            .scrollPosition($position, anchor: ChatScroll.foot)
             .onScrollPhaseChange { old, phase in
                 let dragging = phase == .interacting || phase == .tracking
                 if scroll.dragging != dragging { scroll.dragging = dragging }
@@ -231,7 +240,7 @@ struct NeedsScrolling: ViewModifier {
     private func move(_ target: ChatScroll.Target, reduce: Bool) {
         let apply = {
             switch target {
-            case .row(let id): position.scrollTo(id: id, anchor: .bottom)
+            case .row(let id): position.scrollTo(id: id, anchor: ChatScroll.foot)
             case .bottom: position.scrollTo(edge: .bottom)
             }
         }
@@ -296,7 +305,41 @@ struct ChatScrolling: ViewModifier {
     }
 }
 
+/// The chat's reading column, shared by everything that sits in it or under it (the composer,
+/// a helper's thread, a background terminal), so on a wide window they line up.
+enum ChatLayout {
+    /// The column's widest, centred in wider panes.
+    static let columnWidth: CGFloat = 720
+    /// The column's own side padding; text starts this far inside it.
+    static let inset: CGFloat = 16
+    /// The composer's widest: the column's text width, so the field starts where replies do.
+    static let composerWidth: CGFloat = columnWidth - 2 * inset
+
+    /// The text's width in a scroll view `width` wide: the column, less its padding.
+    static func textWidth(in width: CGFloat) -> CGFloat {
+        max(0, min(width, columnWidth) - 2 * inset)
+    }
+
+    /// Where the text starts in a row `width` wide (`chatColumn()`), and how far in a prompt
+    /// bubble ends: `inset` up to the column's widest, centred beyond it.
+    static func textLeading(in width: CGFloat) -> CGFloat {
+        max(0, (width - textWidth(in: width)) / 2)
+    }
+}
+
 extension View {
+    /// One row of a chat's scroll content: exactly as wide as the scroll view, its content in
+    /// the reading column centred in it, `ChatLayout.textLeading` in from either edge. The row
+    /// owns its width, so one that measures wider than offered (a code well, a long token)
+    /// overflows trailing and never moves the others; and a row spanning the scroll view
+    /// gives the scroll anchor (`ChatScroll.foot`) nothing to offset horizontally.
+    func chatColumn() -> some View {
+        // The reading column: the text width, any overflow trailing.
+        containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in ChatLayout.textWidth(in: width) }
+            // The row: the scroll view's width, the column centred in it.
+            .containerRelativeFrame(.horizontal)
+    }
+
     /// Reports whether a needs card is on screen, for the "Needs you" capsule.
     func needsVisibility(_ id: String, in scroll: ChatScrollModel) -> some View {
         onScrollVisibilityChange(threshold: 0.25) { visible in scroll.setVisible(id, visible) }

@@ -327,7 +327,7 @@ public actor TerminalLink {
             true
         // Reaches here only when Mosh was chosen explicitly; Auto falls back to the next kind.
         // No UDP reply means a firewall or network in between blocks Mosh; retrying cannot help.
-        case MoshBootstrapError.serverMissing, MoshConnectError.noUDPReply:
+        case MoshBootstrapError.serverMissing, MoshConnectError.noUDPReply, TransportAddressError.linkLocalOnly:
             true
         // Thrown only when no kind may run for this host: an explicit kind that is
         // unavailable, or Auto with every kind skipped.

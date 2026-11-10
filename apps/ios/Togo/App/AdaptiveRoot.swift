@@ -28,6 +28,27 @@ enum ShellLayout: Equatable, Sendable {
     }
 }
 
+/// Where the sidebar's show/hide control sits. Each layout has one (P3).
+enum SidebarTogglePlace: Equatable, Sendable {
+    /// The split view's own toggle: in the sidebar's top bar while it shows, across the top of
+    /// the detail while it is hidden. iPad, the unfolded Duo upright, and any horizontal bar.
+    case system
+    /// Beside a vertical detail bar, shown or hidden. The system's toggle is a horizontal item
+    /// (across the top of the detail it doubled the band over the tab rail, and with the sidebar
+    /// shown it jumped to the sidebar's bar), so it is removed and the app's own "Show Sidebar"
+    /// / "Hide Sidebar" tops the vertical bar as a capsule of its own, in both states.
+    case dock
+
+    static func resolve(inline: Bool, detailBarVertical: Bool) -> Self {
+        inline && detailBarVertical ? .dock : .system
+    }
+}
+
+extension EnvironmentValues {
+    /// Set by the root on the detail column: the bars there carry "Show Sidebar" themselves.
+    @Entry var sidebarToggleInDock = false
+}
+
 extension AppStore {
     /// Set by the window as it crosses between compact and regular. Tabs, selection, panes and
     /// `workspaceOpen` stay as they are.
@@ -69,6 +90,8 @@ struct AdaptiveRoot<Destination: View>: View {
     /// The compact detail column keeps the workspace a moment after it closed, so the column
     /// pops with the session in it rather than an empty one. Nil follows `workspaceOpen`.
     @State private var workspaceHeld: Bool?
+    /// Whether the detail column's bar is a Duo's vertical bar, as the detail reads it.
+    @State private var detailBarVertical = false
 
     var body: some View {
         let layout = ShellLayout.resolve(
@@ -80,13 +103,21 @@ struct AdaptiveRoot<Destination: View>: View {
                 rosterLayer
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
+            // The split view's toggle is removed from the sidebar column, where Apple's example
+            // removes it, whenever the detail's dock carries the app's toggle: the sidebar's bar
+            // then holds New session and search only (root.md "Sidebar show/hide").
+            .toolbar(removing: dockToggle ? .sidebarToggle : nil)
+            // The roster's header leaves the toggle to the dock here (roster.md).
+            .environment(\.sidebarToggleInDock, dockToggle)
         } detail: {
             // The detail's own stack, so the workspace's items are in a system bar that an iPhone
             // Duo stands on its side beside the status bar.
             NavigationStack(path: detailPath) {
                 detailRoot(layout)
+                    .background { BarEdgeReport(vertical: $detailBarVertical) }
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
+            .environment(\.sidebarToggleInDock, dockToggle)
             .modifier(WorkspaceEntrance(sourceID: zoomSource, namespace: zoom))
             // Mission control's inspector column belongs to the split view, on the detail's
             // stack and not inside it, so the workspace's items stay this stack's bar items: in
@@ -248,6 +279,11 @@ struct AdaptiveRoot<Destination: View>: View {
         }
     }
 
+    /// The same decision the split view's toggle is removed on, so one of the two shows.
+    private var dockToggle: Bool {
+        SidebarTogglePlace.resolve(inline: inline, detailBarVertical: detailBarVertical) == .dock
+    }
+
     @ViewBuilder private func placeholder(_ layout: ShellLayout) -> some View {
         switch layout {
         case .stack:
@@ -261,14 +297,57 @@ struct AdaptiveRoot<Destination: View>: View {
                 // status only. Settings is always here, as it is in the workspace's bar, so the
                 // unfolded Duo's dock is never empty (root.md). New session is the sidebar's,
                 // so it comes first here only while the user has hidden the sidebar (each
-                // control once, P3; the prominent action leads, D13).
+                // control once, P3; the prominent action leads, D13). Beside a vertical bar the
+                // sidebar toggle tops the bar as a capsule of its own.
                 .toolbar {
+                    if dockToggle {
+                        SidebarToggleToolbarItem(store: store)
+                    }
                     if store.sidebar.isHidden {
                         ToolbarItem(placement: .primaryAction) { RosterNewSessionButton(store: store) }
                     }
                     SettingsToolbarItem(store: store)
                 }
         }
+    }
+}
+
+/// Hands the root whether the detail column's bar stands on its side, read where the detail's
+/// items are, so the root can move the sidebar toggle into it.
+private struct BarEdgeReport: View {
+    @Binding var vertical: Bool
+
+    var body: some View {
+        BarEdgeReader { edge in
+            Color.clear.onChange(of: edge, initial: true) { _, now in
+                if vertical != now { vertical = now }
+            }
+        }
+    }
+}
+
+/// "Show Sidebar" / "Hide Sidebar" as the detail column's first bar item beside a vertical bar
+/// (`SidebarTogglePlace.dock`), in both states. A capsule of its own at the top of the dock,
+/// apart from the session's items: a vertical bar draws every placement into one capsule, so
+/// it takes the same placement as the items after it and a fixed spacer splits the group
+/// (owner, 2026-11-10; the one spacer on these bars, an exception to D15 the owner asked for).
+/// Fixed spacers keep their size on the vertical axis. Bound to the router's `sidebar` like
+/// the split view's `columnVisibility`; the column moves with the system's own animation. ⌃⌘S
+/// stays the Sessions menu's command, which calls the same toggle.
+struct SidebarToggleToolbarItem: ToolbarContent {
+    let store: AppStore
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(
+                store.sidebar.isHidden ? AppCommandCopy.showSidebar : AppCommandCopy.hideSidebar,
+                systemImage: "sidebar.leading"
+            ) {
+                withAnimation { store.toggleSidebar() }
+            }
+            .accessibilityIdentifier("detail.sidebarToggle")
+        }
+        ToolbarSpacer(.fixed, placement: .primaryAction)
     }
 }
 

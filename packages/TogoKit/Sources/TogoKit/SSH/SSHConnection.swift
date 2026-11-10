@@ -28,6 +28,9 @@ public actor SSHConnection: TCPChannelOpener {
     public internal(set) var remoteAddress: String?
     /// The route that won, as the machine's routes name it; nil through a jump host.
     public internal(set) var route: String?
+    /// The interface a link-local `remoteAddress` was reached on, such as `en0`; the
+    /// address names no machine without it.
+    public internal(set) var remoteInterface: String?
 
     /// The SSH port, the same on every route.
     public nonisolated var port: Int { profile.endpoint.port }
@@ -320,7 +323,10 @@ public actor SSHConnection: TCPChannelOpener {
         let channel = client.channel
         if parent == nil { await Self.keepAlive(channel) }
         // Mosh needs the address SSH reached, not a name that may resolve elsewhere later.
-        if parent == nil, profile.jumps.isEmpty { remoteAddress = channel.remoteAddress?.ipAddress }
+        if parent == nil, profile.jumps.isEmpty {
+            remoteAddress = channel.remoteAddress?.ipAddress
+            remoteInterface = Self.scopeInterface(channel.remoteAddress)
+        }
         return (client, channel)
     }
 

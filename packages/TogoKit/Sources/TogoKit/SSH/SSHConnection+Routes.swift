@@ -61,6 +61,7 @@ extension SSHConnection {
         root = win.value.channel
         credentials = win.value.credentials
         remoteAddress = win.value.channel.remoteAddress?.ipAddress
+        remoteInterface = Self.scopeInterface(win.value.channel.remoteAddress)
         route = win.route
         await routeBook.recordUse(win.route, for: profile.id)
     }
@@ -106,4 +107,29 @@ private final class MismatchedRoutes: Sendable {
     func add(_ host: String) { list.withLock { $0.append(host) } }
 
     var hosts: [String] { list.withLock { $0 } }
+}
+
+extension SSHConnection {
+    /// Where Mosh should send, given the address this connection reached; nil when it
+    /// reached only an unscoped IPv6 link-local address and the machine has no other.
+    public func moshTarget(resolveTimeout: Duration = .seconds(2)) async -> MoshTarget? {
+        let name = route ?? profile.endpoint.host
+        let reached = remoteAddress.map { ReachedAddress(ip: $0, interface: remoteInterface) }
+        let resolved = MoshAddress.isLinkLocalIPv6(reached?.ip ?? name)
+            ? await MoshAddress.resolveIPv4(name, timeout: resolveTimeout)
+            : []
+        return MoshAddress.choose(
+            reached: reached, fallbackHost: name, routes: await routeBook.routes(for: profile), resolved: resolved
+        )
+    }
+
+    /// The interface name for an IPv6 peer's scope id, or nil when it has none.
+    static func scopeInterface(_ address: SocketAddress?) -> String? {
+        guard case .v6(let v6) = address else { return nil }
+        let index = v6.address.sin6_scope_id
+        guard index != 0 else { return nil }
+        var buffer = [CChar](repeating: 0, count: Int(IF_NAMESIZE) + 1)
+        guard if_indextoname(index, &buffer) != nil else { return nil }
+        return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
 }

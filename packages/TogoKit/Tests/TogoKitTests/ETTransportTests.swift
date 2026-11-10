@@ -24,9 +24,57 @@ struct ETTransportTests {
     }
 
     @Test func bootstrapLooksPastPath() {
-        let path = ETFactory.bootstrapOptions.etterminalPath
-        #expect(path.contains("command -v etterminal"))
-        #expect(path.contains("/opt/homebrew/bin/etterminal"))
+        let command = ETFactory.launchCommand("true", tag: "abc")
+        #expect(command.contains("command -v etterminal"))
+        #expect(command.contains("/opt/homebrew/bin/etterminal"))
+    }
+
+    /// etterminal runs under a tagged name, with the bootstrap's stdin, and the link is gone after.
+    @Test func launchRunsETTerminalUnderItsTag() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("et-launch-\(UUID().uuidString)")
+        let bin = dir.appendingPathComponent("bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let stub = bin.appendingPathComponent("etterminal")
+        try "#!/bin/sh\nread line\necho \"$0 $1 $line\"\n".write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        let bootstrap = "echo 'XXXabc/key_xterm' | \(ETFactory.bootstrapOptions.etterminalPath) --verbose=0"
+        let output = try Self.shell(ETFactory.launchCommand(bootstrap, tag: "t1234"), path: bin.path, tmp: dir.path)
+        #expect(output == "\(dir.path)/togo-et-t1234 --verbose=0 XXXabc/key_xterm\n")
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("togo-et-t1234").path))
+    }
+
+    @Test func stopEndsOnlyTheTaggedETTerminal() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("et-stop-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let (ours, other) = (ETFactory.newTag(), ETFactory.newTag())
+        var running: [Process] = []
+        for tag in [ours, other] {
+            let link = dir.appendingPathComponent("togo-et-\(tag)")
+            try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "/bin/sleep")
+            let process = Process()
+            process.executableURL = link
+            process.arguments = ["30"]
+            try process.run()
+            running.append(process)
+        }
+        defer { running.forEach { $0.terminate() } }
+        _ = try Self.shell(ETFactory.stopCommand(tag: ours), path: "/usr/bin:/bin", tmp: dir.path)
+        running[0].waitUntilExit()
+        #expect(running[0].terminationReason == .uncaughtSignal)
+        #expect(running[1].isRunning)
+    }
+
+    private static func shell(_ command: String, path: String, tmp: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", command]
+        process.environment = ["PATH": path + ":/usr/bin:/bin", "TMPDIR": tmp, "HOME": tmp]
+        let out = Pipe()
+        process.standardOutput = out
+        try process.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// Needs Remote Login, the dedicated test key and a running `etserver` on this Mac:

@@ -13,6 +13,35 @@ struct MoshBootstrapTests {
         #expect(endpoint == MoshEndpoint(host: "10.0.0.2", port: 60001, key: Self.key))
     }
 
+    @Test func parseReadsTheDetachedServerPID() throws {
+        let stdout = Data("\nMOSH CONNECT 60003 \(Self.key)\n".utf8)
+        let stderr = Data("\nmosh-server (mosh 1.4.0) [build mosh 1.4.0]\nCopyright 2012 Keith Winstein\n\n[mosh-server detached, pid = 48213]\n".utf8)
+        let endpoint = try MoshBootstrap.parse(stdout: stdout, stderr: stderr, status: 0, host: "192.168.1.123")
+        #expect(endpoint.serverPID == 48213)
+    }
+
+    @Test func bootstrapCommandBindsTheChosenAddress() throws {
+        let command = MoshBootstrap.command(argv: ["true"], serverPath: nil, ports: nil, bind: .address("192.168.1.123"))
+        let args = try runWithStub(command, stubPath: nil)
+        let separator = try #require(args.firstIndex(of: "--"))
+        let flags = Array(args[..<separator])
+        #expect(!flags.contains("-s"))
+        let bind = try #require(flags.firstIndex(of: "-i"))
+        #expect(flags[bind + 1] == "192.168.1.123")
+    }
+
+    @Test func stopCommandSignalsOnlyAMoshServer() throws {
+        let sleeper = Process()
+        sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        sleeper.arguments = ["30"]
+        try sleeper.run()
+        defer { sleeper.terminate() }
+        let (_, _, status) = try run(["/bin/sh", "-c", MoshBootstrap.stopCommand(pid: sleeper.processIdentifier)], path: "/usr/bin:/bin")
+        #expect(status == 0)
+        #expect(sleeper.isRunning)
+        #expect(MoshBootstrap.stopCommand(pid: 4242).contains("kill 4242"))
+    }
+
     @Test func serverMissingExit127() {
         #expect(throws: MoshBootstrapError.serverMissing("togo: mosh-server not found")) {
             try MoshBootstrap.parse(

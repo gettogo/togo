@@ -4,7 +4,8 @@ import TogoKit
 /// The workspace's bar items, in the navigation bar its stack supplies, so on an iPhone Duo they
 /// move into the vertical bar beside the status bar and the terminal keeps the whole height.
 /// Every item has a symbol and a title: the symbol shows in the bar, the title in overflow and
-/// to VoiceOver. Order (D13, D14): the way back first, then Run again once the agent stopped,
+/// to VoiceOver. Order (D13, D14): the way back first (or, beside a vertical bar, the sidebar
+/// toggle as a capsule of its own, root.md), then Run again once the agent stopped,
 /// then Changes, the session's way into its git review, then the layer switch, mission control,
 /// Preview, the session menu, and beside the sidebar the app's Settings last (root.md). When
 /// the bar runs out of room the items stay in this order of priority: mission control while it
@@ -25,6 +26,9 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     /// Settings, while the workspace is the detail column beside the sidebar; a compact window
     /// has it in the roster's bar.
     var settings: SettingsToolbarItem? = nil
+    /// "Show Sidebar" / "Hide Sidebar", where the root moved the split view's toggle into this
+    /// bar. Declared before every `.primaryAction` item so its spacer parts it from them.
+    var sidebar: SidebarToggleToolbarItem? = nil
     @ViewBuilder let actions: () -> Actions
 
     var body: some ToolbarContent {
@@ -32,6 +36,9 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
             ToolbarItem(placement: .navigation) {
                 Button(item.title, systemImage: item.symbol, action: onLeading)
             }
+        }
+        if let sidebar {
+            sidebar
         }
         if let runAgain {
             ToolbarItem(placement: .primaryAction) {
@@ -113,7 +120,8 @@ struct WorkspaceRunAgain {
 enum WorkspaceLeading: Equatable {
     /// "Sessions", back to the list the workspace covers.
     case back
-    /// Nothing: the workspace is the detail column; the split view's toggle handles the sidebar.
+    /// Nothing: the workspace is the detail column; the split view's toggle handles the sidebar,
+    /// or beside a vertical bar the root's "Show Sidebar" (`WorkspaceToolbar.sidebar`).
     case none
 
     var item: (title: String, symbol: String)? {

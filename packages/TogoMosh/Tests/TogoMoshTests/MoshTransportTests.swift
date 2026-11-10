@@ -21,6 +21,23 @@ struct MoshTransportTests {
         for await _ in transport.incoming {}
     }
 
+    /// An unscoped link-local address makes mosh's sends fail at once, so its bar flips from
+    /// "sendto: No route to host" to "Nothing received from server" within a quarter second.
+    /// That repaint once passed for the server's first reply and left a dead session live.
+    @Test func unscopedLinkLocalFailsInsteadOfGoingLive() async throws {
+        let endpoint = MoshEndpoint(host: "fe80::1", port: 60_999, key: "4NeCCgvZFe2RnPgrcU1PQw")
+        let stopped = Mutex(0)
+        let transport = MoshTransport(
+            endpoint: endpoint, cols: 80, rows: 24, firstReplyTimeout: .seconds(2),
+            stopServer: { stopped.withLock { $0 += 1 } }
+        )
+        await #expect(throws: MoshConnectError.noUDPReply(address: "fe80::1")) {
+            try await transport.connect()
+        }
+        #expect(stopped.withLock { $0 } == 1)
+        for await _ in transport.incoming {}
+    }
+
     static var integrationEnabled: Bool { ProcessInfo.processInfo.environment["TOGO_IT_MOSH"] == "1" }
 
     @Test(.enabled(if: integrationEnabled, "set TOGO_IT_MOSH=1, TOGO_IT_USER and TOGO_IT_KEY to run against localhost"))
@@ -97,6 +114,23 @@ struct MoshStatusLineTests {
     @Test func moshNotificationBarMeansRoaming() {
         #expect(MoshTransport.isSilenceStatusLine(chunk("\u{1B}[1;1H\u{1B}[0;37;44mmosh: Last contact 7 seconds ago. [To quit: Ctrl-^ .]")))
         #expect(MoshTransport.isSilenceStatusLine(chunk("\u{1B}[0;37;44mmosh: Last contact 2 minutes ago.")))
+    }
+
+    /// Chunks a real mosh client painted while no server answered.
+    @Test func notificationBarRepaintsAreNotServerOutput() {
+        let bar = [
+            "\u{1B}[0;1;37;44mmosh: sendto: No route to host\u{1B}[0;37;44m          \r\n\u{1B}[1;1H\u{1B}[?25l\u{1B}[0m",
+            "\u{1B}[1;7H\u{1B}[0;1;37;44mNothing\u{1B}[1;15Hreceived\u{1B}[1;24Hfrom \u{1B}[1;30Herver on UDP port 60999.\r\u{1B}[0m",
+            "\u{1B}[1;54H\u{1B}[0;1;37;44m (6 s without contact.)\r\u{1B}[0m",
+        ]
+        for text in bar {
+            #expect(!MoshTransport.isServerPaint(chunk(text)), "\(text)")
+        }
+    }
+
+    @Test func serverOutputCountsAsAReply() {
+        #expect(MoshTransport.isServerPaint(chunk("\u{1B}[1;1H\u{1B}[0mlast login: today\r\n$ \u{1B}[K")))
+        #expect(MoshTransport.isServerPaint(chunk("\u{1B}[1;1H\u{1B}[30;42m[togo] 0:zsh*\u{1B}[0m")))
     }
 
     @Test func outputMentioningLastContactIsNotRoaming() {
