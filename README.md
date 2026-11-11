@@ -14,6 +14,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#supported-agents">Supported agents</a> ·
   <a href="https://togoapp.dev/docs/">Docs</a> ·
+  <a href="#roadmap">Roadmap</a> ·
   <a href="#contributing">Contribute</a> ·
   <a href="https://togoapp.dev">Website</a>
 </p>
@@ -168,18 +169,34 @@ Without the helper, a reachable SSH machine still works as a terminal. The helpe
 
 Any other CLI agent works in the terminal view. A screen watcher can surface numbered menus and y/n prompts so you can answer them from your phone. [Agent compatibility](https://togoapp.dev/agents/)
 
+## Roadmap
+
+<p align="center">
+  <a href="https://github.com/gettogo/togo/discussions/1">
+    <picture>
+      <source media="(max-width: 600px)" srcset=".github/assets/roadmap-mobile.webp">
+      <img src=".github/assets/roadmap.webp" alt="Planned: Herdr support, Tern Surface Protocol and task worktrees. Exploring: a native pull request workflow with batched review feedback, and cross-agent handoff. Bug fixes and harness updates continue with each release." width="100%">
+    </picture>
+  </a>
+</p>
+
+Follow the [roadmap discussion](https://github.com/gettogo/togo/discussions/1) for scope and updates. Planned features have no release dates yet.
+
 ## Contributing
 
 Togo is free and open source across the app, helper and relay. You can work on the helper, adapters, relay and protocol on macOS or Linux **without an Apple developer account**.
 
 | Help with | Where to start |
 |---|---|
+| Make a first contribution | [Add custom SSH port support to the diagnostics (#3)](https://github.com/gettogo/togo/issues/3), a Go-only `good first issue`. |
+| Build a planned feature | The [Herdr backend prototype (#4)](https://github.com/gettogo/togo/issues/4) and [Tern Surface Protocol prototype (#5)](https://github.com/gettogo/togo/issues/5) are open for help. Discuss a smaller piece in the issue before starting. |
 | Test your agent | [Report an agent issue](https://github.com/gettogo/togo/issues/new?template=adapter.yml) with its version and what Togo missed. |
 | Report a bug | [Open a bug report](https://github.com/gettogo/togo/issues/new?template=bug.yml) with steps to reproduce and the app/helper versions. |
 | Improve agent support | Explore the [adapters](helper/internal/harness/adapters): YAML definitions and Go mappers for messages, tools, status and controls. |
-| Improve the app | Terminal themes, keyboard presets, accessibility testing and setup-documentation fixes are welcome. |
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup and review requirements. Sign off commits with `git commit -s`. For questions or to discuss a larger change, write to [support@togoapp.dev](mailto:support@togoapp.dev). Remove private details from anything you share publicly; vulnerabilities go through [SECURITY.md](SECURITY.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup and review requirements. Sign off commits with `git commit -s`.
+
+Introduce yourself in the [welcome discussion](https://github.com/gettogo/togo/discussions/2), ask setup questions in [Q&A](https://github.com/gettogo/togo/discussions/categories/q-a), or suggest a workflow in [Ideas](https://github.com/gettogo/togo/discussions/categories/ideas). Remove private details from anything you share publicly; vulnerabilities go through [SECURITY.md](SECURITY.md).
 
 If you find Togo useful, a star is a welcome way to support the project.
 
