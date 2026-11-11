@@ -10,8 +10,10 @@ public struct PlainTmuxSource: SessionSource {
     public let events: AsyncStream<EventEnvelope>
     private let link: PlainTmuxLink
 
-    public init(record: HostRecord, env: SessionEnvironment) {
-        self.init(host: record.profile.name, now: { Date() }) {
+    /// `helperFound` is told the helper's path when the machine turns out to have one now, so a
+    /// record saved without it can switch to the helper. It runs at most once per connection.
+    public init(record: HostRecord, env: SessionEnvironment, helperFound: (@Sendable (String) -> Void)? = nil) {
+        self.init(host: record.profile.name, now: { Date() }, helperFound: helperFound) {
             let connection = env.connection(for: record.profile)
             do {
                 try await connection.connect()
@@ -30,8 +32,10 @@ public struct PlainTmuxSource: SessionSource {
     }
 
     /// Runs over a connection that is already signed in. The source owns it from here.
-    public init(record: HostRecord, connected connection: SSHConnection) {
-        self.init(host: record.profile.name, now: { Date() }) {
+    public init(
+        record: HostRecord, connected connection: SSHConnection, helperFound: (@Sendable (String) -> Void)? = nil
+    ) {
+        self.init(host: record.profile.name, now: { Date() }, helperFound: helperFound) {
             PlainTmuxDial(
                 run: { command in
                     let result = try await connection.run(command, timeout: PlainTmuxLink.commandTimeout)
@@ -42,12 +46,15 @@ public struct PlainTmuxSource: SessionSource {
         }
     }
 
-    init(host: String, now: @escaping @Sendable () -> Date, dial: @escaping @Sendable () async throws -> PlainTmuxDial) {
+    init(
+        host: String, now: @escaping @Sendable () -> Date, helperFound: (@Sendable (String) -> Void)? = nil,
+        dial: @escaping @Sendable () async throws -> PlainTmuxDial
+    ) {
         // The host has no events.v1, so the stream is empty and already ended.
         let (events, sink) = AsyncStream<EventEnvelope>.makeStream()
         sink.finish()
         self.events = events
-        link = PlainTmuxLink(host: host, now: now, dial: dial)
+        link = PlainTmuxLink(host: host, now: now, helperFound: helperFound, dial: dial)
     }
 
     public func open() async throws -> (HelperPresence, Set<String>) { try await link.open() }
@@ -211,13 +218,18 @@ actor PlainTmuxLink {
 
     private let host: String
     private let now: @Sendable () -> Date
+    private let helperFound: (@Sendable (String) -> Void)?
     private let dial: @Sendable () async throws -> PlainTmuxDial
     private var connection: PlainTmuxDial?
     private var isClosed = false
 
-    init(host: String, now: @escaping @Sendable () -> Date, dial: @escaping @Sendable () async throws -> PlainTmuxDial) {
+    init(
+        host: String, now: @escaping @Sendable () -> Date, helperFound: (@Sendable (String) -> Void)?,
+        dial: @escaping @Sendable () async throws -> PlainTmuxDial
+    ) {
         self.host = host
         self.now = now
+        self.helperFound = helperFound
         self.dial = dial
     }
 
@@ -230,7 +242,17 @@ actor PlainTmuxLink {
         connection = dialed
         let found = try await dialed.run(shellCommand(PlainTmux.probeScript))
         let path = String(decoding: found.stdout, as: UTF8.self)
+        await lookForHelper(on: dialed)
         return (path.isEmpty ? .missing : .unknown, [])
+    }
+
+    /// A machine saved without the helper may have it by now. Looked at once per connection;
+    /// a probe that fails or finds nothing changes nothing.
+    private func lookForHelper(on dialed: PlainTmuxDial) async {
+        guard let helperFound,
+              let result = try? await dialed.run(HelperProbe.command), result.status == 0 else { return }
+        let report = HelperProbe.parse(String(decoding: result.stdout, as: UTF8.self))
+        if case .present = report.helper, let path = report.path { helperFound(path) }
     }
 
     func snapshot() async throws -> EventSnapshot {
