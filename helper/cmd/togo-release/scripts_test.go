@@ -21,8 +21,12 @@ func fakeTool(t *testing.T, dir, name, log string) {
 }
 
 func runScript(t *testing.T, env []string, name string, args ...string) (string, error) {
+	return runScriptIn(t, scriptDir, env, name, args...)
+}
+
+func runScriptIn(t *testing.T, dir string, env []string, name string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command("bash", append([]string{filepath.Join(scriptDir, name)}, args...)...)
+	cmd := exec.Command("bash", append([]string{filepath.Join(dir, name)}, args...)...)
 	cmd.Env = append(os.Environ(), env...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -32,6 +36,11 @@ func TestSignDarwinPassesRequirementText(t *testing.T) {
 	bin := t.TempDir()
 	log := filepath.Join(t.TempDir(), "codesign.log")
 	fakeTool(t, bin, "codesign", log)
+	// The script refuses to sign off macOS; pretend to be Darwin so the
+	// requirement text is checked on every platform.
+	if err := os.WriteFile(filepath.Join(bin, "uname"), []byte("#!/bin/sh\necho Darwin\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	target := filepath.Join(t.TempDir(), "togo")
 	if err := os.WriteFile(target, []byte("bin"), 0o755); err != nil {
 		t.Fatal(err)
@@ -60,7 +69,40 @@ func TestSignDarwinPassesRequirementText(t *testing.T) {
 	}
 }
 
+// testKeyRepo returns a scripts directory inside a throwaway repo layout whose
+// pinned release key is the test key, whatever the real repo pins.
+func testKeyRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	scripts := filepath.Join(root, "scripts", "release")
+	if err := os.MkdirAll(scripts, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"sign-sums.sh", "build-release.sh"} {
+		b, err := os.ReadFile(filepath.Join(scriptDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(scripts, name), b, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pubDir := filepath.Join(root, "helper", "internal", "release")
+	if err := os.MkdirAll(pubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pub, err := os.ReadFile("../../internal/release/testdata/test.pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pubDir, "minisign.pub"), pub, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return scripts
+}
+
 func TestReleaseScriptsRefusePinnedTestKey(t *testing.T) {
+	scripts := testKeyRepo(t)
 	dist := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dist, "SHA256SUMS"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -74,7 +116,7 @@ func TestReleaseScriptsRefusePinnedTestKey(t *testing.T) {
 		{"sign-sums.sh", dist, "v1.0.0", "--run"},
 		{"build-release.sh", "v1.0.0", "--run", "--skip-apple"},
 	} {
-		out, err := runScript(t, env, c[0], c[1:]...)
+		out, err := runScriptIn(t, scripts, env, c[0], c[1:]...)
 		if err == nil || !strings.Contains(out, "test key") {
 			t.Errorf("%v: err %v, output %q", c, err, out)
 		}
