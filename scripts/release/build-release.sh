@@ -84,7 +84,7 @@ if [ "$apple" = "yes" ]; then
     fi
     "$here/sign-darwin.sh" "$work/togo" ${runflag[@]+"${runflag[@]}"}
     "$here/notarize.sh" "$work/togo" ${runflag[@]+"${runflag[@]}"}
-    release archive --version "$version" --module-dir "$repo/helper" --target "darwin/$arch" --bin "$work/togo" --license "$repo/LICENSE" --out "$dist"
+    release archive --version "$version" --module-dir "$repo/helper" --target "darwin/$arch" --binary "$work/togo" --license "$repo/LICENSE" --out "$dist"
     if [ "$mode" = "run" ]; then
       find "$work" -mindepth 1 -delete
       rmdir "$work"
