@@ -156,6 +156,11 @@ func TestListSessionsNewlineInSessionName(t *testing.T) {
 	const rawName = "my\nwork"
 
 	if err := c.NewSession(ctx, tmux.NewSessionOpts{Name: rawName, Dir: t.TempDir()}); err != nil {
+		// Newer tmux refuses the name outright ("invalid session name"),
+		// which is as safe as storing an escaped form.
+		if strings.Contains(err.Error(), "invalid session name") {
+			t.Skipf("this tmux rejects a newline in a session name: %v", err)
+		}
 		t.Fatalf("NewSession: %v", err)
 	}
 
