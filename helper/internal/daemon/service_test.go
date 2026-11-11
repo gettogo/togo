@@ -258,3 +258,51 @@ func TestSystemdUninstallDisablesInactiveUnit(t *testing.T) {
 		t.Errorf("commands = %q, want %q", got, want)
 	}
 }
+
+func TestServiceStartUsesManager(t *testing.T) {
+	for _, tc := range []struct {
+		m    Manager
+		want []string
+	}{
+		{Launchd, []string{"launchctl", "kickstart", "gui/501/" + Label}},
+		{Systemd, []string{"systemctl", "--user", "start", systemdUnit}},
+	} {
+		s, r := newTestService(t, tc.m)
+		if err := s.Start(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if len(r.calls) != 1 || !slices.Equal(r.calls[0], tc.want) {
+			t.Errorf("calls = %v, want [%v]", r.calls, tc.want)
+		}
+	}
+}
+
+func TestServiceManaged(t *testing.T) {
+	ctx := context.Background()
+	s, r := newTestService(t, Launchd)
+	if s.Managed(ctx) {
+		t.Error("managed with nothing installed")
+	}
+	if err := s.Install(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Managed(ctx) {
+		t.Error("not managed after install")
+	}
+	other := s
+	other.TogoHome = filepath.Join(s.Home, "other")
+	if other.Managed(ctx) {
+		t.Error("managed for a TOGO_HOME the service was not installed for")
+	}
+	r.loaded = false // booted out but the file remains
+	if s.Managed(ctx) {
+		t.Error("managed while not loaded")
+	}
+	r.loaded = true
+	if err := s.Uninstall(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s.Managed(ctx) {
+		t.Error("managed after uninstall")
+	}
+}

@@ -156,6 +156,44 @@ func (s Service) Uninstall(ctx context.Context) error {
 	return nil
 }
 
+// Start asks the service manager to start the job if it is not running. It
+// does not touch a running job and does not wait for the daemon to come up.
+// Launchd's kickstart also starts a job whose last run exited, which
+// launchd's own KeepAlive will not do after a successful exit.
+func (s Service) Start(ctx context.Context) error {
+	if s.Manager == Systemd {
+		return s.Run(ctx, []string{"systemctl", "--user", "start", systemdUnit})
+	}
+	return s.Run(ctx, []string{"launchctl", "kickstart", s.domain() + "/" + Label})
+}
+
+// Managed reports whether the service manager owns the daemon for s.TogoHome:
+// the service file is installed for that TOGO_HOME and the manager has the
+// job loaded. A daemon started while Managed is true must be started through
+// Start, so it stays under the manager's supervision. A service installed
+// for another TOGO_HOME runs a different daemon and is not touched.
+func (s Service) Managed(ctx context.Context) bool {
+	st, err := s.Status(ctx)
+	if err != nil || !st.Installed || !st.Loaded || st.Legacy {
+		return false
+	}
+	data, err := os.ReadFile(st.Path)
+	if err != nil {
+		return false
+	}
+	var needle string
+	if s.Manager == Systemd {
+		needle = systemdQuote("TOGO_HOME=" + s.TogoHome)
+	} else {
+		var b bytes.Buffer
+		if xml.EscapeText(&b, []byte(s.TogoHome)) != nil {
+			return false
+		}
+		needle = "<string>" + b.String() + "</string>"
+	}
+	return bytes.Contains(data, []byte(needle))
+}
+
 // Status reports the installed and loaded state without changing either.
 func (s Service) Status(ctx context.Context) (Status, error) {
 	st := Status{Path: s.Path()}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/daemon"
@@ -27,15 +28,46 @@ var capabilities = []string{"session.v1", "agents.v1", "fs.v1", "capture.v1"}
 // daemonCapabilities are what `togo daemon` offers.
 var daemonCapabilities = daemon.Capabilities
 
-// startDaemon launches a detached daemon for home. Tests replace it so
-// they never start a real one by accident.
+// startDaemon starts a daemon for home. Tests replace it so they never start
+// a real one by accident.
 var startDaemon = func(home string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return startDaemonVia(ctx, home, managedService(ctx), detachDaemon)
+}
+
+// detachDaemon launches a detached daemon, outside any service manager.
+func detachDaemon(home string) error {
 	exe, err := executable()
 	if err != nil {
 		return err
 	}
 	_, err = daemon.Start(exe, home)
 	return err
+}
+
+// managedService returns the user service when the service manager owns the
+// daemon, and nil when it does not (no service installed or loaded).
+func managedService(ctx context.Context) *daemon.Service {
+	svc, err := userService()
+	if err != nil || !svc.Managed(ctx) {
+		return nil
+	}
+	return &svc
+}
+
+// startDaemonVia picks how a missing daemon is started. Under a service
+// manager it asks the manager, so the daemon stays supervised: a detached
+// daemon would take the lock, the manager's own restart would lose the race
+// and exit 0, and the manager would then never restart the daemon again.
+// Without a service, or when the manager refuses, it falls back to detach.
+func startDaemonVia(ctx context.Context, home string, svc *daemon.Service, detach func(home string) error) error {
+	if svc != nil {
+		if err := svc.Start(ctx); err == nil {
+			return nil
+		}
+	}
+	return detach(home)
 }
 
 // runServe answers protocol requests on stdin and stdout until stdin ends.
