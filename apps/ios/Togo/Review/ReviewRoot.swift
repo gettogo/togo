@@ -270,9 +270,7 @@ struct ReviewRoot: View {
             .navigationDestination(for: ReviewRoute.self) { destination($0) }
     }
 
-    private var title: String {
-        [subject.bib, subject.title].compactMap(\.self).filter { !$0.isEmpty }.joined(separator: " ")
-    }
+    private var title: String { subject.displayTitle }
 
     @ViewBuilder private var tabContent: some View {
         switch navigation.tab {

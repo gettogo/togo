@@ -5,8 +5,9 @@ import TogoKit
 @testable import Togo
 
 /// When the chat scrolls on its own: a needs card arriving or its answers landing, the user's
-/// own send, never during a drag; the capsule while a card is off screen; staying at the foot
-/// when the composer changes height.
+/// own send, a revealed field, never during a drag and never for a size change (the scroll
+/// view's anchor keeps the foot); the capsule while a card is off screen; where a rebuilt
+/// chat returns to.
 @MainActor
 struct ChatScrollTests {
     private let a = NeedsMark(id: "approval-a", ready: false)
@@ -26,54 +27,55 @@ struct ChatScrollTests {
     }
 
     @Test func aNewNeedsCardIsScrolledTo() {
-        #expect(ChatScroll.target(old: [], new: [a], dragging: false) == "approval-a")
+        #expect(ChatScroll.decide(.needsChanged(old: [], new: [a]), dragging: false) == .row("approval-a"))
     }
 
     @Test func theNewestArrivalWins() {
         let b = NeedsMark(id: "q-b", ready: true)
-        #expect(ChatScroll.target(old: [a], new: [a, b], dragging: false) == "q-b")
+        #expect(ChatScroll.decide(.needsChanged(old: [a], new: [a, b]), dragging: false) == .row("q-b"))
     }
 
     @Test func waitingTurningIntoACardScrollsAgain() {
         var ready = a
         ready.ready = true
-        #expect(ChatScroll.target(old: [a], new: [ready], dragging: false) == "approval-a")
+        #expect(ChatScroll.decide(.needsChanged(old: [a], new: [ready]), dragging: false) == .row("approval-a"))
     }
 
     @Test func nothingNewMeansNoScroll() {
-        #expect(ChatScroll.target(old: [a], new: [a], dragging: false) == nil)
-        #expect(ChatScroll.target(old: [a], new: [], dragging: false) == nil)
+        #expect(ChatScroll.decide(.needsChanged(old: [a], new: [a]), dragging: false) == nil)
+        #expect(ChatScroll.decide(.needsChanged(old: [a], new: []), dragging: false) == nil)
     }
 
     @Test func aDragSuppressesEveryAutomaticScroll() {
-        #expect(ChatScroll.target(old: [], new: [a], dragging: true) == nil)
-        #expect(ChatScroll.followsSend(dragging: true) == nil)
-        #expect(ChatScroll.liveAppeared(was: false, now: true, afterSend: true, dragging: true) == nil)
+        #expect(ChatScroll.decide(.needsChanged(old: [], new: [a]), dragging: true) == nil)
+        #expect(ChatScroll.decide(.sent, dragging: true) == nil)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: true) == nil)
+        #expect(ChatScroll.decide(.reveal("approval-a"), dragging: true) == nil)
     }
 
     @Test func theOwnSendAndItsLiveLineScrollToTheFoot() {
-        #expect(ChatScroll.followsSend(dragging: false) == .bottom)
-        #expect(ChatScroll.liveAppeared(was: false, now: true, afterSend: true, dragging: false) == .bottom)
-        #expect(ChatScroll.liveAppeared(was: false, now: true, afterSend: false, dragging: false) == nil)
-        #expect(ChatScroll.liveAppeared(was: true, now: true, afterSend: true, dragging: false) == nil)
+        #expect(ChatScroll.decide(.sent, dragging: false) == .bottom)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: false) == .bottom)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: false), dragging: false) == nil)
+    }
+
+    @Test func aRevealedFieldOrGoToRequestScrollsToItsRow() {
+        #expect(ChatScroll.decide(.reveal("q-b"), dragging: false) == .row("q-b"))
+    }
+
+    /// The scroll bug's rule: the composer growing a line, the keyboard coming or going, a
+    /// fold, a reply streaming in, are never a reason to scroll. The scroll view's own anchor
+    /// keeps the foot through them, and a reader up in the history is left where they are.
+    /// With or without a finger on the chat, at the foot or not.
+    @Test(arguments: [false, true])
+    func aSizeChangeNeverScrolls(dragging: Bool) {
+        #expect(ChatScroll.decide(.resized, dragging: dragging) == nil)
+        #expect(ChatScroll.decide(.contentChanged, dragging: dragging) == nil)
     }
 
     @Test func theFootIsTheLastLineAboveTheComposer() {
         #expect(ChatScroll.isPinned(offset: 300, topInset: 116, container: 580, content: 1_000))
         #expect(!ChatScroll.isPinned(offset: 0, topInset: 116, container: 580, content: 1_000))
-    }
-
-    @Test func theKeyboardKeepsAReaderAtTheFootAtTheFoot() {
-        // The keyboard shrinks the chat by its height: a reader at the foot stays there, the
-        // latest line right above the composer.
-        let foot = ChatScroll.Frame(pinned: true, height: 640)
-        #expect(ChatScroll.repinsOnResize(old: foot, new: .init(pinned: false, height: 330), dragging: false))
-        // And when it goes, the same.
-        #expect(ChatScroll.repinsOnResize(old: .init(pinned: true, height: 330), new: .init(pinned: true, height: 640), dragging: false))
-        // A reader up in the history keeps their place; so does a drag, and a scroll at the same height.
-        #expect(!ChatScroll.repinsOnResize(old: .init(pinned: false, height: 640), new: .init(pinned: false, height: 330), dragging: false))
-        #expect(!ChatScroll.repinsOnResize(old: foot, new: .init(pinned: false, height: 330), dragging: true))
-        #expect(!ChatScroll.repinsOnResize(old: foot, new: .init(pinned: false, height: 640), dragging: false))
     }
 
     /// Measured on an iPhone 18 Pro with a five-line draft and the keyboard down: 758 pt of
@@ -85,6 +87,22 @@ struct ChatScrollTests {
         #expect(!ChatScroll.isPinned(offset: -116, topInset: 116, container: container, content: 758))
         #expect(!ChatScroll.isPinned(offset: 100, topInset: 116, container: container, content: 758))
         #expect(ChatScroll.isPinned(offset: 156, topInset: 116, container: container, content: 758))
+    }
+
+    /// The chat's top and bottom space is a content margin (`chatScrollMargins()`), not padding
+    /// in the content, so a scroll to a needs card leaves the same gap above the composer as the
+    /// foot does. The margin counts among the insets, not the content: the same chat as above,
+    /// its 758 pt now 726 of rows and 16 each end, is at the foot at its furthest offset, and
+    /// a margin and more above it is not.
+    @Test func theComposerGapIsAMarginNotContent() {
+        #expect(ChatLayout.endMargin == ChatLayout.inset)
+        let margin = ChatLayout.endMargin
+        let top = 116 + margin
+        let container = 874 - 116 - 272 - 2 * margin
+        let rows = 758 - 2 * margin
+        let foot = rows - container - top
+        #expect(ChatScroll.isPinned(offset: foot, topInset: top, container: container, content: rows))
+        #expect(!ChatScroll.isPinned(offset: foot - margin - 9, topInset: top, container: container, content: rows))
     }
 
     /// A rebuilt chat returns to the reader's row while it is there, to the foot once it has
@@ -155,9 +173,4 @@ struct ChatScrollTests {
         #expect(chat.layer == .chat)
         #expect(chat.scrollRequest?.row == "approval-9")
     }
-}
-
-/// Set from an observation's change handler.
-private final class Flag: @unchecked Sendable {
-    var on = false
 }

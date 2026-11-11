@@ -33,6 +33,15 @@ enum ReplayKnownIssues {
         "opencode.turn": ["invariants": [
             "[no-reply": "OpenCode ran a turn (working true, then false, a \"done\" notify with an empty body) but neither a reply nor an error notice reached the chat: the user sees the prompt and nothing else.",
         ]],
+        // Recorded on a local model: not a product bug. After the file reads the model thought for
+        // 134 s before streaming anything; OpenCode's own execution events kept the turn running the
+        // whole time (the same turn went on to write the files), so working=true is right and the 45 s
+        // rule, which assumes a hosted model that streams, misfires. The empty "done" notifies in the
+        // recording came from the pane watcher calling the silent pane done mid-turn; the helper no
+        // longer does that while an agent's event stream says its turn runs.
+        "opencode.status": ["invariants": [
+            "[working-stuck": "The recording's model thought for over two minutes without streaming; OpenCode's events kept the turn running, so working stays true with nothing new for longer than the 45 s rule allows.",
+        ]],
         "vibe.turn": ["invariants": [
             "[no-reply": "Mistral Vibe ran a turn (working, then a \"done\" notify with an empty body) but neither a reply nor an error notice reached the chat.",
         ]],

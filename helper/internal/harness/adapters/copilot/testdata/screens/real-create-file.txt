@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+ ❯ Use your file create tool (not the shell) to create notes.txt         13:20 ┃
+   containing the single line hello. Then reply done.                          ┃
+                                                                               ┃
+ ○ Create notes.txt                                                            ┃
+                                                                               ┃
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Create file                                                                  │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ notes.txt +1 -0                                                              │
+│ /Users/jamie/proj                                                            │
+│                                                                              │
+│ 1 +   hello                                                                  │
+│                                                                              │
+│ Do you want to create /Users/jamie/proj/notes.txt?                           │
+│                                                                              │
+│ ❯ 1. Yes                                                                     │
+│   2. Yes, and don't ask again for file operations when in this repo          │
+│   (/Users/jamie/proj)                                                        │
+│   3. No, and tell Copilot what to do differently (Esc to stop)               │
+│                                                                              │
+│ ↑/↓ to navigate · enter to select · esc to cancel                            │
+╰──────────────────────────────────────────────────────────────────────────────╯

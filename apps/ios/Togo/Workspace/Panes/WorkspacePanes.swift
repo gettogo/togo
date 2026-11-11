@@ -97,7 +97,7 @@ struct WorkspacePanes<Overlay: View>: View {
         guard store.panesVisible, let focused = store.focusedTab?.id,
               let other = store.focusedTab?.id == store.workspace.selected ? store.workspace.secondary : store.workspace.selected,
               terminals.handle(for: other)?.holdsKeyboard == true else { return }
-        terminals.handle(for: focused)?.raiseKeyboard()
+        terminals.handle(for: focused)?.raiseKeyboard(automatic: true)
     }
 
     private func panes(_ geometry: PaneGeometry, width: CGFloat, handle: Bool) -> some View {

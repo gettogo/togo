@@ -110,6 +110,31 @@ import UIKit
         await deliver(id)
     }
 
+    /// A pasted file that is not a picture: uploaded as it is, its machine path returned for
+    /// the prompt. Nil, with a line saying why, when it is too large or does not arrive.
+    func upload(file name: String, data: Data) async -> String? {
+        notice = nil
+        guard let upload else {
+            refuse()
+            return nil
+        }
+        guard data.count <= Self.fileLimit else {
+            notice = ComposerCopy.fileTooLarge
+            return nil
+        }
+        do {
+            return try await upload(name, data)
+        } catch {
+            notice = ComposerCopy.fileFailed(ServiceErrors.message(error))
+            return nil
+        }
+    }
+
+    /// A pasted picture or file with nowhere to go: the machine takes no uploads.
+    func refuse() {
+        notice = ComposerCopy.attachUnavailable
+    }
+
     /// The prompt went: the pictures are part of it now.
     func clear() {
         items = []

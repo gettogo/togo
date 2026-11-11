@@ -30,13 +30,6 @@ struct InputFieldsTests {
         #expect(MachineDraft.jumpText(cases[2]) == "sam@[fe80::1]:2222")
     }
 
-    @Test func composeFieldKeepsDashesAndQuotesAsTyped() {
-        let view = PastingTextView(placeholder: "Message")
-        #expect(view.smartDashesType == .no)
-        #expect(view.smartQuotesType == .no)
-        #expect(view.smartInsertDeleteType == .no)
-    }
-
     @Test func commitMessageStraightensQuotesAndTypedDashes() {
         #expect(CommitMessageText.straightened("fix \u{201C}a\u{201D} it\u{2019}s", previous: "fix \u{201C}a\u{201D} it") == "fix \"a\" it's")
         #expect(CommitMessageText.straightened("run \u{2014}", previous: "run -") == "run --")

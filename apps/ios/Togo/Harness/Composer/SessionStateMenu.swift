@@ -110,8 +110,9 @@ struct SessionStateChip: View {
             Label {
                 if let title {
                     Text(title)
-                        // Wraps in full: a long model id and the mode after it never lose their end.
-                        .multilineTextAlignment(.leading)
+                        // One line (ComposerChipStyle's limit), cut in the middle: a long model id
+                        // keeps its start and the mode after it. trunc-ok: the menu rows show both in full.
+                        .truncationMode(.middle)
                         // motion: state change — the words morph in place when the harness reports a new value.
                         .contentTransition(reduceMotion ? .opacity : .interpolate)
                         .animation(Motion.animation(.respond, reduce: reduceMotion), value: title)

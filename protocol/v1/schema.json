@@ -2209,6 +2209,10 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 80
+        },
+        "plain": {
+          "description": "True for a question whose options are choices, not a yes or a no: none gets the approve or deny role, so no notification offers a one-tap Yes that would pick one.",
+          "type": "boolean"
         }
       },
       "required": [

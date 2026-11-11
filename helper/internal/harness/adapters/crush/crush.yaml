@@ -21,7 +21,7 @@ name: Crush
 revision: 1
 match: { agents: [crush], commands: [crush] }
 harness: { version: [crush, --version], pattern: 'v(\d+\.\d+\.\d+)', range: ">=0.100 <0.110" }
-capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, mode, resume]
+capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, mode, resume, needs.questions]
 feeds:
   session:
     sqlite:
@@ -66,6 +66,14 @@ actions:
   resume:
     relaunch: { argv: [crush, --session, '{{.id}}'] }
     stability: documented
+  # The question tool's call (crush.db) is the question item; its dialog is answered with keys
+  # (detect.ParseChoice). Seen on 0.100.0: single choice ends on Enter, 1-9 quick-select, Space
+  # toggles a multi choice, "Something else?" takes typed words; a batch has tabs ([ / ]) and a
+  # Yup!/Not yet confirm page; a yes/no in a batch must be set with Left/Right then Enter (its
+  # y/n keys record No there, a Crush bug). Permissions stay screen prompts (no record).
+  answer:
+    builtin: screen_answer
+    stability: experimental
   set_mode:
     label: Mode
     confirm: Restart Crush in this mode? The session continues.
@@ -73,8 +81,11 @@ actions:
       - { when: '{{eq .id "yolo"}}', relaunch: { argv: [crush, --yolo, --continue] } }
       - { relaunch: { argv: [crush, --continue] } }
     stability: documented
-  interrupt:         # Crush asks for a second Escape before it cancels
-    keys: { keys: [Escape, Escape] }
+  # Crush asks for a second Escape before it cancels. Sent in one write the
+  # two read as Alt+Escape and only armed "esc press again to cancel" (seen on
+  # 0.100.0), so the second follows the first after a gap.
+  interrupt:
+    keys: { keys: [Escape], until: idle, max: 2, then: [Escape] }
     stability: documented
 modes:
   choices: [{ id: default, label: Ask }, { id: yolo, label: Skip prompts }]

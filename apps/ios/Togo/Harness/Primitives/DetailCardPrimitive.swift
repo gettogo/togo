@@ -99,11 +99,14 @@ private struct DetailBody: View {
             }
             .background(Color.togoGrouped, in: .rect(cornerRadius: 14, style: .continuous))
         case .text:
-            Text(verbatim: content.text ?? "")
-                .font(.mono(.footnote))
-                .foregroundStyle(Color.togoSnow)
-                .textSelection(.enabled)
-                .primitiveWell()
+            // Machine text a step printed: any part selects and copies exactly.
+            let text = content.text ?? ""
+            SelectableText(key: text, copy: { ChatPasteboard.copy(exact: $0.string) }) { traits in
+                ChatSelectable.attributed(
+                    AttributedString(text), style: ChatSelectable.Style(textStyle: .footnote, monospaced: true), traits: traits
+                )
+            }
+            .primitiveWell()
         case .empty:
             Text(PrimitiveCopy.noBody).font(.body).foregroundStyle(Color.togoMute)
         }

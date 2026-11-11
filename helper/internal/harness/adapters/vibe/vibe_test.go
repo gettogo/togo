@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -215,5 +216,31 @@ func TestJournalForPicksThisFolder(t *testing.T) {
 	env := harness.Env{Cwd: "/w/proj", Vars: map[string]string{source.VarHome: home}}
 	if got := journalFor(env); got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+// Vibe records its agent nowhere but the footer; the mode is read there.
+func TestModeFromTheFooter(t *testing.T) {
+	a, err := spec.Parse(AdapterFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(line string) string {
+		for _, r := range a.Modes.Screen {
+			if regexp.MustCompile(r.Line).MatchString(line) {
+				return r.ID
+			}
+		}
+		return ""
+	}
+	for line, want := range map[string]string{
+		"──────────── Qwen3.8 27B (5090)[off] · accept edits ─": "accept-edits",
+		"──── Devstral 2 · ask ─":                                "ask",
+		"──── Devstral 2 · auto approve":                         "auto-approve",
+		"> Should I ask · or not?":                               "",
+	} {
+		if got := read(line); got != want {
+			t.Errorf("%q read as %q, want %q", line, got, want)
+		}
 	}
 }

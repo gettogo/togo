@@ -24,6 +24,11 @@ enum TutorialTip: String, CaseIterable, Sendable {
         tip(generation: defaults.integer(forKey: TutorialModel.Keys.tipsGeneration)).invalidate(reason: .actionPerformed)
     }
 
+    /// Tips belong to the person's own first run. The demo's screens show none and put none
+    /// away: TipKit keeps one record for the whole app, and the demo's emptied defaults give it
+    /// the same tip ids, so a tip seen or done in the demo would never show for real.
+    static func shows(inDemo: Bool) -> Bool { !inDemo }
+
     var title: String {
         switch self {
         case .workspace: String(localized: "tutorial.tip.workspace.title", defaultValue: "Chat or terminal")
@@ -95,12 +100,24 @@ extension View {
 
 private struct TutorialTipModifier: ViewModifier {
     @AppStorage(TutorialModel.Keys.tipsGeneration) private var generation = 0
+    @Environment(\.demoExit) private var demoExit
     let kind: TutorialTip
     let arrowEdge: Edge
 
     func body(content: Content) -> some View {
-        content
-            .popoverTip(kind.tip(generation: generation), arrowEdge: arrowEdge)
-            .tint(Color.togoSnow)
+        if TutorialTip.shows(inDemo: demoExit != nil) {
+            content
+                .popoverTip(kind.tip(generation: generation), arrowEdge: arrowEdge)
+                .tint(Color.togoSnow)
+        } else {
+            content
+        }
+    }
+}
+
+extension AppStore {
+    /// The person did what `tip` teaches: put it away, unless this store is the demo's.
+    func tipDone(_ tip: TutorialTip) {
+        if teachesTips { tip.done() }
     }
 }

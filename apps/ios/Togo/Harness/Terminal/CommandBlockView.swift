@@ -39,12 +39,16 @@ struct CommandBlockView: View {
                 if shown.open {
                     VStack(alignment: .leading, spacing: 0) {
                         Rectangle().fill(Color.togoLine).frame(height: 1)
-                        Text(verbatim: block.output)
-                            .font(.mono(.caption))
-                            .foregroundStyle(Color.togoSnow.opacity(0.85))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
+                        // Any part of the output selects: a long press picks a word, its
+                        // handles reach across lines, and Copy takes exactly what is selected.
+                        SelectableText(
+                            key: block.output, insets: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12),
+                            copy: { copy($0.string) }
+                        ) { traits in
+                            ChatSelectable.attributed(AttributedString(block.output), style: Self.output, traits: traits)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .environment(\.selectableTextActions, textMenu(block))
                     }
                     // The block's growing edge uncovers the output in place.
                     .unfolds(shown)
@@ -64,7 +68,6 @@ struct CommandBlockView: View {
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
         // Nothing draws outside the block while it grows or shrinks.
         .clipShape(.rect(cornerRadius: 12, style: .continuous))
-        .contextMenu { menu(block, collapsed: collapsed) }
         .accessibilityElement(children: .contain)
         .onAppear { if ended == nil { ended = !block.isRunning } }
         .onChange(of: block.isRunning) { _, running in
@@ -102,6 +105,8 @@ struct CommandBlockView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        // The block's menu lives on its command line; a long press on the output selects words.
+        .contextMenu { menu(block, collapsed: collapsed) }
         .accessibilityLabel(block.spoken)
         .accessibilityValue(block.hasOutput ? (collapsed ? ChatCopy.collapsed : ChatCopy.expanded) : "")
         .accessibilityActions { menu(block, collapsed: collapsed) }
@@ -164,6 +169,32 @@ struct CommandBlockView: View {
             Button(ChatCopy.showInTerminal, systemImage: "arrow.up.forward.app") {
                 Task { await store.showInTerminal(item) }
             }
+        }
+    }
+
+    /// SF Mono at the caption size, a little dimmer than prose.
+    private static var output: ChatSelectable.Style {
+        ChatSelectable.Style(textStyle: .caption1, monospaced: true, color: UIColor.togoSnow.withAlphaComponent(0.85))
+    }
+
+    /// The block's actions after the edit menu's Copy, Look Up and Share.
+    private func textMenu(_ block: CommandBlock) -> SelectableTextActions {
+        SelectableTextActions { _ in
+            var items: [UIMenuElement] = [
+                UIAction(title: TerminalSyncCopy.copyOutput, image: UIImage(systemName: "doc.on.doc")) { _ in copy(block.copyText) },
+            ]
+            if !block.command.isEmpty {
+                items.append(UIAction(title: TerminalSyncCopy.copyCommand, image: UIImage(systemName: "terminal")) { _ in copy(block.command) })
+            }
+            if block.canRerun {
+                items.append(UIAction(title: TerminalSyncCopy.rerun, image: UIImage(systemName: "arrow.clockwise")) { _ in rerun(block) })
+            }
+            if item.anchor != nil, store.has(HarnessCapability.anchors) {
+                items.append(UIAction(title: ChatCopy.showInTerminal, image: UIImage(systemName: "arrow.up.forward.app")) { _ in
+                    Task { await store.showInTerminal(item) }
+                })
+            }
+            return items
         }
     }
 

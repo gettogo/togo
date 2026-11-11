@@ -25,6 +25,7 @@ type turnOut struct {
 	sendErr     error
 	sentAt      time.Time
 	dur         time.Duration
+	seen        []string // the kinds of the items the turn produced, for a failure's report
 }
 
 var okRE = regexp.MustCompile(`(?im)^\W*ok\W*$`)
@@ -78,7 +79,9 @@ func (r *runner) turn(ctx context.Context, prompt string, stopOnApproval bool, o
 		}
 		final, partial := "", false
 		ended := false
+		out.seen = out.seen[:0]
 		for _, it := range news {
+			out.seen = append(out.seen, itemTag(it))
 			switch {
 			case it.Parent != "":
 			case it.Kind == harness.KindAssistant && it.Assistant != nil:
@@ -93,7 +96,8 @@ func (r *runner) turn(ctx context.Context, prompt string, stopOnApproval bool, o
 				if it.Turn.State == harness.StateFailed && out.errText == "" {
 					out.errText = "turn failed"
 				}
-			case it.Kind == harness.KindNotice && it.Notice != nil && it.Notice.Level == "error":
+			case it.Kind == harness.KindNotice && it.Notice != nil && (it.Notice.Level == "error" || it.Notice.Code == harness.NoticeRateLimit):
+				// A rate limit is a warning notice; "out of credits" is one too.
 				out.errText = it.Notice.Text
 			}
 		}
@@ -140,6 +144,18 @@ func (r *runner) turn(ctx context.Context, prompt string, stopOnApproval bool, o
 		}
 	}
 	return out
+}
+
+// itemTag names an item for a report: its kind, and a turn's state.
+func itemTag(it harness.Item) string {
+	tag := it.Kind
+	if it.Turn != nil {
+		tag += "(" + it.Turn.State + ")"
+	}
+	if it.Parent != "" {
+		tag += "^"
+	}
+	return tag
 }
 
 // newItems returns the main conversation's items stored after mark, in

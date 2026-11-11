@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/detect"
@@ -186,8 +187,17 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		}
 		return s.send(ctx, tgt, false, keys...)
 	}
-	if p, ok := detect.Detect(screen); !ok || p.Fingerprint != fingerprint {
+	p, ok := detect.Detect(screen)
+	if !ok || p.Fingerprint != fingerprint {
 		return errPromptGone
+	}
+	if d.Kind == wire.DecisionText && len(p.TextKeys) > 0 {
+		// The option that opens the field first (Kimi's "Reject with
+		// feedback"), then the words once the field shows.
+		if err := s.send(ctx, tgt, false, p.TextKeys...); err != nil {
+			return err
+		}
+		s.awaitChange(ctx, tgt, screen)
 	}
 	if d.Kind == wire.DecisionText {
 		if a.SignIn != nil && a.SignIn.Secret {
@@ -211,4 +221,16 @@ func (s *Store) send(ctx context.Context, tgt string, literal bool, keys ...stri
 		return fmt.Errorf("send keys: %w", err)
 	}
 	return nil
+}
+
+// awaitChange waits a moment for the pane to differ from before, as a
+// field opens after the key that asked for it.
+func (s *Store) awaitChange(ctx context.Context, tgt, before string) {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && ctx.Err() == nil {
+		time.Sleep(100 * time.Millisecond)
+		if now, err := s.cfg.Tmux.CapturePane(ctx, tgt); err != nil || now != before {
+			return
+		}
+	}
 }

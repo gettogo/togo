@@ -14,6 +14,6 @@ extension SwiftTermEngine {
     }
 
     func endEditing() {
-        _ = terminalView.resignFirstResponder()
+        terminalView.dismissKeyboard()
     }
 }

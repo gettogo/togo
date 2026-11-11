@@ -1,0 +1,40 @@
+ restart tmux.
+   MCP server "plugin-mobbin:mobbin" needs OAuth — run /mcp-config login plugin-mobbin:mobbin
+
+ ❯ Use your AskUserQuestion tool to ask me exactly one question: "Which colour should the banner use?" with options
+   Red, Green and Blue, each with a short description. Do nothing else.
+
+ ● The user wants me to use the AskUserQuestion tool to ask exactly one question: "Which color should the banner use?",
+   with Red, Green, and Blue as options, each with a short description. Do nothing else.
+   … (2 more lines, ctrl+o to expand)
+
+ ● Collected your answers
+   Q  Which colour should the banner use?
+   →  Green
+
+ ● Compaction complete (17938 → 18795 tokens) (Ctrl-O to show compaction summary)
+
+ ● I have a question to ask. Let's call the AskUserQuestion tool.
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   ❯ Now use AskUserQuestion once with two questions in one call: 1) header "Features", "Which features?" with multiSe…
+   ↑ to edit · ctrl-s to steer immediately
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  question
+
+   Q1    Submit
+
+  ? Which colour should the banner use?
+    Type your answer, then press Enter to save.
+
+     [1] Red
+         Bold and eye-catching, great for urgency or promotions.
+     [2] Green
+         Calm and approachable, often associated with growth or success.
+     [3] Blue
+         Trustworthy and professional, a safe pick for most brands.
+   → [4] Other:
+
+   type answer  ↵ save  tab switch  esc cancel
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Qwen3.8 27B (5090) thinking  …/w/proj  main           /goal for multi-step work with a clear finish line
+                                                                                               context: 28% (17.9k/64k)

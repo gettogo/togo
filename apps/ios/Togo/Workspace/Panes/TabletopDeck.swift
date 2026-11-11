@@ -36,8 +36,15 @@ struct TabletopDeck<Requests: View>: View {
 }
 
 extension TerminalHandle {
-    /// Gives the terminal keyboard focus, which brings up the software keyboard and key bar.
-    func raiseKeyboard() {
+    /// Gives the terminal keyboard focus, which brings up the software keyboard and key bar,
+    /// also when the terminal kept focus while its keyboard went away (`showKeyboard`).
+    /// `automatic`: the app raising it on its own (a pane move, coming back from the chat); it
+    /// never undoes the user's Hide keyboard.
+    func raiseKeyboard(automatic: Bool = false) {
+        if let engine {
+            engine.showKeyboard(automatic: automatic)
+            return
+        }
         guard let view = engineView.viewIfLoaded else { return }
         Self.firstResponder(in: view)?.becomeFirstResponder()
     }

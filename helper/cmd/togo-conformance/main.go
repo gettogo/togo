@@ -36,6 +36,9 @@ type options struct {
 	jsonOut   string
 	root      string
 	runID     string
+	router    *openRouter         // -openrouter: run on OpenRouter with the key from the environment
+	models    map[string]string   // -model: per-harness model id used instead of the picker's cheapest
+	args      map[string][]string // -args: per-harness launch arguments (Cline's --auto-approve false)
 }
 
 // order runs the slow, signed-in agents first so the run ends sooner.
@@ -45,7 +48,7 @@ func main() { os.Exit(realMain()) }
 
 func realMain() int {
 	var o options
-	var only, scen string
+	var only, scen, router, models, args string
 	var cleanup bool
 	flag.StringVar(&o.bin, "bin", "", "togo binary built from this tree (required)")
 	flag.StringVar(&o.adapters, "adapters", "", "adapter folder (helper/internal/harness/adapters) for input-line patterns")
@@ -57,7 +60,37 @@ func realMain() int {
 	flag.StringVar(&o.root, "root", "", "scratch root (default /private/tmp/togo-conformance-<run id>)")
 	flag.StringVar(&o.runID, "run-id", "", "run id (default random)")
 	flag.BoolVar(&cleanup, "cleanup", false, "with -root and -run-id: kill the run's servers and daemons, restore configs, exit")
+	flag.StringVar(&router, "openrouter", "", "run the agents on this OpenRouter model (provider/model; \"default\" = "+defaultOpenRouterModel+") with OPENROUTER_API_KEY from the environment")
+	flag.StringVar(&models, "model", "", "per-harness model ids used instead of the picker's cheapest, e.g. aider=openrouter/z-ai/glm-5.3-flash,omp=openrouter/deepseek/deepseek-v3.2")
+	flag.StringVar(&args, "args", "", "per-harness launch arguments, harness=args separated by ';', e.g. 'cline=--auto-approve false'")
 	flag.Parse()
+	var err error
+	if o.args, err = parseArgs(args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	o.models = map[string]string{}
+	for _, kv := range strings.Split(models, ",") {
+		if kv = strings.TrimSpace(kv); kv != "" {
+			h, m, ok := strings.Cut(kv, "=")
+			if !ok || h == "" || m == "" {
+				fmt.Fprintf(os.Stderr, "-model takes harness=model pairs, not %q\n", kv)
+				return 2
+			}
+			o.models[h] = m
+		}
+	}
+	if router != "" {
+		key := os.Getenv("OPENROUTER_API_KEY")
+		if key == "" {
+			fmt.Fprintln(os.Stderr, "-openrouter needs OPENROUTER_API_KEY in the environment")
+			return 2
+		}
+		if router == "default" {
+			router = defaultOpenRouterModel
+		}
+		o.router = &openRouter{model: router, key: key}
+	}
 	o.only, o.scenarios = set(only), set(scen)
 	for s := range o.scenarios {
 		if !contains(scenarios, s) {
@@ -232,6 +265,10 @@ func runOne(ctx context.Context, o *options, r *runner) {
 	}
 	r.sb, r.start = sb, time.Now().Add(-2*time.Second)
 	r.marker = filepath.Base(sb.work)
+	if err := o.router.projectFiles(r.id, sb.work); err != nil {
+		r.set("create", fail, "openrouter project file: %v", err)
+		return
+	}
 	defer func() {
 		sb.killServer()
 		stopDaemon(sb.home)
@@ -242,7 +279,7 @@ func runOne(ctx context.Context, o *options, r *runner) {
 	}()
 	hctx, cancel := context.WithTimeout(ctx, o.perAgent)
 	defer cancel()
-	c, err := dial(hctx, o.bin, sb.env(), r.onNotify)
+	c, err := dial(hctx, o.bin, append(sb.env(), o.router.env(r.id)...), r.onNotify)
 	if err != nil {
 		r.set("create", fail, "helper: %v", err)
 		return
@@ -304,4 +341,21 @@ func writeJSON(path string, runners []*runner, notes []string) {
 	}
 	b, _ := json.MarshalIndent(map[string]any{"harnesses": rows, "cleanup": notes}, "", "  ")
 	_ = os.WriteFile(path, b, 0o600)
+}
+
+// parseArgs reads -args: harness=arguments pairs separated by ';', the
+// arguments split on spaces (argv entries, never shell text).
+func parseArgs(s string) (map[string][]string, error) {
+	out := map[string][]string{}
+	for _, kv := range strings.Split(s, ";") {
+		if kv = strings.TrimSpace(kv); kv == "" {
+			continue
+		}
+		h, a, ok := strings.Cut(kv, "=")
+		if !ok || strings.TrimSpace(h) == "" || len(strings.Fields(a)) == 0 {
+			return nil, fmt.Errorf("-args takes harness=arguments pairs, not %q", kv)
+		}
+		out[strings.TrimSpace(h)] = strings.Fields(a)
+	}
+	return out, nil
 }

@@ -29,6 +29,11 @@ func (e *AskError) Error() string { return e.Msg }
 var (
 	askPoll = 100 * time.Millisecond
 	askWait = 3 * time.Second
+	// askSettle is how long a question the driver just found stays on
+	// screen before its first key: Vibe 3.1 drops keys for up to half a
+	// second after drawing its dialog (a digit sent at once is lost), and
+	// Copilot loses keys sent right after its form opens.
+	askSettle = 700 * time.Millisecond
 )
 
 // AnswerAsk answers Claude Code's question dialog with keys, one question

@@ -67,3 +67,32 @@ func TestReplayedQuestionComesBackAnswered(t *testing.T) {
 		t.Fatalf("answered %v", last.Question.Answered)
 	}
 }
+
+// ExitPlanMode is the plan as a message and a question with the dialog's
+// three answers, a permission (approve is the manual yes); its result
+// settles it as approved, or empty when the user kept planning.
+func TestExitPlanModeIsAPlanAndAQuestion(t *testing.T) {
+	const use = `{"type":"assistant","uuid":"a3","timestamp":"2026-11-07T10:00:00Z","message":{"id":"m3","role":"assistant","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"toolu_9","name":"ExitPlanMode","input":{"plan":"# Plan\n1. Add a retry wrapper\n2. Cover it with tests"}}]}}`
+	m := newTranscript(env())
+	items, _ := m.Map(rec(use))
+	if len(items) != 2 || items[0].Kind != harness.KindAssistant || items[0].Assistant.Text != "# Plan\n1. Add a retry wrapper\n2. Cover it with tests" {
+		t.Fatalf("items %+v", items)
+	}
+	q := items[1]
+	if q.ID != "toolu_9" || q.Kind != harness.KindQuestion || q.Question.Approve != "manual" || q.Question.Deny != "keep" ||
+		q.Question.Questions[0].Prompt != planPrompt || len(q.Question.Questions[0].Options) != 3 || q.Question.Questions[0].AllowText {
+		t.Fatalf("question %+v", q.Question)
+	}
+	res := `{"type":"user","uuid":"u9","timestamp":"2026-11-07T10:00:09Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_9","content":"User has approved your plan. You can now start coding."}]},"toolUseResult":"approved"}`
+	items, _ = m.Map(rec(res))
+	if len(items) != 1 || !reflect.DeepEqual(items[0].Question.Answered, map[string][]string{"plan": {"Yes"}}) {
+		t.Fatalf("approved %+v", items)
+	}
+	m2 := newTranscript(env())
+	m2.Map(rec(use))
+	rej := `{"type":"user","uuid":"u9","timestamp":"2026-11-07T10:00:09Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_9","content":"The user doesn't want to proceed with this tool use.","is_error":true}]}}`
+	items, _ = m2.Map(rec(rej))
+	if len(items) != 1 || !reflect.DeepEqual(items[0].Question.Answered, map[string][]string{"plan": {}}) {
+		t.Fatalf("rejected %+v", items)
+	}
+}

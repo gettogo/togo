@@ -1,0 +1,24 @@
+ │   exact URL when writing; use Cursor docs path for hooks if                │
+ │   available).                                                              │
+ │                                                                            │
+ │ Out of scope (unless you ask later)                                        │
+ │                                                                            │
+ │ • Moving dump.sh into the repo or making paths relative/portable.          │
+ │ • .gitignore for hooks.log.                                                │
+ │ • License section or SPDX identifier.                                      │
+ │                                                                            │
+ │ Verification after implementation                                          │
+ │                                                                            │
+ │ • README renders correctly in GitHub/Cursor preview (headings, lists,      │
+ │   links).                                                                  │
+ │ • Instructions match actual paths in .cursor/hooks.json                    │
+ │   (.cursor/hooks.json) and dump.sh (/Users/jamie/bin/hook).                │
+ │ • Only README.md added (no unrelated files).                               │
+ └────────────────────────────────────────────────────────────────────────────┘
+
+
+
+  → Describe how to revise the plan (Enter to submit, Esc to cancel)
+
+
+

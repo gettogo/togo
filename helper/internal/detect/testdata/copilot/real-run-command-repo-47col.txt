@@ -1,0 +1,30 @@
+ [Current]  Sessions   Issues  →
+
+                                              ┃
+ ● done                                       ┃
+                                              ┃
+ ❯ Use your shell tool to run exactly:  13:19 ┃
+   touch y.txt — then reply done.             ┃
+                                              ┃
+ ○ Shell Create empty file y.txt              ┃
+   touch y.txt                                ┃
+                                              ┃
+╭─────────────────────────────────────────────╮
+│ Create empty file y.txt                     │
+│ ─────────────────────────────────────────── │
+│ ╭─────────────────────────────────────────╮ │
+│ │ touch y.txt                             │ │
+│ ╰─────────────────────────────────────────╯ │
+│                                             │
+│ Do you want to run this command?            │
+│                                             │
+│ ❯ 1. Yes                                    │
+│  2. Yes, and don't ask again for `touch` in │
+│  this repo (/Users/jamie/                   │
+│  proj)                                      │
+│   3. No, and tell Copilot what to do        │
+│   differently (Esc to stop)                 │
+│                                             │
+│ ↑/↓ to navigate · enter to select · esc to  │
+│ cancel                                      │
+╰─────────────────────────────────────────────╯

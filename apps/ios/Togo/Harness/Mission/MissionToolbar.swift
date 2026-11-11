@@ -72,7 +72,7 @@ struct MissionToolbarItem: ToolbarContent {
 
     var body: some ToolbarContent {
         if #available(iOS 27.0, *) {
-            item.visibilityPriority(badge > 0 ? ToolbarItemVisibilityPriority(higherThan: .high) : .automatic)
+            item.visibilityPriority(DockPriority.tier(.mission, missionNeedsYou: badge > 0).priority)
         } else {
             item
         }

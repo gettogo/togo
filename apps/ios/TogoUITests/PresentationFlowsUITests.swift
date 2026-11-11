@@ -83,6 +83,30 @@ import XCTest
         return found
     }
 
+    /// Opens mission control: its bar item where the bar has one (regular width, a Duo's
+    /// vertical bar), else its item in the session menu, where a compact bar keeps it.
+    private func openMissionControl() -> Bool {
+        if let item = visibleButton("mission.item", timeout: 3) {
+            item.tap()
+            return true
+        }
+        // The menu lists it once the session's mission has loaded: look again until it does.
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            guard let menu = visibleButton("Session actions", timeout: 5) else { return false }
+            menu.tap()
+            // By its label: a menu item does not carry its view's identifier. The open menu's
+            // item is the one on top; the screen under it may name mission control too.
+            if let item = visibleButton("Mission control", timeout: 2) {
+                item.tap()
+                return true
+            }
+            // Closes the menu without picking anything.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+        }
+        return false
+    }
+
     /// The on-screen button whose label starts with `prefix` ("Sonnet, Fast and capable").
     private func visibleButton(beginningWith prefix: String, timeout: TimeInterval = 10) -> XCUIElement? {
         var found: XCUIElement?
@@ -243,8 +267,7 @@ import XCTest
     func testMissionControlOpensAndCloses() {
         launch(replay: "chat")
         openChat()
-        guard let item = visibleButton("mission.item") else { return XCTFail("No mission control item") }
-        item.tap()
+        guard openMissionControl() else { return XCTFail("No mission control item") }
         expectProbe(contains: "mission.sheet", "Mission control as a sheet")
         XCTAssertTrue(app.navigationBars["Mission control"].waitForExistence(timeout: 5))
         guard let done = visibleButton("Done", timeout: 5) else { return XCTFail("No Done in mission control") }
@@ -298,13 +321,21 @@ import XCTest
 
     /// 10. The same request, two widths: a sheet on a compact width, an inspector beside the
     /// chat on a regular one (the policy keys on width, never the device).
-    func testRegularWidthPicksInspector() {
+    func testRegularWidthPicksInspector() throws {
         launch(replay: "chat")
         XCUIDevice.shared.orientation = .landscapeLeft
         openChat()
-        guard let item = visibleButton("mission.item") else { return XCTFail("No mission control item") }
+        // An iPhone below the Max models keeps a compact-width window in landscape (its size
+        // class), where mission control is rightly a sheet. The regular-width inspector is
+        // checked on a Max or an iPad; check-ui.sh runs on the iPhone 18 Pro Max.
+        let device = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] ?? ""
+        if !device.contains("Max"), !device.contains("iPad") {
+            throw XCTSkip("Landscape on \(device) is compact width; the inspector is for regular width")
+        }
         // It may already be open by default beside the chat; otherwise open it.
-        if !probeValue.contains("mission.inspector") { item.tap() }
+        if !probeValue.contains("mission.inspector") {
+            guard openMissionControl() else { return XCTFail("No mission control item") }
+        }
         expectProbe(contains: "mission.inspector", "Mission control as an inspector at regular width")
         XCTAssertFalse(probeValue.contains("mission.sheet"), probeValue)
         XCTAssertTrue(composer.isHittable, "The chat stays usable beside the inspector")

@@ -21,13 +21,14 @@ type db struct {
 	mu       sync.Mutex
 	state    map[string]string
 	sessions map[string]sessionRow
-	done     map[string]bool // messages already mapped whole
+	done     map[string]bool  // messages already mapped whole
+	asks     map[string]asked // question tool calls by call id
 	b        *turns.Builder
 }
 
 func newDB(env harness.Env) *db {
 	return &db{env: env, state: map[string]string{}, sessions: map[string]sessionRow{},
-		done: map[string]bool{}, b: turns.New()}
+		done: map[string]bool{}, asks: map[string]asked{}, b: turns.New()}
 }
 
 func (m *db) Name() string { return MapperDB }
@@ -107,6 +108,7 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	if best.ID != m.state["harness_session"] {
 		m.b.Reset()
 		m.done = map[string]bool{}
+		m.asks = map[string]asked{}
 		m.state["harness_session"] = best.ID
 	}
 	return nil, nil
@@ -149,6 +151,10 @@ func (m *db) message(r messageRow) []harness.Item {
 			if p.Type != "tool_result" {
 				continue
 			}
+			if x, ok := m.answered(p.Data.ToolCallID, p.Data.Content, p.Data.IsError); ok {
+				items = append(items, x)
+				continue
+			}
 			state := harness.StateOK
 			if p.Data.IsError {
 				state = harness.StateFailed
@@ -182,9 +188,16 @@ func (m *db) assistant(r messageRow, parts []part, fin part, at time.Time) []har
 				thought = append(thought, t)
 			}
 		case "tool_call":
-			if p.Data.ID != "" {
-				items = append(items, m.b.ToolStart(p.Data.ID, p.Data.Name, json.RawMessage(p.Data.Input), at))
+			if p.Data.ID == "" {
+				continue
 			}
+			if p.Data.Name == questionTool {
+				if q, ok := m.question(p.Data.ID, p.Data.Input, at); ok {
+					items = append(items, q)
+					continue
+				}
+			}
+			items = append(items, m.b.ToolStart(p.Data.ID, p.Data.Name, json.RawMessage(p.Data.Input), at))
 		}
 	}
 	if r.Summary == 1 {
@@ -216,8 +229,10 @@ func (m *db) assistant(r messageRow, parts []part, fin part, at time.Time) []har
 	case "", "tool_use":
 		return append(items, m.b.TurnItem(harness.StateRunning, nil))
 	case "canceled":
+		items = append(items, m.closeOpen()...)
 		return append(items, m.b.Close(harness.StateInterrupted, at)...)
 	case "error", "permission_denied":
+		items = append(items, m.closeOpen()...)
 		return append(items, m.b.Close(harness.StateFailed, at)...)
 	}
 	return append(items, m.b.Close(harness.StateOK, at)...)

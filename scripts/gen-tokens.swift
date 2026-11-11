@@ -35,6 +35,8 @@ let roleKeys = [
     "ink", "deepest", "raised", "line", "snow", "mute", "muteDim", "grouped",
     // Content colours for diffs and code; they never reuse the accent hue.
     "diffAddedBg", "diffAddedWord", "diffRemovedBg", "diffRemovedWord", "diffHunkBg", "gutterText",
+    // Change marks drawn as text (A, U, !): foreground values that read at 4.5:1 on ink and grouped.
+    "changeAdded", "changeConflict",
     "syntaxKeyword", "syntaxType", "syntaxString", "syntaxNumber", "syntaxComment", "syntaxAttribute",
 ]
 

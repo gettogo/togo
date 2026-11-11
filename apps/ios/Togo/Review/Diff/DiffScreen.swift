@@ -129,6 +129,7 @@ struct DiffScreen: View {
                     .pickerStyle(.inline)
                 }
                 Toggle(DiffCopy.wrap, isOn: wrapBinding)
+                    .menuToggle()
                     .disabled(typeSize.isAccessibilitySize)
                 if model.actions.contains(.discard) {
                     Section {

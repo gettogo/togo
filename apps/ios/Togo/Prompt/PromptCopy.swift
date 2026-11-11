@@ -14,6 +14,7 @@ enum PromptCopy {
     static let folderOrAgent = String(localized: "prompt.folderOrAgent", defaultValue: "Folder or agent")
     static let moreOptions = String(localized: "prompt.moreOptions", defaultValue: "More options")
     static let more = String(localized: "prompt.more", defaultValue: "More")
+    static let answer = String(localized: "prompt.answer", defaultValue: "Answer")
     static let dismiss = String(localized: "prompt.dismiss", defaultValue: "Dismiss")
     /// The request went away while the user wrote a reply.
     static let withdrawn = String(localized: "prompt.withdrawn", defaultValue: "No longer waiting for an answer")

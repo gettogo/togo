@@ -163,6 +163,9 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		a.SignIn = &in
 		a.AllowText = in.Secret
 	}
+	if p.TextKeys != nil {
+		a.AllowText = true // typed words: a reason, a form field
+	}
 	if p.ReadOnly {
 		a.Answerable = notAnswerable()
 	}
@@ -282,6 +285,11 @@ func (s *Store) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <
 	a.Title = truncate(p.Title, wire.MaxTitle)
 	a.AllowText = p.AllowText
 	roles := AskRoles(p.Options, p.Approve, p.Deny)
+	if p.Plain {
+		for i := range roles {
+			roles[i] = wire.RoleOther
+		}
+	}
 	for i, label := range p.Options {
 		a.Options = append(a.Options, wire.Option{N: i + 1, Label: truncate(label, wire.MaxOptionLabel), Role: roles[i]})
 	}

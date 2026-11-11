@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+                                                                               ┃
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Fetch content from this URL.                                                 │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ Copilot is attempting to access the following URL:                           │
+│                                                                              │
+│ ╭──────────────────────────────────────────────────────────────────────────╮ │
+│ │ https://example.com                                                      │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ Do you want to allow this access?                                            │
+│                                                                              │
+│ ❯ 1. Yes                                                                     │
+│   2. Yes, and approve all URLs from "https://example.com" for the rest of    │
+│   the running session                                                        │
+│   3. Yes, and approve all URLs from "https://example.com" permanently        │
+│   4. Yes, and approve "https://*.example.com" and its subdomains for the     │
+│   rest of the running session                                                │
+│   5. No, and tell Copilot what to do differently (Esc to stop)               │
+│                                                                              │
+│ ↑/↓ to navigate · enter to select · esc to cancel                            │
+╰──────────────────────────────────────────────────────────────────────────────╯

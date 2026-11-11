@@ -1,0 +1,9 @@
+│ ⏎ select · n note · ↑/↓ move · ⎋ cancel · ⌥H hide                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ I asked one question with three options, and you picked New feature.
+
+
+                                                            🗳️ ASK: Ask one multiple-choice question
+ π > ◑ Opus 5.5 > 🗑 code/demo > ⑂ main > S0.15 ▶─2%─────────────────────────────╎┃─────1M─
+╰─                                                                      ⇧⇥ to change thinking effort

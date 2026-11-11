@@ -134,6 +134,7 @@ func (e *Events) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "permission.asked":
 		return e.permission(p, at)
 	case httpsrc.Reconnected:
+		e.lostTrack()
 		return e.dropOpen()
 	case "session.compacted":
 		var s struct {
@@ -412,4 +413,14 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 	x.Agent = &body
 	s.agent = x
 	return append(items, x), []harness.Op{agentRow(x)}
+}
+
+// lostTrack forgets whether the main session's turn runs: the stream that
+// came back may have missed its end (session.idle, an execution's end),
+// and a "working" kept from before would hold the done back for good. The
+// pane decides until the next event says otherwise.
+func (e *Events) lostTrack() {
+	if e.state["working"] == "true" {
+		e.state["working"], e.state["idle"] = "false", "true"
+	}
 }

@@ -93,10 +93,12 @@ struct DiagnosticsPage: View {
                 count(settingsText("diagnostics.events", "Events recorded"), summary?.events)
                 count(settingsText("diagnostics.machines", "Machines"), summary?.machines)
             } footer: {
-                Text(settingsText(
-                    "diagnostics.included",
-                    "Includes app and iOS versions, device model, a settings summary and recent connection events. Machines show as codes. Never includes names, addresses, folders, session names, prompts, terminal text, keys or passwords."
-                ))
+                SectionFooter {
+                    Text(settingsText(
+                        "diagnostics.included",
+                        "Includes app and iOS versions, device model, a settings summary and recent connection events. Machines show as codes. Never includes names, addresses, folders, session names, prompts, terminal text, keys or passwords."
+                    ))
+                }
             }
             .groupedRows()
             Section {
@@ -114,7 +116,9 @@ struct DiagnosticsPage: View {
                     .frame(minHeight: 44)
                 }
             } footer: {
-                Text(settingsText("diagnostics.sent", "Togo never sends this report. It leaves this device only when you share it."))
+                SectionFooter {
+                    Text(settingsText("diagnostics.sent", "Togo never sends this report. It leaves this device only when you share it."))
+                }
             }
             .groupedRows()
             Section {

@@ -26,7 +26,7 @@ import TogoKit
     func composer(for id: TabID) -> CommandLineModel? {
         if let model = composers[id] { return model }
         guard let store = stores[id] else { return nil }
-        let model = CommandLineModel(store: store)
+        let model = CommandLineModel(store: store, memory: services.composerMemory)
         composers[id] = model
         return model
     }

@@ -26,6 +26,8 @@ struct SmartCommandLine: View {
     @FocusState private var focused: Bool
     @State private var shown: ComposerParts
     @State private var leaving: Set<ComposerParts.Part> = []
+    /// Pictures and files pasted into the field go to the attachments, not into the text.
+    @State private var paste = ComposerPasteDelegate()
 
     init(model: CommandLineModel, onOpen: @escaping (HarnessOpen) -> Void = { _ in }) {
         self.model = model
@@ -85,6 +87,13 @@ struct SmartCommandLine: View {
         // The keyboard going (a swipe, a tap on the chat, Hide Keyboard) takes the menu with it.
         .onChange(of: focused) { _, isFocused in
             if !isFocused, model.menu != .none { model.dismissMenu() }
+            guard isFocused else { return }
+            model.pasteDelegate(paste)
+            // The field's text view is the first responder once focus has landed.
+            Task { @MainActor in
+                await Task.yield()
+                ComposerPasteHook.install(paste, files: model.attachments.available)
+            }
         }
         .haptic(.error, trigger: model.notice) { _, notice in notice != nil }
         .task(id: model.draft) { await model.draftChanged() }
@@ -310,6 +319,17 @@ struct SmartCommandLine: View {
             .buttonStyle(ComposerChipStyle())
         }
         Spacer(minLength: 0)
+        // Puts the keyboard away without scrolling the chat, for the whole conversation in view.
+        // Only while a software keyboard is up: a hardware keyboard covers nothing.
+        if focused, KeyboardWatch.shared.keyboardUp {
+            Button(ComposerCopy.hideKeyboard, systemImage: "keyboard.chevron.compact.down") {
+                KeyboardDictation.end()
+                focused = false
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(ComposerChipStyle())
+            .accessibilityIdentifier("composer.hideKeyboard")
+        }
     }
 
     /// The keyboard helps with natural language only.

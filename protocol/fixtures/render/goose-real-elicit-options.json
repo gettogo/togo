@@ -1,0 +1,38 @@
+{
+  "name": "goose/real-elicit-options",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "goose",
+    "title": "colour (Banner colour)",
+    "body": "Which colour should the banner use?",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "red",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "green",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "blue",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Goose",
+    "subtitle": "colour (Banner colour)",
+    "body": "Which colour should the banner use?",
+    "category": "togo.choice.r_render0001"
+  }
+}

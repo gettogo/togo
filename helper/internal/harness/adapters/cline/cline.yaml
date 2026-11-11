@@ -14,7 +14,7 @@ name: Cline
 revision: 1
 match: { agents: [cline], commands: [cline] }
 harness: { version: [cline, version], pattern: '(\d+\.\d+\.\d+)', range: ">=3.0.74 <4" }
-capabilities: [chat, send.queue, interrupt, commands, changes, ports, resume]
+capabilities: [chat, send.queue, interrupt, commands, needs.approvals, needs.questions, changes, ports, resume]
 feeds:
   sessions:         # finds this session's file; the mapper checks the manifest next to it
     file: { glob: '~/.cline/data/sessions/*/*.messages.json', format: json, follow: true }
@@ -46,6 +46,9 @@ actions:
     label: Resume
     relaunch: { argv: [cline, -i, --id, '{{.id}}'] }
     stability: documented
+  answer:            # question items: keys on the dialog drawn (detect.ParseChoice)
+    builtin: screen_answer
+    stability: experimental
   interrupt:
     keys: { keys: [Escape] }
     stability: experimental

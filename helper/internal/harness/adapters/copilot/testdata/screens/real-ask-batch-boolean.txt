@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+                                                                               ┃
+ ❯ Use ask_user once more with a single form of three fields, in this    13:14 ┃
+   order: "platforms" a multi-select array of iOS, Android, Web;               ┃
+   "caching" a boolean; "name" a free-text string for the project name.        ┃
+   Do nothing else.                                                            ┃
+                                                                               ┃
+ ○ Asking user Waiting for response                                        33s ┃
+                                                                               ┃
+────────────────────────────────────────────────────────────────────────────────
+ Copilot needs information.
+ Please fill in the project details.
+
+  Platforms  [Caching]  Project name
+
+ Caching:
+ ❯ Yes
+   No
+   Other (type your answer)
+
+ ↑/↓ select · enter accept · tab next · shift+tab prev · ctrl+d decline · esc
+ cancel
+────────────────────────────────────────────────────────────────────────────────

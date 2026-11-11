@@ -1,6 +1,7 @@
 import SwiftUI
 import TogoKit
 import UIKit
+import TogoTerminal
 
 /// Where the user spends most of their time: the selected session's terminal edge to edge
 /// on an opaque canvas, or two sessions side by side once the user puts one beside the other.
@@ -53,11 +54,12 @@ struct WorkspaceView: View {
 
     var body: some View {
         BarEdgeReader { verticalBar in
-            workspace(.choose(horizontal: sizeClass, vertical: verticalSizeClass, verticalBar: verticalBar))
+            workspace(.choose(horizontal: sizeClass, vertical: verticalSizeClass, verticalBar: verticalBar), verticalBar: verticalBar)
+                .environment(\.terminalBarVertical, verticalBar)
         }
     }
 
-    private func workspace(_ layout: WorkspaceBarLayout) -> some View {
+    private func workspace(_ layout: WorkspaceBarLayout, verticalBar: Bool) -> some View {
         WorkspacePanes(store: store, terminals: terminals, window: window) { geometry, insets in
             ChatPanes(store: store, geometry: geometry, insets: insets)
         }
@@ -80,7 +82,7 @@ struct WorkspaceView: View {
                         .transition(Motion.unfold(reduce: reduceMotion))
                 }
             }
-            .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title, onReveal: { zen.reveal() }) { toolbar(layout) })
+            .modifier(WorkspaceBar(revealOnly: chromeLayout.revealItem, title: title(layout), onReveal: { zen.reveal() }) { toolbar(layout, verticalBar: verticalBar) })
             .modifier(TitleOffBesideVerticalBar())
             .modifier(TaskBarCompression())
             .onChange(of: store.zen, initial: true) { _, on in
@@ -99,7 +101,9 @@ struct WorkspaceView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
-                    .background { Color.clear.tutorialTip(.workspace, arrowEdge: .bottom) }
+                    // The tip's popover anchor is a UIKit view over this strip, where the terminal
+                    // keys' row stands above the keyboard: it must never take their touches.
+                    .background { Color.clear.tutorialTip(.workspace, arrowEdge: .bottom).allowsHitTesting(false) }
                     .modifier(PaneColumns(state: panes) { [store] in $0.geometry.composeFrame(focused: store.workspace.focused) })
             }
             // The terminal theme's canvas behind the bar while the terminal shows, the app's otherwise.
@@ -203,13 +207,16 @@ struct WorkspaceView: View {
 
     private var focusedRow: SessionRow? { store.focusedTab.flatMap { store.session(for: $0) } }
 
-    private var title: WorkspaceTitle? {
+    /// The title for `layout`: a compact bar's subtitle is the bib and status only, so the
+    /// title's width leaves the bar room for its three items (the session menu has the rest).
+    private func title(_ layout: WorkspaceBarLayout = .full) -> WorkspaceTitle? {
         guard let tab = store.focusedTab else { return nil }
         let row = store.session(for: tab)
         return WorkspaceTitle(
             tab: tab, row: row, machine: store.machine(for: tab.hostID)?.name,
             message: status ?? store.workspace.ended ?? row.flatMap { LifecycleCopy.line(status: $0.status, exit: $0.exit) },
-            glance: store.missionStore.map { MissionPlacement.glance($0.mission.summary) }
+            glance: store.missionStore.map { MissionPlacement.glance($0.mission.summary) },
+            brief: layout.titleMenu
         )
     }
 
@@ -238,7 +245,7 @@ struct WorkspaceView: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
-    @ToolbarContentBuilder private func toolbar(_ layout: WorkspaceBarLayout) -> some ToolbarContent {
+    @ToolbarContentBuilder private func toolbar(_ layout: WorkspaceBarLayout, verticalBar: Bool) -> some ToolbarContent {
         if let tab = store.focusedTab {
             if layout.titleMenu {
                 ToolbarTitleMenu {
@@ -248,27 +255,42 @@ struct WorkspaceView: View {
                     )
                 }
             }
+            // With the controller in a vertical bar, the bar's rarer items move into the session
+            // menu, so the system never overflows the bar and the controller holds the last slot.
+            let keys = dockKeys(for: tab, verticalBar: verticalBar)
+            let inMenu = keys != nil
             WorkspaceToolbar(
                 leading: leading, onLeading: leadingAction, runAgain: bar.runAgain,
                 review: focusedRow.map {
-                    ReviewToolbarItems(store: store, row: $0, model: review, folded: reviewFold(layout))
+                    ReviewToolbarItems(store: store, row: $0, model: review, folded: reviewFold(layout, inMenu: inMenu))
                 },
-                layer: bar.layer, mission: layout.sessionItemsInBar ? bar.mission : nil,
-                settings: store.workspaceInline ? SettingsToolbarItem(store: store) : nil,
-                sidebar: sidebarInDock ? SidebarToggleToolbarItem(store: store) : nil
+                layer: inMenu ? nil : bar.layer,
+                mission: layout.sessionItemsInBar && !inMenu ? bar.mission : nil,
+                settings: store.workspaceInline && !inMenu ? SettingsToolbarItem(store: store) : nil,
+                sidebar: sidebarInDock ? SidebarToggleToolbarItem(store: store) : nil,
+                keys: keys,
+                showKeyboard: ShowKeyboardToolbarItem(store: store, terminals: terminals, tab: tab.id)
             ) {
-                actions(for: tab, row: store.session(for: tab), layout: layout)
+                actions(for: tab, row: store.session(for: tab), layout: layout, inMenu: inMenu)
                     .onAppear { menuOpen = true }
                     .onDisappear { menuOpen = false }
             }
         }
     }
 
+    /// The controller as the vertical bar's own capsule, for the focused terminal while the
+    /// terminal layer shows (contract rev 4: a bar that can hold it does; the column stays away).
+    private func dockKeys(for tab: WorkspaceTab, verticalBar: Bool) -> TerminalKeysToolbarItem? {
+        guard verticalBar, store.layer(for: tab.id) == .terminal,
+              let keys = terminals.handle(for: tab.id)?.keys else { return nil }
+        return TerminalKeysToolbarItem(keys: keys)
+    }
+
     /// Preview leaves the bar where mission control has Ports, and under a compact horizontal
     /// bar, where the session menu has it.
-    private func reviewFold(_ layout: WorkspaceBarLayout) -> ReviewFold {
+    private func reviewFold(_ layout: WorkspaceBarLayout, inMenu: Bool = false) -> ReviewFold {
         var fold = ReviewFold(store.missionStore?.descriptor)
-        if !layout.sessionItemsInBar { fold.preview = true }
+        if !layout.sessionItemsInBar || inMenu { fold.preview = true }
         return fold
     }
 
@@ -314,10 +336,10 @@ struct WorkspaceView: View {
         }
     }
 
-    @ViewBuilder private func actions(for tab: WorkspaceTab, row: SessionRow?, layout: WorkspaceBarLayout) -> some View {
+    @ViewBuilder private func actions(for tab: WorkspaceTab, row: SessionRow?, layout: WorkspaceBarLayout, inMenu: Bool = false) -> some View {
         // The name and status, which the title says unless a vertical bar took it off screen,
         // and why the link fell back from the transport asked for.
-        if let title {
+        if let title = title(layout) {
             Section {
                 Text(title.detail)
                 if let fallback = title.fallback { Text(fallback) }
@@ -325,9 +347,24 @@ struct WorkspaceView: View {
                 Text(title.title)
             }
         }
-        // A compact horizontal bar keeps three items; mission control is the menu's first.
-        if !layout.sessionItemsInBar, let item = bar.mission {
+        // A compact horizontal bar keeps three items; mission control is the menu's first. With
+        // the controller in a vertical bar, the layer switch and Settings join it here too.
+        if !layout.sessionItemsInBar || inMenu, let item = bar.mission {
             MissionMenuSection(item: item)
+        }
+        if inMenu {
+            Section {
+                if let layer = bar.layer {
+                    Button(layer.layer == .chat ? ChatCopy.terminal : ChatCopy.chat,
+                           systemImage: layer.layer == .chat ? "terminal" : "bubble.left.and.text.bubble.right") {
+                        LayerToolbarItem.resignKeyboard()
+                        withAnimation(Motion.animation(.fade, reduce: reduceMotion)) { layer.toggle() }
+                    }
+                }
+                if store.workspaceInline {
+                    Button(RosterCopy.settings, systemImage: "gearshape") { store.showSettings() }
+                }
+            }
         }
         let etAvailable = store.services.hosts.first { $0.id == tab.hostID }?.etAvailable ?? false
         ConnectWithMenu(etAvailable: etAvailable) { transport in
@@ -342,6 +379,17 @@ struct WorkspaceView: View {
         }
         Toggle(isOn: Binding(get: { store.zen }, set: { _ in store.toggleZen() })) {
             Label(ZenCopy.zenMode, systemImage: "arrow.up.left.and.arrow.down.right")
+        }
+        .menuToggle()
+        // Holds the column up with the keyboard down, where the setting offers it.
+        if store.layer(for: tab.id) == .terminal, store.services.settings.terminalKeys.showColumn == .alsoOnDemand {
+            Toggle(isOn: Binding(
+                get: { store.keptKeys.contains(tab.id) },
+                set: { on in if on { store.keptKeys.insert(tab.id) } else { store.keptKeys.remove(tab.id) } }
+            )) {
+                Label(KeysCopy.keepOnScreen, systemImage: "keyboard.onehanded.left")
+            }
+            .menuToggle()
         }
         Button(WorkspaceCopy.copyLines, systemImage: "doc.on.doc") {
             Task { status = await store.copyLastLines(of: tab) }
@@ -358,7 +406,7 @@ struct WorkspaceView: View {
             let allowed = SessionActions.actions(for: row, on: store.machine(for: tab.hostID))
             let canRead = store.reviewSubject(for: row).canRead
             // Preview, where the bar left it out for room and mission control does not carry it.
-            let preview = !layout.sessionItemsInBar && review.hasPorts && !ReviewFold(store.missionStore?.descriptor).preview
+            let preview = (!layout.sessionItemsInBar || inMenu) && review.hasPorts && !ReviewFold(store.missionStore?.descriptor).preview
             if canRead || preview {
                 Section {
                     if canRead {

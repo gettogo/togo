@@ -1,0 +1,54 @@
+{
+  "agentVersion": "0.0.1794312042",
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ],
+    "4": [
+      "Down",
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  },
+  "kind": "permission",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Allow Once",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Reject with feedback",
+      "role": "deny"
+    },
+    {
+      "n": 3,
+      "label": "Allow All for This Session",
+      "role": "approve_always"
+    },
+    {
+      "n": 4,
+      "label": "Allow All for Every Session",
+      "role": "approve_always"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "command",
+    "text": "echo hello-from-amp"
+  },
+  "title": "Approval Required"
+}

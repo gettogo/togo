@@ -1,0 +1,10 @@
+{
+  "agentVersion": "3.0.74",
+  "keys": {},
+  "kind": "waiting",
+  "match": true,
+  "options": null,
+  "source": "real",
+  "subject": null,
+  "title": "What should the greeting text say?"
+}

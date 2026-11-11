@@ -135,7 +135,13 @@ var (
 	editLine   = regexp.MustCompile(`^Applied edit to (.+)$`)
 	commitLine = regexp.MustCompile(`^Commit ([0-9a-f]{7,40}) (.*)$`)
 	runLine    = regexp.MustCompile(`^Running (.+)$`)
-	errorLine  = regexp.MustCompile(`^(litellm\.\S*Error|\S*Error:|Error |Traceback )`)
+	// groupAnswer is a confirmation aider answered by itself after an
+	// earlier "(A)ll" or "(S)kip all" in the same group: confirm_ask logs
+	// it with user_input, so it arrives as a prompt line ("#### Add file to
+	// the chat? (Y)es/(N)o/(A)ll/(S)kip all/(D)on't ask again [Yes]: all"),
+	// though nobody typed it (io.py, 0.86).
+	groupAnswer = regexp.MustCompile(`\(Y\)es/\(N\)o(/\([A-Z]\)[^/\[]*)*\s*\[(Yes|No)\]:\s*(all|skip)$`)
+	errorLine   = regexp.MustCompile(`^(litellm\.\S*Error|\S*Error:|Error |Traceback )`)
 )
 
 // Map takes one lines record: the whole lines one poll read.
@@ -180,6 +186,13 @@ func (h *history) line(line string, at time.Time) []harness.Item {
 	}
 	breakEnd := strings.HasSuffix(line, "  ")
 	switch {
+	case breakEnd && strings.HasPrefix(line, "####") && groupAnswer.MatchString(strings.TrimSpace(strings.TrimPrefix(line, "####"))):
+		// Not the user's: a step of the turn, like the answered question
+		// it repeats.
+		items := h.flushUser(at)
+		items = append(items, h.flushReply(at)...)
+		h.quote = append(h.quote, strings.TrimSpace(strings.TrimPrefix(line, "####")))
+		return items
 	case breakEnd && strings.HasPrefix(line, "####"):
 		items := h.flushReply(at)
 		items = append(items, h.flushQuote(at)...)

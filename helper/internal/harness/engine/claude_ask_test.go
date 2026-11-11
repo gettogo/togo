@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // askApprovals records both Claude question routes.
@@ -103,5 +105,30 @@ func TestAnswersMayHoldNewlines(t *testing.T) {
 	}
 	if _, err := checkArgs(map[string]json.RawMessage{"id": json.RawMessage(`"a\nb"`)}); err == nil {
 		t.Fatal("a newline outside text and answers was accepted")
+	}
+}
+
+// Claude's plan dialog (ExitPlanMode) is a menu, not an AskUserQuestion:
+// its question item takes no typed words, so the answer goes to the prompt
+// the watcher found on screen, by its keys.
+func TestPlanQuestionAnswersThroughTheScreenPrompt(t *testing.T) {
+	const id = "s_plan01"
+	plan := wire.Approval{RequestID: "rq_plan", Title: "Would you like to proceed?", CreatedAt: time.Unix(4, 0),
+		Options: []wire.Option{{N: 1, Label: "Yes, and auto-accept edits"}, {N: 2, Label: "Yes, and manually approve edits"}, {N: 3, Label: "No, keep planning"}}}
+	ap := &fakeApprovals{pending: []wire.Approval{plan}}
+	e, s := questionEngine(t, id, ap)
+	item := harness.Item{ID: "toolu_plan", Kind: harness.KindQuestion, Question: &harness.QuestionBody{Questions: []harness.Question{{
+		ID: "plan", Prompt: "Would you like to proceed?",
+		Options: []harness.Choice{{ID: "auto", Label: "Yes, and auto-accept edits"}, {ID: "manual", Label: "Yes, and manually approve edits"}, {ID: "keep", Label: "No, keep planning"}},
+	}}, Approve: "manual", Deny: "keep"}}
+	e.log.Append(id, []harness.Item{item})
+	res, err := e.answerClaudeQuestion(context.Background(), s, "toolu_plan", map[string][]string{"plan": {"manual"}})
+	if err != nil || res.Result != harness.ResultApplied {
+		t.Fatalf("%+v %v", res, err)
+	}
+	ap.mu.Lock()
+	defer ap.mu.Unlock()
+	if len(ap.answers) != 1 || ap.answers[0] != "rq_plan option:2" {
+		t.Fatalf("answers %v", ap.answers)
 	}
 }

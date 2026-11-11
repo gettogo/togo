@@ -34,6 +34,7 @@ struct FileViewer: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Toggle(FilesCopy.wrap, isOn: $model.wrap)
+                                .menuToggle()
                                 .disabled(typeSize.isAccessibilitySize)
                         } label: {
                             Label(FilesCopy.options, systemImage: "slider.horizontal.3")
@@ -58,8 +59,8 @@ struct FileViewer: View {
                 CodeLinesView(
                     rows: model.displayRows, wrap: model.wrap, showsOldNumbers: false, scrollTo: model.scrollTarget
                 )
-            case .image(let data):
-                ZoomableImage(data: data, label: model.fileName)
+            case .image(let file):
+                ZoomableImage(image: file.picture, label: model.fileName)
             case .binary(let size):
                 FileNotice(symbol: "doc", title: FilesCopy.binary(size: size), name: model.fileName)
             case .empty:
@@ -167,60 +168,48 @@ private struct FileNotice: View {
 }
 
 /// An image that fits the screen, pinches up to 5 times its size and toggles with a double tap.
+/// The picture was decoded with the file (`FileImage`); a pinch only changes the frame.
 private struct ZoomableImage: View {
-    let data: Data
+    let image: UIImage
     let label: String
 
     @State private var zoom: CGFloat = 1
     @State private var settled: CGFloat = 1
-    /// Decoded once, off the main thread and no larger than a 5× zoom can use; a pinch only
-    /// changes the frame.
-    @State private var image: UIImage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// Long side in pixels: enough for the deepest zoom on the largest screen.
-    private nonisolated static let maxSide = 4096
 
     var body: some View {
         GeometryReader { proxy in
-            if let image {
-                ScrollView([.horizontal, .vertical]) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .interpolation(.medium)
-                        .scaledToFit()
-                        .frame(width: proxy.size.width * zoom, height: proxy.size.height * zoom)
-                }
-                .scrollIndicators(zoom > 1 ? .visible : .hidden)
-                .defaultScrollAnchor(.center)
-                .gesture(
-                    MagnifyGesture()
-                        .onChanged { zoom = min(max(settled * $0.magnification, 1), 5) }
-                        .onEnded { _ in settled = zoom }
-                )
-                // VoiceOver's three-finger double tap and zoom gestures, and Switch Control.
-                .accessibilityZoomAction { action in
-                    zoom = action.direction == .zoomIn ? min(zoom * 2, 5) : max(zoom / 2, 1)
+            ScrollView([.horizontal, .vertical]) {
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.medium)
+                    .scaledToFit()
+                    .frame(width: proxy.size.width * zoom, height: proxy.size.height * zoom)
+            }
+            .scrollIndicators(zoom > 1 ? .visible : .hidden)
+            .defaultScrollAnchor(.center)
+            .gesture(
+                MagnifyGesture()
+                    .onChanged { zoom = min(max(settled * $0.magnification, 1), 5) }
+                    .onEnded { _ in settled = zoom }
+            )
+            // VoiceOver's three-finger double tap and zoom gestures, and Switch Control.
+            .accessibilityZoomAction { action in
+                zoom = action.direction == .zoomIn ? min(zoom * 2, 5) : max(zoom / 2, 1)
+                settled = zoom
+            }
+            .onTapGesture(count: 2) {
+                // motion: cause → effect — the double tap zooms the picture where it was tapped
+                withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
+                    zoom = zoom > 1 ? 1 : 3
                     settled = zoom
                 }
-                .onTapGesture(count: 2) {
-                    // motion: cause → effect — the double tap zooms the picture where it was tapped
-                    withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
-                        zoom = zoom > 1 ? 1 : 3
-                        settled = zoom
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(verbatim: label))
-                .accessibilityAddTraits(.isImage)
-                .accessibilityHint(FilesCopy.zoomHint)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: label))
+            .accessibilityAddTraits(.isImage)
+            .accessibilityHint(FilesCopy.zoomHint)
         }
-        .task(id: data) { image = await Self.decode(data) }
-    }
-
-    @concurrent private nonisolated static func decode(_ data: Data) async -> UIImage? {
-        ImageShrinker.preview(data, maxSide: maxSide)
     }
 }
 

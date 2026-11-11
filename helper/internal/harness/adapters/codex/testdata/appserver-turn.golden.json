@@ -259,6 +259,75 @@
    }
   },
   {
+   "id": "rq-3",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "question",
+   "at": "2026-11-06T12:00:01.7Z",
+   "question": {
+    "questions": [
+     {
+      "id": "decision",
+      "header": "Edits",
+      "prompt": "Would you like to make the following edits?",
+      "options": [
+       {
+        "id": "accept",
+        "label": "Yes, proceed",
+        "detail": "/Users/me/proj/add.go"
+       },
+       {
+        "id": "acceptForSession",
+        "label": "Yes, and don't ask again this session"
+       },
+       {
+        "id": "decline",
+        "label": "No, and tell Codex what to do differently"
+       }
+      ],
+      "multi": false,
+      "allowText": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "rq-3",
+   "seq": 0,
+   "turnId": "019a0000-0000-7000-8000-0000000000a2",
+   "kind": "question",
+   "at": "2026-11-06T12:00:01.7Z",
+   "question": {
+    "questions": [
+     {
+      "id": "decision",
+      "header": "Edits",
+      "prompt": "Would you like to make the following edits?",
+      "options": [
+       {
+        "id": "accept",
+        "label": "Yes, proceed",
+        "detail": "/Users/me/proj/add.go"
+       },
+       {
+        "id": "acceptForSession",
+        "label": "Yes, and don't ask again this session"
+       },
+       {
+        "id": "decline",
+        "label": "No, and tell Codex what to do differently"
+       }
+      ],
+      "multi": false,
+      "allowText": false
+     }
+    ],
+    "answered": {
+     "decision": []
+    }
+   }
+  },
+  {
    "id": "call_patch",
    "seq": 0,
    "turnId": "019a0000-0000-7000-8000-0000000000a2",

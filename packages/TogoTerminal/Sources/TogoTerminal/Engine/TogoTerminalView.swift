@@ -27,6 +27,8 @@ final class TogoTerminalView: TerminalView {
     /// Edit menu Paste, so it takes the same sanitised, bracketed path as every other paste.
     var onPaste: ((String) -> Void)?
     var pasteboardText: () -> String? = { UIPasteboard.general.string }
+    /// Edit menu Paste when the pasteboard has no text, so a screenshot takes the image path.
+    var onPasteWithoutText: (() -> Void)?
     /// Asked per hardware press; kitty mode never gets here, SwiftTerm reports those keys.
     var extendedKeyMode: (() -> ExtendedKeyMode)?
     let chordRepeater: ChordRepeater
@@ -61,6 +63,10 @@ final class TogoTerminalView: TerminalView {
         // would shift the content sideways and push the last columns past the edge.
         contentInsetAdjustmentBehavior = .never
         alwaysBounceHorizontal = false
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardWillShow(_:)), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardWillHide(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
         for name in [
             UIAccessibility.reduceMotionStatusDidChangeNotification, UIApplication.willEnterForegroundNotification,
             AccessibilitySettings.prefersNonBlinkingTextInsertionIndicatorDidChangeNotification,
@@ -194,16 +200,26 @@ final class TogoTerminalView: TerminalView {
     /// Something asked for the keyboard while focus was refused, such as the terminal
     /// appearing before its session connected. The keyboard comes up once it may.
     var wantsFocus = false
+    /// The user put the keyboard away (Hide keyboard). Nothing but the user brings it back: a tap
+    /// on the terminal or Show keyboard clear this; appearing, a pane change or the terminal
+    /// uncovering do not.
+    var keyboardDismissed = false
     /// Another layer covers the terminal, so it may not take the keyboard until uncovered.
     var covered = false
     /// Counts cover changes, so a delayed hide from an earlier cover does nothing.
     var coverGeneration = 0
 
     override var canBecomeFirstResponder: Bool {
-        acceptsFocus && !covered && super.canBecomeFirstResponder
+        acceptsFocus && !covered && !keyboardDismissed && super.canBecomeFirstResponder
     }
 
     override func becomeFirstResponder() -> Bool {
+        #if DEBUG
+        TerminalKeyTouchTrace.focusAttempt(dismissed: keyboardDismissed)
+        #endif
+        // UIKit restores the presenting view's responder after a popover closes. Hide must
+        // survive that restoration too; explicit terminal taps / Show keyboard clear the flag.
+        guard !keyboardDismissed else { return false }
         guard acceptsFocus, !covered else {
             wantsFocus = true
             return false
@@ -270,12 +286,60 @@ final class TogoTerminalView: TerminalView {
     /// Typing goes straight to the terminal, so a tap on it always brings the keyboard. SwiftTerm
     /// spends a tap on an app that tracks the mouse as a click and leaves the keyboard down;
     /// here the keyboard comes up after that handler ran, so the click still reaches the app.
+    /// A terminal that kept focus while its keyboard went away gets it back too (`showKeyboard`).
     @objc private func tapEnded(_ tap: UITapGestureRecognizer) {
-        guard tap.state == .ended, tap.numberOfTapsRequired == 1, !isFirstResponder, acceptsFocus, !covered else { return }
+        guard tap.state == .ended, tap.numberOfTapsRequired == 1 else { return }
+        keyboardDismissed = false
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.isFirstResponder, self.window != nil else { return }
-            _ = self.becomeFirstResponder()
+            guard let self, self.window != nil, !self.keyboardDismissed else { return }
+            self.showKeyboard()
         }
+    }
+
+    /// Brings up the software keyboard for typing here, or with a hardware keyboard attached,
+    /// focuses the terminal so it types (`TerminalFocusPolicy`).
+    func showKeyboard(automatic: Bool = false) {
+        let action = TerminalFocusPolicy.action(
+            accepts: acceptsFocus, covered: covered, focused: isFirstResponder,
+            keyboardShown: softwareKeyboardShown, hardwareKeyboard: KeyboardPresence.shared.hardwareKeyboardConnected,
+            dismissed: keyboardDismissed, automatic: automatic
+        )
+        if !automatic { keyboardDismissed = false }
+        switch action {
+        case .none:
+            break
+        case .wait:
+            wantsFocus = true
+        case .focus:
+            _ = becomeFirstResponder()
+        case .refocus:
+            _ = resignFirstResponder()
+            _ = becomeFirstResponder()
+        }
+    }
+
+    /// Hide keyboard: lets focus go and keeps the keyboard down until the user asks for it. If
+    /// something still holds the keyboard, the window is told to end editing.
+    func dismissKeyboard() {
+        keyboardDismissed = true
+        wantsFocus = false
+        chordRepeater.stop()
+        _ = resignFirstResponder()
+        // Whatever holds the keyboard goes too (the chat's composer stays under the terminal
+        // layer and can own it), so Hide keyboard always hides it.
+        window?.endEditing(true)
+    }
+
+    /// The software keyboard is on screen, as the keyboard's own notifications say.
+    private(set) var softwareKeyboardShown = false
+
+    @objc private func keyboardWillShow(_ note: Notification) {
+        let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
+        softwareKeyboardShown = frame.height > 0
+    }
+
+    @objc private func keyboardWillHide(_ note: Notification) {
+        softwareKeyboardShown = false
     }
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -338,12 +402,14 @@ final class TogoTerminalView: TerminalView {
     }
 
     /// SwiftTerm's copy writes the pasteboard itself and also ends the selection drag, so it
-    /// still runs; the text is read first because the copy clears the selection.
+    /// still runs; the text is read first because the copy clears the selection, and written
+    /// again after it without the spaces programs pad their lines with (`CopyText`).
     override func copy(_ sender: Any?) {
         var text = getSelection()
         if selectionThroughLineEnd, text?.hasSuffix("\n") == true { text = text.map { String($0.dropLast()) } }
+        text = text.map(CopyText.trimmingLineEnds)
         super.copy(sender)
-        if selectionThroughLineEnd, let text { UIPasteboard.general.string = text }
+        if let text { UIPasteboard.general.string = text }
         selectionThroughLineEnd = false
         if let text { onCopy?(text) }
     }
@@ -353,7 +419,7 @@ final class TogoTerminalView: TerminalView {
     override func paste(_ sender: Any?) {
         guard let onPaste else { return super.paste(sender) }
         clearSelection()
-        if let text = pasteboardText() { onPaste(text) }
+        if let text = pasteboardText() { onPaste(text) } else { onPasteWithoutText?() }
     }
 
     /// A key released after focus moves never reaches this view, so the repeat ends here.

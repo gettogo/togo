@@ -53,7 +53,9 @@ func rowCommand(row string) string {
 	if i := strings.LastIndex(r, " /"); i >= 0 {
 		r = r[i+1:]
 	}
-	if !strings.HasPrefix(r, "/") {
+	// A command's name follows the slash at once: "/ commands" is a key
+	// hint (Copilot CLI's footer: "· / commands   Claude Haiku 5.5").
+	if !strings.HasPrefix(r, "/") || len(r) < 2 || r[1] == ' ' || r[1] == '\t' {
 		return ""
 	}
 	return r
@@ -120,7 +122,7 @@ func (e *Engine) letGo(ctx context.Context, s *sess, text string, row int) (othe
 			other = ""
 			for i := len(rows) - 1; i >= min(row, len(rows)); i-- {
 				if endsWith(rows[i], text) {
-					holding = true
+					holding = !newPromptBelow(rows, i, text)
 					break
 				}
 				if other == "" && strings.TrimSpace(rows[i]) != "" {
@@ -143,6 +145,30 @@ func (e *Engine) letGo(ctx context.Context, s *sess, text string, row int) (othe
 			return other, false
 		}
 	}
+}
+
+// newPromptBelow reports whether a row under rows[i], which holds text
+// after its prompt mark, starts with the same mark: the TUI drew a fresh
+// input line under the command it took, which it keeps on screen as the
+// echo of what was sent (Goose 1.57: "> /mode chat", its reply, then
+// "> Enter to send · Ctrl+J newline").
+func newPromptBelow(rows []string, i int, text string) bool {
+	r := strings.TrimSpace(strings.Trim(rows[i], "│┃| "))
+	k := strings.LastIndex(r, strings.TrimSpace(text))
+	if k <= 0 {
+		return false
+	}
+	mark := strings.TrimSpace(r[:k])
+	if mark == "" || strings.ContainsAny(mark, " /") {
+		return false
+	}
+	for _, below := range rows[i+1:] {
+		b := strings.TrimSpace(strings.Trim(below, "│┃| "))
+		if b == mark || strings.HasPrefix(b, mark+" ") {
+			return true
+		}
+	}
+	return false
 }
 
 // emptyRow backspaces a command a completion left in the input line.

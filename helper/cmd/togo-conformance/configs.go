@@ -38,6 +38,10 @@ var watched = map[string][]struct {
 	"goose":    {{"~/.config/goose/config.yaml", false}},
 	"qwen":     {{"~/.qwen/settings.json", false}},
 	"aider":    {{"~/.aider.conf.yml", false}},
+	// Cline saves a -P/-m launch's provider and model as its default.
+	"cline": {{"~/.cline/data/settings/providers.json", false}, {"~/.cline/data/settings/global-settings.json", false}},
+	// Cursor rewrites its caches here on every start.
+	"cursor": {{"~/.cursor/cli-config.json", true}},
 }
 
 // artifactRoots hold per-folder records a harness makes for a new folder;

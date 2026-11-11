@@ -1,0 +1,30 @@
+{
+  "source": "real",
+  "agentVersion": "18.16.0",
+  "match": true,
+  "kind": "question",
+  "title": "How should the feature ship?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Feature flag",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Direct release",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": true
+}

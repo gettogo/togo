@@ -53,6 +53,9 @@ type Status struct {
 	Path      string
 	Installed bool
 	Loaded    bool
+	// Legacy is set when the only service file is one an earlier build
+	// wrote under a retired label; Install replaces it.
+	Legacy bool
 }
 
 // Path returns the service file the manager reads.
@@ -60,7 +63,11 @@ func (s Service) Path() string {
 	if s.Manager == Systemd {
 		return filepath.Join(s.Home, ".config", "systemd", "user", systemdUnit)
 	}
-	return filepath.Join(s.Home, "Library", "LaunchAgents", Label+".plist")
+	return s.launchAgentPath(Label)
+}
+
+func (s Service) launchAgentPath(label string) string {
+	return filepath.Join(s.Home, "Library", "LaunchAgents", label+".plist")
 }
 
 func (s Service) logPath() string {
@@ -82,6 +89,9 @@ func (s Service) Install(ctx context.Context) error {
 	}
 	content, err := s.render()
 	if err != nil {
+		return err
+	}
+	if err := s.retireLegacy(ctx); err != nil {
 		return err
 	}
 	if s.Manager == Launchd && s.loaded(ctx) {
@@ -114,8 +124,12 @@ func (s Service) Install(ctx context.Context) error {
 }
 
 // Uninstall stops the job and removes the service file. It touches no
-// other file, and returns nil when the service was never installed.
+// other file, and returns nil when the service was never installed. A
+// service left under a retired label is removed too.
 func (s Service) Uninstall(ctx context.Context) error {
+	if err := s.retireLegacy(ctx); err != nil {
+		return err
+	}
 	if _, err := os.Lstat(s.Path()); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -152,6 +166,11 @@ func (s Service) Status(ctx context.Context) (Status, error) {
 	case !errors.Is(err, os.ErrNotExist):
 		return st, fmt.Errorf("service file: %w", err)
 	}
+	if !st.Installed {
+		if label, ok := s.legacyInstalled(); ok {
+			return Status{Path: s.launchAgentPath(label), Installed: true, Loaded: s.launchdLoaded(ctx, label), Legacy: true}, nil
+		}
+	}
 	st.Loaded = s.loaded(ctx)
 	return st, nil
 }
@@ -162,7 +181,11 @@ func (s Service) loaded(ctx context.Context) bool {
 	if s.Manager == Systemd {
 		return s.Run(ctx, []string{"systemctl", "--user", "is-active", "--quiet", systemdUnit}) == nil
 	}
-	return s.Run(ctx, []string{"launchctl", "print", s.domain() + "/" + Label}) == nil
+	return s.launchdLoaded(ctx, Label)
+}
+
+func (s Service) launchdLoaded(ctx context.Context, label string) bool {
+	return s.Run(ctx, []string{"launchctl", "print", s.domain() + "/" + label}) == nil
 }
 
 // render writes the service definition. Both managers start the daemon

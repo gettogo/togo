@@ -62,7 +62,9 @@ struct AcknowledgmentsView: View {
                     }
                 }
             } footer: {
-                Text(settingsText("settings.ack.footer", "Togo is built with this software. Tap one to read its license."))
+                SectionFooter {
+                    Text(settingsText("settings.ack.footer", "Togo is built with this software. Tap one to read its license."))
+                }
             }
             .groupedRows()
         }

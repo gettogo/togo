@@ -18,7 +18,7 @@ struct TutorialFlow: View {
     var now: Date?
     let onClose: (TutorialExit) -> Void
 
-    @State private var demo: AppStore?
+    @State private var demo: DemoVisit?
     /// The last page's buttons as the bar shows them. A swipe moves the page with no
     /// transaction, so the bar follows here: Continue gives way to the last page's two buttons
     /// at once, and back (buttons are controls, not news).
@@ -44,8 +44,16 @@ struct TutorialFlow: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         // A cover is a new root, so it may open over the guide wherever the guide is a sheet.
-        .presentCover("tutorial.demo", item: demoItem, nests: true) { item in
-            DemoControlCenter(store: item.store, now: now) { demo = nil }
+        .presentCover("tutorial.demo", item: $demo, nests: true) { visit in
+            DemoControlCenter(visit: visit, exit: DemoExit(
+                leave: { demo = nil },
+                addMachine: {
+                    demo = nil
+                    onClose(.addMachine)
+                },
+                // The guide is under the demo.
+                openGuide: { demo = nil }
+            ))
         }
         .togoControls()
         // Skip and the last page's buttons are the ways out, as a cover and as a page sheet.
@@ -118,7 +126,7 @@ struct TutorialFlow: View {
     }
 
     private func openDemo() {
-        demo = DemoMachine.store(now: now ?? .now)
+        demo = DemoVisit(now: now ?? .now)
     }
 
     /// Under Reduce Motion the page changes in place: a paged TabView slides with any animation.
@@ -133,14 +141,6 @@ struct TutorialFlow: View {
         }
     }
 
-    private var demoItem: Binding<DemoItem?> {
-        Binding { demo.map(DemoItem.init) } set: { if $0 == nil { demo = nil } }
-    }
-
-    private struct DemoItem: Identifiable {
-        let store: AppStore
-        var id: ObjectIdentifier { ObjectIdentifier(store) }
-    }
 }
 
 /// Where the user is in the guide, as short bars: the current one long and snow, the rest

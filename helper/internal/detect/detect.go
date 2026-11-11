@@ -23,6 +23,11 @@ const (
 	KindPermission = "permission"
 	KindQuestion   = "question"
 	KindConfirm    = "confirm"
+	// KindWaiting is a dialog the agent waits at that offers nothing the
+	// phone can press: a text field, a review page, a form. It reaches the
+	// phone as needs-you with the screen as its excerpt, answered in the
+	// terminal (or by an adapter's question item that knows the dialog).
+	KindWaiting = "waiting"
 )
 
 // windowLines is how much of the bottom of the screen is inspected. A
@@ -61,6 +66,10 @@ type Prompt struct {
 	// ReadOnly marks a prompt one key cannot answer (Claude's tabbed or
 	// multi-select question dialog); its question item answers it.
 	ReadOnly bool
+	// TextKeys, when not nil, says the prompt takes typed words: these
+	// keys open the field (none when the words go straight in), then the
+	// words are typed and Enter sent. Kimi's "Reject with feedback".
+	TextKeys []string
 }
 
 // Detect inspects the last 40 non-empty lines of screen and reports the
@@ -82,6 +91,12 @@ func Detect(screen string) (Prompt, bool) {
 		p, ok = askPrompt(a), true
 	}
 	if !ok {
+		p, ok = matchHarness(screen, raw, lines)
+	}
+	if !ok {
+		p, ok = matchAgentChoice(screen)
+	}
+	if !ok {
 		p, ok = matchConfirm(lines)
 	}
 	if !ok {
@@ -94,13 +109,31 @@ func Detect(screen string) (Prompt, bool) {
 		p, ok = matchWordButtons(lines)
 	}
 	if !ok {
+		p, ok = matchCrushPermission(raw)
+	}
+	if !ok {
+		p, ok = matchBulletBox(raw)
+	}
+	if !ok {
+		p, ok = matchChoice(screen)
+	}
+	if !ok {
 		p, ok = matchSignIn(raw, lines)
 	}
 	if !ok {
 		p, ok = matchLoginStart(lines)
 	}
 	if !ok {
+		p, ok = matchLineField(lines)
+	}
+	if !ok {
+		p, ok = matchWaiting(raw)
+	}
+	if !ok {
 		return Prompt{}, false
+	}
+	if p.TextKeys == nil {
+		p.TextKeys = feedbackKeys(p)
 	}
 	if EnterOpensLink(screen) {
 		// Enter would open a link outside the terminal: no option that
@@ -275,6 +308,22 @@ func KeysFor(screen, fingerprint, label string) ([]string, bool) {
 		}
 	}
 	return nil, false
+}
+
+// feedbackRow is an option that opens a field for the reason: Kimi Code's
+// "Reject with feedback" and its plan review's "Revise".
+var feedbackRow = regexp.MustCompile(`(?i)^(reject with feedback|revise)$`)
+
+// feedbackKeys are the keys of a feedback option picked by one digit,
+// which a typed answer presses before the words; nil without one.
+func feedbackKeys(p Prompt) []string {
+	for _, o := range p.Options {
+		k := p.Keys[o.N]
+		if feedbackRow.MatchString(o.Label) && len(k) == 1 && len(k[0]) == 1 && k[0] >= "1" && k[0] <= "9" {
+			return []string{k[0]}
+		}
+	}
+	return nil
 }
 
 // hasEnter reports a key list that presses Enter.

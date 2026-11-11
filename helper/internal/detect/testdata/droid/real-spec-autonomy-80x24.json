@@ -1,0 +1,44 @@
+{
+  "agentVersion": "1.5.0",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Proceed with Manual Approvals",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Proceed with Low autonomy",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Proceed with Medium autonomy",
+      "role": "other"
+    },
+    {
+      "n": 4,
+      "label": "Proceed with High autonomy",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Proceed with which autonomy?"
+}

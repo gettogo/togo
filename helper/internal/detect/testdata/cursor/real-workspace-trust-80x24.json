@@ -1,0 +1,32 @@
+{
+  "agentVersion": "2026.11.05-86047df",
+  "keys": {
+    "1": [
+      "a"
+    ],
+    "2": [
+      "q"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Trust this workspace",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Quit",
+      "role": "deny"
+    }
+  ],
+  "readOnly": false,
+  "source": "real",
+  "subject": {
+    "kind": "file",
+    "text": "/Users/jamie/proj"
+  },
+  "title": "Do you trust the contents of this directory?"
+}

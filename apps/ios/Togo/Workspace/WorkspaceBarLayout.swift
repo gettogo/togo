@@ -35,6 +35,9 @@ extension EnvironmentValues {
     /// Whether the bar is a Duo's vertical bar, for hosts the system cannot tell (snapshot
     /// tests). Nil reads the system's `toolbarVerticalEdge`.
     @Entry var barIsVerticalOverride: Bool?
+    /// Whether the workspace's bar is vertical, as the terminal under it needs to know: the
+    /// controller is then the bar's capsule and the column stays away.
+    @Entry var terminalBarVertical = false
 }
 
 /// Hands its content whether the system drew the bar vertically, read in the same pass so no
@@ -93,6 +96,7 @@ struct WorkspaceTabMenu: View {
                     Text(verbatim: entry.title)
                     if let status = entry.status { Text(status) }
                 }
+                .menuToggle()
                 .accessibilityIdentifier("workspace.tabMenu.\(entry.id.sessionID)")
             }
         }

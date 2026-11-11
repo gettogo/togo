@@ -27,6 +27,7 @@ struct CaptureSheet: View {
         case failed
     }
 
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @State private var phase: Phase = .loading
     @State private var attempt = 0
     @AccessibilityFocusState private var focusMarked: Bool
@@ -91,7 +92,24 @@ struct CaptureSheet: View {
         }
     }
 
-    private func history(_ lines: [String], marked: Int?) -> some View {
+    /// One text, so a long press picks a word and its handles reach across lines and screens of
+    /// history; the needle's line is marked and in the middle. VoiceOver keeps a line per
+    /// element (`lineList`), so it can start on the marked line.
+    @ViewBuilder private func history(_ lines: [String], marked: Int?) -> some View {
+        if voiceOver {
+            lineList(lines, marked: marked)
+        } else {
+            let text = CaptureText(lines: lines, marked: marked)
+            SelectableText(
+                key: text, layout: .scrolls, insets: UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16),
+                reveal: text.markedRange, copy: { ChatPasteboard.copy(exact: $0.string) }
+            ) { traits in
+                text.attributed(traits: traits)
+            }
+        }
+    }
+
+    private func lineList(_ lines: [String], marked: Int?) -> some View {
         ScrollViewReader { proxy in
             ScrollView([.vertical]) {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -143,5 +161,33 @@ struct CaptureSheet: View {
         } catch {
             phase = .failed
         }
+    }
+}
+
+/// The captured history as one selectable text: SF Mono at the footnote size, the marked line
+/// brighter on a faint band, the rest a little dimmer, as the line list draws them.
+struct CaptureText: Hashable {
+    let lines: [String]
+    let marked: Int?
+
+    var string: String { lines.joined(separator: "\n") }
+
+    /// The marked line's characters in the joined text, in UTF-16 as UIKit counts them.
+    var markedRange: NSRange? {
+        guard let marked, lines.indices.contains(marked) else { return nil }
+        let before = lines[..<marked].reduce(0) { $0 + ($1 as NSString).length + 1 }
+        return NSRange(location: before, length: (lines[marked] as NSString).length)
+    }
+
+    @MainActor func attributed(traits: UITraitCollection) -> NSAttributedString {
+        let style = ChatSelectable.Style(textStyle: .footnote, monospaced: true, color: UIColor.togoSnow.withAlphaComponent(0.85))
+        let out = ChatSelectable.attributed(AttributedString(string), style: style, traits: traits)
+        if let range = markedRange {
+            out.addAttributes([
+                .foregroundColor: UIColor.togoSnow,
+                .backgroundColor: UIColor.togoSnow.withAlphaComponent(0.14),
+            ], range: range)
+        }
+        return out
     }
 }

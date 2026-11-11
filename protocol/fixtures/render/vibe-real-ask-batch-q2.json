@@ -1,0 +1,22 @@
+{
+  "name": "vibe/real-ask-batch-q2",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "vibe",
+    "title": "How should we roll out?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Mistral Vibe",
+    "subtitle": "How should we roll out?",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

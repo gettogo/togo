@@ -288,15 +288,17 @@ import XCTest
         XCTAssertTrue(reveal(row, in: app), "The control center has no session \(bib)")
         row.tap()
 
-        // The bar's Changes item, its count a badge VoiceOver reads as the value.
+        // The bar's Changes item, its count a badge VoiceOver reads as the value, in the
+        // system's words ("9 items").
         let header = app.buttons["workspace.changes"]
         XCTAssertTrue(header.waitForExistence(timeout: 10), "The workspace bar has no Changes item")
         XCTAssertEqual(header.label, "Changes")
-        XCTAssertEqual(header.value as? String, "\(count) changes", "The Changes item does not count \(count) changes")
+        XCTAssertEqual((header.value as? String)?.hasPrefix("\(count) "), true, "The Changes item does not count \(count) changes")
         if largeType {
-            assertTappable(header)
-            if app.buttons["Preview"].exists { assertTappable(app.buttons["Preview"]) }
-            assertTappable(app.buttons["Session actions"])
+            // System bar items report their glyph's frame, not their touch area.
+            XCTAssertTrue(header.isHittable)
+            if app.buttons["Preview"].exists { XCTAssertTrue(app.buttons["Preview"].isHittable) }
+            XCTAssertTrue(app.buttons["Session actions"].isHittable)
         }
         header.tap()
         XCTAssertTrue(app.buttons["Close"].waitForExistence(timeout: 5), "Changes did not open")
@@ -328,11 +330,19 @@ import XCTest
     /// Scrolls the list up until `element` is wholly on screen, above the Commit bar when there is
     /// one: lists build rows lazily, so one below the fold does not exist until scrolled to.
     @discardableResult private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        // The list's visible foot: the window's bottom, or the top of the prompt bar's request
+        // card where one floats over the list. Commit is a bar item now; it bounds nothing.
+        func bottom() -> CGFloat {
+            var edge = app.windows.firstMatch.frame.maxY
+            let card = app.descendants(matching: .any)["prompt.context"]
+            if card.exists, card.isHittable { edge = min(edge, card.frame.minY - 16) }
+            return edge
+        }
+        // Its middle, where a tap lands, above that foot: at the largest text sizes a row can be
+        // taller than the strip the card leaves, so the whole row never fits.
         func shown() -> Bool {
             guard element.exists, element.isHittable else { return false }
-            let commit = app.buttons["Commit"]
-            let bottom = commit.exists ? commit.frame.minY : app.windows.firstMatch.frame.maxY
-            return element.frame.maxY <= bottom
+            return element.frame.midY <= bottom()
         }
         // The list on top: screens under a sheet keep theirs, and in a split view the list is
         // the sidebar, not the middle of the screen.
@@ -341,7 +351,14 @@ import XCTest
         }
         for _ in 0..<10 {
             if element.waitForExistence(timeout: 1), shown() { return true }
-            list().swipeUp(velocity: .slow)
+            // Dragged in the list's upper part: its middle can be under the request card, which
+            // would take the swipe.
+            let list = list()
+            // Slow, and held at the end, so the list does not fling past the row.
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).press(
+                forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)),
+                withVelocity: .slow, thenHoldForDuration: 0.1
+            )
         }
         return shown()
     }

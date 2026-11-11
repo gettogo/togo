@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+   I can still use  ask_user  whenever I need your input on a task. I don't    ┃
+   have a plan-mode exit tool in my current toolset. Tell me what you'd like   ┃
+   to work on in this repo and I'll get started.                               ┃
+                                                                               ┃
+ ❯ Use your ask_user tool now to ask me one multiple-choice question:    13:13 ┃
+   which color to use for the README title, with choices Red, Green and        ┃
+   Blue. Do nothing else.                                                      ┃
+                                                                               ┃
+ ○ Asking user Waiting for response                                        17s ┃
+                                                                               ┃
+────────────────────────────────────────────────────────────────────────────────
+ Copilot needs information.
+ Which color should I use for the README title?
+
+ README title color:
+ ❯ Red
+   Green
+   Blue
+   Other (type your answer)
+
+ ↑/↓ select · enter accept · ctrl+d decline · esc cancel
+────────────────────────────────────────────────────────────────────────────────

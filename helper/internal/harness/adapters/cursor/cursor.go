@@ -19,7 +19,7 @@ const MapperHooks = "cursor.hooks"
 
 func init() {
 	harness.RegisterAdapterFile("cursor", adapterFile)
-	hookstyle.Register(hookstyle.Options{Name: MapperHooks})
+	hookstyle.Register(hookstyle.Options{Name: MapperHooks, Ask: askQuestion})
 }
 
 // AdapterFile returns the embedded adapter file.

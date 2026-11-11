@@ -27,7 +27,8 @@ import UIKit
     /// or a terminal moving between panes does not flash the bar and header.
     private static let release: Duration = .milliseconds(450)
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
-    @ObservationIgnored private var dockedKeyboard = false
+    /// The software keyboard is docked on screen, whoever holds it.
+    private(set) var dockedKeyboard = false
     @ObservationIgnored private var pendingRelease: Task<Void, Never>?
 
     private init() {
@@ -62,7 +63,9 @@ import UIKit
     func refresh() {
         let responder = UIResponder.togoCurrent
         let software = GCKeyboard.coalesced == nil
-        let field = responder is UITextField || responder is UITextView
+        // Selected words in the chat make a read-only text view first responder; it brings no
+        // keyboard.
+        let field = responder is UITextField || (responder as? UITextView)?.isEditable == true
         let terminal = TerminalFocus.hasKeyboard
         let up = dockedKeyboard || (software && (field || terminal))
         if keyboardUp != up { keyboardUp = up }

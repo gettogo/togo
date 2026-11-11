@@ -32,8 +32,8 @@ done
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 
-# The pinned key is still the test key (ID 9AA09F4C20C5559E, stored as these
-# bytes) until the owner's release key replaces it. Refuse to sign with it.
+# A release must never be signed while the test key (ID 9AA09F4C20C5559E, stored
+# as these bytes) is pinned in place of the release key. Refuse to sign with it.
 TEST_KEY_BYTES="9e55c5204c9fa09a"
 pinned_is_test_key() {
   local id

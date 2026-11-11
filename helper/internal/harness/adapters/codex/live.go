@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -372,20 +373,34 @@ func (a *AppServer) request(m msg, at time.Time) ([]harness.Item, []harness.Op) 
 		return a.question(key, m.Params, at)
 	case "item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval":
 		var p struct {
-			ItemID string `json:"itemId"`
+			ItemID             string   `json:"itemId"`
+			ThreadID           string   `json:"threadId"`
+			TurnID             string   `json:"turnId"`
+			Reason             string   `json:"reason"`
+			AvailableDecisions []string `json:"availableDecisions"`
 		}
 		if json.Unmarshal(m.Params, &p) != nil {
 			return nil, nil
 		}
+		var items []harness.Item
 		x, ok := a.tools[p.ItemID]
-		if !ok {
-			return nil, nil
+		if ok {
+			body := *x.Tool
+			body.State = harness.StateWaiting
+			x.Tool = &body
+			a.tools[p.ItemID] = x
+			items = append(items, x)
 		}
-		body := *x.Tool
-		body.State = harness.StateWaiting
-		x.Tool = &body
-		a.tools[p.ItemID] = x
-		return []harness.Item{x}, nil
+		if m.Method == "item/permissions/requestApproval" {
+			if q, ok := a.permissions(key, m.Params, at); ok {
+				items = append(items, q)
+			}
+			return items, nil
+		}
+		if q, ok := a.approval(key, m.Method, x, ok, p.ThreadID, p.TurnID, p.Reason, p.AvailableDecisions, at); ok {
+			items = append(items, q)
+		}
+		return items, nil
 	case "mcpServer/elicitation/request":
 		var p struct {
 			ThreadID string `json:"threadId"`
@@ -440,6 +455,120 @@ func (a *AppServer) question(key string, params json.RawMessage, at time.Time) (
 	return []harness.Item{x}, []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionNeeds, Row: &row}}
 }
 
+// Approval decisions the app-server takes (CommandExecutionApprovalDecision
+// and FileChangeApprovalDecision, 0.167): the request may list the ones
+// available; without the list these three are offered.
+var approvalDecisions = []struct{ id, label string }{
+	{"accept", "Yes, proceed"},
+	{"acceptForSession", "Yes, and don't ask again this session"},
+	{"decline", "No, and tell Codex what to do differently"},
+}
+
+// approval turns a command or file-change approval request into a
+// question item: one question whose options are the decisions, answered
+// over the same request (rpc_reply) with {"decision": id}. Approve is
+// accept, deny is decline, so the engine offers it on the Lock Screen too.
+func (a *AppServer) approval(key, method string, tool harness.Item, hasTool bool, threadID, turnID, reason string, available []string, at time.Time) (harness.Item, bool) {
+	prompt := "Would you like to run the following command?"
+	header := "Command"
+	if method == "item/fileChange/requestApproval" {
+		prompt, header = "Would you like to make the following edits?", "Edits"
+	}
+	if reason != "" {
+		prompt = truncate(reason, harness.MaxTitle)
+	}
+	allowed := map[string]bool{}
+	for _, d := range available {
+		allowed[d] = true
+	}
+	q := harness.Question{ID: "decision", Header: header, Prompt: prompt}
+	for _, d := range approvalDecisions {
+		if len(allowed) > 0 && !allowed[d.id] {
+			continue
+		}
+		q.Options = append(q.Options, harness.Choice{ID: d.id, Label: d.label})
+	}
+	if len(q.Options) < 2 {
+		return harness.Item{}, false
+	}
+	if hasTool && tool.Tool != nil && tool.Tool.Subject != nil {
+		q.Options[0].Detail = tool.Tool.Subject.Text
+	}
+	body := &harness.QuestionBody{Questions: []harness.Question{q}}
+	for _, o := range q.Options {
+		switch o.ID {
+		case "accept":
+			body.Approve = o.ID
+		case "decline":
+			body.Deny = o.ID
+		}
+	}
+	x := harness.Item{ID: key, TurnID: turnID, Parent: a.parentOf(threadID), Kind: harness.KindQuestion, At: at, Question: body}
+	a.tools[key] = x // kept until resolved
+	return x, true
+}
+
+// permissionDecisions are the answers to a permissions request
+// (item/permissions/requestApproval, 0.167): grant what it asks for this
+// turn or the rest of the session, or grant nothing.
+var permissionDecisions = []struct{ id, label string }{
+	{"accept", "Yes, allow this turn"},
+	{"acceptForSession", "Yes, allow for this session"},
+	{"decline", "No, keep the sandbox"},
+}
+
+// permissions turns a request for more sandbox permissions (network
+// access, extra readable or writable paths: the request_permissions tool)
+// into a question answered over the same request: answerPermissions
+// grants the profile asked for, scoped to the turn or session, or an empty
+// one. The first option's detail says what is asked.
+func (a *AppServer) permissions(key string, params json.RawMessage, at time.Time) (harness.Item, bool) {
+	var p struct {
+		ThreadID    string  `json:"threadId"`
+		TurnID      string  `json:"turnId"`
+		Reason      *string `json:"reason"`
+		Permissions struct {
+			Network *struct {
+				Enabled *bool `json:"enabled"`
+			} `json:"network"`
+			FileSystem *struct {
+				Read  []string `json:"read"`
+				Write []string `json:"write"`
+			} `json:"fileSystem"`
+		} `json:"permissions"`
+	}
+	if json.Unmarshal(params, &p) != nil {
+		return harness.Item{}, false
+	}
+	var asks []string
+	if n := p.Permissions.Network; n != nil && n.Enabled != nil && *n.Enabled {
+		asks = append(asks, "network access")
+	}
+	if fs := p.Permissions.FileSystem; fs != nil {
+		if len(fs.Write) > 0 {
+			asks = append(asks, "write "+strings.Join(fs.Write, ", "))
+		}
+		if len(fs.Read) > 0 {
+			asks = append(asks, "read "+strings.Join(fs.Read, ", "))
+		}
+	}
+	prompt := "Codex asks for more permissions"
+	if len(asks) > 0 {
+		prompt = "Codex asks for " + strings.Join(asks, "; ")
+	}
+	q := harness.Question{ID: "decision", Header: "Permissions", Prompt: truncate(prompt, harness.MaxTitle)}
+	for _, d := range permissionDecisions {
+		q.Options = append(q.Options, harness.Choice{ID: d.id, Label: d.label})
+	}
+	if p.Reason != nil && *p.Reason != "" {
+		q.Options[0].Detail = *p.Reason
+	}
+	body := &harness.QuestionBody{Questions: []harness.Question{q}, Approve: "accept", Deny: "decline"}
+	x := harness.Item{ID: key, TurnID: p.TurnID, Parent: a.parentOf(p.ThreadID), Kind: harness.KindQuestion, At: at, Question: body}
+	a.tools[key] = x // kept until resolved
+	return x, true
+}
+
 // resolved closes a question answered here or at the desk.
 func (a *AppServer) resolved(params json.RawMessage, at time.Time) ([]harness.Item, []harness.Op) {
 	var p struct {
@@ -460,6 +589,10 @@ func (a *AppServer) resolved(params json.RawMessage, at time.Time) ([]harness.It
 		body.Answered[q.ID] = []string{}
 	}
 	x.Question = &body
+	if body.Approve != "" {
+		// An approval question had no row of its own (the engine's stands).
+		return []harness.Item{x}, nil
+	}
 	return []harness.Item{x}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: key}}
 }
 

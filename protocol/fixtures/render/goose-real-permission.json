@@ -1,0 +1,43 @@
+{
+  "name": "goose/real-permission",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "goose",
+    "title": "Goose would like to call the above tool, do you allow?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Allow",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Always Allow",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Deny",
+        "role": "deny"
+      },
+      {
+        "n": 4,
+        "label": "Cancel",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Goose",
+    "subtitle": "Goose would like to call the above tool, do you allow?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

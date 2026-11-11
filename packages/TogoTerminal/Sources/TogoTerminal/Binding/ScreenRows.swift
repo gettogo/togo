@@ -42,9 +42,10 @@ extension SwiftTermEngine {
         return TerminalScreenRows(rows: rows, cursorRow: snapshot.cursorRow - top, cursorColumn: snapshot.cursorColumn)
     }
 
-    /// The first visible character's attribute, hashed; 0 for a blank row.
+    /// The first visible character's attribute, hashed; 0 for a blank row. A cell nothing was
+    /// written to holds NUL, which is as blank as a space.
     static func look(of cells: [TerminalCellSnapshot]) -> Int {
-        guard let cell = cells.first(where: { !$0.text.allSatisfy(\.isWhitespace) && !$0.text.isEmpty }) else { return 0 }
+        guard let cell = cells.first(where: { $0.text.contains { !$0.isWhitespace && $0 != "\u{0}" } }) else { return 0 }
         var hasher = Hasher()
         hasher.combine(cell.attribute)
         return hasher.finalize()

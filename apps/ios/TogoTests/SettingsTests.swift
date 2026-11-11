@@ -38,7 +38,7 @@ import TogoTerminal
         #expect(settings.fontSize == 15)
         // A record never decides sync on this device, even one that says off; `SyncSwitch` does.
         #expect(settings.syncEnabled)
-        #expect(settings.keyBarConfig == .standard)
+        #expect(settings.terminalKeys == TerminalKeysConfig())
         #expect(settings.gestures == GestureBindings())
         #expect(settings.customThemes.isEmpty)
         #expect(settings.readNewOutput)
@@ -115,7 +115,7 @@ import TogoTerminal
 
     @Test func settingsRoundTrip() throws {
         var settings = AppSettings()
-        settings.keyBarConfig = .claude
+        settings.terminalKeys.controller = false
         settings.gestures.touchMouse = true
         settings.readNewOutput = false
         let decoded = try JSONDecoder().decode(AppSettings.self, from: try JSONEncoder().encode(settings))

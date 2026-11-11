@@ -92,6 +92,7 @@ private struct PeekRow: View {
         Text(verbatim: text)
             .font(.mono(.footnote))
             .foregroundStyle(selected ? Color.togoSnow : Color.togoMute)
+            // trunc-ok: the accessibility label carries the whole row; the terminal shows it uncut
             .lineLimit(1)
             .truncationMode(.tail)
             .padding(.horizontal, 14)

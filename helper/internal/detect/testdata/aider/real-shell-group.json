@@ -1,0 +1,51 @@
+{
+  "agentVersion": "0.86.2",
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ],
+    "3": [
+      "s",
+      "Enter"
+    ],
+    "4": [
+      "d",
+      "Enter"
+    ]
+  },
+  "kind": "confirm",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    },
+    {
+      "n": 3,
+      "label": "Skip all",
+      "role": "deny"
+    },
+    {
+      "n": 4,
+      "label": "Don't ask again",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "command",
+    "text": "echo one"
+  },
+  "title": "Run shell command?"
+}

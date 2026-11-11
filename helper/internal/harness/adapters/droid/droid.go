@@ -21,7 +21,7 @@ const MapperHooks = "droid.hooks"
 
 func init() {
 	harness.RegisterAdapterFile("droid", adapterFile)
-	hookstyle.Register(hookstyle.Options{Name: MapperHooks})
+	hookstyle.Register(hookstyle.Options{Name: MapperHooks, Ask: droidAsk, Answered: droidAnswered, Plan: specPlan})
 }
 
 // AdapterFile returns the embedded adapter file.

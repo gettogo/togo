@@ -1,0 +1,24 @@
+  Cursor Agent
+  v2026.11.05-86047df
+  Tip: Use /plan to iterate on an
+  implementation plan before code changes.
+
+
+  Use your shell tool to run exactly:
+  touch x.txt — then reply done.
+
+
+  $ touch x.txt Waiting for approval...
+
+───────────────────────────────────────────────
+ $  touch x.txt in .
+
+ Run this command?
+ Not in allowlist: touch
+  → Run (once) (y)
+    Add Shell(touch) to allowlist? (tab)
+    Run Everything (shift+tab)
+    Skip & tell the agent what to do instead
+  (esc or n)
+
+

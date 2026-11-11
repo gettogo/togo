@@ -59,6 +59,12 @@ type sessionState struct {
 	// working indicator; busyMisses counts reads in a row without it.
 	lastBusyCheck time.Time
 	busyMisses    int
+	// vouchedSince is when a harness feed's word first kept this silent
+	// session working, since the pane last showed the agent busy;
+	// busyHold is when the indicator is read again after such a vouch
+	// (see settle).
+	vouchedSince time.Time
+	busyHold     time.Time
 	// lastSignInCheck is when the screen of a program whose output never
 	// stops was last read for a sign-in step (see signin.go).
 	lastSignInCheck time.Time

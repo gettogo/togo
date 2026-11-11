@@ -114,7 +114,7 @@ private let deviceSafeArea = ScreenSize.iPhone17.safeArea
                 .environment(\.barIsVerticalOverride, size == .duoFolded ? true : nil)
             assertSnapshot(
                 of: render(UIHostingController(rootView: content), in: variant, size: size),
-                as: .image(precision: precision, perceptualPrecision: perceptualPrecision, scale: 3),
+                as: .screen(precision: precision, perceptualPrecision: perceptualPrecision),
                 named: "\(name)\(size.suffix)-\(variant.rawValue)",
                 fileID: fileID, file: filePath, testName: testName, line: line, column: column
             )
@@ -180,4 +180,77 @@ private let deviceSafeArea = ScreenSize.iPhone17.safeArea
         image = next
     }
     return image
+}
+
+extension Snapshotting where Value == UIImage, Format == UIImage {
+    /// `.image`, except that a render the perceptual comparison fails matches when it is noise
+    /// by the rule `nearlyIdentical` spells out. That comparison runs on the simulator's GPU and
+    /// scored renders that differ in a few thousand antialiased pixels by a few levels as several
+    /// percent apart, so the same screen passed and failed from run to run. A change the eye
+    /// could see (new words, a moved control, a recoloured or faded surface) still fails.
+    static func screen(precision: Float, perceptualPrecision: Float) -> Snapshotting {
+        let image = Diffing<UIImage>.image(precision: precision, perceptualPrecision: perceptualPrecision, scale: 3)
+        return Snapshotting(
+            pathExtension: "png",
+            diffing: .diff(toData: image.toData, fromData: image.fromData) { old, new in
+                guard let failure = image.diffV2(old, new) else { return nil }
+                return nearlyIdentical(old, new) ? nil : failure
+            }
+        )
+    }
+}
+
+/// The largest per-channel difference, out of 255, that render noise reaches.
+private let maxChannelDelta = 8
+/// The most pixels render noise moves by more than a rounding step: 1%.
+private let maxNoisyShare = 0.01
+/// The largest mean difference per colour channel, out of 255, over the whole image. Noise
+/// lives on antialiased edges and averages far below one level; a tint or opacity drift moves
+/// every pixel of a surface a level or two and lifts the mean past it.
+private let maxMeanDelta = 1.0
+
+/// Whether two images are the same size and differ only as render noise does, compared as 8-bit
+/// sRGB. Noise is all three:
+/// - no channel off by more than `maxChannelDelta` (8 of 255): anything larger is a real change;
+/// - at most `maxNoisyShare` (1%) of the pixels off by more than 2: noise stays on edges, it
+///   never moves a surface;
+/// - a mean colour-channel difference of at most `maxMeanDelta` (1 of 255): a shift of a level
+///   or two spread over a large surface (a uniform tint, an opacity drift) passes the first two
+///   rules pixel by pixel and fails this one.
+private func nearlyIdentical(_ old: UIImage, _ new: UIImage) -> Bool {
+    guard let a = old.cgImage, let b = new.cgImage, a.width == b.width, a.height == b.height else { return false }
+    func bytes(_ image: CGImage) -> [UInt8]? {
+        var data = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let drawn = data.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: image.width, height: image.height, bitsPerComponent: 8,
+                bytesPerRow: image.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return true
+        }
+        return drawn ? data : nil
+    }
+    guard let x = bytes(a), let y = bytes(b) else { return false }
+    return x.withUnsafeBufferPointer { x in
+        y.withUnsafeBufferPointer { y in
+            // A while loop: test targets build without optimisation, where it is much the fastest.
+            var index = 0, noisy = 0, lastNoisyPixel = -1, total = 0
+            while index < x.count {
+                let delta = abs(Int(x[index]) - Int(y[index]))
+                if delta > maxChannelDelta { return false }
+                if delta > 2, index / 4 != lastNoisyPixel {
+                    noisy += 1
+                    lastNoisyPixel = index / 4
+                }
+                // Colour channels only: alpha is opaque on both sides and would dilute the mean.
+                if index & 3 != 3 { total += delta }
+                index += 1
+            }
+            let pixels = x.count / 4
+            let mean = Double(total) / Double(pixels * 3)
+            return Double(noisy) <= maxNoisyShare * Double(pixels) && mean <= maxMeanDelta
+        }
+    }
 }

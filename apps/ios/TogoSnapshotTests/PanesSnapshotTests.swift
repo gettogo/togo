@@ -69,7 +69,8 @@ struct PanesSnapshotTests {
         for id in [one, four] {
             store.setLink(Self.mosh, for: id)
         }
-        return WorkspaceView(store: store, terminals: terminals)
+        // The session's items are the bar of the navigation stack the workspace is shown in.
+        return NavigationStack { WorkspaceView(store: store, terminals: terminals) }
             .tint(Color.togoSnow)
     }
 

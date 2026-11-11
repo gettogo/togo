@@ -21,6 +21,9 @@ enum ComposeCopy {
     )
     static let unreadable = String(localized: "compose.unreadable", defaultValue: "The image could not be read.")
     static let loadFailed = String(localized: "compose.loadFailed", defaultValue: "Couldn't load that photo.")
+    static let imageSent = String(
+        localized: "compose.imageSent", defaultValue: "Image sent. Its path is typed in the terminal."
+    )
 }
 
 /// One tab's tools beside typing straight into its terminal: dictation and pictures. The
@@ -44,9 +47,12 @@ enum ComposeCopy {
     }
 
     /// Dictated words go to the terminal as a paste, cleaned by `PasteText`: control
-    /// characters never reach the session, and Enter is never pressed.
+    /// characters never reach the session, and Enter is never pressed: a line break the
+    /// words carry (a recogniser's "new line", a trailing return) becomes a space, and
+    /// words that are only space type nothing.
     func type(_ words: String) {
-        let clean = PasteText.sanitize(words)
+        let clean = String(PasteText.sanitize(words).map { $0.isNewline ? " " : $0 })
+            .trimmingCharacters(in: .whitespaces)
         guard !clean.isEmpty else { return }
         paste(clean)
     }
@@ -152,6 +158,18 @@ struct ImageStatusRow: View {
                 .padding(.horizontal, 16)
         case .failed(let detail):
             row(ComposeCopy.uploadFailed, detail: detail)
+        case .sent:
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.togoSnow)
+                    .accessibilityHidden(true)
+                Text(ComposeCopy.imageSent)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoSnow)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, 16)
         case .loadFailed, .unreadable, .tooLarge, .unsupported, .noHelper:
             row(phase.message ?? "", detail: nil)
         }

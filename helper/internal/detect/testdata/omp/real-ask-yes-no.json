@@ -1,0 +1,30 @@
+{
+  "source": "real",
+  "agentVersion": "18.16.0",
+  "match": true,
+  "kind": "question",
+  "title": "Should the 5 percent canary roll back on its own if error rates go up?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

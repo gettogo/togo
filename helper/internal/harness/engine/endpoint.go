@@ -29,6 +29,54 @@ const maxSocketPath = 100
 type endpoints struct {
 	mu   sync.Mutex
 	byID map[string]endpoint
+	// argv is the command line a relaunch restarted a session's agent
+	// with, by session id: the session keeps the one it was created with,
+	// but the mappers read the agent that runs (OpenCode 2.x's --session).
+	argv map[string][]string
+	// relaunching marks a relaunch under way: the launch it makes keeps
+	// argv; any other launch (a restore) starts the agent as created.
+	relaunching map[string]bool
+}
+
+// noteRelaunch keeps the argv a session's agent was restarted with.
+func (e *Engine) noteRelaunch(id string, argv []string) {
+	e.eps.mu.Lock()
+	defer e.eps.mu.Unlock()
+	if e.eps.argv == nil {
+		e.eps.argv = map[string][]string{}
+	}
+	e.eps.argv[id] = append([]string(nil), argv...)
+	if e.eps.relaunching == nil {
+		e.eps.relaunching = map[string]bool{}
+	}
+	e.eps.relaunching[id] = true
+}
+
+// launched is told of every launch with an endpoint: one a relaunch made
+// keeps its argv, any other drops it.
+func (e *Engine) launched(id string) {
+	e.eps.mu.Lock()
+	defer e.eps.mu.Unlock()
+	if !e.eps.relaunching[id] {
+		delete(e.eps.argv, id)
+	}
+	delete(e.eps.relaunching, id)
+}
+
+// dropRelaunch forgets a relaunch's argv.
+func (e *Engine) dropRelaunch(id string) {
+	e.eps.mu.Lock()
+	defer e.eps.mu.Unlock()
+	delete(e.eps.argv, id)
+	delete(e.eps.relaunching, id)
+}
+
+// relaunchedArgv returns the argv a relaunch restarted the session with.
+func (e *Engine) relaunchedArgv(id string) ([]string, bool) {
+	e.eps.mu.Lock()
+	defer e.eps.mu.Unlock()
+	a, ok := e.eps.argv[id]
+	return a, ok
 }
 
 type endpoint struct {
@@ -145,6 +193,7 @@ func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 	}
 	e.eps.byID[sessionID] = ep
 	e.eps.mu.Unlock()
+	e.launched(sessionID)
 	e.restart(sessionID)
 	return out
 }
@@ -158,9 +207,32 @@ func (e *Engine) restart(id string) {
 	s, ok := e.sessions[id]
 	delete(e.sessions, id)
 	e.mu.Unlock()
-	if ok {
-		s.stop()
+	if !ok {
+		return
 	}
+	s.mu.Lock()
+	subs := make([]harness.Subscriber, 0, len(s.subs))
+	for sub := range s.subs {
+		subs = append(subs, sub)
+	}
+	s.mu.Unlock()
+	s.stop()
+	if len(subs) == 0 {
+		return
+	}
+	// Open chats stay open: the session is served again at once on the
+	// new address, and its subscribers carried over (carry).
+	e.mu.Lock()
+	if e.carried == nil {
+		e.carried = map[string][]harness.Subscriber{}
+	}
+	e.carried[id] = subs
+	e.mu.Unlock()
+	go func() {
+		if s, err := e.session(context.Background(), id); err == nil {
+			s.waitReady(context.Background())
+		}
+	}()
 }
 
 // endpointFor returns the address picked for a session, if any.

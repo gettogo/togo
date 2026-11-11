@@ -107,57 +107,51 @@ struct PrimitiveMarkdown: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Links underline in the text's colour and open on a tap; Copy and Select text are in
-        // the menu, so selection never sits on the tap path.
+        // Links underline in the text's colour and open on a tap. A long press selects words;
+        // copying the whole card is in their edit menu, and Select text stays for VoiceOver.
         .tint(Color.togoSnow)
-        .contextMenu {
-            Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = source }
+        .environment(\.selectableTextActions, SelectableTextActions { [source] _ in
+            [UIAction(title: TerminalSyncCopy.copyAll, image: UIImage(systemName: "doc.on.doc")) { _ in
+                ChatPasteboard.copy(markdown: source)
+            }]
+        })
+        .accessibilityActions {
+            Button(ChatCopy.copy, systemImage: "doc.on.doc") { ChatPasteboard.copy(markdown: source) }
             Button(ChatCopy.selectText, systemImage: "selection.pin.in.out") { selecting = true }
         }
         // Nests by policy: the screen it was selected from stays up under it and comes back.
-        .presentSheet("primitive.markdownSelect", isPresented: $selecting, nests: true) { SelectTextSheet(text: source) }
+        .presentSheet("primitive.markdownSelect", isPresented: $selecting, nests: true) { SelectTextSheet(text: source, markdown: true) }
     }
 
     @ViewBuilder private func view(_ block: PrimitiveMarkdownBlock) -> some View {
         switch block {
         case let .heading(level, text):
-            Text(PrimitiveMarkdownBlock.inline(text))
-                .font(level <= 1 ? .title3.weight(.semibold) : .headline)
-                .foregroundStyle(Color.togoSnow)
-                .accessibilityAddTraits(.isHeader)
+            words(text, style: ChatSelectable.Style(textStyle: level <= 1 ? .title3 : .headline, bold: level <= 1), heading: true)
         case let .paragraph(text):
-            Text(PrimitiveMarkdownBlock.inline(text))
-                .font(.body)
-                .foregroundStyle(Color.togoSnow)
+            words(text, style: .prompt)
         case let .item(marker, text):
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(verbatim: marker)
-                    .font(marker.last == "." ? .mono(.subheadline) : .body)
-                    .foregroundStyle(Color.togoMute)
-                    .accessibilityHidden(true)
-                Text(PrimitiveMarkdownBlock.inline(text))
-                    .font(.body)
-                    .foregroundStyle(Color.togoSnow)
+            SelectableText(key: [marker, text], copy: { ChatPasteboard.copy(selection: $0) }) { traits in
+                ChatSelectable.item(marker: marker, PrimitiveMarkdownBlock.inline(text), style: .prompt, traits: traits)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         case let .quote(text):
             HStack(spacing: 10) {
                 Capsule().fill(Color.togoLine).frame(width: 3)
-                Text(PrimitiveMarkdownBlock.inline(text)).font(.body).foregroundStyle(Color.togoMute)
+                words(text, style: ChatSelectable.Style(color: .togoMute))
             }
             .fixedSize(horizontal: false, vertical: true)
         case let .code(_, text):
-            ScrollView(.horizontal) {
-                Text(ChatLinks.plain(text))
-                    .font(.mono(.footnote))
-                    .foregroundStyle(Color.togoSnow)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-            }
-            .scrollIndicators(.hidden)
-            .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
+            CodeWell(text: text)
         case .rule:
             Rectangle().fill(Color.togoLine).frame(height: 1)
         }
+    }
+
+    /// Inline markdown as selectable words.
+    private func words(_ text: String, style: ChatSelectable.Style, heading: Bool = false) -> some View {
+        SelectableText(key: text, heading: heading, copy: { ChatPasteboard.copy(selection: $0) }) { traits in
+            ChatSelectable.attributed(PrimitiveMarkdownBlock.inline(text), style: style, traits: traits)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -39,6 +39,12 @@ const (
 	// without it end the turn.
 	busyCheckEvery     = 2 * time.Second
 	busyMissesToSettle = 2
+	// maxVouched bounds how long a harness feed's "the turn still runs"
+	// keeps a silent pane working. A feed can be wrong for good (OpenCode's
+	// stream dropped as the turn ended, an omp or Pi session file that
+	// never records the end of a turn that failed on screen), and a done
+	// that never comes is the worst miss; after this the pane decides.
+	maxVouched = 3 * time.Minute
 	// textIdlePoll spaces the screen reads of an agent whose output left
 	// its text unchanged last time (a blinking cursor at an idle prompt).
 	textIdlePoll = 8 * time.Second
@@ -78,6 +84,14 @@ func (w *Watcher) output(ctx context.Context, id string, e *entry) {
 			return
 		}
 		w.clearPrompt(ctx, id, e)
+		if !detect.KnowsBusy(e.agent) && w.statusIs(id, statusWorking) {
+			// The turn the prompt paused goes on: its output is work at
+			// once, so the silence after it settles the session. Cline
+			// finishes within a second of an approval, a burst too short
+			// to count as work, and nothing else would end the "working"
+			// it showed before the prompt.
+			e.working = true
+		}
 	}
 	if detect.KnowsBusy(e.agent) {
 		w.agentOutput(ctx, id, e, now)
@@ -102,7 +116,8 @@ func (w *Watcher) selfRedraw(ctx context.Context, id string, e *entry, now time.
 }
 
 // settle runs after silence: a prompt on screen is reported, otherwise the
-// session is idle and its owner is told it is done.
+// session is idle and its owner is told it is done, unless the agent's
+// feed says its turn still runs.
 func (w *Watcher) settle(ctx context.Context, id string, e *entry) {
 	e.working, e.promptCheck, e.busyMisses = false, false, 0
 	p, ok, err := w.inspect(ctx, id)
@@ -114,11 +129,42 @@ func (w *Watcher) settle(ctx context.Context, id string, e *entry) {
 		w.setStatus(id, statusIdle)
 	case ok:
 		w.promptSeen(ctx, id, e, p)
+	case w.waitsOnUser(id):
+		// A question or approval waits (one the screen does not show, or
+		// one answered through the agent's API): no idle, no done, and
+		// no limit; the silence is looked at again after an idle window.
+		now := w.now()
+		e.awaitingIdle, e.lastOutput, e.busyHold = true, now, now.Add(w.idleWindow())
+	case w.vouched(id, e):
+		// The agent's own feed says its turn goes on (a model thinking
+		// without streaming): the session stays working and the silence
+		// is looked at again after another full idle window, the screen
+		// included, not after the next two indicator reads.
+		w.clearPrompt(ctx, id, e)
+		now := w.now()
+		e.working, e.awaitingIdle, e.lastOutput = true, true, now
+		e.busyHold = now.Add(w.idleWindow())
 	default:
+		e.vouchedSince = time.Time{}
 		w.clearPrompt(ctx, id, e)
 		w.setStatus(id, statusIdle)
 		w.notify(id, wire.LevelDone, w.sessionName(ctx, id), "")
 	}
+}
+
+// vouched reports whether the feed's word keeps a silent session working:
+// it says the turn runs, and has not said so alone for maxVouched since
+// the pane last showed the agent busy.
+func (w *Watcher) vouched(id string, e *entry) bool {
+	if !w.feedWorking(id) {
+		e.vouchedSince = time.Time{}
+		return false
+	}
+	now := w.now()
+	if e.vouchedSince.IsZero() {
+		e.vouchedSince = now
+	}
+	return now.Sub(e.vouchedSince) < maxVouched
 }
 
 // agentOutput handles output from an agent with a working indicator: it
@@ -134,7 +180,7 @@ func (w *Watcher) agentOutput(ctx context.Context, id string, e *entry, now time
 		e.promptCheck = true
 		return
 	}
-	e.busyMisses = 0
+	e.busyMisses, e.vouchedSince = 0, time.Time{}
 	if e.outputSeen(now) {
 		w.setStatus(id, statusWorking)
 	}
@@ -142,6 +188,7 @@ func (w *Watcher) agentOutput(ctx context.Context, id string, e *entry, now time
 
 // plainOutput handles output from a program without a known indicator.
 func (w *Watcher) plainOutput(id string, e *entry, now time.Time) {
+	e.vouchedSince = time.Time{} // the pane shows work again
 	if e.burstStart.IsZero() || now.Sub(e.lastOutput) > burstGap {
 		e.burstStart = now
 	}
@@ -164,12 +211,12 @@ func (w *Watcher) plainOutput(id string, e *entry, now time.Time) {
 // showing it on busyMissesToSettle reads in a row, so its turn ended even
 // though redraws keep the pane from falling silent.
 func (w *Watcher) turnOver(ctx context.Context, id string, e *entry, now time.Time) bool {
-	if !e.working || !detect.KnowsBusy(e.agent) || now.Sub(e.lastBusyCheck) < busyCheckEvery {
+	if !e.working || !detect.KnowsBusy(e.agent) || now.Sub(e.lastBusyCheck) < busyCheckEvery || now.Before(e.busyHold) {
 		return false
 	}
 	e.lastBusyCheck = now
 	if w.busy(ctx, id, e) {
-		e.busyMisses = 0
+		e.busyMisses, e.vouchedSince = 0, time.Time{}
 		return false
 	}
 	e.busyMisses++
@@ -213,11 +260,17 @@ func (w *Watcher) checkPrompt(ctx context.Context, id string, e *entry) {
 // output the interrupt draws is no work. An interrupt is no finished
 // turn, so no done notification goes out.
 func (w *Watcher) staleWorking(ctx context.Context, id string, e *entry) {
-	r, ok := w.cfg.Status.(StatusReader)
-	if !ok || r.Status(id) != statusWorking || !detect.KnowsBusy(e.agent) || w.busy(ctx, id, e) {
+	if !w.statusIs(id, statusWorking) || !detect.KnowsBusy(e.agent) || w.busy(ctx, id, e) {
 		return
 	}
 	w.setStatus(id, statusIdle)
+}
+
+// statusIs reports whether the status sink reads back status for id; a
+// sink that cannot read back says no.
+func (w *Watcher) statusIs(id, status string) bool {
+	r, ok := w.cfg.Status.(StatusReader)
+	return ok && r.Status(id) == status
 }
 
 // textUnchanged reports whether output from a coding agent without a

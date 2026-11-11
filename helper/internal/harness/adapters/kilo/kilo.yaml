@@ -135,6 +135,15 @@ actions:
   command:
     http: { method: POST, path: '/session/{{.state.harness_session}}/command', body: '{"command": {{.command | json}}, "arguments": {{.arguments | json}}}' }
     stability: documented
+  # Before the first prompt there is no server session (the TUI makes one with
+  # it), so a model or mode picked then starts one here and shows it in the
+  # TUI; the pick applies to it and the first prompt runs on it.
+  start_session:
+    http: { method: POST, path: /session, body: '{}' }
+    stability: documented
+  show_session:
+    http: { method: POST, path: /tui/select-session, body: '{"sessionID": {{.state.harness_session | json}}}' }
+    stability: documented
   send:
     http: { method: POST, path: '/session/{{.state.harness_session}}/prompt_async', body: '{"parts": [{"type": "text", "text": {{.text | json}}}]}' }
     stability: documented

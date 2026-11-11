@@ -131,6 +131,14 @@ type IdleCloser interface {
 	CloseIdle(at time.Time) []Item
 }
 
+// Relauncher is a mapper that learns state from the flags an action
+// restarted the agent with, for a harness that records none of them: Pi
+// writes nothing for a --thinking level given on a resume. Its ops (a
+// Status block) are published at once.
+type Relauncher interface {
+	Relaunched(argv []string, at time.Time) []Op
+}
+
 // MapperFactory builds a fresh mapper for one session.
 type MapperFactory func(env Env) Mapper
 

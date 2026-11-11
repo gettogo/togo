@@ -33,6 +33,8 @@ struct PendingImage: Identifiable, Equatable {
         case idle
         case annotating(PendingImage)
         case uploading
+        /// Uploaded and its path typed into the terminal: said for a moment, then idle.
+        case sent
         case failed(detail: String)
         case loadFailed
         case unreadable
@@ -44,6 +46,7 @@ struct PendingImage: Identifiable, Equatable {
         var message: String? {
             switch self {
             case .idle, .annotating, .uploading: nil
+            case .sent: ComposeCopy.imageSent
             case .failed: ComposeCopy.uploadFailed
             case .loadFailed: ComposeCopy.loadFailed
             case .unreadable: ComposeCopy.unreadable
@@ -182,9 +185,27 @@ struct PendingImage: Identifiable, Equatable {
             let path = try await upload(fileName(encoded.fileExtension), encoded.data)
             // Quoted so a path with spaces stays one word; the space lets the user keep typing.
             paste(shellQuote([path]) + " ")
-            dismiss()
+            confirmSent()
         } catch {
             phase = .failed(detail: ServiceErrors.message(error))
+        }
+    }
+
+    /// How long "Image sent" stays before the status closes.
+    static let sentHold: Duration = .seconds(3)
+
+    /// The picture went: a success haptic, VoiceOver hears it, and the status says so for a
+    /// moment before it closes, so a path appearing in the terminal is never a surprise.
+    private func confirmSent() {
+        pending = nil
+        loader = nil
+        phase = .sent
+        Haptic.done.play()
+        AccessibilityNotification.Announcement(ComposeCopy.imageSent).post()
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.sentHold)
+            guard let self, self.phase == .sent else { return }
+            self.phase = .idle
         }
     }
 

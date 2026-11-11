@@ -180,7 +180,9 @@ struct ShortcutBuilderView: View {
                         ? settingsText("settings.builder.preview.empty", "Choose a key or type some text.")
                         : settingsText("settings.builder.preview.label", "Sends \(draft.preview)"))
             } footer: {
-                Text(settingsText("settings.builder.preview.footer", "What the terminal receives."))
+                SectionFooter {
+                    Text(settingsText("settings.builder.preview.footer", "What the terminal receives."))
+                }
             }
             .groupedRows()
             Section {
@@ -201,7 +203,9 @@ struct ShortcutBuilderView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             } footer: {
-                Text(settingsText("settings.builder.text.footer", "Sent exactly as typed, in place of a key."))
+                SectionFooter {
+                    Text(settingsText("settings.builder.text.footer", "Sent exactly as typed, in place of a key."))
+                }
             }
             .groupedRows()
             Section {
@@ -210,7 +214,9 @@ struct ShortcutBuilderView: View {
                     prompt: Text(draft.suggestedTitle.isEmpty ? settingsText("settings.builder.label", "Label") : draft.suggestedTitle)
                 )
             } footer: {
-                Text(settingsText("settings.builder.label.footer", "Shown on the key bar."))
+                SectionFooter {
+                    Text(settingsText("settings.builder.label.footer", "Shown on the key bar."))
+                }
             }
             .groupedRows()
         }

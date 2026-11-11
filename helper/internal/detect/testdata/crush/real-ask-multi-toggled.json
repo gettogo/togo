@@ -1,0 +1,40 @@
+{
+  "source": "real",
+  "agentVersion": "0.100.0",
+  "match": true,
+  "kind": "question",
+  "title": "Which features?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Auth",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Billing",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Search",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Up",
+      "Up",
+      "Enter"
+    ],
+    "2": [
+      "Up",
+      "Enter"
+    ],
+    "3": [
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

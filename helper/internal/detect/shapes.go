@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -54,7 +55,7 @@ var (
 	permRe     = regexp.MustCompile(`(?i)\b(allow|approve|permission|run|execute|proceed|edit|write|create|delete|apply|command|make this|make the following|edits?|changes?|patch)\b`)
 	denyRe     = regexp.MustCompile(`(?i)^(no|reject|deny|decline|cancel|abort|skip|continue without)\b`)
 	approveRe  = regexp.MustCompile(`(?i)^(yes|allow|always|approve|accept|run|proceed|continue|ok|okay|apply|confirm|trust|remember)\b`)
-	alwaysRe   = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|auto-accept|all edits|remember|permanent|in this project|for this project|globally|trust)`)
+	alwaysRe   = regexp.MustCompile(`(?i)(always|don't ask|do not ask|never ask|for this session|for the session|for every session|all sessions|auto-accept|all edits|remember|permanent|rest of the (running )?session|remainder of (this|the) session|in this project|for this project|globally|trust)`)
 )
 
 // opensBrowser matches a y/n question whose Yes opens a URL, a browser or a
@@ -108,11 +109,26 @@ func matchConfirm(lines []string) (Prompt, bool) {
 		return Prompt{}, false
 	}
 	title := strings.TrimSpace(last[:loc[0]])
+	above := len(lines) - 2 // the line before the question, aider's subject
 	if title == "" {
 		if len(lines) < 2 {
 			return Prompt{}, false
 		}
 		title = strings.TrimSpace(lines[len(lines)-2])
+		above = len(lines) - 3
+	}
+	if above >= 0 && wrappedQuestion(title) {
+		// An 80-column pane wrapped the question's head onto the line
+		// above: "… Do you want to create /Users/jamie/proj" then
+		// "/nosuch.txt? (Y)es/(N)o [Yes]:" (Aider 0.86.2, seen live). A
+		// cut mid-word joins with no space, one at a space with one.
+		head := strings.TrimRight(lines[above], " ")
+		sep := " "
+		if r, _ := utf8.DecodeRuneInString(title); !unicode.IsLetter(r) {
+			sep = ""
+		}
+		title = strings.TrimSpace(head) + sep + title
+		above--
 	}
 	yes := wire.RoleApprove
 	if opensBrowser.MatchString(title) {
@@ -120,7 +136,7 @@ func matchConfirm(lines []string) (Prompt, bool) {
 		// one-tap approve: the phone must pick it on purpose.
 		yes = wire.RoleOther
 	}
-	return Prompt{
+	p := Prompt{
 		Kind:  KindConfirm,
 		Title: title,
 		Options: []wire.Option{
@@ -128,7 +144,65 @@ func matchConfirm(lines []string) (Prompt, bool) {
 			{N: 2, Label: "No", Role: wire.RoleDeny},
 		},
 		Keys: map[int][]string{1: {"y", "Enter"}, 2: {"n", "Enter"}},
-	}, true
+	}
+	// Aider's group options, in the token's order. (A)ll says yes to this
+	// and the rest of the group; (S)kip all says no to them; (D)on't ask
+	// again is a No that is never asked again (confirm_ask returns False
+	// for d), so it is never an approve of any kind.
+	token := last[loc[0]:loc[1]]
+	for _, g := range []struct {
+		mark, label, key, role string
+	}{
+		{"(A)ll", "All", "a", wire.RoleApproveAlways},
+		{"(S)kip all", "Skip all", "s", wire.RoleDeny},
+		{"(D)on't ask again", "Don't ask again", "d", wire.RoleDeny},
+	} {
+		if strings.Contains(token, g.mark) {
+			n := len(p.Options) + 1
+			p.Options = append(p.Options, wire.Option{N: n, Label: g.label, Role: g.role})
+			p.Keys[n] = []string{g.key, "Enter"}
+		}
+	}
+	if above >= 0 {
+		p.Subject = confirmSubject(title, lines[above])
+	}
+	return p, true
+}
+
+// wrappedQuestion reports a question whose head is on the line above: it
+// starts with no capital, digit or quote, as a wrapped tail does.
+func wrappedQuestion(title string) bool {
+	r, size := utf8.DecodeRuneInString(title)
+	if size == 0 {
+		return false
+	}
+	return !(unicode.IsUpper(r) || unicode.IsDigit(r) || strings.ContainsRune("\"'`(['", r))
+}
+
+// confirmSubject reads what a line-mode question is about from the line
+// before it: Aider prints the file, URL or command it asks about there.
+func confirmSubject(title, before string) *wire.Subject {
+	before = CleanLine(before)
+	if before == "" || strings.HasPrefix(before, ">") || strings.HasPrefix(before, "Please answer") || len(before) > 300 ||
+		ynToken.MatchString(before) || aiderYN.MatchString(before) {
+		return nil
+	}
+	low := strings.ToLower(title)
+	switch {
+	case strings.Contains(low, "command"):
+		return NewSubject(wire.SubjectCommand, before)
+	case strings.Contains(low, "url"):
+		if !strings.Contains(before, "://") {
+			return nil
+		}
+		return NewSubject(wire.SubjectText, before)
+	case strings.Contains(low, "file"):
+		if strings.ContainsAny(before, " ") {
+			return nil
+		}
+		return NewSubject(wire.SubjectFile, before)
+	}
+	return nil
 }
 
 // menu is a block of options found on screen, as indexes into the lines.
@@ -404,6 +478,12 @@ func findArrow(lines []string) (menu, bool) {
 	if c < 0 {
 		return menu{}, false
 	}
+	if echoLine(strings.TrimSpace(lines[c])) && composerBelow(lines, c) {
+		// A sent prompt the transcript echoes after its marker, wrapped
+		// over several lines, above the agent's input box (Kimi Code 2.5
+		// at 80 columns): no menu.
+		return menu{}, false
+	}
 	aligned := func(i int) bool {
 		l := lines[i]
 		if cursorLine.MatchString(l) || numbered.MatchString(l) {
@@ -432,6 +512,18 @@ func findArrow(lines []string) (menu, bool) {
 		m.labels = append(m.labels, strings.TrimSpace(l))
 	}
 	return m, true
+}
+
+// composerBelow reports an agent's empty input box under line i: a line
+// that, once unboxed, is only a prompt marker.
+func composerBelow(lines []string, i int) bool {
+	for _, l := range lines[i+1:] {
+		switch strings.TrimSpace(l) {
+		case ">", "❯", "›":
+			return true
+		}
+	}
+	return false
 }
 
 // footerLines counts the non-border lines below index i.
@@ -592,6 +684,9 @@ func splitShortcut(label string) (string, string) {
 // "approve" must never widen a grant, so any qualified yes is classified
 // as approve_always (when it names a lasting grant) or other, and the phone
 // can still pick it explicitly by option number.
+// askOnly is a label that only stops the question: "Don't ask again".
+var askOnly = regexp.MustCompile(`(?i)^(don'?t|do not|never) ask\b`)
+
 var plainApprove = map[string]bool{
 	"yes": true, "allow": true, "approve": true, "run": true,
 	"yes, proceed": true, "allow once": true, "approve once": true,
@@ -607,6 +702,11 @@ func roleOf(label string) string {
 		return wire.RoleDeny
 	case plainApprove[norm]:
 		return wire.RoleApprove
+	case askOnly.MatchString(label):
+		// "Don't ask again" with no Yes or Allow says nothing about the
+		// answer: Aider's is a permanent No. The phone must pick it on
+		// purpose.
+		return wire.RoleOther
 	case alwaysRe.MatchString(label):
 		return wire.RoleApproveAlways
 	}

@@ -7,9 +7,13 @@
     "bib": "03",
     "agent": "aider",
     "title": "Open documentation url for more info?",
-    "body": "",
+    "body": "https://aider.chat/docs/llms/warnings.html",
     "requestId": "r_render0001",
     "ts": 1793871000000,
+    "subject": {
+      "kind": "text",
+      "text": "https://aider.chat/docs/llms/warnings.html"
+    },
     "host": "studio",
     "options": [
       {
@@ -21,13 +25,18 @@
         "n": 2,
         "label": "No",
         "role": "deny"
+      },
+      {
+        "n": 3,
+        "label": "Don't ask again",
+        "role": "deny"
       }
     ]
   },
   "expect": {
     "title": "03 Aider",
     "subtitle": "Open documentation url for more info?",
-    "body": "",
+    "body": "https://aider.chat/docs/llms/warnings.html",
     "category": "togo.request.deny"
   }
 }

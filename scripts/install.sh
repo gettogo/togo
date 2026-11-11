@@ -2,7 +2,11 @@
 # Install the togo helper from a GitHub release, verifying every download.
 #
 #   curl -fsSL https://github.com/gettogo/togo/releases/latest/download/install.sh | sh
-#   sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart]
+#   sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service]
+#
+# Unless --no-service is given, the helper's login service is installed too
+# (togo service install), so needs-you alerts arrive while the app is closed.
+# Through a pipe: curl -fsSL https://togoapp.dev/install.sh | sh -s -- --no-service
 #
 # The default directory is ~/.togo/bin, where the Togo app looks first; a
 # link from /usr/local/bin (when writable) puts it on the terminal PATH.
@@ -18,7 +22,7 @@
 # this script is on stdin, so nothing it runs may read stdin.
 set -eu
 
-RELEASE_KEY='RWSeVcUgTJ+gmhc1h4Vzaz456UQqfduvEOXTisTVSoBxMW/f8Zc94dgE'
+RELEASE_KEY='RWSrP5h2npeZJPo2xMRBOcppXrPGo6sJLR5Q4kMAM7KPq+kpCCDGFVfH'
 # Developer ID Application only (intermediate 6.2.6, leaf 6.1.13): Apple
 # Development and Distribution certificates of the same team do not match.
 TEAM_REQUIREMENT='identifier "app.togo.helper" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "WULW83YF8M"'
@@ -33,7 +37,7 @@ say() { printf '%s\n' "$*"; }
 warn() { printf 'togo install: %s\n' "$*" >&2; }
 refuse() { printf 'togo install: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart]\n' >&2
+  printf 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service]\n' >&2
   exit 2
 }
 
@@ -70,6 +74,7 @@ main() {
   version=""
   dir=""
   restart=yes
+  with_service=yes
   while [ $# -gt 0 ]; do
     case $1 in
       --version) [ $# -ge 2 ] || usage; version=$2; shift 2 ;;
@@ -77,8 +82,10 @@ main() {
       --dir) [ $# -ge 2 ] && [ -n "$2" ] || usage; dir=$2; shift 2 ;;
       --dir=?*) dir=${1#--dir=}; shift ;;
       --no-restart) restart=no; shift ;;
+      --no-service) with_service=no; shift ;;
+      --service) shift ;; # the default now; accepted for older instructions
       -h | --help)
-        say 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart]'
+        say 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service]'
         exit 0
         ;;
       *) usage ;;
@@ -388,7 +395,13 @@ main() {
         warn "could not restart the helper; run: togo daemon restart --when-idle"
       fi
       ;;
-    *) next=yes ;;
+    *)
+      if [ "$with_service" = no ]; then
+        next=yes
+      elif ! "$dir/togo" service install </dev/null; then
+        warn "could not install the login service; run: togo service install"
+      fi
+      ;;
   esac
   say "${installed_version:-togo $version}"
   [ "$next" = no ] || say "Next: $dir/togo service install"

@@ -224,7 +224,9 @@ import UIKit
         let data = png()
         let reply = FsReadResult(path: "assets/logo.png", size: data.count, encoding: .base64, content: data.base64EncodedString(), truncated: false)
         let model = await viewer("assets/logo.png", reply)
-        #expect(model.content == .image(data))
+        guard case .image(let file) = model.content else { Issue.record("expected an image"); return }
+        #expect(file.data == data)
+        #expect(file.picture.size.width > 0)
     }
 
     @Test func bigImageIsBinary() async {

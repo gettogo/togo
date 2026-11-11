@@ -27,8 +27,9 @@ type session struct {
 	cur       string            // parent of the file read last
 	turn      *turn
 	tools     map[string]*harness.Item
-	taskCalls map[string][]string // task call id -> agent item ids
-	pending   []string            // agent item ids still waiting for their file
+	asks      map[string]*harness.Item // ask call id -> its open question item
+	taskCalls map[string][]string      // task call id -> agent item ids
+	pending   []string                 // agent item ids still waiting for their file
 	agents    map[string]*harness.Item
 	headers   map[string]string // subagent header id -> agent item id
 	files     map[string]bool
@@ -47,7 +48,7 @@ type turn struct {
 
 func newSession(env harness.Env) *session {
 	return &session{env: env, cwd: env.Cwd, state: map[string]string{}, parents: map[string]string{},
-		tools: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
+		tools: map[string]*harness.Item{}, asks: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
 		headers: map[string]string{}, files: map[string]bool{}}
 }
 
@@ -376,9 +377,10 @@ func short(n float64) string {
 	return fmt.Sprintf("%.0f", n)
 }
 
-// stopRunning ends the turn's tool calls that never got a result.
+// stopRunning ends the turn's tool calls that never got a result, and
+// closes the questions they asked.
 func (s *session) stopRunning(tid, state string, at time.Time) []harness.Item {
-	var out []harness.Item
+	out := s.closeAsks(tid)
 	for _, it := range s.tools {
 		if it.TurnID != tid || it.Tool.State != harness.StateRunning {
 			continue

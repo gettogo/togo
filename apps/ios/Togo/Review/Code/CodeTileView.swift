@@ -223,10 +223,11 @@ final class CodeTileView: UIView {
         bounds.origin.x = shift
         guard let source else { return }
         let width = Self.width(of: source.text)
-        let count = Int((width / CodeTileCache.tileWidth).rounded(.up))
+        let phase = Self.phase(of: source.row)
+        let count = Int(((width + phase) / CodeTileCache.tileWidth).rounded(.up))
         guard count > 0, bounds.width > 0 else { return }
-        let first = max(0, Int((shift / CodeTileCache.tileWidth).rounded(.down)))
-        let last = min(count - 1, Int(((shift + bounds.width) / CodeTileCache.tileWidth).rounded(.down)))
+        let first = max(0, Int(((shift + phase) / CodeTileCache.tileWidth).rounded(.down)))
+        let last = min(count - 1, Int(((shift + phase + bounds.width) / CodeTileCache.tileWidth).rounded(.down)))
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for (index, layer) in tiles where index < first || index > last {
@@ -253,7 +254,10 @@ final class CodeTileView: UIView {
         let layer = spare.popLast() ?? CALayer()
         layer.contents = image
         layer.contentsScale = source.scale
-        layer.frame = CGRect(x: CGFloat(index) * CodeTileCache.tileWidth, y: 0, width: CodeTileCache.tileWidth, height: source.height)
+        layer.frame = CGRect(
+            x: CGFloat(index) * CodeTileCache.tileWidth - Self.phase(of: source.row), y: 0,
+            width: CodeTileCache.tileWidth, height: source.height
+        )
         self.layer.addSublayer(layer)
         tiles[index] = layer
     }
@@ -264,6 +268,15 @@ final class CodeTileView: UIView {
         spare.append(layer)
     }
 
+    /// How far left of the text's start a row's first tile begins: a quarter tile more on each
+    /// of four rows in turn. With every row's tiles on one grid, a fling brought each row to its
+    /// next tile in the same frame, and the dozens of tiles drawn in that one frame made it a
+    /// hitch; staggered, a quarter of the rows reach a new tile at a time, and the drawing ahead
+    /// of the screen keeps up.
+    static func phase(of row: Int) -> CGFloat {
+        CGFloat(row % 4) * CodeTileCache.tileWidth / 4
+    }
+
     static func width(of text: CodeRender.Block) -> CGFloat {
         guard let last = text.offsets.indices.last else { return 0 }
         return text.offsets[last] + text.widths[last]
@@ -271,7 +284,7 @@ final class CodeTileView: UIView {
 
     /// Tile `index` of the text, transparent where nothing is drawn.
     static func drawTile(_ index: Int, source: Source) -> CGImage? {
-        let minX = CGFloat(index) * CodeTileCache.tileWidth
+        let minX = CGFloat(index) * CodeTileCache.tileWidth - phase(of: source.row)
         let span = minX...(minX + CodeTileCache.tileWidth)
         guard source.text.offsets.indices.contains(where: {
             source.text.offsets[$0] < span.upperBound && source.text.offsets[$0] + source.text.widths[$0] > span.lowerBound

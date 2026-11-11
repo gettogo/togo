@@ -1,0 +1,40 @@
+ │  Session:   session_55f1d276-50b5-406f-87af-e14c92b9bcca                                                           │
+ │  Model:     Qwen3.8 27B (5090)                                                                                     │
+ │  Version:   2.5.3                                                                                                  │
+ │  MCP:       1 need auth                                                                                            │
+ │                                                                                                                    │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ✦ Kimi K3.1 Pro is ready - use the model in a fresh session for the best results
+   Standard: Plus/Moderato and above; Highspeed: Pro/Allegretto and above
+
+   No session yet — one will be created on your first message.
+   tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and
+ restart tmux.
+   MCP server "plugin-mobbin:mobbin" needs OAuth — run /mcp-config login plugin-mobbin:mobbin
+
+ ❯ Use your AskUserQuestion tool to ask me exactly one question: "Which colour should the banner use?" with options
+   Red, Green and Blue, each with a short description. Do nothing else.
+
+ ● The user wants me to use the AskUserQuestion tool to ask exactly one question: "Which color should the banner use?",
+   with Red, Green, and Blue as options, each with a short description. Do nothing else.
+   … (2 more lines, ctrl+o to expand)
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  question
+
+   Q1    Submit
+
+  ? Which colour should the banner use?
+
+   → [1] Red
+         Bold and attention-grabbing; good for high-contrast emphasis.
+     [2] Green
+         Calming and natural; suggests growth, success, or eco themes.
+     [3] Blue
+         Trusted and professional; widely used in corporate and tech contexts.
+     [4] Other
+
+   ↑↓ select  1-4 / ↵ choose  ←/→/tab switch  esc cancel
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Qwen3.8 27B (5090) thinking  …/w/proj  main
+                                                                                               context: 27% (17.1k/64k)

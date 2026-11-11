@@ -41,7 +41,9 @@ struct AgentSignInSection: View {
         } header: {
             if !commands.isEmpty { Text(AgentSignInCopy.title) }
         } footer: {
-            if !commands.isEmpty { Text(AgentSignInCopy.footer) }
+            SectionFooter {
+                if !commands.isEmpty { Text(AgentSignInCopy.footer) }
+            }
         }
         .groupedRows()
         .task(id: machine) { await load() }

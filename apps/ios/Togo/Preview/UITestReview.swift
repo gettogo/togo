@@ -49,8 +49,15 @@ import TogoKit
     private let demo: FakeReviewServices = {
         let fake = FakeReviewServices(status: DemoAPIFixture.status)
         fake.portList = DemoAPIFixture.ports
+        fake.reads = DemoAPIFixture.reads
         return fake
     }()
+    /// `-ui-demo-api`'s history, file tree and files: the status project the demo machine
+    /// plays (`DemoProject`), with every change the session made, at the persona's root.
+    private let project: DemoReviewServices? = DemoProject.load().map { project in
+        let written = Set(project.status.map(\.path))
+        return DemoReviewServices(project: project, root: DemoAPIFixture.root, started: Samples.now) { written }
+    }
     private let opener = PageOpener()
     private var forwards: [Int: LocalForward] = [:]
     private var subscribers: [UUID: AsyncStream<(localPort: Int, message: String)>.Continuation] = [:]
@@ -61,7 +68,13 @@ import TogoKit
     }
 
     func status(_ s: ReviewSubject) async throws -> GitStatus { try await fake(s).status(s) }
+    /// The status project, for the `-ui-demo-api` session.
+    private func demoProject(_ s: ReviewSubject) -> DemoReviewServices? {
+        DemoAPIFixture.enabled && s.sessionID == DemoAPIFixture.session ? project : nil
+    }
+
     func diff(_ s: ReviewSubject, _ source: DiffSource) async throws -> GitDiff {
+        if case .commit = source, let project = demoProject(s) { return try await project.diff(s, source) }
         if DemoAPIFixture.enabled, s.sessionID == DemoAPIFixture.session {
             _ = try await demo.diff(s, source)
             let path: String? = switch source {
@@ -77,15 +90,26 @@ import TogoKit
         return try await fake(s).diff(s, source)
     }
     func read(_ s: ReviewSubject, path: String, ref: String?, base: ReviewPathBase) async throws -> FsReadResult {
-        try await fake(s).read(s, path: path, ref: ref, base: base)
+        if let project = demoProject(s) { return try await project.read(s, path: path, ref: ref, base: base) }
+        return try await fake(s).read(s, path: path, ref: ref, base: base)
     }
     func listDir(_ s: ReviewSubject, path: String, ref: String?, base: ReviewPathBase) async throws -> ListDirResult {
-        try await fake(s).listDir(s, path: path, ref: ref, base: base)
+        if let project = demoProject(s) { return try await project.listDir(s, path: path, ref: ref, base: base) }
+        return try await fake(s).listDir(s, path: path, ref: ref, base: base)
     }
     func log(_ s: ReviewSubject, ref: String?, limit: Int) async throws -> [GitCommit] {
-        try await fake(s).log(s, ref: ref, limit: limit)
+        if let project = demoProject(s) { return try await project.log(s, ref: ref, limit: limit) }
+        return try await fake(s).log(s, ref: ref, limit: limit)
     }
-    func branches(_ s: ReviewSubject) async throws -> GitBranches { try await fake(s).branches(s) }
+    func branches(_ s: ReviewSubject) async throws -> GitBranches {
+        if let project = demoProject(s) { return try await project.branches(s) }
+        return try await fake(s).branches(s)
+    }
+    func files(_ s: ReviewSubject, ref: String?) async throws -> GitFiles {
+        // Other sessions keep the folder-by-folder search, as before.
+        guard let project = demoProject(s) else { throw ReviewUnavailable() }
+        return try await project.files(s, ref: ref)
+    }
     func stage(_ s: ReviewSubject, paths: [String], seen: [String: GitSeen]) async throws -> GitStatus {
         try await fake(s).stage(s, paths: paths, seen: seen)
     }

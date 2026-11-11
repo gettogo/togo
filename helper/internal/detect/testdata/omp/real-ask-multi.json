@@ -1,0 +1,40 @@
+{
+  "source": "real",
+  "agentVersion": "18.16.0",
+  "match": true,
+  "kind": "question",
+  "title": "Which areas should the new feature touch?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Backend",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Frontend",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Database",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": true
+}

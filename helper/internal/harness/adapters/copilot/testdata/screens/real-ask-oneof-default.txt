@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+   I listed the fields as caching, name, platforms, not the platforms,         ┃
+   caching, name order you asked for. I can re-ask in the right order if that  ┃
+   matters.                                                                    ┃
+                                                                               ┃
+ ❯ Use ask_user once more: one field "level", type string, with oneOf    13:16 ┃
+   choices const dbg title "Debug", const inf title "Info", default inf,       ┃
+   and a description "Log level for the app". Do nothing else.                 ┃
+                                                                               ┃
+ ○ Asking user Waiting for response                                        18s ┃
+                                                                               ┃
+────────────────────────────────────────────────────────────────────────────────
+ Copilot needs information.
+ Which log level should the app use?
+
+ level:
+ Log level for the app
+   Debug
+ ❯ Info
+   Other (type your answer)
+
+ ↑/↓ select · enter accept · ctrl+d decline · esc cancel
+────────────────────────────────────────────────────────────────────────────────

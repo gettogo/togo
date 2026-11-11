@@ -4,7 +4,7 @@
 
 Please report vulnerabilities privately. Do not open a public issue or discussion.
 
-Open a private report with the **Report a vulnerability** button on the repository's [Security tab](https://github.com/gettogo/togo/security/advisories/new). Only the maintainers can see it.
+Open a private report with the **Report a vulnerability** button on the repository's [Security tab](https://github.com/gettogo/togo/security/advisories/new). Only the maintainers can see it. If you can't use GitHub, email [security@togoapp.dev](mailto:security@togoapp.dev).
 
 Include what you found, how to reproduce it, and what an attacker gains. You will get an acknowledgement within a few days, and we will agree a disclosure date with you once a fix is ready. We credit reporters in the advisory unless you ask us not to.
 

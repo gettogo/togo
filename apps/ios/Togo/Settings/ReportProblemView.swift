@@ -57,7 +57,9 @@ struct ReportProblemPage: View {
                     .foregroundStyle(Color.togoMute)
                     .textCase(nil)
             } footer: {
-                Text(settingsText("report.export.footer", "The report holds settings and recent connection events, with machines as codes. Togo never sends it."))
+                SectionFooter {
+                    Text(settingsText("report.export.footer", "The report holds settings and recent connection events, with machines as codes. Togo never sends it."))
+                }
             }
             .groupedRows()
             Section {
@@ -72,7 +74,9 @@ struct ReportProblemPage: View {
                 }
                 .frame(minHeight: 44)
             } footer: {
-                Text(settingsText("report.attach", "Attach the exported file to the issue if you're comfortable sharing it."))
+                SectionFooter {
+                    Text(settingsText("report.attach", "Attach the exported file to the issue if you're comfortable sharing it."))
+                }
             }
             .groupedRows()
         }

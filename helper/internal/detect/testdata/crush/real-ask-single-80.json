@@ -1,0 +1,40 @@
+{
+  "source": "real",
+  "agentVersion": "0.100.0",
+  "match": true,
+  "kind": "question",
+  "title": "Which color should the button be?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Red",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Green",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Blue",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

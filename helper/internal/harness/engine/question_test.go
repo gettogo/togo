@@ -32,6 +32,7 @@ func (f *fakeApprovals) Answer(_ context.Context, id, raw, _ string) error {
 
 func questionEngine(t *testing.T, id string, ap *fakeApprovals) (*Engine, *sess) {
 	t.Helper()
+	offerGrace = 0 // offers open at once; the watcher's take-over is tested on its own
 	pane := &seqPane{mode: "a"}
 	e := newSeq(t, id, pane, nil)
 	e.cfg.Approvals = ap

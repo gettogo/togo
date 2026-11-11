@@ -67,21 +67,23 @@ struct CommitSheet: View {
                 .accessibilityLabel(ChangesCopy.messageLabel)
                 .listRowBackground(Color.togoGrouped)
         } footer: {
-            // The count and the first line's length side by side, one under the other when they
-            // do not fit.
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(ChangesCopy.stagedCount(model.stagedCount))
-                    Spacer(minLength: 8)
-                    lineLength
+            SectionFooter {
+                // The count and the first line's length side by side, one under the other when they
+                // do not fit.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(ChangesCopy.stagedCount(model.stagedCount))
+                        Spacer(minLength: 8)
+                        lineLength
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(ChangesCopy.stagedCount(model.stagedCount))
+                        lineLength
+                    }
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(ChangesCopy.stagedCount(model.stagedCount))
-                    lineLength
-                }
+                .font(.footnote)
+                .foregroundStyle(Color.togoMute)
             }
-            .font(.footnote)
-            .foregroundStyle(Color.togoMute)
         }
     }
 
@@ -99,20 +101,22 @@ struct CommitSheet: View {
                 .disabled(model.lastCommit == nil)
                 .listRowBackground(Color.togoGrouped)
         } footer: {
-            if amendShown.read(model.amend) {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let replaces = model.amendReplaces {
-                        Text(replaces)
-                            .foregroundStyle(Color.togoMute)
+            SectionFooter {
+                if amendShown.read(model.amend) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let replaces = model.amendReplaces {
+                            Text(replaces)
+                                .foregroundStyle(Color.togoMute)
+                        }
+                        if let warning = model.amendWarning {
+                            Label(warning, systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(Color.togoSnow)
+                        }
                     }
-                    if let warning = model.amendWarning {
-                        Label(warning, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(Color.togoSnow)
-                    }
+                    .font(.footnote)
+                    // motion: cause → effect — turning on Amend opens what it replaces under the toggle
+                    .transition(Motion.arrive(reduce: reduceMotion))
                 }
-                .font(.footnote)
-                // motion: cause → effect — turning on Amend opens what it replaces under the toggle
-                .transition(Motion.arrive(reduce: reduceMotion))
             }
         }
     }
@@ -163,12 +167,14 @@ struct CommitSheet: View {
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
         } footer: {
-            Text(ChangesCopy.footnote)
-                .font(.footnote)
-                .foregroundStyle(Color.togoMute)
-                .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
-                .padding(.top, 8)
+            SectionFooter {
+                Text(ChangesCopy.footnote)
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 8)
+            }
         }
     }
 

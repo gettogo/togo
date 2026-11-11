@@ -1,0 +1,47 @@
+{
+  "name": "amp/real-approval-80",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "amp",
+    "title": "Approval Required",
+    "body": "echo hello-from-amp",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "echo hello-from-amp"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Allow Once",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Reject with feedback",
+        "role": "deny"
+      },
+      {
+        "n": 3,
+        "label": "Allow All for This Session",
+        "role": "approve_always"
+      },
+      {
+        "n": 4,
+        "label": "Allow All for Every Session",
+        "role": "approve_always"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Amp",
+    "subtitle": "Approval Required",
+    "body": "echo hello-from-amp",
+    "category": "togo.request"
+  }
+}

@@ -40,6 +40,8 @@ struct RosterView: View {
     @FocusState private var fieldFocused: Bool
     /// The detail column's dock carries the sidebar toggle (root.md), so the header does not.
     @Environment(\.sidebarToggleInDock) private var toggleInDock
+    /// While the demo machine shows, Done closes it.
+    @Environment(\.demoExit) private var demoExit
 
     /// One body at every width: the bar's items and the search field's place change with
     /// `wide`, the view tree does not, so a fold or resize keeps the list's scroll, search and
@@ -127,10 +129,10 @@ struct RosterView: View {
                 // coming and going never lands in the same update as a line leaving a machine,
                 // and no empty section adds a gap above the first machine.
                 Section {
-                    // Its 44-point target is laid out in 28, so the first machine follows close.
+                    // Its 44-point target gives back only blank room, so the first machine
+                    // follows close and a wrapped headline is never clipped (`RosterFilterHeader`).
                     RosterFilterHeader(store: store, roster: roster, launchTarget: launchTarget)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, -8)
                         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 0, trailing: 20))
                         .listRowBackground(Color.togoInk)
                         .listRowSeparator(.hidden)
@@ -237,6 +239,9 @@ struct RosterView: View {
     /// no bottom bar. The filter is the list's first row everywhere, so no bar carries it.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         let bar = RosterBar.layout(wide: wide, hasMachines: !hasNoMachines)
+        if let demoExit {
+            DemoDoneToolbarItem(exit: demoExit)
+        }
         // Each its own item, so the prominent New session keeps its own glass.
         if let first = bar.topTrailing.first {
             ToolbarItem(placement: .topBarTrailing) { item(first) }
@@ -393,7 +398,7 @@ struct RosterHeadline: View {
                     .launchTarget(fades: true)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("roster.headline")

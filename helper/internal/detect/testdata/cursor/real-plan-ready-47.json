@@ -1,0 +1,36 @@
+{
+  "agentVersion": "2026.11.05",
+  "keys": {
+    "1": [
+      "b"
+    ],
+    "2": [
+      "c"
+    ],
+    "3": [
+      "p"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes, build locally",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, build in cloud",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "No, propose changes",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Ready to build?"
+}

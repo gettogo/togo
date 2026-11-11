@@ -117,8 +117,10 @@ struct PickerRolesSection: View {
         } header: {
             Text(PrimitiveCopy.roles).textCase(nil)
         } footer: {
-            Text(picking.flatMap { id in refs.first { $0.id == id } }.map { PrimitiveCopy.choosing($0.label) }
-                ?? PrimitiveCopy.rolesFooter)
+            SectionFooter {
+                Text(picking.flatMap { id in refs.first { $0.id == id } }.map { PrimitiveCopy.choosing($0.label) }
+                    ?? PrimitiveCopy.rolesFooter)
+            }
         }
     }
 

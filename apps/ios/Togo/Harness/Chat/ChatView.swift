@@ -84,17 +84,18 @@ struct ChatView: View {
                         .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
-            // The scroll position follows the row at the bottom as the reader scrolls, so a
-            // rebuilt chat can return to it (`ChatScrollModel.restoreTarget`).
+            // The rows are scroll targets, so the row at the bottom edge is reported as the
+            // reader scrolls and a rebuilt chat can return to it (`ChatScrollModel.restoreTarget`).
             .scrollTargetLayout()
             // No horizontal padding here: each row spans the scroll view and keeps the reading
             // column inside it (`chatColumn()`), so replies, work lines, notices and cards start
             // `textLeading` in and the prompt bubble ends as far in, whatever the scroll anchor.
-            .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
+            // The content as a whole: what a scroll to the foot aims at.
+            .id(ChatScroll.contentID)
         }
-        .defaultScrollAnchor(ChatScroll.foot)
-        .defaultScrollAnchor(ChatScroll.foot, for: .sizeChanges)
+        // The gap above the composer, kept by every scroll: at the foot and to a needs card.
+        .chatScrollMargins()
         .scrollDismissesKeyboard(.interactively)
         // While the composer's / or @ menu is up, a tap on the conversation puts the keyboard
         // away, and the menu goes with it: a way out that needs no aim.
@@ -107,10 +108,10 @@ struct ChatView: View {
                 // motion: state change — "Reading" gives way to the empty state in place, never a jump.
                 .motion(.fade, value: placeholderKind)
         }
-        // Keeps the composer's height clear, scrolls to what needs the user and offers the
-        // "Needs you" capsule while a card is off screen.
-        // A chat rebuilt by a fold, unfold or resize opens where the reader left it, or at the
-        // foot if that row has gone.
+        // The one owner of the scrolling: the foot anchor through every size change, the
+        // scrolls to what needs the user, and the "Needs you" capsule while a card is off
+        // screen. A chat rebuilt by a fold, unfold or resize opens where the reader left it,
+        // or at the foot if that row has gone.
         .modifier(ChatScrolling(store: store, marks: needsMarks, scroll: scroll, has: { id in rows.contains { $0.id == id } }))
         .background(Color.togoInk)
         .environment(\.chatImageFetch, imageFetch)
@@ -132,7 +133,7 @@ struct ChatView: View {
             }
         }
         .presentSheet("chat.selectText", item: $selecting) { selected in
-            SelectTextSheet(text: selected.text)
+            SelectTextSheet(text: selected.text, markdown: selected.markdown)
         }
         // After the sheets, so the step details' links go through the same router.
         .environment(\.openURL, OpenURLAction { url in open(url) })
@@ -150,8 +151,8 @@ struct ChatView: View {
         } else {
             withTransaction(Transaction(animation: nil)) { live = work }
         }
-        if change == .appear, let target = ChatScroll.liveAppeared(
-            was: false, now: true, afterSend: store.awaitingSince != nil, dragging: scroll.dragging
+        if change == .appear, let target = ChatScroll.decide(
+            .liveAppeared(afterSend: store.awaitingSince != nil), dragging: scroll.dragging
         ) {
             scroll.go(target, reduce: reduceMotion)
         }
@@ -257,13 +258,13 @@ struct ChatView: View {
                                 .font(.footnote)
                         }
                     }
-                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self) { selecting = $0 })
+                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self, selectable: true) { selecting = $0 })
                 }
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
                 ReplyRow(text: text.text)
-                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(text.text), host: self) { selecting = $0 })
+                    .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(RichMarkdown.spoken(text.text)), host: self, selectable: true) { selecting = $0 })
             }
         case .work(let id, let summary, let steps):
             let disclosure = expanded[id] ?? Disclosure()
@@ -411,27 +412,48 @@ struct ChatView: View {
 
 /// Copy, Show in terminal and Quote in reply on a row, as a context menu and as VoiceOver
 /// actions; the row reads as one element.
+///
+/// A row of selectable words (a prompt, a reply) has no context menu: a long press there picks
+/// words, so its actions join the edit menu after Copy, Look Up and Share instead.
 private struct RowActions: ViewModifier {
     let item: HarnessItem
     let spoken: String
     let host: ChatView
+    var selectable = false
     /// Opens the row's words in a sheet where any part can be selected.
     let select: (SelectedText) -> Void
 
-    func body(content: Content) -> some View {
-        content
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(spoken)
-            .contextMenu { menu }
-            .accessibilityActions { menu }
+    @ViewBuilder func body(content: Content) -> some View {
+        if selectable {
+            content
+                .environment(\.selectableTextActions, textMenu)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(spoken)
+                .accessibilityActions { menu }
+        } else {
+            content
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(spoken)
+                .contextMenu { menu }
+                .accessibilityActions { menu }
+        }
+    }
+
+    private var textMenu: SelectableTextActions {
+        let quote: @MainActor (String) -> Void = { [actions = host.actions] in actions.quote($0) }
+        var show: (@MainActor () -> Void)?
+        if host.canShow(item) {
+            show = { [store = host.store, item] in Task { await store.showInTerminal(item) } }
+        }
+        return ChatTextMenu.actions(item: item, quote: quote, showInTerminal: show)
     }
 
     @ViewBuilder private var menu: some View {
         if let text = item.chatText {
-            Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
+            Button(ChatCopy.copy, systemImage: "doc.on.doc") { item.copyWords() }
             Button(ChatCopy.quote, systemImage: "text.quote") { host.actions.quote(ChatQuote.quoted(text)) }
             Button(ChatCopy.selectText, systemImage: "selection.pin.in.out") {
-                select(SelectedText(id: item.id, text: text))
+                select(SelectedText(id: item.id, text: text, markdown: item.copiesAsMarkdown))
             }
         }
         host.terminalButton(item)
@@ -460,24 +482,4 @@ extension ChatRow {
 extension HarnessSessionStore {
     /// Mission control has something to show for this session.
     var hasMission: Bool { mission.mission.map { !$0.sections.isEmpty } ?? false }
-}
-
-/// A row's words opened in the Select text sheet.
-struct SelectedText: Identifiable {
-    let id: String
-    let text: String
-}
-
-/// Tells the scroll model whether a needs card is on screen; other rows pass through.
-private struct NeedsVisibility: ViewModifier {
-    let id: String?
-    let scroll: ChatScrollModel
-
-    func body(content: Content) -> some View {
-        if let id {
-            content.needsVisibility(id, in: scroll)
-        } else {
-            content
-        }
-    }
 }

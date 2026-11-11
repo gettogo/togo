@@ -1,0 +1,39 @@
+
+   Charm™ CRUSH ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱ ~/p/t/t/tcr03f739f5-w-crush • 45% • ctrl+d open
+
+ │ Reply with only the word ok.
+
+   I should just say "ok" in response to this.
+
+   ok
+
+   ◇ Qwen3.8 27B (5090) via Qwen3.8 27B (5090) in 27s ────────────────────────────────────────────
+
+ │ Use your shell tool to run exactly this command: touch conformance-approval.txt — then reply
+ │ with the word don╭──────────────────────────────────────────────────────────╮
+                    │  Permission Required ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱  │
+   The user wants me│                                                          │hen reply "done".
+   This is a simple,│ Tool bash                                                │
+                    │ Path /private/tmp/togo-conformance-                      │
+   ● Bash Create con│     tcr03f739f5/tcr03f739f5-w-crush                      │
+                    │ Desc Create conformance-approval.txt file                │
+     touch conforman│                                                          │
+                    │                                                          │
+   Requesting permis│   touch conformance-approval.txt                         │
+                    │                                                          │
+                    │                                                          │
+                    │                 Allow      Allow for Session      Deny   │
+                    │                                                          │
+                    │ ←/→ choose • enter confirm • esc exit                    │
+                    ╰──────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+   > Working...
+ :::
+ :::
+
+ esc cancel • tab focus chat • shift+tab mode • / or ctrl+p commands • ctrl+l models …

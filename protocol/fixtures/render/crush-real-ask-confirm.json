@@ -1,0 +1,22 @@
+{
+  "name": "crush/real-ask-confirm",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "crush",
+    "title": "Ready to go?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Crush",
+    "subtitle": "Ready to go?",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

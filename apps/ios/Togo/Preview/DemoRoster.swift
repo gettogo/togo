@@ -36,11 +36,11 @@ extension Samples {
                     id: demoStudio, name: "Studio", symbol: .desktop, reachability: .online,
                     helper: .present(version: "0.3.0", live: true),
                     sessions: [
-                        demoRow(demoStudio, "01", "api", agent: "claude", .needsYou, "Wants to run npm test",
+                        demoRow(demoStudio, "01", "api", agent: "opencode", .needsYou, "Wants to run npm test",
                                 cwd: "/Users/sam/code/api", history: calm),
                         demoRow(demoStudio, "02", "web", agent: "codex", .working, "Editing src/checkout/cart.tsx",
                                 cwd: "/Users/sam/code/web", history: busy),
-                        demoRow(demoStudio, "03", "ios", agent: "opencode", .working, "Running xcodebuild test",
+                        demoRow(demoStudio, "03", "ios", agent: "claude", .working, "Running xcodebuild test",
                                 cwd: "/Users/sam/code/ios", history: busy.reversed()),
                         demoRow(demoStudio, "04", "docs", agent: "goose", .done, "Rewrote the setup guide",
                                 cwd: "/Users/sam/code/docs", history: quiet),

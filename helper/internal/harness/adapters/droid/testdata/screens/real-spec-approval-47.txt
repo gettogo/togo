@@ -1,0 +1,30 @@
+                         directory."
+   ─────────────────────────────────────────
+
+   Create hello.txt in the working
+   directory.
+   Its content will be exactly hi.
+
+   ─────────────────────────────────────────
+
+   Hooks Notification
+    └─ '/Users/jamie/.to... : Exit code 0
+
+
+
+
+    Will save to: /Users/jamie/.factory/specs
+    /2026-11-10-create-hello-txt-in-the-worki
+    ng-directory.md
+
+ ╭───────────────────────────────────────────╮
+ │ 1. Proceed with the proposal              │
+ │ 2. Proceed with comment                   │
+ │ 3. Proceed and handoff to a new session   │
+ │ (1% context savings)                      │
+ │ 4. Manually edit spec (open via system    │
+ │ default)                                  │
+ │ 5. No and explain why                     │
+ ╰───────────────────────────────────────────╯
+   ↑↓ navigate   1-5 select   Enter select …
+

@@ -59,4 +59,14 @@ struct MarkdownBlocksTests {
         for i in 0..<5 { _ = cache.blocks("text \(i)") }
         #expect(cache.count == 2)
     }
+
+    @Test func codeInAListLosesOnlyTheFencesIndent() {
+        let text = "1. Run:\n   ```sh\n   make test\n     --verbose\n   ```"
+        #expect(MarkdownBlocks.parse(text).blocks.last == .code(language: "sh", text: "make test\n  --verbose"))
+    }
+
+    @Test func codeIsKeptExactlyWithTabsTrailingSpacesAndCRLF() {
+        let text = "```\r\n\tif x {  \r\n\t\treturn\u{00A0}1\r\n}\r\n```"
+        #expect(MarkdownBlocks.parse(text).blocks == [.code(language: nil, text: "\tif x {  \n\t\treturn\u{00A0}1\n}")])
+    }
 }

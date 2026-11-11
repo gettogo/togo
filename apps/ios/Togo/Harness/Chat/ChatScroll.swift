@@ -9,14 +9,34 @@ struct NeedsMark: Hashable, Sendable {
     var ready: Bool
 }
 
-/// When the chat scrolls on its own, worked out from plain values so it can be tested. It
-/// scrolls only for what needs the user or what the user just did: a needs card arriving or
-/// growing its answers, the user's own send and the live line that follows it. Never while
-/// the user's finger is on the chat.
+/// When the chat scrolls on its own, worked out from plain values so it can be tested.
+///
+/// One thing owns the scroll offset: the scroll view's own anchor (`foot`, for the first
+/// layout and for every size change). The composer growing a line, the keyboard coming or
+/// going, a fold, a streaming reply: the scroll view keeps its foot by itself, and nothing
+/// here scrolls for a size change. The chat scrolls only for an event: a needs card arriving
+/// or growing its answers, the user's own send and the live line that follows it, a field a
+/// card revealed, a "Go to request". Never while the user's finger is on the chat.
 enum ChatScroll {
     enum Target: Equatable {
         case row(String)
         case bottom
+    }
+
+    /// What happens to a chat, as its scrolling sees it.
+    enum Event: Equatable {
+        /// The user's own send.
+        case sent
+        /// The live line appeared; `afterSend` says the user's own prompt started the turn.
+        case liveAppeared(afterSend: Bool)
+        /// The open needs cards changed.
+        case needsChanged(old: [NeedsMark], new: [NeedsMark])
+        /// A card revealed a field, or "Go to request" named a row.
+        case reveal(String)
+        /// The scroll view changed size: the composer, the keyboard, a fold.
+        case resized
+        /// The content changed size: a streaming reply, a card growing, Earlier loading.
+        case contentChanged
     }
 
     /// The point every scroll of a chat keeps: the bottom edge, at the leading side. Its x is
@@ -28,6 +48,28 @@ enum ChatScroll {
     /// the scroll view (`chatColumn()`), every scroll lands at horizontal offset 0.
     static let foot = UnitPoint(x: 0, y: 1)
 
+    /// The chat's content as a whole, so a scroll to the foot has a view to aim at: its bottom
+    /// edge at `foot` is the foot, above the bottom margin.
+    static let contentID = "chat.content"
+
+    /// The one decision: given what happened and whether a finger is on the chat, where the
+    /// chat scrolls, or nowhere. A size change is never a reason: the anchor keeps the foot.
+    static func decide(_ event: Event, dragging: Bool) -> Target? {
+        guard !dragging else { return nil }
+        switch event {
+        case .sent:
+            return .bottom
+        case .liveAppeared(let afterSend):
+            return afterSend ? .bottom : nil
+        case .needsChanged(let old, let new):
+            return newest(old: old, new: new).map(Target.row)
+        case .reveal(let id):
+            return .row(id)
+        case .resized, .contentChanged:
+            return nil
+        }
+    }
+
     /// The open needs cards in row order. `ready` says whether an approval's card has arrived.
     static func marks(_ rows: [ChatRow], ready: (HarnessItem.Approval) -> Bool) -> [NeedsMark] {
         rows.compactMap { row in
@@ -38,9 +80,8 @@ enum ChatScroll {
     }
 
     /// The card to scroll to after the open cards changed: the newest that arrived, or whose
-    /// answers just landed (waiting → card). Nil while dragging, or when nothing new came.
-    static func target(old: [NeedsMark], new: [NeedsMark], dragging: Bool) -> String? {
-        guard !dragging else { return nil }
+    /// answers just landed (waiting → card). Nil when nothing new came.
+    static func newest(old: [NeedsMark], new: [NeedsMark]) -> String? {
         let before = Dictionary(old.map { ($0.id, $0.ready) }, uniquingKeysWith: { first, _ in first })
         return new.last { mark in
             guard let wasReady = before[mark.id] else { return true }
@@ -48,30 +89,9 @@ enum ChatScroll {
         }?.id
     }
 
-    /// The user's own send, or the live line's first appearance after it, scrolls to the foot.
-    static func followsSend(dragging: Bool) -> Target? {
-        dragging ? nil : .bottom
-    }
-
-    static func liveAppeared(was: Bool, now: Bool, afterSend: Bool, dragging: Bool) -> Target? {
-        !was && now && afterSend && !dragging ? .bottom : nil
-    }
-
-    /// What the chat's scroll view reports: whether it is at the foot, and its height.
-    struct Frame: Equatable {
-        var pinned: Bool
-        var height: Int
-    }
-
-    /// The scroll view changed height (the keyboard came or went) while the reader was at the
-    /// foot and not dragging: it returns to the foot. A scroll alone, at the same height, never
-    /// pulls the reader down.
-    static func repinsOnResize(old: Frame, new: Frame, dragging: Bool) -> Bool {
-        old.pinned && old.height != new.height && !dragging
-    }
-
     /// At the foot, within a few points: the last line shows above the composer. The visible
-    /// region starts below the top inset (the tab strip's bar the chat scrolls under).
+    /// region starts below the top inset (the tab strip's bar the chat scrolls under, and the
+    /// chat's own top margin); the bottom margin is no more content than the top one is.
     static func isPinned(offset: CGFloat, topInset: CGFloat, container: CGFloat, content: CGFloat) -> Bool {
         offset + topInset + container >= content - 8
     }
@@ -91,12 +111,12 @@ enum ChatScroll {
     }
 }
 
-/// What the chat's scrolling keeps between renders. It never holds the scroll view's own
-/// `ScrollPosition`: bound to an observed property, the scroll view wrote it while committing a
-/// scroll, the write invalidated the modifier that binds it, the binding re-applied it, and the
-/// scroll view committed again, forever (a hard freeze on the Terminal toggle, and on relaunch).
-/// The position lives in `NeedsScrolling`'s own state; this keeps requests going in and the
-/// settled row coming out.
+/// What the chat's scrolling keeps between renders: requests going in, and what the scroll
+/// view reports coming out. It never holds a `ScrollPosition`, and the chat binds none: a
+/// bound position is a standing order the scroll view re-applies on every size change (it
+/// scrolls the bound row or edge back to the anchor), a second owner of the offset beside the
+/// anchor; and bound to an observed property it froze the app (the write invalidated the
+/// modifier that bound it, which re-applied it, forever). Scrolls here are one-shot asks.
 @MainActor @Observable final class ChatScrollModel {
     /// A scroll asked of the chat. `seed` tells two asks for the same place apart.
     struct Request: Equatable {
@@ -105,16 +125,17 @@ enum ChatScroll {
         var seed: Int
     }
 
-    /// The latest scroll asked for; the chat applies it to its own position.
+    /// The latest scroll asked for; the chat applies it once.
     private(set) var request: Request?
     /// Needs cards on screen now.
     private(set) var visibleNeeds: Set<String> = []
     /// The card the capsule offers, once it has stayed off screen a moment.
     var capsule: String?
+    /// What the scroll view reports. Unobserved: nothing draws from them, so the scroll view's
+    /// own reports never invalidate the views that drive it.
     @ObservationIgnored var dragging = false
     @ObservationIgnored var pinned = true
-    /// The row at the chat's bottom edge when the reader's last scroll came to rest, so a
-    /// rebuilt chat returns to it. Unobserved: nothing draws from it.
+    /// The row at the chat's bottom edge, so a rebuilt chat returns to it.
     @ObservationIgnored private(set) var settledRow: String?
 
     /// Scrolls on `resize`, the same role that grows a card, so the chat makes room and brings
@@ -134,8 +155,7 @@ enum ChatScroll {
         request = Request(target: target, reduce: reduce, seed: (request?.seed ?? 0) &+ 1)
     }
 
-    /// The reader's scroll came to rest with `row` at the bottom edge. Writes only a change.
-    /// Returns whether it changed.
+    /// The row at the chat's bottom edge is `row`. Writes only a change. Returns whether it changed.
     @discardableResult func settle(at row: String?) -> Bool {
         guard settledRow != row else { return false }
         settledRow = row
@@ -158,13 +178,15 @@ enum ChatScroll {
     }
 }
 
-/// Scrolls a conversation to a needs card when one arrives or its answers land, keeps track
-/// of the user's finger, and keeps a reader at the foot at the foot when the chat changes
-/// height. The main chat and a subagent's chat both use it.
+/// The one owner of a conversation's scrolling. The main chat and a subagent's chat both use it.
 ///
-/// The scroll position is this modifier's own state: only the scroll view, the model's
-/// requests and the one restore write it, and the model hears of it only when a scroll comes
-/// to rest, and only if the row changed.
+/// The scroll view's anchor keeps the foot: the chat opens there, and a reader at the foot
+/// stays there as the composer grows or shrinks, as the keyboard comes or goes, as a reply
+/// streams in (`defaultScrollAnchor`, for the first layout and for size changes). Nothing
+/// else moves the offset for a size change. Events scroll once, through the reader's proxy:
+/// a needs card arriving or its answers landing, a field a card revealed, and the model's
+/// requests (a send, "Go to request", a rebuilt chat returning to its row). The scroll view
+/// only reports back: the finger, the foot, the row at the bottom edge.
 struct NeedsScrolling: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let marks: [NeedsMark]
@@ -174,74 +196,69 @@ struct NeedsScrolling: ViewModifier {
     /// Whether a row is in the chat, for returning to the reader's place once. Nil: nothing to return to.
     var has: ((String) -> Bool)?
 
-    @State private var position = ScrollPosition(edge: .bottom)
     @State private var restored = false
 
     func body(content: Content) -> some View {
-        content
-            // The position is the row at the chat's bottom edge, and that row is what a size
-            // change keeps in place: the latest lines stay right above the composer as it grows
-            // or shrinks and as the keyboard comes or goes. Anchored at the top (the default),
-            // the top row stayed put and the latest lines slid under the composer.
-            .scrollPosition($position, anchor: ChatScroll.foot)
-            .onScrollPhaseChange { old, phase in
-                let dragging = phase == .interacting || phase == .tracking
-                if scroll.dragging != dragging { scroll.dragging = dragging }
-                // Once a scroll has come to rest, never while it moves; an unobserved write.
-                if phase == .idle, old != .idle {
-                    scroll.settle(at: position.viewID(type: String.self))
+        ScrollViewReader { proxy in
+            content
+                // The chat opens at its foot, and keeps it through every size change: the row
+                // above the composer stays above the composer as the composer grows or the
+                // keyboard rises, and the latest line stays in view as a reply streams.
+                .defaultScrollAnchor(ChatScroll.foot)
+                .defaultScrollAnchor(ChatScroll.foot, for: .sizeChanges)
+                .onScrollPhaseChange { _, phase in
+                    let dragging = phase == .interacting || phase == .tracking
+                    if scroll.dragging != dragging { scroll.dragging = dragging }
                 }
-            }
-            .onScrollGeometryChange(for: ChatScroll.Frame.self) { geometry in
-                ChatScroll.Frame(
-                    pinned: ChatScroll.isPinned(
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    ChatScroll.isPinned(
                         offset: geometry.contentOffset.y, topInset: geometry.contentInsets.top,
                         container: geometry.containerSize.height, content: geometry.contentSize.height
-                    ),
-                    height: Int(geometry.containerSize.height.rounded())
-                )
-            } action: { old, new in
-                // The keyboard (or a fold, or the composer growing) shrank or grew the chat: a
-                // reader at the foot stays at the foot, the latest line right above the composer.
-                // The bottom anchor already keeps it there; this only lands a reader whose foot
-                // was reached by a scroll the anchor has not caught up with.
-                if ChatScroll.repinsOnResize(old: old, new: new, dragging: scroll.dragging) {
-                    move(.bottom, reduce: true)
-                    if !scroll.pinned { scroll.pinned = true }
-                } else if scroll.pinned != new.pinned {
-                    scroll.pinned = new.pinned
+                    )
+                } action: { _, pinned in
+                    // Only reported, never acted on: a size change is the anchor's to keep.
+                    if scroll.pinned != pinned { scroll.pinned = pinned }
                 }
-            }
-            .onChange(of: scroll.request) { _, request in
-                guard let request else { return }
-                move(request.target, reduce: request.reduce)
-            }
-            // A chat made again returns to the reader's row once, after its first layout; a
-            // row that has gone sends it to the foot.
-            .task {
-                guard !restored else { return }
-                restored = true
-                guard let has else { return }
-                await Task.yield()
-                guard !scroll.dragging, let target = scroll.restoreTarget(has: has) else { return }
-                move(target, reduce: true)
-            }
-            .onChange(of: marks) { old, new in
-                guard loaded, let id = ChatScroll.target(old: old, new: new, dragging: scroll.dragging) else { return }
-                scroll.go(.row(id), reduce: reduceMotion, settle: true)
-            }
-            // A field a card just revealed rises above the composer, and once more after the
-            // keyboard has come up (`settle`).
-            .environment(\.revealRow, RevealRowAction { [reduceMotion, scroll] id in
-                scroll.go(.row(id), reduce: reduceMotion, settle: true)
-            })
+                // The row at the bottom edge, so a rebuilt chat can return to it; an
+                // unobserved write, only on a change.
+                .onScrollTargetVisibilityChange(idType: String.self, threshold: 0) { visible in
+                    scroll.settle(at: visible.last)
+                }
+                .onChange(of: scroll.request) { _, request in
+                    guard let request else { return }
+                    move(request.target, reduce: request.reduce, proxy: proxy)
+                }
+                // A chat made again returns to the reader's row once, after its first layout; a
+                // row that has gone sends it to the foot.
+                .task {
+                    guard !restored else { return }
+                    restored = true
+                    guard let has else { return }
+                    await Task.yield()
+                    guard !scroll.dragging, let target = scroll.restoreTarget(has: has) else { return }
+                    move(target, reduce: true, proxy: proxy)
+                }
+                .onChange(of: marks) { old, new in
+                    guard loaded,
+                          let target = ChatScroll.decide(.needsChanged(old: old, new: new), dragging: scroll.dragging)
+                    else { return }
+                    scroll.go(target, reduce: reduceMotion, settle: true)
+                }
+                // A field a card just revealed rises above the composer, and once more after the
+                // keyboard has come up (`settle`).
+                .environment(\.revealRow, RevealRowAction { [reduceMotion, scroll] id in
+                    guard let target = ChatScroll.decide(.reveal(id), dragging: scroll.dragging) else { return }
+                    scroll.go(target, reduce: reduceMotion, settle: true)
+                })
+        }
     }
 
-    private func move(_ target: ChatScroll.Target, reduce: Bool) {
+    /// One scroll, through the proxy: a one-shot ask the scroll view does not keep.
+    private func move(_ target: ChatScroll.Target, reduce: Bool, proxy: ScrollViewProxy) {
         let apply = {
             switch target {
-            case .row(let id): position.scrollTo(id: id, anchor: ChatScroll.foot)
-            case .bottom: position.scrollTo(edge: .bottom)
+            case .row(let id): proxy.scrollTo(id, anchor: ChatScroll.foot)
+            case .bottom: proxy.scrollTo(ChatScroll.contentID, anchor: ChatScroll.foot)
             }
         }
         guard !reduce else {
@@ -257,8 +274,7 @@ struct NeedsScrolling: ViewModifier {
 }
 
 /// The main chat's scrolling: needs cards (`NeedsScrolling`), the user's own sends, "Go to
-/// request", the composer's height kept clear, and the "Needs you" capsule while a card is off
-/// screen.
+/// request", and the "Needs you" capsule while a card is off screen.
 struct ChatScrolling: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let store: HarnessSessionStore
@@ -281,12 +297,14 @@ struct ChatScrolling: ViewModifier {
                 }
             }
             .onChange(of: store.sends) {
-                guard let target = ChatScroll.followsSend(dragging: scroll.dragging) else { return }
+                guard let target = ChatScroll.decide(.sent, dragging: scroll.dragging) else { return }
                 scroll.go(target, reduce: reduceMotion)
             }
             .onChange(of: store.scrollRequest) { _, request in
                 guard let request else { return }
-                scroll.go(.row(request.row), reduce: reduceMotion, settle: true)
+                if let target = ChatScroll.decide(.reveal(request.row), dragging: scroll.dragging) {
+                    scroll.go(target, reduce: reduceMotion, settle: true)
+                }
                 store.scrollRequest = nil
             }
             .task(id: candidate) {
@@ -312,6 +330,10 @@ enum ChatLayout {
     static let columnWidth: CGFloat = 720
     /// The column's own side padding; text starts this far inside it.
     static let inset: CGFloat = 16
+    /// The space above the first row and below the row a scroll lands on: the last line at
+    /// rest, or a needs card scrolled up to the composer. The column's own padding, so text
+    /// keeps as far from the composer as from the pane's edge.
+    static let endMargin: CGFloat = inset
     /// The composer's widest: the column's text width, so the field starts where replies do.
     static let composerWidth: CGFloat = columnWidth - 2 * inset
 
@@ -340,8 +362,32 @@ extension View {
             .containerRelativeFrame(.horizontal)
     }
 
+    /// A chat's scroll view keeps `ChatLayout.endMargin` clear at its top and bottom as content
+    /// margins, not as padding inside the content. Padding is part of the content, so it showed
+    /// only at the very end: a scroll to a row (`ChatScroll.foot`) put that row's bottom edge
+    /// on the scroll view's, a needs card flush against the composer. A margin is where every
+    /// scroll lands, to the foot or to a row, with or without the keyboard, and what the
+    /// anchor keeps through every size change.
+    func chatScrollMargins() -> some View {
+        contentMargins(.vertical, ChatLayout.endMargin, for: .scrollContent)
+    }
+
     /// Reports whether a needs card is on screen, for the "Needs you" capsule.
     func needsVisibility(_ id: String, in scroll: ChatScrollModel) -> some View {
         onScrollVisibilityChange(threshold: 0.25) { visible in scroll.setVisible(id, visible) }
+    }
+}
+
+/// Tells the scroll model whether a needs card is on screen; other rows pass through.
+struct NeedsVisibility: ViewModifier {
+    let id: String?
+    let scroll: ChatScrollModel
+
+    func body(content: Content) -> some View {
+        if let id {
+            content.needsVisibility(id, in: scroll)
+        } else {
+            content
+        }
     }
 }

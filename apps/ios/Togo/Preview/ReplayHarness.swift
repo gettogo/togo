@@ -1,8 +1,7 @@
-#if DEBUG
 import Foundation
 import TogoKit
 
-/// A recorded helper conversation, for UI tests: one protocol/v1 JSON-RPC message per line, in
+/// A recorded helper conversation, for UI tests and the demo machine: one protocol/v1 JSON-RPC message per line, in
 /// the order it crossed the wire (`-ui-replay <name>` loads `<name>.jsonl` from the app's
 /// resources).
 ///
@@ -117,12 +116,31 @@ struct ReplayScript: Sendable {
         return answers.last { $0.line <= line }?.result ?? answers.first?.result
     }
 
+    /// The recorded session's agent, as the app names agents ("opencode", "claude"): the adapter
+    /// `harness.describe` reported, without its protocol generation ("opencode2").
+    var agent: Agent? {
+        guard let data = read("harness.describe", atOrBefore: .max),
+              let adapter = (try? JSONDecoder().decode(HarnessDescriptor.self, from: data))?.adapter else { return nil }
+        let id = String(adapter.id.reversed().drop(while: \.isNumber).reversed())
+        return Agent(id: id.isEmpty ? adapter.id : id, name: adapter.name)
+    }
+
+    struct Agent: Equatable, Sendable {
+        var id: String
+        var name: String
+    }
+
     /// The first chapter after `released` that `trigger` releases.
     func chapter(for trigger: String, after released: Int) -> Int? {
         chapters.indices.first { $0 > released && chapters[$0].trigger == trigger }
     }
 
+    /// Recordings the app ships once under another name: the website's `replay-status` is the
+    /// demo machine's session.
+    static let aliases = ["replay-status": "demo-session"]
+
     static func load(_ name: String) -> ReplayScript? {
+        let name = aliases[name] ?? name
         guard let url = Bundle.main.url(forResource: name, withExtension: "jsonl"),
               let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         let args = ProcessInfo.processInfo.arguments
@@ -150,6 +168,8 @@ struct ReplayScript: Sendable {
     enum Playback {
         case released(String)
         case event([String: Any])
+        /// A harness notification, as the feeds got it.
+        case harness(HarnessNotification)
         case finished(String?)
     }
     private var released = 0
@@ -160,6 +180,14 @@ struct ReplayScript: Sendable {
     /// sending first) still gets deltas that follow on, so the store never reopens.
     private var missionRev = 0
     private let decoder = JSONDecoder()
+    /// What has played so far, so a feed opened again (a tab reopened, the app back from the
+    /// background) starts where the session is, as a helper's `harness.open` would.
+    private var played: [String: HarnessItem] = [:]
+    private var mission = MissionState()
+    private var hasPlayed = false
+    /// Permission questions offered as approvals, by item id, as the helper offers them.
+    private var offered: [String: String] = [:]
+    private var openingPlayed = false
 
     init(script: ReplayScript) {
         self.script = script
@@ -175,11 +203,25 @@ struct ReplayScript: Sendable {
         let (stream, continuation) = AsyncThrowingStream<HarnessFeed, any Error>.makeStream()
         feeds[id] = (s.sessionID, continuation)
         continuation.onTermination = { [weak self] _ in Task { @MainActor in self?.feeds[id] = nil } }
-        if let data = script.opened, let opened = try? decoder.decode(HarnessOpenResult.self, from: data) {
-            missionRev = opened.mission.rev
+        if let data = script.opened, var opened = try? decoder.decode(HarnessOpenResult.self, from: data) {
+            if hasPlayed {
+                opened.items = played.values.sorted { $0.seq < $1.seq }
+                opened.cursor = max(opened.cursor, opened.items.last?.seq ?? 0)
+                if var current = mission.mission {
+                    current.rev = missionRev
+                    opened.mission = current
+                }
+            } else {
+                missionRev = opened.mission.rev
+                mission.load(opened.mission)
+            }
             continuation.yield(.opened(opened))
         }
-        if released == 0 { play(0) }
+        // The opening chapter plays once, for the first feed.
+        if !openingPlayed {
+            openingPlayed = true
+            play(0)
+        }
         return stream
     }
 
@@ -218,9 +260,19 @@ struct ReplayScript: Sendable {
         (try? read("harness.locate")) ?? HarnessLocation(found: false, linesFromBottom: 0)
     }
 
+    /// Whether a recorded chapter still waits for `trigger`, such as `harness.send`.
+    func canRelease(_ trigger: String) -> Bool {
+        script.chapter(for: trigger, after: released) != nil
+    }
+
     /// The control center answered a request: releases the recorded `approval.answer` chapter.
+    /// A recording whose requests were questions (OpenCode's permissions) has no
+    /// `approval.answer` chapters: an approval answered from the phone releases the question's
+    /// answer instead, as the helper answers through the adapter.
     func trigger(_ method: String) {
-        guard let index = script.chapter(for: method, after: released) else { return }
+        let index = script.chapter(for: method, after: released)
+            ?? (method == "approval.answer" ? script.chapter(for: "harness.action:answer", after: released) : nil)
+        guard let index else { return }
         released = index
         position = script.chapters[index].line
         onPlayback?(.released(method))
@@ -256,6 +308,18 @@ struct ReplayScript: Sendable {
         }
     }
 
+    private func remember(_ notification: HarnessNotification) {
+        hasPlayed = true
+        for item in notification.items ?? [] where (played[item.id]?.seq ?? .min) < item.seq {
+            played[item.id] = item
+        }
+        if let delta = notification.mission {
+            var applied = delta
+            applied.rev = (mission.mission?.rev ?? 0) + 1
+            _ = mission.apply(applied)
+        }
+    }
+
     private func deliver(_ note: ReplayScript.Note) {
         switch note.method {
         case "harness":
@@ -264,28 +328,62 @@ struct ReplayScript: Sendable {
                 missionRev += 1
                 notification.mission?.rev = missionRev
             }
+            remember(notification)
             for feed in feeds.values {
                 notification.sessionId = feed.session
                 feed.continuation.yield(.note(notification))
             }
+            onPlayback?(.harness(notification))
+            for item in notification.items ?? [] { offer(item) }
         case "event":
             guard let event = try? JSONSerialization.jsonObject(with: note.params) as? [String: Any] else { return }
-            onPlayback?(.event(event))
-            switch event["kind"] as? String {
-            case "approval.open":
-                guard let body = event["approval"],
-                      let data = try? JSONSerialization.data(withJSONObject: body),
-                      let approval = try? decoder.decode(Approval.self, from: data) else { return }
-                onApproval?(.open(approval), session)
-            case "approval.closed":
-                guard let id = event["requestId"] as? String else { return }
-                onApproval?(.closed(requestID: id), session)
-            default:
-                break
-            }
+            handle(event)
+        default:
+            break
+        }
+    }
+
+    /// The helper offers a permission an adapter answers through its API (OpenCode's "Allow
+    /// once / Always allow / Deny" question) as an approval titled with its prompt, Allow once
+    /// and Deny only, so the Lock Screen, the Watch and the sessions list can answer it; it
+    /// closes once the question is answered. Recordings made before the helper did so have
+    /// only the question, so the replay offers it the same way.
+    private func offer(_ item: HarnessItem) {
+        guard case .question(let body) = item.body, body.questions.count == 1, let question = body.questions.first,
+              let approve = question.options.first(where: { $0.id == "once" }),
+              let deny = question.options.first(where: { $0.id == "reject" }) else { return }
+        if body.answered?.isEmpty == false {
+            guard let request = offered.removeValue(forKey: item.id) else { return }
+            handle(["kind": "approval.closed", "requestId": request])
+            return
+        }
+        guard offered[item.id] == nil else { return }
+        let request = "rq_" + item.id.prefix(while: { $0 != "~" })
+        offered[item.id] = request
+        let approval = Approval(
+            requestId: request, sessionId: session, bib: nil, agent: script.agent?.id ?? "shell", source: .ask,
+            title: question.prompt, detail: nil, snippet: "",
+            options: [ApprovalOption(n: 1, label: approve.label, role: .approve), ApprovalOption(n: 2, label: deny.label, role: .deny)],
+            allowText: false, createdAt: Date(), expiresAt: nil
+        )
+        guard let data = try? JSONEncoder().encode(approval),
+              let object = try? JSONSerialization.jsonObject(with: data) else { return }
+        handle(["kind": "approval.open", "approval": object])
+    }
+
+    private func handle(_ event: [String: Any]) {
+        onPlayback?(.event(event))
+        switch event["kind"] as? String {
+        case "approval.open":
+            guard let body = event["approval"],
+                  let data = try? JSONSerialization.data(withJSONObject: body),
+                  let approval = try? decoder.decode(Approval.self, from: data) else { return }
+            onApproval?(.open(approval), session)
+        case "approval.closed":
+            guard let id = event["requestId"] as? String else { return }
+            onApproval?(.closed(requestID: id), session)
         default:
             break
         }
     }
 }
-#endif

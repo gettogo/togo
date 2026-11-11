@@ -151,4 +151,17 @@ struct NeedsCardTests {
         #expect(PromptFeed.requests(in: app).map(\.id) == ["r1"])
         tabs.stopAll()
     }
+
+    /// Yes and No are drawn only for a card that offers both; a list of choices is drawn as
+    /// its own words, never with an invented Yes.
+    @Test func yesAndNoNeedBothRoles() {
+        let red = ApprovalOption(n: 1, label: "Red", role: .other)
+        let blue = ApprovalOption(n: 2, label: "Blue", role: .other)
+        let yes = ApprovalOption(n: 3, label: "Yes", role: .approve)
+        let no = ApprovalOption(n: 4, label: "No", role: .deny)
+        #expect(!ApprovalRow.yesOrNo(card(options: [red, blue])))
+        #expect(!ApprovalRow.yesOrNo(card(options: [red, no])))
+        #expect(ApprovalRow.yesOrNo(card(options: [yes, no])))
+        #expect(ApprovalRow.yesOrNo(card(options: [yes, no, red])))
+    }
 }

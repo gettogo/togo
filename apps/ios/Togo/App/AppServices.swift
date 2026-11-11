@@ -140,15 +140,22 @@ extension AppServices {
     var onEdgeSwipe: () -> Void = {}
     /// The point size a pinch settled on.
     var onFontSize: (Double) -> Void = { _ in }
-    /// The key bar's Attach key.
+    /// The palette's Attach key.
     var onAttach: () -> Void = {}
-    /// The key bar's Dictate key.
+    /// The palette's Dictate key.
     var onDictate: () -> Void = {}
-    /// Hides the key bar's Attach and Dictate keys while zen mode shows the terminal alone.
+    /// Hides the palette's Attach and Dictate keys while zen mode shows the terminal alone.
     var hidesInputKeys = false {
         didSet { if hidesInputKeys != oldValue { onHidesInputKeys(hidesInputKeys) } }
     }
     var onHidesInputKeys: (Bool) -> Void = { _ in }
+    /// The terminal's keys: the column, the row above the keyboard and the bar's controller.
+    /// Nil for a terminal without them (previews).
+    var keys: TerminalKeysHost?
+    /// A prompt key above the keyboard was tapped.
+    var onPromptKey: (PromptKey) -> Void = { _ in }
+    /// "Edit keys" from the palette or a hold on the controller.
+    var onEditKeys: () -> Void = {}
     /// An image pasted into the terminal, as the pasteboard encoded it.
     var onPasteImage: (Data) -> Void = { _ in }
     /// Text into the session as a paste: dictated words, a sent picture's path, a reply that
@@ -250,8 +257,9 @@ enum ServiceErrorCopy {
 // terminal. Settings outlive app versions and arrive from other devices through sync, so bytes
 // that no longer decode read as the default, and one bad theme is dropped rather than all.
 extension AppSettings {
-    var keyBarConfig: KeyBarConfig {
-        get { keyBar.flatMap { try? JSONDecoder().decode(KeyBarConfig.self, from: $0) } ?? .standard }
+    /// The terminal's keys. Bytes written by an older build's key bar migrate on read.
+    var terminalKeys: TerminalKeysConfig {
+        get { keyBar.map(TerminalKeysConfig.decode) ?? TerminalKeysConfig() }
         set { keyBar = try? Self.encoder.encode(newValue) }
     }
 

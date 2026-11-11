@@ -1,0 +1,40 @@
+
+   Green.
+
+   ◇ Qwen3.8 27B (5090) via Qwen3.8 27B (5090) in 1m17s ─────────────────────────────
+
+ │ Now use your question tool once more, with a batch of four questions in one call:
+ │ 1) single_choice label "Database", "Which database?" choices pg PostgreSQL and
+ │ mongo MongoDB; 2) multi_choice label "Features", "Which features?" choices auth
+ │ Auth, billing Billing, search Search; 3) yes_no label "Caching", "Enable
+ │ caching?"; 4) free_text label "Notes", "Any concerns?". Give every question a one-
+ │ line description and set confirm_title "Ready to go?" and confirm_description "We
+ │ will set it up.". Do nothing else.
+
+   The user wants a batch of four questions in a single question tool call.
+
+   ● Question Which database? (+3 more)
+
+   Waiting for tool response...
+
+ ╭──────────╮╭──────────╮╭─────────╮╭───────╮╭─────────╮
+ │ Database ││ Features ││ Caching ││ Notes ││ Confirm │
+ ┴──────────┴┘          └┴─────────┴┴───────┴┴─────────┴──────────────────────────────
+
+  ?  Which features?
+
+ Select one or more features to include.
+
+   ◉ Auth
+   Authentication.
+
+   ○ Billing
+   Billing system.
+
+   ◉ Search
+   Search feature.
+
+ ┃ > Export
+
+ [ prev tab • ] next tab • ↑ up • enter done • esc exit
+

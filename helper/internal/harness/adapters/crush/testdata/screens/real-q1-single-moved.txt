@@ -1,0 +1,40 @@
+
+ │ Use your question tool to ask me exactly one single_choice question: "Which colour
+ │ should the banner use?" with choices red, green and blue (ids red, green, blue,
+ │ each with a short description). Do nothing else before or after asking.
+
+   The user wants me to use the question tool with a single_choice question about
+   banner color.
+
+   Thought for 1s
+
+   ● Question Which colour should the banner use?
+
+   Waiting for tool response...
+
+
+
+
+
+
+
+
+
+
+  ?  Which colour should the banner use?
+
+ Pick the colour to use for the banner.
+
+   Red
+   Bold and attention-grabbing.
+
+ ┃ Green
+ ┃ Calm and fresh.
+
+   Blue
+   Calm and professional.
+
+   > Something else?
+
+ [ prev tab • ] next tab • ↑ up • ↓ down • enter select • 1-3 quick select …
+

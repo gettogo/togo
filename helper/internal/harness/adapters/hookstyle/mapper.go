@@ -30,6 +30,17 @@ type Options struct {
 	// the harness's own log for session after offset, and the offset to go
 	// on from. An offset below zero asks only for the log's end.
 	Replies func(env harness.Env, session string, offset int64) ([]Reply, int64)
+	// Ask, when set, reads the harness's own ask tool: the question a
+	// PreToolUse payload for it raises, ok false for any other tool. The
+	// call becomes a question item instead of a tool row (ask.go).
+	Ask func(tool string, input json.RawMessage) (*harness.QuestionBody, bool)
+	// Answered reads the ask tool's PostToolUse response: the answers per
+	// question id, every id [] for a cancel; nil when it cannot tell.
+	Answered func(tool string, input, response json.RawMessage) map[string][]string
+	// Plan, when set, reads the plan text an ask tool that approves a plan
+	// carries (Droid's ExitSpecMode): it is drawn as an assistant item just
+	// before the question.
+	Plan func(tool string, input json.RawMessage) (string, bool)
 }
 
 // Reply is one agent message from the harness's own log: its text (empty
@@ -68,6 +79,7 @@ type Mapper struct {
 	steps     map[string]bool
 	running   map[string][]string // tool name -> running call ids, oldest first
 	tools     map[string]harness.Item
+	asks      map[string]harness.Item // open ask-tool questions by call id
 	n         int
 	// replyFrom is where Options.Replies goes on reading replySession's log.
 	replySession string
@@ -77,7 +89,8 @@ type Mapper struct {
 // New returns a mapper for one session.
 func New(env harness.Env, opts Options) *Mapper {
 	m := &Mapper{env: env, opts: opts, state: map[string]string{"working": "false", "idle": "true"},
-		steps: map[string]bool{}, running: map[string][]string{}, tools: map[string]harness.Item{}}
+		steps: map[string]bool{}, running: map[string][]string{}, tools: map[string]harness.Item{},
+		asks: map[string]harness.Item{}}
 	if env.Cwd != "" {
 		// Sources filter the harness's session lists by $state.cwd.
 		m.state["cwd"] = env.Cwd
@@ -185,12 +198,24 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		m.working(at)
 		call := p.ToolUseID
 		said := m.replies(at, draw, replyWaitTool, func(r Reply) bool { return call != "" && slices.Contains(r.Calls, call) })
+		if qs := m.askStart(p, at); len(qs) > 0 {
+			if !draw {
+				return nil, nil
+			}
+			return append(append(said, qs...), m.turnItem(harness.StateRunning, nil)), nil
+		}
 		x := m.toolStart(p, at)
 		if !draw {
 			return nil, nil
 		}
 		return append(said, x, m.turnItem(harness.StateRunning, nil)), nil
 	case PostToolUse, PostToolUseFailure:
+		if q, ok := m.askEnd(p, p.Event == PostToolUseFailure); ok {
+			if !draw {
+				return nil, nil
+			}
+			return []harness.Item{q}, nil
+		}
 		if _, started := m.tools[m.callID(p, false)]; p.Once && !started {
 			if m.turn == "" {
 				m.begin(at)
@@ -292,6 +317,7 @@ func (m *Mapper) begin(at time.Time) {
 	m.steps = map[string]bool{}
 	m.running = map[string][]string{}
 	m.tools = map[string]harness.Item{}
+	m.asks = map[string]harness.Item{}
 	m.state["turn"] = m.turn
 	m.working(at)
 }
@@ -315,6 +341,7 @@ func (m *Mapper) end(p payload, at time.Time, draw bool, state string) []harness
 		items = append(items, x)
 		delete(m.tools, id)
 	}
+	items = append(items, m.closeAsks()...)
 	items = append(items, m.turnItem(state, &at))
 	m.turn = ""
 	return items
@@ -399,55 +426,6 @@ func (m *Mapper) errorNotice(at time.Time, turn string, p payload, fallback stri
 		body = harness.ErrorNotice(harness.ErrOther, fallback)
 	}
 	return harness.Item{ID: fmt.Sprintf("hook-notice-%d-%d", at.UnixMilli(), m.n), TurnID: turn, Kind: harness.KindNotice, At: at, Notice: body}
-}
-
-// agentOps turns a subagent hook into an agent row.
-func agentOps(p payload, at time.Time) []harness.Op {
-	if p.AgentID == "" {
-		return nil
-	}
-	row := harness.Row{ID: p.AgentID, Title: firstOf(p.AgentType, "Subagent"), State: harness.RowActive, Started: &at}
-	if p.Event == SubagentStop {
-		row.State, row.Started = harness.RowDone, nil
-	}
-	return []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}}
-}
-
-// planOps turns a task hook into a plan row.
-func planOps(p payload) []harness.Op {
-	id := p.TaskID
-	if id == "" {
-		return nil
-	}
-	title := Truncate(firstOf(p.TaskSubject, p.TaskDesc, "Task "+id), harness.MaxTitle)
-	state := harness.RowPending
-	if p.Event == TaskCompleted {
-		state = harness.RowDone
-	}
-	return []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionPlan, Row: &harness.Row{ID: id, Title: title, State: state}}}
-}
-
-// modelName reads a model given as a string or as {id, display_name}.
-func modelName(rawModel json.RawMessage) string {
-	var s string
-	if json.Unmarshal(rawModel, &s) == nil {
-		return s
-	}
-	var o struct {
-		ID   string `json:"id"`
-		Name string `json:"display_name"`
-	}
-	if json.Unmarshal(rawModel, &o) == nil {
-		return firstOf(o.ID, o.Name)
-	}
-	return ""
-}
-
-// raw is a JSON string's value, or "" for any other value.
-func raw(v json.RawMessage) string {
-	var s string
-	_ = json.Unmarshal(v, &s)
-	return s
 }
 
 // skipReplies starts reading the harness's log at its end when a turn

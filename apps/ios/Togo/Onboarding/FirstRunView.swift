@@ -12,7 +12,7 @@ struct FirstRunView: View {
     let onAddMachine: () -> Void
     @State private var guideShown = false
     /// The read-only demo machine, for anyone without a machine at hand (App Review included).
-    @State private var demo: DemoItem?
+    @State private var demo: DemoVisit?
 
     /// The side of the mark's box here. The launch shrinks into it.
     static let markSide: CGFloat = 120
@@ -62,7 +62,7 @@ struct FirstRunView: View {
                         .buttonStyle(.secondary)
                 }
                 Button(SetupPage.demoTitle) {
-                    demo = DemoItem(store: DemoMachine.store())
+                    demo = DemoVisit()
                 }
                 .buttonStyle(.secondary)
             }
@@ -72,14 +72,24 @@ struct FirstRunView: View {
         }
         .background(Color.togoInk)
         .modifier(GuideCover(tutorial: tutorial, shown: $guideShown, onAddMachine: onAddMachine))
-        .presentCover("firstRun.demo", item: $demo) { item in
-            DemoControlCenter(store: item.store) { demo = nil }
+        .presentCover("firstRun.demo", item: $demo) { visit in
+            DemoControlCenter(visit: visit, exit: demoExit)
         }
     }
 
-    private struct DemoItem: Identifiable {
-        let store: AppStore
-        var id: ObjectIdentifier { ObjectIdentifier(store) }
+    /// Out of the demo: back here, or on to adding a machine or the guide.
+    private var demoExit: DemoExit {
+        var exit = DemoExit(leave: { demo = nil }, addMachine: {
+            demo = nil
+            onAddMachine()
+        })
+        if tutorial != nil {
+            exit.openGuide = {
+                demo = nil
+                openGuide()
+            }
+        }
+        return exit
     }
 
     private func openGuide() {

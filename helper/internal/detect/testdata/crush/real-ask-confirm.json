@@ -1,0 +1,11 @@
+{
+  "source": "real",
+  "agentVersion": "0.100.0",
+  "match": true,
+  "kind": "waiting",
+  "title": "Ready to go?",
+  "subject": null,
+  "options": null,
+  "keys": {},
+  "readOnly": false
+}

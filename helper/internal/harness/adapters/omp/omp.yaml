@@ -8,7 +8,7 @@ revision: 1
 match: { agents: [omp], commands: [omp] }
 harness: { version: [omp, --version], pattern: 'omp/(\S+)', range: ">=18.10 <19" }
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
-  agents, background, plan, changes, ports, status, compact, settings]
+  agents, background, plan, changes, ports, status, compact, settings, needs.questions]
 images: { insert: together }   # how image paths are pasted into the input
 # The input line is the row under the status bar: "╰─ text", with the
 # effort hint at its right end when it is empty. C-u empties it; a slash
@@ -190,6 +190,12 @@ actions:
     stability: documented-command
   resume:
     relaunch: { argv: [omp, --resume, '{{.id}}'] }
+    stability: documented
+  # The ask tool's dialog (❯ ○ rows, ☐ boxes for a multi-select, "Other
+  # (type your own)", a Review page for a batch; seen on 18.16.0) is driven
+  # with keys and read back after every step; the toolResult closes the item.
+  answer:
+    builtin: screen_answer
     stability: documented
   interrupt:
     keys: { keys: [Escape], until: idle, max: 2 }

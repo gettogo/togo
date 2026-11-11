@@ -1,0 +1,24 @@
+
+
+> Use your ask_user_question tool to ask me one single-choice question: which
+  database should we use? Options: Postgres (relational, mature), SQLite       ▅
+  (embedded file), MongoDB (document store). Ask nothing else and do nothing
+  else.
+───────────────────────────────────────────────────────────────────────────────
+
+⏵ Thought
+
+■ Asking Which database should we use?
+
+⢀⣀ User input required… (27s Esc/Ctrl+C to interrupt)
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Which database should we use?                                                │
+│                                                                              │
+│   1. Postgres - Relational, mature                                           │
+│   2. SQLite - Embedded file                                                  │
+│   3. MongoDB - Document store                                                │
+│   4. Type your answer...                                                     │
+│                                                                              │
+│ ↑↓/jk navigate  Enter select  Esc cancel                                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+/Users/jamie/proj       ⧉                     ctx ██▌    13.8k/32.8k

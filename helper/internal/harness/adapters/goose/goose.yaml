@@ -19,7 +19,7 @@ match: { agents: [goose], commands: [goose] }
 harness: { version: [goose, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=1.57 <2" }
 # No model capability: nothing reads the current model and there is no model list.
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, mode, changes,
-  ports, resume, compact]
+  ports, resume, compact, needs.approvals, needs.questions]
 feeds:
   session:          # sessions touched since this Togo session began; the mapper keeps this folder's
     sqlite:
@@ -81,6 +81,14 @@ actions:
   interrupt:
     keys: { keys: [C-c] }
     stability: documented
+  # A tool confirmation (approve and smart_approve modes) is stored as an actionRequired part (the
+  # question "Allow shell: make?") while the CLI's cliclack select waits: "Goose would like to call
+  # the above tool, do you allow?" Allow / Always Allow / Deny / Cancel. The screen watcher reads
+  # that select; the answer is one pick through it. MCP elicitations are line prompts, read on
+  # screen; they are stored only once answered.
+  answer:
+    builtin: approval_answer
+    stability: experimental
 modes:
   # The mapper reads the mode from the session row's goose_mode.
   choices:

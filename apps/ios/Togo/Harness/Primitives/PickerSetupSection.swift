@@ -31,8 +31,10 @@ struct PickerSetupSection: View {
         } header: {
             header
         } footer: {
-            if expanded, asksSecret {
-                Text(PrimitiveCopy.secretFooter).font(.footnote).foregroundStyle(Color.togoMute)
+            SectionFooter {
+                if expanded, asksSecret {
+                    Text(PrimitiveCopy.secretFooter).font(.footnote).foregroundStyle(Color.togoMute)
+                }
             }
         }
         .onChange(of: typing) { _, now in entries.focusMoved(to: now) }

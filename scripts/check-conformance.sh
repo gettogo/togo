@@ -13,14 +13,26 @@
 #
 # Usage: scripts/check-conformance.sh [--only claude,omp] [--scenario model_switch,mode]
 #                                     [--jobs N] [--json results.json] [--keep]
+#                                     [--openrouter [provider/model]] [--model aider=openrouter/z-ai/glm-5.3-flash,...]
+#                                     [--args 'cline=--auto-approve false;...']
+#
+# --openrouter runs the agents on OpenRouter (default model deepseek/deepseek-v3.2; or e.g.
+# z-ai/glm-5.3-flash) with the key from $TOGO_OPENROUTER_ENV (default
+# ~/.config/togo/openrouter.env, a file that exports OPENROUTER_API_KEY), sourced here and
+# handed to the sandboxed helper only, never printed or written to the results.
 set -eu
 cd "$(dirname "$0")/.."
 repo=$(pwd)
 
-only="" scenario="" jobs="" json="" keep=0
+only="" scenario="" jobs="" json="" keep=0 openrouter="" models="" args=""
 while [ $# -gt 0 ]; do
     case "$1" in
+        --openrouter)
+            openrouter="default"; shift
+            case "${1:-}" in ""|--*) ;; *) openrouter="$1"; shift ;; esac ;;
         --only) only="$2"; shift 2 ;;
+        --model) models="$2"; shift 2 ;;
+        --args) args="$2"; shift 2 ;;
         --scenario) scenario="$2"; shift 2 ;;
         --jobs) jobs="$2"; shift 2 ;;
         --json) json="$2"; shift 2 ;;
@@ -32,6 +44,17 @@ done
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 command -v tmux >/dev/null || { echo "tmux is required" >&2; exit 2; }
+
+if [ -n "$openrouter" ]; then
+    envfile="${TOGO_OPENROUTER_ENV:-$HOME/.config/togo/openrouter.env}"
+    if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -r "$envfile" ]; then
+        set +x
+        # shellcheck disable=SC1090
+        . "$envfile"
+    fi
+    [ -n "${OPENROUTER_API_KEY:-}" ] || { echo "--openrouter: no OPENROUTER_API_KEY in the environment or $envfile" >&2; exit 2; }
+    export OPENROUTER_API_KEY
+fi
 
 # Parallelism from free memory: 4 with plenty, 3 normally, 2 under pressure.
 if [ -z "$jobs" ]; then
@@ -71,4 +94,7 @@ set -- -bin "$bin/togo" -adapters "$repo/helper/internal/harness/adapters" -root
 [ -n "$only" ] && set -- "$@" -only "$only"
 [ -n "$scenario" ] && set -- "$@" -scenario "$scenario"
 [ -n "$json" ] && set -- "$@" -json "$json"
+[ -n "$openrouter" ] && set -- "$@" -openrouter "$openrouter"
+[ -n "$models" ] && set -- "$@" -model "$models"
+[ -n "$args" ] && set -- "$@" -args "$args"
 "$bin/togo-conformance" "$@"

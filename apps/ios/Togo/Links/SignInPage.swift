@@ -212,7 +212,9 @@ struct SignInPage: View {
             Section {
                 status
             } footer: {
-                if let footer { Text(footer) }
+                SectionFooter {
+                    if let footer { Text(footer) }
+                }
             }
             if let open = model.progress.open, showsCard {
                 Section {

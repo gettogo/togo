@@ -171,17 +171,58 @@ func TestUnknownLinesAreSkipped(t *testing.T) {
 }
 
 func TestSessionDirNames(t *testing.T) {
-	cases := []struct{ cwd, want string }{
-		{"/home/u/Dev/Delta RE", "-Dev-Delta RE"},
-		{"/home/u", "-"},
-		{"/tmp/togo-capture-omp-setup", "-tmp-togo-capture-omp-setup"},
-		{"/opt/work/x", "--opt-work-x--"},
+	cases := []struct{ cwd, tmp, want string }{
+		{"/home/u/Dev/Delta RE", "/tmp", "-Dev-Delta RE"},
+		{"/home/u", "/tmp", "-"},
+		{"/tmp/togo-capture-omp-setup", "/tmp", "-tmp-togo-capture-omp-setup"},
+		{"/opt/work/x", "/tmp", "--opt-work-x--"},
+		// omp's temp folder is TMPDIR: with it elsewhere (macOS), a
+		// folder under /tmp is named by its absolute path (omp 18.16.0).
+		{"/tmp/togo-conformance-x/w-omp", "/var/folders/ab/T", "--tmp-togo-conformance-x-w-omp--"},
 	}
 	for _, c := range cases {
-		got := SessionDirNames(c.cwd, "/home/u", "/var/tmp-none")
+		got := SessionDirNames(c.cwd, "/home/u", c.tmp, "/tmp")
 		if len(got) == 0 || got[0] != c.want {
 			t.Errorf("%s: %v, want %s first", c.cwd, got, c.want)
 		}
+	}
+	// The other temp folders' names are still tried, last.
+	got := SessionDirNames("/tmp/x", "/home/u", "/var/folders/ab/T", "/tmp")
+	if got[len(got)-1] != "-tmp-x" {
+		t.Errorf("fallbacks %v", got)
+	}
+}
+
+// Of the folders that exist, the one omp wrote last is followed, whatever
+// the name order says.
+func TestSessionDirPicksNewestFolder(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, ".omp", "agent", "sessions")
+	e := harness.Env{Cwd: "/opt/work/x", Environ: []string{"TMPDIR=/opt/work/"}, Vars: map[string]string{source.VarHome: home}}
+	if got := sessionDir(e); got != "-tmp-x" {
+		t.Fatalf("none yet: %q", got)
+	}
+	write := func(dir string, at time.Time) {
+		d := filepath.Join(root, dir)
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		f := filepath.Join(d, "s.jsonl")
+		if err := os.WriteFile(f, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.Chtimes(f, at, at)
+		_ = os.Chtimes(d, at, at)
+	}
+	now := time.Now()
+	write("-tmp-x", now.Add(-time.Hour))
+	write("--opt-work-x--", now)
+	if got := sessionDir(e); got != "--opt-work-x--" {
+		t.Fatalf("abs newer: %q", got)
+	}
+	write("-tmp-x", now.Add(time.Minute))
+	if got := sessionDir(e); got != "-tmp-x" {
+		t.Fatalf("tmp newer: %q", got)
 	}
 }
 

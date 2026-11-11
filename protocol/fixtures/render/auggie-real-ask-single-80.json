@@ -1,0 +1,33 @@
+{
+  "name": "auggie/real-ask-single-80",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "auggie",
+    "title": "Which color should the button be?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Red (Recommended)",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "Blue",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Auggie",
+    "subtitle": "Which color should the button be?",
+    "body": "",
+    "category": "togo.choice.r_render0001"
+  }
+}

@@ -1,0 +1,30 @@
+
+ Use your ask tool to ask me one multiple-choice question with three options, each with a short
+ description. Nothing else.
+
+
+╭─── Ask 1 questions ──────────────────────────────────────────────────────────────────────────────╮
+├─── [next_focus] · options:3 ─────────────────────────────────────────────────────────────────────┤
+│  What should I work on next?                                                                     │
+│  ○ Bug fixes                                                                                     │
+│    ↳ Find and fix known defects first; lowers risk but adds no new features.                     │
+│  ○ New feature                                                                                   │
+│    ↳ Build new functionality; adds value but may bring new bugs.                                 │
+│  ○ Refactoring                                                                                   │
+│    ↳ Clean up existing code for easier maintenance; users see no change.                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  ⎋ Asking one multiple-choice question                     🗳️ ASK: Ask one multiple-choice question
+╭─ Ask ────────────────────────────────────────────────────────────────────────────────────────────╮
+│ What should I work on next?                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│   ○ Bug fixes (Recommended)                                                                      │
+│       Find and fix known defects first; lowers risk but adds no new features.                    │
+│ ❯ ○ New feature                                                                                  │
+│       Build new functionality; adds value but may bring new bugs.                                │
+│   ○ Refactoring                                                                                  │
+│       Clean up existing code for easier maintenance; users see no change.                        │
+│   ○ Other (type your own)                                                                        │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ⏎ select · n note · ↑/↓ move · ⎋ cancel · ⌥H hide                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

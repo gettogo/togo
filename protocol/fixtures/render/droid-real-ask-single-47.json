@@ -1,0 +1,38 @@
+{
+  "name": "droid/real-ask-single-47",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "droid",
+    "title": "Which color?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Red",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "Green",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "Blue",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Droid",
+    "subtitle": "Which color?",
+    "body": "",
+    "category": "togo.choice.r_render0001"
+  }
+}

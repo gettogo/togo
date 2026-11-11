@@ -1,0 +1,30 @@
+
+   Hooks Notification
+    └─ '/Users/jamie/.to... : Exit code 0
+
+   Thinking:
+   Please create the file.
+
+
+
+
+
+   Hooks PreToolUse → 1 completed
+   Create hello.txt
+
+   Hooks Notification
+    └─ '/Users/jamie/.to... : Exit code 0
+Create hello.txt: (+1 added)
+
+╭─────────────────────────────────────────────╮
+│        1   hi                               │
+╰─────────────────────────────────────────────╯
+
+╭─────────────────────────────────────────────╮
+│  Yes, allow                                 │
+│  Yes, and always allow low impact commands  │
+│(file edits and read-only commands)          │
+│  No, cancel                                 │
+╰─────────────────────────────────────────────╯
+  ↑↓ navigate   Enter select   Esc cancel   …
+

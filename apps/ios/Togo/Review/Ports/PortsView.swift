@@ -79,9 +79,11 @@ struct PortsView: View {
                     }
                 }
             } footer: {
-                Text(PortsCopy.footer)
-                    .font(.footnote)
-                    .foregroundStyle(Color.togoMute)
+                SectionFooter {
+                    Text(PortsCopy.footer)
+                        .font(.footnote)
+                        .foregroundStyle(Color.togoMute)
+                }
             }
             Section {
                 ManualPortRow(model: model)
@@ -90,9 +92,11 @@ struct PortsView: View {
                 SectionHeading(PortsCopy.manualTitle)
                     .textCase(nil)
             } footer: {
-                Text(PortsCopy.manualFooter)
-                    .font(.footnote)
-                    .foregroundStyle(Color.togoMute)
+                SectionFooter {
+                    Text(PortsCopy.manualFooter)
+                        .font(.footnote)
+                        .foregroundStyle(Color.togoMute)
+                }
             }
         }
         .groupedList()

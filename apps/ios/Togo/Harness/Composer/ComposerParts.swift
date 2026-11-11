@@ -138,7 +138,7 @@ struct ComposerChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
-            // trunc-ok: chips are icons, or the state chip, which overrides this and wraps
+            // trunc-ok: chips are icons, or the state chip, which cuts a long title in the middle
             .foregroundStyle(prominent ? Color.togoInk : Color.togoSnow)
             .lineLimit(1)
             .padding(.horizontal, 12)

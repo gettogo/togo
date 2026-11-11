@@ -152,9 +152,10 @@ let esc = "\u{1b}"
         controller.view.frame = CGRect(x: 0, y: 0, width: 480, height: 200)
         controller.refit()
         #expect(h.engine.size.rows == before.rows)
-        try? await Task.sleep(for: TerminalViewController.layerSettle + .milliseconds(100))
-        await settle()
-        #expect(h.engine.size.rows < before.rows)
+        // Fitted once the layer settles. Waited for rather than slept past: under a full test
+        // run the main actor reaches the settle task late.
+        try? await Task.sleep(for: TerminalViewController.layerSettle)
+        #expect(await waitUntil { h.engine.size.rows < before.rows })
     }
 
     @Test func insertTextEmitsInput() async {
@@ -235,7 +236,7 @@ let esc = "\u{1b}"
         h.feed("\(esc)[?2004h")
         h.engine.paste("x\(esc)[201~rm -rf ~\r")
         #expect(await waitUntil { !h.input.isEmpty })
-        #expect(h.joinedInput == Data("\(esc)[200~x[201~rm -rf ~\r\(esc)[201~".utf8))
+        #expect(h.joinedInput == Data("\(esc)[200~x[201~rm -rf ~\n\(esc)[201~".utf8))
     }
 
     @Test func nestedEndMarkerCannotReassemble() async {
@@ -243,7 +244,7 @@ let esc = "\u{1b}"
         h.feed("\(esc)[?2004h")
         h.engine.paste("\(esc)[20\(esc)[201~1~echo owned\r")
         #expect(await waitUntil { !h.input.isEmpty })
-        #expect(h.joinedInput == Data("\(esc)[200~[20[201~1~echo owned\r\(esc)[201~".utf8))
+        #expect(h.joinedInput == Data("\(esc)[200~[20[201~1~echo owned\n\(esc)[201~".utf8))
     }
 
     @Test func pasteDropsEscapeDeleteAndC1Controls() {
@@ -274,14 +275,14 @@ let esc = "\u{1b}"
         h.engine.terminalView.pasteboardText = { "hi\(esc)[201~\r" }
         h.engine.terminalView.paste(nil)
         #expect(await waitUntil { !h.input.isEmpty })
-        #expect(h.joinedInput == Data("\(esc)[200~hi[201~\r\(esc)[201~".utf8))
+        #expect(h.joinedInput == Data("\(esc)[200~hi[201~\n\(esc)[201~".utf8))
     }
 
     @Test func plainPasteIsSanitisedToo() async {
         let h = EngineHarness()
         h.engine.paste("ls\(esc)[A\r")
         #expect(await waitUntil { !h.input.isEmpty })
-        #expect(h.joinedInput == Data("ls[A\r".utf8))
+        #expect(h.joinedInput == Data("ls[A\n".utf8))
     }
 
     @Test func longTitleIsTruncated() async {

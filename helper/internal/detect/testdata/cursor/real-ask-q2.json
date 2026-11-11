@@ -1,0 +1,42 @@
+{
+  "agentVersion": "2026.11.05",
+  "keys": {
+    "1": [
+      "Space",
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Space",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Space",
+      "Enter"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Usage",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "License",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Credits",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Which sections should the README include? (select all that apply)"
+}

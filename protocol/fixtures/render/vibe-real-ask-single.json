@@ -1,0 +1,38 @@
+{
+  "name": "vibe/real-ask-single",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "vibe",
+    "title": "Which database should we use?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Postgres",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "SQLite",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "MongoDB",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Mistral Vibe",
+    "subtitle": "Which database should we use?",
+    "body": "",
+    "category": "togo.choice.r_render0001"
+  }
+}

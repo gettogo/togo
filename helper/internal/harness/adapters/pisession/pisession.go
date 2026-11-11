@@ -23,6 +23,9 @@ type Session struct {
 	state map[string]string
 	turn  *turn
 	tools map[string]harness.Item
+	// flagsAt is when a relaunch set effort from its flags; a thinking
+	// level the file recorded before then is older than that.
+	flagsAt time.Time
 }
 
 type turn struct {
@@ -92,6 +95,9 @@ func (s *Session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "model_change":
 		return s.setModel(e.Provider, e.ModelID, e.ID, at)
 	case "thinking_level_change":
+		if at.Before(s.flagsAt) {
+			return nil, nil
+		}
 		if e.ThinkingLevel != "" && s.state["effort"] != e.ThinkingLevel {
 			s.state["effort"] = e.ThinkingLevel
 			return nil, []harness.Op{s.statusOp()}
@@ -107,6 +113,34 @@ func (s *Session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		s.state["session_title"] = x.Title(e.Name)
 	}
 	return nil, nil
+}
+
+// Relaunched takes the thinking level and model a relaunch gave Pi. Pi
+// writes no thinking_level_change when --thinking resumes a session that
+// already has one (setThinkingLevel finds the level unchanged), so its
+// file would keep reporting the old level; a later change in the TUI is
+// recorded and wins. The model is corrected by the next reply's record.
+func (s *Session) Relaunched(argv []string, at time.Time) []harness.Op {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for i := 1; i+1 < len(argv); i++ {
+		switch v := argv[i+1]; argv[i] {
+		case "--thinking":
+			if v != "" && s.state["effort"] != v {
+				s.state["effort"], changed = v, true
+			}
+			s.flagsAt = at.UTC()
+		case "--model":
+			if v != "" && s.state["model"] != v {
+				s.state["model"], changed = v, true
+			}
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return []harness.Op{s.statusOp()}
 }
 
 func (s *Session) setModel(provider, model, id string, at time.Time) ([]harness.Item, []harness.Op) {

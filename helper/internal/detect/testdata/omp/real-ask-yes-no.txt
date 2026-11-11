@@ -1,0 +1,30 @@
+ - Areas: Backend and Frontend.
+ - Rollout: You typed your own answer instead of picking an option: canary release to 5 percent of
+   users first.
+
+
+ Use your ask tool to ask me one yes-or-no style question with two options. Nothing else.
+
+
+╭─── Ask 1 questions ──────────────────────────────────────────────────────────────────────────────╮
+├─── [canary_auto_rollback] · options:2 ───────────────────────────────────────────────────────────┤
+│  Should the 5 percent canary roll back on its own if error rates go up?                          │
+│  ○ Yes                                                                                           │
+│    ↳ Rolls back by itself when errors pass a set limit; safer, but needs alerting set up.        │
+│  ○ No                                                                                            │
+│    ↳ Someone decides on rollback by hand; simpler, but slower to react.                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  ⎋ Asking yes-or-no question                               🗳️ ASK: Ask one multiple-choice question
+╭─ Ask ────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Should the 5 percent canary roll back on its own if error rates go up?                           │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ❯ ○ Yes (Recommended)                                                                            │
+│       Rolls back by itself when errors pass a set limit; safer, but needs alerting set up.       │
+│   ○ No                                                                                           │
+│       Someone decides on rollback by hand; simpler, but slower to react.                         │
+│   ○ Other (type your own)                                                                        │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ⏎ select · n note · ↑/↓ move · ⎋ cancel · ⌥H hide                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

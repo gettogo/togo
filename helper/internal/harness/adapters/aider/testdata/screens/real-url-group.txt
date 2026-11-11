@@ -1,0 +1,24 @@
+No git repo found, create one to track aider's changes (recommended)? (Y)es/(N)o
+ [Yes]: y
+Added .aider* to .gitignore
+Git repository created in /Users/jamie/proj
+Aider v0.86.2
+Model: openai/qwen3.8-27b with diff edit format
+Git repo: .git with 0 files
+Repo-map: using 4096 tokens, auto refresh
+────────────────────────────────────────────────────────────────────────────────
+> /run echo hello
+
+hello
+Add 0.0k tokens of command output to the chat? (Y)es/(N)o [Yes]: n
+────────────────────────────────────────────────────────────────────────────────
+> /add nosuch.txt
+
+No files matched 'nosuch.txt'. Do you want to create /Users/jamie/proj
+/nosuch.txt? (Y)es/(N)o [Yes]: n
+────────────────────────────────────────────────────────────────────────────────
+> Reply with one word only. Links: https://example.com/a https://example.org/b
+
+
+https://example.com/a
+Add URL to the chat? (Y)es/(N)o/(A)ll/(S)kip all/(D)on't ask again [Yes]:

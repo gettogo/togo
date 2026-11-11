@@ -1,0 +1,24 @@
+
+   Charm™ CRUSH ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱ main ~/.../w/proj • 0% • ctrl+d open
+
+   ● Question Which color should the button be?
+
+   Waiting for tool response...
+
+  ?  Which color should the button be?
+
+ Pick a color for the button.
+
+ ┃ Red
+ ┃ Bold and attention-grabbing.
+
+   Green
+   Calm and indicates success.
+
+   Blue
+   Trustworthy and familiar.
+
+   > Something else?
+
+ [ prev tab • ] next tab • ↑ up • ↓ down • enter select • 1-3 quick select …
+

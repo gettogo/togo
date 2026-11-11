@@ -1,0 +1,31 @@
+{
+  "agentVersion": "2026.11.05",
+  "keys": {
+    "1": [
+      "Space",
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Space",
+      "Enter"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Hi",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Hello",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Which greeting word should hello.txt use?"
+}

@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+ ● You chose Green for the README title.                                       ┃
+                                                                               ┃
+ ❯ Use ask_user once more with a single form of three fields, in this    13:14 ┃
+   order: "platforms" a multi-select array of iOS, Android, Web;               ┃
+   "caching" a boolean; "name" a free-text string for the project name.        ┃
+   Do nothing else.                                                            ┃
+                                                                               ┃
+ ○ Asking user Waiting for response                                        38s ┃
+                                                                               ┃
+────────────────────────────────────────────────────────────────────────────────
+ Copilot needs information.
+ Please fill in the project details.
+
+  Platforms   Caching  [Project name]
+
+ Project name
+ ──────────────────────────────────────────────────────────────────────────────
+ ❯
+ ──────────────────────────────────────────────────────────────────────────────
+
+ enter accept · shift+tab prev · ctrl+d decline · esc cancel
+────────────────────────────────────────────────────────────────────────────────

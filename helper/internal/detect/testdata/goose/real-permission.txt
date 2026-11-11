@@ -1,0 +1,40 @@
+
+    __( O)>  ● new session · custom_qwen_5090 qwen3.8-27b
+   \____)    20261110_8 · /tmp/w/proj
+     L L     goose is ready
+  ⏳ loading extensions in background...
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 0% 0/66k
+> Run the shell command `make` with your shell tool, then stop.
+  ✓ extensions ready
+
+
+  ────────────────────────────────────────
+  ▸ shell
+    command: make
+
+
+  Tool approval request
+    {
+      "tool_name": "shell",
+      "arguments": {
+        "command": "make"
+      }
+    }
+
+◆  Goose would like to call the above tool, do you allow?
+│  ● Allow (Allow the tool call once)
+│  ○ Always Allow
+│  ○ Deny
+│  ○ Cancel
+└
+
+
+
+
+
+
+
+
+
+
+

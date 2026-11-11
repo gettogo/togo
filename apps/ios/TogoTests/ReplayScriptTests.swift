@@ -9,7 +9,7 @@ import TogoKit
 struct ReplayScriptTests {
     private let decoder = JSONDecoder()
 
-    @Test(arguments: ["replay-chat", "replay-approval", "replay-question"])
+    @Test(arguments: ["replay-chat", "replay-approval", "replay-question", DemoScript.resource])
     func everyShippedRecordingDecodes(_ name: String) throws {
         let script = try #require(ReplayScript.load(name), "\(name).jsonl is in the app's resources and parses")
         let opened = try #require(script.opened)

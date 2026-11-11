@@ -15,12 +15,27 @@ type needsState struct {
 	open    map[string]harness.QuestionBody // unanswered question items by id
 	request map[string]string               // question item id to its request id
 	relink  []string                        // approval items to republish with their owner
+	asked   map[string]string               // permission question id to the approval offering it ("" while it opens)
 	hint    bool                            // the setup-hooks notice is showing
 }
 
+// needsOpenLocked reports whether a question item is unanswered or an
+// approval of the session is pending.
+func (s *sess) needsOpenLocked() bool {
+	if len(s.needs.open) > 0 {
+		return true
+	}
+	return s.e.cfg.Approvals != nil && len(s.e.cfg.Approvals.Pending(s.id)) > 0
+}
+
 // questionLocked decorates a question item before it is stored: whether
-// the phone can answer it, and the request it is linked to.
-func (s *sess) questionLocked(it *harness.Item) {
+// the phone can answer it, and the request it is linked to. It returns
+// the Needs row ops the item implies: an open question is a row of the
+// session's Needs section, whatever the adapter emits itself (a row of
+// the same id merges), and an answered one takes its row away. This is
+// the shared needs-you contract: the mission summary, the roster and the
+// watcher's "done" all read it, and offerLocked gives it a push.
+func (s *sess) questionLocked(it *harness.Item) []harness.Op {
 	n := &s.needs
 	if n.open == nil {
 		n.open, n.request = map[string]harness.QuestionBody{}, map[string]string{}
@@ -29,38 +44,86 @@ func (s *sess) questionLocked(it *harness.Item) {
 		f := false
 		it.Question.Answerable = &f
 	}
+	var ops []harness.Op
 	if len(it.Question.Answered) > 0 {
 		delete(n.open, it.ID)
+		ops = []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: it.ID}}
 	} else {
 		n.open[it.ID] = *it.Question
+		if row := s.questionRow(*it); row != nil {
+			ops = []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionNeeds, Row: row}}
+		}
 	}
 	if req := n.request[it.ID]; req != "" {
 		it.Question.RequestID = req
-		return
+		return ops
 	}
 	if len(it.Question.Answered) > 0 || s.e.cfg.Approvals == nil {
-		return
+		return ops
 	}
 	for _, a := range s.e.cfg.Approvals.Pending(s.id) {
 		if sameQuestion(*it.Question, a) {
 			n.request[it.ID] = a.RequestID
 			it.Question.RequestID = a.RequestID
 			n.relink = append(n.relink, a.RequestID)
-			return
+			return ops
 		}
 	}
+	return ops
+}
+
+// questionRow is the Needs row of an open question item: its first
+// prompt, how many questions follow, and the way to answer it (the answer
+// action, or the terminal when the phone cannot).
+func (s *sess) questionRow(it harness.Item) *harness.Row {
+	q := it.Question
+	if q == nil || len(q.Questions) == 0 {
+		return nil
+	}
+	first := q.Questions[0]
+	title := first.Prompt
+	if title == "" {
+		title = first.Header
+	}
+	if title == "" {
+		title = s.ad.Name + " is asking"
+	}
+	row := harness.Row{ID: it.ID, Title: clipRunes(s.e.red.String(title), harness.MaxTitle), State: harness.StateWaiting}
+	if !it.At.IsZero() {
+		at := it.At
+		row.Started = &at
+	}
+	switch {
+	case len(q.Questions) > 1:
+		row.Subtitle = itoa(int64(len(q.Questions))) + " questions"
+	case first.Header != "":
+		row.Subtitle = clipRunes(s.e.red.String(first.Header), harness.MaxTitle)
+	}
+	if q.Answerable == nil || *q.Answerable {
+		row.Actions = []harness.ActionRef{{ID: harness.ActionAnswer, Label: "Answer", Role: harness.RolePrimary}}
+	} else {
+		row.Open = &harness.Open{Kind: harness.OpenTerminal, Ref: s.id}
+	}
+	return &row
 }
 
 // ownerLocked names the open question item a new approval is, and links
-// the question to it.
+// the question to it. A prompt the watcher found on screen takes over
+// from an ask the engine offered for the same question: the screen one is
+// the real dialog, answerable with keys, and two pending requests would
+// mean two pushes.
 func (s *sess) ownerLocked(a wire.Approval) string {
 	n := &s.needs
 	for id, q := range n.open {
-		if !sameQuestion(q, a) {
+		offered := s.offersLocked(id, q, a)
+		if !offered && !sameQuestion(q, a) {
 			continue
 		}
 		if n.request[id] == a.RequestID {
 			return id
+		}
+		if !offered {
+			s.withdrawOfferLocked(id)
 		}
 		n.request[id] = a.RequestID
 		if it, ok := s.e.log.Get(s.id, id); ok && it.Question != nil {

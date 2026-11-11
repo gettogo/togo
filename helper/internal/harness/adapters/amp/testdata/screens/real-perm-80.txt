@@ -1,0 +1,30 @@
+
+
+
+
+
+ ┃ Run the shell command `echo hello-from-amp` with the Bash tool. Nothing
+ ┃ else.
+
+ ⡅ Running 1 command ▸
+╭─ Approval Required ──────────────────────────────────────────────────────────╮
+│                                                                              │
+│ Bash:                                                                        │
+│   echo hello-from-amp                                                        │
+│   Working directory: /Users/jamie/projects/amp                               │
+│                                                                              │
+│ Matches user permissions rule 1: ask shell_command                           │
+│                                                                              │
+│ ‣ Allow Once                                                                 │
+│   Reject with feedback                                                       │
+│   Allow All for This Session                                                 │
+│   Allow All for Every Session                                                │
+│                                                                              │
+╰─────────────────────────────────── ↑/↓/j/k move · Enter select · Esc cancel ─╯
+  Up next (1)
+  2. Approval Required  Bash: echo hello-from-amp Working directory: /private…
+╭──────────────────────────────────────────────────────────────── $···· ─ low ─╮
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰ ≈ Running Tools ──────── permissions: on ─ /Users/jamie/projects/amp (main) ─╯

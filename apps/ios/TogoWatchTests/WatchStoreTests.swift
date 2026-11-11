@@ -229,8 +229,9 @@ private final class Clock: Sendable {
         await store.answer("r_other", "deny")
         #expect(sender.decisions.isEmpty)
 
-        // Ten minutes on, nothing has pruned it yet: the screen says so, and a tap sends nothing.
-        clock.advance(599)
+        // Ten minutes after it was sent (a second before it arrived), nothing has pruned it yet:
+        // the screen says so, and a tap sends nothing.
+        clock.advance(598)
         #expect(store.state(of: "r_late") == .open)
         clock.advance(2)
         #expect(store.state(of: "r_late") == .expired)

@@ -95,13 +95,17 @@ struct DictationSettingsView: View {
             Section {
                 languagePicker
             } footer: {
-                Text(DictationCopy.languageFooter)
+                SectionFooter {
+                    Text(DictationCopy.languageFooter)
+                }
             }
             .groupedRows()
             Section {
                 speechRow
             } footer: {
-                Text(DictationCopy.speechFooter)
+                SectionFooter {
+                    Text(DictationCopy.speechFooter)
+                }
             }
             .groupedRows()
             Section {
@@ -109,7 +113,9 @@ struct DictationSettingsView: View {
             } header: {
                 Text(DictationCopy.recent)
             } footer: {
-                Text(DictationCopy.recentFooter)
+                SectionFooter {
+                    Text(DictationCopy.recentFooter)
+                }
             }
             .groupedRows()
         }

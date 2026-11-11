@@ -30,15 +30,19 @@ import TogoTerminal
         #expect(draft.preview == #""ESC""#)
     }
 
-    @Test func presetReplacesBar() {
-        var editor = KeyBarEditor(config: .standard)
-        editor.add(KeyBarItem(title: "Deploy", action: .steps([.text("make deploy")])))
-        editor.move(from: IndexSet(integer: 0), to: 3)
-        editor.apply(.claude)
-        #expect(editor.config == KeyBarConfig.claude)
-        #expect(editor.activePreset == .claude)
-        editor.remove(at: IndexSet(integer: 0))
-        #expect(editor.activePreset == nil)
+    @Test func shortcutsAreAddedForEveryAgentOrOne() {
+        var editor = TerminalKeysEditor(config: TerminalKeysConfig())
+        let deploy = KeyBarItem(title: "Deploy", action: .steps([.text("make deploy")]))
+        let compact = KeyBarItem(title: "/compact", action: .steps([.text("/compact")]))
+        editor.add(deploy, for: nil)
+        editor.add(compact, for: "Claude")
+        #expect(editor.config.shortcuts == [deploy])
+        #expect(editor.config.shortcutsByAgent == ["claude": [compact]])
+        editor.remove(at: IndexSet(integer: 0), for: "claude")
+        #expect(editor.config.shortcutsByAgent.isEmpty, "an agent with no shortcuts left is dropped")
+        editor.add(compact, for: nil)
+        editor.move(from: IndexSet(integer: 1), to: 0, for: nil)
+        #expect(editor.config.shortcuts == [compact, deploy])
     }
 
     @Test func removeMachineAsksFirst() {

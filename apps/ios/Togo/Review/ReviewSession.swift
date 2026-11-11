@@ -6,7 +6,12 @@ import TogoKit
 /// another presenter, or rebuilds its screens, picks it up where it was.
 @MainActor @Observable final class ReviewSession {
     let subject: ReviewSubject
-    var navigation: ReviewNavigation
+    var navigation: ReviewNavigation {
+        // A route that closes lets its model go now, not at the next screen asked for: opened
+        // again, it starts fresh. Every change is one whole value (a relayout moves a route
+        // between the stack and the detail in one step), so a moving route stays open.
+        didSet { screens = screens.filter { openRoutes.contains($0.key) } }
+    }
     let changes: ChangesModel
     let history: HistoryModel
     let files: FilesModel
@@ -38,12 +43,16 @@ import TogoKit
     /// The model for `route`'s screen: the one already made while the route stays open, else
     /// a new one from `make`.
     func screen<Model: AnyObject>(for route: ReviewRoute, make: () -> Model) -> Model {
-        let open = Set(navigation.path + [navigation.detail, navigation.focus].compactMap(\.self))
+        let open = openRoutes
         screens = screens.filter { open.contains($0.key) }
         if let kept = screens[route] as? Model { return kept }
         let made = make()
         if open.contains(route) { screens[route] = made }
         return made
+    }
+
+    private var openRoutes: Set<ReviewRoute> {
+        Set(navigation.path + [navigation.detail, navigation.focus].compactMap(\.self))
     }
 }
 

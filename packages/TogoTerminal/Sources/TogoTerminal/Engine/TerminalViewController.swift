@@ -204,7 +204,7 @@ import UIKit
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         engine.useMetalIfAvailable()
-        engine.view.becomeFirstResponder()
+        if !engine.keyboardDismissed { engine.view.becomeFirstResponder() }
         updateDisplayLink()
         refit()
     }
@@ -259,7 +259,9 @@ enum TerminalFit {
         rect = rect.intersection(visible)
         guard !rect.isNull else { return .zero }
         rect = rect.inset(by: margins)
-        guard rect.width > 0, rect.height > 0 else { return .zero }
+        // `size`, not `width`/`height`: margins wider than the room leave a negative size,
+        // which `width` and `height` report as positive.
+        guard rect.size.width > 0, rect.size.height > 0 else { return .zero }
         return CGRect(
             x: rect.minX.rounded(.up), y: rect.minY.rounded(.up),
             width: max(0, rect.width.rounded(.down)), height: max(0, rect.height.rounded(.down))

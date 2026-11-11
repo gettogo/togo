@@ -1,0 +1,36 @@
+{
+  "agentVersion": "1.5.0",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Red",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Green",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Blue",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Which color?"
+}

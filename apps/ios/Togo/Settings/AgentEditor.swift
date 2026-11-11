@@ -86,15 +86,19 @@ struct AgentEditor: View {
             } header: {
                 Text(settingsText("settings.agents.agent", "Agent"))
             } footer: {
-                if draft.isCustom {
-                    Text(settingsText("settings.agents.program.footer", "A program name on the machine, or its full path."))
+                SectionFooter {
+                    if draft.isCustom {
+                        Text(settingsText("settings.agents.program.footer", "A program name on the machine, or its full path."))
+                    }
                 }
             }
             .groupedRows()
             Section {
                 FlagsField(text: $flags, error: flagsError, underlined: false)
             } footer: {
-                Text(settingsText("settings.agents.flags.footer", "Each flag reaches the agent exactly as written."))
+                SectionFooter {
+                    Text(settingsText("settings.agents.flags.footer", "Each flag reaches the agent exactly as written."))
+                }
             }
             .groupedRows()
             if !Self.checkable(machines).isEmpty {

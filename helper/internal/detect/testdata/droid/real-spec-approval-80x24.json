@@ -1,0 +1,52 @@
+{
+  "agentVersion": "1.5.0",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ],
+    "5": [
+      "5"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Proceed with the proposal",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Proceed with comment",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Proceed and handoff to a new session",
+      "role": "other"
+    },
+    {
+      "n": 4,
+      "label": "Manually edit spec (open via system default)",
+      "role": "other"
+    },
+    {
+      "n": 5,
+      "label": "No and explain why",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Propose Specification \"Create `hello.txt` in the working directory.\""
+}

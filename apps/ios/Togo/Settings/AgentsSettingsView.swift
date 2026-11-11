@@ -65,9 +65,11 @@ struct AgentsSettingsView: View {
                 } header: {
                     Text(IntegrationsCopy.title)
                 } footer: {
-                    Text(settingsText(
-                        "settings.agents.integrations.footer", "Set up each agent on a machine so its chat and requests reach this device."
-                    ))
+                    SectionFooter {
+                        Text(settingsText(
+                            "settings.agents.integrations.footer", "Set up each agent on a machine so its chat and requests reach this device."
+                        ))
+                    }
                 }
                 .groupedRows()
             }
@@ -102,7 +104,9 @@ struct AgentsSettingsView: View {
                 }
                 .frame(minHeight: 44)
             } footer: {
-                Text(settingsText("settings.agents.footer", "Tap an agent to edit it. Swipe left to delete it."))
+                SectionFooter {
+                    Text(settingsText("settings.agents.footer", "Tap an agent to edit it. Swipe left to delete it."))
+                }
             }
             .groupedRows()
         }

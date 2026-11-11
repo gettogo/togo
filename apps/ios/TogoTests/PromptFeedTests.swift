@@ -18,9 +18,21 @@ import TogoKit
 
     private func mode(
         _ requests: [PromptRequest], current: PromptBarModel.Mode = .start, hasMachines: Bool = true,
-        composerTyping: Bool = false
+        composerTyping: Bool = false, terminalLayer: Bool = false
     ) -> PromptBarModel.Mode {
-        PromptFeed.mode(requests: requests, current: current, hasMachines: hasMachines, composerTyping: composerTyping)
+        PromptFeed.mode(
+            requests: requests, current: current, hasMachines: hasMachines, composerTyping: composerTyping,
+            terminalLayer: terminalLayer
+        )
+    }
+
+    /// On the terminal layer the agent's own dialog is on screen and the inputs row answers it;
+    /// the card stays away. A reply being typed is kept, as when the composer holds the keyboard.
+    @Test func terminalLayerHidesTheCard() {
+        let request = request("r1")
+        #expect(mode([request], terminalLayer: true) == .hidden)
+        #expect(mode([request], terminalLayer: false) == .request(request, position: 1, count: 1))
+        #expect(mode([request], current: .replying(request), terminalLayer: true) == .replying(request))
     }
 
     // MARK: Queue

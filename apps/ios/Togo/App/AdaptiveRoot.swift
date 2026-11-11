@@ -19,6 +19,7 @@ enum ShellLayout: Equatable, Sendable {
     static func resolve(
         sizeClass: UserInterfaceSizeClass?, workspaceOpen: Bool, hasTabs: Bool
     ) -> ShellLayout {
+        // width-ok: NavigationSplitView collapses on the size class alone; this follows it.
         guard sizeClass == .regular else { return .stack(workspaceShown: workspaceOpen && hasTabs) }
         return .split(detail: workspaceOpen && hasTabs ? .workspace : .empty)
     }
@@ -168,6 +169,7 @@ struct AdaptiveRoot<Destination: View>: View {
     private static var popDuration: Duration { .milliseconds(500) }
 
     /// Regular width: the roster and the detail sit side by side.
+    // width-ok: the split view shows its columns side by side exactly on the regular size class.
     private var inline: Bool { sizeClass == .regular }
 
     private var promptModel: PromptBarModel { bar ?? ownBar }
@@ -336,6 +338,7 @@ private struct BarEdgeReport: View {
 /// stays the Sessions menu's command, which calls the same toggle.
 struct SidebarToggleToolbarItem: ToolbarContent {
     let store: AppStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
@@ -343,7 +346,8 @@ struct SidebarToggleToolbarItem: ToolbarContent {
                 store.sidebar.isHidden ? AppCommandCopy.showSidebar : AppCommandCopy.hideSidebar,
                 systemImage: "sidebar.leading"
             ) {
-                withAnimation { store.toggleSidebar() }
+                // motion: cause → effect — the column slides in or out from the edge it lives on.
+                withAnimation(Motion.animation(.sidebar, reduce: reduceMotion)) { store.toggleSidebar() }
             }
             .accessibilityIdentifier("detail.sidebarToggle")
         }

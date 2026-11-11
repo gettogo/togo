@@ -167,6 +167,7 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	defer e.mu.Unlock()
 	switch ev.Type {
 	case httpsrc.Reconnected:
+		e.lostTrack()
 		return e.dropOpen()
 	case "session.created":
 		return e.created(d, at)
@@ -274,6 +275,13 @@ func (e *Events2) parent(sess string) string {
 }
 
 func (e *Events2) created(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
+	if d.ParentID == "" && e.main == "" && d.SessionID != "" {
+		// The first top-level session on this private server: the one
+		// Togo started for a setting picked before the first prompt (the
+		// TUI's own first session arrives with its first prompt anyway).
+		e.setMain(d.SessionID)
+		return nil, nil
+	}
 	if d.ParentID == "" || !e.follows(d.ParentID) {
 		return nil, nil
 	}
@@ -419,4 +427,14 @@ func (e *Events2) dropOpen() ([]harness.Item, []harness.Op) {
 		ops = append(ops, harness.Op{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id})
 	}
 	return items, ops
+}
+
+// lostTrack forgets whether the main session's turn runs: the stream that
+// came back may have missed its end (session.idle, an execution's end),
+// and a "working" kept from before would hold the done back for good. The
+// pane decides until the next event says otherwise.
+func (e *Events2) lostTrack() {
+	if e.state["working"] == "true" {
+		e.state["working"], e.state["idle"] = "false", "true"
+	}
 }

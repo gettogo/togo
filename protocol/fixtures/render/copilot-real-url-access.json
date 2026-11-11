@@ -1,0 +1,52 @@
+{
+  "name": "copilot/real-url-access",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "copilot",
+    "title": "Do you want to allow this access?",
+    "body": "https://example.com",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "url",
+      "text": "https://example.com"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, and approve all URLs from \"https://example.com\" for the rest of the running",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Yes, and approve all URLs from \"https://example.com\" permanently",
+        "role": "approve_always"
+      },
+      {
+        "n": 4,
+        "label": "Yes, and approve \"https://*.example.com\" and its subdomains for the rest of the ",
+        "role": "approve_always"
+      },
+      {
+        "n": 5,
+        "label": "No, and tell Copilot what to do differently (Esc to stop)",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Copilot CLI",
+    "subtitle": "Do you want to allow this access?",
+    "body": "example.com",
+    "category": "togo.request"
+  }
+}

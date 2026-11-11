@@ -1,0 +1,48 @@
+{
+  "name": "kimi/real-run-command",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "kimi",
+    "title": "▶ Run this command?",
+    "body": "make",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "make"
+    },
+    "host": "studio",
+    "allowText": true,
+    "options": [
+      {
+        "n": 1,
+        "label": "Approve once",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Approve for this session",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Reject",
+        "role": "deny"
+      },
+      {
+        "n": 4,
+        "label": "Reject with feedback",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Kimi Code",
+    "subtitle": "▶ Run this command?",
+    "body": "make",
+    "category": "togo.request"
+  }
+}

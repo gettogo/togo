@@ -1,0 +1,24 @@
+
+   No session yet — one will be created on your first message.
+   tmux extended-keys is off. Modified Enter keys may not work. Add `set -g
+ extended-keys on` to ~/.tmux.conf and restart tmux.
+   MCP server "plugin-mobbin:mobbin" needs OAuth — run /mcp-config login
+ plugin-mobbin:mobbin
+
+ ❯ Reply with only the word ok.
+
+ ● The user is asking for a simple response. The system reminder says "Reply
+   with only the word ok." I should just respond with "ok".
+
+ ● ok
+
+ ❯ Use your own ask-the-user tool, the one that shows me a multiple-choice
+   question to pick from, to ask me which colour a button should be, with the
+   options Red, Green and Blue. Ask nothing else.
+
+  ⠴ Compacting… · Tip: /web: use the Web UI for a better experience
+ ╭────────────────────────────────────────────────────────────────────────────╮
+ │ >                                                                          │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+ Qwen3.8 27B (5090) thinking  …/w/proj  main
+                                                       context: 27% (16.9k/64k)

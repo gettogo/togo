@@ -1,0 +1,55 @@
+{
+  "agentVersion": "1.0.108",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ],
+    "5": [
+      "5"
+    ]
+  },
+  "kind": "permission",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, and approve all URLs from \"https://example.com\" for the rest of the running",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Yes, and approve all URLs from \"https://example.com\" permanently",
+      "role": "approve_always"
+    },
+    {
+      "n": 4,
+      "label": "Yes, and approve \"https://*.example.com\" and its subdomains for the rest of the ",
+      "role": "approve_always"
+    },
+    {
+      "n": 5,
+      "label": "No, and tell Copilot what to do differently (Esc to stop)",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "url",
+    "text": "https://example.com"
+  },
+  "title": "Do you want to allow this access?"
+}

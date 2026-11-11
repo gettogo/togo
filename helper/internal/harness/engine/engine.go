@@ -97,7 +97,13 @@ type Engine struct {
 
 	mu       sync.Mutex
 	sessions map[string]*sess
-	idSeq    int64
+	// carried holds a restarted session's subscribers until it is served
+	// again (carry), so open chats keep receiving across the restart.
+	carried map[string][]harness.Subscriber
+	idSeq   int64
+	// act runs an action for a permission answered from a notification;
+	// nil means Act. Tests replace it.
+	act func(context.Context, harness.ActionRequest) (harness.ActionResult, error)
 }
 
 var _ harness.Engine = (*Engine)(nil)
@@ -179,7 +185,10 @@ func (e *Engine) track(info session.Session) *sess {
 	}
 	s = fresh
 	e.sessions[info.ID] = s
+	subs := e.carried[info.ID]
+	delete(e.carried, info.ID)
 	e.mu.Unlock()
+	s.carry(subs)
 	return s
 }
 
@@ -194,6 +203,7 @@ func (e *Engine) Forget(id string) {
 	}
 	e.log.Forget(id)
 	e.cache.forget(id)
+	e.dropRelaunch(id)
 	source.Hooks.Forget(id)
 	e.stopServer(id)
 	e.eps.mu.Lock()
@@ -414,6 +424,47 @@ func (e *Engine) Summary(id string) (harness.Summary, bool) {
 		out.Plan = &p
 	}
 	return out, true
+}
+
+// TurnRunning reports whether a session's feeds see its agent's turn still
+// running, for a session fed by the agent's own server or stream, not by
+// hooks. Unlike Summary it leaves out the hub's status, which follows the
+// pane: the pane watcher asks before it calls a silent pane a finished
+// turn. A hook-fed turn can miss its Stop, and the pane going idle is what
+// ends it (checkStuckTurnLocked), so those are never vouched for. A feed
+// can still be wrong for good (a dropped stream, a session file that never
+// records a turn's end): the watcher takes this word for a bounded time
+// only (watch.maxVouched), then the pane decides.
+func (e *Engine) TurnRunning(id string) bool {
+	e.mu.Lock()
+	s, ok := e.sessions[id]
+	e.mu.Unlock()
+	if !ok || s.ad == nil || s.hookFed() {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failedHold || agentGone(s.hubStatus()) {
+		return false
+	}
+	working, known := s.turnLocked()
+	return known && working
+}
+
+// NeedsYou reports whether a question or an approval of the session waits
+// for the user: its silence is no finished turn, whatever the feed says
+// (OpenCode 2.2.5 reported its session idle while a permission waited, and
+// the phone heard "done").
+func (e *Engine) NeedsYou(id string) bool {
+	e.mu.Lock()
+	s, ok := e.sessions[id]
+	e.mu.Unlock()
+	if !ok || s.ad == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.needsOpenLocked()
 }
 
 func itoa(n int64) string {

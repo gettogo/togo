@@ -289,80 +289,46 @@ struct FileRef: Equatable {
     var knownExtension: Bool { fileExtension.map { Self.fileExtensions.contains($0.lowercased()) } ?? false }
 }
 
-/// A row's whole text in a sheet where any part of it can be selected: selection lives here,
-/// off the chat's tap path, so links in the chat open on a tap.
+/// A row's whole text in a sheet, for VoiceOver's "Select text" action and a reader who wants
+/// the words on their own: any part can be selected there as in the chat.
+///
+/// A reply's markdown shows rendered (`markdown`), so a selected part copies as the words with
+/// their formatting and never with `**` or backticks; code shows in SF Mono, exactly.
 struct SelectTextSheet: View {
     @Environment(\.dismiss) private var dismiss
     let text: String
+    var markdown = false
+    var monospaced = false
 
     var body: some View {
         NavigationStack {
-            SelectableText(text: text)
-                .background(Color.togoInk)
-                .navigationTitle(ChatCopy.selectText)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(ChatCopy.done, systemImage: "checkmark") { dismiss() }
-                            .keyboardShortcut(.cancelAction)
-                    }
+            SelectableText(
+                key: [text, "\(markdown)", "\(monospaced)"], layout: .scrolls,
+                insets: UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12),
+                copy: { [markdown] in markdown ? ChatPasteboard.copy(selection: $0) : ChatPasteboard.copy(exact: $0.string) }
+            ) { [text, markdown, monospaced] traits in
+                if markdown {
+                    let style = RichMarkdown.Style(
+                        body: .preferredFont(forTextStyle: .body, compatibleWith: traits), color: .togoSnow
+                    )
+                    return RichMarkdown.attributed(text, style: style)
                 }
+                let style = monospaced
+                    ? ChatSelectable.Style(textStyle: .body, monospaced: true)
+                    : ChatSelectable.Style.prompt
+                return ChatSelectable.attributed(ChatLinks.plain(text), style: style, traits: traits)
+            }
+            .background(Color.togoInk)
+            .navigationTitle(ChatCopy.selectText)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(ChatCopy.done, systemImage: "checkmark") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                }
+            }
         }
         .presentationDetents([.medium, .large])
-    }
-}
-
-/// UIKit's text view, read-only, for range selection the way every iOS app has it.
-private struct SelectableText: UIViewRepresentable {
-    let text: String
-
-    func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
-        view.isEditable = false
-        view.isSelectable = true
-        view.backgroundColor = .clear
-        view.textColor = UIColor(Color.togoSnow)
-        view.font = UIFont.preferredFont(forTextStyle: .body)
-        view.adjustsFontForContentSizeCategory = true
-        view.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12)
-        view.dataDetectorTypes = [.link]
-        // Links and selection handles in the text's own colour, underlined, as in the chat:
-        // the beacon blue only ever means needs-you.
-        view.tintColor = .togoSnow
-        view.linkTextAttributes = [
-            .foregroundColor: UIColor.togoSnow,
-            .underlineStyle: NSUnderlineStyle.single.rawValue,
-        ]
-        view.delegate = context.coordinator
-        return view
-    }
-
-    func updateUIView(_ view: UITextView, context: Context) {
-        context.coordinator.openURL = context.environment.openURL
-        if view.text != text { view.text = text }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    /// A link here opens as it would in the chat (web pages in the app, mail through the
-    /// system) and any other scheme does nothing, not even from the long-press menu.
-    final class Coordinator: NSObject, UITextViewDelegate {
-        var openURL: OpenURLAction?
-
-        func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
-            guard case .link(let url) = textItem.content else { return defaultAction }
-            guard ChatLinks.route(url) != .refused else { return nil }
-            return UIAction { [weak self] _ in self?.openURL?(url) }
-        }
-
-        func textView(
-            _ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu
-        ) -> UITextItem.MenuConfiguration? {
-            guard case .link(let url) = textItem.content, ChatLinks.route(url) == .refused else {
-                return UITextItem.MenuConfiguration(menu: defaultMenu)
-            }
-            return nil
-        }
     }
 }
 

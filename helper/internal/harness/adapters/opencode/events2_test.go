@@ -93,9 +93,17 @@ func TestRecordedSession2(t *testing.T) {
 		!strings.Contains(perm.Question.Questions[0].Prompt, "echo hi > a.txt") {
 		t.Fatalf("permission %+v", perm.Question)
 	}
+	// A notification's Approve allows it once and Deny rejects it; a form is
+	// not a permission and is offered only in the app.
+	if perm.Question.Approve != "once" || perm.Question.Deny != "reject" {
+		t.Fatalf("permission approve/deny %q %q", perm.Question.Approve, perm.Question.Deny)
+	}
 	form := got["frm_1b796ecee00128y1cvfI6jEono~"+v2Session]
 	if form.Question == nil || len(form.Question.Questions) != 1 {
 		t.Fatalf("form %+v", form.Question)
+	}
+	if form.Question.Approve != "" || form.Question.Deny != "" {
+		t.Fatalf("a form marked as a permission: %q %q", form.Question.Approve, form.Question.Deny)
 	}
 	q := form.Question.Questions[0]
 	if q.ID != "q0" || q.Prompt != "Do you prefer red or blue?" || len(q.Options) != 2 || q.Options[1].ID != "Blue" || !q.AllowText {
@@ -194,5 +202,25 @@ func TestActionTemplates2(t *testing.T) {
 	cwd := map[string]any{"cwd": "/tmp/a b&c"}
 	if got := render(a.Sources["models"].HTTP.Path, cwd); got != "/api/model?location%5Bdirectory%5D=%2Ftmp%2Fa+b%26c" {
 		t.Fatalf("models path %s", got)
+	}
+}
+
+// A stream that drops while a turn ends never delivers the end: after it
+// comes back the feed no longer says the turn runs, so the pane decides and
+// the done is not held back for good.
+func TestReconnectForgetsWorking(t *testing.T) {
+	m := NewEvents2(harness.Env{Cwd: "/w"})
+	for _, rec := range recorded2(t) {
+		m.Map(rec)
+		if m.State()["working"] == "true" {
+			break
+		}
+	}
+	if m.State()["working"] != "true" {
+		t.Fatal("the recording never started a turn")
+	}
+	m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(`{"type":"` + httpsrc.Reconnected + `"}`)})
+	if st := m.State(); st["working"] != "false" || st["idle"] != "true" {
+		t.Fatalf("after the reconnect: %v", st)
 	}
 }

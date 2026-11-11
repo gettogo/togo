@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/rpc"
@@ -66,7 +67,6 @@ func runTap(ctx context.Context, args []string, env map[string]string, stdin io.
 	}
 
 	var sc tap.Scanner
-	var lastOutput time.Time
 	enqueue := func(s wire.Signal) {
 		s.SessionID = id
 		select {
@@ -74,6 +74,7 @@ func runTap(ctx context.Context, args []string, env map[string]string, stdin io.
 		default:
 		}
 	}
+	output := &outputSignals{every: tapOutputEvery, emit: func() { enqueue(wire.Signal{Kind: wire.SignalOutput}) }}
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := stdin.Read(buf)
@@ -84,21 +85,72 @@ func runTap(ctx context.Context, args []string, env map[string]string, stdin io.
 			for _, s := range sc.Feed(buf[:n]) {
 				enqueue(s)
 			}
-			if now := time.Now(); now.Sub(lastOutput) >= tapOutputEvery {
-				lastOutput = now
-				enqueue(wire.Signal{Kind: wire.SignalOutput})
-			}
+			output.note(time.Now())
 		}
 		if err != nil {
 			break
 		}
 	}
+	output.stop()
 	close(queue)
 	select {
 	case <-done:
 	case <-time.After(tapFlushWait):
 	}
 	return exitOK
+}
+
+// outputSignals reports pane output at most once per interval, and once
+// more when an interval in which output came after the report ends: the
+// last change of a burst (a dialog closing, the reply drawn as the agent
+// goes idle) is the screen the watcher must read, and nothing may follow
+// it.
+type outputSignals struct {
+	every time.Duration
+	emit  func()
+
+	mu      sync.Mutex
+	last    time.Time
+	timer   *time.Timer
+	stopped bool
+}
+
+func (o *outputSignals) note(now time.Time) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.stopped {
+		return
+	}
+	if since := now.Sub(o.last); since < o.every {
+		if o.timer == nil {
+			o.timer = time.AfterFunc(o.every-since, o.trail)
+		}
+		return
+	}
+	o.last = now
+	o.emit()
+}
+
+func (o *outputSignals) trail() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.timer = nil
+	if o.stopped {
+		return
+	}
+	o.last = time.Now()
+	o.emit()
+}
+
+// stop drops a trailing report still due; emit is not called afterwards.
+func (o *outputSignals) stop() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.stopped = true
+	if o.timer != nil {
+		o.timer.Stop()
+		o.timer = nil
+	}
 }
 
 func tapSocketPath(env map[string]string) (string, error) {

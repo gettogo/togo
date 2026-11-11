@@ -25,12 +25,12 @@ struct PromptBubble: View {
                     // motion: state change — a queued command brightens in place when it is sent.
                     .motion(.respond, value: dimmed)
             } else if !text.isEmpty {
-                // A prompt of pictures alone has no words to set in a bubble.
-                // `@path` mentions open the file; Select text is in the row's menu.
-                Text(ChatLinks.prompt(text))
-                    .font(.body)
-                    .foregroundStyle(Color.togoSnow)
-                    .tint(Color.togoSnow)
+                // A prompt of pictures alone has no words to set in a bubble. Any part of it
+                // can be selected and copies as typed; `@path` mentions open the file.
+                // As wide as its words, up to the column: a short prompt stays a small bubble.
+                SelectableText(key: text, hugs: true, copy: { ChatPasteboard.copy(exact: $0.string) }) { traits in
+                    ChatSelectable.attributed(ChatLinks.prompt(text), style: .prompt, traits: traits)
+                }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Color.togoRaised, in: .rect(cornerRadius: 14, style: .continuous))
@@ -142,7 +142,7 @@ struct ChatNoticeRow: View {
     private var errorBlock: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: symbol)
-                .foregroundStyle(Color.togoDiffRemovedWord)
+                .foregroundStyle(Color.togoChangeConflict)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(NoticeCopy.lead(notice))

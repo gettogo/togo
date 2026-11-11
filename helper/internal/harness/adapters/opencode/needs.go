@@ -89,6 +89,7 @@ func (e *Events) permission(raw json.RawMessage, at time.Time) ([]harness.Item, 
 		{ID: "reject", Label: "Deny"},
 	}}
 	items, ops := e.need(p.ID, p.SessionID, p.Tool, []harness.Question{q}, "Allow "+what, q.Prompt, at)
+	asPermission(items)
 	// The tool that asked waits for the answer.
 	if p.Tool != nil {
 		if x, ok := e.tools[p.Tool.CallID]; ok {

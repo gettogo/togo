@@ -100,3 +100,35 @@ func TestMalformed(t *testing.T) {
 	replay(t, m, []string{``, `{`, `{"type":"message","id":"x","message":5}`, `{"type":"message","id":"y","message":{"role":"toolResult","toolCallId":"none"}}`,
 		`{"type":"message","id":"z","message":{"role":"assistant","content":"plain text","stopReason":"stop"}}`})
 }
+
+// Pi records no thinking_level_change when --thinking resumes a session
+// that already has one: the relaunch's flags set the effort, and the old
+// record read after them does not take it back. A change made later in the
+// TUI is recorded and wins.
+func TestRelaunchFlagsSetEffort(t *testing.T) {
+	m := New("pi.session", harness.Env{Cwd: "/w"})
+	t0 := time.Date(2026, 11, 10, 13, 0, 0, 0, time.UTC)
+	rec := func(at time.Time, level string) {
+		m.Map(harness.Record{Data: json.RawMessage(`{"type":"thinking_level_change","id":"x","timestamp":"` +
+			at.Format(time.RFC3339Nano) + `","thinkingLevel":"` + level + `"}`)})
+	}
+	rec(t0, "medium")
+	ops := m.Relaunched([]string{"pi", "--session", "abc", "--thinking", "low", "--model", "qwen5090/qwen3.8-27b"}, t0.Add(time.Minute))
+	if len(ops) != 1 || ops[0].Status == nil || ops[0].Status.Effort != "low" {
+		t.Fatalf("ops %+v", ops)
+	}
+	if st := m.State(); st["effort"] != "low" || st["model"] != "qwen5090/qwen3.8-27b" {
+		t.Fatalf("state %v", st)
+	}
+	rec(t0.Add(30*time.Second), "medium") // the file's old record, read late
+	if st := m.State(); st["effort"] != "low" {
+		t.Fatalf("old record took the effort back: %v", st)
+	}
+	rec(t0.Add(2*time.Minute), "high") // changed in the TUI afterwards
+	if st := m.State(); st["effort"] != "high" {
+		t.Fatalf("later change lost: %v", st)
+	}
+	if ops := m.Relaunched([]string{"pi", "--session", "abc"}, t0.Add(3*time.Minute)); ops != nil {
+		t.Fatalf("no flags changed, ops %+v", ops)
+	}
+}

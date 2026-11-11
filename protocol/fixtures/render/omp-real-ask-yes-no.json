@@ -1,0 +1,33 @@
+{
+  "name": "omp/real-ask-yes-no",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "omp",
+    "title": "Should the 5 percent canary roll back on its own if error rates go up?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "No",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 OMP",
+    "subtitle": "Should the 5 percent canary roll back on its own if error rates go up?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

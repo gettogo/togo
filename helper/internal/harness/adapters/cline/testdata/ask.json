@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "session_id": "1794334480911_meju1",
+  "source": "cli",
+  "started_at": "2026-11-10T18:14:40.936Z",
+  "status": "idle",
+  "interactive": true,
+  "provider": "openai-compatible",
+  "model": "coder-fast",
+  "cwd": "/Users/jamie/proj",
+  "workspace_root": "/Users/jamie/proj",
+  "metadata": {
+    "mode": "act"
+  }
+}

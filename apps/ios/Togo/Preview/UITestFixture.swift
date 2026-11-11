@@ -122,7 +122,8 @@ struct UITestLaunch {
                 snapshot.requests.removeAll { $0.id == approval.requestId }
                 snapshot.requests.append(RequestCard(
                     id: approval.requestId, hostID: hostID, sessionID: session, bib: bib,
-                    agentName: "Claude Code", title: approval.title, detail: approval.detail,
+                    agentName: self.replay?.script.agent?.name ?? AgentCatalog.name(approval.agent) ?? approval.agent,
+                    title: approval.title, detail: approval.detail,
                     options: approval.options, allowText: approval.allowText, phase: .open, signIn: approval.signIn
                 ))
             case .closed(let requestID):
@@ -132,8 +133,11 @@ struct UITestLaunch {
     }
 
     /// The first machine's first session: the one a replay plays in.
-    var firstSessionID: String? {
-        services.hosts.first.flatMap { snapshots[$0.id]?.sessions.first?.id }
+    var firstSessionID: String? { firstSession?.id }
+
+    /// The first machine's first session: the one a replay plays in.
+    var firstSession: SessionRow? {
+        services.hosts.first.flatMap { snapshots[$0.id]?.sessions.first }
     }
 
     /// A request answered outside the app (the Live Activity), as the helper would report it.

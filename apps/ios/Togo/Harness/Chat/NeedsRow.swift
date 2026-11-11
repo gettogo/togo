@@ -177,8 +177,10 @@ struct ApprovalRow: View {
         .accessibilityAction { showInTerminal?() }
         .accessibilityActions {
             if let card, card.phase == .open {
-                Button(approveLabel(card)) { approve(card) }
-                Button(ChatCopy.deny) { deny(card) }
+                if Self.yesOrNo(card) {
+                    Button(approveLabel(card)) { approve(card) }
+                    Button(ChatCopy.deny) { deny(card) }
+                }
                 ForEach(extraOptions(card)) { option in
                     Button(option.title) { pick(option) }
                 }
@@ -213,12 +215,15 @@ struct ApprovalRow: View {
     private func answers(_ card: RequestCard) -> some View {
         let extra = extraOptions(card)
         return VStack(alignment: .leading, spacing: 10) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
-                VStack(alignment: .leading, spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
+            if Self.yesOrNo(card) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
+                    VStack(alignment: .leading, spacing: 8) { answerButtons(card, hasExtra: !extra.isEmpty) }
+                }
             }
-            // More: the card's growing edge uncovers the extra answers top to bottom.
-            if more.open, !extra.isEmpty {
+            // More: the card's growing edge uncovers the extra answers top to bottom. A list
+            // of choices with no yes and no is the answers, open from the start.
+            if !Self.yesOrNo(card) || more.open, !extra.isEmpty {
                 AnswerOptionList(
                     options: extra, sending: sendingOption(card),
                     source: { tapped.isSource(.option($0)) ? (id: AnswerMatch.id(item.id), namespace: answerSpace) : nil }
@@ -272,8 +277,14 @@ struct ApprovalRow: View {
 
     private func extraOptions(_ card: RequestCard) -> [AnswerOption] {
         card.options
-            .filter { $0.role != .approve && $0.role != .deny }
+            .filter { !Self.yesOrNo(card) || ($0.role != .approve && $0.role != .deny) }
             .map { AnswerOption(id: $0.n, label: $0.label) }
+    }
+
+    /// Yes and No are drawn only when the agent offers both. A question with choices has no
+    /// Yes: one invented for its first choice would pick that choice.
+    static func yesOrNo(_ card: RequestCard) -> Bool {
+        card.options.contains { $0.role == .approve } && card.options.contains { $0.role == .deny }
     }
 
     private func approve(_ card: RequestCard) {

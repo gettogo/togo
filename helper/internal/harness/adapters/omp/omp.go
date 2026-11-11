@@ -41,9 +41,13 @@ func AdapterFile() []byte { return adapterFile }
 
 // SessionDirNames lists the folder names omp may use under
 // ~/.omp/agent/sessions for cwd, most likely first. omp names a folder
-// under the temp folder "-tmp-<rel>", one under home "-<rel>", and any
-// other "--<abs>--", with "/", "\" and ":" turned into "-".
-func SessionDirNames(cwd, home, tmp string) []string {
+// under its temp folder "-tmp-<rel>", one under home "-<rel>", and any
+// other "--<abs>--", with "/", "\" and ":" turned into "-". Its temp
+// folder is os.tmpdir(): TMPDIR, else /tmp. On macOS TMPDIR is a
+// /var/folders path, so a folder under /private/tmp is named "--<abs>--"
+// (seen on 18.16.0); tmp lists the temp folders to try, the likely one
+// first, and only the first decides the order before any folder exists.
+func SessionDirNames(cwd, home string, tmp ...string) []string {
 	clean := func(p string) string {
 		if p == "" {
 			return ""
@@ -55,7 +59,7 @@ func SessionDirNames(cwd, home, tmp string) []string {
 	}
 	dash := func(s string) string { return strings.NewReplacer("/", "-", "\\", "-", ":", "-").Replace(s) }
 	inside := func(root, p string) (string, bool) {
-		if root == "" {
+		if root == "" || root == "." {
 			return "", false
 		}
 		r, err := filepath.Rel(root, p)
@@ -76,18 +80,24 @@ func SessionDirNames(cwd, home, tmp string) []string {
 		}
 		out = append(out, s)
 	}
-	for _, c := range []string{clean(cwd), filepath.Clean(cwd)} {
-		if c == "" || c == "." {
-			continue
-		}
-		for _, t := range []string{clean(tmp), "/tmp", "/private/tmp"} {
-			if r, ok := inside(t, c); ok {
+	underTmp := func(c, t string) {
+		for _, root := range []string{clean(t), filepath.Clean(t)} {
+			if r, ok := inside(root, c); ok {
 				if r == "" {
 					add("-tmp")
 				} else {
 					add("-tmp-" + dash(r))
 				}
 			}
+		}
+	}
+	cwds := []string{clean(cwd), filepath.Clean(cwd)}
+	for _, c := range cwds {
+		if c == "" || c == "." {
+			continue
+		}
+		if len(tmp) > 0 {
+			underTmp(c, tmp[0])
 		}
 		for _, h := range []string{clean(home), filepath.Clean(home)} {
 			if r, ok := inside(h, c); ok && h != "" && h != "." {
@@ -96,22 +106,67 @@ func SessionDirNames(cwd, home, tmp string) []string {
 		}
 		add("--" + dash(strings.TrimLeft(c, "/\\")) + "--")
 	}
+	// Other temp folders omp may have run with, after the rest.
+	for _, c := range cwds {
+		if c == "" || c == "." {
+			continue
+		}
+		for _, t := range tmp[min(1, len(tmp)):] {
+			underTmp(c, t)
+		}
+	}
 	return out
 }
 
-// sessionDir picks the first SessionDirNames entry that exists under the
-// sessions folder, else the first one.
+// tmpDirs lists the temp folders omp may name a session folder after:
+// the TMPDIR its environment gives it (os.tmpdir() reads TMPDIR, else
+// /tmp), then the others it has used.
+func tmpDirs(env harness.Env) []string {
+	t := ""
+	for _, kv := range env.Environ {
+		if v, ok := strings.CutPrefix(kv, "TMPDIR="); ok {
+			t = v
+		}
+	}
+	if t == "" {
+		t = os.Getenv("TMPDIR")
+	}
+	if t = strings.TrimRight(t, "/"); t == "" {
+		t = "/tmp"
+	}
+	return []string{t, "/tmp", "/private/tmp", os.TempDir()}
+}
+
+// sessionDir picks, of the SessionDirNames entries that exist under the
+// sessions folder, the one holding the newest session file; with none,
+// the most likely name.
 func sessionDir(env harness.Env) string {
 	home := source.Expand("~", env.Vars[source.VarHome])
-	names := SessionDirNames(env.Cwd, home, os.TempDir())
+	names := SessionDirNames(env.Cwd, home, tmpDirs(env)...)
 	if len(names) == 0 {
 		return ""
 	}
 	root := filepath.Join(home, ".omp", "agent", "sessions")
+	best, bestAt := "", time.Time{}
 	for _, n := range names {
-		if st, err := os.Stat(filepath.Join(root, n)); err == nil && st.IsDir() {
-			return n
+		st, err := os.Stat(filepath.Join(root, n))
+		if err != nil || !st.IsDir() {
+			continue
 		}
+		at := st.ModTime()
+		if files, _ := filepath.Glob(filepath.Join(root, n, "*.jsonl")); len(files) > 0 {
+			for _, f := range files {
+				if fi, err := os.Stat(f); err == nil && fi.ModTime().After(at) {
+					at = fi.ModTime()
+				}
+			}
+		}
+		if best == "" || at.After(bestAt) {
+			best, bestAt = n, at
+		}
+	}
+	if best != "" {
+		return best
 	}
 	return names[0]
 }

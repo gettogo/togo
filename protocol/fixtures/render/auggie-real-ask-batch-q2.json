@@ -1,0 +1,22 @@
+{
+  "name": "auggie/real-ask-batch-q2",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "auggie",
+    "title": "Which platforms should we support?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Auggie",
+    "subtitle": "Which platforms should we support?",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

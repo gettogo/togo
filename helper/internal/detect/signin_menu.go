@@ -85,15 +85,30 @@ func findRadio(lines []string) (menu, bool) {
 	}
 	m := menu{start: start, end: end, cursor: c - start}
 	for i := start; i <= end; i++ {
-		m.labels = append(m.labels, cleanLabel(strings.TrimSpace(radioLine.FindStringSubmatch(lines[i])[3])))
+		l := cleanLabel(strings.TrimSpace(radioLine.FindStringSubmatch(lines[i])[3]))
+		if i == c {
+			// clack prints the focused item's hint after its label, so
+			// the label would change as the cursor moves: Goose 1.57's
+			// "● Allow (Allow the tool call once)".
+			if h := clackHint.FindStringIndex(l); h != nil && h[0] > 0 && !recommended.MatchString(l) {
+				l = strings.TrimSpace(l[:h[0]])
+			}
+		}
+		m.labels = append(m.labels, l)
 	}
 	return m, true
 }
+
+// clackHint is the hint clack prints after the focused item's label.
+var clackHint = regexp.MustCompile(`\s+\([^()]+\)$`)
 
 // matchRadioPair recognises a clack confirm, "● Yes / ○ No" under its
 // question, answered by moving to a side and pressing Enter.
 func matchRadioPair(lines []string) (Prompt, bool) {
 	i := len(lines) - 1
+	if i > 0 && strings.TrimSpace(lines[i]) == "└" {
+		i-- // the bar's foot under a confirm (Goose 1.57's elicitation)
+	}
 	g := radioPair.FindStringSubmatch(lines[i])
 	if g == nil || g[1] == g[3] || i == 0 {
 		return Prompt{}, false

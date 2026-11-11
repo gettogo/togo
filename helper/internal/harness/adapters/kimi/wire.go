@@ -26,7 +26,7 @@ type Wire struct {
 	tools    map[string]harness.Item  // by tool call id
 	tasks    map[string]harness.Item  // agents and background work by task id
 	byCall   map[string]string        // tool call id -> task id
-	open     map[string]harness.Item  // unanswered questions by request id
+	open     map[string]harness.Item  // unanswered questions and approvals by interaction id
 	status   harness.StatusBlock
 }
 
@@ -72,6 +72,7 @@ type record struct {
 	Event         json.RawMessage `json:"event"`
 	ID            string          `json:"id"`
 	Kind          string          `json:"kind"`
+	ToolCallID    string          `json:"toolCallId"`
 	Request       json.RawMessage `json:"request"`
 	Response      json.RawMessage `json:"response"`
 	Info          json.RawMessage `json:"info"`
@@ -115,7 +116,8 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	defer w.mu.Unlock()
 	switch r.Type {
 	case "metadata":
-		return w.endTurn(harness.StateInterrupted, at)
+		items, ops := w.endTurn(harness.StateInterrupted, at)
+		return append(w.closeOpen(), items...), ops
 	case "profile.bind", "config.update", "llm.request":
 		return nil, w.setModel(r.ModelAlias, r.Effort)
 	case "permission.set_mode":
@@ -133,9 +135,9 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "context.append_loop_event":
 		return w.loopEvent(r.Event, at)
 	case "interaction.request":
-		return w.question(r, at)
+		return w.interaction(r, at), nil
 	case "interaction.resolved":
-		return w.resolved(r)
+		return w.resolved(r), nil
 	case "turn.cancel":
 		return w.endTurn(harness.StateInterrupted, at)
 	case "turn.ended":

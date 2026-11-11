@@ -24,11 +24,14 @@ type db struct {
 	mu       sync.Mutex
 	state    map[string]string
 	sessions map[string]sessionRow
+	asks     map[string]harness.Item        // confirmations and elicitations by item id
+	early    map[string]map[string][]string // elicitation answers stored before their request
 	b        *turns.Builder
 }
 
 func newDB(env harness.Env) *db {
-	return &db{env: env, state: map[string]string{}, sessions: map[string]sessionRow{}, b: turns.New()}
+	return &db{env: env, state: map[string]string{}, sessions: map[string]sessionRow{}, asks: map[string]harness.Item{},
+		early: map[string]map[string][]string{}, b: turns.New()}
 }
 
 func (m *db) Name() string { return MapperDB }
@@ -95,6 +98,8 @@ type part struct {
 	Message string `json:"message"`
 	// A systemNotification part names its kind in notificationType.
 	NotificationType string `json:"notificationType"`
+	// An actionRequired part (question.go) carries its request or response.
+	Data json.RawMessage `json:"data"`
 }
 
 func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
@@ -134,6 +139,7 @@ func (m *db) session(s sessionRow) {
 	}
 	if best.ID != m.state["harness_session"] {
 		m.b.Reset()
+		m.asks, m.early = map[string]harness.Item{}, map[string]map[string][]string{}
 		m.state["harness_session"] = best.ID
 	}
 	if best.Mode != "" {
@@ -151,25 +157,26 @@ func (m *db) message(r messageRow) []harness.Item {
 			json.Unmarshal([]byte(s), &meta)
 		}
 	}
-	if meta.UserVisible != nil && !*meta.UserVisible {
-		return nil // turn context and other agent-only messages
-	}
 	var parts []part
 	if json.Unmarshal([]byte(r.Content), &parts) != nil {
 		return nil
 	}
 	at := time.Unix(r.Created, 0).UTC()
+	items := m.actions(parts, at) // answers are stored hidden
+	if meta.UserVisible != nil && !*meta.UserVisible {
+		return items // turn context and other agent-only messages
+	}
 	id := r.MsgID
 	if id == "" {
 		id = "goose-" + strconv.FormatInt(r.ID, 10)
 	}
 	switch r.Role {
 	case "user":
-		return m.user(id, parts, at)
+		return append(items, m.user(id, parts, at)...)
 	case "assistant":
-		return m.assistant(id, parts, at)
+		return append(items, m.assistant(id, parts, at)...)
 	}
-	return nil
+	return items
 }
 
 func (m *db) user(id string, parts []part, at time.Time) []harness.Item {
@@ -189,6 +196,7 @@ func (m *db) user(id string, parts []part, at time.Time) []harness.Item {
 		}
 	}
 	if len(text) > 0 {
+		items = append(items, m.closeOpen()...)
 		items = append(items, m.b.User(id, strings.Join(text, "\n"), at)...)
 	}
 	return items
@@ -240,6 +248,7 @@ func (m *db) assistant(id string, parts []part, at time.Time) []harness.Item {
 	}
 	if failed {
 		// Goose ends the turn after an error part: it waits for a resend.
+		items = append(items, m.closeOpen()...)
 		return append(items, m.b.Close(harness.StateFailed, at)...)
 	}
 	if calls == 0 && reply {

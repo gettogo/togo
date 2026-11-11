@@ -97,19 +97,36 @@ screens:
     map: { item.id: .id, item.title: '{{.name | default .preview | truncate 60}}', item.subtitle: '{{.updatedAt | ago}}' }
     on_select: resume
 actions:
-  # Codex has no live setter for a running thread: model, effort and approval
-  # policy change through turn/start overrides only. These write the default in
-  # config.toml, which the next thread and a relaunch pick up; the result says
-  # so (0.144 has no thread-scoped setter outside turn/start).
+  # Codex has no live setter for a running thread: model and effort change
+  # through turn/start overrides only, and the TUI sends its own with every
+  # turn, so a config.toml write reached only new threads (seen on 0.167.0:
+  # the next turn ran on the old model). These restart the TUI on the same
+  # thread with -m and a -c override instead, for this session only; the
+  # thread and its history carry on. Without a thread yet, a plain restart.
   set_model:
     label: Use model
-    note: Applies to new threads
-    rpc: { method: config/value/write, params: { keyPath: model, value: '{{.id}}', mergeStrategy: replace } }
-    stability: experimental
+    confirm: Restart Codex on this model? The thread continues.
+    branch:
+      - when: '{{if .state.harness_session}}true{{end}}'
+        relaunch:
+          argv: [codex, resume, '{{.state.harness_session}}', -m, '{{.id}}']
+          keep: [[-c, '{{if .state.effort}}model_reasoning_effort={{.state.effort}}{{end}}']]
+      - relaunch:
+          argv: [codex, -m, '{{.id}}']
+          keep: [[-c, '{{if .state.effort}}model_reasoning_effort={{.state.effort}}{{end}}']]
+    stability: documented
   set_effort:
-    note: Applies to new threads
-    rpc: { method: config/value/write, params: { keyPath: model_reasoning_effort, value: '{{.id}}', mergeStrategy: replace } }
-    stability: experimental
+    label: Set effort
+    confirm: Restart Codex with this effort? The thread continues.
+    branch:
+      - when: '{{if .state.harness_session}}true{{end}}'
+        relaunch:
+          argv: [codex, resume, '{{.state.harness_session}}', -c, 'model_reasoning_effort={{.id}}']
+          keep: [[-m, '{{.state.model}}']]
+      - relaunch:
+          argv: [codex, -c, 'model_reasoning_effort={{.id}}']
+          keep: [[-m, '{{.state.model}}']]
+    stability: documented
   set_mode:
     note: Applies to new threads
     rpc: { method: config/value/write, params: { keyPath: approval_policy, value: '{{.id}}', mergeStrategy: replace } }

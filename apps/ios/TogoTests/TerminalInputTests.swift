@@ -36,7 +36,8 @@ struct TerminalInputTests {
         await tools.images.begin(png)
         #expect(tools.images.isAnnotating)
         await tools.images.send(annotated: nil)
-        #expect(tools.images.phase == .idle)
+        // "Image sent" shows for a moment, then the status closes by itself.
+        #expect(tools.images.phase == .sent)
         #expect(log.events.count == 1)
         #expect(log.events.first?.hasPrefix("paste:") == true)
         #expect(log.events.first?.contains("/tmp/togo/shot.png") == true)

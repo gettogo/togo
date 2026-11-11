@@ -1,0 +1,39 @@
+{
+  "name": "kimi/real-plan-review",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "kimi",
+    "title": "▶ Ready to build with this plan?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "allowText": true,
+    "options": [
+      {
+        "n": 1,
+        "label": "Approve",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Reject",
+        "role": "deny"
+      },
+      {
+        "n": 3,
+        "label": "Revise",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Kimi Code",
+    "subtitle": "▶ Ready to build with this plan?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

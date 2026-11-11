@@ -46,6 +46,15 @@ type field2 struct {
 
 func needID(req, sess string) string { return req + "~" + sess }
 
+// asPermission marks a permission's question (the first item) as one a
+// notification answers: Approve allows it once, Deny rejects it. "Always
+// allow" stays in the app.
+func asPermission(items []harness.Item) {
+	if len(items) > 0 && items[0].Question != nil {
+		items[0].Question.Approve, items[0].Question.Deny = "once", "reject"
+	}
+}
+
 func (e *Events2) permission2(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 	if d.ID == "" || !e.follows(d.SessionID) {
 		return nil, nil
@@ -64,6 +73,7 @@ func (e *Events2) permission2(d ev2, at time.Time) ([]harness.Item, []harness.Op
 		{ID: "reject", Label: "Deny"},
 	}}
 	items, ops := e.need2(needID(d.ID, d.SessionID), d.SessionID, []harness.Question{q}, "Allow "+what, q.Prompt, at)
+	asPermission(items)
 	if d.Source != nil && d.Source.Type == "tool" {
 		if x, ok := e.tools[d.Source.ID]; ok {
 			b := *x.Tool

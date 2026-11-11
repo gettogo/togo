@@ -61,6 +61,8 @@ import TogoKit
     @ObservationIgnored var openReview: ReviewSession?
     /// The workspace with its chrome hidden.
     var zen = false
+    /// Tabs whose terminal keys stay on screen with the keyboard down ("Keep keys on screen").
+    var keptKeys: Set<TabID> = []
     /// Both panes are on screen. The workspace sets it from its arrangement; while false the
     /// secondary tab waits in state and everything acts on the primary pane.
     var panesVisible = false
@@ -100,6 +102,9 @@ import TogoKit
     /// What the native harness layers read and run. Without live services every session shows
     /// the terminal only.
     let harnessServices: any HarnessServices
+    /// Whether what is done here counts toward the tips. Off for the demo's store: TipKit's
+    /// record is the whole app's, and a tip put away in the demo would never show for real.
+    @ObservationIgnored var teachesTips = true
 
     init(
         services: any AppServices, controlCenter: ControlCenterState = .init(), firstRun: Bool = false,
@@ -203,7 +208,7 @@ import TogoKit
         do {
             try await services.answer(hostID: card.hostID, requestID: cardID, decision: decision)
             setPhase(.done(Self.outcome(of: decision, on: card)), of: cardID)
-            TutorialTip.request.done()
+            tipDone(.request)
         } catch where ServiceErrors.isAlreadyAnswered(error) {
             setPhase(.done(.answeredElsewhere), of: cardID)
         } catch {

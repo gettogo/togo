@@ -9,8 +9,8 @@ import (
 
 // hintPart is one "keys verb" part of a TUI's key-hint footer, such as
 // "↑↓ navigate", "Enter select", "Esc to cancel" or "ctrl+c exit".
-var hintPart = regexp.MustCompile(`(?i)^(?:[↑↓←→⏎↵⇥]+|enter|esc|escape|tab|shift\+tab|space|return|ctrl\+\S+|pgup|pgdn|[a-z])` +
-	`(?:\s*/\s*\S+)?\s+(?:to\s+)?[a-z]+(?:\s[a-z]+)?$`)
+var hintPart = regexp.MustCompile(`(?i)^(?:[↑↓←→⏎↵⇥⎋␣]+|[⌥⌃⇧⌘]+\S|\^[a-z]|enter|esc|escape|tab|shift\+tab|space|return|ctrl\+\S+|pgup|pgdn|[a-z])` +
+	`(?:\s*/\s*\S+)*\s+(?:to\s+)?[a-z]+(?:\s[a-z]+)?$`)
 
 // hintSplit separates the parts of a key-hint line.
 var hintSplit = regexp.MustCompile(`\s*[·|•]\s*|\s{2,}|,\s+`)

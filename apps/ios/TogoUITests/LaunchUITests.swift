@@ -15,11 +15,18 @@ import XCTest
         app.descendants(matching: .any)["launch"]
     }
 
+    /// Whether the launch played and removed itself. It keeps the app busy while it plays, so
+    /// `launch()`, which waits for the app to settle, returns once it is already gone: the app
+    /// leaves a "launch.played" mark instead of a test racing to see it.
+    private func launchPlayed(_ app: XCUIApplication) -> Bool {
+        app.descendants(matching: .any)["launch.played"].waitForExistence(timeout: 8)
+            && !launchElement(app).exists
+    }
+
     func testEveryColdLaunchPlaysTheLaunchAndThenRemovesIt() {
         for attempt in 1...2 {
             let app = coldLaunch()
-            XCTAssertTrue(launchElement(app).waitForExistence(timeout: 3), "Cold launch \(attempt) shows no launch")
-            XCTAssertTrue(launchElement(app).waitForNonExistence(timeout: 5), "The launch never goes away")
+            XCTAssertTrue(launchPlayed(app), "Cold launch \(attempt) did not play the launch and remove it")
             // Each launch starts with a fresh defaults suite, so the guide is unseen and opens.
             XCTAssertTrue(app.buttons["Skip"].waitForExistence(timeout: 5), "The guide did not open over the machines")
             app.buttons["Skip"].tap()
@@ -42,8 +49,7 @@ import XCTest
     /// A first run lands on the first-run screen, calm: no guide opens by itself.
     func testFreshInstallLandsOnFirstRunWithNoGuide() {
         let app = coldLaunch(["-ui-first-run"])
-        XCTAssertTrue(launchElement(app).waitForExistence(timeout: 3), "A first run shows no launch")
-        XCTAssertTrue(launchElement(app).waitForNonExistence(timeout: 5))
+        XCTAssertTrue(launchPlayed(app), "A first run did not play the launch and remove it")
         XCTAssertTrue(app.buttons["Add a machine"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["How it works"].exists)
         // Give a cover time to arrive, if one were coming.

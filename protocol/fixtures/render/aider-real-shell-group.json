@@ -1,0 +1,47 @@
+{
+  "name": "aider/real-shell-group",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "aider",
+    "title": "Run shell command?",
+    "body": "echo one",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "echo one"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "No",
+        "role": "deny"
+      },
+      {
+        "n": 3,
+        "label": "Skip all",
+        "role": "deny"
+      },
+      {
+        "n": 4,
+        "label": "Don't ask again",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Aider",
+    "subtitle": "Run shell command?",
+    "body": "echo one",
+    "category": "togo.request"
+  }
+}

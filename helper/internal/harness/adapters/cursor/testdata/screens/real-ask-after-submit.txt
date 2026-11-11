@@ -1,0 +1,24 @@
+      [ ] Formal
+      [x] Casual
+
+    2. Which sections should the README include? (select all that apply)
+    (multi-select)
+      [x] Usage
+      [ ] License
+      [x] Credits
+      [x] Other: FAQ
+
+    Reading, globbing 1 file, 1 glob
+    Reading .cursor/hooks.json
+    Globbing "**/*" in .cursor
+
+ ⠠⠛ Globbing  1.23k tokens
+
+
+  → Add a follow-up                                             ctrl+c to stop
+
+
+  Plan (shift+tab to cycle)
+  Composer 2.5 · 8.2%
+  /Users/jamie/proj · main
+

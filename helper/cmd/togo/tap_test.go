@@ -125,3 +125,65 @@ func TestTapCountsBytes(t *testing.T) {
 		t.Fatalf("total %d, want %d", total, len(data))
 	}
 }
+
+// Output is reported at most once a second, and the last change of a
+// burst is reported too. Seen live on Cline 3.0.74: the key that answered
+// its question was reported with the dialog still drawn, the dialog closed
+// and the reply came within the same second, and Cline drew nothing more;
+// the watcher never read the screen again, so the answered question's
+// prompt stayed pending and the session read "needs you".
+func TestOutputSignalsReportTheEndOfABurst(t *testing.T) {
+	got := make(chan time.Time, 16)
+	o := &outputSignals{every: 50 * time.Millisecond, emit: func() { got <- time.Now() }}
+	defer o.stop()
+	start := time.Now()
+	for range 5 { // a burst inside one interval
+		o.note(time.Now())
+		time.Sleep(5 * time.Millisecond)
+	}
+	select {
+	case <-got: // the burst's first output, at once
+	case <-time.After(time.Second):
+		t.Fatal("no signal for the first output")
+	}
+	select {
+	case at := <-got:
+		if at.Sub(start) < 40*time.Millisecond {
+			t.Fatalf("trailing signal after %v, want one interval", at.Sub(start))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no signal for the end of the burst")
+	}
+	select {
+	case <-got:
+		t.Fatal("a third signal for one burst")
+	case <-time.After(150 * time.Millisecond):
+	}
+	// A lone output after a quiet spell is one signal.
+	o.note(time.Now())
+	select {
+	case <-got:
+	case <-time.After(time.Second):
+		t.Fatal("no signal after quiet")
+	}
+	select {
+	case <-got:
+		t.Fatal("a lone output gave two signals")
+	case <-time.After(150 * time.Millisecond):
+	}
+}
+
+// Once the pipe closed, no signal goes out (the queue is closed).
+func TestOutputSignalsStopCancelsTheTrailingSignal(t *testing.T) {
+	n := make(chan struct{}, 4)
+	o := &outputSignals{every: 30 * time.Millisecond, emit: func() { n <- struct{}{} }}
+	o.note(time.Now())
+	o.note(time.Now())
+	<-n
+	o.stop()
+	select {
+	case <-n:
+		t.Fatal("signal after stop")
+	case <-time.After(100 * time.Millisecond):
+	}
+}

@@ -259,7 +259,8 @@ import TogoMosh
             for agent in DemoAPIFixture.favorites { agentLibrary.toggleFavorite(agent) }
         }
         if LiveDemo.enabled, let replay {
-            let demo = LiveDemo(session: machines.firstSessionID ?? "")
+            let first = machines.firstSession
+            let demo = LiveDemo(session: first?.id ?? "", name: first?.name ?? "", agent: replay.script.agent)
             demo.prepare(appHostID: machines.services.hosts.first?.id)
             demo.onAnswered = { [weak machines] requestID, _ in machines?.answeredElsewhere(requestID) }
             replay.onPlayback = { [weak demo] in demo?.playback($0) }

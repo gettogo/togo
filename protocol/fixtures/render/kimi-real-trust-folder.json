@@ -1,0 +1,37 @@
+{
+  "name": "kimi/real-trust-folder",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "kimi",
+    "title": "Trust this folder?",
+    "body": "/tmp/w/proj",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "file",
+      "text": "…/w/proj"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Trust and continue",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Exit",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Kimi Code",
+    "subtitle": "Trust this folder?",
+    "body": "…/w/proj",
+    "category": "togo.request"
+  }
+}

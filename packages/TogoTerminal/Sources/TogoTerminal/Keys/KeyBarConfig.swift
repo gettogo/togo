@@ -1,5 +1,8 @@
 import Foundation
 
+// The key bar this described is gone (`TerminalKeysConfig` replaced it); the type stays so
+// settings saved by older builds, and synced from them, still decode and migrate.
+
 public struct KeyBarItem: Hashable, Codable, Sendable, Identifiable {
     public var id: UUID
     /// A word, also the accessibility label when `symbol` is set.
@@ -92,14 +95,5 @@ extension KeyBarItem {
         // A preset that fails to parse is a programming error caught by the preset tests.
         let steps = (try? KeySequence.parse(sequence)) ?? []
         return KeyBarItem(title: title, symbol: symbol, action: .steps(steps))
-    }
-}
-
-/// An element that decodes to nil instead of failing its array.
-private struct Droppable<Value: Decodable>: Decodable {
-    var value: Value?
-
-    init(from decoder: any Decoder) throws {
-        value = try? Value(from: decoder)
     }
 }

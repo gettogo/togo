@@ -20,7 +20,11 @@ import UserNotifications
     static let localAnswers = "ui.demo.liveAnswers"
     static let hostId = "h_demo"
 
-    private let agent = "claude"
+    /// The recorded session's agent, from its harness (`ReplayScript.agent`).
+    private let agent: String
+    private let agentName: String
+    /// The session's name in the list, as its notifications name it.
+    private let name: String
     private let bib = "01"
     private let session: String
     private let directory = SharedGroup.storeDirectory(SharedGroup.ios)
@@ -34,8 +38,11 @@ import UserNotifications
     /// The control center answered the request the island approved.
     var onAnswered: ((String, String) -> Void)?
 
-    init(session: String) {
+    init(session: String, name: String, agent: ReplayScript.Agent?) {
         self.session = session
+        self.name = name
+        self.agent = agent?.id ?? "shell"
+        agentName = agent?.name ?? AgentCatalog.name(self.agent) ?? self.agent
     }
 
     /// Pairs the demo machine and asks for notifications, before anything is recorded.
@@ -45,7 +52,7 @@ import UserNotifications
         let hostKey = Base64URL.encode(Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation)
         PairingStore(directory: directory).put(Pairing(
             hostId: Self.hostId, hostKey: hostKey, relayURL: URL(string: "https://relay.invalid")!,
-            machineName: "Studio", appHostID: appHostID, pairedAt: Date(), tokenHash: "demo00",
+            machineName: Samples.studioName, appHostID: appHostID, pairedAt: Date(), tokenHash: "demo00",
             liveActivityCommand: true
         ))
         if let appHostID, let data = try? JSONEncoder().encode([appHostID]) {
@@ -61,7 +68,7 @@ import UserNotifications
         case .released("harness.send"):
             sends += 1
             update(status: "working", context: LiveContext(title: nil, step: nil))
-        case .released("approval.answer"):
+        case .released("approval.answer"), .released("harness.action:answer"):
             waiting = nil
             update(status: "working", context: LiveContext())
         case .event(let event):
@@ -70,7 +77,9 @@ import UserNotifications
             case "notify": notified(event["notify"] ?? event["payload"] ?? event)
             default: break
             }
-        case .finished(let trigger) where (trigger == "approval.answer" || trigger == "harness.send") && waiting == nil:
+        // A request answered from the island releases the recording's own answer: an approval's,
+        // or a question's (OpenCode's permissions).
+        case .finished(let trigger) where ["approval.answer", "harness.action:answer", "harness.send"].contains(trigger) && waiting == nil:
             finish()
         default:
             break
@@ -103,13 +112,13 @@ import UserNotifications
         if let directory {
             PendingStore(directory: directory, clock: { Date() }).upsert(PendingRequest(
                 requestId: approval.requestId, hostId: Self.hostId, sessionId: session, bib: bib, agent: agent,
-                host: "Studio", title: approval.title, subject: subject, options: [], receivedAt: Date(),
+                host: Samples.studioName, title: approval.title, subject: subject, options: [], receivedAt: Date(),
                 answered: nil
             ))
         }
         let context = LiveContext(ask: approval.title, subject: subject, answer: .approveDeny)
         let alert = AlertConfiguration(
-            title: "Claude Code needs you", body: LocalizedStringResource(stringLiteral: subject?.text ?? approval.title),
+            title: LocalizedStringResource(stringLiteral: "\(agentName) needs you"), body: LocalizedStringResource(stringLiteral: subject?.text ?? approval.title),
             sound: .default
         )
         update(status: "needs_you", context: context, requestId: approval.requestId, command: subject?.text, alert: alert)
@@ -151,7 +160,7 @@ import UserNotifications
         let payload = PushPayload(
             kind: .done, sessionId: session, bib: bib, agent: agent, title: summary?.title ?? "Finished",
             body: summary?.body ?? "Finished", ts: Int64(Date().timeIntervalSince1970 * 1000),
-            sessionName: "api"
+            sessionName: name
         )
         guard let text = NotificationTextBuilder.build(payload, hostId: Self.hostId) else { return }
         let content = UNMutableNotificationContent()

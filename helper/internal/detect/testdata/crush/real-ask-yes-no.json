@@ -1,0 +1,30 @@
+{
+  "source": "real",
+  "agentVersion": "0.100.0",
+  "match": true,
+  "kind": "question",
+  "title": "Delete the notes file?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Left",
+      "Enter"
+    ],
+    "2": [
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

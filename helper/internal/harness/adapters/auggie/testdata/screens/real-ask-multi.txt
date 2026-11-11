@@ -1,0 +1,30 @@
+                                    by HARNESS
+ send us feedback — use /feedback. You might just see it happen next release
+
+
+ Indexing disabled for current workspace "/Users/jamie/proj".
+
+ Warning: tmux extended-keys is off. Modified Enter keys may not work. Add `set
+ -g extended-keys on` to ~/.tmux.conf and restart tmux.
+
+────────────────────────────────────────────────────────────────────────────────
+
+  Platforms
+
+ Which platforms should we support?
+
+❯ 1. [ ] iOS
+  iPhone and iPad
+  2. [ ] macOS
+  Desktop
+  3. [ ] Linux
+  Servers
+  Submit
+
+────────────────────────────────────────────────────────────────────────────────
+
+  4. Chat about this
+
+ Enter to select · ↑/↓ to navigate · Space to toggle · Esc to cancel
+/Users/jamie/proj (main)
+0.8%/1.0M (estimated) (auto)                            Claude Opus 5.5 • medium

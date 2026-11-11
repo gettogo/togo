@@ -40,15 +40,16 @@ enum WatchFixtures {
     private static var requests: [PushPayload] {
         let ts = Int64(Date().timeIntervalSince1970 * 1000)
         return [
+            // The recorded OpenCode session on the status page, asking to run its checks: a
+            // permission as the helper offers it, Allow once and Deny.
             PushPayload(
-                kind: .needsYou, sessionId: "s_1", bib: "04", agent: "claude", host: "studio",
-                title: "Allow this command to run?", body: "", requestId: "r_1",
+                kind: .needsYou, sessionId: "s_1", bib: "01", agent: "opencode", host: "studio",
+                title: "Allow shell: npm run typecheck, npm test", body: "", requestId: "r_1",
                 options: [
-                    PushOption(n: 1, label: "Yes", role: "approve"),
-                    PushOption(n: 2, label: "Yes, and don't ask again", role: "approve_always"),
-                    PushOption(n: 3, label: "No", role: "deny"),
+                    PushOption(n: 1, label: "Allow once", role: "approve"),
+                    PushOption(n: 2, label: "Deny", role: "deny"),
                 ],
-                subject: PushSubject(kind: "command", text: "npm run test -- --filter api/sessions"), ts: ts - 90_000
+                ts: ts - 90_000, sessionName: "status"
             ),
             PushPayload(
                 kind: .needsYou, sessionId: "s_2", bib: "17", agent: "codex", host: "studio",
@@ -60,12 +61,10 @@ enum WatchFixtures {
     }
 
     private static let sessions = [
-        WatchSession(hostName: "Studio", bib: "04", agentName: "Claude Code", status: "needs_you", activity: nil),
+        WatchSession(hostName: "Studio", bib: "01", agentName: "OpenCode", status: "needs_you", activity: nil),
         WatchSession(hostName: "Studio", bib: "17", agentName: "Codex", status: "needs_you", activity: nil),
-        WatchSession(
-            hostName: "Studio", bib: "21", agentName: "Claude Code", status: "working", activity: "Running the test suite"
-        ),
-        WatchSession(hostName: "Build box", bib: "03", agentName: "OMP", status: "done", activity: nil),
+        WatchSession(hostName: "Studio", bib: "07", agentName: "omp", status: "working", activity: "Running go test ./..."),
+        WatchSession(hostName: "Build box", bib: "03", agentName: "Pi", status: "done", activity: nil),
         WatchSession(hostName: "Build box", bib: "08", agentName: "Codex", status: "idle", activity: nil),
     ]
 }

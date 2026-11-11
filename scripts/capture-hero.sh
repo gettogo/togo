@@ -1,6 +1,6 @@
 #!/bin/bash
-# Records the website's hero: the real app in the simulator playing the recorded Claude Code
-# session (replay-demo), driven by TogoUITests/HeroCaptureUITests, screen-recorded with
+# Records the website's hero: the real app in the simulator playing the recorded OpenCode
+# session on the status page (replay-status), driven by TogoUITests/HeroCaptureUITests, screen-recorded with
 # `simctl io recordVideo`. The test plays the first turn off camera and writes `ready`; the
 # recording starts, this writes `go`; the test writes `done` at the end.
 #
@@ -10,7 +10,10 @@
 # shared queue (build-lock.sh) once, waits until no other build or test run is going, erases and
 # boots the simulator fresh, and plays the story once off the record (WARMUPS=1) before the take.
 # TAKES=n records n takes and keeps the smoothest (scripts/hero-smoothness.py scores them). Builds into
-# apps/ios/DerivedData-hero; the simulator is shut down at the end.
+# apps/ios/DerivedData-hero (DERIVED overrides); the simulator is shut down at the end.
+# STILLS=<folder> instead runs testHeroStills and testHeroStillsLock once, unrecorded, and leaves
+# the app's and the Lock Screen's frames the hero rests on (hero-*.png) in that folder, for the
+# website's fidelity tests.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 ios="$root/apps/ios"
@@ -20,12 +23,13 @@ SIM=${SIM:-iPhone 18 Pro}
 WARMUPS=${WARMUPS:-1}
 TAKES=${TAKES:-1}
 LOCK=${LOCK:-${TOGO_BUILD_LOCK:-}}
-dd="$ios/DerivedData-hero"
+dd=${DERIVED:-$ios/DerivedData-hero}
+STILLS=${STILLS:-}
 mkdir -p "$(dirname "$out")"
 
 if [ -z "${HERO_LOCK_HELD:-}" ]; then
   (cd "$ios" && xcodegen generate --quiet)
-  HERO_LOCK_HELD=1 exec "$LOCK" hero-capture -- "$0" "$out"
+  HERO_LOCK_HELD=1 STILLS="$STILLS" DERIVED="$dd" exec "$LOCK" hero-capture -- "$0" "$out"
 fi
 
 # Waits until nothing else heavy runs (another agent's build or test), three checks in a row.
@@ -68,6 +72,17 @@ xcrun simctl ui "$udid" appearance dark
 xcrun simctl status_bar "$udid" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
   --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 sleep 30
+
+if [ -n "$STILLS" ]; then
+  mkdir -p "$STILLS"
+  TEST_RUNNER_TOGO_HERO_DIR="$STILLS" xcodebuild test-without-building -xctestrun "$run" -destination "id=$udid" \
+    -only-testing:TogoUITests/HeroCaptureUITests/testHeroStills -only-testing:TogoUITests/HeroCaptureUITests/testHeroStillsLock \
+    -parallel-testing-enabled NO >"$STILLS/test.log" 2>&1 \
+    || { grep -E "error|failed|XCTAssert" "$STILLS/test.log" | tail -10; }
+  grep -E "Test Case .*(passed|failed)" "$STILLS/test.log" || true
+  ls "$STILLS"/*.png 2>/dev/null
+  exit 0
+fi
 
 # One pass of the story; records to $1.
 take() {

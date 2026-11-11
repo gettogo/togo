@@ -31,7 +31,8 @@ import XCTest
     func testEachControlShowsOnce() {
         let app = launchTogo()
         XCTAssertTrue(app.buttons["roster.settings"].waitForExistence(timeout: 10))
-        assertTappable(app.rosterMenu)
+        // A system bar item reports its glyph's frame, not its touch area.
+        XCTAssertTrue(app.rosterMenu.isHittable)
         let wide = app.windows.firstMatch.frame.width >= 700
         XCTAssertEqual(app.buttons.matching(identifier: "roster.newSession").count, wide ? 0 : 1, "New session is not where it belongs")
         for id in ["roster.settings", "roster.filter"] {
@@ -91,8 +92,10 @@ import XCTest
     func testDebugOpensFromAboutAndCloses() throws {
         let app = launchTogo()
         app.pickFromRosterMenu("Settings")
-        let about = app.buttons["About"]
+        // The row reads "About, 0.1.0 (1)": its title, then the version.
+        let about = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'About'")).firstMatch
         XCTAssertTrue(about.waitForExistence(timeout: 5))
+        if !about.isHittable { app.swipeUp() }
         about.tap()
         let developer = app.buttons["Developer"]
         XCTAssertTrue(developer.waitForExistence(timeout: 5))

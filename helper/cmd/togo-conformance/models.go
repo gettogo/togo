@@ -177,8 +177,10 @@ func fileContains(p, s string) bool {
 // listed) and returns the model of the last reply they record. strong is
 // false when the only model found sits on a record that is not a reply
 // (a model-change record), which says what was asked for, not what ran.
+// A record of the assistant's own message wins over other replies: Copilot
+// CLI also records its side calls (titles, summaries) on a nano model.
 func modelSince(files map[string]int64, before map[string]int64) (model string, strong bool) {
-	var lastStrong, lastAny string
+	var lastAssistant, lastStrong, lastAny string
 	paths := make([]string, 0, len(files))
 	for p := range files {
 		paths = append(paths, p)
@@ -212,15 +214,21 @@ func modelSince(files map[string]int64, before map[string]int64) (model string, 
 			if json.Unmarshal(d, &v) != nil {
 				continue
 			}
-			walkModels(v, false, func(m string, reply bool) {
-				if reply {
+			walkModels(v, noReply, func(m string, kind int) {
+				switch kind {
+				case assistantReply:
+					lastAssistant, lastStrong = m, m
+				case otherReply:
 					lastStrong = m
 				}
 				lastAny = m
 			})
 		}
 	}
-	if lastStrong != "" {
+	switch {
+	case lastAssistant != "":
+		return lastAssistant, true
+	case lastStrong != "":
 		return lastStrong, true
 	}
 	return lastAny, false
@@ -228,19 +236,32 @@ func modelSince(files map[string]int64, before map[string]int64) (model string, 
 
 var modelKeys = map[string]bool{"model": true, "modelID": true, "modelId": true, "model_id": true, "modelName": true}
 
+// What a model id sits on.
+const (
+	noReply        = iota
+	otherReply     // an object with usage, a turn context, a model call
+	assistantReply // the assistant's own message
+)
+
 // walkModels calls fn for every model id in v, in document order, saying
-// whether it sits on a reply (an object with usage, or role/type
-// assistant, or under such an object).
-func walkModels(v any, inReply bool, fn func(string, bool)) {
+// what it sits on: the assistant's message (role or type assistant), another
+// reply (an object with usage, type turn_context, gemini or model), or
+// neither; an object under one inherits it.
+func walkModels(v any, in int, fn func(string, int)) {
 	switch x := v.(type) {
 	case map[string]any:
-		reply := inReply
-		if _, ok := x["usage"]; ok {
-			reply = true
+		kind := in
+		if _, ok := x["usage"]; ok && kind < otherReply {
+			kind = otherReply
 		}
 		for _, k := range []string{"role", "type"} {
-			if s, ok := x[k].(string); ok && (s == "assistant" || s == "turn_context" || s == "gemini" || s == "model") {
-				reply = true
+			switch s, _ := x[k].(string); s {
+			case "assistant", "assistant.message":
+				kind = assistantReply
+			case "turn_context", "gemini", "model":
+				if kind < otherReply {
+					kind = otherReply
+				}
 			}
 		}
 		keys := make([]string, 0, len(x))
@@ -251,15 +272,15 @@ func walkModels(v any, inReply bool, fn func(string, bool)) {
 		for _, k := range keys {
 			if modelKeys[k] {
 				if s, ok := x[k].(string); ok && s != "" && !strings.HasPrefix(s, "<") {
-					fn(s, reply)
+					fn(s, kind)
 				}
 				continue
 			}
-			walkModels(x[k], reply, fn)
+			walkModels(x[k], kind, fn)
 		}
 	case []any:
 		for _, e := range x {
-			walkModels(e, inReply, fn)
+			walkModels(e, in, fn)
 		}
 	}
 }

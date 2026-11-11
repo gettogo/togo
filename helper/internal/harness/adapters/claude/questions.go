@@ -27,6 +27,10 @@ func (t *transcript) questionResult(e entry, b block, q *harness.Item) []harness
 	for _, qu := range body.Questions {
 		body.Answered[qu.ID] = answerIDs(qu, res.Answers[qu.Prompt])
 	}
+	if body.Approve == "manual" && len(body.Questions) == 1 && body.Questions[0].ID == "plan" && !b.IsError {
+		// ExitPlanMode's result says the plan was approved, not which yes.
+		body.Answered["plan"] = []string{"Yes"}
+	}
 	it.Question = &body
 	return []harness.Item{it}
 }

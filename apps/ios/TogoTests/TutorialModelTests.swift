@@ -165,32 +165,34 @@ import TogoKit
     }
 
     @Test func demoNeverConnects() async throws {
-        let demo = DemoMachine.store(now: Samples.now)
-        let services = try #require(demo.services as? DemoServices)
+        let visit = DemoVisit(now: Samples.now)
+        let demo = visit.store
+        let services = visit.services
         let machine = try #require(demo.controlCenter.machines.first)
         #expect(machine.name == "Demo")
         #expect(services.hosts.map(\.address) == [""])
+        #expect(demo.controlCenter.requests.isEmpty)
         let row = try #require(machine.sessions.first)
-        let card = try #require(demo.controlCenter.requests.first)
 
-        await demo.answer(card.id, .approve)
         await demo.kill(row)
-        await demo.rename(row, to: "renamed")
-        await demo.setMute(row, true)
+        // The terminal is drawn on the phone: live at once, with no connection behind it.
         let handle = services.terminal(hostID: machine.id, sessionID: row.id, transport: nil, userStarted: true)
-        var phases: [LinkPhase] = []
-        for await phase in handle.phases { phases.append(phase) }
-        await #expect(throws: DemoServices.ReadOnly.self) {
-            try await services.saveHost(HostRecord(
-                id: machine.id, profile: HostProfile(
-                    id: machine.id, name: "Demo", endpoint: HostEndpoint(host: "demo", port: 22, user: "demo"), auth: .password
-                ), symbol: "laptop", helperPath: nil, noHelper: true
-            ))
-        }
+        var phases = handle.phases.makeAsyncIterator()
+        let first = await phases.next()
+        #expect(first == .live(transport: DemoTerminal.transport, note: nil))
+        handle.stop()
 
-        #expect(services.attempts == [.answer, .kill, .rename, .setMute, .terminal, .saveHost])
-        #expect(!phases.contains { if case .live = $0 { true } else { false } })
-        #expect(demo.controlCenter.requests.first?.phase == .open)
+        #expect(services.attempts == [.kill, .terminal])
         #expect(demo.controlCenter.machines.first?.sessions.first?.name == row.name)
+        visit.end()
+    }
+
+    /// TipKit's record is the whole app's and the demo's ids match the real ones, so the demo
+    /// shows no tip and puts none away: leaving it, the first real workspace still teaches.
+    @Test func theDemoNeitherShowsNorPutsAwayTips() {
+        #expect(TutorialTip.shows(inDemo: false))
+        #expect(!TutorialTip.shows(inDemo: true))
+        #expect(AppStore(services: FakeAppServices()).teachesTips)
+        #expect(!DemoVisit(pace: 0.01).store.teachesTips)
     }
 }

@@ -1,0 +1,24 @@
+
+  Plan a hello.txt file. Before anything else, ask me one question with
+  your question tool: greeting word, options Hi / Hello. Do not read any
+  files.
+
+
+  Asking your greeting preference first, then we'll plan hello.txt.
+
+ ┌────────────────────────────────────────────────────────────────────────────┐
+ │ hello.txt greeting                                                         │
+ │                                                                            │
+ │ Question 1 of 1                                                            │
+ │                                                                            │
+ │ 1. Which greeting word should hello.txt use?                               │
+ │                                                                            │
+ │   › [ ] Hi                                                                 │
+ │     [ ] Hello                                                              │
+ │     [ ] Other: (type to answer)                                            │
+ │                                                                            │
+ │ ↑/↓ option · ←/→ question · Space select · Enter next/submit · Esc to skip │
+ └────────────────────────────────────────────────────────────────────────────┘
+
+
+

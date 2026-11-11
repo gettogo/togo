@@ -162,7 +162,9 @@ struct MachinesSettingsView: View {
                 }
                 .frame(minHeight: 44)
             } footer: {
-                Text(settingsText("settings.machines.footer", "Tap a machine to edit it. Swipe left to remove it."))
+                SectionFooter {
+                    Text(settingsText("settings.machines.footer", "Tap a machine to edit it. Swipe left to remove it."))
+                }
             }
             .groupedRows()
             let unpairing = removing.filter { $0.kind == .unpair }
@@ -208,10 +210,12 @@ private struct PendingRemovalsSection: View {
                 .frame(minHeight: 44)
             }
         } footer: {
-            Text(settingsText(
-                "settings.machines.forgetNow.footer",
-                "After Forget now, notifications may continue until you run togo devices revoke on that machine."
-            ))
+            SectionFooter {
+                Text(settingsText(
+                    "settings.machines.forgetNow.footer",
+                    "After Forget now, notifications may continue until you run togo devices revoke on that machine."
+                ))
+            }
         }
         .groupedRows()
     }
@@ -272,8 +276,10 @@ private struct PendingKeySection: View {
             .padding(.vertical, 4)
             .frame(minHeight: 44)
         } footer: {
-            if let footer = removal.footer {
-                Text(footer)
+            SectionFooter {
+                if let footer = removal.footer {
+                    Text(footer)
+                }
             }
         }
         .groupedRows()

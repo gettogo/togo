@@ -13,7 +13,7 @@ type harnessItem = harness.Item
 
 var heads = map[string]string{
 	"create": "create", "trust": "trust", "signin": "signin", "first_turn": "turn", "working": "working",
-	"model_switch": "model", "mode": "mode", "effort": "effort", "approval": "approval",
+	"model_switch": "model", "mode": "mode", "effort": "effort", "approval": "approval", "question": "question",
 	"interrupt": "intr", "slash": "slash", "restore": "restore", "close": "close",
 }
 

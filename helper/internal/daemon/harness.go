@@ -66,6 +66,8 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		Logf:       c.logf,
 	})
 	c.Hub.SetMission(eng.Summary)
+	c.Watch.SetTurnRunning(eng.TurnRunning)
+	c.Watch.SetNeedsYou(eng.NeedsYou)
 	c.Hub.OnEvent(eng.Observe)
 	source.Hooks.OnDeliver = eng.Delivered
 	c.Local.Harness = deliverHook

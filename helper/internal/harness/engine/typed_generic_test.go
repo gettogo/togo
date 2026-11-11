@@ -83,3 +83,37 @@ func TestGenericTypedCommandTaken(t *testing.T) {
 		t.Fatalf("enters %d submitted %q", p.enters, p.submitted)
 	}
 }
+
+// A footer's "/ commands" key hint is no command: Copilot CLI 1.0.107 drew
+// "· / commands   Claude Haiku 5.5" under a /model it had taken, and the
+// switch was reported as changed to another command.
+func TestRowCommandSkipsKeyHints(t *testing.T) {
+	for row, want := range map[string]string{
+		" ← open sidebar · Interactive · Manual Approval · / commands   Claude Haiku 5.5": "",
+		"❯ /model claude-haiku-4.5": "/model claude-haiku-4.5",
+		"│ /login amazon-bedrock │":  "/login amazon-bedrock",
+		"/":                         "",
+	} {
+		if got := rowCommand(row); got != want {
+			t.Errorf("rowCommand(%q) = %q, want %q", row, got, want)
+		}
+	}
+}
+
+// Goose keeps a sent line on screen as "> /mode chat" and draws a fresh
+// "> " input line under its reply: the command was taken, and no second
+// Enter goes in. A line still at the bottom with nothing under it is not.
+func TestNewPromptBelowTheEcho(t *testing.T) {
+	taken := []string{"> Reply with only the word ok.", "ok", "> /mode chat", "", "mode: Goose mode set to 'chat'",
+		"  ━━━━╌╌╌╌ 21% 14k/66k", "> Enter to send · Ctrl+J newline"}
+	if !newPromptBelow(taken, 2, "/mode chat") {
+		t.Fatal("goose's fresh input line was not seen")
+	}
+	waiting := []string{"> Reply with only the word ok.", "ok", "> /mode chat", "  /mode   Set the goose mode"}
+	if newPromptBelow(waiting, 2, "/mode chat") {
+		t.Fatal("a popup row counted as a new input line")
+	}
+	if newPromptBelow([]string{"/mode chat", "/mode chat x"}, 0, "/mode chat") {
+		t.Fatal("a row with no prompt mark")
+	}
+}

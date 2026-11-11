@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
@@ -316,5 +317,44 @@ func TestWriteConfinedOutsideHome(t *testing.T) {
 	}
 	if _, err := confineWrite("~/ok.json", env); err != nil {
 		t.Fatal(err)
+	}
+}
+
+type flagMapper struct {
+	harness.Mapper
+	argv []string
+}
+
+func (f *flagMapper) Relaunched(argv []string, _ time.Time) []harness.Op {
+	f.argv = argv
+	return []harness.Op{{Op: harness.OpStatus, Status: &harness.StatusBlock{Effort: argv[len(argv)-1]}}}
+}
+
+// A mapper that reads state from the relaunch flags gets the argv the
+// agent was restarted with (Pi records no --thinking given on a resume).
+func TestRelaunchTellsMappersTheFlags(t *testing.T) {
+	const id = "s_relaunch02"
+	e := newSeq(t, id, &seqPane{mode: "a"}, func(context.Context, string, []string) error { return nil })
+	s, _ := e.served(context.Background(), id)
+	fm := &flagMapper{}
+	s.mu.Lock()
+	for name, m := range s.mappers {
+		fm.Mapper = m
+		s.mappers[name] = fm
+		break
+	}
+	s.mu.Unlock()
+	if fm.Mapper == nil {
+		t.Fatal("the fake adapter has no mapper")
+	}
+	act := spec.Action{Routes: spec.Routes{Relaunch: &spec.Relaunch{Argv: []string{"fake", "--thinking", "{{.id}}"}}}, Stability: "documented"}
+	if res, err := e.run(context.Background(), s, "x", act, map[string]any{"id": "low"}); err != nil || res.Result != harness.ResultRelaunched {
+		t.Fatalf("relaunch = %+v %v", res, err)
+	}
+	s.mu.Lock()
+	got := strings.Join(fm.argv, " ")
+	s.mu.Unlock()
+	if got != "fake --thinking low" {
+		t.Fatalf("mapper saw %q", got)
 	}
 }

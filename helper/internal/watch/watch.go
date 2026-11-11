@@ -82,8 +82,12 @@ type Config struct {
 type Watcher struct {
 	cfg  Config
 	idle time.Duration
-	home string
-	now  func() time.Time
+	// turnRunning, when set, reports that the agent's own feed (its server's
+	// event stream) sees its turn still running; see SetTurnRunning.
+	turnRunning func(id string) bool
+	needsYou    func(id string) bool
+	home        string
+	now         func() time.Time
 
 	// Seams for tests; New binds them to tmux and the session service.
 	list    func(context.Context) ([]session.Session, error)
@@ -162,6 +166,43 @@ func (w *Watcher) SetIdle(d time.Duration) {
 	w.mu.Lock()
 	w.idle = d
 	w.mu.Unlock()
+}
+
+// SetTurnRunning installs the reader for a harness feed's word on a
+// session's turn. A model that thinks for minutes without streaming leaves
+// the pane silent mid-turn; while the feed says the turn runs, that silence
+// is no done (see settle). Feeds that hooks deliver are not asked: their
+// turn can miss its Stop, and the pane going idle is what ends it.
+func (w *Watcher) SetTurnRunning(fn func(id string) bool) {
+	w.mu.Lock()
+	w.turnRunning = fn
+	w.mu.Unlock()
+}
+
+// SetNeedsYou installs the reader for whether a question or approval of a
+// session waits for the user. While one does, its silent pane is never
+// called done or idle, and no time limit turns the wait into a done.
+func (w *Watcher) SetNeedsYou(fn func(id string) bool) {
+	w.mu.Lock()
+	w.needsYou = fn
+	w.mu.Unlock()
+}
+
+// waitsOnUser reports whether a question or approval of the session waits.
+func (w *Watcher) waitsOnUser(id string) bool {
+	w.mu.Lock()
+	fn := w.needsYou
+	w.mu.Unlock()
+	return fn != nil && fn(id)
+}
+
+// feedWorking reports whether the session's harness feed sees its turn
+// still running.
+func (w *Watcher) feedWorking(id string) bool {
+	w.mu.Lock()
+	fn := w.turnRunning
+	w.mu.Unlock()
+	return fn != nil && fn(id)
 }
 
 func (w *Watcher) idleWindow() time.Duration {

@@ -22,7 +22,7 @@ extension AppStore {
         guard !zen else { return }
         focusPane(showing: id)
         attaching = id
-        TutorialTip.workspace.done()
+        tipDone(.workspace)
     }
 
     /// A pasted image goes to the tab's image flow, which uploads it or, on a machine that

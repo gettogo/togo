@@ -60,16 +60,18 @@ struct MachineForm: View {
             } header: {
                 SectionHeading(String(localized: "onboard.form.signIn", defaultValue: "Sign in with"))
             } footer: {
-                if draft.auth == .deviceKey {
-                    note(String(
-                        localized: "onboard.form.deviceKeyNote",
-                        defaultValue: "The key is made on this device and never leaves it. You add its public half to the machine."
-                    ))
-                } else if draft.auth == .password, draft.savePassword {
-                    note(String(
-                        localized: "onboard.form.savePasswordNote",
-                        defaultValue: "Kept in this \(DeviceName.model)'s keychain behind \(BiometryName.current), never synced. Without it, Togo asks each time it signs in."
-                    ))
+                SectionFooter {
+                    if draft.auth == .deviceKey {
+                        note(String(
+                            localized: "onboard.form.deviceKeyNote",
+                            defaultValue: "The key is made on this device and never leaves it. You add its public half to the machine."
+                        ))
+                    } else if draft.auth == .password, draft.savePassword {
+                        note(String(
+                            localized: "onboard.form.savePasswordNote",
+                            defaultValue: "Kept in this \(DeviceName.model)'s keychain behind \(BiometryName.current), never synced. Without it, Togo asks each time it signs in."
+                        ))
+                    }
                 }
             }
             .groupedRows()

@@ -36,7 +36,21 @@ func newSandbox(root, runID, harness string) (*sandbox, error) {
 			return nil, err
 		}
 	}
+	for name, body := range projectFiles[harness] {
+		if err := os.WriteFile(filepath.Join(sb.work, name), []byte(body), 0o600); err != nil {
+			return nil, err
+		}
+	}
 	return sb, nil
+}
+
+// projectFiles are written into a harness's scratch folder before its
+// session starts: project settings that live and die with the folder, never
+// the user's own config. OpenCode runs shell commands without asking unless
+// told to, so the approval scenario would only ever see it skip; a project
+// opencode.json (merged over the user's) makes bash ask.
+var projectFiles = map[string]map[string]string{
+	"opencode": {"opencode.json": `{"$schema": "https://opencode.ai/config.json", "permission": {"bash": "ask"}}` + "\n"},
 }
 
 func labelPrefix(runID string) string { return "tc-" + runID + "-" }

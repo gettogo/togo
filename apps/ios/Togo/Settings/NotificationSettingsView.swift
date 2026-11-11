@@ -63,6 +63,8 @@ struct NotificationMachine: Identifiable, Equatable, Sendable {
 }
 
 struct NotificationSettingsView: View {
+    /// In the demo there is nothing to turn on: notifications come from a paired machine.
+    @Environment(\.demoExit) private var demoExit
     let settings: AppSettings
     let notifications: NotificationValues
     let update: (AppSettings) -> Void
@@ -104,10 +106,12 @@ struct NotificationSettingsView: View {
                     Toggle(settingsText("settings.notifications.live", "Live Activities"), isOn: settings.binding(\.liveActivities, update))
                         .frame(minHeight: 44)
                 } footer: {
-                    Text(settingsText(
-                        "settings.notifications.live.footer",
-                        "Shows what each machine is doing on the Lock Screen and in the Dynamic Island."
-                    ))
+                    SectionFooter {
+                        Text(settingsText(
+                            "settings.notifications.live.footer",
+                            "Shows what each machine is doing on the Lock Screen and in the Dynamic Island."
+                        ))
+                    }
                 }
                 .groupedRows()
             }
@@ -118,10 +122,12 @@ struct NotificationSettingsView: View {
                 )
                 .frame(minHeight: 44)
             } footer: {
-                Text(settingsText(
-                    "settings.notifications.approveUnlocked.footer",
-                    "Anyone holding your locked \(DeviceName.model) could approve commands."
-                ))
+                SectionFooter {
+                    Text(settingsText(
+                        "settings.notifications.approveUnlocked.footer",
+                        "Anyone holding your locked \(DeviceName.model) could approve commands."
+                    ))
+                }
             }
             .groupedRows()
             Section {
@@ -176,10 +182,16 @@ struct NotificationSettingsView: View {
                 }
                 .frame(minHeight: 44)
             case .notDetermined:
-                Button(settingsText("settings.notifications.turnOn", "Turn on"), action: turnOn)
-                    .frame(minHeight: 44)
+                if demoExit == nil {
+                    Button(settingsText("settings.notifications.turnOn", "Turn on"), action: turnOn)
+                        .frame(minHeight: 44)
+                }
             case .authorized, .provisional:
                 EmptyView()
+            }
+        } footer: {
+            if demoExit != nil, notifications.authorization == .notDetermined {
+                Text(DemoCopy.notifications)
             }
         }
         .groupedRows()
@@ -224,18 +236,20 @@ struct NotificationSettingsView: View {
         } header: {
             heading(settingsText("settings.notifications.relay", "Relay"))
         } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                if relayInvalid {
-                    Label(
-                        settingsText("settings.notifications.relay.invalid", "Use an https address, like https://relay.example.com."),
-                        systemImage: "exclamationmark.circle"
-                    )
-                    .foregroundStyle(Color.togoSnow)
+            SectionFooter {
+                VStack(alignment: .leading, spacing: 6) {
+                    if relayInvalid {
+                        Label(
+                            settingsText("settings.notifications.relay.invalid", "Use an https address, like https://relay.example.com."),
+                            systemImage: "exclamationmark.circle"
+                        )
+                        .foregroundStyle(Color.togoSnow)
+                    }
+                    Text(settingsText(
+                        "settings.notifications.relay.footer",
+                        "Notifications are sealed on your machine and your answers on this \(DeviceName.model), so the relay can't read either. It does see when they're sent, this \(DeviceName.model)'s push address, and each Live Activity's status: session number, agent, state, how many requests wait, when it started and the request's id."
+                    ))
                 }
-                Text(settingsText(
-                    "settings.notifications.relay.footer",
-                    "Notifications are sealed on your machine and your answers on this \(DeviceName.model), so the relay can't read either. It does see when they're sent, this \(DeviceName.model)'s push address, and each Live Activity's status: session number, agent, state, how many requests wait, when it started and the request's id."
-                ))
             }
         }
         .groupedRows()

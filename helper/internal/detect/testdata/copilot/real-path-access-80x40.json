@@ -1,0 +1,44 @@
+{
+  "agentVersion": "1.0.108",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "Escape"
+    ]
+  },
+  "kind": "permission",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, and remember this path for this session",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Yes, allow Copilot to read files in the listed directory for this session",
+      "role": "approve_always"
+    },
+    {
+      "n": 4,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Do you want to allow this?"
+}

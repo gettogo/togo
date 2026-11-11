@@ -1,0 +1,40 @@
+{
+  "source": "real",
+  "agentVersion": "1.57.0",
+  "match": true,
+  "kind": "question",
+  "title": "colour (Banner colour)",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "red",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "green",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "blue",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "red",
+      "Enter"
+    ],
+    "2": [
+      "green",
+      "Enter"
+    ],
+    "3": [
+      "blue",
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

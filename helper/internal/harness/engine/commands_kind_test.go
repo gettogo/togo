@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
-	_ "github.com/gettogo/togo/helper/internal/harness/adapters/auggie"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/codex"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/crush"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/kilo"
@@ -32,14 +31,6 @@ var commandTable = map[string]map[string]cmdWant{
 		"tokens": {kind: spec.CommandTerminal},
 		"clear":  {kind: spec.CommandRun, role: spec.RoleDestructive},
 		"run":    {kind: spec.CommandArgs}, "test": {kind: spec.CommandArgs},
-	},
-	"auggie": {
-		"model": {kind: spec.CommandPicker},
-		"ask":   {kind: spec.CommandChoice, action: "set_mode"}, "plan": {kind: spec.CommandChoice, action: "set_mode"},
-		"agents": {kind: spec.CommandTerminal}, "task": {kind: spec.CommandTerminal},
-		"diffs":   {kind: spec.CommandRun, opens: spec.OpensChanges},
-		"context": {kind: spec.CommandTerminal}, "stats": {kind: spec.CommandTerminal},
-		"sessions": {kind: spec.CommandPicker},
 	},
 	"cline": {"resume": {kind: spec.CommandPicker}},
 	"codex": {

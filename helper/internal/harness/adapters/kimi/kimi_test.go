@@ -129,15 +129,11 @@ func TestRecordedQuestion(t *testing.T) {
 	if q.Question == nil || len(q.Question.Questions) != 1 || len(q.Question.Questions[0].Options) != 4 || len(q.Question.Answered["0"]) != 1 {
 		t.Fatalf("question %+v", q.Question)
 	}
-	added, removed := false, false
+	// The Needs row is the engine's (every open question item is one).
 	for _, op := range out.ops {
 		if op.Section == harness.SectionNeeds {
-			added = added || op.Op == harness.OpUpsert
-			removed = removed || op.Op == harness.OpRemove
+			t.Fatalf("adapter Needs op %+v", op)
 		}
-	}
-	if !added || !removed {
-		t.Fatal("needs row not added and removed")
 	}
 	if st := m.State(); st["working"] != "false" || st["model"] != "kimi-code/k3" || st["effort"] != "high" {
 		t.Fatalf("state %v", st)

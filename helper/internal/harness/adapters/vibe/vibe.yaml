@@ -11,7 +11,7 @@ revision: 1
 match: { agents: [vibe], commands: [vibe] }
 harness: { version: [vibe, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=3.1 <4" }
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode,
-  needs.approvals, changes, ports, resume, compact]
+  needs.approvals, needs.questions, changes, ports, resume, compact]
 feeds:
   hooks:            # not installed by Togo: Vibe reads claude_code hooks from Claude-format plugins
     hook: { events: [PreToolUse, PostToolUse, Stop] }
@@ -56,8 +56,8 @@ actions:
     label: Resume
     relaunch: { argv: [vibe, --resume, '{{.id}}'] }
     stability: documented
-  answer:
-    builtin: approval_answer
+  answer:            # question items: keys on the dialog drawn (detect.ParseChoice)
+    builtin: screen_answer
     stability: experimental
   interrupt:
     keys: { keys: [Escape] }
@@ -68,9 +68,17 @@ modes:
     - { id: accept-edits, label: Auto edit }
     - { id: smart-approve, label: Smart }
     - { id: auto-approve, label: YOLO }
-  current: config
-  select: .default_agent
+  # Vibe records the agent nowhere it can be read (meta.json and the
+  # journal hold none, and the config source is not a feed): its footer
+  # says it, "… Qwen3.8 27B (5090)[off] · accept edits ─" (3.1.0). A switch
+  # from the phone keeps the new one.
+  select: $state.mode
   set: set_mode
+  screen:
+    - { line: '·\s+ask\s*─*\s*$', id: ask }
+    - { line: '·\s+accept edits\s*─*\s*$', id: accept-edits }
+    - { line: '·\s+smart approve\s*─*\s*$', id: smart-approve }
+    - { line: '·\s+auto approve\s*─*\s*$', id: auto-approve }
 status:
   actions: [compact]   # inline on the context meter, once a status block exists
 commands:

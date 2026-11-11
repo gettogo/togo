@@ -1,0 +1,37 @@
+{
+  "name": "cursor/real-workspace-trust-80x24",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cursor",
+    "title": "Do you trust the contents of this directory?",
+    "body": "/Users/jamie/proj",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "file",
+      "text": "~/proj"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Trust this workspace",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Quit",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cursor CLI",
+    "subtitle": "Do you trust the contents of this directory?",
+    "body": "~/proj",
+    "category": "togo.request"
+  }
+}

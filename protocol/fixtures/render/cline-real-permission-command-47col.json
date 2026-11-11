@@ -1,0 +1,37 @@
+{
+  "name": "cline/real-permission-command-47col",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cline",
+    "title": "Approve tool call?",
+    "body": "touch x.txt",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "touch x.txt"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Approve",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Deny",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cline",
+    "subtitle": "Approve tool call?",
+    "body": "touch x.txt",
+    "category": "togo.request"
+  }
+}

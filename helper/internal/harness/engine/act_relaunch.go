@@ -48,12 +48,28 @@ group:
 	if err := e.waitIdle(ctx, s); err != nil {
 		return harness.ActionResult{}, err
 	}
+	prev, had := e.relaunchedArgv(s.id)
+	// Noted first: the relaunch drops the session's state, and what is
+	// rebuilt reads the agent as it now runs.
+	e.noteRelaunch(s.id, argv)
 	if err := e.cfg.Relaunch(ctx, s.id, argv); err != nil {
+		e.dropRelaunch(s.id)
+		if had {
+			e.noteRelaunch(s.id, prev)
+			e.launched(s.id)
+		}
 		e.cfg.Logf("harness: %s relaunch: %v", s.ad.Adapter.Adapter, err)
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "The agent could not be restarted"}, nil
 	}
 	s.mu.Lock()
 	s.relaunchedAt = time.Now()
+	for _, m := range s.mappers {
+		if r, ok := m.(harness.Relauncher); ok {
+			if ops := r.Relaunched(argv, s.relaunchedAt); len(ops) > 0 {
+				s.publishLocked(nil, ops)
+			}
+		}
+	}
 	s.mu.Unlock()
 	return harness.ActionResult{Result: harness.ResultRelaunched}, nil
 }

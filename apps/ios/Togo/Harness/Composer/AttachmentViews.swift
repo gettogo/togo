@@ -172,8 +172,13 @@ struct AttachMenu: View {
         }
     }
 
+    /// Each picture in its own encoding where the pasteboard has it, so a photo is not first
+    /// made into a much larger PNG.
     private func paste() {
-        let datas = (UIPasteboard.general.images ?? []).compactMap { $0.pngData() }
+        let datas = UIPasteboard.general.items.compactMap { item -> Data? in
+            guard let type = ComposerPasteRoute.imageType(Array(item.keys)) else { return nil }
+            return item[type] as? Data ?? (item[type] as? UIImage)?.pngData()
+        }
         guard !datas.isEmpty else { return }
         Task { await attachments.add(datas) }
     }

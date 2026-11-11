@@ -57,3 +57,17 @@ extension SwiftTermEngine: GestureTarget {
         onClipboardWrite(text)
     }
 }
+
+extension SwiftTermEngine: TouchSelectionTarget {
+    var viewportTop: Int { terminalView.terminalStateSnapshot().viewportRow }
+
+    func rowCells(_ row: Int) -> (text: String, widths: [Int])? {
+        guard let match = terminalView.terminalStateSnapshot().visibleRows.first(where: { $0.row == row }) else { return nil }
+        return (match.text, match.cellWidths)
+    }
+
+    func selectCells(from start: GridCell, to end: GridCell) {
+        let top = viewportTop
+        terminalView.select(from: GridCell(col: start.col, row: start.row - top), to: GridCell(col: end.col, row: end.row - top))
+    }
+}

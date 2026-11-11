@@ -98,7 +98,7 @@ struct TutorialSnapshotTests {
 
     @Test func demoMachine() {
         assertScreen(named: "tutorial-demo") {
-            DemoControlCenter(store: DemoMachine.store(now: Samples.now), now: Samples.now) {}
+            DemoControlCenter(visit: DemoVisit(now: Samples.now), exit: DemoExit(leave: {}))
         }
     }
 

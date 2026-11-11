@@ -319,6 +319,8 @@ private struct LaunchOverlayHost: ViewModifier {
     @Binding var shown: Bool
     let ready: Bool
     @State private var targetFades = false
+    /// The launch played to its end and removed itself (UI tests on fake services read it).
+    @State private var played = false
 
     func body(content: Content) -> some View {
         content
@@ -329,12 +331,33 @@ private struct LaunchOverlayHost: ViewModifier {
                 if shown {
                     GeometryReader { proxy in
                         LaunchOverlay(ready: ready, target: anchor.map { proxy[$0] }, targetFades: targetFades) {
+                            played = true
                             shown = false
                         }
                     }
                     .ignoresSafeArea()
                 }
             }
+            .background { PlayedMarker(played: played) }
+    }
+}
+
+/// For UI tests on fake services, an element named "launch.played" once the launch has played
+/// and gone. The launch keeps the app busy while it plays, so a test that waits for the app to
+/// settle only gets to look after it is over; this says it was there.
+private struct PlayedMarker: View {
+    let played: Bool
+
+    var body: some View {
+        #if DEBUG
+        if played, UITestLaunch.current.fakes {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityLabel(Text(verbatim: "launch played"))
+                .accessibilityIdentifier("launch.played")
+        }
+        #endif
     }
 }
 

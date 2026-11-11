@@ -230,6 +230,20 @@ func FuzzDetectNeverPanics(f *testing.F) {
 			}
 			return
 		}
+		if p.Kind == KindWaiting {
+			// Nothing to press: the terminal answers it.
+			if len(p.Options) != 0 || !p.ReadOnly || p.Fingerprint == "" {
+				t.Fatalf("inconsistent waiting prompt %+v", p)
+			}
+			return
+		}
+		if p.TextKeys != nil && len(p.Options) == 0 {
+			// A field that takes typed words, nothing to pick.
+			if p.Kind != KindQuestion || p.Fingerprint == "" {
+				t.Fatalf("inconsistent text prompt %+v", p)
+			}
+			return
+		}
 		if len(p.Options) < 2 || len(p.Keys) != len(p.Options) || p.Fingerprint == "" {
 			t.Fatalf("inconsistent prompt %+v", p)
 		}
@@ -293,7 +307,9 @@ func TestRoleOfFailsClosed(t *testing.T) {
 		"Run Everything":                    wire.RoleOther,
 		"Yes, allow once":                   wire.RoleApprove,
 		"Yes, and don't ask again for git":  wire.RoleApproveAlways,
-		"Don't ask again":                   wire.RoleApproveAlways,
+		"Don't ask again":                   wire.RoleOther,
+		"Allow All for Every Session":       wire.RoleApproveAlways,
+		"Allow All for This Session":        wire.RoleApproveAlways,
 		"Yes, remember this decision":       wire.RoleApproveAlways,
 		"Allow in this project":             wire.RoleApproveAlways,
 		"Yes, trust this folder":            wire.RoleApproveAlways,

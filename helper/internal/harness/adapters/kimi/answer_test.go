@@ -7,12 +7,11 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness"
 )
 
-// Kimi's questions are answered in its TUI: the card is read-only, and a
-// resolution that names none of the questions still closes every one.
-func TestQuestionReadOnlyAndClosesUnmatched(t *testing.T) {
+// A resolution that names none of the questions still closes every one.
+func TestQuestionClosesUnmatched(t *testing.T) {
 	m := NewWire(harness.Env{SessionID: "s1"})
-	items, _ := m.Map(harness.Record{Data: json.RawMessage(`{"type":"interaction.request","time":1,"id":"q1","request":{"questions":[{"question":"A?"},{"question":"B?"}]}}`)})
-	if len(items) != 1 || items[0].Question.Answerable == nil || *items[0].Question.Answerable {
+	items, _ := m.Map(harness.Record{Data: json.RawMessage(`{"type":"interaction.request","time":1,"id":"q1","kind":"question","request":{"questions":[{"question":"A?"},{"question":"B?"}]}}`)})
+	if len(items) != 1 || items[0].Question.Answerable != nil || !items[0].Question.Questions[0].AllowText {
 		t.Fatalf("asked %+v", items)
 	}
 	items, _ = m.Map(harness.Record{Data: json.RawMessage(`{"type":"interaction.resolved","time":2,"id":"q1","response":{"answers":{"A?":"yes","C?":"x"}}}`)})

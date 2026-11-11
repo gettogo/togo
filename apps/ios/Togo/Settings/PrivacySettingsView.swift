@@ -21,10 +21,12 @@ struct PrivacySettingsView: View {
                 )
                 .frame(minHeight: 44)
             } footer: {
-                Text(settingsText(
-                    "settings.privacy.lock.footer",
-                    "Togo asks for \(unlockWord) when you come back to it. Sessions are always hidden in the app switcher."
-                ))
+                SectionFooter {
+                    Text(settingsText(
+                        "settings.privacy.lock.footer",
+                        "Togo asks for \(unlockWord) when you come back to it. Sessions are always hidden in the app switcher."
+                    ))
+                }
             }
             .groupedRows()
         }

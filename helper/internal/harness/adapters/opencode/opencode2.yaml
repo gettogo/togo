@@ -138,6 +138,18 @@ actions:
   command:
     http: { method: POST, path: '/api/session/{{.state.harness_session}}/command', body: '{"name": {{.command | json}}, "text": {{.arguments | json}}}' }
     stability: documented
+  # Before the first prompt there is no session (the TUI makes one with it),
+  # so a model or mode picked then starts one here and the pick applies to
+  # it. The TUI does not follow a session made over the API (seen on 2.2.5),
+  # so it restarts on this one (--session), its footer showing the pick:
+  # one session for the phone and the desk, and prompts typed there
+  # continue it. Open chats are carried across the restart.
+  start_session:
+    http: { method: POST, path: '/api/session?location%5Bdirectory%5D={{.cwd | urlquery}}', body: '{}' }
+    stability: documented
+  show_session:
+    relaunch: { argv: [opencode, --session, '{{.state.harness_session}}'] }
+    stability: documented
   send:
     http: { method: POST, path: '/api/session/{{.state.harness_session}}/prompt', body: '{"text": {{.text | json}}}' }
     stability: documented

@@ -1,0 +1,30 @@
+
+
+ Indexing disabled for current workspace
+ "/Users/jamie/proj".
+
+ Warning: tmux extended-keys is off. Modified
+ Enter keys may not work. Add `set -g
+ extended-keys on` to ~/.tmux.conf and restart
+ tmux.
+
+───────────────────────────────────────────────
+
+  Color
+
+ Which color should the button be?
+
+❯ 1. Red (Recommended)
+     Warm and loud
+  2. Blue
+     Calm and quiet
+  3. Type something.
+
+───────────────────────────────────────────────
+
+  4. Chat about this
+
+ Enter to select · ↑/↓ to navigate · Esc to
+ cancel
+/Users/jamie/proj (main)
+0.8%/1.0M (estimated) (auto)  Claude Opus 5.5 •

@@ -20,17 +20,20 @@ private final class SlowPipe: ExecChannel {
 struct HelperClientQueueTests {
     /// A call waiting behind a slow frame is not timed out for the wait: its timeout counts
     /// from when its own frame is written.
+    /// Margins are in seconds, not milliseconds: the suite runs in parallel with CPU-bound
+    /// tests (replays, the tokenizer) that can hold the cooperative pool for seconds, and a
+    /// 100 ms margin then lost the race against the call's own timer.
     @Test func timeoutCountsFromTheWrite() async throws {
         let channel = SlowPipe()
-        let client = HelperClient(channel: channel, callTimeout: .milliseconds(150))
+        let client = HelperClient(channel: channel, callTimeout: .seconds(2))
         async let accepted: Void = channel.pipe.acceptHello()
         _ = try await client.hello(client: HelperClient.testClient)
         await accepted
 
         channel.slow.withLock { $0 = true }
         let list = Task { try await client.listSessions() }
-        // Longer than the call timeout, shorter than the queued allowance.
-        try await Task.sleep(for: .milliseconds(250))
+        // Longer than the call timeout (2 s), well short of the queued allowance (6 s).
+        try await Task.sleep(for: .seconds(3))
         channel.slow.withLock { $0 = false }
         let request = try #require(await channel.pipe.nextRequest())
         await channel.pipe.reply(to: request.id, result: #"{"sessions":[]}"#)

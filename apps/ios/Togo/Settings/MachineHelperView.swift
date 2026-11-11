@@ -11,6 +11,8 @@ struct MachineHelperView<Extra: View>: View {
     private let extra: Extra
 
     @Environment(\.machineTools) private var tools
+    /// The demo machine has no helper to ask, so its page says so instead of failing to load.
+    @Environment(\.demoExit) private var demoExit
 
     init(
         machine: HostID, name: String, supportsNotify: Bool, @ViewBuilder extra: () -> Extra
@@ -22,7 +24,13 @@ struct MachineHelperView<Extra: View>: View {
     }
 
     var body: some View {
-        Loaded(machine: machine, name: name, supportsNotify: supportsNotify, tools: tools) { extra }
+        if let demoExit {
+            DemoNotHereContent(exit: demoExit)
+                .navigationTitle(name)
+                .navigationBarTitleDisplayMode(.inline)
+        } else {
+            Loaded(machine: machine, name: name, supportsNotify: supportsNotify, tools: tools) { extra }
+        }
     }
 
     /// Owns the model, which needs the tools from the environment.

@@ -67,7 +67,9 @@ struct TerminalSettingsView: View {
                 .frame(minHeight: 44)
                 .id(Self.importRow)
             } footer: {
-                importFooter
+                SectionFooter {
+                    importFooter
+                }
             }
             .groupedRows()
             Section {
@@ -97,10 +99,12 @@ struct TerminalSettingsView: View {
                 )
                 .frame(minHeight: 44)
             } footer: {
-                Text(settingsText(
-                    "settings.terminal.readOutput.footer",
-                    "With VoiceOver on, new output in the focused terminal is read aloud once it settles."
-                ))
+                SectionFooter {
+                    Text(settingsText(
+                        "settings.terminal.readOutput.footer",
+                        "With VoiceOver on, new output in the focused terminal is read aloud once it settles."
+                    ))
+                }
             }
             .groupedRows()
             Section {
@@ -110,14 +114,16 @@ struct TerminalSettingsView: View {
                 )
                 .frame(minHeight: 44)
             } footer: {
-                // The shortcut glyphs only with a keyboard attached to type them (P5).
-                Text([
-                    settingsText(
-                        "settings.terminal.singleKeys.footer",
-                        "On a hardware keyboard, Y approves, N denies and R replies to the request in the prompt bar."
-                    ),
-                    keyboard.hint(settingsText("settings.terminal.singleKeys.shortcuts", "⌘↩ and ⌘. always work.")),
-                ].compactMap { $0 }.joined(separator: " "))
+                SectionFooter {
+                    // The shortcut glyphs only with a keyboard attached to type them (P5).
+                    Text([
+                        settingsText(
+                            "settings.terminal.singleKeys.footer",
+                            "On a hardware keyboard, Y approves, N denies and R replies to the request in the prompt bar."
+                        ),
+                        keyboard.hint(settingsText("settings.terminal.singleKeys.shortcuts", "⌘↩ and ⌘. always work.")),
+                    ].compactMap { $0 }.joined(separator: " "))
+                }
             }
             .groupedRows()
         }

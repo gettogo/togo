@@ -14,8 +14,9 @@ extension XCUIApplication {
     /// A session row, found by how VoiceOver reads it: bib, name, status, then folder.
     func row(_ bib: String, _ name: String) -> XCUIElement {
         // A button in the compact list; beside the sidebar a selectable row, which may read as a cell.
+        // Not the prompt bar's request line, which reads the same way and sits higher in the tree.
         descendants(matching: .any).matching(NSPredicate(
-            format: "label BEGINSWITH %@ AND (elementType == %d OR elementType == %d)",
+            format: "label BEGINSWITH %@ AND (elementType == %d OR elementType == %d) AND identifier != 'prompt.context'",
             "\(bib), \(name), ", XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue
         )).firstMatch
     }

@@ -1,0 +1,38 @@
+{
+  "name": "omp/real-ask-single",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "omp",
+    "title": "What should I work on next?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Bug fixes",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "New feature",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "Refactoring",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 OMP",
+    "subtitle": "What should I work on next?",
+    "body": "",
+    "category": "togo.choice.r_render0001"
+  }
+}

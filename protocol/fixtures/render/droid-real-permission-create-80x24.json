@@ -1,0 +1,38 @@
+{
+  "name": "droid/real-permission-create-80x24",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "droid",
+    "title": "Create hello.txt: (+1 added)",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes, allow",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, and always allow low impact commands (file edits and read-only commands)",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "No, cancel",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Droid",
+    "subtitle": "Create hello.txt: (+1 added)",
+    "body": "",
+    "category": "togo.request"
+  }
+}

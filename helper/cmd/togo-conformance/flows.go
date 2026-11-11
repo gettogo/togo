@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +17,35 @@ import (
 
 const approvalFile = "conformance-approval.txt"
 
+// askingModes are the modes that ask before running a command, in the
+// order tried (Claude's default, Goose's approve, Codex's on-request).
+var askingModes = []string{"default", "approve", "on-request"}
+
 var autoModes = map[string]bool{"dontAsk": true, "bypassPermissions": true, "yolo": true, "auto": true, "full-auto": true}
+
+// ensureAsking switches a session in a mode that runs without asking (which
+// would skip a permission prompt, and in Claude denies AskUserQuestion) to
+// the harness's asking mode first.
+func (r *runner) ensureAsking(ctx context.Context, scenario string) {
+	_ = r.describe(ctx)
+	if !autoModes[r.desc.Mode] {
+		return
+	}
+	ids := map[string]bool{}
+	for _, c := range r.desc.Modes {
+		ids[c.ID] = true
+	}
+	for _, ask := range askingModes {
+		if !ids[ask] {
+			continue
+		}
+		res, err := r.act(ctx, harness.ActionSetMode, "", map[string]any{"id": ask})
+		r.note("%s: switched %s → %s first (%s %v)", scenario, r.desc.Mode, ask, res.Result, err)
+		r.afterAct(ctx, res, scenario, "set_mode "+ask)
+		_ = r.describe(ctx)
+		return
+	}
+}
 
 // approvalScenario asks for a harmless shell command, expects the
 // harness's permission prompt in Needs you for this session, answers it by
@@ -24,19 +55,7 @@ func (r *runner) approvalScenario(ctx context.Context) {
 		r.set("approval", skip, "adapter declares no approvals")
 		return
 	}
-	// A mode that runs commands without asking would skip the prompt:
-	// switch this session to the harness's asking mode first.
-	_ = r.describe(ctx)
-	if autoModes[r.desc.Mode] {
-		for _, c := range r.desc.Modes {
-			if c.ID == "default" {
-				res, err := r.act(ctx, harness.ActionSetMode, "", map[string]any{"id": "default"})
-				r.note("approval: switched %s → default first (%s %v)", r.desc.Mode, res.Result, err)
-				r.afterAct(ctx, res, "approval", "set_mode default")
-				_ = r.describe(ctx)
-			}
-		}
-	}
+	r.ensureAsking(ctx, "approval")
 	target := filepath.Join(r.sb.work, approvalFile)
 	_ = os.Remove(target)
 	defer os.Remove(target)
@@ -51,16 +70,30 @@ func (r *runner) approvalScenario(ctx context.Context) {
 			r.set("approval", skip, "blocked: %s", clip(t.errText, 100))
 		default:
 			r.set("approval", fail, "no approval reached Needs you and the command did not run; reply %q; err %q; pane: %s",
-				clip(oneLine(t.reply), 50), t.errText, clip(oneLine(screenTail(r.capture(ctx), 5)), 140))
+				clip(oneLine(t.reply), 50), t.errText, clip(oneLine(screenTail(r.captureLate(ctx), 5)), 140))
 		}
 		return
 	}
 	a := t.approval
+	// A hook can raise the request before the agent draws its prompt; it
+	// is answerable once the watcher reads the prompt's options.
+	for i := 0; i < 20 && a.Answerable != nil && !*a.Answerable; i++ {
+		if sleep(ctx, 500*time.Millisecond) != nil {
+			break
+		}
+		for _, p := range r.pending(ctx) {
+			if p.RequestID == a.RequestID {
+				p := p
+				a = &p
+			}
+		}
+	}
 	about := strings.ToLower(a.Title + " " + a.Snippet + " " + subjectText(a.Subject))
 	if !strings.Contains(about, "touch") && !strings.Contains(about, approvalFile) && !strings.Contains(about, "bash") &&
 		!strings.Contains(about, "shell") && !strings.Contains(about, "command") && !strings.Contains(about, "run") {
 		// Never answer a prompt the suite did not cause.
-		r.set("approval", fail, "a prompt that is not about the command reached Needs you instead: %q (left unanswered)", clip(oneLine(a.Title), 70))
+		r.set("approval", fail, "a prompt that is not about the command reached Needs you instead: %q (%s, %d options; left unanswered); pane: %s",
+			clip(oneLine(a.Title), 70), a.Source, len(a.Options), clip(oneLine(screenTail(r.captureLate(ctx), 8)), 200))
 		return
 	}
 	if a.SessionID == nil || *a.SessionID != r.sid {
@@ -85,12 +118,25 @@ func (r *runner) approvalScenario(ctx context.Context) {
 		return
 	}
 	if a.Answerable != nil && !*a.Answerable {
-		r.set("approval", fail, "approval %q is not answerable from the phone (options %d)", clip(a.Title, 50), len(a.Options))
+		r.set("approval", fail, "approval %q is not answerable from the phone (%s, options %d); pane: %s", clip(a.Title, 50), a.Source, len(a.Options), clip(oneLine(screenTail(r.captureLate(ctx), 8)), 200))
 		return
 	}
 	if err := r.call(ctx, wire.MethodApprovalAnswer, map[string]string{"requestId": a.RequestID, "decision": "approve"}, nil); err != nil {
-		r.set("approval", fail, "approval.answer %s: %v", a.RequestID, err)
-		return
+		// The engine offers an ask for the agent's own permission record
+		// when the watcher has not read the dialog yet; the dialog's
+		// prompt takes over once read, closing the offer. Answer the one
+		// that took over, as the phone's card (the question's) would.
+		next := r.takeOver(ctx, a, t.sentAt)
+		if next == nil {
+			r.set("approval", fail, "approval.answer %s (%s %q): %v", a.RequestID, a.Source, clip(oneLine(a.Title), 40), err)
+			return
+		}
+		r.note("approval: the %s request %s was taken over by the %s prompt %s (%v)", a.Source, short8(a.RequestID), next.Source, short8(next.RequestID), err)
+		a = next
+		if err := r.call(ctx, wire.MethodApprovalAnswer, map[string]string{"requestId": a.RequestID, "decision": "approve"}, nil); err != nil {
+			r.set("approval", fail, "approval.answer %s (%s %q): %v", a.RequestID, a.Source, clip(oneLine(a.Title), 40), err)
+			return
+		}
 	}
 	answered := map[string]bool{a.RequestID: true}
 	gone, ran := false, false
@@ -105,20 +151,31 @@ func (r *runner) approvalScenario(ctx context.Context) {
 				gone = false
 				continue
 			}
-			// A follow-up prompt for the same command is answered too;
-			// anything else is denied.
-			if !answered[p.RequestID] {
-				answered[p.RequestID] = true
-				d := "deny"
-				if strings.Contains(p.Title+p.Snippet+subjectText(p.Subject), approvalFile) {
-					d = "approve"
-				}
-				_ = r.call(ctx, wire.MethodApprovalAnswer, map[string]string{"requestId": p.RequestID, "decision": d}, nil)
-			}
+			r.followUp(ctx, p, answered)
 		}
 		ran = exists(target)
 	}
-	_ = r.waitIdle(ctx, 30*time.Second)
+	// The agent may go on to check its work (Cline runs `ls` on the file),
+	// asking again: those prompts are answered until it is idle, so none
+	// is left waiting for the next scenario.
+	quiet := 0
+	for end := time.Now().Add(30 * time.Second); time.Now().Before(end) && quiet < 3; {
+		if sleep(ctx, time.Second) != nil {
+			break
+		}
+		open := false
+		for _, p := range r.pending(ctx) {
+			if p.SessionID != nil && *p.SessionID == r.sid {
+				open = true
+				r.followUp(ctx, p, answered)
+			}
+		}
+		if w, err := r.workingNow(ctx); err == nil && !w && !open {
+			quiet++
+		} else {
+			quiet = 0
+		}
+	}
 	switch {
 	case !gone:
 		r.set("approval", fail, "answered %s from the phone but it is still pending", short8(a.RequestID))
@@ -129,6 +186,38 @@ func (r *runner) approvalScenario(ctx context.Context) {
 	default:
 		r.set("approval", pass, "%q (%d options) listed for this session, answered by id %s, command ran", clip(oneLine(a.Title), 40), len(a.Options), short8(a.RequestID))
 	}
+}
+
+// followUp answers a prompt that came after the approval: one about the
+// same file is approved, anything else denied. Each is answered once.
+func (r *runner) followUp(ctx context.Context, p wire.Approval, answered map[string]bool) {
+	if answered[p.RequestID] {
+		return
+	}
+	answered[p.RequestID] = true
+	d := "deny"
+	if strings.Contains(p.Title+p.Snippet+subjectText(p.Subject), approvalFile) {
+		d = "approve"
+	}
+	r.note("approval: follow-up prompt %q answered %s", clip(oneLine(p.Title+" "+subjectText(p.Subject)), 60), d)
+	_ = r.call(ctx, wire.MethodApprovalAnswer, map[string]string{"requestId": p.RequestID, "decision": d}, nil)
+}
+
+// takeOver finds the prompt that replaced approval a: another request of
+// this session raised since the turn was sent, pending now.
+func (r *runner) takeOver(ctx context.Context, a *wire.Approval, since time.Time) *wire.Approval {
+	for i := 0; i < 10; i++ {
+		for _, p := range r.pending(ctx) {
+			if p.RequestID != a.RequestID && p.SessionID != nil && *p.SessionID == r.sid && !p.CreatedAt.Before(since.Add(-2*time.Second)) {
+				p := p
+				return &p
+			}
+		}
+		if sleep(ctx, 500*time.Millisecond) != nil {
+			break
+		}
+	}
+	return nil
 }
 
 func subjectText(s *wire.Subject) string {
@@ -209,7 +298,14 @@ func (r *runner) interruptScenario(ctx context.Context) {
 		return
 	}
 	if !t.cleared {
-		r.set("interrupt", fail, "harness.interrupt → %s, but still working %.0fs later", res.Result, time.Since(sentAt).Seconds())
+		r.mu.Lock()
+		w := r.working
+		r.mu.Unlock()
+		if w {
+			r.set("interrupt", fail, "harness.interrupt → %s, but still working %.0fs later; pane: %s", res.Result, time.Since(sentAt).Seconds(), clip(oneLine(screenTail(r.captureLate(ctx), 4)), 120))
+		} else {
+			r.set("interrupt", fail, "harness.interrupt → %s; working cleared, but the turn never ended in the chat (turn state %q)", res.Result, t.turnState)
+		}
 		return
 	}
 	if !actOK(res) {
@@ -254,6 +350,7 @@ func (r *runner) slashScenario(ctx context.Context) {
 		return
 	}
 	_ = r.waitIdle(ctx, 20*time.Second)
+	prior := r.capture(ctx)
 	if err := r.call(ctx, harness.MethodSend, map[string]any{"id": r.sid, "text": cmd, "mode": "now"}, nil); err != nil {
 		r.set("slash", fail, "harness.send %s: %v", cmd, err)
 		return
@@ -269,11 +366,52 @@ func (r *runner) slashScenario(ctx context.Context) {
 		r.set("slash", fail, "%s submitted, but mission.working then stayed true at an idle prompt", cmd)
 	case found && strings.Contains(line, cmd):
 		r.set("slash", fail, "%s typed but not submitted: input line still reads %q", cmd, clip(line, 60))
+	case !strings.Contains(pane, cmd) && opened(prior, pane, cmd):
+		r.set("slash", pass, "%s submitted (input line empty; it opened its own view)", cmd)
 	case !strings.Contains(pane, cmd):
 		r.set("slash", fail, "%s sent but it appears nowhere on screen", cmd)
 	default:
 		r.set("slash", pass, "%s submitted (input line empty, command on screen)", cmd)
 	}
+}
+
+// dumpItems writes the session's items, oldest first, next to its home in
+// the scratch root (kept with --keep), for a failure the report cannot hold.
+func (r *runner) dumpItems(scenario string) {
+	r.mu.Lock()
+	list := make([]harness.Item, 0, len(r.items))
+	for _, it := range r.items {
+		list = append(list, it)
+	}
+	r.mu.Unlock()
+	sort.Slice(list, func(i, j int) bool { return list[i].Seq < list[j].Seq })
+	var b strings.Builder
+	for _, it := range list {
+		line, _ := json.Marshal(it)
+		b.Write(line)
+		b.WriteByte('\n')
+	}
+	_ = os.WriteFile(filepath.Join(filepath.Dir(r.sb.home), r.id+"-"+scenario+"-items.jsonl"), []byte(b.String()), 0o600)
+}
+
+// opened reports whether a command that is not echoed (omp's /context,
+// Claude's /help) drew a view of its own: a line new since prior is headed
+// by its name, as a box title ("╭─ Context · Claude Haiku 4.5 ─") or a tab
+// row ("Help  General  Commands"). A line that merely starts a sentence
+// with it ("Context left until auto-compact: 5%") is not.
+func opened(prior, pane, cmd string) bool {
+	name := regexp.QuoteMeta(strings.TrimPrefix(cmd, "/"))
+	header := regexp.MustCompile(`(?i)^[\s╭┌╔│┃─━═]*/?` + name + `(\s*$|\s{2,}|\s*[·─━═│┃:(])`)
+	was := map[string]bool{}
+	for _, l := range strings.Split(prior, "\n") {
+		was[strings.TrimSpace(l)] = true
+	}
+	for _, l := range strings.Split(pane, "\n") {
+		if t := strings.TrimSpace(l); t != "" && !was[t] && header.MatchString(l) {
+			return true
+		}
+	}
+	return false
 }
 
 // inputLine returns the text in the harness's input line, from the last
@@ -364,6 +502,7 @@ func (r *runner) restoreScenario(ctx context.Context) {
 		r.set("restore", pass, "restored with resume; the conversation continued (recalled %q)", clip(oneLine(t.reply), 20))
 		return
 	}
-	r.set("restore", fail, "restored with resume (argv %v) but the agent did not recall the conversation: reply %q %s",
-		s.Command, clip(oneLine(t.reply), 40), t.errText)
+	r.dumpItems("restore")
+	r.set("restore", fail, "restored with resume (argv %v) but the agent did not recall the conversation: reply %q %s; items %v; pane: %s",
+		s.Command, clip(oneLine(t.reply), 40), t.errText, t.seen, clip(oneLine(screenTail(r.captureLate(ctx), 6)), 120))
 }

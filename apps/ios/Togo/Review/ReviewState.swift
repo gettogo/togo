@@ -11,6 +11,12 @@ struct ReviewSubject: Hashable, Sendable {
     var managed: Bool
     var capabilities: Set<String>
 
+    /// The review's title on every tab: the session's bib and name, "01 status", as its tab
+    /// in the workspace reads.
+    var displayTitle: String {
+        [bib, DisplayText.clean(title)].compactMap(\.self).filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
     var canRead: Bool { capabilities.contains(Capability.git) }
     /// Writes need a session Togo started: the helper refuses them on any other.
     var canWrite: Bool { capabilities.contains(Capability.gitWrite) && managed }

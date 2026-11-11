@@ -25,7 +25,6 @@ import TogoTerminal
         self.session = session
         engine = SwiftTermEngine(settings: TerminalSettings(), theme: BuiltInThemes.all[0])
         controller = TerminalViewController(engine: engine)
-        engine.inputAccessory = KeyBarView(config: .claude, engine: engine)
     }
 
     var header: String {

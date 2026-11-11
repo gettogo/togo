@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -93,5 +94,55 @@ func TestInputLineAndPane(t *testing.T) {
 	}
 	if !updatePrompt("Update available 1.2 -> 1.3\n  Skip  Install") || updatePrompt("ready\n❯ ") {
 		t.Fatal("update prompt detection")
+	}
+}
+
+// A command that draws its own view instead of echoing counts as run; one
+// whose name shows only where it already was does not.
+func TestOpenedView(t *testing.T) {
+	prior := "ok\n π > Haiku\n╰─\n"
+	view := "╭─ Context · Claude Haiku 4.5 ──╮\n│ Used 21K of 200K │\n"
+	if !opened(prior, view, "/context") {
+		t.Fatal("the context view was not seen")
+	}
+	if opened("talk about context\n", "talk about context\n╰─\n", "/context") {
+		t.Fatal("an old line counted")
+	}
+	if !opened(prior, "   Help  General   Commands\n", "/help") {
+		t.Fatal("Claude's help view was not seen")
+	}
+	// A lost /context must not pass on Claude's own status line.
+	if opened(prior, "  Context left until auto-compact: 5%\n", "/context") {
+		t.Fatal("a sentence that starts with the name counted")
+	}
+}
+
+// Copilot CLI records side calls (a title, a summary) on a nano model after
+// the reply; the assistant's own message names the model the turn ran on.
+func TestModelSincePrefersTheAssistantsMessage(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "events.jsonl")
+	lines := `{"type":"assistant.message","data":{"model":"claude-haiku-4.5"}}` + "\n" +
+		`{"type":"model.turn_ended","data":{"model":"gpt-5.4-nano"}}` + "\n" +
+		`{"type":"session.usage_record","data":{"usage":{"model":"gpt-5.4-nano"}}}` + "\n"
+	if err := os.WriteFile(p, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, strong := modelSince(map[string]int64{p: 0}, nil); got != "claude-haiku-4.5" || !strong {
+		t.Fatalf("got %q strong=%v", got, strong)
+	}
+}
+
+func TestParseArgs(t *testing.T) {
+	got, err := parseArgs("cline=--auto-approve false; droid = --x ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got["cline"], "|") != "--auto-approve|false" || strings.Join(got["droid"], "|") != "--x" || len(got) != 2 {
+		t.Fatalf("parseArgs = %v", got)
+	}
+	for _, bad := range []string{"cline", "=x", "cline="} {
+		if _, err := parseArgs(bad); err == nil {
+			t.Errorf("parseArgs(%q) took it", bad)
+		}
 	}
 }

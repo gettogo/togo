@@ -1,0 +1,24 @@
+
+ ❯ Before doing anything, use your ask_question tool to ask me which language
+   to use for a hello world script, offering exactly these options: Go,
+   Python, Rust. Do nothing else until I answer.
+
+ ▶ Thinking: ..., Rust. Let me ask this question using the ask_question tool.
+
+ ⠙ ask_question(Which language would you like me to use for the hello world ...
+   )
+
+
+ Cline is asking a question
+
+ Which language would you like me to use for the hello world script?
+
+  > Go
+    Python
+    Rust
+    Type a response...
+
+
+ coder-fast (5,966) $0.00                                    ○ Plan ● Act (Tab)
+ proj
+ Auto-approve all disabled (Shift+Tab)

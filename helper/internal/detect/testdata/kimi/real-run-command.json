@@ -1,0 +1,48 @@
+{
+  "source": "real",
+  "agentVersion": "2.5.3",
+  "match": true,
+  "kind": "permission",
+  "title": "▶ Run this command?",
+  "subject": {
+    "kind": "command",
+    "text": "make"
+  },
+  "options": [
+    {
+      "n": 1,
+      "label": "Approve once",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Approve for this session",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Reject",
+      "role": "deny"
+    },
+    {
+      "n": 4,
+      "label": "Reject with feedback",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ]
+  },
+  "readOnly": false
+}

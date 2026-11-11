@@ -1,0 +1,28 @@
+{
+  "agentVersion": "1.5.0",
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Escape"
+    ]
+  },
+  "kind": "permission",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Trust this folder",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Exit without trusting",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Trust this folder?"
+}

@@ -5,7 +5,7 @@ import UIKit
 
 /// One attached session: the link keeps it attached across drops, the binding moves bytes
 /// between the link and the engine, and the controller shows the engine with the user's
-/// gestures, key bar, font and theme.
+/// gestures, keys, font and theme.
 @MainActor final class LiveTerminal {
     let engine: SwiftTermEngine
     let controller: ThemedTerminalController
@@ -13,7 +13,7 @@ import UIKit
     private let link: TerminalLink
     private let binding: TerminalBinding
     private var feed: Task<Void, Never>?
-    private var keyBarConfig: KeyBarConfig
+    private var keysConfig: TerminalKeysConfig
 
     /// `onStop` gets this terminal's identity once its tab lets go of it.
     /// `wasAsked` tells whether the machine put a sign-in question to the user, which turns a
@@ -31,7 +31,7 @@ import UIKit
             terminal: TerminalViewController(engine: engine, gestureConfig: Self.gestureConfig(settings.gestures)),
             choice: Self.themeChoice(settings)
         )
-        keyBarConfig = settings.keyBarConfig
+        keysConfig = settings.terminalKeys
         let size = engine.size
         let link = TerminalLink(
             connect: connect, path: SystemPathSource(),
@@ -68,7 +68,7 @@ import UIKit
             sink.finish()
             onStop(id)
         }
-        installKeyBar()
+        installKeys()
         engine.onShortcut = { [weak handle] in handle?.onShortcut($0) }
         engine.onPasteImage = { [weak handle] in handle?.onPasteImage($0) }
         handle.paste = { [weak engine] in engine?.paste($0) }
@@ -111,9 +111,9 @@ import UIKit
         engine.apply(Self.terminalSettings(settings))
         controller.choice = Self.themeChoice(settings)
         controller.terminal.gestures.bindings = Self.gestureConfig(settings.gestures)
-        if settings.keyBarConfig != keyBarConfig {
-            keyBarConfig = settings.keyBarConfig
-            installKeyBar()
+        if settings.terminalKeys != keysConfig {
+            keysConfig = settings.terminalKeys
+            controller.keys.input.config = keysConfig
         }
     }
 
@@ -122,13 +122,16 @@ import UIKit
         Task { on ? await link.willEnterForeground() : await link.didEnterBackground() }
     }
 
-    private func installKeyBar() {
-        let bar = KeyBarView(config: keyBarConfig, engine: engine)
-        bar.onAttach = { [weak handle] in handle?.onAttach() }
-        bar.onDictate = { [weak handle] in handle?.onDictate() }
-        bar.onHaptic = { Haptic($0).play() }
-        bar.hidesInputTools = handle.hidesInputKeys
-        handle.onHidesInputKeys = { [weak bar] in bar?.hidesInputTools = $0 }
+    private func installKeys() {
+        let keys = controller.keys
+        keys.input.config = keysConfig
+        keys.onAttach = { [weak handle] in handle?.onAttach() }
+        keys.onDictate = { [weak handle] in handle?.onDictate() }
+        keys.onPrompt = { [weak handle] in handle?.onPromptKey($0) }
+        keys.onEdit = { [weak handle] in handle?.onEditKeys() }
+        keys.input.hidesInputTools = handle.hidesInputKeys
+        handle.onHidesInputKeys = { [weak keys] in keys?.input.hidesInputTools = $0 }
+        handle.keys = keys
     }
 
     private func shutDown() {
@@ -200,6 +203,8 @@ import UIKit
 /// that matches the appearance, now and whenever it changes.
 final class ThemedTerminalController: UIViewController, TerminalRefitting {
     let terminal: TerminalViewController
+    /// The column, the row above the keyboard and the bar's controller, installed on this view.
+    let keys: TerminalKeysHost
     var choice: ThemeChoice {
         didSet { applyTheme() }
     }
@@ -207,6 +212,7 @@ final class ThemedTerminalController: UIViewController, TerminalRefitting {
     init(terminal: TerminalViewController, choice: ThemeChoice) {
         self.terminal = terminal
         self.choice = choice
+        keys = TerminalKeysHost(engine: terminal.engine, terminal: terminal)
         // The grid's first column starts where the chat's text does, so switching between the
         // two layers keeps the text's leading edge in place.
         terminal.gridMargins = UIEdgeInsets(top: 0, left: ChatLayout.inset, bottom: 0, right: ChatLayout.inset)
@@ -224,6 +230,7 @@ final class ThemedTerminalController: UIViewController, TerminalRefitting {
         terminal.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(terminal.view)
         terminal.didMove(toParent: self)
+        keys.install(on: self)
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _) in self.applyTheme() }
     }
 
@@ -243,6 +250,7 @@ final class ThemedTerminalController: UIViewController, TerminalRefitting {
         guard isViewLoaded else { return }
         view.setNeedsLayout()
         view.layoutIfNeeded()
+        keys.refresh()
         terminal.refit()
     }
 

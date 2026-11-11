@@ -1,0 +1,24 @@
+ │ • .gitignore for hooks.log.                                                │
+ │ • License section or SPDX identifier.                                      │
+ │                                                                            │
+ │ Verification after implementation                                          │
+ │                                                                            │
+ │ • README renders correctly in GitHub/Cursor preview (headings, lists,      │
+ │   links).                                                                  │
+ │ • Instructions match actual paths in .cursor/hooks.json                    │
+ │   (.cursor/hooks.json) and dump.sh (/Users/jamie/bin/hook).                │
+ │ • Only README.md added (no unrelated files).                               │
+ │                                                                            │
+ │  Saved to Users/jamie/.cursor/plans/Add README-475b7945.plan.md            │
+ │ ────────────────────────────────────────────────────────────────────────── │
+ │                                                                            │
+ │ Ready to build?                                                            │
+ │                                                                            │
+ │  → 1. Yes, build locally (b)                                               │
+ │    2. Yes, build in cloud (c)                                              │
+ │    3. No, propose changes (p or Esc)                                       │
+ │                                                                            │
+ └────────────────────────────────────────────────────────────────────────────┘
+
+
+

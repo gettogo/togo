@@ -4,17 +4,25 @@ import XCTest
 /// `simctl io recordVideo` and passes a folder for the handshake as `TEST_RUNNER_TOGO_HERO_DIR`;
 /// without it the test skips, so ordinary UI test runs leave it alone.
 ///
-/// The replayed Claude Code session (`replay-demo`) answers its first turn before the recording
-/// starts. On camera: the second prompt is typed and sent, the Home Screen comes up while the
-/// agent works, the Dynamic Island asks to run `npm test`, Approve is tapped there, and the
-/// finished notification arrives.
+/// The recorded OpenCode session on the status page (`replay-status`, the website's hero story,
+/// with `-ui-demo-api` naming session 01 "status"). The prompt is drafted off camera up to its
+/// last sentence. On camera: that sentence is typed and sent, the chat streams, the first two
+/// shell requests are allowed once in the chat, the Home Screen comes up, the Dynamic Island asks to
+/// run `npm test`, Approve is tapped there, and the finished notification arrives.
+///
+/// `testHeroStills` plays the same session and saves the app's own frames the hero rests on
+/// (the list, the chat streaming, the npm test request in the chat, the finished chat, the terminal,
+/// Changes and the render.ts diff). `testHeroStillsLock` saves the Lock Screen's: the phone locks
+/// while OpenCode works, the Live Activity asks to run npm test, Approve is tapped there, and the
+/// turn ends; it never returns to the app, whose resume lock would ask for a passcode.
+/// into the handshake folder, for the website's fidelity tests.
 @MainActor final class HeroCaptureUITests: XCTestCase {
     private let app = XCUIApplication()
     private var springboard: XCUIApplication { XCUIApplication(bundleIdentifier: "com.apple.springboard") }
 
-    static let first = "What does the /login route do right now?"
-    static let last = " Then run npm test."
-    static let second = "Add rate limiting to the /login route (5 attempts per minute per IP) and cover it with tests. No new dependencies. Then run npm test."
+    static let last = " Add tests, then run npm test."
+    static let prompt = "Add an incident history timeline under the services: each incident has a time, service, severity (minor/major) and a short note, coloured by severity, newest first. Read incidents from data/incidents.json with a few examples. Add tests, then run npm test."
+    static let launchArguments = ["-ui-fakes", "-ui-skip-launch", "-ui-one-machine", "-ui-demo-api", "-ui-replay", "replay-status"]
 
     override func setUp() {
         continueAfterFailure = false
@@ -108,31 +116,49 @@ import XCTest
         send.tap()
     }
 
+    /// Session 01's line in the list.
+    private var sessionRow: XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND (elementType == %d OR elementType == %d)",
+            "01, status, ", XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue
+        )).firstMatch
+    }
+
+    /// OpenCode's permission request: a question card in the chat, answered "Allow once".
+    private var request: XCUIElement { app.descendants(matching: .any).matching(identifier: "chat.needs.question").firstMatch }
+
+    /// Allow once on the request card in the chat, brought into view first if it is off screen.
+    private func allowInChat() {
+        let button = request.buttons["Allow once"].firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "No Allow once on the request")
+        let jump = app.buttons["chat.needsJump"]
+        if jump.exists, !button.isHittable { jump.tap(); hold(0.8) }
+        button.tap()
+    }
+
+    /// The whole screen, saved into the handshake folder as `<name>.png`.
+    private func shoot(_ name: String, settle: TimeInterval = 2.5) {
+        guard let dir else { return }
+        hold(settle)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: dir.appendingPathComponent("\(name).png"))
+    }
+
     func testHero() throws {
         guard dir != nil else { throw XCTSkip("Runs only from scripts/capture-hero.sh") }
         hideRunnerIcon()
-        app.launchArguments = ["-ui-fakes", "-ui-skip-launch", "-ui-one-machine", "-ui-replay", "replay-demo", "-ui-replay-pace", "0.15", "-ui-demo-live"]
+        app.launchArguments = Self.launchArguments + ["-ui-replay-pace", "0.15", "-ui-demo-live"]
         app.launch()
         let allow = springboard.alerts.buttons["Allow"]
         if allow.waitForExistence(timeout: 8) { allow.tap() }
 
-        let row = app.descendants(matching: .any).matching(NSPredicate(
-            format: "label BEGINSWITH %@ AND (elementType == %d OR elementType == %d)",
-            "01, api, ", XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue
-        )).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "No session 01")
-        row.tap()
+        XCTAssertTrue(sessionRow.waitForExistence(timeout: 20), "No session 01")
+        sessionRow.tap()
         XCTAssertTrue(composer.waitForExistence(timeout: 15), "No chat")
 
-        // Off camera: the first turn, played through to its answer.
-        say(Self.first, slowly: false)
-        hold(1)
-        XCTAssertTrue(waitFor(60) { send.exists && send.isHittable && ((composer.value as? String) ?? "").isEmpty }, "The first turn never ended")
-        hold(3)
-        // The keyboard down, so the chat fills the screen when the recording starts.
-        // The second prompt is drafted off camera up to its last sentence, which is typed on camera.
+        // Off camera: the prompt drafted up to its last sentence, the keyboard down so the chat
+        // fills the screen when the recording starts.
         composer.tap()
-        composer.typeText(String(Self.second.dropLast(Self.last.count)))
+        composer.typeText(String(Self.prompt.dropLast(Self.last.count)))
         hold(0.5)
         lowerKeyboard()
         hold(1.2)
@@ -147,16 +173,23 @@ import XCTest
         hold(1.0)
         composer.typeText(Self.last)
         hold(0.4)
-        if composer.value as? String != Self.second { mark("draft-mismatch") }
+        if composer.value as? String != Self.prompt { mark("draft-mismatch") }
         send.tap()
-        hold(1.8)
+
+        // The first two shell requests, answered in the chat.
+        for _ in 0..<2 {
+            XCTAssertTrue(sparse(request, timeout: 90), "No request in the chat")
+            hold(1.2)
+            allowInChat()
+            hold(1.5)
+        }
         XCUIDevice.shared.press(.home)
         hold(2.0)
 
-        // The island asks; if the alert did not open it, a long press does.
-        let approve = springboard.buttons["Approve"]
+        // The island asks to run npm test; if the alert did not open it, a long press does.
+        let approve = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Approve", "Allow once"])).firstMatch
         let asked = springboardText("Needs you")
-        _ = sparse(asked, timeout: 30)
+        _ = sparse(asked, timeout: 60)
         hold(1.0)
         if !approve.exists {
             springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.025)).press(forDuration: 0.9)
@@ -168,10 +201,117 @@ import XCTest
         hold(2.0)
 
         // Working again, then the turn's end.
-        let finished = springboardText("5 attempts")
-        _ = sparse(finished, timeout: 40, every: 1.5)
+        let finished = springboardText("Done")
+        _ = sparse(finished, timeout: 60, every: 1.5)
         hold(2.6)
         mark("done")
         hold(1)
+    }
+
+    /// The app's frames the website's hero rests on, as stills (no recording, loops held still).
+    func testHeroStills() throws {
+        guard dir != nil else { throw XCTSkip("Runs only from scripts/capture-hero.sh") }
+        app.launchArguments = Self.launchArguments + ["-ui-replay-pace", "0.15", "-ui-no-keyboard"]
+        app.launch()
+        let allow = springboard.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: 8) { allow.tap() }
+
+        XCTAssertTrue(sessionRow.waitForExistence(timeout: 20), "No session 01")
+        shoot("hero-roster")
+        sessionRow.tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 15), "No chat")
+
+        composer.tap()
+        composer.typeText(Self.prompt)
+        send.tap()
+        hold(4)
+        if app.keyboards.count > 0 { lowerKeyboard() }
+        shoot("hero-chat", settle: 1.5)
+
+        // Three shell requests, each allowed once in the chat; the last asks to run npm test.
+        for n in 1...3 {
+            XCTAssertTrue(request.waitForExistence(timeout: 120), "No request \(n)")
+            if n == 3 { shoot("hero-needs-you-app") }
+            hold(1)
+            allowInChat()
+            hold(2)
+        }
+
+        // The turn's end: Send back, the composer empty, nothing waiting.
+        XCTAssertTrue(waitFor(180) { send.exists && send.isHittable && !request.buttons["Allow once"].exists }, "The turn never ended")
+        hold(1)
+        if app.keyboards.count > 0 { lowerKeyboard() }
+        hold(3)
+        shoot("hero-finished")
+
+        // The session's terminal, once the turn is done (leaving the chat earlier would close the
+        // replay's feed): the recorded OpenCode screen.
+        let terminal = app.buttons["Terminal"].firstMatch
+        if terminal.waitForExistence(timeout: 3) {
+            terminal.tap()
+            shoot("hero-terminal")
+            let chat = app.buttons["Chat"].firstMatch
+            if chat.waitForExistence(timeout: 3) { chat.tap() }
+            hold(1)
+        }
+
+        let changes = app.descendants(matching: .any).matching(identifier: "workspace.changes").firstMatch
+        XCTAssertTrue(changes.waitForExistence(timeout: 10), "No Changes in the bar")
+        changes.tap()
+        let render = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND (elementType == %d OR elementType == %d)",
+            "render.ts, ", XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.cell.rawValue
+        )).firstMatch
+        XCTAssertTrue(render.waitForExistence(timeout: 15), "No render.ts in Changes")
+        shoot("hero-changes")
+        render.tap()
+        XCTAssertTrue(app.buttons["Next change"].waitForExistence(timeout: 10), "No diff")
+        shoot("hero-diff")
+        mark("done")
+    }
+
+    func testHeroStillsLock() throws {
+        guard dir != nil else { throw XCTSkip("Runs only from scripts/capture-hero.sh") }
+        app.launchArguments = Self.launchArguments + ["-ui-replay-pace", "0.15", "-ui-no-keyboard", "-ui-demo-live"]
+        app.launch()
+        let allow = springboard.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: 8) { allow.tap() }
+
+        XCTAssertTrue(sessionRow.waitForExistence(timeout: 20), "No session 01")
+        sessionRow.tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 15), "No chat")
+        composer.tap()
+        composer.typeText(Self.prompt)
+        send.tap()
+        for n in 1...2 {
+            XCTAssertTrue(request.waitForExistence(timeout: 120), "No request \(n)")
+            hold(1)
+            allowInChat()
+            hold(n == 2 ? 0.2 : 1.5)
+        }
+
+        // The phone locks while the agent works; the Lock Screen wakes with the Live Activity.
+        let device = XCUIDevice.shared
+        let lock = NSSelectorFromString("pressLockButton")
+        XCTAssertTrue(device.responds(to: lock), "No lock button on this device")
+        device.perform(lock)
+        hold(1.2)
+        // A second press wakes the Lock Screen; Home would unlock (the simulator has no passcode).
+        device.perform(lock)
+        // A fresh simulator asks once whether Togo may show Live Activities; it may.
+        let allowLive = springboard.buttons["Allow"].firstMatch
+        if allowLive.waitForExistence(timeout: 4) { allowLive.tap() }
+        shoot("hero-lock-working", settle: 1.0)
+
+        let approve = springboard.buttons["Approve"].firstMatch
+        XCTAssertTrue(sparse(approve, timeout: 60), "The Lock Screen never offered Approve")
+        shoot("hero-lock-needs-you", settle: 1.5)
+        approve.tap()
+        shoot("hero-lock-approved", settle: 1.2)
+        let finished = springboardText("Done")
+        _ = sparse(finished, timeout: 60, every: 1.5)
+        shoot("hero-lock-done", settle: 2.0)
+        mark("done")
+        device.press(.home)
     }
 }

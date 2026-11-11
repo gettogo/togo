@@ -1,0 +1,48 @@
+{
+  "name": "droid/real-spec-approval-80x24",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "droid",
+    "title": "Propose Specification \"Create `hello.txt` in the working directory.\"",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Proceed with the proposal",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Proceed with comment",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "Proceed and handoff to a new session",
+        "role": "other"
+      },
+      {
+        "n": 4,
+        "label": "Manually edit spec (open via system default)",
+        "role": "other"
+      },
+      {
+        "n": 5,
+        "label": "No and explain why",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Droid",
+    "subtitle": "Propose Specification \"Create `hello.txt` in the working directory.\"",
+    "body": "",
+    "category": "togo.request"
+  }
+}

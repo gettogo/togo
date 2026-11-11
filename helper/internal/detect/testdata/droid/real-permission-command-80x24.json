@@ -1,0 +1,40 @@
+{
+  "agentVersion": "1.5.0",
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Escape"
+    ]
+  },
+  "kind": "permission",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes, allow",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Yes, and always allow low impact commands (file edits and read-only commands)",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "No, cancel",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "command",
+    "text": "touch second.txt"
+  },
+  "title": "Command to approve · low risk"
+}

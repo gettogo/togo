@@ -1,0 +1,33 @@
+{
+  "name": "goose/real-elicit-confirm",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "goose",
+    "title": "bold (Bold text?)",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "No",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Goose",
+    "subtitle": "bold (Bold text?)",
+    "body": "",
+    "category": "togo.request"
+  }
+}

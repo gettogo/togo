@@ -257,8 +257,18 @@ func (e *Engine) addApproval(s *sess, a wire.Approval) {
 	if e.cfg.Approvals != nil && !slices.ContainsFunc(e.cfg.Approvals.Pending(s.id), func(p wire.Approval) bool { return p.RequestID == a.RequestID }) {
 		return
 	}
+	owner := s.ownerLocked(a)
+	if a.Source != wire.SourceAsk {
+		s.screenPromptOpenedLocked()
+	}
 	item := harness.Item{ID: "approval-" + a.RequestID, TurnID: s.turn, Kind: harness.KindApproval, At: a.CreatedAt,
-		Approval: &harness.ApprovalBody{RequestID: a.RequestID, Owner: s.ownerLocked(a)}}
+		Approval: &harness.ApprovalBody{RequestID: a.RequestID, Owner: owner}}
+	if owner != "" {
+		// The question item's own Needs row (questionLocked) stands for
+		// its prompt, offered by the engine or found on screen.
+		s.publishLocked([]harness.Item{item}, nil)
+		return
+	}
 	row := harness.Row{ID: a.RequestID, Title: a.Title, State: harness.StateWaiting,
 		Open: &harness.Open{Kind: harness.OpenApproval, Ref: a.RequestID}}
 	if a.Subject != nil {
@@ -299,8 +309,15 @@ func (e *Engine) approvalClosed(ev wire.Event) {
 		if resolution == "" {
 			resolution = "gone"
 		}
-		it.Approval = &harness.ApprovalBody{RequestID: reqID, Resolved: resolution, Owner: it.Approval.Owner}
+		owner := it.Approval.Owner
+		it.Approval = &harness.ApprovalBody{RequestID: reqID, Resolved: resolution, Owner: owner}
 		s.publishLocked([]harness.Item{it}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: reqID}})
+		if owner != "" && resolution == wire.ResolutionExpired {
+			s.reofferLocked(owner, reqID)
+		}
+		if !s.screenPromptPendingLocked() {
+			s.reofferOpenLocked()
+		}
 		s.mu.Unlock()
 	}
 }

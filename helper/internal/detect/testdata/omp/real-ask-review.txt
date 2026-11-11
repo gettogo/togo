@@ -1,0 +1,30 @@
+│  Which areas should the new feature touch?                                                       │
+│  ☐ Backend                                                                                       │
+│    ↳ Server logic and APIs.                                                                      │
+│  ☐ Frontend                                                                                      │
+│    ↳ UI the user sees and uses.                                                                  │
+│  ☐ Database                                                                                      │
+│    ↳ Schema and data storage changes.                                                            │
+├─── [rollout] · options:2 ────────────────────────────────────────────────────────────────────────┤
+│  How should the feature ship?                                                                    │
+│  ○ Feature flag                                                                                  │
+│    ↳ Turn it on bit by bit; safer, but more code to manage.                                      │
+│  ○ Direct release                                                                                │
+│    ↳ On for everyone at once; simpler, but harder to undo.                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  ⎋ Asking two batched questions                            🗳️ ASK: Ask one multiple-choice question
+╭─ Ask ────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Areas    Rollout    Submit                                                                      │
+│ Review answers                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1. Areas: Backend, Frontend                                                                      │
+│ 2. Rollout: “Canary to 5 percent first”                                                          │
+│                                                                                                  │
+│ ❯ Submit                                                                                         │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ⏎ submit · ↑/↓ scroll · ⎋ cancel · ⌥H hide                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

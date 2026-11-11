@@ -94,8 +94,10 @@ struct IntegrationsRows: View {
                 .textCase(nil)
                 .task { await model.load() }
         } footer: {
-            if model.phase == .loaded, !model.setupRows.isEmpty {
-                Text(IntegrationsCopy.footer)
+            SectionFooter {
+                if model.phase == .loaded, !model.setupRows.isEmpty {
+                    Text(IntegrationsCopy.footer)
+                }
             }
         }
         .groupedRows()

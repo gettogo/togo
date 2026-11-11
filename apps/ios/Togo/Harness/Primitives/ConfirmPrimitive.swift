@@ -56,7 +56,13 @@ struct ConfirmPrimitive: View {
             }
         }
         .onChange(of: confirm) { _, new in model.update(new) }
-        .onAppear { if loopsPaused { model.armNow() } }
+        // A still (loops held) arms at once and without animating, so it is drawn as it settles.
+        .onAppear {
+            guard loopsPaused else { return }
+            var still = Transaction()
+            still.disablesAnimations = true
+            withTransaction(still) { model.armNow() }
+        }
         .haptic(needsYou ? .approve : .done, trigger: model.phase) { _, new in
             if case .answered = new { true } else { false }
         }
@@ -135,7 +141,12 @@ struct ConfirmPrimitive: View {
                     .disabled(!model.canSubmit)
                     .keyboardShortcut(.defaultAction)
             } else if needsYou {
+                // Under a navigation title the row once offered the hugging button a sliver and
+                // Confirm drew one letter per line. The button claims the row's width before the
+                // spinner's slot does, and keeps its style's wrapping: one line while the title
+                // fits, more lines (never clipped) for a long title at the largest sizes.
                 ApproveButton(title) { send() }
+                    .layoutPriority(1)
                     .disabled(!model.canSubmit)
                     .keyboardShortcut(.defaultAction)
             } else {

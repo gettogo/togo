@@ -105,6 +105,19 @@ struct RosterFilterHeader: View {
     /// Marks the leading edge, where the launch mark shrinks to on its way out.
     var launchTarget = false
 
+    /// The headline's own height, as laid out.
+    @State private var wordsHeight: CGFloat = 0
+
+    /// The button's touch height.
+    static let target: CGFloat = 44
+    /// How much of the target the row gives back above and below, so the first machine follows
+    /// close: only the blank part of it, never the words. One line keeps the row 28 points
+    /// tall; a headline that wraps (a narrow sidebar, large text) takes the room it needs
+    /// instead of running under the machine's heading.
+    static func overlap(words: CGFloat) -> CGFloat {
+        min(8, max(0, (target - words) / 2))
+    }
+
     var body: some View {
         Menu {
             Picker(selection: $store.filter) {
@@ -117,11 +130,13 @@ struct RosterFilterHeader: View {
             .pickerStyle(.inline)
         } label: {
             RosterHeadline(roster: roster, filter: store.filter, launchTarget: launchTarget)
-                .frame(minHeight: 44)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { wordsHeight = $0 }
+                .frame(minHeight: Self.target)
                 .contentShape(.rect)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        .padding(.vertical, -Self.overlap(words: wordsHeight))
         .accessibilityLabel(RosterCopy.show)
         .accessibilityValue(RosterHeadline.spoken(roster: roster, filter: store.filter))
         .accessibilityIdentifier("roster.filter")
@@ -173,12 +188,14 @@ struct RosterSidebarHeader: View {
     var search: Bool
     var toggle: Bool
     var focused: FocusState<Bool>.Binding
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 8) {
             if toggle {
                 Button(AppCommandCopy.hideSidebar, systemImage: "sidebar.leading") {
-                    withAnimation { store.toggleSidebar() }
+                    // motion: cause → effect — the column slides out toward the edge it lives on.
+                    withAnimation(Motion.animation(.sidebar, reduce: reduceMotion)) { store.toggleSidebar() }
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.glass)

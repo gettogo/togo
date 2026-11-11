@@ -1,0 +1,22 @@
+{
+  "name": "omp/real-ask-multi-toggled",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "omp",
+    "title": "Which areas should the new feature touch?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 OMP",
+    "subtitle": "Which areas should the new feature touch?",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

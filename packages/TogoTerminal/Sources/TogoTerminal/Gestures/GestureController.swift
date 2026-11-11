@@ -100,6 +100,8 @@ public struct GestureConfig: Equatable, Sendable {
     private let haptics = UISelectionFeedbackGenerator()
     private var touchMouse: TouchMouse?
     private var linkMenu: LinkMenu?
+    /// A long press on words selects them; their handles drag either end.
+    private var touchSelection: TouchSelection?
     /// Trackpad and mouse: the I-beam, clicks, hover and scrolling.
     let pointer: PointerController?
 
@@ -119,6 +121,7 @@ public struct GestureConfig: Equatable, Sendable {
             menu.showAll = { [weak self] in self?.onShowLinks() }
             linkMenu = menu
         }
+        touchSelection = (engine as? any TouchSelectionTarget).map(TouchSelection.init(target:))
         install()
     }
 
@@ -174,6 +177,9 @@ public struct GestureConfig: Equatable, Sendable {
         press.minimumPressDuration = 0.5
         linkPress = press
         add(press)
+        if let touchSelection {
+            add(touchSelection.pan)
+        }
         if bindings.touchMouse {
             installTouchMouse()
         }
@@ -229,12 +235,18 @@ public struct GestureConfig: Equatable, Sendable {
         }
     }
 
+    /// A link's menu on a link; anywhere else the word under the finger is selected with its
+    /// handles and Copy, as in any iOS text, rather than SwiftTerm's Select / Select All menu.
     @objc private func longPressed(_ press: UILongPressGestureRecognizer) {
-        guard press.state == .began, let target, let linkMenu else { return }
+        guard press.state == .began, let target else { return }
         let point = press.location(in: target.gestureView)
-        guard let url = target.bareLink(at: point) else { return }
-        haptics.selectionChanged()
-        linkMenu.present(url, at: point)
+        if let url = target.bareLink(at: point), let linkMenu {
+            haptics.selectionChanged()
+            linkMenu.present(url, at: point)
+        } else if let touchSelection {
+            // A blank keeps SwiftTerm's menu, for Paste.
+            if touchSelection.selectWord(at: point) { haptics.selectionChanged() } else { touchSelection.showMenu(at: point) }
+        }
     }
 
     @objc private func swiped(_ pan: UIPanGestureRecognizer) {
@@ -336,8 +348,15 @@ public struct GestureConfig: Equatable, Sendable {
             let count = (recognizer as? UITapGestureRecognizer)?.numberOfTapsRequired ?? 0
             return tapBindings.sequence(forTaps: count, isSelecting: target.isSelecting) != nil
         }
-        if recognizer === linkTap || recognizer === linkPress {
+        if recognizer === linkTap {
             return !target.isSelecting && target.bareLink(at: point) != nil
+        }
+        if recognizer === linkPress {
+            // Without touch selection (another engine) only a link takes the press.
+            return !target.isSelecting && (touchSelection != nil || target.bareLink(at: point) != nil)
+        }
+        if let touchSelection, recognizer === touchSelection.pan {
+            return touchSelection.shouldBegin()
         }
         if recognizer === mousePan {
             return !target.isSelecting && target.tracksMouse
@@ -368,6 +387,8 @@ public struct GestureConfig: Equatable, Sendable {
             return theirs.numberOfTapsRequired <= mine.numberOfTapsRequired
         }
         if recognizer === linkPress { return other is UILongPressGestureRecognizer }
+        // Scrolling and SwiftTerm's own selection drag wait while a finger may be on a handle.
+        if let touchSelection, recognizer === touchSelection.pan { return other is UIPanGestureRecognizer }
         if recognizer === mousePan, let pan = other as? UIPanGestureRecognizer {
             return pan.minimumNumberOfTouches == 1
         }

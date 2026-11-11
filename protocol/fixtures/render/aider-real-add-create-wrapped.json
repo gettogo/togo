@@ -1,0 +1,33 @@
+{
+  "name": "aider/real-add-create-wrapped",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "aider",
+    "title": "No files matched 'nosuch.txt'. Do you want to create /Users/jamie/proj/nosuch.txt?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "No",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Aider",
+    "subtitle": "No files matched 'nosuch.txt'. Do you want to create /Users/jamie/proj/nosuch.txt?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

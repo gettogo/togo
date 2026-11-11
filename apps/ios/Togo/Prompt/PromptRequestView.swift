@@ -170,6 +170,8 @@ struct PromptRequestView: View {
                     .countChange(Double(position))
             }
         }
+        // A tap target: 44 points tall, like every control.
+        .frame(minHeight: 44)
         // motion: state change — the queue count appears in place as a second request waits; the bar's height does not change.
         .motion(.respond, value: queue)
         .contentShape(.rect)
@@ -181,6 +183,7 @@ struct PromptRequestView: View {
         ))
         .accessibilityAddTraits(request.sessionID.isEmpty ? [] : .isButton)
         .accessibilityAction { if !request.sessionID.isEmpty { model.onOpen(request) } }
+        .accessibilityIdentifier("prompt.context")
     }
 
     /// Yes, No and Reply in a row, or stacked when the text is too large for one.
@@ -205,8 +208,10 @@ struct PromptRequestView: View {
                 .answerSource(AnswerMatch.id(request.id), in: answerSpace, active: tapped.isSource(.no))
         }
         if !request.more.isEmpty {
-            Button(PromptCopy.more) { showingMore = true }
-                .buttonStyle(.promptCapsule(.plain))
+            // The agent's choices: "More" beside a Yes and a No, "Answer" when they are all
+            // there is to pick from.
+            Button(request.asksYesOrNo ? PromptCopy.more : PromptCopy.answer) { showingMore = true }
+                .buttonStyle(.promptCapsule(request.asksYesOrNo ? .plain : .beacon))
                 .accessibilityLabel(PromptCopy.moreOptions)
         }
         if request.allowsReply {

@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ┃ Run the shell command `echo hello-from-amp` with the Bash tool. Nothing
+ ┃ else.
+
+ ⣿ Running 1 command ▸
+╭─ Tell Amp what to do differently ────────────────────────────────────────────╮
+│                                                                              │
+│ >  use echo hi instead                                                       │
+│                                                                              │
+╰────────────────────────────────────────────────── Enter submit · Esc cancel ─╯
+  Up next (1)
+  2. Tell Amp what to do differently
+╭──────────────────────────────────────────────────────────────── $···· ─ low ─╮
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰ ≈ Running Tools ──────── permissions: on ─ /Users/jamie/projects/amp (main) ─╯

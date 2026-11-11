@@ -1,0 +1,38 @@
+{
+  "name": "cursor/real-plan-ready-47",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cursor",
+    "title": "Ready to build?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes, build locally",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Yes, build in cloud",
+        "role": "other"
+      },
+      {
+        "n": 3,
+        "label": "No, propose changes",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cursor CLI",
+    "subtitle": "Ready to build?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

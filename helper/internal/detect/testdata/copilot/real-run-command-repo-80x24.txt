@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+ ❯ Use your shell tool to run exactly this command: touch x.txt — then   13:18 ┃
+   reply with the word done.                                                   ┃
+                                                                               ┃
+ ○ Shell Create empty file x.txt                                               ┃
+   touch x.txt                                                                 ┃
+                                                                               ┃
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Create empty file x.txt                                                      │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ ╭──────────────────────────────────────────────────────────────────────────╮ │
+│ │ touch x.txt                                                              │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ Do you want to run this command?                                             │
+│                                                                              │
+│ ❯ 1. Yes                                                                     │
+│   2. Yes, and don't ask again for `touch` in this repo                       │
+│   (/Users/jamie/proj)                                                        │
+│   3. No, and tell Copilot what to do differently (Esc to stop)               │
+│                                                                              │
+│ ↑/↓ to navigate · enter to select · esc to cancel                            │
+╰──────────────────────────────────────────────────────────────────────────────╯

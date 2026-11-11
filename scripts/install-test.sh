@@ -98,6 +98,8 @@ func main() {
 		} else {
 			fmt.Println("Not installed")
 		}
+	case "service install":
+		fmt.Println("Installed /fake/togo.plist")
 	case "daemon restart --when-idle":
 		fmt.Println("Restarting once idle")
 	default:

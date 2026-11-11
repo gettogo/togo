@@ -1,10 +1,21 @@
 {
-  "source": "synthetic",
   "agentVersion": null,
-  "match": true,
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ],
+    "3": [
+      "d",
+      "Enter"
+    ]
+  },
   "kind": "confirm",
-  "title": "Run shell command?",
-  "subject": null,
+  "match": true,
   "options": [
     {
       "n": 1,
@@ -15,16 +26,17 @@
       "n": 2,
       "label": "No",
       "role": "deny"
+    },
+    {
+      "n": 3,
+      "label": "Don't ask again",
+      "role": "deny"
     }
   ],
-  "keys": {
-    "1": [
-      "y",
-      "Enter"
-    ],
-    "2": [
-      "n",
-      "Enter"
-    ]
-  }
+  "source": "synthetic",
+  "subject": {
+    "kind": "command",
+    "text": "go test ./..."
+  },
+  "title": "Run shell command?"
 }

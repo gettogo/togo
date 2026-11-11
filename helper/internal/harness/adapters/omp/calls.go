@@ -26,6 +26,12 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 	s.tools[callID] = it
 	items := []harness.Item{*it}
 	var ops []harness.Op
+	if strings.EqualFold(name, "ask") {
+		if q := askQuestion(callID, tid, parent, at, args); q != nil {
+			s.asks[callID] = q
+			items = append(items, *q)
+		}
+	}
 	if parent == "" && s.turn != nil && !s.turn.ended {
 		s.turn.item.Turn.Steps++
 		if info.file != "" && !s.turn.files[info.file] {
@@ -122,6 +128,13 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 	it.Tool = &b
 	items := []harness.Item{*it}
 	var ops []harness.Op
+	if q, ok := s.asks[b.CallID]; ok {
+		body := *q.Question
+		body.Answered = askAnswers(&body, m)
+		q.Question = &body
+		items = append(items, *q)
+		delete(s.asks, b.CallID)
+	}
 	if agents := s.taskCalls[b.CallID]; len(agents) > 0 {
 		results := map[string]map[string]any{}
 		for _, r := range asList(details["results"]) {

@@ -2,8 +2,9 @@
   "name": "togo-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
-  // Default environment: a workers.dev sandbox for development and for
-  // self-hosting. Use `--env production` for the custom-domain deployment.
+  // One worker serves Togo: relay.togoapp.dev. workers.dev stays on until launch,
+  // then goes off. Self-hosters replace the route with their own domain (or drop
+  // it and use workers.dev).
   "workers_dev": true,
   "routes": [{ "pattern": "relay.togoapp.dev", "custom_domain": true }],
   // Logs never hold tokens or ciphertext.
@@ -24,22 +25,5 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["RateLimiter", "Mailbox"] }
-  ],
-  // Production serves only from the custom domain. Environments do not inherit
-  // bindings, vars or migrations, so they are repeated here. Self-hosters set
-  // their own domain (or drop this block and use the default environment).
-  "env": {
-    "production": {
-      "workers_dev": false,
-      "routes": [{ "pattern": "relay.togoapp.dev", "custom_domain": true }],
-      "observability": { "enabled": true, "head_sampling_rate": 0.1 },
-      "vars": { "APNS_TOPIC": "app.togo.Togo" },
-      "durable_objects": {
-        "bindings": [
-          { "name": "RATE_LIMITER", "class_name": "RateLimiter" },
-          { "name": "MAILBOX", "class_name": "Mailbox" }
-        ]
-      }
-    }
-  }
+  ]
 }

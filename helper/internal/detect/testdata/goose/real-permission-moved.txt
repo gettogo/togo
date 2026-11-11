@@ -1,0 +1,40 @@
+        "command": "make"
+      }
+    }
+
+◇  Goose would like to call the above tool, do you allow?
+│  Allow
+│
+    built
+`make` completed successfully:
+
+```
+built
+```
+
+Stopping as requested.
+  ⏱ 22.69s
+  ━━━━╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ 21% 14k/66k
+> Run the shell command `make clean` with your shell tool, then stop.
+
+
+  ────────────────────────────────────────
+  ▸ shell
+    command: make clean
+
+
+  Tool approval request
+    {
+      "tool_name": "shell",
+      "arguments": {
+        "command": "make clean"
+      }
+    }
+
+◆  Goose would like to call the above tool, do you allow?
+│  ○ Allow
+│  ○ Always Allow
+│  ● Deny (Deny the tool call)
+│  ○ Cancel
+└
+^[[B

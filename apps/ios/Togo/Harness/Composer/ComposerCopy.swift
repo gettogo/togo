@@ -91,6 +91,16 @@ enum ComposerCopy {
     static let attachUnavailable = String(localized: "composer.attach.unavailable",
                                           defaultValue: "The Togo helper on this machine can't take images yet. Update the helper there.")
 
+    static let hideKeyboard = String(localized: "composer.hideKeyboard", defaultValue: "Hide Keyboard")
+    static let fileTooLarge = String(
+        localized: "composer.paste.fileTooLarge", defaultValue: "That file is too large to send. Files up to 700 KB can go."
+    )
+
+    /// "Couldn't send the file. The connection timed out."
+    static func fileFailed(_ reason: String) -> String {
+        String(localized: "composer.paste.fileFailed", defaultValue: "Couldn't send the file. \(reason)")
+    }
+
     /// "Up to 10 images per message."
     static func attachLimit(_ n: Int) -> String {
         String(localized: "composer.attach.limit", defaultValue: "Up to \(n) images per message.")

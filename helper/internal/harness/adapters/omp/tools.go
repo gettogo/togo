@@ -33,6 +33,11 @@ func describeTool(name string, args map[string]any, cwd string) toolInfo {
 	url := firstArg(args, "url", "uri")
 	info := toolInfo{category: harness.ToolOther, title: name}
 	switch {
+	case n == "ask":
+		info.title = "Ask"
+		if qs := asList(args["questions"]); len(qs) > 0 {
+			info.title = join("Ask", str(obj(qs[0]), "question"))
+		}
 	case n == "task" || strings.HasPrefix(n, "subagent") || n == "agent":
 		info.category = harness.ToolAgent
 		info.title = "Run subagents"

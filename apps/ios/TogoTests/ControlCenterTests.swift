@@ -182,4 +182,22 @@ import TogoKit
         #expect(choices.deny?.n == 3)
         #expect(choices.more.map(\.n) == [2])
     }
+
+    /// A question with choices has no Yes and no No: every choice is its own answer, so the
+    /// bar never offers a Yes that would pick the first one.
+    @Test func choicesWithoutAYesAndANoAreAllAnswers() {
+        let options = [
+            ApprovalOption(n: 1, label: "Test app input", role: .other),
+            ApprovalOption(n: 2, label: "Make code changes", role: .other),
+            ApprovalOption(n: 3, label: "Something else", role: .other),
+        ]
+        let choices = RequestChoices(options)
+        #expect(choices.approve == nil)
+        #expect(choices.deny == nil)
+        #expect(!choices.yesOrNo)
+        #expect(choices.more.map(\.n) == [1, 2, 3])
+        let denyOnly = RequestChoices([ApprovalOption(n: 1, label: "Red", role: .other), ApprovalOption(n: 2, label: "No", role: .deny)])
+        #expect(!denyOnly.yesOrNo)
+        #expect(denyOnly.more.map(\.n) == [1, 2])
+    }
 }

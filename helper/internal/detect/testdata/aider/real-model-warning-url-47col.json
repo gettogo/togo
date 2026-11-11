@@ -1,10 +1,21 @@
 {
-  "source": "real",
   "agentVersion": "0.86.2",
-  "match": true,
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ],
+    "3": [
+      "d",
+      "Enter"
+    ]
+  },
   "kind": "confirm",
-  "title": "Open documentation url for more info?",
-  "subject": null,
+  "match": true,
   "options": [
     {
       "n": 1,
@@ -15,16 +26,17 @@
       "n": 2,
       "label": "No",
       "role": "deny"
+    },
+    {
+      "n": 3,
+      "label": "Don't ask again",
+      "role": "deny"
     }
   ],
-  "keys": {
-    "1": [
-      "y",
-      "Enter"
-    ],
-    "2": [
-      "n",
-      "Enter"
-    ]
-  }
+  "source": "real",
+  "subject": {
+    "kind": "text",
+    "text": "https://aider.chat/docs/llms/warnings.html"
+  },
+  "title": "Open documentation url for more info?"
 }

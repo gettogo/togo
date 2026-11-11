@@ -3,8 +3,8 @@ import TogoKit
 
 struct AboutView: View {
     static let sourceURL = URL(string: "https://github.com/gettogo/togo")!
-    static let privacyURL = URL(string: "https://togo.app/privacy/")!
-    static let supportURL = URL(string: "https://togo.app/support/")!
+    static let privacyURL = URL(string: "https://togoapp.dev/privacy/")!
+    static let supportURL = URL(string: "https://togoapp.dev/support/")!
 
     let appVersion: String
     let settings: AppSettings
@@ -65,10 +65,12 @@ struct AboutView: View {
                 webLink(settingsText("settings.about.support", "Support"), Self.supportURL)
                 webLink(settingsText("settings.about.privacy", "Privacy policy"), Self.privacyURL)
             } footer: {
-                Text(settingsText(
-                    "settings.about.licenses.footer",
-                    "Togo is free software under the GNU GPL version 3. The helper and relay are MIT licensed."
-                ))
+                SectionFooter {
+                    Text(settingsText(
+                        "settings.about.licenses.footer",
+                        "Togo is free software under the GNU GPL version 3. The helper and relay are MIT licensed."
+                    ))
+                }
             }
             .groupedRows()
             #if DEBUG

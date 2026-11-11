@@ -1,0 +1,44 @@
+{
+  "agentVersion": "1.0.108",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Accept plan and continue in Autopilot execution mode",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Accept plan and continue in Interactive execution mode",
+      "role": "approve"
+    },
+    {
+      "n": 3,
+      "label": "Exit to Interactive execution mode without running the plan",
+      "role": "deny"
+    },
+    {
+      "n": 4,
+      "label": "Suggest changes",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Plan Ready for Review"
+}

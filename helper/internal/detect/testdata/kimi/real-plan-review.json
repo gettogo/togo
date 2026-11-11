@@ -1,0 +1,37 @@
+{
+  "source": "real",
+  "agentVersion": "2.5.3",
+  "match": true,
+  "kind": "question",
+  "title": "▶ Ready to build with this plan?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Approve",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Reject",
+      "role": "deny"
+    },
+    {
+      "n": 3,
+      "label": "Revise",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  },
+  "readOnly": false
+}

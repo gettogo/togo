@@ -24,7 +24,7 @@ type result struct {
 // scenarios in report order.
 var scenarios = []string{
 	"create", "trust", "signin", "first_turn", "working", "model_switch", "mode", "effort",
-	"approval", "interrupt", "slash", "restore", "close",
+	"approval", "question", "interrupt", "slash", "restore", "close",
 }
 
 const okPrompt = "Reply with only the word ok."
@@ -73,7 +73,7 @@ func (r *runner) run(ctx context.Context) {
 	t1 := r.firstTurn(ctx)
 	r.judgeSignin(ctx)
 	if r.blocked != "" {
-		for _, s := range []string{"working", "model_switch", "mode", "effort", "approval", "interrupt", "slash"} {
+		for _, s := range []string{"working", "model_switch", "mode", "effort", "approval", "question", "interrupt", "slash"} {
 			r.set(s, skip, "blocked: %s", r.blocked)
 		}
 	} else {
@@ -88,7 +88,9 @@ func (r *runner) run(ctx context.Context) {
 		if r.want("effort") {
 			phase(ctx, 90*time.Second, func(c context.Context) { eff = r.effortChange(c) })
 		}
-		phase(ctx, 200*time.Second, func(c context.Context) { r.modelSwitch(c, &m) })
+		if r.want("model_switch") {
+			phase(ctx, 300*time.Second, func(c context.Context) { r.modelSwitch(c, &m) })
+		}
 		if !m.turned && (mode.target != "" || eff.target != "") {
 			// Mode and effort must hold across a turn even without a model switch.
 			phase(ctx, 120*time.Second, func(c context.Context) { r.turn(c, okPrompt, false, nil) })
@@ -101,6 +103,9 @@ func (r *runner) run(ctx context.Context) {
 		}
 		if r.want("approval") {
 			phase(ctx, 150*time.Second, r.approvalScenario)
+		}
+		if r.want("question") {
+			phase(ctx, 240*time.Second, r.questionScenario)
 		}
 		if r.want("interrupt") {
 			phase(ctx, 100*time.Second, r.interruptScenario)
@@ -119,9 +124,12 @@ func (r *runner) create(ctx context.Context) bool {
 	ok := false
 	phase(ctx, 90*time.Second, func(c context.Context) {
 		var s session
-		err := r.call(c, "session.create", map[string]any{
-			"agent": r.id, "cwd": r.sb.work, "muted": true, "cols": 100, "rows": 40,
-		}, &s)
+		params := map[string]any{"agent": r.id, "cwd": r.sb.work, "muted": true, "cols": 100, "rows": 40}
+		if a := r.opts.args[r.id]; len(a) > 0 {
+			params["args"] = a
+			r.note("launched with %s", strings.Join(a, " "))
+		}
+		err := r.call(c, "session.create", params, &s)
 		if err != nil {
 			r.set("create", fail, "session.create: %v", err)
 			return

@@ -62,10 +62,10 @@ struct ReviewDiffSnapshotTests {
     @Test func comment() {
         let draft = DiffModel.CommentDraft(row: 4, quote: "  app.get(\"/health\", health)", location: "src/router.ts:12")
         assertScreen(named: "comment") {
-            CommentSheet(draft: draft, actionTitle: DiffCopy.sendToSession, canSend: true) { _ in }
+            CommentSheet(draft: draft, actionTitle: DiffCopy.sendToSession, canSend: true) { _ in true }
         }
         assertScreen(named: "comment-no-session") {
-            CommentSheet(draft: draft, actionTitle: DiffCopy.openSessionToSend, canSend: false) { _ in }
+            CommentSheet(draft: draft, actionTitle: DiffCopy.openSessionToSend, canSend: false) { _ in true }
         }
     }
 

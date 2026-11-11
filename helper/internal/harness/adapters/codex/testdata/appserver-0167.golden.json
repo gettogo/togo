@@ -240,6 +240,75 @@
    }
   },
   {
+   "id": "rq-0",
+   "seq": 0,
+   "turnId": "01a1bbae-0f5e-7d41-80f5-b3a05ed572ee",
+   "kind": "question",
+   "at": "2026-11-06T12:00:01.7Z",
+   "question": {
+    "questions": [
+     {
+      "id": "decision",
+      "header": "Edits",
+      "prompt": "Would you like to make the following edits?",
+      "options": [
+       {
+        "id": "accept",
+        "label": "Yes, proceed",
+        "detail": "/Users/me/proj/notes.txt"
+       },
+       {
+        "id": "acceptForSession",
+        "label": "Yes, and don't ask again this session"
+       },
+       {
+        "id": "decline",
+        "label": "No, and tell Codex what to do differently"
+       }
+      ],
+      "multi": false,
+      "allowText": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "rq-0",
+   "seq": 0,
+   "turnId": "01a1bbae-0f5e-7d41-80f5-b3a05ed572ee",
+   "kind": "question",
+   "at": "2026-11-06T12:00:01.7Z",
+   "question": {
+    "questions": [
+     {
+      "id": "decision",
+      "header": "Edits",
+      "prompt": "Would you like to make the following edits?",
+      "options": [
+       {
+        "id": "accept",
+        "label": "Yes, proceed",
+        "detail": "/Users/me/proj/notes.txt"
+       },
+       {
+        "id": "acceptForSession",
+        "label": "Yes, and don't ask again this session"
+       },
+       {
+        "id": "decline",
+        "label": "No, and tell Codex what to do differently"
+       }
+      ],
+      "multi": false,
+      "allowText": false
+     }
+    ],
+    "answered": {
+     "decision": []
+    }
+   }
+  },
+  {
    "id": "exec-78477322-19e8-4862-9621-a6f136bb2789",
    "seq": 0,
    "turnId": "01a1bbae-0f5e-7d41-80f5-b3a05ed572ee",

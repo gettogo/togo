@@ -1,0 +1,30 @@
+│  Which areas should the new feature touch?                                                       │
+│  ☐ Backend                                                                                       │
+│    ↳ Server logic and APIs.                                                                      │
+│  ☐ Frontend                                                                                      │
+│    ↳ UI the user sees and uses.                                                                  │
+│  ☐ Database                                                                                      │
+│    ↳ Schema and data storage changes.                                                            │
+├─── [rollout] · options:2 ────────────────────────────────────────────────────────────────────────┤
+│  How should the feature ship?                                                                    │
+│  ○ Feature flag                                                                                  │
+│    ↳ Turn it on bit by bit; safer, but more code to manage.                                      │
+│  ○ Direct release                                                                                │
+│    ↳ On for everyone at once; simpler, but harder to undo.                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  ⎋ Asking two batched questions                            🗳️ ASK: Ask one multiple-choice question
+╭─ Ask ────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Areas    Rollout    Submit                                                                      │
+│ How should the feature ship?                                                                     │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ❯ ○ Feature flag (Recommended)                                                                   │
+│       Turn it on bit by bit; safer, but more code to manage.                                     │
+│   ○ Direct release                                                                               │
+│       On for everyone at once; simpler, but harder to undo.                                      │
+│   ○ Other (type your own)                                                                        │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ⏎ select · n note · ↑/↓ move · ⇥/←/→ question · ⎋ cancel · ⌥H hide                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

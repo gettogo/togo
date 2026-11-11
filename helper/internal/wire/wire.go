@@ -467,6 +467,10 @@ type AskParams struct {
 	// a notification. Empty means the role is inferred from the labels.
 	Approve string `json:"approve,omitempty"`
 	Deny    string `json:"deny,omitempty"`
+	// Plain marks a question whose options are choices, not a yes or a no:
+	// none gets the approve or deny role, whatever its words, so no surface
+	// offers a one-tap Yes that would pick one of them.
+	Plain bool `json:"plain,omitempty"`
 }
 
 // AskResult answers local.ask. Decision is nil on timeout.

@@ -1,0 +1,36 @@
+{
+  "agentVersion": "1.2.0",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "iOS",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "macOS",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Linux",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Which platforms should we support?"
+}

@@ -10,7 +10,7 @@ revision: 1
 match: { agents: [droid], commands: [droid] }
 harness: { version: [droid, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=1.5 <2" }
 # No status capability: the hooks carry no model, usage or context to fill one.
-capabilities: [chat, chat.anchors, send.queue, interrupt, commands, files, needs.approvals, agents,
+capabilities: [chat, chat.anchors, send.queue, interrupt, commands, files, needs.approvals, needs.questions, agents,
   changes, ports, resume, compact]
 feeds:
   hooks:            # `togo hook droid <event>` in ~/.factory/hooks.json (installed only by `togo hooks install --agent droid`)
@@ -50,8 +50,8 @@ actions:
       - { relaunch: { argv: [droid, --resume, '{{.id}}'] } }
     verify: { source: hooks, select: $state.harness_session, equals: '{{.id}}', within: 10s }
     stability: documented-command
-  answer:
-    builtin: approval_answer
+  answer:            # question items: keys on the dialog drawn (detect.ParseChoice)
+    builtin: screen_answer
     stability: experimental
   interrupt:
     keys: { keys: [Escape], until: idle, max: 2 }

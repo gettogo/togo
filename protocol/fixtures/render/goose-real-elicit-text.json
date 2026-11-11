@@ -1,0 +1,23 @@
+{
+  "name": "goose/real-elicit-text",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "goose",
+    "title": "note (Anything else?)",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "allowText": true,
+    "options": []
+  },
+  "expect": {
+    "title": "03 Goose",
+    "subtitle": "note (Anything else?)",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "source": "real",
+  "agentVersion": "2.5.3",
+  "match": true,
+  "kind": "question",
+  "title": "Trust this folder?",
+  "subject": {
+    "kind": "file",
+    "text": "/tmp/w/proj"
+  },
+  "options": [
+    {
+      "n": 1,
+      "label": "Trust and continue",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Exit",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

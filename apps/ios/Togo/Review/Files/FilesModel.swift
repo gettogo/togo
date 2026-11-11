@@ -106,7 +106,8 @@ enum FilesCopy {
     var reviewServices: any ReviewServices { services }
 
     var title: String {
-        path.isEmpty ? DisplayText.clean(subject.title) : DisplayText.clean(String(path.split(separator: "/").last ?? ""))
+        // At the root it is the tab's own title, the same on every tab; a folder names itself.
+        path.isEmpty ? subject.displayTitle : DisplayText.clean(String(path.split(separator: "/").last ?? ""))
     }
 
     var breadcrumb: String { Self.breadcrumb(path) }
@@ -185,7 +186,7 @@ enum FilesCopy {
 
     enum Content: Equatable, Sendable {
         case text([CodeRow])
-        case image(Data)
+        case image(FileImage)
         case binary(size: Int)
         case empty
     }
@@ -351,8 +352,8 @@ enum FilesCopy {
         let ext = (path as NSString).pathExtension.lowercased()
         if imageExtensions.contains(ext) {
             if result.encoding == .base64, !result.truncated, result.size < imageLimit,
-               let data = result.data, UIImage(data: data) != nil {
-                return .image(data)
+               let data = result.data, let picture = ImageShrinker.preview(data, maxSide: FileImage.maxSide) {
+                return .image(FileImage(data: data, picture: picture))
             }
             return .binary(size: result.size)
         }
@@ -362,6 +363,19 @@ enum FilesCopy {
         let tokens = language == .plain ? [] : Tokenizer.tokenize(file.lines, language: language)
         return .text(HiddenCharacters.reveal(CodeRow.file(file, tokens: tokens)))
     }
+}
+
+/// An image file's bytes and the picture decoded from them while the file loads, off the main
+/// thread and no larger than a 5× zoom can use, so the viewer draws it at once.
+struct FileImage: Equatable, @unchecked Sendable {
+    /// Long side in pixels: enough for the deepest zoom on the largest screen.
+    nonisolated static let maxSide = 4096
+
+    let data: Data
+    /// Never mutated after decoding.
+    let picture: UIImage
+
+    nonisolated static func == (a: FileImage, b: FileImage) -> Bool { a.data == b.data }
 }
 
 private extension FileViewerModel.Content {

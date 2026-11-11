@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/detect"
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/wire"
 	"gopkg.in/yaml.v3"
@@ -33,6 +34,7 @@ type runner struct {
 
 	mu          sync.Mutex
 	items       map[string]harness.Item
+	epoch       string // the item log's epoch as of the last open
 	seq         int64
 	working     bool
 	workingSeen bool
@@ -110,6 +112,12 @@ func (r *runner) open(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if res.Epoch != r.epoch {
+		// A new item log (the session was restored): its seqs start
+		// over, so the old items and the old high mark go, or the next
+		// turn's items would sit below the mark and never be seen.
+		r.epoch, r.items, r.seq = res.Epoch, map[string]harness.Item{}, 0
+	}
 	for _, it := range res.Items {
 		r.items[it.ID] = it
 		if it.Seq > r.seq {
@@ -212,6 +220,14 @@ func (r *runner) workingNow(ctx context.Context) (bool, error) {
 	r.working = w
 	r.mu.Unlock()
 	return w, nil
+}
+
+// captureLate reads the pane for a report after the phase's deadline,
+// which has usually passed when a scenario fails by timing out.
+func (r *runner) captureLate(ctx context.Context) string {
+	c, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return r.capture(c)
 }
 
 func (r *runner) capture(ctx context.Context) string {
@@ -366,12 +382,12 @@ func (r *runner) settle(ctx context.Context, max time.Duration) error {
 			r.blocked = "update dialog on screen (not answered, nothing typed)"
 			return nil
 		}
-		if trustDialog.MatchString(screenTail(pane, 30)) && trustSince.IsZero() {
+		if trustOnScreen(pane) && trustSince.IsZero() {
 			trustSince = time.Now()
 		}
 		// Detection may take a few seconds (a redraw, the idle check): give
 		// the prompt 15 s to reach Needs you before calling it a miss.
-		if trustDialog.MatchString(screenTail(pane, 30)) && time.Since(trustSince) > 15*time.Second && !deskTrust {
+		if trustOnScreen(pane) && time.Since(trustSince) > 15*time.Second && !deskTrust {
 			// On screen for two polls and still not in Needs you: the phone
 			// could not get past it. Answer it at the desk to go on.
 			deskTrust = true
@@ -389,7 +405,7 @@ func (r *runner) settle(ctx context.Context, max time.Duration) error {
 			stable = 0
 		}
 		last = pane
-		onTrust := trustDialog.MatchString(screenTail(pane, 30))
+		onTrust := trustOnScreen(pane)
 		if stable >= 2 && time.Now().After(minReady) && !onTrust {
 			if l := lineMatching(screenTail(pane, 20), loginPrompt); l != "" {
 				r.blocked = "sign-in prompt on screen (nothing typed): " + clip(oneLine(l), 90)
@@ -443,6 +459,14 @@ var (
 	yesRE    = regexp.MustCompile(`(?i)^\s*[│|]?\s*(?:[❯›>●▶→]\s*)?(?:(\d)[.)]\s*)?(yes|trust|allow|proceed)\b`)
 )
 
+// trustOnScreen reports a folder-trust dialog in the bottom of the pane
+// that still waits. Cursor leaves its answered dialog drawn above the
+// composer, marked "Trusting workspace...".
+func trustOnScreen(pane string) bool {
+	tail := screenTail(pane, 30)
+	return trustDialog.MatchString(tail) && !strings.Contains(tail, "Trusting workspace")
+}
+
 // deskAnswer picks the "yes" row of an arrow or numbered menu on screen,
 // as the owner would at the desk, and checks the dialog went away.
 func (r *runner) deskAnswer(ctx context.Context, pane string) error {
@@ -469,17 +493,31 @@ func (r *runner) deskAnswer(ctx context.Context, pane string) error {
 		}
 		keys = append(keys, "Enter")
 	default:
-		return fmt.Errorf("no yes option found")
+		// A dialog whose rows name their own keys ("[a] Trust this
+		// workspace", Cursor): the prompt detector's approve option.
+		p, ok := detect.Detect(pane)
+		if !ok {
+			return fmt.Errorf("no yes option found")
+		}
+		for _, o := range p.Options {
+			if o.Role == wire.RoleApprove && len(p.Keys[o.N]) > 0 {
+				keys = append(keys, p.Keys[o.N]...)
+				break
+			}
+		}
+		if len(keys) == 0 {
+			return fmt.Errorf("no yes option found")
+		}
 	}
 	if _, err := r.sb.tmux(ctx, append([]string{"send-keys", "-t", "=" + r.sid + ":"}, keys...)...); err != nil {
 		return err
 	}
 	_ = sleep(ctx, 1500*time.Millisecond)
-	if p := r.capture(ctx); trustDialog.MatchString(screenTail(p, 30)) && digit != "" {
+	if p := r.capture(ctx); trustOnScreen(p) && digit != "" {
 		_, _ = r.sb.tmux(ctx, "send-keys", "-t", "="+r.sid+":", "Enter")
 		_ = sleep(ctx, 1500*time.Millisecond)
 	}
-	if p := r.capture(ctx); trustDialog.MatchString(screenTail(p, 30)) {
+	if p := r.capture(ctx); trustOnScreen(p) {
 		return fmt.Errorf("still on screen after %v", keys)
 	}
 	r.note("answered the folder-trust dialog at the desk (%s)", strings.Join(keys, " "))

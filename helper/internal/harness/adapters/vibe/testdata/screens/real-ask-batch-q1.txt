@@ -1,0 +1,24 @@
+  Frontend, Docs. Question 2 header "Rollout", "How should we roll out?",
+  options Canary, Big bang. Do nothing else.
+───────────────────────────────────────────────────────────────────────────────
+
+⏵ Thought
+                                                                               ▅
+□ Asking 2 questions
+
+⠘⠒ User input required… (3s Esc/Ctrl+C to interrupt)
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ [Areas]   Rollout                                                            │
+│                                                                              │
+│ Which areas should change?                                                   │
+│                                                                              │
+│   1. [ ] Backend                                                             │
+│   2. [ ] Frontend                                                            │
+│   3. [ ] Docs                                                                │
+│   4. [ ] Type your answer...                                                 │
+│                                                                              │
+│      Next →                                                                  │
+│                                                                              │
+│ ←→ questions  ↑↓/jk navigate  Space/Enter toggle  Esc cancel                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+/Users/jamie/proj       ⧉                     ctx ██▋    14.1k/32.8k

@@ -122,7 +122,8 @@ import TogoKit
         #expect(rows[0].bottom == [.init(from: 0, to: 0, lane: 0)])
         #expect(rows[1].top == [.init(from: 0, to: 0, lane: 0)])
         #expect(rows[2].bottom.isEmpty)
-        #expect(!rows.contains(where: \.merge))
+        let merges = rows.contains(where: \.merge)
+        #expect(!merges)
     }
 
     @Test func mergeOpensALaneThatMeetsAtTheFork() {

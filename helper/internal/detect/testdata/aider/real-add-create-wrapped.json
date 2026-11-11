@@ -1,0 +1,30 @@
+{
+  "agentVersion": "0.86.2",
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ]
+  },
+  "kind": "confirm",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "No files matched 'nosuch.txt'. Do you want to create /Users/jamie/proj/nosuch.txt?"
+}

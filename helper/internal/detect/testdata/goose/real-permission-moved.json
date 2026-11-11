@@ -1,0 +1,49 @@
+{
+  "source": "real",
+  "agentVersion": "1.57.0",
+  "match": true,
+  "kind": "permission",
+  "title": "Goose would like to call the above tool, do you allow?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Allow",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Always Allow",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Deny",
+      "role": "deny"
+    },
+    {
+      "n": 4,
+      "label": "Cancel",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Up",
+      "Up",
+      "Enter"
+    ],
+    "2": [
+      "Up",
+      "Enter"
+    ],
+    "3": [
+      "Enter"
+    ],
+    "4": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

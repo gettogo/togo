@@ -1,0 +1,39 @@
+{
+  "agentVersion": "1.0.108",
+  "keys": {
+    "1": [
+      "Enter"
+    ],
+    "2": [
+      "Down",
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Down",
+      "Enter"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "iOS",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Android",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Web",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Platforms"
+}

@@ -1,0 +1,24 @@
+   Hooks Stop
+    └─ '/Users/jamie/.togo/bin/togo' hook droi... : Exit code 0
+
+   Use your shell tool to run exactly this command: touch second.txt
+
+
+   Hooks UserPromptSubmit · 1 hook · 1 completed
+
+   Hooks PreToolUse → 1 completed
+   Execute touch second.txt
+
+   Hooks Notification
+    └─ '/Users/jamie/.togo/bin/togo' hook droi... : Exit code 0
+
+  Command to approve · low risk
+  ↳ touch second.txt
+╭──────────────────────────────────────────────────────────────────────────────╮
+│  Yes, allow                                                                  │
+│  Yes, and always allow low impact commands (file edits and read-only         │
+│commands)                                                                     │
+│  No, cancel                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+  ↑↓ navigate   Enter select   Esc cancel   Alt/Option+E to inspect approval …
+

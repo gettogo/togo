@@ -370,7 +370,12 @@ var AllowedKeys = map[string]bool{"Escape": true, "Enter": true, "C-c": true, "B
 
 // StopKeys may be sent only as an until-idle interrupt's Then: chords that
 // stop work Escape does not reach, such as Claude Code's background agents.
-var StopKeys = map[string]bool{"C-x": true, "C-k": true}
+//
+// Escape is one too, for the second press of a harness that cancels on a
+// double Escape: sent with the first as one write the two read as Alt+Escape
+// (Crush 0.100 then only armed "esc press again to cancel"), so the second
+// goes after a gap.
+var StopKeys = map[string]bool{"C-x": true, "C-k": true, "Escape": true}
 
 // UntilIdle is the Until that presses an interrupt until the session is idle.
 const UntilIdle = "idle"

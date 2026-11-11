@@ -65,7 +65,9 @@ struct ImageShrinkerTests {
         #expect(host == Samples.studio && session == "s-04")
         #expect(name.hasSuffix(".png"))
         #expect(pasted == [shellQuote(["/tmp/togo-uploads/\(name)"]) + " "])
-        #expect(flow.phase == .idle)
+        // Said, then gone by itself.
+        #expect(flow.phase == .sent)
+        #expect(flow.phase.message == "Image sent. Its path is typed in the terminal.")
     }
 
     @Test func noUploadCapabilityExplains() async throws {
@@ -100,7 +102,8 @@ struct ImageShrinkerTests {
         services.failure = nil
         await flow.retry()
         #expect(pasted.count == 1)
-        #expect(flow.phase == .idle)
+        #expect(flow.phase == .sent)
+        #expect(!flow.canRetry)
     }
 
     @Test func failedPhotoLoadOffersRetry() async throws {

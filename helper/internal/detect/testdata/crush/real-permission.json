@@ -1,0 +1,36 @@
+{
+  "source": "real",
+  "agentVersion": "crush v0.100.0",
+  "match": true,
+  "kind": "permission",
+  "title": "Allow bash?",
+  "options": [
+    {
+      "n": 1,
+      "label": "Allow",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Allow for Session",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Deny",
+      "role": "deny"
+    }
+  ],
+  "keys": {
+    "1": [
+      "a"
+    ],
+    "2": [
+      "s"
+    ],
+    "3": [
+      "d"
+    ]
+  },
+  "subject": {"kind": "command", "text": "touch conformance-approval.txt"}
+}

@@ -210,12 +210,12 @@ struct SettingsView: View {
         case .terminal:
             TerminalSettingsView(settings: settings, fonts: values.fonts, update: actions.update)
         case .keyboard:
-            KeyboardSettingsView(keyBar: settings.keyBarConfig, update: updateKeyBar)
+            KeyboardSettingsView(keys: settings.terminalKeys, update: updateKeys)
         case .shortcuts:
             ShortcutBuilderView { item in
-                var bar = settings.keyBarConfig
-                bar.items.append(item)
-                updateKeyBar(bar)
+                var keys = settings.terminalKeys
+                keys.shortcuts.append(item)
+                updateKeys(keys)
             }
         case .gestures:
             GestureSettingsView(gestures: settings.gestures) { gestures in
@@ -253,9 +253,9 @@ struct SettingsView: View {
         }
     }
 
-    private func updateKeyBar(_ bar: KeyBarConfig) {
+    private func updateKeys(_ keys: TerminalKeysConfig) {
         var changed = values.settings
-        changed.keyBarConfig = bar
+        changed.terminalKeys = keys
         actions.update(changed)
     }
 

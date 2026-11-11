@@ -201,13 +201,15 @@ struct MachineNotifySection: View {
                 .foregroundStyle(Color.togoSnow)
                 .textCase(nil)
         } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                if let error = model.error {
-                    Label(error, systemImage: "exclamationmark.circle")
-                        .foregroundStyle(Color.togoSnow)
-                }
-                if supported, model.settings != nil {
-                    Text(MachineNotifyCopy.muteFooter(name: name))
+            SectionFooter {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let error = model.error {
+                        Label(error, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(Color.togoSnow)
+                    }
+                    if supported, model.settings != nil {
+                        Text(MachineNotifyCopy.muteFooter(name: name))
+                    }
                 }
             }
         }

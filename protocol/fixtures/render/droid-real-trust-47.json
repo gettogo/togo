@@ -1,0 +1,33 @@
+{
+  "name": "droid/real-trust-47",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "droid",
+    "title": "Trust this folder?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Trust this folder",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Exit without trusting",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Droid",
+    "subtitle": "Trust this folder?",
+    "body": "",
+    "category": "togo.request"
+  }
+}

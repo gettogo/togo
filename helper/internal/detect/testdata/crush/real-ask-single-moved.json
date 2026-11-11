@@ -1,0 +1,39 @@
+{
+  "source": "real",
+  "agentVersion": "0.100.0",
+  "match": true,
+  "kind": "question",
+  "title": "Which colour should the banner use?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Red",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Green",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Blue",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Up",
+      "Enter"
+    ],
+    "2": [
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

@@ -37,12 +37,13 @@ struct SubagentChatView: View {
                 }
             }
             // Each row keeps the reading column itself (`chatColumn()`), as in the main chat.
-            .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
+            .id(ChatScroll.contentID)
         }
-        .defaultScrollAnchor(ChatScroll.foot)
-        .defaultScrollAnchor(ChatScroll.foot, for: .sizeChanges)
-        // A card that needs the user scrolls into view as it arrives, as in the main chat.
+        // A needs card scrolled into view keeps the chat's gap at the foot, as in the main chat.
+        .chatScrollMargins()
+        // The one owner of the scrolling, as in the main chat: the foot through every size
+        // change, and a card that needs the user scrolled into view as it arrives.
         .modifier(NeedsScrolling(
             marks: ChatScroll.marks(thread.rows) { approval in actions.card(approval.requestId) != nil },
             loaded: store.hasLoaded, scroll: scroll
@@ -114,17 +115,20 @@ struct SubagentChatView: View {
         switch row {
         case .prompt(let item):
             if case .user(let user) = item.body {
+                // Selectable words: the row's actions join their edit menu, not a context menu.
                 PromptBubble(text: user.text)
+                    .environment(\.selectableTextActions, textMenu(item))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(ChatCopy.spokenPrompt(user.text))
-                    .contextMenu { menu(item) }
+                    .accessibilityActions { menu(item) }
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
                 ReplyRow(text: text.text)
+                    .environment(\.selectableTextActions, textMenu(item))
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel(ChatCopy.spokenReply(text.text))
-                    .contextMenu { menu(item) }
+                    .accessibilityLabel(ChatCopy.spokenReply(RichMarkdown.spoken(text.text)))
+                    .accessibilityActions { menu(item) }
             }
         case .work(let id, let summary, let steps):
             let disclosure = expanded[id] ?? Disclosure()
@@ -166,8 +170,8 @@ struct SubagentChatView: View {
     }
 
     @ViewBuilder private func menu(_ item: HarnessItem) -> some View {
-        if let text = item.chatText {
-            Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
+        if item.chatText != nil {
+            Button(ChatCopy.copy, systemImage: "doc.on.doc") { item.copyWords() }
         }
         if canShow(item) {
             Button(ChatCopy.showInTerminal, systemImage: "terminal") {
@@ -175,6 +179,17 @@ struct SubagentChatView: View {
                 Task { await store.showInTerminal(item) }
             }
         }
+    }
+
+    private func textMenu(_ item: HarnessItem) -> SelectableTextActions {
+        var show: (@MainActor () -> Void)?
+        if canShow(item) {
+            show = { [store, item] in
+                store.focusedAgent = nil
+                Task { await store.showInTerminal(item) }
+            }
+        }
+        return ChatTextMenu.actions(item: item, quote: nil, showInTerminal: show)
     }
 
     /// A step that is itself an agent opens that agent's conversation; any other opens its

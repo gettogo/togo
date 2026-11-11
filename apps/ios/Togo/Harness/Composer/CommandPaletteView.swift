@@ -278,6 +278,7 @@ private struct SettingRow: View {
                 Text(verbatim: value)
                     .font(.mono(.subheadline))
                     .foregroundStyle(Color.togoMute)
+                    // trunc-ok: VoiceOver reads the whole value; the tap opens the list that shows it
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .layoutPriority(1)

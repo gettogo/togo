@@ -25,6 +25,8 @@ private struct PromptBarFeed: ViewModifier {
         var keyboardElsewhere: Bool
         /// The on-screen keyboard types into the chat's composer.
         var composerTyping: Bool
+        /// The focused session shows its terminal: its requests are answered there, not here.
+        var terminalLayer: Bool
     }
 
     private var suggestions: [StartSuggestion] {
@@ -46,7 +48,8 @@ private struct PromptBarFeed: ViewModifier {
             keyboardElsewhere: focused != nil || store.sheet != nil || !store.path.isEmpty
                 || store.dialogOpen || store.reviewing != nil,
             composerTyping: typesElsewhere && KeyboardWatch.shared.keyboardUp && !KeyboardWatch.shared.terminalTyping
-                && !model.barTextFocused
+                && !model.barTextFocused,
+            terminalLayer: focused.map { store.layer(for: $0) == .terminal } ?? false
         )
     }
 
@@ -78,7 +81,7 @@ private struct PromptBarFeed: ViewModifier {
     private func update(_ inputs: Inputs, current: PromptBarModel.Mode) {
         let next = PromptFeed.mode(
             requests: inputs.requests, current: current, hasMachines: inputs.hasMachines,
-            composerTyping: inputs.composerTyping
+            composerTyping: inputs.composerTyping, terminalLayer: inputs.terminalLayer
         )
         if next != model.mode { model.mode = next }
         // A request shown over a terminal that has the keyboard keeps to its smallest form.

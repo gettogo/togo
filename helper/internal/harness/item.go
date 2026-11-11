@@ -207,6 +207,13 @@ type QuestionBody struct {
 	// RequestID is the pending approval that is this question at the
 	// terminal, once linked.
 	RequestID string `json:"requestId,omitempty"`
+	// Approve and Deny are set by an adapter on a permission it answers
+	// through its own API: the option ids a notification's Approve and Deny
+	// pick. The engine offers such a question as an approval, so it can be
+	// answered from the Lock Screen and the Watch; the app keeps every
+	// option. Never sent.
+	Approve string `json:"-"`
+	Deny    string `json:"-"`
 }
 
 // Question is one question of a Confirm, in an item or a screen.

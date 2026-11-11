@@ -81,18 +81,20 @@ struct ImportHostsView: View {
             } header: {
                 SectionHeading(settingsText("import.hosts.paste", "Paste your config"))
             } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let message = model.message {
-                        Label(message, systemImage: "exclamationmark.circle")
-                            .foregroundStyle(Color.togoSnow)
+                SectionFooter {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let message = model.message {
+                            Label(message, systemImage: "exclamationmark.circle")
+                                .foregroundStyle(Color.togoSnow)
+                        }
+                        Text(settingsText(
+                            "import.hosts.keysNote",
+                            "Keys aren't imported. New machines use this \(DeviceName.model)'s key; pick another in each machine's details."
+                        ))
                     }
-                    Text(settingsText(
-                        "import.hosts.keysNote",
-                        "Keys aren't imported. New machines use this \(DeviceName.model)'s key; pick another in each machine's details."
-                    ))
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
                 }
-                .font(.footnote)
-                .foregroundStyle(Color.togoMute)
             }
             .groupedRows()
             if !model.skipped.isEmpty { skippedSection }
@@ -138,10 +140,12 @@ struct ImportHostsView: View {
         } header: {
             SectionHeading(settingsText("import.hosts.hosts", "Hosts"))
         } footer: {
-            if let failure = model.failure {
-                Label(failure, systemImage: "exclamationmark.circle")
-                    .font(.footnote)
-                    .foregroundStyle(Color.togoSnow)
+            SectionFooter {
+                if let failure = model.failure {
+                    Label(failure, systemImage: "exclamationmark.circle")
+                        .font(.footnote)
+                        .foregroundStyle(Color.togoSnow)
+                }
             }
         }
         .groupedRows()

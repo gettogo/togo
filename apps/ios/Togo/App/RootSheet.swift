@@ -4,6 +4,7 @@ import TogoKit
 /// The sheet for each `AppSheet`, built against the app's services.
 struct RootSheet: View {
     @Environment(\.agentLibrary) private var agentLibrary
+    @Environment(\.demoExit) private var demoExit
     let sheet: AppSheet
     let store: AppStore
     let onboarding: any OnboardingServices
@@ -32,6 +33,15 @@ struct RootSheet: View {
     }
 
     @ViewBuilder private var content: some View {
+        if let demoExit, sheet.changesMachine {
+            // The demo machine has nothing to add, edit or sign in to.
+            DemoNotHere(exit: demoExit) { store.sheet = nil }
+        } else {
+            forms
+        }
+    }
+
+    @ViewBuilder private var forms: some View {
         switch sheet {
         case .addMachine:
             AddMachineSheet(store: store, services: onboarding, tutorial: tutorial)
@@ -67,6 +77,16 @@ struct RootSheet: View {
         case .review:
             // RootView presents the review itself, as a cover on a phone.
             EmptyView()
+        }
+    }
+}
+
+private extension AppSheet {
+    /// A form that adds, changes or signs in to a machine.
+    var changesMachine: Bool {
+        switch self {
+        case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .signIn: true
+        case .newSession, .review, .settings: false
         }
     }
 }

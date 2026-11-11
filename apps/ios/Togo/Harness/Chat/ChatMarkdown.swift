@@ -14,39 +14,29 @@ enum ChatMarkdown {
     static func blocks(_ text: String) -> [Block] {
         cache.blocks(text)
     }
-
-    /// Inline markdown with its links: markdown links, bare URLs and file references
-    /// (`ChatLinks`). The plain text when it does not parse.
-    static func attributed(_ text: String) -> AttributedString {
-        ChatLinks.markdown(text)
-    }
 }
 
-/// A reply's markdown, laid out block by block.
+/// A reply's markdown, laid out block by block. Prose and headings are selectable text
+/// (`SelectableText`): a long press picks a word with handles to drag, and a selection reaches
+/// across paragraphs up to a code block. Links open on a tap.
 struct MarkdownText: View, Equatable {
     let text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(ChatMarkdown.blocks(text).enumerated()), id: \.offset) { _, block in
-                switch block {
-                case .prose(let prose):
-                    // Links are underlined in snow and open on a tap (the chat's `openURL`);
-                    // selecting text is "Select text" in the row's menu, off the tap path.
-                    Text(ChatMarkdown.attributed(prose))
-                        .font(.body)
-                        .foregroundStyle(Color.togoSnow)
-                        .lineSpacing(3)
-                        .tint(Color.togoSnow)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                case .heading(let heading):
-                    Text(ChatMarkdown.attributed(heading))
-                        .font(.headline)
-                        .foregroundStyle(Color.togoSnow)
-                        .tint(Color.togoSnow)
-                        .accessibilityAddTraits(.isHeader)
-                case .code(_, let code):
+        VStack(alignment: .leading, spacing: ChatSelectable.blockSpacing) {
+            ForEach(Array(ChatSelectable.segments(ChatMarkdown.blocks(text)).enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case .text(let blocks):
+                    // A streamed reply changes only its last blocks; the text before keeps its
+                    // key, so it is neither rebuilt nor measured again.
+                    SelectableText(key: blocks, copy: { ChatPasteboard.copy(selection: $0) }) { traits in
+                        ChatSelectable.text(blocks, traits: traits)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                case .code(let code):
                     CodeWell(text: code)
+                case .table(let table):
+                    MarkdownTableView(table: table)
                 }
             }
         }
@@ -54,30 +44,59 @@ struct MarkdownText: View, Equatable {
 }
 
 /// Machine text in a well: SF Mono on the deepest surface, scrolling sideways rather than
-/// wrapping, so a command or a stack trace keeps its shape. Its URLs and file references open
-/// on a tap; Copy and Select text are in its menu.
+/// wrapping, so a command or a stack trace keeps its shape. Any part of it can be selected and
+/// copies exactly, whitespace and all; its URLs and file references open on a tap. Copy in its
+/// corner, and in the edit menu, copies the whole code with nothing added.
 struct CodeWell: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The row's own actions (Quote, Copy message), kept after Copy code in the edit menu.
+    @Environment(\.selectableTextActions) private var rowActions
     let text: String
 
-    @State private var selecting = false
+    @State private var copied = false
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            Text(ChatLinks.plain(text))
-                .font(.system(.footnote, design: .monospaced))
-                .foregroundStyle(Color.togoSnow)
-                .tint(Color.togoSnow)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(12)
+            // The corner's copy button keeps clear of the first line's end.
+            SelectableText(
+                key: text, layout: .lines, insets: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 40),
+                copy: { ChatPasteboard.copy(exact: $0.string) }
+            ) { traits in
+                ChatSelectable.attributed(ChatLinks.plain(text), style: .code, traits: traits)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
-        .contextMenu {
-            Button(ChatCopy.copy, systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
-            Button(ChatCopy.selectText, systemImage: "selection.pin.in.out") { selecting = true }
+        .overlay(alignment: .topTrailing) { copyButton }
+        .environment(\.selectableTextActions, SelectableTextActions { [rowActions] selected in
+            [UIAction(title: ChatCopy.copyCode, image: UIImage(systemName: "doc.on.doc")) { _ in copy() }]
+                + (rowActions?.items(selected) ?? [])
+        })
+    }
+
+    private var copyButton: some View {
+        Button(action: copy) {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                // motion: state change — the glyph becomes a check in place once the code is copied.
+                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Color.togoMute)
+                .frame(width: 44, height: 40)
+                .contentShape(.rect)
         }
-        // Nests by policy: selecting text from a reply inside a sheet (a helper's thread, a step's
-        // details) returns to it, the way a share sheet does.
-        .presentSheet("chat.markdownSelect", isPresented: $selecting, nests: true) { SelectTextSheet(text: text) }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .accessibilityLabel(copied ? ChatCopy.copied : ChatCopy.copyCode)
+        .task(id: copied) {
+            guard copied else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
+        }
+    }
+
+    private func copy() {
+        ChatPasteboard.copy(exact: text)
+        Haptic.done.play()
+        copied = true
     }
 }

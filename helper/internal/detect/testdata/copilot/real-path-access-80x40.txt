@@ -1,0 +1,40 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+ │ raw page directly. example.com's title should be "Example Domain," and I    ┃
+ │ want to confirm that before relying on it.                                  ┃
+                                                                               ┃
+ ● Fetching web content https://example.com · url: "… Here is the raw content: ┃
+                                                                               ┃
+ ● Example Domain                                                              ┃
+                                                                               ┃
+ ❯ Use your view tool to read /etc/hosts and reply with its line count   13:23 ┃
+   only.                                                                       ┃
+                                                                               ┃
+ ○ Read hosts                                                                  ┃
+                                                                               ┃
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Allow path access                                                            │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ This action may read the following path outside the paths currently allowed  │
+│ for this session.                                                            │
+│                                                                              │
+│ ╭──────────────────────────────────────────────────────────────────────────╮ │
+│ │ /etc/hosts                                                               │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ Read access covers this directory and its descendants:                       │
+│                                                                              │
+│ ╭──────────────────────────────────────────────────────────────────────────╮ │
+│ │ /private/etc                                                             │ │
+│ ╰──────────────────────────────────────────────────────────────────────────╯ │
+│                                                                              │
+│ Do you want to allow this?                                                   │
+│                                                                              │
+│ ❯ 1. Yes                                                                     │
+│   2. Yes, and remember this path for this session                            │
+│  3. Yes, allow Copilot to read files in the listed directory for this        │
+│  session                                                                     │
+│   4. No (Esc)                                                                │
+│                                                                              │
+│ ↑/↓ to navigate · enter to select · esc to cancel                            │
+╰──────────────────────────────────────────────────────────────────────────────╯

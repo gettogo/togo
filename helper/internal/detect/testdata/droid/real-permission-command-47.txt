@@ -1,0 +1,30 @@
+
+⛬  done
+
+   Hooks Stop
+    └─ '/Users/jamie/.to... : Exit code 0
+
+   Use your shell tool to run exactly this comm
+and: touch second.txt
+
+   Hooks UserPromptSubmit · 1 hook · 1
+         completed
+
+
+
+   Hooks PreToolUse → 1 completed
+   Execute touch second.txt
+
+   Hooks Notification
+    └─ '/Users/jamie/.to... : Exit code 0
+
+  Command to approve · low risk
+  ↳ touch second.txt
+╭─────────────────────────────────────────────╮
+│  Yes, allow                                 │
+│  Yes, and always allow low impact commands  │
+│(file edits and read-only commands)          │
+│  No, cancel                                 │
+╰─────────────────────────────────────────────╯
+  ↑↓ navigate   Enter select   Esc cancel   …
+

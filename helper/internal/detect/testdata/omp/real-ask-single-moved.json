@@ -1,0 +1,39 @@
+{
+  "source": "real",
+  "agentVersion": "18.16.0",
+  "match": true,
+  "kind": "question",
+  "title": "What should I work on next?",
+  "subject": null,
+  "options": [
+    {
+      "n": 1,
+      "label": "Bug fixes",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "New feature",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Refactoring",
+      "role": "other"
+    }
+  ],
+  "keys": {
+    "1": [
+      "Up",
+      "Enter"
+    ],
+    "2": [
+      "Enter"
+    ],
+    "3": [
+      "Down",
+      "Enter"
+    ]
+  },
+  "readOnly": false
+}

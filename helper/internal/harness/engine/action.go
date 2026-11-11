@@ -205,6 +205,17 @@ func (e *Engine) run(ctx context.Context, s *sess, name string, act spec.Action,
 		s.mu.Lock()
 		early := notYet(raw, s.stateLocked())
 		s.mu.Unlock()
+		if early && strings.HasPrefix(name, "set_") && e.startSession(ctx, s) {
+			// A model, mode or effort picked before the first prompt: the
+			// session was started for it, the pick applies to it, and then
+			// the agent's screen is put on it (which may restart the agent,
+			// so it comes last).
+			res, err := e.run(ctx, s, name, act, args)
+			if err == nil && res.Result == harness.ResultApplied {
+				e.showSession(ctx, s)
+			}
+			return res, err
+		}
 		if early {
 			return harness.ActionResult{Result: harness.ResultFallback, Message: "Nothing has started here yet"}, nil
 		}
@@ -499,6 +510,10 @@ func (e *Engine) runBuiltin(ctx context.Context, s *sess, name string, args map[
 		answers := answerArgs(args)
 		target, _ := args["target"].(string)
 		return e.answerClaudeQuestion(ctx, s, target, answers)
+	case "screen_answer":
+		answers := answerArgs(args)
+		target, _ := args["target"].(string)
+		return e.answerScreenQuestion(ctx, s, target, answers)
 	case "rpc_reply":
 		return e.rpcReply(ctx, s, args)
 	}

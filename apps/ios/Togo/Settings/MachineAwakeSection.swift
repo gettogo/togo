@@ -210,15 +210,17 @@ struct MachineAwakeRows: View {
                 .textCase(nil)
                 .task { await model.load() }
         } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                if let error = model.error {
-                    Label(error, systemImage: "exclamationmark.circle")
-                        .foregroundStyle(Color.togoSnow)
-                }
-                if let status = model.status {
-                    let reason = AwakeCopy.reason(status)
-                    if !reason.isEmpty {
-                        Text(verbatim: reason)
+            SectionFooter {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let error = model.error {
+                        Label(error, systemImage: "exclamationmark.circle")
+                            .foregroundStyle(Color.togoSnow)
+                    }
+                    if let status = model.status {
+                        let reason = AwakeCopy.reason(status)
+                        if !reason.isEmpty {
+                            Text(verbatim: reason)
+                        }
                     }
                 }
             }

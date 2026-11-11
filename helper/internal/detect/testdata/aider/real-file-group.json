@@ -1,0 +1,60 @@
+{
+  "agentVersion": "0.86.2",
+  "keys": {
+    "1": [
+      "y",
+      "Enter"
+    ],
+    "2": [
+      "n",
+      "Enter"
+    ],
+    "3": [
+      "a",
+      "Enter"
+    ],
+    "4": [
+      "s",
+      "Enter"
+    ],
+    "5": [
+      "d",
+      "Enter"
+    ]
+  },
+  "kind": "confirm",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Yes",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "No",
+      "role": "deny"
+    },
+    {
+      "n": 3,
+      "label": "All",
+      "role": "approve_always"
+    },
+    {
+      "n": 4,
+      "label": "Skip all",
+      "role": "deny"
+    },
+    {
+      "n": 5,
+      "label": "Don't ask again",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "file",
+    "text": "alpha.py"
+  },
+  "title": "Add file to the chat?"
+}

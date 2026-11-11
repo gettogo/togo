@@ -10,7 +10,7 @@ revision: 1
 match: { agents: [kimi], commands: [kimi] }
 harness: { version: [kimi, --version], pattern: '(\d+\.\d+\.\d+)', range: ">=2.0 <3" }
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, mode, model,
-  agents, background, plan, changes, status, resume, compact]
+  agents, background, plan, changes, status, resume, compact, needs.approvals, needs.questions]
 feeds:
   wire:
     jsonl: { glob: '~/.kimi-code/sessions/wd_*_{{slice (sha256 .cwd) 0 12}}/session_*/agents/main/wire.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
@@ -76,6 +76,17 @@ actions:
   interrupt:
     keys: { keys: [Escape] }
     stability: documented
+  # Prompts are logged as interaction.request (kind question or approval) and answered in the
+  # TUI only, so the answer is keys. Approvals (ids approval_…: a tool's Approve once / for this
+  # session / Reject, or a plan's Approve / Reject / Revise) are numbered menus the screen
+  # watcher reads with these labels: one pick through that prompt. Questions (ids question_…:
+  # `→ [1] Label` rows with descriptions, `[ ]/[✓]` for multi-select, Other, a tab strip and a
+  # "Ready to submit your answers?" page) go through the shared dialog driver. Seen on 2.5.3.
+  answer:
+    branch:
+      - { when: '{{eq (part "_" 0 .target) "approval"}}', builtin: approval_answer }
+      - { builtin: screen_answer }
+    stability: experimental
 modes:
   choices:
     - { id: default, label: Ask }

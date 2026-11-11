@@ -32,12 +32,12 @@ enum KeyRepeatTiming {
     private let schedule: Schedule
     private var cancel: Cancel?
     private var isHeld: @MainActor () -> Bool = { false }
-    private let timing: (Int) -> TimeInterval
+    private let timing: @MainActor (Int) -> TimeInterval
     private var count = 0
 
     init(
         schedule: @escaping Schedule = ChordRepeater.timer,
-        timing: @escaping (Int) -> TimeInterval = { $0 == 0 ? ChordRepeater.initialDelay : ChordRepeater.interval }
+        timing: @escaping @MainActor (Int) -> TimeInterval = { $0 == 0 ? ChordRepeater.initialDelay : ChordRepeater.interval }
     ) {
         self.timing = timing
         self.schedule = schedule

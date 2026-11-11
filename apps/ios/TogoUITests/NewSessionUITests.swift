@@ -28,14 +28,17 @@ import XCTest
 
         let start = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Start")).firstMatch
         XCTAssertTrue(start.isEnabled)
-        assertTappable(start)
+        // A system bar item reports its glyph's frame, not its touch area.
+        XCTAssertTrue(start.isHittable)
         start.tap()
 
-        XCTAssertTrue(app.staticTexts["09, payments"].waitForExistence(timeout: 5))
-        // The workspace is found by its tab strip: a cover with a back button on a phone, the
-        // detail beside the sidebar on iPad and an open iPhone Duo.
+        // The workspace is found by its tab strip beside the sidebar (iPad, an open iPhone Duo),
+        // and by its bar's title on a phone, where the title's menu lists the tabs.
         let tab = app.scrollViews["Open sessions"].buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "09, ")).firstMatch
-        XCTAssertTrue(tab.waitForExistence(timeout: 5), "The workspace shows the new session's tab")
+        XCTAssertTrue(
+            tab.waitForExistence(timeout: 5) || app.navigationBars.buttons["payments"].waitForExistence(timeout: 5),
+            "The workspace shows the new session's tab"
+        )
     }
 
     /// Every step can close the sheet, not only the first.

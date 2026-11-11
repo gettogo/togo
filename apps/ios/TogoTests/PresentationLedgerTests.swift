@@ -255,7 +255,8 @@ struct PresentationLedgerTests {
         var ledger = PresentationLedger()
         ledger.request(sheet("settings"))
         for kind in [PresentationKind.sheet, .popover, .sheet, .cover, .sheet] {
-            #expect(ledger.request(of(kind, "settings")))
+            let shown = ledger.request(of(kind, "settings"))
+            #expect(shown)
             #expect(ledger.modalDepth <= 1)
             #expect(ledger.entries.count == 1)
         }

@@ -51,6 +51,9 @@ actions:
       - { when: '{{.state.idle}}', type: { text: '/model {{.id}}', submit: true, when_idle: true } }
       - { when: '{{.state.harness_session}}', relaunch: { argv: [cursor-agent, --model, '{{.id}}', --resume, '{{.state.harness_session}}'] } }
     stability: documented-command
+  # No question items: AskQuestion fires no hook and its transcript line
+  # comes only after the answer, so its dialog reaches the phone as a
+  # screen prompt (detect's cursorAsk), answered by its keys.
   answer:
     builtin: approval_answer
     stability: experimental

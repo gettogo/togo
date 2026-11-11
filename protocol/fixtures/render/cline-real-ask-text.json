@@ -1,0 +1,22 @@
+{
+  "name": "cline/real-ask-text",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cline",
+    "title": "What should the greeting text say?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Cline",
+    "subtitle": "What should the greeting text say?",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

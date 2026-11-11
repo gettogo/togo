@@ -75,7 +75,7 @@ extension AppStore {
         case .newSession(let hostID):
             sheet = .newSession(hostID)
         case .retry:
-            TutorialTip.offline.done()
+            tipDone(.offline)
             Task { await services.refresh() }
         case .signIn(let hostID):
             sheet = .signIn(hostID)

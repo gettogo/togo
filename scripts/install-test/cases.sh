@@ -14,7 +14,7 @@ CASES=(
   refuses_http_redirect_with_wget refuses_symlinked_togo runs_nothing_when_truncated
   openssl_path_without_minisign minisign_path codesign_path_on_darwin
   refuses_without_any_verifier installs_to_togo_bin_by_default
-  restarts_daemon_when_service_installed runs_from_a_pipe rejects_bad_usage
+  restarts_daemon_when_service_installed installs_service_by_default runs_from_a_pipe rejects_bad_usage
 )
 
 BASE_TOOLS=(awk cat chmod cp cut grep gzip head mkdir mktemp mv od pwd rm sed tail tar tr uname wc sysctl ln readlink)
@@ -142,7 +142,7 @@ case_installs_fresh() {
   run_install -- --dir "$C/dir"
   expect_code 0
   expect_same "$C/dir/togo" "$W/bins/v1.0.0_${HOST_OS}_$HOST_ARCH"
-  expect_tail "togo v1.0.0" "Next: $C/dir/togo service install"
+  expect_tail "togo v1.0.0"
   expect_short
   [ "$(ls -A "$C/dir")" = togo ] || fail_msg "install directory holds $(ls -A "$C/dir" | tr '\n' ' ')"
   grep -q "/latest" "$WWW/requests.log" || fail_msg "latest release was not looked up"
@@ -319,7 +319,7 @@ case_uses_busybox_wget() {
   run_install -- --dir "$C/dir"
   expect_code 0
   expect_same "$C/dir/togo" "$W/bins/v1.0.0_${HOST_OS}_$HOST_ARCH"
-  expect_tail "togo v1.0.0" "Next: $C/dir/togo service install"
+  expect_tail "togo v1.0.0"
 }
 
 case_refuses_http_redirect_with_wget() {
@@ -424,7 +424,7 @@ case_installs_to_togo_bin_by_default() {
   expect_code 0
   expect_same "$C/home/.togo/bin/togo" "$W/bins/v1.0.0_${HOST_OS}_$HOST_ARCH"
   expect_err "$C/home/.togo/bin is not on your PATH"
-  expect_tail "togo v1.0.0" "Next: $C/home/.togo/bin/togo service install"
+  expect_tail "togo v1.0.0"
   [ -z "$(ls -A "$C/usr-local-bin")" ] || fail_msg "wrote to the read-only directory"
   # A writable system directory gets a link, for the terminal's PATH.
   mkdir -p "$C/writable"
@@ -459,13 +459,30 @@ case_restarts_daemon_when_service_installed() {
   ! grep -q "daemon restart" "$C/togo.log" || fail_msg "restarted without an installed service"
 }
 
+case_installs_service_by_default() {
+  tools default
+  run_install TOGO_FAKE_LOG="$C/togo.log" -- --version v1.0.0 --dir "$C/dir"
+  expect_code 0
+  grep -qx "service install" "$C/togo.log" || fail_msg "service was not installed"
+  expect_no_out "Next:"
+  : >"$C/togo.log"
+  run_install TOGO_FAKE_LOG="$C/togo.log" -- --version v1.0.0 --dir "$C/dir" --no-service
+  expect_code 0
+  ! grep -q "service install" "$C/togo.log" || fail_msg "--no-service installed the service"
+  expect_tail "togo v1.0.0" "Next: $C/dir/togo service install"
+  : >"$C/togo.log"
+  run_install TOGO_FAKE_LOG="$C/togo.log" -- --version v1.0.0 --dir "$C/dir" --service
+  expect_code 0
+  grep -qx "service install" "$C/togo.log" || fail_msg "--service was not accepted"
+}
+
 case_runs_from_a_pipe() {
   tools default
   # As in curl ... | sh: the script arrives on stdin, and a togo that reads
   # stdin must not swallow the rest of it.
   PIPED=1 run_install TOGO_FAKE_READ_STDIN=1 -- --version v1.0.0 --dir "$C/dir"
   expect_code 0
-  expect_tail "togo v1.0.0" "Next: $C/dir/togo service install"
+  expect_tail "togo v1.0.0"
 }
 
 case_refuses_symlinked_togo() {

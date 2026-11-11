@@ -38,7 +38,9 @@ struct SettingsPrimitive: View {
                 } header: {
                     if let title = section.title { Text(title).textCase(nil) }
                 } footer: {
-                    if let footer = section.footer { Text(footer) }
+                    SectionFooter {
+                        if let footer = section.footer { Text(footer) }
+                    }
                 }
             }
         }

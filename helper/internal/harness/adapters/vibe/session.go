@@ -27,6 +27,8 @@ type session struct {
 	order  []string                // turn ids, oldest first
 	tools  map[string]harness.Item // running effects by entry id
 	failed map[string]bool         // turns whose error notice was shown
+	asks   map[string]harness.Item // open prompts (ask.go) by item id
+	gates  map[string]string       // approval callback id -> the effect it gates
 }
 
 type turn struct {
@@ -39,7 +41,8 @@ type turn struct {
 
 func newSession(env harness.Env) *session {
 	return &session{env: env, state: map[string]string{}, turns: map[string]*turn{},
-		tools: map[string]harness.Item{}, failed: map[string]bool{}}
+		tools: map[string]harness.Item{}, failed: map[string]bool{},
+		asks: map[string]harness.Item{}, gates: map[string]string{}}
 }
 
 func (s *session) Name() string { return MapperSession }
@@ -58,6 +61,10 @@ type record struct {
 	Type    string `json:"type"`
 	Payload struct {
 		Delta []op `json:"delta"`
+		// callback_registered and callback_resolved (ask.go).
+		CallbackID string          `json:"callback_id"`
+		Routing    *callbackEntry  `json:"routing"`
+		Result     *callbackResult `json:"result"`
 	} `json:"payload"`
 }
 
@@ -135,7 +142,19 @@ type turnError struct {
 
 func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	var r record
-	if json.Unmarshal(rec.Data, &r) != nil || r.Type != "projection_delta" || len(r.Payload.Delta) == 0 {
+	if json.Unmarshal(rec.Data, &r) != nil {
+		return nil, nil
+	}
+	switch {
+	case r.Type == "callback_registered" && r.Payload.Routing != nil:
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.callbackOpened(*r.Payload.Routing), nil
+	case r.Type == "callback_resolved" && r.Payload.Result != nil:
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.callbackResolved(r.Payload.CallbackID, *r.Payload.Result), nil
+	case r.Type != "projection_delta" || len(r.Payload.Delta) == 0:
 		return nil, nil
 	}
 	hookstyle.MarkLive(s.env.SessionID)
@@ -242,6 +261,11 @@ func (s *session) entry(e entry) []harness.Item {
 		return append(items, harness.Item{ID: e.ID, TurnID: e.TurnID, Kind: harness.KindThinking, At: at,
 			Thinking: &harness.TextBody{Text: hookstyle.Clip(e.Text)}})
 	case "effect":
+		if isAsk(e.Detail.ToolName) {
+			if x, ok := s.askEffect(e, at); ok {
+				return append(items, x)
+			}
+		}
 		x := s.effect(e, at)
 		if t != nil && !t.steps[e.ID] {
 			t.steps[e.ID] = true
@@ -418,6 +442,7 @@ func (s *session) end(id, state string, at time.Time) []harness.Item {
 		items = append(items, x)
 		delete(s.tools, eid)
 	}
+	items = append(items, s.closeAsks(id)...)
 	t.state, t.ended = state, &at
 	s.working(false, at)
 	return append(items, s.turnItem(id))

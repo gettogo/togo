@@ -59,8 +59,9 @@ struct WorkspaceSnapshotTests {
         for id in tabs {
             store.setLink(id == selected ? link : Self.mosh, for: TabID(hostID: Self.macbook, sessionID: id))
         }
-        // RootView sets this tint for the whole app.
-        return WorkspaceView(store: store, terminals: terminals)
+        // RootView sets this tint for the whole app. The session's items are the bar of the
+        // navigation stack the workspace is shown in, so it is drawn in one.
+        return NavigationStack { WorkspaceView(store: store, terminals: terminals) }
             .tint(Color.togoSnow)
     }
 

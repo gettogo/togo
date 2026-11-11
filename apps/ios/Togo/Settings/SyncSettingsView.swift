@@ -16,11 +16,13 @@ struct SyncSettingsView: View {
                 .disabled(!iCloudAvailable)
                 .frame(minHeight: 44)
             } footer: {
-                VStack(alignment: .leading, spacing: 6) {
-                    if !iCloudAvailable {
-                        Text(settingsText("settings.sync.unavailable", "Sign in to iCloud in Settings to sync."))
+                SectionFooter {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if !iCloudAvailable {
+                            Text(settingsText("settings.sync.unavailable", "Sign in to iCloud in Settings to sync."))
+                        }
+                        Text(settingsText("settings.sync.footer", "Private keys stay on this \(DeviceName.model)."))
                     }
-                    Text(settingsText("settings.sync.footer", "Private keys stay on this \(DeviceName.model)."))
                 }
             }
             .groupedRows()

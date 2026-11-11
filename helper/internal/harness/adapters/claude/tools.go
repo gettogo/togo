@@ -29,6 +29,8 @@ func (t *transcript) toolUse(e entry, b block, at time.Time, turn, parent string
 		it := t.question(b, in, at, turn, parent)
 		t.questions[b.ID] = &it
 		return []harness.Item{it}, nil
+	case b.Name == "ExitPlanMode":
+		return t.planExit(b, in, at, turn, parent), nil
 	}
 	title, category, subj := describeTool(b.Name, in, t.cwd)
 	it := harness.Item{ID: b.ID, TurnID: turn, Parent: parent, Kind: harness.KindTool, At: at,
@@ -278,6 +280,36 @@ func (t *transcript) question(b block, in map[string]any, at time.Time, turn, pa
 		qb.Questions = append(qb.Questions, qu)
 	}
 	return harness.Item{ID: b.ID, TurnID: turn, Parent: parent, Kind: harness.KindQuestion, At: at, Question: qb}
+}
+
+// Claude's plan dialog as the TUI draws it (2.1.x): the question and its
+// three answers. The screen prompt the watcher finds carries the same
+// words, so the engine links it to the question item.
+const (
+	planPrompt = "Would you like to proceed?"
+	planAuto   = "Yes, and auto-accept edits"
+	planManual = "Yes, and manually approve edits"
+	planKeep   = "No, keep planning"
+)
+
+// planExit maps ExitPlanMode: the plan itself as a message, then a question
+// with the dialog's answers, a permission the engine offers on the Lock
+// Screen (approve is the manual yes, deny keeps planning). Its tool result
+// settles it: approved, or rejected.
+func (t *transcript) planExit(b block, in map[string]any, at time.Time, turn, parent string) []harness.Item {
+	var items []harness.Item
+	if plan := strings.TrimSpace(str(in, "plan")); plan != "" {
+		items = append(items, harness.Item{ID: b.ID + "-plan", TurnID: turn, Parent: parent, Kind: harness.KindAssistant, At: at,
+			Assistant: &harness.TextBody{Text: plan}})
+	}
+	q := harness.Item{ID: b.ID, TurnID: turn, Parent: parent, Kind: harness.KindQuestion, At: at, Question: &harness.QuestionBody{
+		Questions: []harness.Question{{ID: "plan", Header: "Plan", Prompt: planPrompt, Options: []harness.Choice{
+			{ID: "auto", Label: planAuto}, {ID: "manual", Label: planManual}, {ID: "keep", Label: planKeep},
+		}}},
+		Approve: "manual", Deny: "keep",
+	}}
+	t.questions[b.ID] = &q
+	return append(items, q)
 }
 
 // planUse maps TodoWrite, TaskCreate and TaskUpdate onto the plan.

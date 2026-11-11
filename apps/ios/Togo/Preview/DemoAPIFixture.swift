@@ -2,55 +2,53 @@
 import Foundation
 import TogoKit
 
-/// `-ui-demo-api`: what the website's screen captures show. Session 01 reviews the demo API
-/// (`togo-demo-api`) right after the recorded Claude Code session
-/// protocol/v1/replays/claude.page.jsonl ("Add a small HTML page at / that shows the service
-/// name, the version from package.json and the uptime…"): `src/app.ts` modified, and
-/// `src/routes/home.ts` and `test/home.test.ts` new, as `git status` and `git diff` report them
-/// (kept on togo-demo-api's branch demo/home-page). Its server listens on its default port and
-/// answers `/` with the page that session wrote. The new session sheet lists the agents the
-/// registry knows, installed as on the owner's Mac.
+/// `-ui-demo-api`: what the website's screen captures show. Session 01 is the recorded OpenCode
+/// session protocol/v1/replays/opencode.status.jsonl on togo-demo-status, a small service status
+/// page ("Add an incident history timeline under the services…"), reviewed right after it:
+/// four files modified and three new, as `git status` and `git diff` report them (the tree is
+/// kept on togo-demo-status's branch demo/incidents; the demo machine's `DemoProject`, so the
+/// captures and the in-app demo share one copy). The first machine reads
+/// as the owner's laptop, and the new session sheet lists the agents the registry knows,
+/// installed as on the owner's Mac, with ~/status first among recent folders.
 enum DemoAPIFixture {
     static var enabled: Bool { UITestLaunch.current.demoAPI }
 
     static let session = "s-01"
-    static let root = "/Users/sam/Dev/togo-demo-api"
+    /// The session's line: the helper names a session after its folder.
+    static let name = "status"
+    static let agentName = "OpenCode"
+    static let activity: String? = nil
+    static let root = "/Users/sam/status"
+    static let machine = "MacBook Pro"
+
+    /// The status project and the session's changes: the same copy the demo machine plays.
+    private static let project = DemoProject.load()
 
     static var status: GitStatus {
-        GitStatus(
+        let files = project?.status ?? []
+        return GitStatus(
             repo: true, root: root, branch: "main", ahead: 0, behind: 0, truncated: false,
-            files: [
-                ReviewFixtures.file("src/app.ts", ".", "M"),
-                ReviewFixtures.file("src/routes/home.ts", "?", "?"),
-                ReviewFixtures.file("test/home.test.ts", "?", "?"),
-            ]
+            files: files.filter { $0.index != "?" }.map(\.path).sorted().map { ReviewFixtures.file($0, ".", "M") }
+                + files.filter { $0.index == "?" }.map(\.path).sorted().map { ReviewFixtures.file($0, "?", "?") }
         )
     }
 
-    static let diffs: [String: String] = [
-        "src/app.ts": """
-            diff --git a/src/app.ts b/src/app.ts
-            index e81e3e5..584e522 100644
-            --- a/src/app.ts
-            +++ b/src/app.ts
-            @@ -1,10 +1,12 @@
-             import express from "express";
-            +import { home } from "./routes/home.js";
-             import { health } from "./routes/health.js";
-             import { login } from "./routes/login.js";
-            \u{20}
-             export function createApp() {
-               const app = express();
-               app.use(express.json());
-            +  app.get("/", home);
-               app.get("/health", health);
-               app.post("/login", login);
-               return app;
+    static var diffs: [String: String] { project?.diffs ?? [:] }
 
-            """,
-    ]
+    /// The untracked files, as the review reads them whole.
+    static var reads: [String: FsReadResult] {
+        let project = project
+        return (project?.status ?? []).filter { $0.index == "?" }.reduce(into: [:]) { result, file in
+            guard let text = project?.work[file.path] else { return }
+            result[file.path] = FsReadResult(path: file.path, size: text.utf8.count, encoding: .utf8, content: text, truncated: false)
+        }
+    }
 
-    /// The compiled server run with node: Express on every address, as lsof reports it (`*:3000`).
+    /// Ports and the preview still show the earlier recorded Claude Code session on the demo API
+    /// (protocol/v1/replays/claude.page.jsonl, togo-demo-api's branch demo/home-page): the server
+    /// it ran and the page it wrote at `/`. The website's fidelity baselines for them are that
+    /// session's.
+    /// Its compiled server run with node: Express on every address, as lsof reports it (`*:3000`).
     static let ports = [ListeningPort(port: 3000, address: "*", pid: 2944, command: "node")]
 
     /// What the API answers at `/`, byte for byte: the page the session wrote, 30 seconds after the
@@ -99,7 +97,7 @@ enum DemoAPIFixture {
 
     static let recentDirs = [root, "/Users/sam/src/app", "/Users/sam/src/site", "/Users/sam/notes"]
 
-    /// Claude Code is the starred agent, so it leads the list and is chosen.
-    static let favorites = ["claude"]
+    /// omp is the starred agent, so it leads the list and is chosen.
+    static let favorites = ["omp"]
 }
 #endif

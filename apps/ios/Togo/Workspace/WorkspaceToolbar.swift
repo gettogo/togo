@@ -8,8 +8,10 @@ import TogoKit
 /// toggle as a capsule of its own, root.md), then Run again once the agent stopped,
 /// then Changes, the session's way into its git review, then the layer switch, mission control,
 /// Preview, the session menu, and beside the sidebar the app's Settings last (root.md). When
-/// the bar runs out of room the items stay in this order of priority: mission control while it
-/// has a badge, Changes and the session menu, the layer switch, the rest, Settings first to go.
+/// the bar runs out of room the system folds items into its overflow menu by `DockPriority`:
+/// mission control while it has a badge, then Changes, the session menu, Show keyboard and the
+/// terminal controller stay; the layer switch, mission control without a badge, Preview and
+/// Settings go first, the last placed first.
 /// Under a compact horizontal bar (`WorkspaceBarLayout.compact`) the workspace passes no mission
 /// item and folds Preview: both are in the session menu, leaving Changes, the layer switch and
 /// the menu.
@@ -29,6 +31,11 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
     /// "Show Sidebar" / "Hide Sidebar", where the root moved the split view's toggle into this
     /// bar. Declared before every `.primaryAction` item so its spacer parts it from them.
     var sidebar: SidebarToggleToolbarItem? = nil
+    /// The terminal's controller as the bar's last capsule, where the bar is vertical and the
+    /// terminal layer is up (2026-11-10-keyboard/contract.md).
+    var keys: TerminalKeysToolbarItem? = nil
+    /// Show keyboard, while the terminal layer is up and nothing types into it.
+    var showKeyboard: ShowKeyboardToolbarItem? = nil
     @ViewBuilder let actions: () -> Actions
 
     var body: some ToolbarContent {
@@ -48,14 +55,14 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
         }
         if let review {
             if #available(iOS 27.0, *) {
-                review.changesItem.visibilityPriority(.high)
+                review.changesItem.visibilityPriority(DockPriority.tier(.changes).priority)
             } else {
                 review.changesItem
             }
         }
         if let layer {
             if #available(iOS 27.0, *) {
-                layer.visibilityPriority(ToolbarItemVisibilityPriority(lowerThan: .high))
+                layer.visibilityPriority(DockPriority.tier(.layer).priority)
             } else {
                 layer
             }
@@ -64,16 +71,30 @@ struct WorkspaceToolbar<Actions: View>: ToolbarContent {
             mission
         }
         if let review {
-            review.previewItem
+            if #available(iOS 27.0, *) {
+                review.previewItem.visibilityPriority(DockPriority.tier(.preview).priority)
+            } else {
+                review.previewItem
+            }
         }
         // Not the ellipsis: that symbol belongs to the system's own overflow.
         if #available(iOS 27.0, *) {
-            menu.visibilityPriority(.high)
+            menu.visibilityPriority(DockPriority.tier(.actions).priority)
         } else {
             menu
         }
         if let settings {
             settings
+        }
+        if let showKeyboard {
+            if #available(iOS 27.0, *) {
+                showKeyboard.visibilityPriority(.high)
+            } else {
+                showKeyboard
+            }
+        }
+        if let keys {
+            keys
         }
     }
 
@@ -157,7 +178,8 @@ struct ReviewToolbarItems {
 
     /// Shown for every session whose machine can read git, until a read finds no repository.
     /// The changed-file count is a badge on the symbol; the title stays "Changes", so the item
-    /// never changes width and VoiceOver hears the count as "Changes, 3 changes".
+    /// never changes width. VoiceOver hears the system's badge value ("Changes, 3 items"), which
+    /// replaces any value set on the button.
     var changesItem: some ToolbarContent {
         ChangesToolbarItem(store: store, row: row, model: model)
     }
@@ -180,7 +202,6 @@ private struct ChangesToolbarItem: ToolbarContent {
                 }
                 .badge(model.changes)
                 .accessibilityLabel(ReviewEntryCopy.changesItem)
-                .accessibilityValue(model.changesLabel ?? "")
                 .accessibilityHint(ReviewEntryCopy.changesHint)
                 .accessibilityIdentifier("workspace.changes")
             }
@@ -219,7 +240,9 @@ struct WorkspaceTitle: Equatable {
     /// Why the link fell back from the transport asked for, for the session menu.
     var fallback: String?
 
-    init(tab: WorkspaceTab, row: SessionRow?, machine: String?, message: String?, glance: String? = nil) {
+    /// `brief`: the subtitle is the bib and status only, for a compact bar, where a longer one
+    /// pushes the bar's items into an overflow menu.
+    init(tab: WorkspaceTab, row: SessionRow?, machine: String?, message: String?, glance: String? = nil, brief: Bool = false) {
         let name = row.map { $0.name.isEmpty ? $0.agentName : $0.name } ?? tab.title
         title = name
         let link = tab.link
@@ -236,6 +259,7 @@ struct WorkspaceTitle: Equatable {
         var words: [String] = []
         if let bib = row?.bib ?? tab.bib { words.append(bib) }
         if let row { words.append(LifecycleCopy.status(row.status, exit: row.exit)) }
+        let short = words.joined(separator: " · ")
         if let agent = row?.agentName ?? tab.agent, !agent.isEmpty, agent.caseInsensitiveCompare(name) != .orderedSame { words.append(agent) }
         if let machine { words.append(machine) }
         // The transport is said only while the link is not simply up, or fell back.
@@ -245,7 +269,7 @@ struct WorkspaceTitle: Equatable {
             words.append(link.word)
         }
         detail = words.joined(separator: " · ")
-        subtitle = glance ?? detail
+        subtitle = glance ?? (brief && !short.isEmpty ? short : detail)
     }
 }
 

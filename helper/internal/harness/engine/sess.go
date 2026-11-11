@@ -7,6 +7,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/wire"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +31,10 @@ type sess struct {
 	ready  chan struct{}
 	once   sync.Once
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// starting serialises starting the harness's session for a setting
+	// picked before the first prompt (startSession).
+	starting sync.Mutex
 	env      harness.Env
 	version  string
 	gateOK   bool
@@ -66,9 +70,14 @@ type sess struct {
 	failedHold bool
 	// relaunchedAt is when an action last restarted the agent.
 	relaunchedAt time.Time
-	turn         string
-	summaryT     *time.Timer
-	srcRows      map[string]map[string]bool // mission rows each section's source listed
+	// statusModelFromState is the status block's model when the session's
+	// state filled it in (no status line named one), so a later switch
+	// replaces it.
+	statusModelFromState string
+
+	turn     string
+	summaryT *time.Timer
+	srcRows  map[string]map[string]bool // mission rows each section's source listed
 	// sum mirrors the mission summary for readers that must not take mu
 	// (the hub decorates sessions while holding its own lock).
 	sum      atomic.Pointer[harness.Summary]
@@ -122,8 +131,20 @@ func newSess(e *Engine, info session.Session) *sess {
 		return s
 	}
 	s.env = e.envFor(info)
-	s.mission = newMission(s.ad.Capabilities)
+	s.mission = newMission(s.missionCaps())
 	return s
+}
+
+// missionCaps is the adapter's capabilities plus the Needs section every
+// served session has: the screen detector's approvals and the engine's
+// question rows reach the chat whatever the adapter declares, as the
+// descriptor says too.
+func (s *sess) missionCaps() []string {
+	caps := s.ad.Capabilities
+	if s.hasNeeds() && !harness.Has(caps, harness.CapNeedsApprovals) && !harness.Has(caps, harness.CapNeedsQuestions) {
+		caps = append(slices.Clone(caps), harness.CapNeedsApprovals)
+	}
+	return caps
 }
 
 // envFor builds the template and runner environment of a session.
@@ -134,6 +155,9 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 		source.VarHome: home, "cwd": cwd, "cwd_key": CwdKey(cwd), "session": info.ID,
 		"created": info.CreatedAt.UTC().Format(time.RFC3339),
 	}}
+	if argv, ok := e.relaunchedArgv(info.ID); ok {
+		env.Argv = argv
+	}
 	if ep, ok := e.endpointFor(info.ID); ok {
 		env.Endpoint = ep.url()
 		env.Auth = ep.auth()
@@ -283,6 +307,32 @@ func (s *sess) degradedList() []string {
 		}
 	}
 	return out
+}
+
+// carry subscribes the subscribers of the session's previous run (a
+// relaunch restarted it): items flow on as they did, the log and its epoch
+// being the same, and a reset tells each to reopen for a fresh mission
+// snapshot, since the new run builds its mission anew.
+func (s *sess) carry(subs []harness.Subscriber) {
+	if len(subs) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sub := range subs {
+		select {
+		case <-sub.Done():
+			continue
+		default:
+		}
+		if _, ok := s.subs[sub]; ok {
+			continue
+		}
+		q := newSubQueue(sub, s.id, func() string { return s.e.log.Epoch(s.id) }, s.e.cfg.Now, func() { s.dropSub(sub) })
+		s.subs[sub] = q
+		q.release()
+	}
+	s.notifyLocked(harness.Notification{Kind: harness.NoteReset, Reason: "adapter"})
 }
 
 func (s *sess) dropSub(sub harness.Subscriber) {
@@ -572,6 +622,10 @@ func (s *sess) statusChanged() {
 	if !s.gateOK {
 		return
 	}
+	// A feed whose path comes from state (omp's session folder, found
+	// once omp makes it) re-renders here too: waiting on a folder that
+	// does not exist, it reads no record that would do it.
+	s.syncFeedsLocked()
 	s.setWorkingLocked(s.stateLocked()["working"] == "true")
 	if agentGone(s.hubStatus()) {
 		s.agentExitedLocked()
@@ -615,7 +669,9 @@ func (s *sess) afterTurnLocked() {
 // An adapter's hook feed alone is not enough: Codex 0.167 runs hooks only
 // once the user trusts them, and hooks may not be installed at all.
 func (s *sess) doneLocked() {
-	if s.e.cfg.Done == nil || agentGone(s.hubStatus()) {
+	if s.e.cfg.Done == nil || agentGone(s.hubStatus()) || s.needsOpenLocked() {
+		// A turn that "ended" while a question or approval waits is
+		// waiting on the user, not done.
 		return
 	}
 	for name, f := range s.ad.Feeds {

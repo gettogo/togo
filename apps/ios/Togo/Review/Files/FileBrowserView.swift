@@ -28,6 +28,7 @@ struct FileBrowserView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Toggle(FilesCopy.hidden, isOn: $model.showsHidden)
+                            .menuToggle()
                     } label: {
                         Label(FilesCopy.options, systemImage: "slider.horizontal.3")
                     }
@@ -204,10 +205,12 @@ private struct FileSearchResults: View {
                     .reviewRow(opening: hit.route)
                 }
             } footer: {
-                if search.partial {
-                    Text(FileTreeCopy.partial)
-                } else if search.more {
-                    Text(FileTreeCopy.moreResults(FileSearch.limit))
+                SectionFooter {
+                    if search.partial {
+                        Text(FileTreeCopy.partial)
+                    } else if search.more {
+                        Text(FileTreeCopy.moreResults(FileSearch.limit))
+                    }
                 }
             }
         }
@@ -320,8 +323,9 @@ private struct ItemRow: View {
 
     static func color(_ mark: ChangeMarks.Mark) -> Color {
         switch mark {
-        case .added, .untracked: .togoDiffAddedWord
-        case .conflicted: .togoDiffRemovedWord
+        // Foreground tokens: the diff's word colours are backgrounds and read at about 1.3:1.
+        case .added, .untracked: .togoChangeAdded
+        case .conflicted: .togoChangeConflict
         case .modified: .togoSnow
         }
     }

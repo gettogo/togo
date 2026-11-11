@@ -14,18 +14,18 @@ function parse(text: string): any {
 }
 
 const config = parse(raw);
-const production = config.env.production;
 
-describe("wrangler production environment", () => {
-  it("production env has no workers.dev", () => {
-    expect(production.workers_dev).toBe(false);
-    expect(production.routes).toEqual([{ pattern: "relay.togo.app", custom_domain: true }]);
+describe("wrangler config", () => {
+  it("one worker owns the custom domain", () => {
+    expect(config.env).toBeUndefined();
+    expect(config.routes).toEqual([{ pattern: "relay.togoapp.dev", custom_domain: true }]);
   });
 
-  it("production env keeps mailbox binding and migrations", () => {
-    expect(production.durable_objects).toEqual(config.durable_objects);
-    expect(production.vars).toEqual(config.vars);
-    expect(production.observability).toEqual(config.observability);
+  it("keeps the mailbox binding and migrations", () => {
+    expect(config.durable_objects.bindings).toEqual([
+      { name: "RATE_LIMITER", class_name: "RateLimiter" },
+      { name: "MAILBOX", class_name: "Mailbox" },
+    ]);
     expect(config.migrations).toEqual([
       { tag: "v1", new_sqlite_classes: ["RateLimiter", "Mailbox"] },
     ]);

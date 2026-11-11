@@ -373,3 +373,33 @@ func TestAppServerFeedNeedsNoHookState(t *testing.T) {
 		t.Fatalf("appserver feed waits on session state: %s", raw)
 	}
 }
+
+// A command approval request is a question with the decisions as options
+// (a permission: approve accept, deny decline), beside the waiting tool
+// row; serverRequest/resolved closes it.
+func TestCommandApprovalRequestIsAQuestion(t *testing.T) {
+	m := NewAppServer(harness.Env{SessionID: "s_approve"})
+	m.Map(harness.Record{Data: json.RawMessage(`{"method":"item/started","params":{"threadId":"t","turnId":"u","item":{"id":"exec-1","type":"commandExecution","command":"touch x.txt","status":"inProgress"}}}`)})
+	items, _ := m.Map(harness.Record{Data: json.RawMessage(`{"id":9,"method":"item/commandExecution/requestApproval","params":{"threadId":"t","turnId":"u","itemId":"exec-1","reason":null,"availableDecisions":["accept","acceptForSession","decline"]}}`)})
+	var q *harness.Item
+	for i := range items {
+		if items[i].Kind == harness.KindQuestion {
+			q = &items[i]
+		}
+	}
+	if q == nil || q.ID != "rq-9" || q.Question.Approve != "accept" || q.Question.Deny != "decline" || len(q.Question.Questions[0].Options) != 3 ||
+		q.Question.Questions[0].Options[0].ID != "accept" {
+		t.Fatalf("items %+v", items)
+	}
+	items, _ = m.Map(harness.Record{Data: json.RawMessage(`{"method":"serverRequest/resolved","params":{"requestId":9}}`)})
+	if len(items) != 1 || items[0].Question == nil || items[0].Question.Answered == nil {
+		t.Fatalf("resolved %+v", items)
+	}
+	raw, err := answerApproval(nil, map[string]json.RawMessage{"answers": json.RawMessage(`{"decision":["acceptForSession"]}`)})
+	if err != nil || string(raw) != `{"decision":"acceptForSession"}` {
+		t.Fatalf("answer %s %v", raw, err)
+	}
+	if _, err := answerApproval(nil, map[string]json.RawMessage{"answers": json.RawMessage(`{"decision":["maybe"]}`)}); err == nil {
+		t.Fatal("an unknown decision was accepted")
+	}
+}

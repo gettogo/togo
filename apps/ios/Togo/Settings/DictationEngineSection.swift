@@ -116,16 +116,20 @@ struct DictationEngineSection: View {
         } header: {
             Text(DictationCopy.engine)
         } footer: {
-            if model.selection == .apple { Text(DictationCopy.engineFooter) }
+            SectionFooter {
+                if model.selection == .apple { Text(DictationCopy.engineFooter) }
+            }
         }
         .groupedRows()
         if model.selection == .whisper {
             Section {
                 whisperRows
             } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(model.isInstalled ? DictationCopy.whisperInstalledFooter(size: size) : DictationCopy.whisperFooter)
-                    Text(DictationCopy.whisperCredit)
+                SectionFooter {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(model.isInstalled ? DictationCopy.whisperInstalledFooter(size: size) : DictationCopy.whisperFooter)
+                        Text(DictationCopy.whisperCredit)
+                    }
                 }
             }
             .groupedRows()

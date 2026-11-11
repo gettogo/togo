@@ -1,0 +1,33 @@
+{
+  "name": "cursor/real-ask-batch-first",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cursor",
+    "title": "What tone should the README use?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Formal",
+        "role": "other"
+      },
+      {
+        "n": 2,
+        "label": "Casual",
+        "role": "other"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cursor CLI",
+    "subtitle": "What tone should the README use?",
+    "body": "",
+    "category": "togo.choice.r_render0001"
+  }
+}

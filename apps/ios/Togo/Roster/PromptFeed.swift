@@ -43,7 +43,7 @@ enum PromptFeed {
             allowsReply: card.allowText,
             // A question with no options that takes words is answered in words alone.
             // A sign-in step with nothing to choose is answered on its page or in its field.
-            asksYesOrNo: !(card.options.isEmpty && (card.allowText || card.signIn != nil)),
+            asksYesOrNo: choices.yesOrNo || (card.options.isEmpty && card.signIn == nil && !card.allowText),
             more: choices.more.map { PromptOption(id: $0.n, label: $0.label) },
             state: state(of: card, failure: failure),
             signIn: card.signIn, hostID: card.hostID
@@ -63,8 +63,13 @@ enum PromptFeed {
     /// request goes, or is answered elsewhere, the reply stays with its words until the user
     /// puts it away. The bar is never a terminal's input: the terminal takes the typing itself,
     /// and a chat has its own composer.
+    /// `terminalLayer`: the focused session shows its terminal, where the agent's own dialog is
+    /// on screen and the inputs row's prompt keys drive it; the native card would duplicate it
+    /// and take its rows. The request stays reachable through the needs-you badge, Mission
+    /// control and the chat layer.
     static func mode(
-        requests: [PromptRequest], current: PromptBarModel.Mode, hasMachines: Bool, composerTyping: Bool = false
+        requests: [PromptRequest], current: PromptBarModel.Mode, hasMachines: Bool, composerTyping: Bool = false,
+        terminalLayer: Bool = false
     ) -> PromptBarModel.Mode {
         guard hasMachines else { return .hidden }
         if case .replying(let writing) = current {
@@ -75,7 +80,7 @@ enum PromptFeed {
         }
         // The chat's composer holds the keyboard: another session's request waits off screen
         // until the keyboard goes, rather than sitting over the field and its menu.
-        if composerTyping { return .hidden }
+        if composerTyping || terminalLayer { return .hidden }
         if let first = requests.first {
             return .request(first, position: 1, count: requests.count)
         }
@@ -138,12 +143,16 @@ struct RequestChoices: Equatable {
     var deny: ApprovalOption?
     var more: [ApprovalOption]
 
+    /// Yes and No only when the agent offers both: a list of choices with neither, or one
+    /// of them, is shown as its own words. A Yes invented for the first choice would pick it.
+    var yesOrNo: Bool { approve != nil && deny != nil }
+
     init(_ options: [ApprovalOption]) {
-        let approve = options.first { $0.role == .approve } ?? options.first { $0.role != .deny }
+        let approve = options.first { $0.role == .approve }
         let deny = options.first { $0.role == .deny }
         self.approve = approve
         self.deny = deny
-        more = options.filter { $0 != approve && $0 != deny }
+        more = approve != nil && deny != nil ? options.filter { $0 != approve && $0 != deny } : options
     }
 }
 

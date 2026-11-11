@@ -29,6 +29,7 @@ struct ComposeShape: Equatable {
         case .tooLarge: 5
         case .unsupported: 6
         case .noHelper: 7
+        case .sent: 8
         }
     }
 

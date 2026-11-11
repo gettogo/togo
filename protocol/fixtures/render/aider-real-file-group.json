@@ -1,0 +1,52 @@
+{
+  "name": "aider/real-file-group",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "aider",
+    "title": "Add file to the chat?",
+    "body": "alpha.py",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "file",
+      "text": "alpha.py"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Yes",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "No",
+        "role": "deny"
+      },
+      {
+        "n": 3,
+        "label": "All",
+        "role": "approve_always"
+      },
+      {
+        "n": 4,
+        "label": "Skip all",
+        "role": "deny"
+      },
+      {
+        "n": 5,
+        "label": "Don't ask again",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Aider",
+    "subtitle": "Add file to the chat?",
+    "body": "alpha.py",
+    "category": "togo.request"
+  }
+}

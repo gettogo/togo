@@ -5,6 +5,7 @@ import TogoKit
 /// list and the workspace, stacked or side by side), with sheets for forms over either.
 struct RootView: View {
     @Environment(\.windowID) private var window
+    @Environment(\.demoExit) private var demoExit
     @State private var store: AppStore
     /// Shared by every window, so a tab has one connection however many windows show it.
     private let terminals: TerminalPool
@@ -179,7 +180,11 @@ struct RootView: View {
 
     /// "Getting started" in settings: the guide from its first page, with every tip again.
     private func openGuide() {
-        guard let tutorial else { return }
+        guard let tutorial else {
+            // The demo has no guide of its own: Getting started leaves it for the guide.
+            demoExit?.openGuide?()
+            return
+        }
         // The guide is a new root: the Settings sheet closes first, or the guide would wait behind it.
         if store.sheet == .settings { store.sheet = nil }
         tutorial.reopen()

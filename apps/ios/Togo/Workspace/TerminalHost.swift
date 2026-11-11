@@ -248,6 +248,7 @@ import UIKit
             hostID: tab.hostID, sessionID: tab.sessionID, transport: tab.transport, userStarted: userStarted
         )
         handle.onFontSize = { [weak services] size in services?.settings.fontSize = size }
+        handle.keys?.input.agent = tab.agent
         let origin = LinkCenter.Origin(hostID: tab.hostID, sessionID: tab.sessionID)
         handle.onOpenURL = { LinkCenter.shared.open($0, from: origin) }
         handle.onShowLinks = { [weak handle] in LinkCenter.shared.showLinks(handle?.links?() ?? [], from: origin) }
@@ -279,6 +280,21 @@ import UIKit
         handle.onDictate = { [weak store] in store?.dictate(id) }
         handle.hidesInputKeys = store.zen
         handle.onPasteImage = { [weak store] in store?.pasteImage($0, into: id) }
+        handle.onPromptKey = { [weak store, weak handle] key in
+            guard let store else { return }
+            switch key.kind {
+            case .answer:
+                guard let card = PromptKeys.card(for: id.sessionID, in: store.controlCenter.requests),
+                      let decision = PromptKeys.decision(for: key, card: card) else { return }
+                Task { await store.answer(card.id, decision) }
+            case .more:
+                // The prompt bar shows the whole request once the terminal lets the keyboard go.
+                handle?.keys?.overlay?.press(.hideKeyboard)
+            case .stroke(let stroke):
+                handle?.sendKeys([stroke])
+            }
+        }
+        handle.onEditKeys = { [weak store] in store?.showSettings() }
     }
 
     private func stop(_ id: TabID, keepHost: Bool = false) {
@@ -295,10 +311,22 @@ import UIKit
 struct TerminalSlot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.windowID) private var window
+    @Environment(\.terminalBarVertical) private var barVertical
     let tab: TabID
     let terminals: TerminalPool
     /// "Show in terminal" landed on a line the phone does not hold.
     @State private var capture: CaptureRequest?
+
+    /// The bar's edge, the session's kept keys and its open request, for the terminal's keys.
+    private func keysInput(_ store: AppStore?) -> TerminalKeysInput {
+        var input = TerminalKeysInput()
+        input.verticalBar = barVertical
+        input.keep = store?.keptKeys.contains(tab) ?? false
+        if let store {
+            input.promptKeys = PromptKeys.plan(for: PromptKeys.card(for: tab.sessionID, in: store.controlCenter.requests))
+        }
+        return input
+    }
 
     var body: some View {
         if let handle = terminals.handle(for: tab) {
@@ -313,6 +341,7 @@ struct TerminalSlot: View {
                     TabTerminalView(
                         handle: handle, fit: proxy.size, covered: covered,
                         focused: store?.focusedTab?.id == tab,
+                        keys: keysInput(store),
                         jump: covered ? nil : harness?.pendingJump.flatMap { $0.sessionID == tab.sessionID ? $0 : nil },
                         onJump: { jump, landed in
                             if harness?.pendingJump == jump { harness?.pendingJump = nil }
@@ -353,6 +382,8 @@ struct TabTerminalView: UIViewControllerRepresentable {
     var covered = false
     /// The tab is the focused one, where a hardware keyboard types.
     var focused = true
+    /// What the terminal's keys need from the window and the session.
+    var keys = TerminalKeysInput()
     /// A line to scroll to and mark, once.
     var jump: TerminalJump?
     /// The jump was handled: `landed` false when the phone does not hold the line.
@@ -375,13 +406,20 @@ struct TabTerminalView: UIViewControllerRepresentable {
         container.show(handle.engineView)
         container.setCovered(covered)
         handle.engine?.isCovered = covered
+        if let host = handle.keys {
+            var input = host.input
+            input.verticalBar = keys.verticalBar
+            input.keep = keys.keep
+            input.promptKeys = keys.promptKeys
+            host.input = input
+        }
         container.refit(for: fit)
         let uncovered = context.coordinator.covered == true && !covered
         context.coordinator.covered = covered
         if uncovered, focused, KeyboardPresence.shared.hardwareKeyboardConnected {
             // Back from the chat, a hardware keyboard types straight into the terminal again.
             // No software keyboard comes up for it; without one, the next tap raises it.
-            Task { @MainActor in handle.raiseKeyboard() }
+            Task { @MainActor in handle.raiseKeyboard(automatic: true) }
         }
         guard let jump, context.coordinator.handled != jump else {
             if jump == nil { context.coordinator.handled = nil }
@@ -401,6 +439,6 @@ struct TabTerminalView: UIViewControllerRepresentable {
     }
 
     static func dismantleUIViewController(_ container: TerminalContainer, coordinator: Coordinator) {
-        container.release()
+        container.leave()
     }
 }

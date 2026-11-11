@@ -256,6 +256,7 @@ struct PickerPrimitive: View {
                         get: { model.value(of: filter) == "true" },
                         set: { model.filterValues[filter.id] = $0 ? "true" : "false" }
                     ))
+                    .menuToggle()
                 } else {
                     Picker(filter.label, selection: Binding(
                         get: { model.value(of: filter) },

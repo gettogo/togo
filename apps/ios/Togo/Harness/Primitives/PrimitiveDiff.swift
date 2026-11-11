@@ -10,6 +10,8 @@ import TogoKit
 struct PrimitiveDiff: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let files: [PrimitiveDiffLogic.File]
+    /// The unified diff as the helper sent it: what Copy diff puts on the pasteboard.
+    private let source: String
     @State private var open: [String: Disclosure]
 
     static let lineCap = 300
@@ -17,6 +19,7 @@ struct PrimitiveDiff: View {
     init(_ text: String) {
         let files = PrimitiveDiffLogic.files(text)
         self.files = files
+        source = text
         let initially = PrimitiveDiffLogic.initiallyOpen(files)
         _open = State(initialValue: Dictionary(
             files.map { ($0.id, Disclosure(open: initially.contains($0.id))) }, uniquingKeysWith: { first, _ in first }
@@ -40,6 +43,10 @@ struct PrimitiveDiff: View {
         }
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
         .clipShape(.rect(cornerRadius: 12, style: .continuous))
+        // The patch exactly as sent, without the line numbers drawn beside it, so it applies.
+        .contextMenu {
+            Button(ChatCopy.copyDiff, systemImage: "doc.on.doc") { ChatPasteboard.copy(exact: source) }
+        }
     }
 
     private func header(_ file: PrimitiveDiffLogic.File) -> some View {

@@ -109,6 +109,40 @@ func (r *runner) modelSetup(ctx context.Context) modelPlan {
 		return m
 	}
 	m.cheap = m.order[0]
+	if want := r.opts.models[r.id]; want != "" {
+		// -model harness=id: this model first, listed by the picker or not
+		// (a static picker types what it is given).
+		it := pickerItem{ID: want, Title: want}
+		for _, x := range items {
+			if x.ID == want || strings.HasSuffix(x.ID, "/"+want) {
+				it = x
+				break
+			}
+		}
+		m.cheap = it
+		rest := make([]pickerItem, 0, len(m.order))
+		for _, o := range m.order {
+			if o.ID != it.ID {
+				rest = append(rest, o)
+			}
+		}
+		m.order = append([]pickerItem{it}, rest...)
+	} else if r.opts.router != nil {
+		// -openrouter: the OpenRouter model first, so every turn runs on
+		// the test key; the switch scenario still picks a second model.
+		if it, ok := r.opts.router.pick(items); ok {
+			m.cheap = it
+			rest := make([]pickerItem, 0, len(m.order))
+			for _, o := range m.order {
+				if o.ID != it.ID {
+					rest = append(rest, o)
+				}
+			}
+			m.order = append([]pickerItem{it}, rest...)
+		} else {
+			r.note("openrouter: the model picker lists no %s; the agent runs on its own account", r.opts.router.model)
+		}
+	}
 	if sameModel(m.cheap.ID, s.Picker.Selected) && s.Picker.Selected != "" {
 		return m
 	}
@@ -155,28 +189,67 @@ func (r *runner) modelSwitch(ctx context.Context, m *modelPlan) {
 		r.set("model_switch", fail, "picked %s before turn 1, but turn 1 ran on %s (harness records)", m.cheap.ID, m.model1)
 	}
 	// The next turn must run on a model other than the one turn 1 used.
-	second := m.order[1]
-	if m.model1 != "" {
-		for _, it := range append(m.order[1:], m.order[0]) {
-			if !sameModel(it.ID, m.model1) {
-				second = it
-				break
-			}
+	// A model whose provider refuses the account (out of credits, no
+	// key) says nothing about Togo: the next one is tried instead.
+	var tries []pickerItem
+	for _, it := range append(append([]pickerItem{}, m.order[1:]...), m.order[0]) {
+		if m.model1 == "" || !sameModel(it.ID, m.model1) {
+			tries = append(tries, it)
 		}
 	}
-	res, err := r.act(ctx, m.onSel, second.ID, map[string]any{"id": second.ID})
-	if err != nil || !actOK(res) {
-		r.set("model_switch", fail, "selecting %s: %s", second.ID, firstNonEmpty(errText(err), res.Result+" "+res.Message))
+	if len(tries) == 0 {
+		tries = []pickerItem{m.order[1]}
+	}
+	// Back to the cheap one for the remaining turns, whatever happened:
+	// a later scenario on a model that fails would fail for that alone.
+	switched := false
+	defer func() {
+		if !switched {
+			return
+		}
+		if res, err := r.act(ctx, m.onSel, m.cheap.ID, map[string]any{"id": m.cheap.ID}); err == nil && actOK(res) {
+			r.afterAct(ctx, res, "model_switch", "set model back")
+		}
+	}()
+	var blocked []string
+	refused := map[string]bool{} // provider groups that refused
+	n := 0
+	for _, second := range tries {
+		if n == 3 {
+			break
+		}
+		if second.Group != "" && refused[second.Group] {
+			continue
+		}
+		n++
+		res, err := r.act(ctx, m.onSel, second.ID, map[string]any{"id": second.ID})
+		if err != nil || !actOK(res) {
+			r.set("model_switch", fail, "selecting %s: %s", second.ID, firstNonEmpty(errText(err), res.Result+" "+res.Message))
+			return
+		}
+		switched = true
+		r.afterAct(ctx, res, "model_switch", "set model "+second.ID)
+		before := truthFiles(r.id, r.marker, r.start)
+		t := r.turn(ctx, okPrompt, false, nil)
+		m.turned = true
+		if !saysOK(t.reply) && blockRE.MatchString(t.errText) {
+			blocked = append(blocked, second.ID+": "+clip(oneLine(t.errText), 80))
+			refused[second.Group] = second.Group != ""
+			r.note("model %s is blocked by its provider (%s); trying another", second.ID, clip(oneLine(t.errText), 80))
+			continue
+		}
+		if !saysOK(t.reply) {
+			r.set("model_switch", fail, "switched to %s (%s) but the next turn failed: %s", second.ID, res.Result, firstNonEmpty(t.errText, "no reply"))
+			return
+		}
+		r.judgeSwitch(ctx, m, second, res, before)
 		return
 	}
-	r.afterAct(ctx, res, "model_switch", "set model "+second.ID)
-	before := truthFiles(r.id, r.marker, r.start)
-	t := r.turn(ctx, okPrompt, false, nil)
-	m.turned = true
-	if !saysOK(t.reply) {
-		r.set("model_switch", fail, "switched to %s (%s) but the next turn failed: %s", second.ID, res.Result, firstNonEmpty(t.errText, "no reply"))
-		return
-	}
+	r.set("model_switch", skip, "blocked: every model tried is refused by its provider (%s)", strings.Join(blocked, "; "))
+}
+
+// judgeSwitch checks the turn after selecting second ran on it.
+func (r *runner) judgeSwitch(ctx context.Context, m *modelPlan, second pickerItem, res harness.ActionResult, before map[string]int64) {
 	files := truthFiles(r.id, r.marker, r.start)
 	got, strong := modelSince(files, before)
 	switch {
@@ -207,10 +280,6 @@ func (r *runner) modelSwitch(ctx context.Context, m *modelPlan) {
 		default:
 			r.set("model_switch", fail, "selected %s (action %s); nothing confirms it (record %q, status %q, picker %q)", second.ID, res.Result, got, st, sel)
 		}
-	}
-	// Back to the cheap one for the remaining turns.
-	if res, err := r.act(ctx, m.onSel, m.cheap.ID, map[string]any{"id": m.cheap.ID}); err == nil && actOK(res) {
-		r.afterAct(ctx, res, "model_switch", "set model back")
 	}
 }
 

@@ -109,7 +109,7 @@ import UIKit
     func terminal(hostID: HostID, sessionID: String, transport: TransportPreference?, userStarted: Bool) -> TerminalHandle {
         terminalsMade.append(TabID(hostID: hostID, sessionID: sessionID))
         terminalsUserStarted.append(userStarted)
-        return TerminalHandle.preview(text: Samples.terminalText, phases: terminalPhases) { [weak self] in
+        return TerminalHandle.preview(text: Samples.terminalText(for: sessionID), phases: terminalPhases) { [weak self] in
             self?.stoppedTerminals.append(TabID(hostID: hostID, sessionID: sessionID))
         }
     }
@@ -117,7 +117,7 @@ import UIKit
     func capture(hostID: HostID, sessionID: String, lines: Int) async throws -> String {
         calls.append(.capture(hostID, sessionID, lines))
         try fail()
-        return Samples.terminalText
+        return Samples.terminalText(for: sessionID)
     }
 
     func upload(hostID: HostID, sessionID: String, name: String, data: Data) async throws -> String {
@@ -171,10 +171,14 @@ enum Samples {
     /// Fixed so previews and snapshots render the same relative times every run.
     static let now = Date(timeIntervalSinceReferenceDate: 815_000_000)
 
-    static let hosts = [
-        HostRecordView(id: studio, name: "Studio", symbol: .desktop, address: "studio.local"),
+    /// The first machine; `-ui-demo-api` shows it as the owner's laptop (DemoAPIFixture.machine).
+    static var studioName: String { DemoAPIFixture.enabled ? DemoAPIFixture.machine : "Studio" }
+    static var studioSymbol: HostSymbol { DemoAPIFixture.enabled ? .laptop : .desktop }
+
+    static var hosts: [HostRecordView] { [
+        HostRecordView(id: studio, name: studioName, symbol: studioSymbol, address: "studio.local"),
         HostRecordView(id: build, name: "Build box", symbol: .server, address: "build.tail1234.ts.net"),
-    ]
+    ] }
 
     static func row(
         hostID: HostID = studio, bib: String?, name: String, agentName: String = "Claude Code",
@@ -221,15 +225,36 @@ enum Samples {
         "",
     ].joined(separator: "\r\n")
 
+    /// The recorded OpenCode session on the status page, as its screen reads once it is done:
+    /// the demo machine's recording, drawn as the demo's terminal draws it. Wide, so the
+    /// terminal wraps the lines itself.
+    static let statusTerminalText: String = {
+        guard let url = Bundle.main.url(forResource: DemoScript.resource, withExtension: "jsonl"),
+              let text = try? String(contentsOf: url, encoding: .utf8),
+              let script = try? ReplayScript(jsonl: text) else { return terminalText }
+        return DemoScreen.agent(items: DemoScreen.items(in: script), prompt: "", phase: .done, cols: 200)
+    }()
+
+    /// What a session's terminal shows: session 01 is the status session wherever the captures
+    /// show it (`-ui-demo-api`, or `-ui-replay replay-status`); every other one the sample screen.
+    static func terminalText(for sessionID: String) -> String {
+        let launch = UITestLaunch.current
+        let replaysStatus = launch.replay.map { (ReplayScript.aliases[$0] ?? $0) == DemoScript.resource } ?? false
+        return sessionID == "s-01" && (launch.demoAPI || replaysStatus) ? statusTerminalText : terminalText
+    }
+
     static var controlCenter: ControlCenterState {
         ControlCenterState(
             requests: [request(id: "r1", bib: "04", title: "Run npm test?")],
             machines: [
                 MachineSection(
-                    id: studio, name: "Studio", symbol: .desktop, reachability: .online,
+                    id: studio, name: studioName, symbol: studioSymbol, reachability: .online,
                     helper: .present(version: "0.3.0", live: true),
                     sessions: [
-                        row(bib: "01", name: "api", status: .working, activity: "Editing routes.ts", cwd: "/Users/sam/src/api"),
+                        DemoAPIFixture.enabled
+                            ? row(bib: "01", name: DemoAPIFixture.name, agentName: DemoAPIFixture.agentName, status: .done,
+                                  activity: DemoAPIFixture.activity, cwd: DemoAPIFixture.root)
+                            : row(bib: "01", name: "api", status: .working, activity: "Editing routes.ts", cwd: "/Users/sam/src/api"),
                         row(bib: "04", name: "app", status: .needsYou, activity: "Wants to run npm test", cwd: "/Users/sam/src/app"),
                         row(bib: nil, name: "scratch", agentName: "Shell", status: .idle, cwd: "/Users/sam"),
                     ],
@@ -257,7 +282,6 @@ extension TerminalHandle {
     ) -> TerminalHandle {
         let engine = SwiftTermEngine(settings: TerminalSettings(), theme: BuiltInThemes.all[0])
         engine.view.accessibilityLabel = WorkspaceCopy.terminal
-        engine.inputAccessory = KeyBarView(config: .claude, engine: engine)
         engine.feed(Array(text.utf8)[...])
         let (stream, continuation) = AsyncStream.makeStream(of: LinkPhase.self)
         phases.forEach { continuation.yield($0) }

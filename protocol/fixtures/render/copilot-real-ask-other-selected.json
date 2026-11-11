@@ -1,0 +1,22 @@
+{
+  "name": "copilot/real-ask-other-selected",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "copilot",
+    "title": "Which log level should the app use?",
+    "body": "",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "host": "studio",
+    "options": []
+  },
+  "expect": {
+    "title": "03 Copilot CLI",
+    "subtitle": "Which log level should the app use?",
+    "body": "Open to answer",
+    "category": "togo.info"
+  }
+}

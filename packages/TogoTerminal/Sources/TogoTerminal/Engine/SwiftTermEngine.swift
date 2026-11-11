@@ -71,6 +71,8 @@ import UIKit
         terminalView.capturesWheelPan = { [weak self] in self?.mouseReporting ?? false }
         terminalView.onShortcut = { [weak self] action in self?.perform(action) }
         terminalView.onPaste = { [weak self] text in self?.paste(text) }
+        // The edit menu's Paste with no text on the pasteboard: a picture, or a lone link.
+        terminalView.onPasteWithoutText = { [weak self] in self?.pasteFromClipboard() }
         terminalView.onCopy = { [weak self] text in self?.onClipboardWrite(text) }
         terminalView.extendedKeyMode = { [weak self] in self?.modifyKeys.mode ?? .legacy }
         terminalView.cursorLine = { [weak self] in self?.cursorLine() }
@@ -113,16 +115,16 @@ import UIKit
         return kitty ? .kitty : modifyKeys.mode
     }
 
-    /// Bracketed when the remote enabled mode 2004. Either way the text passes `PasteText`
-    /// first, so it cannot close the bracket or carry its own control sequences.
+    /// Bracketed when the remote enabled mode 2004. Either way the text passes
+    /// `PasteText.terminal` first, so it cannot close the bracket or carry its own control
+    /// sequences, and its line endings reach the pty as LF. A long paste goes out in
+    /// `PasteText.chunkSize` writes, in order, one after another on this turn of the main
+    /// actor, so nothing typed can land between them.
     public func paste(_ text: String) {
-        let body = PasteText.sanitize(text)
         let bracketed = terminalView.terminalInputStateSnapshot()?.bracketedPasteMode ?? false
-        guard bracketed else {
-            write(Array(body.utf8))
-            return
+        for chunk in PasteText.chunks(PasteText.payload(text, bracketed: bracketed)) {
+            write(Array(chunk))
         }
-        write(Array("\u{1b}[200~\(body)\u{1b}[201~".utf8))
     }
 
     // MARK: Appearance
@@ -348,8 +350,9 @@ import UIKit
 
     /// Text pastes as text. A pasteboard holding only an image hands its bytes to
     /// `onPasteImage`, keeping the original encoding when the pasteboard has one.
+    /// A pasteboard holding only a link (some apps' Copy Link) pastes the link's exact text.
     public func pasteFromClipboard(_ board: UIPasteboard = .general) {
-        if let text = board.string {
+        if let text = board.string ?? board.url?.absoluteString {
             paste(text)
             return
         }

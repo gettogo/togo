@@ -416,11 +416,12 @@ enum HarnessFixtures {
     }
 }
 
-/// Harness services that replay scripted feeds, one per open, and record what was asked.
+/// Set from an observation's change handler.
 final class Flag: @unchecked Sendable {
     var on = false
 }
 
+/// Harness services that replay scripted feeds, one per open, and record what was asked.
 @MainActor final class FakeHarnessServices: HarnessServices {
     var sentImages: [[String]] = []
     var uploads: [String] = []

@@ -1,0 +1,47 @@
+{
+  "agentVersion": "3.1.0",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ],
+    "4": [
+      "4"
+    ]
+  },
+  "kind": "permission",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Allow once",
+      "role": "approve"
+    },
+    {
+      "n": 2,
+      "label": "Allow for remainder of this session",
+      "role": "approve_always"
+    },
+    {
+      "n": 3,
+      "label": "Always allow",
+      "role": "approve_always"
+    },
+    {
+      "n": 4,
+      "label": "Deny",
+      "role": "deny"
+    }
+  ],
+  "source": "real",
+  "subject": {
+    "kind": "command",
+    "text": "touch x.txt"
+  },
+  "title": "Permission for the file_system.bash tool"
+}

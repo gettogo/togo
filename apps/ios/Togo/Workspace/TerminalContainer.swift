@@ -34,6 +34,13 @@ final class TerminalContainer: UIViewController {
     /// How many times the grid was fitted to a new size: once per fold, sidebar toggle or pane
     /// change, never per frame of an animation (motion spec §4).
     private(set) var fits = 0
+    /// Between appearing and starting to disappear.
+    private var appeared = false
+    /// The content swipe this container holds a claim on, nil when it holds none. Kept strongly
+    /// so the claim it releases is the one it took, even after the container left its parent.
+    private var claimedSwipe: UIGestureRecognizer?
+    /// Where the claims live; one per app, a test hands in its own.
+    var swipeClaims = ContentSwipeClaims.shared
 
     /// A container can be put on screen without appearing, as when a pager page that held
     /// something else starts showing a terminal, so it also attaches when its view reaches a
@@ -41,15 +48,17 @@ final class TerminalContainer: UIViewController {
     override func loadView() {
         let view = WindowView()
         view.onWindow = { [weak self] in self?.attach() }
+        view.offWindow = { [weak self] in self?.updateSwipeClaim() }
         self.view = view
     }
 
     private final class WindowView: UIView {
         var onWindow: () -> Void = {}
+        var offWindow: () -> Void = {}
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            if window != nil { onWindow() }
+            if window != nil { onWindow() } else { offWindow() }
         }
     }
 
@@ -67,6 +76,7 @@ final class TerminalContainer: UIViewController {
     func setCovered(_ on: Bool) {
         guard on != covered else { return }
         covered = on
+        updateSwipeClaim()
         view.isUserInteractionEnabled = !on
         view.accessibilityElementsHidden = on
         if on { clearBand() }
@@ -122,6 +132,40 @@ final class TerminalContainer: UIViewController {
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         attach()
+        appeared = true
+        updateSwipeClaim()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        appeared = false
+        updateSwipeClaim()
+    }
+
+    /// The container is going away for good (SwiftUI dismantled it): whatever it claimed goes
+    /// back, even if it never saw a disappear.
+    func leave() {
+        appeared = false
+        updateSwipeClaim()
+        release()
+    }
+
+    /// A drag across the terminal is the terminal's (its scrollback, a TUI's own gestures): it
+    /// never pops the session, as the system's swipe back from anywhere on the content would on
+    /// a phone. The swipe from the edge still goes back, and under the chat the content swipe
+    /// is the chat's, as on any other screen.
+    ///
+    /// The swipe belongs to the navigation controller, and two panes put two containers under
+    /// one: each holds one counted claim while it is visible and uncovered, so a chat in one
+    /// pane or a pane closing never hands the swipe back while the other terminal shows.
+    private func updateSwipeClaim() {
+        let wanted = appeared && !covered && viewIfLoaded?.window != nil
+            ? navigationController?.interactiveContentPopGestureRecognizer
+            : nil
+        guard wanted !== claimedSwipe else { return }
+        if let claimedSwipe { swipeClaims.release(claimedSwipe) }
+        claimedSwipe = wanted
+        if let wanted { swipeClaims.claim(wanted) }
     }
 
     /// The terminal's frame is set outright on every pass, never left to an autoresizing mask

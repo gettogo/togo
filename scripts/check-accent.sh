@@ -36,7 +36,7 @@ unmarked=$(grep -rl --include='*.swift' 'togoAccent' \
             /togoAccent/ {
                 ok = 0
                 for (i = NR; i >= NR - 6 && i > 0; i--)
-                    if (line[i] ~ /[Nn]eeds|[Ww]aiting|[Ll]antern|(^|[^A-Za-z])lit([^A-Za-z]|$)|[Aa]pprove|[Rr]equest|accent-ok:/) ok = 1
+                    if (line[i] ~ /[Nn]eeds|[Ww]aiting|[Bb]eacon|(^|[^A-Za-z])lit([^A-Za-z]|$)|[Aa]pprove|[Rr]equest|accent-ok:/) ok = 1
                 if (!ok) print file ":" NR ": " $0
             }
         ' "$f"

@@ -77,6 +77,9 @@ func runService(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		default:
 			fmt.Fprintf(stdout, "Installed but not running: %s\n", st.Path)
 		}
+		if st.Legacy {
+			fmt.Fprintln(stdout, "This service uses an older name; run togo service install to replace it.")
+		}
 	}
 	return exitOK
 }
@@ -113,7 +116,7 @@ func userService() (daemon.Service, error) {
 func uninstallService(ctx context.Context, svc daemon.Service, stderr io.Writer) error {
 	marker := filepath.Join(svc.TogoHome, mailbox.StopMarkerName)
 	wrote := false
-	if _, err := os.Lstat(svc.Path()); err == nil {
+	if svc.HasFile() {
 		if err := state.WriteFile(marker, nil); err != nil {
 			fmt.Fprintf(stderr, "togo: %v\n", err)
 		} else {

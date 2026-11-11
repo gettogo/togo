@@ -39,6 +39,12 @@ enum HarnessFeed: Sendable {
     func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult
     func complete(_ s: HarnessSubject, kind: HarnessCompleteParams.Kind, query: String) async throws -> [HarnessCompletion]
     func locate(_ s: HarnessSubject, anchor: HarnessAnchor) async throws -> HarnessLocation
+    /// Where the composer keeps the lines sent and the commands starred.
+    var composerMemory: CommandMemory { get }
+}
+
+extension HarnessServices {
+    var composerMemory: CommandMemory { .shared }
 }
 
 struct HarnessUnavailable: Error {}

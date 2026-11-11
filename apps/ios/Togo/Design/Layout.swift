@@ -21,8 +21,9 @@ extension View {
             .scrollContentBackground(.hidden)
             .background(Color.togoInk)
             .listRowSeparatorTint(Color.togoLine)
-            // Section footers and secondary values draw in the secondary level: the system gray
-            // is 3.3:1 on light ink, mute is 5.5:1 and follows Increase Contrast.
+            // Secondary values draw in the secondary level: the system gray is 3.3:1 on light
+            // ink, mute is 5.5:1 and follows Increase Contrast. Section footers do not take the
+            // level (they draw in the primary one); each is a `SectionFooter`.
             .foregroundStyle(Color.primary, Color.togoMute)
     }
 
@@ -84,6 +85,15 @@ private struct ScreenMargins: ViewModifier {
     }
 }
 
+extension View {
+    /// A toggle in a menu, drawn as the menu draws one: a checkmark. The app's switch style
+    /// (`togoControls`) has no menu form, and a menu shows a toggle it cannot draw as a
+    /// disabled item that does nothing.
+    func menuToggle() -> some View {
+        toggleStyle(.automatic)
+    }
+}
+
 struct SystemSwitchToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Toggle(configuration)
@@ -94,4 +104,15 @@ struct SystemSwitchToggleStyle: ToggleStyle {
 
 extension ToggleStyle where Self == SystemSwitchToggleStyle {
     static var systemSwitch: Self { Self() }
+}
+
+/// A list section's footer in mute. A footer inside `groupedList()` draws in the list's primary
+/// level, not its secondary one, so it would read as body text; mute is 5.5:1 on light ink, where
+/// the system gray is 3.3:1, and follows Increase Contrast.
+struct SectionFooter<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content.foregroundStyle(Color.togoMute)
+    }
 }

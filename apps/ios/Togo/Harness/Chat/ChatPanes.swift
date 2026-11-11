@@ -137,11 +137,11 @@ struct LayerToolbarItem: ToolbarContent {
                 // Neither layer keeps the keyboard across the switch: the terminal under the
                 // chat may not have it, and the composer stays, hidden, under the terminal.
                 Self.resignKeyboard()
+                // Only opacity changes: both layers keep their frames (the composer keeps its
+                // place under the terminal, the terminal its grid under the chat), so no text
+                // moves. Under Reduce Motion the layers swap at once (`MotionTokens` .fade).
                 // motion: cause → effect — the user's toggle crossfades the layers in place and
-                // turns the symbol into the other layer's; nothing else ever fades them. Only
-                // opacity changes: both layers keep their frames (the composer keeps its place
-                // under the terminal, the terminal its grid under the chat), so no text moves.
-                // Under Reduce Motion the layers swap at once (`MotionTokens` .fade).
+                // turns the symbol into the other layer's; nothing else ever fades them.
                 withAnimation(Motion.animation(.fade, reduce: reduceMotion)) { toggle() }
             } label: {
                 Label(title, systemImage: symbol)

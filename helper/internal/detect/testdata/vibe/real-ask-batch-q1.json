@@ -1,0 +1,36 @@
+{
+  "agentVersion": "3.1.0",
+  "keys": {
+    "1": [
+      "1"
+    ],
+    "2": [
+      "2"
+    ],
+    "3": [
+      "3"
+    ]
+  },
+  "kind": "question",
+  "match": true,
+  "options": [
+    {
+      "n": 1,
+      "label": "Backend",
+      "role": "other"
+    },
+    {
+      "n": 2,
+      "label": "Frontend",
+      "role": "other"
+    },
+    {
+      "n": 3,
+      "label": "Docs",
+      "role": "other"
+    }
+  ],
+  "source": "real",
+  "subject": null,
+  "title": "Which areas should change?"
+}

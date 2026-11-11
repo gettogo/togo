@@ -29,10 +29,12 @@ struct MachineRoutesSection: View {
         } header: {
             SectionHeading(String(localized: "routes.title", defaultValue: "Routes"))
         } footer: {
-            Text(String(
-                localized: "routes.footer",
-                defaultValue: "Togo tries these together and uses the first one that answers with this machine's key."
-            ))
+            SectionFooter {
+                Text(String(
+                    localized: "routes.footer",
+                    defaultValue: "Togo tries these together and uses the first one that answers with this machine's key."
+                ))
+            }
         }
         .groupedRows()
         .task(id: draft.machineID) {

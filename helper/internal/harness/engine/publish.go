@@ -34,7 +34,8 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 		s.prepareLocked(&it, mark)
 		s.labelModelNoticeLocked(&it)
 		if it.Kind == harness.KindQuestion && it.Question != nil {
-			s.questionLocked(&it)
+			ops = append(ops, s.questionLocked(&it)...)
+			s.offerLocked(it)
 		}
 		if txt := partialText(it); txt != nil && txt.Partial {
 			if t, ok := s.lastPart[it.ID]; ok && now.Sub(t) < partialEvery {
@@ -84,11 +85,15 @@ func (s *sess) decorateStatusLocked(st *harness.StatusBlock) {
 	if st.Effort == "" {
 		st.Effort = state["effort"]
 	}
-	if st.Model == "" {
+	fromState := st.Model == ""
+	if fromState {
 		st.Model = state["model"]
 	}
 	if st.Model != "" {
 		st.Model = s.modelLabelLocked(st.Model)
+	}
+	if fromState {
+		s.statusModelFromState = st.Model
 	}
 	if len(st.Actions) == 0 {
 		// Status screens' actions, then the adapter's status.actions
@@ -125,7 +130,10 @@ func (s *sess) refreshStatusLocked() {
 	}
 	st := *sec.Status
 	st.Mode, st.Effort = "", ""
-	if m := s.stateLocked()["model"]; st.Model == m || (m != "" && st.Model == s.modelLabelLocked(m)) {
+	if m := s.stateLocked()["model"]; st.Model == m || (m != "" && st.Model == s.modelLabelLocked(m)) ||
+		(st.Model != "" && st.Model == s.statusModelFromState) {
+		// The model shown came from the session's state: read it again, so
+		// a switch replaces it rather than leaving the one before.
 		st.Model = ""
 	}
 	s.decorateStatusLocked(&st)

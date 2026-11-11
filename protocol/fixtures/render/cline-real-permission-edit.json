@@ -1,0 +1,37 @@
+{
+  "name": "cline/real-permission-edit",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cline",
+    "title": "Approve tool call?",
+    "body": "/Users/jamie/proj/hello.py",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "text",
+      "text": "/Users/jamie/proj/hello.py"
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Approve",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Deny",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cline",
+    "subtitle": "Approve tool call?",
+    "body": "/Users/jamie/proj/hello.py",
+    "category": "togo.request"
+  }
+}

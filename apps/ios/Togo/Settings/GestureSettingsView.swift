@@ -20,7 +20,9 @@ struct GestureSettingsView: View {
                 tapPicker(settingsText("settings.gestures.doubleTap", "Double tap"), \.doubleTap)
                 tapPicker(settingsText("settings.gestures.tripleTap", "Triple tap"), \.tripleTap)
             } footer: {
-                Text(settingsText("settings.gestures.taps.footer", "Sent to the session when you tap the terminal."))
+                SectionFooter {
+                    Text(settingsText("settings.gestures.taps.footer", "Sent to the session when you tap the terminal."))
+                }
             }
             .groupedRows()
             Section {

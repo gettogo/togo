@@ -95,6 +95,8 @@ func ParseAsk(screen string) (Ask, bool) {
 		}
 	}
 	optIndent := -1
+	submitRow := false
+	promptAt := -1
 	for i := start; i < len(lines); i++ {
 		l := lines[i]
 		if isBorder(l) {
@@ -102,10 +104,18 @@ func ParseAsk(screen string) (Ask, bool) {
 		}
 		m := askOption.FindStringSubmatch(l)
 		if m == nil {
+			t := strings.TrimSpace(l)
 			if a.Prompt == "" && len(a.Options) == 0 && a.TypeN == 0 && !a.Review {
-				if t := strings.TrimSpace(l); t != "" {
-					a.Prompt = t
+				if t != "" {
+					a.Prompt, promptAt = t, i
 				}
+			} else if promptAt == i-1 && len(a.Options) == 0 && a.TypeN == 0 && askHeader(lines[promptAt], l) {
+				// The line read as the prompt was the question's header,
+				// drawn on its own line above it (Auggie 1.2.0's ask-user).
+				a.Prompt, promptAt = t, i
+			} else if len(a.Options) > 0 && (t == "Submit" || t == "Next") {
+				// A multi-select's own Submit (or Next) row, unnumbered.
+				submitRow = true
 			}
 			continue
 		}
@@ -140,11 +150,21 @@ func ParseAsk(screen string) (Ask, bool) {
 		return a, a.SubmitN > 0
 	}
 	// A question dialog has a prompt, options, and Claude's own "Type
-	// something" choice; a plain numbered menu has no Type something.
-	if a.Prompt == "" || len(a.Options) == 0 || a.TypeN == 0 {
+	// something" choice; a plain numbered menu has no Type something. A
+	// multi-select without it ends in its own Submit row instead (Auggie).
+	if a.Prompt == "" || len(a.Options) == 0 || a.TypeN == 0 && !(a.Multi && submitRow) {
 		return Ask{}, false
 	}
 	return a, true
+}
+
+// askHeader reports a header line drawn above its question: short (a
+// header is at most 16 characters), no question mark, and indented deeper
+// than the question under it.
+func askHeader(header, question string) bool {
+	h := strings.TrimSpace(header)
+	return h != "" && utf8.RuneCountInString(h) <= 16 && !strings.HasSuffix(h, "?") &&
+		indentOf(header) > indentOf(question) && strings.TrimSpace(question) != ""
 }
 
 func parseTabs(strip string) []AskTab {
@@ -153,12 +173,14 @@ func parseTabs(strip string) []AskTab {
 	mark, label := rune(0), []rune{}
 	flush := func() {
 		l := strings.TrimSpace(string(label))
-		if mark != 0 && l != "" && !(mark == '✔' && l == "Submit") {
-			tabs = append(tabs, AskTab{Label: l, Answered: mark == '☒' || mark == '✔'})
+		done := mark == '✔' || mark == '✓'
+		if mark != 0 && l != "" && !(done && l == "Submit") {
+			tabs = append(tabs, AskTab{Label: l, Answered: mark == '☒' || done || mark == '■'})
 		}
 	}
 	for _, r := range body {
-		if r == '☐' || r == '☒' || r == '✔' {
+		// Claude Code marks tabs ☐ / ☒ and Submit ✔, Auggie □ / ■ and ✓.
+		if r == '☐' || r == '☒' || r == '✔' || r == '□' || r == '■' || r == '✓' {
 			flush()
 			mark, label = r, label[:0]
 			continue

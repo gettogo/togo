@@ -1,0 +1,40 @@
+
+ ❯ Reply with only the word ok.
+
+ * ok
+
+ ❯ Use your shell tool to run exactly this command: touch conformance-approval.txt — then reply
+   with the word done.
+
+ ⠴ Thinking... (esc to cancel)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Ask anything...
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ DeepSeek V4.1 Flash ██████ (6,390) $0.00                                        ○ Plan ● Act (Tab)
+ project
+ Auto-approve all disabled (Shift+Tab)

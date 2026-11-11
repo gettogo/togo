@@ -1,0 +1,24 @@
+--------------------------------------------------------------------------------
+
+► ANSWER
+
+
+echo one
+
+
+
+echo two
+
+
+
+Tokens: 2.4k sent, 116 received.
+
+echo one
+Run shell command? (Y)es/(N)o/(S)kip all/(D)on't ask again [Yes]: y
+
+Running echo one
+one
+Add command output to the chat? (Y)es/(N)o/(D)on't ask again [Yes]: d
+
+echo two
+Run shell command? (Y)es/(N)o/(S)kip all/(D)on't ask again [Yes]:

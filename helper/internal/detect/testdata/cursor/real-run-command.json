@@ -5,19 +5,13 @@
       "y"
     ],
     "2": [
-      "Down",
-      "Enter"
+      "Tab"
     ],
     "3": [
-      "Down",
-      "Down",
-      "Enter"
+      "BTab"
     ],
     "4": [
-      "Down",
-      "Down",
-      "Down",
-      "Enter"
+      "n"
     ]
   },
   "kind": "permission",
@@ -30,17 +24,17 @@
     },
     {
       "n": 2,
-      "label": "Add Shell(npm test) to allowlist? (tab)",
-      "role": "other"
+      "label": "Add Shell(npm test) to allowlist?",
+      "role": "approve_always"
     },
     {
       "n": 3,
-      "label": "Run Everything (shift+tab)",
-      "role": "other"
+      "label": "Run Everything",
+      "role": "approve_always"
     },
     {
       "n": 4,
-      "label": "Skip & tell the agent what to do instead (esc or n)",
+      "label": "Skip \u0026 tell the agent what to do instead",
       "role": "deny"
     }
   ],

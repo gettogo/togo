@@ -19,6 +19,20 @@ enum ChatCopy {
     static let earlier = String(localized: "chat.earlier", defaultValue: "Show earlier")
 
     static let copy = String(localized: "chat.copy", defaultValue: "Copy")
+    static let copyCode = String(localized: "chat.copyCode", defaultValue: "Copy code")
+    /// The whole row, beside the edit menu's Copy of the words selected.
+    static let copyMessage = String(localized: "chat.copyMessage", defaultValue: "Copy message")
+    static let copyDiff = String(localized: "chat.copyDiff", defaultValue: "Copy diff")
+    static let copyTable = String(localized: "chat.copyTable", defaultValue: "Copy table")
+
+    static func table(rows: Int) -> String {
+        String(localized: "chat.table.spoken", defaultValue: "Table, \(rows) rows")
+    }
+
+    static func tableColumns(_ names: [String]) -> String {
+        String(localized: "chat.table.columns", defaultValue: "Columns: \(names.joined(separator: ", "))")
+    }
+    static let copied = String(localized: "chat.copied", defaultValue: "Copied")
     static let showInTerminal = String(localized: "chat.showInTerminal", defaultValue: "Show in terminal")
     static let quote = String(localized: "chat.quote", defaultValue: "Quote in reply")
     static let expand = String(localized: "chat.expand", defaultValue: "Expand")

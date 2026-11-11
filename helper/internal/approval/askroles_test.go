@@ -55,3 +55,19 @@ func TestOpenAskCarriesRolesAndApproveAnswersByRole(t *testing.T) {
 		t.Fatalf("ask got %q, want Approve", got)
 	}
 }
+
+// A plain ask's options get no role, whatever their words: a Yes among
+// choices is a choice, never a one-tap approve.
+func TestPlainAskHasNoRoles(t *testing.T) {
+	st := New(Config{Tmux: &fakeTmux{}, Pub: &fakePub{}})
+	a, _ := st.OpenAsk(context.Background(), wire.AskParams{Title: "Ship it?", Options: []string{"Yes", "No", "Later"}, Plain: true})
+	for _, o := range a.Options {
+		if o.Role != wire.RoleOther {
+			t.Fatalf("option %+v has a role", o)
+		}
+	}
+	b, _ := st.OpenAsk(context.Background(), wire.AskParams{Title: "Ship it?", Options: []string{"Yes", "No"}})
+	if b.Options[0].Role != wire.RoleApprove || b.Options[1].Role != wire.RoleDeny {
+		t.Fatalf("yes/no ask %+v", b.Options)
+	}
+}

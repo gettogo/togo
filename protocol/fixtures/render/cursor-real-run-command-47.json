@@ -1,0 +1,47 @@
+{
+  "name": "cursor/real-run-command-47",
+  "plaintext": {
+    "v": 1,
+    "kind": "needs_you",
+    "sessionId": "s_aaaaaaaaaa",
+    "bib": "03",
+    "agent": "cursor",
+    "title": "Run this command?",
+    "body": "touch x.txt in .",
+    "requestId": "r_render0001",
+    "ts": 1793871000000,
+    "subject": {
+      "kind": "command",
+      "text": "touch x.txt in ."
+    },
+    "host": "studio",
+    "options": [
+      {
+        "n": 1,
+        "label": "Run (once)",
+        "role": "approve"
+      },
+      {
+        "n": 2,
+        "label": "Add Shell(touch) to allowlist?",
+        "role": "approve_always"
+      },
+      {
+        "n": 3,
+        "label": "Run Everything",
+        "role": "approve_always"
+      },
+      {
+        "n": 4,
+        "label": "Skip \u0026 tell the agent what to do instead",
+        "role": "deny"
+      }
+    ]
+  },
+  "expect": {
+    "title": "03 Cursor CLI",
+    "subtitle": "Run this command?",
+    "body": "touch x.txt in .",
+    "category": "togo.request"
+  }
+}
