@@ -86,6 +86,21 @@ fake() {
   install_script "$1"
 }
 
+# fakeable NAME...: succeed when the shell under test runs a PATH fake for each
+# NAME. A busybox built with standalone-shell applets runs its own uname, wget,
+# sha256sum... and never looks at PATH, so those cases cannot be faked there;
+# the case skips itself, saying why.
+fakeable() {
+  local n out
+  mkdir -p "$C/probe"
+  for n in "$@"; do
+    printf '#!/bin/sh\necho fake\n' >"$C/probe/$n"
+    chmod +x "$C/probe/$n"
+    out="$(env -i PATH="$C/probe" "${SH[@]}" -c "$n" 2>/dev/null </dev/null || true)"
+    [ "$out" = fake ] || { skip_case "$SH_TAG runs its built-in $n, so a PATH fake is not used"; return 1; }
+  done
+}
+
 # run_install [VAR=value ...] -- ARGS...: run install.sh in the sandbox.
 run_install() {
   local extra=()
@@ -265,6 +280,7 @@ case_refuses_env_override_on_remote_url() {
 }
 
 case_refuses_unknown_arch() {
+  fakeable uname || return 0
   tools default
   prepare_dir
   local pair
@@ -277,6 +293,7 @@ case_refuses_unknown_arch() {
 }
 
 case_rosetta_picks_arm64() {
+  fakeable uname || return 0
   tools default
   fake uname 'case $1 in -s) echo Darwin ;; -m) echo x86_64 ;; esac'
   fake sysctl '[ "$2" = sysctl.proc_translated ] && echo 1'
@@ -292,6 +309,7 @@ case_rosetta_picks_arm64() {
 
 case_uses_shasum_without_sha256sum() {
   command -v shasum >/dev/null || { skip_case "no shasum on this host"; return; }
+  fakeable sha256sum || return 0
   tools curl openssl
   wrap shasum
   run_install -- --version v1.0.0 --dir "$C/dir"
@@ -307,6 +325,7 @@ fake_wget() {
 }
 
 case_uses_wget_without_curl() {
+  fakeable wget || return 0
   fake_wget gnu
   run_install -- --dir "$C/dir"
   expect_code 0
