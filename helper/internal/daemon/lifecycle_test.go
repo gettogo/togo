@@ -281,11 +281,14 @@ func TestWrapperExitReportCounts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Wait for the agent itself (a script, not the pane's own
+			// process): a login shell's startup children, such as zsh's
+			// path_helper, also sit in the foreground before it starts.
 			code := 3
 			sig := wire.Signal{SessionID: sess.ID, Kind: wire.SignalExit, Code: &code}
 			for deadline := time.Now().Add(10 * time.Second); ; {
 				fg, err := tm.Foreground(context.Background(), sess.ID)
-				if err == nil && slices.ContainsFunc(fg.Foreground, func(p tmux.Proc) bool { return p.PID != fg.PanePID }) {
+				if err == nil && slices.ContainsFunc(fg.Foreground, func(p tmux.Proc) bool { return p.PID != fg.PanePID && (p.Name == "sh" || p.Name == "agent") }) {
 					break
 				}
 				if time.Now().After(deadline) {

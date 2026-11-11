@@ -35,6 +35,11 @@ func (c *Client) RespawnPane(ctx context.Context, target, dir string, argv []str
 	if err != nil {
 		return fmt.Errorf("tmux: respawn pane: %w", err)
 	}
+	if dir != "" {
+		// As after new-session, the pane's path can read as the tmux
+		// server's own directory until the new process enters dir.
+		c.waitPanePath(ctx, strings.TrimSuffix(strings.TrimPrefix(target, "="), ":"), dir)
+	}
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -236,7 +237,11 @@ func TestSpoofedExitIgnoredOnRealPane(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	flag := filepath.Join(dir, "stop")
-	agent := `while [ ! -e "$1" ]; do /bin/sleep 0.05; done; exec /bin/sh -i`
+	// The polling loop runs in a child shell, so the agent is a process of
+	// its own for the whole wait. Polling in the pane's own shell would
+	// leave it alone in the foreground between sleeps, which reads as a
+	// pane back at its prompt.
+	agent := `/bin/sh -c 'while [ ! -e "$1" ]; do /bin/sleep 0.05; done' sh "$1"; exec /bin/sh -i`
 	err := c.NewSession(ctx, tmux.NewSessionOpts{Name: sid, Dir: dir, Command: []string{"/bin/sh", "-c", agent, "sh", flag},
 		Env: map[string]string{"ENV": "", "PS1": "$ "}})
 	if err != nil {
@@ -249,7 +254,7 @@ func TestSpoofedExitIgnoredOnRealPane(t *testing.T) {
 	// Wait for the stand-in to be in the foreground.
 	for deadline := time.Now().Add(10 * time.Second); ; {
 		fg, err := c.Foreground(ctx, sid)
-		if err == nil && len(fg.Foreground) > 1 {
+		if err == nil && slices.ContainsFunc(fg.Foreground, func(p tmux.Proc) bool { return p.PID != fg.PanePID && p.Name == "sh" }) {
 			break
 		}
 		if time.Now().After(deadline) {
