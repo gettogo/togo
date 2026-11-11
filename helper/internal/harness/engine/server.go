@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/agents"
+	"github.com/gettogo/togo/helper/internal/fsx"
 	"github.com/gettogo/togo/helper/internal/harness/source/rpc"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
@@ -32,8 +33,9 @@ type servers struct {
 // startServer starts the adapter's endpoint server for one session and
 // waits for its health check. It runs in the session folder dir (Codex
 // 0.167's app-server starts the TUI's thread in its own working
-// directory), else the home folder. On failure the process is stopped and
-// the harness starts without the endpoint.
+// directory), or the home folder when the session has none. A session whose
+// folder is gone gets no server. On failure the process is stopped and the
+// harness starts without the endpoint, so the session opens in its terminal.
 func (e *Engine) startServer(a *adapter, sessionID, dir string, ep endpoint, data map[string]any) error {
 	e.stopServer(sessionID)
 	argv := make([]string, 0, len(a.Endpoint.Server))
@@ -54,11 +56,15 @@ func (e *Engine) startServer(a *adapter, sessionID, dir string, ep endpoint, dat
 	if !ok {
 		return fmt.Errorf("%s is not installed", argv[0])
 	}
+	// The server works on the project in its working directory, so it starts
+	// only in the session's own folder, never somewhere the user did not pick.
+	if dir != "" && !fsx.IsDir(dir) {
+		return fsx.FolderGoneError(dir)
+	}
 	cmd := exec.Command(prog, argv[1:]...)
-	if st, err := os.Stat(dir); dir != "" && err == nil && st.IsDir() {
-		cmd.Dir = dir
-	} else if home := e.cfg.Home; home != "" {
-		cmd.Dir = home
+	cmd.Dir = dir
+	if dir == "" {
+		cmd.Dir = e.cfg.Home
 	}
 	cmd.Env = append(os.Environ(), "PATH="+path)
 	if e.cfg.LoginEnv != nil {

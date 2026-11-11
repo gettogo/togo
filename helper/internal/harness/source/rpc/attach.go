@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/fsx"
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
@@ -135,7 +136,7 @@ func runChild(ctx context.Context, b spec.RPC, env harness.Env) (json.RawMessage
 		}
 	}
 	cmd := exec.CommandContext(ctx, prog, b.Child[1:]...)
-	cmd.Dir = env.Cwd
+	cmd.Dir = fsx.ExecDir(env.Cwd, env.Vars["home"])
 	cmd.Env = append(cmd.Environ(), env.Environ...)
 	if path := env.Vars["path"]; path != "" {
 		cmd.Env = append(cmd.Env, "PATH="+path)

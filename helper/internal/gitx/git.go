@@ -171,6 +171,9 @@ func (g *Git) run(ctx context.Context, dir string, stdin []byte, limit int, args
 // appended after Env.
 func (g *Git) exec(ctx context.Context, dir string, stdin []byte, env []string, limit int, args ...string) (out []byte, truncated bool, err error) {
 	name := subcommand(args)
+	if st, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) || (err == nil && !st.IsDir()) {
+		return nil, false, fsx.FolderGoneError(dir)
+	}
 	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, g.timeout())
 	defer cancel()
@@ -299,6 +302,9 @@ func SessionDir(ctx context.Context, r Resolver, id string) (string, error) {
 		return "", err
 	}
 	info, err := os.Stat(sess.Cwd)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", fsx.FolderGoneError(sess.Cwd)
+	}
 	if err != nil || !info.IsDir() || !filepath.IsAbs(sess.Cwd) {
 		return "", fmt.Errorf("%w: session directory unavailable", fsx.ErrInvalidPath)
 	}

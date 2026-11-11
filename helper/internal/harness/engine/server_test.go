@@ -217,3 +217,20 @@ func TestEndpointServerRunsInTheSessionFolder(t *testing.T) {
 		t.Fatalf("server dir = %q, want %q", cmd.Dir, dir)
 	}
 }
+
+// A session whose folder is gone gets no server: it must not start the
+// harness's server in a parent folder or the home folder, where it would act
+// on a project the user did not pick.
+func TestEndpointServerRefusesAMissingSessionFolder(t *testing.T) {
+	e := fakeServerEngine(t, "serve")
+	dir := filepath.Join(t.TempDir(), "deleted")
+	if args := e.EndpointArgs("fakesrv", "s_abcdefghij", dir); args != nil {
+		t.Fatalf("args for a missing folder: %v", args)
+	}
+	e.srv.mu.Lock()
+	cmd := e.srv.byID["s_abcdefghij"]
+	e.srv.mu.Unlock()
+	if cmd != nil {
+		t.Fatalf("server started in %q for a missing folder", cmd.Dir)
+	}
+}
