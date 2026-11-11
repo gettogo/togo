@@ -57,7 +57,7 @@ struct AddMachineSheet: View {
     private var form: some View {
         MachineForm(
             draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
-            onImportKey: { text, label in Task { await flow.importKey(text, label: label) } },
+            onImportKey: { text, label, source in Task { await flow.importKey(text, label: label, source: source) } },
             onConnect: flow.connect
         )
     }

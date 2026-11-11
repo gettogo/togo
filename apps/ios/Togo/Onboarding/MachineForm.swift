@@ -8,7 +8,7 @@ struct MachineForm: View {
     @Binding var draft: MachineDraft
     let showsErrors: Bool
     let importError: String?
-    let onImportKey: (_ text: String, _ label: String) -> Void
+    let onImportKey: (_ text: String, _ label: String, _ source: KeyImportSource) -> Void
     let onConnect: () -> Void
 
     @FocusState private var focus: MachineDraft.Field?
@@ -120,7 +120,7 @@ struct MachineForm: View {
         }
         .fileImporter(isPresented: $choosingKeyFile, allowedContentTypes: [.data, .plainText]) { result in
             guard case .success(let url) = result, let text = Self.readKey(url) else { return }
-            onImportKey(text, url.lastPathComponent)
+            onImportKey(text, url.lastPathComponent, .file)
         }
         .onAppear {
             jumpShown = !draft.jump.isEmpty
@@ -134,16 +134,10 @@ struct MachineForm: View {
             EmptyView()
         case .importedKey:
             VStack(alignment: .leading, spacing: 8) {
-                Button {
-                    choosingKeyFile = true
-                } label: {
-                    Label(
-                        draft.importedKey?.label ?? String(localized: "onboard.form.chooseKey", defaultValue: "Choose a key file"),
-                        systemImage: draft.importedKey == nil ? "doc.badge.plus" : "key"
-                    )
-                    .foregroundStyle(Color.togoSnow)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(.rect)
+                // Two buttons share one row, so each keeps its own tap target; at large text they stack.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { chooseButton; pasteButton }
+                    VStack(alignment: .leading, spacing: 4) { chooseButton; pasteButton }
                 }
                 if let error = importError ?? visibleError(.key) { FieldError(text: error) }
             }
@@ -169,6 +163,36 @@ struct MachineForm: View {
             }
             .frame(minHeight: 44)
         }
+    }
+
+    private var chooseButton: some View {
+        Button {
+            choosingKeyFile = true
+        } label: {
+            Label(
+                draft.importedKey?.label ?? String(localized: "onboard.form.chooseKey", defaultValue: "Choose a key file"),
+                systemImage: draft.importedKey == nil ? "doc.badge.plus" : "key"
+            )
+            .foregroundStyle(Color.togoSnow)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    /// The system paste control reads the clipboard only on tap, so iOS shows no "Allow Paste"
+    /// prompt. The system fixes its look apart from shape, tint and label style.
+    private var pasteButton: some View {
+        PasteButton(payloadType: String.self) { strings in
+            let mark = ClipboardMark(SystemKeyPasteboard())
+            guard let text = strings.first, text.utf8.count < 64 * 1024 else { return }
+            onImportKey(text, String(localized: "onboard.form.pastedKeyLabel", defaultValue: "Pasted key"), .clipboard(mark))
+        }
+        .labelStyle(.titleAndIcon)
+        .buttonBorderShape(.capsule)
+        .tint(Color.togoSnow)
+        .frame(minHeight: 44)
+        .accessibilityLabel(String(localized: "onboard.form.pasteKeyA11y", defaultValue: "Paste key from clipboard"))
     }
 
     private func field(

@@ -208,16 +208,30 @@ enum ConnectPhase: Equatable, Sendable {
         path = [.form]
     }
 
-    func importKey(_ text: String, label: String) async {
+    /// Pasteboard cleared after a pasted key imports. Tests replace it.
+    var pasteboard: any KeyPasteboard = SystemKeyPasteboard()
+
+    /// Files and pasted text take this same path; only the error wording and the clipboard
+    /// clean-up differ.
+    func importKey(_ text: String, label: String, source: KeyImportSource = .file) async {
         importError = nil
         let passphrase = draft.passphrase.isEmpty ? nil : draft.passphrase
         do {
             draft.importedKey = try await services.importKey(openSSH: text, passphrase: passphrase, label: label)
+            if case .clipboard(let mark) = source { mark.clearIfUnchanged(on: pasteboard) }
         } catch {
-            importError = String(
-                localized: "onboard.form.error.import",
-                defaultValue: "That file isn't a key Togo can read. If it has a passphrase, type it first."
-            )
+            switch source {
+            case .file:
+                importError = String(
+                    localized: "onboard.form.error.import",
+                    defaultValue: "That file isn't a key Togo can read. If it has a passphrase, type it first."
+                )
+            case .clipboard:
+                importError = String(
+                    localized: "onboard.form.error.importPasted",
+                    defaultValue: "The copied text isn't a key Togo can read. Copy the whole private key, and type its passphrase first if it has one."
+                )
+            }
         }
     }
 

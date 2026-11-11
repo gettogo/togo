@@ -36,8 +36,14 @@ import TogoKit
         OnboardingSamples.deviceKey
     }
 
+    /// The key text each import received, and a switch to make imports fail.
+    private(set) var importedTexts: [String] = []
+    var importFails = false
+
     func importKey(openSSH: String, passphrase: String?, label: String) async throws -> ImportedKey {
-        ImportedKey(id: "imported-1", label: label)
+        importedTexts.append(openSSH)
+        if importFails { throw KeyError.malformed }
+        return ImportedKey(id: "imported-1", label: label)
     }
 
     func connect(

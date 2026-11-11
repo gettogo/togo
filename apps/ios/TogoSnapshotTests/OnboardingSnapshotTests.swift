@@ -133,7 +133,7 @@ struct OnboardingSnapshotTests {
 
     private func form(_ draft: MachineDraft, showsErrors: Bool) -> some View {
         MachineForm(
-            draft: .constant(draft), showsErrors: showsErrors, importError: nil, onImportKey: { _, _ in }, onConnect: {}
+            draft: .constant(draft), showsErrors: showsErrors, importError: nil, onImportKey: { _, _, _ in }, onConnect: {}
         )
     }
 
