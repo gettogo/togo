@@ -40,3 +40,14 @@ func (c *Client) SetServerOption(ctx context.Context, key, value string) error {
 	}
 	return err
 }
+
+// BindRoot binds key in the root table (bind-key -n) to cmd, one tmux
+// command in its text form, on the server already running on the client's
+// socket. With no server running it does nothing and returns nil.
+func (c *Client) BindRoot(ctx context.Context, key, cmd string) error {
+	_, err := c.run(ctx, "bind-key", "-n", escapeArg(key), escapeArg(cmd))
+	if errors.Is(err, errNoServer) {
+		return nil
+	}
+	return err
+}
