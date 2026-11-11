@@ -100,6 +100,7 @@ import TogoMosh
                 (try? keys.info(id: $0))?.publicKeyLine
             }
         }
+        let relay = LiveServicesRelay()
         let services = LiveServices(
             hostRecords: hostRecords, settingsRecords: settingsRecords, syncSwitch: syncSwitch,
             device: DeviceSettings(backend: isolated ? MemoryBackend() : AppPush.deviceBackend()),
@@ -114,12 +115,17 @@ import TogoMosh
                     HostMonitor(
                         record: record,
                         factory: { record -> any SessionSource in
+                            let found: @Sendable (String) -> Void = { path in
+                                Task { @MainActor in await relay.target?.helperFound(record.id, path: path) }
+                            }
                             if let connection = await signedIn.take(record.id) {
                                 return record.noHelper
-                                    ? PlainTmuxSource(record: record, connected: connection)
+                                    ? PlainTmuxSource(record: record, connected: connection, helperFound: found)
                                     : HelperSource(record: record, connected: connection)
                             }
-                            return record.noHelper ? PlainTmuxSource(record: record, env: env) : HelperSource(record: record, env: env)
+                            return record.noHelper
+                                ? PlainTmuxSource(record: record, env: env, helperFound: found)
+                                : HelperSource(record: record, env: env)
                         },
                         path: SystemPathSource()
                     )
@@ -154,6 +160,7 @@ import TogoMosh
                 trustedHostKeys: { (try? await hostKeys.fingerprints(for: HostKeyTrust.hostID($0))) ?? [] }
             )
         )
+        relay.target = services
         live = services
         self.services = services
         let review = LiveReviewServices(
@@ -413,4 +420,9 @@ extension AppComposition {
             $0.hostID == host && $0.sessionID == session && $0.phase == .open && $0.signIn?.secret == true
         }?.id
     }
+}
+
+/// Lets the machine watches, built before `LiveServices` exists, reach it later.
+@MainActor private final class LiveServicesRelay {
+    weak var target: LiveServices?
 }
