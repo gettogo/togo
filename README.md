@@ -102,10 +102,10 @@ From source, with Go 1.26 or newer:
 
 ```sh
 GOBIN="$HOME/.togo/bin" go install github.com/gettogo/togo/helper/cmd/togo@latest
-togo service install
+~/.togo/bin/togo service install
 ```
 
-Add `~/.togo/bin` to your `PATH` to use `togo` at the desk.
+Add `~/.togo/bin` to your `PATH` to use plain `togo` at the desk.
 
 The helper is one binary for macOS and Linux, arm64 and amd64. [Release downloads](https://github.com/gettogo/togo/releases/latest) include checksums and a minisign signature. See [Verifying a release](SECURITY.md#verifying-a-release).
 
