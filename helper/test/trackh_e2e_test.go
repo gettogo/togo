@@ -92,6 +92,7 @@ func openApproval(t *testing.T, c *daemonClient, sessionID, notID string) approv
 type rig struct {
 	bin     string
 	env     []string
+	label   string
 	daemon  *exec.Cmd
 	c       *daemonClient
 	ph      *phone
@@ -150,7 +151,7 @@ func newRig(t *testing.T, relayURL string) *rig {
 		return bytes.Contains(out, []byte("Do you want to proceed?"))
 	})
 
-	return &rig{bin: bin, env: env, daemon: daemonCmd, c: c, ph: ph, sess: sess, keysOut: keysOut}
+	return &rig{bin: bin, env: env, label: label, daemon: daemonCmd, c: c, ph: ph, sess: sess, keysOut: keysOut}
 }
 
 // TestE2EPromptToPhoneAndMailbox drives the built daemon end to end: a
@@ -199,7 +200,32 @@ func TestE2EPromptToPhoneAndMailbox(t *testing.T) {
 		t.Fatalf("second answer error = %+v, want -32006", e)
 	}
 
-	second := openApproval(t, c, sess.ID, first.RequestID)
+	// The first menu stays drawn for a moment after its key is typed, and a
+	// watcher that reads that stale screen opens an approval for it, which a
+	// phone answer then finds gone. Take the second approval only once the
+	// agent has cleared the first menu and drawn the second.
+	waitFor(t, "the first menu to clear", 15*time.Second, func() bool {
+		out, _ := tmuxCmd(env, r.label, "capture-pane", "-p", "-t", "="+sess.ID+":").Output()
+		return bytes.Contains(out, []byte("answered 1"))
+	})
+	waitFor(t, "the second menu on screen", 20*time.Second, func() bool {
+		out, _ := tmuxCmd(env, r.label, "capture-pane", "-p", "-t", "="+sess.ID+":").Output()
+		return bytes.Contains(out, []byte("Do you want to proceed?"))
+	})
+	var second approvalInfo
+	waitFor(t, "an open approval for the second menu", 20*time.Second, func() bool {
+		var res struct {
+			Approvals []approvalInfo `json:"approvals"`
+		}
+		c.call("approval.list", map[string]any{"sessionId": sess.ID}, &res)
+		for _, a := range res.Approvals {
+			if a.RequestID != first.RequestID && len(a.Options) > 0 {
+				second = a
+				return true
+			}
+		}
+		return false
+	})
 	frame := ph.answerFrame(t, second.RequestID, "deny")
 	relay.frames <- strings.Replace(frame, `"id":"m"`, `"id":"m1"`, 1)
 	relay.frames <- strings.Replace(frame, `"id":"m"`, `"id":"m2"`, 1)
