@@ -68,7 +68,7 @@ elif pinned_is_test_key "$repo"; then
 fi
 
 step "build and archive every target"
-release build --version "$version" --out "$dist"
+release build --version "$version" --module-dir "$repo/helper" --out "$dist"
 
 if [ "$apple" = "yes" ]; then
   for arch in arm64 amd64; do
@@ -84,7 +84,7 @@ if [ "$apple" = "yes" ]; then
     fi
     "$here/sign-darwin.sh" "$work/togo" ${runflag[@]+"${runflag[@]}"}
     "$here/notarize.sh" "$work/togo" ${runflag[@]+"${runflag[@]}"}
-    release archive --version "$version" --target "darwin/$arch" --bin "$work/togo" --license "$repo/LICENSE" --out "$dist"
+    release archive --version "$version" --module-dir "$repo/helper" --target "darwin/$arch" --bin "$work/togo" --license "$repo/LICENSE" --out "$dist"
     if [ "$mode" = "run" ]; then
       find "$work" -mindepth 1 -delete
       rmdir "$work"
