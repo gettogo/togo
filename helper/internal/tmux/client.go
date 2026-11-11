@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -243,14 +244,21 @@ func (c *Client) NewSession(ctx context.Context, o NewSessionOpts) error {
 // new-session returns that process has not yet entered its directory, so
 // the path reads as "" or as the server's own "/". A caller that lists the
 // session at once, such as a client opening a file in it, would see a wrong
-// cwd. It gives up quietly after about a second: the path is best effort.
+// cwd. Until the shell has entered its directory the path can also read as
+// the tmux server's own working directory, so the wait is for the requested
+// directory itself (symlinks resolved, as tmux reports the real path). It
+// gives up quietly after about a second: the path is best effort.
 func (c *Client) waitPanePath(ctx context.Context, name, dir string) {
+	want := dir
+	if r, err := filepath.EvalSymlinks(dir); err == nil {
+		want = r
+	}
 	for range 200 {
 		out, err := c.run(ctx, "list-panes", "-t", "="+name+":", "-F", "#{pane_current_path}")
 		if err != nil {
 			return
 		}
-		if p := strings.TrimSpace(out); p != "" && (p != "/" || dir == "/") {
+		if p := strings.TrimSpace(out); p != "" && samePath(p, want) {
 			return
 		}
 		select {
@@ -424,4 +432,17 @@ func classifyStderr(stderr string) error {
 	default:
 		return fmt.Errorf("tmux: %s", text)
 	}
+}
+
+// samePath reports whether tmux's reported pane path names dir, comparing
+// cleaned paths and, where they exist, their resolved forms.
+func samePath(reported, dir string) bool {
+	a, b := filepath.Clean(reported), filepath.Clean(dir)
+	if a == b {
+		return true
+	}
+	if r, err := filepath.EvalSymlinks(a); err == nil && r == b {
+		return true
+	}
+	return false
 }
