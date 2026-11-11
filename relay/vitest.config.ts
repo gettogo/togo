@@ -7,6 +7,9 @@ import { defineConfig } from "vitest/config";
 const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
 
 export default defineConfig({
+  // Rate-limit tests send 30 to 60 requests through the Workers runtime, which
+  // can pass 5 s on a busy CI runner.
+  test: { testTimeout: 20_000 },
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
