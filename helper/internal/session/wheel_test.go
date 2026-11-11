@@ -58,8 +58,11 @@ func TestMouseBindingsOnFreshAndRunningServers(t *testing.T) {
 	if err := s.Tmux.NewSession(ctx, tmux.NewSessionOpts{Name: "old", Dir: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
-	if got := wheelTmux(t, s.Tmux, "list-keys", "-T", "root", "MouseDrag1Pane"); strings.Contains(got, "alternate_on") {
-		t.Fatalf("server without the config already has the binding: %q", got)
+	// Newer tmux defaults already guard drags with alternate_on, so the right
+	// click menu, which every default has and the togo config removes, shows
+	// that this server has not been configured yet.
+	if got := wheelTmux(t, s.Tmux, "list-keys", "-T", "root", "MouseDown3Pane"); !strings.Contains(got, "display-menu") {
+		t.Fatalf("server without the config lacks tmux's default right click menu: %q", got)
 	}
 	for range 2 {
 		if err := s.KeepServer(ctx); err != nil {
