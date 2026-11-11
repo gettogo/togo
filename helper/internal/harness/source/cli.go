@@ -16,6 +16,7 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 
+	"github.com/gettogo/togo/helper/internal/fsx"
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
@@ -65,7 +66,7 @@ func RunStderr(ctx context.Context, argv []string, env harness.Env, merge bool) 
 	}
 	cmd := exec.CommandContext(ctx, prog, argv[1:]...)
 	if env.Cwd != "" {
-		cmd.Dir = Expand(env.Cwd, home(env))
+		cmd.Dir = fsx.ExecDir(Expand(env.Cwd, home(env)), home(env))
 	}
 	cmd.Env = withProgDir(Environ(env), prog)
 	var out cappedBuffer
