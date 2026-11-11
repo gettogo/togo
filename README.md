@@ -72,7 +72,16 @@ One Go binary for macOS and Linux, arm64 and amd64. It needs tmux 3.2 or newer a
 curl -fsSL https://togoapp.dev/install.sh | sh
 ```
 
-The script installs from the latest GitHub release and sets up the login service (`togo service install`), so needs-you alerts arrive while the app is closed; pass `--no-service` to skip it (`curl -fsSL https://togoapp.dev/install.sh | sh -s -- --no-service`). It checks the minisign signature on `SHA256SUMS` and the archive's checksum, and writes nothing until both pass. Until the first release is tagged, install from source with Go 1.26 or newer:
+The script installs from the latest GitHub release and sets up the login service (`togo service install`), so needs-you alerts arrive while the app is closed; pass `--no-service` to skip it (`curl -fsSL https://togoapp.dev/install.sh | sh -s -- --no-service`). It checks the minisign signature on `SHA256SUMS` and the archive's checksum, and writes nothing until both pass.
+
+With Homebrew instead (updates come through `brew upgrade togo`):
+
+```sh
+brew install gettogo/tap/togo
+togo service install
+```
+
+From source, with Go 1.26 or newer:
 
 ```sh
 GOBIN="$HOME/.togo/bin" go install github.com/gettogo/togo/helper/cmd/togo@latest
