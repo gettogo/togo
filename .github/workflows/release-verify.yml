@@ -6,6 +6,11 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to verify, e.g. v1.0.0"
+        required: true
 
 permissions:
   contents: read
@@ -14,11 +19,12 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -27,8 +33,9 @@ jobs:
 
       - name: Rebuild the release
         run: |
-          (cd helper && go build -o ../togo-release ./cmd/togo-release)
-          ./togo-release build --version "$TAG" --out rebuilt
+          # Outside the checkout: the release build refuses a dirty working tree.
+          (cd helper && go build -o "$RUNNER_TEMP/togo-release" ./cmd/togo-release)
+          "$RUNNER_TEMP/togo-release" build --version "$TAG" --out rebuilt
 
       - name: Download the published assets
         run: |
