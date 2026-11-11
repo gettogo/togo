@@ -184,9 +184,9 @@ func TestSetOptionRejectsSeparators(t *testing.T) {
 		key   string
 		value string
 	}{
-		{key: "@togo_name", value: "a\x1fb"},
-		{key: "@togo_name", value: "a\x1eb"},
-		{key: "@togo_name\x1f", value: "v"},
+		{key: "@togo_name", value: "a|~F~|b"},
+		{key: "@togo_name", value: "a|~R~|b"},
+		{key: "@togo_name|~F~|", value: "v"},
 	}
 	for _, tc := range cases {
 		if err := c.SetOption(ctx, name, tc.key, tc.value); err == nil {
@@ -419,7 +419,7 @@ func TestNewSessionRejectsSeparatorsInOptions(t *testing.T) {
 	err := c.NewSession(context.Background(), tmux.NewSessionOpts{
 		Name:    "s_bad",
 		Dir:     t.TempDir(),
-		Options: map[string]string{"@togo_name": "a\x1fb"},
+		Options: map[string]string{"@togo_name": "a|~F~|b"},
 	})
 	if err == nil {
 		t.Fatal("NewSession with a separator in an option value = nil error")

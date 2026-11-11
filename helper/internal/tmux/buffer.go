@@ -34,12 +34,12 @@ func (c *Client) PasteText(ctx context.Context, target, text string) error {
 // list-panes is used rather than display-message, which prints empty
 // fields for a target that does not exist instead of failing.
 func (c *Client) PaneCommand(ctx context.Context, target string) (string, error) {
-	out, err := c.run(ctx, "list-panes", "-t", target, "-F", "#{pane_active}\x1f#{pane_current_command}")
+	out, err := c.run(ctx, "list-panes", "-t", target, "-F", "#{pane_active}"+fieldSep+"#{pane_current_command}")
 	if err != nil {
 		return "", noSession(err)
 	}
 	for line := range strings.SplitSeq(out, "\n") {
-		if cmd, ok := strings.CutPrefix(line, "1\x1f"); ok {
+		if cmd, ok := strings.CutPrefix(line, "1"+fieldSep); ok {
 			return cmd, nil
 		}
 	}
@@ -81,12 +81,12 @@ func noSession(err error) error {
 // of clients attached to its session, as "WxH/clients". A change means a
 // client attached, detached or resized, which makes the program redraw.
 func (c *Client) PaneGeometry(ctx context.Context, target string) (string, error) {
-	out, err := c.run(ctx, "list-panes", "-t", target, "-F", "#{pane_active}\x1f#{pane_width}x#{pane_height}/#{session_attached}")
+	out, err := c.run(ctx, "list-panes", "-t", target, "-F", "#{pane_active}"+fieldSep+"#{pane_width}x#{pane_height}/#{session_attached}")
 	if err != nil {
 		return "", noSession(err)
 	}
 	for line := range strings.SplitSeq(out, "\n") {
-		if g, ok := strings.CutPrefix(line, "1\x1f"); ok {
+		if g, ok := strings.CutPrefix(line, "1"+fieldSep); ok {
 			return g, nil
 		}
 	}

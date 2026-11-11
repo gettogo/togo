@@ -12,16 +12,16 @@ func record(fields ...string) string {
 	var out string
 	for i, f := range fields {
 		if i > 0 {
-			out += "\x1f"
+			out += fieldSep
 		}
 		out += f
 	}
-	return out + "\x1e\n"
+	return out + recSep + "\n"
 }
 
 func TestParseListOutputRawNewlineInName(t *testing.T) {
 	// A raw newline inside the session name field must stay inside the
-	// field: records are delimited by "\x1e\n", not by "\n" alone. This is
+	// field: records are delimited by "RecSep", not by "\n" alone. This is
 	// the input shape the old line-based splitting could not handle.
 	out := record("my\nwork", "1700000000", "0", "0", "/tmp", "b", "a", "t", "c", "0", "", "")
 	sessions, err := parseListOutput(out)
@@ -50,7 +50,7 @@ func TestParseListOutputRawNewlineInOption(t *testing.T) {
 func TestParseListOutputSkipsMalformedRecord(t *testing.T) {
 	// A record without exactly 12 fields is skipped, not an error; the
 	// following well-formed record must still be returned.
-	out := "broken\x1frecord\x1e\n" + record("ok", "1700000000", "1", "0", "/tmp", "b", "a", "t", "c", "0", "", "")
+	out := "broken" + fieldSep + "record" + recSep + "\n" + record("ok", "1700000000", "1", "0", "/tmp", "b", "a", "t", "c", "0", "", "")
 	sessions, err := parseListOutput(out)
 	if err != nil {
 		t.Fatalf("parseListOutput: %v", err)

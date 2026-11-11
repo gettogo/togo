@@ -110,25 +110,34 @@ func (c *Client) Version(ctx context.Context) (major, minor int, raw string, err
 	return parseVersion(out)
 }
 
-// listFormat ends with a record separator (\x1e) followed by the newline
-// tmux appends after every format line, so a record is always exactly
-// "fields...\x1e\n" even when a session name or option value contains
-// newlines.
-const listFormat = `#{session_name}` + "\x1f" +
-	`#{session_created}` + "\x1f" +
-	`#{session_attached}` + "\x1f" +
-	`#{pane_dead}` + "\x1f" +
-	`#{pane_current_path}` + "\x1f" +
-	`#{@togo_bib}` + "\x1f" +
-	`#{@togo_agent}` + "\x1f" +
-	`#{@togo_name}` + "\x1f" +
-	`#{@togo_created}` + "\x1f" +
-	`#{@togo_muted}` + "\x1f" +
-	`#{@togo_argv}` + "\x1f" +
-	`#{@togo_exit}` + "\x1e"
+// FieldSep and RecSep delimit fields and records in -F list output. They are
+// printable ASCII because tmux 3.4 rewrites control bytes such as 0x1f and
+// 0x1e in its output as octal text (\037), whatever the locale or -u, while
+// older and newer releases pass them through. Printable text is never
+// rewritten, so output parses the same on every tmux version. A record is
+// "fields...RecSep" plus the newline tmux appends; newlines inside a value
+// stay inside the record. Values holding either token are rejected by
+// checkOption.
+const (
+	fieldSep = "|~F~|"
+	recSep   = "|~R~|"
+)
+
+const listFormat = `#{session_name}` + fieldSep +
+	`#{session_created}` + fieldSep +
+	`#{session_attached}` + fieldSep +
+	`#{pane_dead}` + fieldSep +
+	`#{pane_current_path}` + fieldSep +
+	`#{@togo_bib}` + fieldSep +
+	`#{@togo_agent}` + fieldSep +
+	`#{@togo_name}` + fieldSep +
+	`#{@togo_created}` + fieldSep +
+	`#{@togo_muted}` + fieldSep +
+	`#{@togo_argv}` + fieldSep +
+	`#{@togo_exit}` + recSep
 
 // ListSessions returns every session on the client's socket. When no server
-// is running it returns nil, nil. Output is split on the "\x1e\n" record
+// is running it returns nil, nil. Output is split on the recSep record
 // delimiter, so newlines inside a session name or option value stay inside
 // their field; records without exactly 12 fields are skipped, not an error.
 func (c *Client) ListSessions(ctx context.Context) ([]SessionInfo, error) {
@@ -143,18 +152,18 @@ func (c *Client) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 }
 
 // parseListOutput parses the output of "list-sessions -F listFormat" into
-// session records. Output is split on the "\x1e\n" record delimiter, so
+// session records. Output is split on the recSep record delimiter, so
 // newlines inside a session name or option value stay inside their field.
 // Records without exactly 12 fields are skipped, not an error; a record with
 // a non-numeric created or attached field is an error.
 func parseListOutput(out string) ([]SessionInfo, error) {
 	sessions := []SessionInfo{}
-	for _, record := range strings.Split(out, "\x1e\n") {
-		record = strings.TrimSuffix(record, "\x1e")
+	for _, record := range strings.Split(out, recSep) {
+		record = strings.TrimPrefix(record, "\n")
 		if record == "" {
 			continue
 		}
-		fields := strings.Split(record, "\x1f")
+		fields := strings.Split(record, fieldSep)
 		if len(fields) != 12 {
 			continue
 		}
@@ -259,8 +268,8 @@ func (c *Client) KillSession(ctx context.Context, name string) error {
 // The target is the exact-match session form "=NAME:"; the trailing colon is
 // required because set-option parses its target as a pane, where a bare
 // "=NAME" would be read as a pane identifier. Keys and values containing a
-// field separator (\x1f) or record separator (\x1e) are rejected without
-// calling tmux, because those bytes would corrupt list-sessions output.
+// field or record separator token are rejected without
+// calling tmux, because they would corrupt list-sessions output.
 // When no server is running the error is ErrNoSession, matching
 // KillSession.
 func (c *Client) SetOption(ctx context.Context, session, key, value string) error {
@@ -302,7 +311,8 @@ func (c *Client) SetEnvironment(ctx context.Context, session, key, value string)
 }
 
 func checkOption(key, value string) error {
-	if strings.ContainsAny(key, "\x1f\x1e") || strings.ContainsAny(value, "\x1f\x1e") {
+	if strings.Contains(key, fieldSep) || strings.Contains(key, recSep) ||
+		strings.Contains(value, fieldSep) || strings.Contains(value, recSep) {
 		return fmt.Errorf("tmux: option %q: keys and values must not contain field or record separators", key)
 	}
 	return nil
@@ -335,9 +345,8 @@ func (c *Client) AttachArgv(name string) []string {
 // run execs the tmux binary with the socket arguments and the given args,
 // capturing stdout and translating the error.
 func (c *Client) run(ctx context.Context, args ...string) (string, error) {
-	// -u keeps tmux from replacing non-ASCII bytes, and the \x1f and \x1e
-	// list separators, with "_" when the environment has no UTF-8 locale,
-	// as under launchd or a bare ssh command.
+	// -u keeps tmux from replacing non-ASCII bytes with "_" when the
+	// environment has no UTF-8 locale, as under launchd or a bare ssh command.
 	full := append([]string{"-u"}, c.Socket...)
 	if c.Config != "" {
 		full = append(full, "-f", c.Config)
