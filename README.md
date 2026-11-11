@@ -1,190 +1,237 @@
-<!-- The animated hero plays inline everywhere GitHub renders this file. For a sharper, smaller
-     inline player, upload .github/assets/hero.mp4 through GitHub's web editor (drag it into this
-     file) and put the user-attachments URL it gives you here in place of the image. -->
-<p align="center">
-  <img src=".github/assets/hero.webp" alt="Togo on iPhone, on one OpenCode session: the session list, the chat streaming, the same session's terminal, the Lock Screen asking to run npm test and Approve tapped on it, then the seven changed files and the diff of render.ts" width="100%">
-</p>
+<h1 align="center">Togo</h1>
 
-<p align="center"><strong>Every coding agent, on your phone.</strong></p>
+<p align="center"><strong>Every coding agent. One native app.</strong></p>
 
 <p align="center">
-  Togo is an iPhone, iPad and Apple Watch app for the coding agents running in tmux on your own Mac or Linux machine.<br>
-  Follow a session, answer it from the Lock Screen or your wrist, read the diff and commit. The code never leaves your machine.
+  Native chat for OpenCode, OMP, Pi and 13 more coding agents.<br>
+  On iPhone and iPad, with an Apple Watch companion. Your agents run on your own Mac or Linux machine.
+</p>
+
+<p align="center"><strong>100% free and open source. No subscription. No paid tier. No Togo account.</strong></p>
+
+<p align="center">
+  <a href="https://testflight.apple.com/join/GjzJW2vU">TestFlight (in review)</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#supported-agents">Supported agents</a> ·
+  <a href="https://togoapp.dev/docs/">Docs</a> ·
+  <a href="#contributing">Contribute</a> ·
+  <a href="https://togoapp.dev">Website</a>
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> ·
-  <a href="#supported-agents">Agents</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#privacy-and-security">Privacy</a> ·
-  <a href="#build-from-source">Build</a> ·
-  <a href="https://togoapp.dev">togoapp.dev</a>
+  <a href="https://github.com/gettogo/togo/releases/latest"><img src="https://img.shields.io/github/v/release/gettogo/togo" alt="Latest helper release"></a>
+  <a href="https://github.com/gettogo/togo/actions/workflows/ci.yml"><img src="https://github.com/gettogo/togo/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
 </p>
 
-> [!NOTE]
-> The `togo` helper works today on macOS and Linux. The app is not on the App Store yet and there is no public test build.
+<p align="center">
+  <a href="https://togoapp.dev">
+    <img src=".github/assets/hero.webp" alt="One OpenCode session in Togo: follow the native chat, open its real terminal, approve npm test from the Lock Screen, then review the changed files and diff" width="100%">
+  </a>
+</p>
 
-You're in line for coffee and the agent you left on the big refactor has stopped. It wants to run a database migration and it won't without you. Your phone buzzes. You read the command on the Lock Screen and tap Deny. By the time your order is up, the agent has moved on to a safer plan, still in tmux, on your own machine.
+## One app for the agents you already use
 
-## What it does
+Togo maps each supported agent's hooks, session logs or local API into the same native chat. Read the conversation and tool work, answer requests, and change the model or mode where the agent supports it. The agent's real terminal is one tap away.
 
-Coding agents got good enough to leave alone for an hour, and then they stop to ask something. Togo leaves the agent where it already runs, in a terminal on a machine you own, and gives your phone a proper way in.
+Your sessions run in tmux on your machine. Start one from your phone or attach from your desk. Keep using your agents, models and provider accounts; Togo connects to the work already running there.
 
 <table>
   <tr>
-    <td width="33%"><img src=".github/assets/screen-chat.webp" alt="Native chat for an OpenCode session, with a request to run npm test"></td>
-    <td width="33%"><img src=".github/assets/screen-terminal.webp" alt="The same session's terminal, live in tmux"></td>
-    <td width="33%"><img src=".github/assets/screen-review.webp" alt="A file diff in Review"></td>
+    <td width="33%"><img src=".github/assets/screen-chat.webp" alt="OpenCode's messages, tool work and an inline approval in Togo's native chat"></td>
+    <td width="33%"><img src=".github/assets/screen-terminal.webp" alt="The same OpenCode session in its real tmux terminal"></td>
+    <td width="33%"><img src=".github/assets/screen-review.webp" alt="A changed file's diff in Togo's Review view"></td>
   </tr>
   <tr>
-    <td>A native chat for 16 agents. Tool steps fold into one line per turn and approvals wait inline.</td>
-    <td>The real terminal, one tap away. The agent's own interface in tmux stays the source of truth.</td>
-    <td>Review what changed: diffs, history, files and ports. Stage and commit from the phone.</td>
+    <td><strong>Chat with your agents.</strong><br>One native interface for 16 harnesses, with messages, tool steps and the controls each agent exposes.</td>
+    <td><strong>Open the real terminal.</strong><br>The same session, in the agent's own interface. Switch between chat and terminal.</td>
+    <td><strong>Review and commit.</strong><br>Read the diffs, stage files and commit from your phone.</td>
   </tr>
 </table>
 
-- When an agent waits on you, a Live Activity lights the Lock Screen and the Dynamic Island, and your Watch taps. Approve or deny from any of them.
-- Every native agent's questions and approvals reach the phone as a needs-you, with a push, the Lock Screen and the Watch. A multi-choice question is never offered as Yes or No.
-- In the terminal, a row above the keyboard holds prompt keys, your shortcuts, Esc, Ctrl, Mode and Stop, and Hide keyboard. A directional controller stands in a column on iPhone and iPad while you type, and in the dock on iPhone Duo. Settings, Keyboard changes them. A long press selects a word.
-- Chat text selects by the word and copies exactly, Markdown tables included. Paste keeps every character, and a pasted screenshot or photo becomes an attachment.
-- Start a session from the phone: pick a machine, a folder and an agent, and it starts in tmux. Sessions you start at the desk show up on the phone, and the other way round.
-- Mission control pulls up an agent's subagents, background shells, plan, changes, ports and status, for agents that report them.
-- Model, mode and effort pickers work through the agent itself, by its own commands or its API, so the terminal shows the same choice.
-- On iPad, and on iPhone Duo when it is open, the session list stays beside the session. Held as a tabletop, the Duo keeps the terminal above the hinge and the keyboard below.
-- Togo tries the machine's local name, its home network address, Tailscale and any saved address at once, and keeps the first that answers with the host key it already knows.
-- The helper is scriptable: `togo ask "Ship it?" --options yes,no` waits for your answer on the phone, and `togo notify`, `togo job` and `togo awake` cover the rest of the long-task chores.
+### Step away without losing the thread
+
+You're in line for coffee and an agent stops to ask whether it can run a database migration. Your phone buzzes. Read the command on the Lock Screen and tap Deny. The session stays in tmux, ready for your next instruction.
+
+- **Answer where the request finds you.** Approvals appear in chat, notifications, Live Activities and on Apple Watch. Answer questions and their choices in the app.
+- **Start work from your phone.** Pick a machine, a folder and an agent. It starts in tmux and appears at your desk too.
+- **See the rest of the session.** Mission control gathers subagents, background shells, plans, changes, ports and status where the agent reports them.
+- **Use the screen you have.** On iPad and an open iPhone Duo, keep the session list beside your work. On Watch, approve or deny a waiting request.
 
 <p align="center">
-  <img src=".github/assets/devices.webp" alt="Togo on iPad: the session list, a finished OpenCode turn and mission control with its changes and status. Beside it, an OpenCode request on Apple Watch" width="100%">
+  <img src=".github/assets/devices.webp" alt="Togo on iPad with the session list, OpenCode chat and mission control; an Apple Watch beside it shows a waiting request" width="100%">
 </p>
 
-Without the helper, any machine you can reach over SSH still works as a full terminal with its own tmux sessions.
+## Quick start
 
-## Install
+Togo has two parts: the app on your phone and a small helper on the machine running your agents.
 
-Togo has two parts: the `togo` helper on the machine your agents run on, and the app on your phone.
+**You need:** iOS or iPadOS 26 or later, a Mac or Linux machine with tmux 3.2 or newer, and SSH access to it. The Watch companion needs watchOS 26 or later. Your agents and their model access are separate from Togo.
 
-### The helper
+### 1. Get the app
 
-One Go binary for macOS and Linux, arm64 and amd64. It needs tmux 3.2 or newer and installs to `~/.togo/bin`, where the app looks first.
+[Open the TestFlight invitation](https://testflight.apple.com/join/GjzJW2vU).
+
+**Apple review is pending.** The beta and App Store release are awaiting review; the public TestFlight link will accept testers after approval.
+
+You can explore with a demo machine before connecting your own: open **How it works**, then **Explore with a demo machine** on the first-run screen.
+
+### 2. Install the helper
+
+Run this on your Mac or Linux machine:
 
 ```sh
 curl -fsSL https://togoapp.dev/install.sh | sh
 ```
 
-The script installs from the latest GitHub release and sets up the login service (`togo service install`), so needs-you alerts arrive while the app is closed; pass `--no-service` to skip it (`curl -fsSL https://togoapp.dev/install.sh | sh -s -- --no-service`). It checks the minisign signature on `SHA256SUMS` and the archive's checksum, and writes nothing until both pass.
+The installer checks the release's signature and checksum before writing anything, installs to `~/.togo/bin`, and starts the background service so alerts can arrive while the app is closed.
 
-With Homebrew instead (updates come through `brew upgrade togo`):
+<details>
+<summary><strong>Homebrew, source installs and release verification</strong></summary>
+
+With Homebrew:
 
 ```sh
 brew install gettogo/tap/togo
 togo service install
 ```
 
+Updates come through `brew upgrade togo`.
+
 From source, with Go 1.26 or newer:
 
 ```sh
 GOBIN="$HOME/.togo/bin" go install github.com/gettogo/togo/helper/cmd/togo@latest
+togo service install
 ```
 
-Then:
+Add `~/.togo/bin` to your `PATH` to use `togo` at the desk.
+
+The helper is one binary for macOS and Linux, arm64 and amd64. [Release downloads](https://github.com/gettogo/togo/releases/latest) include checksums and a minisign signature. See [Verifying a release](SECURITY.md#verifying-a-release).
+
+To install without the background service:
 
 ```sh
-togo doctor            # checks tmux, mosh-server, the firewall and Tailscale SSH; changes nothing
-togo service install   # only needed after --no-service; runs the daemon at login
-togo hooks install     # sets up every installed agent that takes hooks; backs up each file once first
-togo new claude --dir ~/code/project
+curl -fsSL https://togoapp.dev/install.sh | sh -s -- --no-service
 ```
 
-`togo ls` lists sessions and `togo attach 1` joins one from another terminal. Run `togo` with no arguments for every command. `togo uninstall` takes the hooks and the login service back out.
+</details>
 
-### The app
+### 3. Connect your machine
 
-<!-- TODO(owner): replace with the App Store badge and link once the listing is live. -->
-App Store link coming with the first release.
+On a Mac, enable **System Settings > General > Sharing > Remote Login**. In Togo, add your machine's hostname and user name, add the app's public key to `~/.ssh/authorized_keys`, and verify the host key fingerprint shown on the first connection. Notification pairing happens over that same SSH connection.
 
-In the app you add the machine by hostname or Tailscale name, put the app's public key in `~/.ssh/authorized_keys`, and check the host key fingerprint it shows the first time. Pairing for notifications happens over that same SSH connection. There is no code to type and no port to open. A demo machine lets you look around before you have set one up.
+For access away from home, connect your phone and machine through Tailscale or use another reachable SSH address. [The setup guide](https://togoapp.dev/docs/getting-started/) walks through the connection; [pairing and device revocation](https://togoapp.dev/docs/pairing/) covers notification keys.
+
+### 4. Start a session
+
+Use the plus button in the app, or run this at your desk:
+
+```sh
+togo doctor
+togo hooks install
+togo new opencode --dir ~/code/project
+```
+
+`togo doctor` checks the machine and changes nothing. `togo hooks install` configures installed agents that accept hooks and backs up the files it changes.
+
+```sh
+togo ls         # list sessions
+togo attach 1   # join a session from your terminal
+```
+
+On a Mac, plugged-in mode keeps the machine awake while sessions work. Closed-lid use on battery needs [additional awake setup](https://togoapp.dev/docs/troubleshooting/#awake). [Troubleshooting](https://togoapp.dev/docs/troubleshooting/) explains the other checks from `togo doctor`.
+
+Without the helper, a reachable SSH machine still works as a terminal. The helper adds native agent chat, session controls, alerts and remote approvals.
 
 ## Supported agents
 
-These 16 agents get a native chat. The app draws it from what the agent already writes down: its hooks, its session log or its local API. An agent outside the version range its adapter was checked against opens in the terminal instead of guessing.
-
-<!-- Generated from helper/internal/agents/agents.go and helper/internal/harness/adapters/*/*.yaml (the capabilities line). Regenerate when an adapter changes; OpenCode, OMP and Pi lead, the rest follow the registry order. -->
+**All 16 get a native chat.** Model selection, approvals, questions and other controls depend on the agent. The app reads each agent's existing hooks, logs or API; an unrecognised version opens in the terminal rather than guessing.
 
 | Agent | Command | Native controls | Togo reads |
 |---|---|---|---|
-| OpenCode | `opencode` | model, mode, approvals, questions, resume | its local HTTP API and event stream |
+| OpenCode | `opencode` | model, mode, approvals, questions, resume | local HTTP API and event stream |
 | OMP | `omp` | model, effort, questions | session log |
 | Pi | `pi` | model, effort, resume | session log |
 | Claude Code | `claude` | model, mode, effort, approvals, questions, resume | hooks, status line, transcript |
-| Codex | `codex` | model, mode, effort, approvals, questions, resume | its app-server, as a second client |
+| Codex | `codex` | model, mode, effort, approvals, questions, resume | app-server, as a second client |
 | Copilot CLI | `copilot` | model, approvals, questions, resume | hooks |
 | Cursor CLI | `cursor-agent` | model, approvals | hooks |
 | Aider | `aider` | model, mode | chat history file |
 | Amp | `amp` | approvals | a Togo plugin |
 | Cline | `cline` | approvals, questions, resume | session file |
-| Crush | `crush` | mode, questions, resume | its client-server API |
+| Crush | `crush` | mode, questions, resume | client-server API |
 | Droid | `droid` | approvals, questions, resume | hooks |
 | Goose | `goose` | mode, approvals, questions, resume | session database, read-only |
-| Kilo Code | `kilo` | model, mode, approvals, questions, resume | its local HTTP API and event stream |
+| Kilo Code | `kilo` | model, mode, approvals, questions, resume | local HTTP API and event stream |
 | Kimi Code | `kimi` | model, mode, approvals, questions, resume | wire log |
 | Mistral Vibe | `vibe` | mode, approvals, questions, resume | session journal |
 
-Any other agent, Auggie, Kiro and OpenHands included, runs in Togo as a terminal. It can still reach you: a screen watcher spots a numbered menu or a y/n prompt in the pane and asks you, and your answer is typed back as the keys that pick it. Plain shells with prompt marks (OSC 133) get each command as its own block.
+Any other CLI agent works in the terminal view. A screen watcher can surface numbered menus and y/n prompts so you can answer them from your phone. [Agent compatibility](https://togoapp.dev/agents/)
 
-Adapters are YAML plus a small Go mapper in [`helper/internal/harness/adapters`](helper/internal/harness/adapters). A new agent is a good first contribution.
+## Contributing
+
+Togo is free and open source across the app, helper and relay. You can work on the helper, adapters, relay and protocol on macOS or Linux **without an Apple developer account**.
+
+| Help with | Where to start |
+|---|---|
+| Test your agent | [Report an agent issue](https://github.com/gettogo/togo/issues/new?template=adapter.yml) with its version and what Togo missed. |
+| Report a bug | [Open a bug report](https://github.com/gettogo/togo/issues/new?template=bug.yml) with steps to reproduce and the app/helper versions. |
+| Improve agent support | Explore the [adapters](helper/internal/harness/adapters): YAML definitions and Go mappers for messages, tools, status and controls. |
+| Improve the app | Terminal themes, keyboard presets, accessibility testing and setup-documentation fixes are welcome. |
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup and review requirements. Sign off commits with `git commit -s`. For questions or to discuss a larger change, write to [support@togoapp.dev](mailto:support@togoapp.dev). Remove private details from anything you share publicly; vulnerabilities go through [SECURITY.md](SECURITY.md).
+
+If you find Togo useful, a star is a welcome way to support the project.
 
 ## How it works
 
 <p align="center">
-  <img src=".github/assets/how-it-works.png" alt="The phone reaches the helper and tmux on your machine over SSH or Mosh. The helper sends sealed pushes through the relay to Apple's push service, and answers from the Lock Screen or Watch come back signed through the relay." width="100%">
+  <img src=".github/assets/how-it-works.png" alt="The app connects directly to the helper and tmux on your machine over SSH or Mosh. A separate relay forwards encrypted notifications to Apple and carries signed answers back." width="100%">
 </p>
 
-- Sessions are tmux sessions on their own socket, `tmux -L togo`. Your own tmux server is left alone.
-- The app talks to the helper through an SSH exec channel (`togo serve --stdio`). The helper opens no listening port of its own.
-- The terminal is a plain SSH or Mosh connection attached to the session.
-- Adapters read what each agent already records and act by typing its documented commands, relaunching it with flags, or answering through its approval path.
-- When an agent waits, the helper seals a push for each paired phone and sends it through the relay at `relay.togoapp.dev`. Answers from the Lock Screen or the Watch come back signed, through a short-lived mailbox the helper reads over an outbound connection.
+- Sessions live in a separate tmux server, `tmux -L togo`. Your own tmux server is left alone.
+- Native chat and session controls travel over an SSH exec channel: `togo serve --stdio`. The helper opens no listening port.
+- The terminal attaches to the same session over SSH or Mosh.
+- The helper seals notifications for each paired device. A small relay forwards them to Apple and carries signed approval answers back through a short-lived mailbox.
+
+The helper is also scriptable: `togo ask "Ship it?" --options yes,no` waits for an answer on your phone. `togo notify`, `togo job` and `togo awake` cover notifications, long tasks and keeping the machine awake. [Architecture](docs/architecture.md)
 
 ## Privacy and security
 
-- There is no account. Your phone connects to machines you own with an SSH key made on the device. The private half stays in the Secure Enclave or the device-only Keychain.
-- Each push is sealed on your machine for one device (X25519, HKDF-SHA256, ChaCha20-Poly1305). The relay forwards ciphertext it cannot open.
-- Live Activities are the exception iOS imposes: it renders them straight from the push, so their status fields travel in the clear. That is the session number, the agent's name, its status, how many requests wait and when it started. Command text rides in the sealed part.
-- Every approval from the Lock Screen or the Watch is signed by that device's Ed25519 key, checked for freshness and used once. The relay path carries approve and deny only; typed replies and "always allow" stay in the app.
-- Host keys are pinned. A route that shows a different key drops out before any credential is sent.
-- The relay is a small Cloudflare Worker in [`relay/`](relay), and the app can point at your own.
-- The helper never reads an agent's credential files and never logs secrets. The app has no analytics, ads or crash reporting.
+- **Direct connection.** Chat, terminal output and reviewed code travel between your phone and your machine over SSH or Mosh. Togo doesn't upload your repository to a Togo server. Your agent's model provider still receives your prompts and code as it does at the desk.
+- **Device-held keys.** SSH keys are made on the device and kept in the Secure Enclave or device-only Keychain. Host keys are pinned.
+- **Encrypted notification contents.** Each payload is sealed for one device with X25519, HKDF-SHA256 and ChaCha20-Poly1305. The relay cannot read commands, questions or output. Live Activity status fields, including the agent name, state and request count, travel in the clear because iOS renders them directly.
+- **Signed approvals.** Lock Screen and Watch answers are signed with the device's Ed25519 key, checked for freshness and accepted once. The relay carries approve and deny only; typed replies and always-allow decisions stay in the app.
+- **No tracking.** The app has no analytics, ads or crash reporter. The helper never reads agent credential files or logs secrets. You can use [your own relay](relay/).
 
-The full model is in [docs/security.md](docs/security.md). Report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
+Read the [security model](docs/security.md) for the full boundaries and [SECURITY.md](SECURITY.md) to report a vulnerability privately.
 
 ## Build from source
 
-| Path | What |
+| Path | Component |
 |---|---|
-| `apps/ios` | The iPhone, iPad and Watch app (SwiftUI, Xcode project generated by XcodeGen) |
-| `packages` | Swift packages: TogoKit, the terminal, Mosh and push crypto |
-| `helper` | The `togo` helper (Go) |
-| `relay` | The push relay (Cloudflare Worker, TypeScript) |
-| `protocol` | The JSON-RPC schema and fixtures both sides test against |
+| [`apps/ios`](apps/ios) | iPhone, iPad and Watch app, built with SwiftUI and XcodeGen |
+| [`packages`](packages) | Swift packages for the session model, terminal, Mosh and push crypto |
+| [`helper`](helper) | Go helper |
+| [`relay`](relay) | Cloudflare Worker push relay |
+| [`protocol`](protocol) | JSON-RPC schema and shared fixtures |
 
 ```sh
-make build lint test   # the helper: build, gofmt and go vet, tests
-make relay-test        # the relay
-make ios-bootstrap     # on a Mac with Xcode: simulators, signing team, Togo.xcodeproj
+make build lint test   # helper
+make relay-test        # relay
+make ios-bootstrap     # Mac with Xcode: prepare simulators and generate the project
 make ios-test
 ```
 
-The helper, the adapters, the relay and the protocol build and test on macOS or Linux without an Apple developer account. The app needs Xcode and iOS 26 or later.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for prerequisites and the checks relevant to each component.
 
-## Contributing
+<details>
+<summary><strong>Why Togo?</strong></summary>
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Sign off every commit with `git commit -s`. Adapters, terminal themes and keyboard presets are the easiest places to start. Questions go to [Discussions](https://github.com/gettogo/togo/discussions).
+In 1925, Togo led Leonhard Seppala's sled-dog team on the serum run to Nome, covering about 260 miles, including the sea ice on Norton Sound. Balto led the final leg and got the statue in Central Park. Togo did the long haul in the dark, which is the job we had in mind.
 
-## Why the name
-
-In the winter of 1925, relays of dog teams carried diphtheria serum across Alaska to Nome. Togo led Leonhard Seppala's team, and they covered about 260 miles, far more than any other team on the run, including a crossing of the sea ice on Norton Sound. Balto led the last leg into Nome and got the statue in Central Park. For decades Togo was mostly left out of the story. He did the long haul in the dark, which is the job we had in mind.
+</details>
 
 ## Licence
 
-The app (`apps/` and `packages/`) is GPLv3 with an app store permission; see [LICENSE](LICENSE). The helper, relay and protocol are MIT; see [helper/LICENSE](helper/LICENSE), [relay/LICENSE](relay/LICENSE) and [protocol/LICENSE](protocol/LICENSE).
+The app and Swift packages are **GPLv3 with an app store permission**: [LICENSE](LICENSE). The [helper](helper/LICENSE), [relay](relay/LICENSE) and [protocol](protocol/LICENSE) are **MIT**. Product names and logos belong to their respective owners.
