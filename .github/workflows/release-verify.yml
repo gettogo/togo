@@ -33,9 +33,9 @@ jobs:
 
       - name: Rebuild the release
         run: |
-          # Outside the checkout: the release build refuses a dirty working tree.
+          # Tool and output live outside the checkout: the release build refuses a dirty working tree.
           (cd helper && go build -o "$RUNNER_TEMP/togo-release" ./cmd/togo-release)
-          "$RUNNER_TEMP/togo-release" build --version "$TAG" --out rebuilt
+          "$RUNNER_TEMP/togo-release" build --version "$TAG" --out "$RUNNER_TEMP/rebuilt"
 
       - name: Download the published assets
         run: |
@@ -53,18 +53,18 @@ jobs:
           status=0
           for arch in amd64 arm64; do
             name="togo_${version}_linux_${arch}.tar.gz"
-            if ! cmp "rebuilt/$name" "released/$name"; then
+            if ! cmp "$RUNNER_TEMP/rebuilt/$name" "released/$name"; then
               echo "::error::$name differs from the rebuild"
               status=1
             fi
           done
           # Pre-sign hashes of every binary, darwin included.
-          if ! diff <(jq -S .binaries rebuilt/BUILDINFO.json) <(jq -S .binaries released/BUILDINFO.json); then
+          if ! diff <(jq -S .binaries "$RUNNER_TEMP/rebuilt/BUILDINFO.json") <(jq -S .binaries released/BUILDINFO.json); then
             echo "::error::BUILDINFO binary hashes differ from the rebuild"
             status=1
           fi
           for key in version commit goVersion; do
-            a="$(jq -r ".$key" rebuilt/BUILDINFO.json)"
+            a="$(jq -r ".$key" "$RUNNER_TEMP/rebuilt/BUILDINFO.json")"
             b="$(jq -r ".$key" released/BUILDINFO.json)"
             if [ "$a" != "$b" ]; then
               echo "::error::BUILDINFO $key differs: rebuilt $a, released $b"
