@@ -232,7 +232,33 @@ func (c *Client) NewSession(ctx context.Context, o NewSessionOpts) error {
 	if _, err := c.run(ctx, args...); err != nil {
 		return fmt.Errorf("tmux: new session %s: %w", o.Name, err)
 	}
+	if o.Dir != "" {
+		c.waitPanePath(ctx, o.Name, o.Dir)
+	}
 	return nil
+}
+
+// waitPanePath waits, briefly, for the new pane's pane_current_path to
+// settle. tmux reads it from the pane process, and for a moment after
+// new-session returns that process has not yet entered its directory, so
+// the path reads as "" or as the server's own "/". A caller that lists the
+// session at once, such as a client opening a file in it, would see a wrong
+// cwd. It gives up quietly after about a second: the path is best effort.
+func (c *Client) waitPanePath(ctx context.Context, name, dir string) {
+	for range 200 {
+		out, err := c.run(ctx, "list-panes", "-t", "="+name+":", "-F", "#{pane_current_path}")
+		if err != nil {
+			return
+		}
+		if p := strings.TrimSpace(out); p != "" && (p != "/" || dir == "/") {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 }
 
 // escapeArg protects an argument from tmux's own argv parsing, which treats
