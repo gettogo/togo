@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
-	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
+	"github.com/gettogo/togo/helper/internal/session"
 )
 
 func init() {

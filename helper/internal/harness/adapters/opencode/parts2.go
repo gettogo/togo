@@ -132,4 +132,3 @@ func contentText(cs []content2) string {
 	}
 	return b.String()
 }
-

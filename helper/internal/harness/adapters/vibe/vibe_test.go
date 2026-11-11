@@ -235,9 +235,9 @@ func TestModeFromTheFooter(t *testing.T) {
 	}
 	for line, want := range map[string]string{
 		"──────────── Qwen3.8 27B (5090)[off] · accept edits ─": "accept-edits",
-		"──── Devstral 2 · ask ─":                                "ask",
-		"──── Devstral 2 · auto approve":                         "auto-approve",
-		"> Should I ask · or not?":                               "",
+		"──── Devstral 2 · ask ─":                               "ask",
+		"──── Devstral 2 · auto approve":                        "auto-approve",
+		"> Should I ask · or not?":                              "",
 	} {
 		if got := read(line); got != want {
 			t.Errorf("%q read as %q, want %q", line, got, want)

@@ -91,7 +91,7 @@ func TestRowCommandSkipsKeyHints(t *testing.T) {
 	for row, want := range map[string]string{
 		" ← open sidebar · Interactive · Manual Approval · / commands   Claude Haiku 5.5": "",
 		"❯ /model claude-haiku-4.5": "/model claude-haiku-4.5",
-		"│ /login amazon-bedrock │":  "/login amazon-bedrock",
+		"│ /login amazon-bedrock │": "/login amazon-bedrock",
 		"/":                         "",
 	} {
 		if got := rowCommand(row); got != want {
