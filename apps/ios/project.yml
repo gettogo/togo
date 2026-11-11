@@ -110,9 +110,9 @@ targets:
     info:
       path: Togo/Info.plist
       properties:
-        # Only standard, published cryptography (SSH, Mosh, TLS, and CryptoKit's sealing of
-        # push payloads): exempt mass-market encryption, so no export documentation is needed.
-        ITSAppUsesNonExemptEncryption: true
+        # ITSAppUsesNonExemptEncryption is left out on purpose: App Store Connect asks the
+        # export compliance questions per build until an approved declaration supplies
+        # ITSEncryptionExportComplianceCode (standard SSH, Mosh and CryptoKit cryptography only).
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -199,7 +199,6 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        ITSAppUsesNonExemptEncryption: true
         UIBackgroundModes:
           - remote-notification
         WKRunsIndependentlyOfCompanionApp: true
@@ -232,7 +231,6 @@ targets:
     info:
       path: TogoWatchWidgets/Info.plist
       properties:
-        ITSAppUsesNonExemptEncryption: true
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -259,7 +257,6 @@ targets:
     info:
       path: TogoWatchNotificationService/Info.plist
       properties:
-        ITSAppUsesNonExemptEncryption: true
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -311,7 +308,6 @@ targets:
     info:
       path: TogoWidgets/Info.plist
       properties:
-        ITSAppUsesNonExemptEncryption: true
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -339,7 +335,6 @@ targets:
     info:
       path: TogoNotificationService/Info.plist
       properties:
-        ITSAppUsesNonExemptEncryption: true
         CFBundleDisplayName: Togo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
