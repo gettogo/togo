@@ -24,8 +24,12 @@ func wheelTmux(t *testing.T, c *tmux.Client, args ...string) string {
 }
 
 func TestTmuxConfBindsTheWheel(t *testing.T) {
-	for _, b := range session.WheelBindings("=") {
-		if !strings.Contains(session.TmuxConf, "bind -n "+b[0]+" "+b[1]+"\n") {
+	for _, b := range session.MouseBindings("=") {
+		line := "bind -n " + b[0] + " " + b[1] + "\n"
+		if b[1] == "" {
+			line = "unbind -n " + b[0] + "\n"
+		}
+		if !strings.Contains(session.TmuxConf, line) {
 			t.Errorf("tmuxConf lacks the %s binding", b[0])
 		}
 	}
@@ -34,7 +38,7 @@ func TestTmuxConfBindsTheWheel(t *testing.T) {
 	}
 }
 
-func TestWheelBindingsOnFreshAndRunningServers(t *testing.T) {
+func TestMouseBindingsOnFreshAndRunningServers(t *testing.T) {
 	ctx := context.Background()
 
 	// A server started with the config has the bindings.
@@ -46,11 +50,7 @@ func TestWheelBindingsOnFreshAndRunningServers(t *testing.T) {
 	if err := fresh.NewSession(ctx, tmux.NewSessionOpts{Name: "f", Dir: t.TempDir()}); err != nil {
 		t.Fatalf("tmux rejected the config: %v", err)
 	}
-	for _, key := range []string{"WheelUpPane", "WheelDownPane"} {
-		if got := wheelTmux(t, fresh, "list-keys", "-T", "root", key); !strings.Contains(got, "-N 3") {
-			t.Errorf("fresh server: %s = %q, want the togo binding", key, got)
-		}
-	}
+	checkBound(t, fresh, "fresh server")
 
 	// A server started by an older helper gets them from KeepServer, and a
 	// second run changes nothing.
@@ -58,7 +58,7 @@ func TestWheelBindingsOnFreshAndRunningServers(t *testing.T) {
 	if err := s.Tmux.NewSession(ctx, tmux.NewSessionOpts{Name: "old", Dir: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
-	if got := wheelTmux(t, s.Tmux, "list-keys", "-T", "root", "WheelUpPane"); strings.Contains(got, "-N 3") {
+	if got := wheelTmux(t, s.Tmux, "list-keys", "-T", "root", "MouseDrag1Pane"); strings.Contains(got, "alternate_on") {
 		t.Fatalf("server without the config already has the binding: %q", got)
 	}
 	for range 2 {
@@ -66,9 +66,29 @@ func TestWheelBindingsOnFreshAndRunningServers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, key := range []string{"WheelUpPane", "WheelDownPane"} {
-		if got := wheelTmux(t, s.Tmux, "list-keys", "-T", "root", key); !strings.Contains(got, "-N 3") {
-			t.Errorf("running server after KeepServer: %s = %q, want the togo binding", key, got)
+	checkBound(t, s.Tmux, "running server after KeepServer")
+}
+
+// checkBound asserts every togo mouse binding is installed, and that no
+// right-click binding opens a menu.
+func checkBound(t *testing.T, c *tmux.Client, what string) {
+	t.Helper()
+	keys := wheelTmux(t, c, "list-keys", "-T", "root")
+	for _, b := range session.MouseBindings("=") {
+		var line string
+		for _, l := range strings.Split(keys, "\n") {
+			if f := strings.Fields(l); len(f) > 3 && f[3] == b[0] {
+				line = l
+			}
+		}
+		switch {
+		case b[1] == "" && line != "":
+			t.Errorf("%s: %s is still bound: %s", what, b[0], line)
+		case b[1] != "" && !strings.Contains(line, "alternate_on") && !strings.Contains(line, "mouse_any_flag"):
+			t.Errorf("%s: %s = %q, want the togo binding", what, b[0], line)
+		}
+		if strings.Contains(line, "display-menu") {
+			t.Errorf("%s: %s opens a menu", what, b[0])
 		}
 	}
 }
@@ -77,7 +97,12 @@ func TestWheelBindingsOnFreshAndRunningServers(t *testing.T) {
 // for a wheel event over that pane.
 func runWheel(t *testing.T, c *tmux.Client, key, pane string) {
 	t.Helper()
-	for _, b := range session.WheelBindings(pane) {
+	runBinding(t, c, key, pane)
+}
+
+func runBinding(t *testing.T, c *tmux.Client, key, pane string) {
+	t.Helper()
+	for _, b := range session.MouseBindings(pane) {
 		if b[0] == key {
 			cmd := exec.Command(c.Bin, append(append([]string{}, c.Socket...), "source-file", "-")...)
 			cmd.Stdin = strings.NewReader(b[1] + "\n")
@@ -108,6 +133,12 @@ func TestWheelOnAlternateScreenSendsArrowsNotCopyMode(t *testing.T) {
 
 	runWheel(t, c, "WheelUpPane", pane)
 	runWheel(t, c, "WheelDownPane", pane)
+	// A drag, a double click, a triple click and a right click do not enter
+	// copy-mode or open a menu either. (A drag on the alternate screen is
+	// the same binding as the others: only the mouse-less branch is run.)
+	for _, key := range []string{"MouseDrag1Pane", "DoubleClick1Pane", "TripleClick1Pane", "MouseDown3Pane"} {
+		runBinding(t, c, key, pane)
+	}
 
 	if got := wheelTmux(t, c, "display", "-p", "-t", pane, "#{pane_in_mode}"); got != "0" {
 		t.Fatalf("pane_in_mode = %s after a wheel on the alternate screen, want 0", got)
@@ -142,4 +173,26 @@ func waitFor(t *testing.T, ok func() bool, what string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for %s", what)
+}
+
+// On the normal screen a drag and a double click keep tmux's copy-mode
+// selection. They need a real mouse event to run, so the binding text is
+// checked.
+func TestDragOnTheNormalScreenKeepsCopyMode(t *testing.T) {
+	for _, b := range session.MouseBindings("=") {
+		switch b[0] {
+		case "MouseDrag1Pane":
+			if !strings.Contains(b[1], "copy-mode -M") {
+				t.Errorf("drag binding lost copy-mode selection: %s", b[1])
+			}
+		case "DoubleClick1Pane", "TripleClick1Pane":
+			if !strings.Contains(b[1], "copy-mode -H") {
+				t.Errorf("%s binding lost copy-mode selection: %s", b[0], b[1])
+			}
+		case "MouseDown3Pane":
+			if strings.Contains(b[1], "display-menu") {
+				t.Errorf("right click opens a menu: %s", b[1])
+			}
+		}
+	}
 }

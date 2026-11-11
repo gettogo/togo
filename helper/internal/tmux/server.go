@@ -41,11 +41,33 @@ func (c *Client) SetServerOption(ctx context.Context, key, value string) error {
 	return err
 }
 
-// BindRoot binds key in the root table (bind-key -n) to cmd, one tmux
-// command in its text form, on the server already running on the client's
-// socket. With no server running it does nothing and returns nil.
-func (c *Client) BindRoot(ctx context.Context, key, cmd string) error {
-	_, err := c.run(ctx, "bind-key", "-n", escapeArg(key), escapeArg(cmd))
+// RootBinding is one root-table key binding. An empty Cmd unbinds Key.
+type RootBinding struct {
+	Key string
+	// Cmd is one tmux command in its text form.
+	Cmd string
+}
+
+// BindRoot sets the root-table bindings (bind-key -n, or unbind-key -n for
+// an empty Cmd) on the server already running on the client's socket, in
+// one tmux invocation. With no server running it does nothing and returns
+// nil.
+func (c *Client) BindRoot(ctx context.Context, bindings []RootBinding) error {
+	var args []string
+	for _, b := range bindings {
+		if len(args) > 0 {
+			args = append(args, ";")
+		}
+		if b.Cmd == "" {
+			args = append(args, "unbind-key", "-n", escapeArg(b.Key))
+		} else {
+			args = append(args, "bind-key", "-n", escapeArg(b.Key), escapeArg(b.Cmd))
+		}
+	}
+	if len(args) == 0 {
+		return nil
+	}
+	_, err := c.run(ctx, args...)
 	if errors.Is(err, errNoServer) {
 		return nil
 	}
