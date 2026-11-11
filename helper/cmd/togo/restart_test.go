@@ -144,6 +144,16 @@ func TestDaemonRestartWaitsBoundedForApproval(t *testing.T) {
 }
 
 // callDaemon greets the daemon on home and makes one call.
+// daemonAccepting reports whether the daemon for home accepts connections.
+func daemonAccepting(home string) bool {
+	c, err := sockd.Dial(context.Background(), daemon.SocketPath(home))
+	if err != nil {
+		return false
+	}
+	c.Close()
+	return true
+}
+
 func callDaemon(t *testing.T, home, method, params string) json.RawMessage {
 	t.Helper()
 	c, err := sockd.Dial(context.Background(), daemon.SocketPath(home))
@@ -210,8 +220,10 @@ func TestRestartKeepsTmuxSessions(t *testing.T) {
 		old.Process.Kill()
 		<-exited
 	})
+	// The daemon takes its lock before it listens, so wait for the socket to
+	// accept a connection, not just for the lock.
 	deadline := time.Now().Add(60 * time.Second)
-	for !daemonRunning(home) {
+	for !daemonAccepting(home) {
 		if time.Now().After(deadline) {
 			t.Fatal("daemon did not start")
 		}
