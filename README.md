@@ -10,7 +10,7 @@
 <p align="center"><strong>100% free and open source. No subscription. No paid tier. No Togo account.</strong></p>
 
 <p align="center">
-  <a href="https://testflight.apple.com/join/GjzJW2vU">TestFlight (in review)</a> ·
+  <a href="https://testflight.apple.com/join/GjzJW2vU">Join the TestFlight beta</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#supported-agents">Supported agents</a> ·
   <a href="https://togoapp.dev/docs/">Docs</a> ·
@@ -70,9 +70,9 @@ Togo has two parts: the app on your phone and a small helper on the machine runn
 
 ### 1. Get the app
 
-[Open the TestFlight invitation](https://testflight.apple.com/join/GjzJW2vU).
+[Join the public TestFlight beta](https://testflight.apple.com/join/GjzJW2vU).
 
-**Apple review is pending.** The beta and App Store release are awaiting review; the public TestFlight link will accept testers after approval.
+**The public beta is open.** Open the invitation on your iPhone or iPad, install Apple's TestFlight app if needed, then accept the invitation and install Togo. The App Store release is still awaiting review.
 
 You can explore with a demo machine before connecting your own: open **How it works**, then **Explore with a demo machine** on the first-run screen.
 
