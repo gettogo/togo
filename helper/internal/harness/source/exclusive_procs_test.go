@@ -184,3 +184,33 @@ func TestExclusiveKeepsFileWithoutEvidence(t *testing.T) {
 		t.Fatalf("switched without evidence: %v", c.recs)
 	}
 }
+
+// (e) After a helper restart, an idle session whose own file nobody holds
+// still finds it when a newer file in the folder belongs to a foreign
+// process: the newest file the session may claim is its own, not none.
+func TestExclusiveIdleOwnFileBehindForeignNewer(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID = "s_idleown001"
+	env.Vars["created"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	procs := &fakeProcs{tree: []int{100, 101}}
+	env.Procs = procs
+	own, foreign := filepath.Join(h, "own.jsonl"), filepath.Join(h, "foreign.jsonl")
+	writeLine(t, own, `{"f":"own1"}`)
+	past := time.Now().Add(-30 * time.Minute)
+	if err := os.Chtimes(own, past, past); err != nil {
+		t.Fatal(err)
+	}
+	writeLine(t, foreign, `{"f":"foreign1"}`)
+	procs.hold(foreign, 999)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+	got := c.wait(t, 1)
+	time.Sleep(100 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.recs) != 1 || got[0] != `{"f":"own1"}` {
+		t.Fatalf("idle own file not found behind a foreign one: %v", c.recs)
+	}
+}

@@ -124,7 +124,11 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 				// With no file yet, an agent that was already writing before
 				// the watch began (a helper restart) is found by who holds it.
 				known := env.Procs != nil && len(tails) == 0 && i < maxHeldCandidates
-				eligible := (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started)
+				// Without a process view only the newest file may be the
+				// session's own; with one, foreign files are skipped below,
+				// so the newest file nobody else holds is.
+				first := i == 0 || env.Procs != nil
+				eligible := (first && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started)
 				if known || eligible {
 					cands = append(cands, cand{m, eligible})
 					paths = append(paths, m.path)
