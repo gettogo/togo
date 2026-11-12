@@ -54,3 +54,5 @@ func TestJournalForSkipsForeignProcess(t *testing.T) {
 		t.Fatalf("foreign-held journal chosen without evidence: %q", got)
 	}
 }
+
+func (heldProcs) Others(context.Context, []string, string) (bool, error) { return false, nil }

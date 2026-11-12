@@ -104,6 +104,10 @@ type Procs interface {
 	// Holders returns, for each path, the pids that have it open. A path
 	// nobody holds is absent.
 	Holders(ctx context.Context, paths []string) (map[string][]int, error)
+	// Others reports whether a process whose command is one of commands
+	// runs in cwd outside the session's process tree. An error means it
+	// could not be told.
+	Others(ctx context.Context, commands []string, cwd string) (bool, error)
 }
 
 // SourceSpec is the part of an adapter's source declaration a runner

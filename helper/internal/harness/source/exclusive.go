@@ -73,8 +73,10 @@ func Attribute(ctx context.Context, env harness.Env, paths []string) map[string]
 //     a resume moves the session there and the previous file is dropped.
 //   - A file held by any other process is never taken.
 //   - A file nobody holds is no evidence. A session with no file yet takes
-//     its own (written since it started) as before; one that has a file
-//     keeps it and never switches to the newest.
+//     its own (written since it started) as before. One that has a file
+//     keeps it, unless a new file appears and no other process of the same
+//     agent runs in the folder outside the session's tree (a /new by an
+//     agent that does not keep its file open); then it moves there.
 func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
 	started := time.Now()
 	created, err := time.Parse(time.RFC3339, env.Vars["created"])
@@ -90,6 +92,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 	claims.watchers[pattern][id] = me
 	claims.Unlock()
 	tails := map[string]*tail{}
+	dropped := map[string]bool{} // files left for a newer one; not taken back without evidence
 	defer func() {
 		claims.Lock()
 		delete(claims.watchers[pattern], id)
@@ -135,6 +138,19 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 				}
 			}
 			verdicts := Attribute(ctx, env, paths)
+			switched := false
+			var amb *bool
+			ambiguous := func() bool {
+				if amb == nil {
+					v := true
+					if env.Procs != nil {
+						others, err := env.Procs.Others(ctx, []string{env.Agent}, env.Cwd)
+						v = err != nil || others
+					}
+					amb = &v
+				}
+				return *amb
+			}
 			for _, c := range cands {
 				m := c.m
 				switch verdicts[m.path] {
@@ -147,10 +163,29 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 					for p := range tails {
 						releaseClaim(id, p)
 						delete(tails, p)
+						dropped[p] = true
 					}
+					delete(dropped, m.path)
 					tails[m.path] = &tail{path: m.path, name: name, replay: true}
 				default:
-					if len(tails) > 0 || !c.eligible {
+					if len(tails) > 0 {
+						// Nobody holds the new file (an agent that appends
+						// and closes per entry, like Pi): it is this
+						// session's /new only if no other agent of the kind
+						// runs in the folder to have made it.
+						if switched || dropped[m.path] || !m.mtime.After(started) || ambiguous() || !claimOwn(pattern, id, m.path) {
+							continue
+						}
+						for p := range tails {
+							releaseClaim(id, p)
+							delete(tails, p)
+							dropped[p] = true
+						}
+						tails[m.path] = &tail{path: m.path, name: name, replay: true}
+						switched = true
+						continue
+					}
+					if !c.eligible {
 						continue
 					}
 					if claim(pattern, id, m.path, true) {

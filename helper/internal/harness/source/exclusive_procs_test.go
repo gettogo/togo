@@ -17,6 +17,14 @@ type fakeProcs struct {
 	mu      sync.Mutex
 	tree    []int
 	holders map[string][]int
+	others  map[string]bool // cwd -> a foreign agent process runs there
+	err     error
+}
+
+func (f *fakeProcs) Others(_ context.Context, _ []string, cwd string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.others[cwd], f.err
 }
 
 func (f *fakeProcs) Tree(context.Context) []int {
@@ -166,7 +174,7 @@ func TestExclusiveKeepsFileWithoutEvidence(t *testing.T) {
 	env, h := testEnv(t)
 	env.SessionID = "s_noevid0001"
 	env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
-	procs := &fakeProcs{tree: []int{100}}
+	procs := &fakeProcs{tree: []int{100}, others: map[string]bool{env.Cwd: true}}
 	env.Procs = procs
 	first, other := filepath.Join(h, "first.jsonl"), filepath.Join(h, "other.jsonl")
 	writeLine(t, first, `{"f":"first1"}`)
@@ -212,5 +220,74 @@ func TestExclusiveIdleOwnFileBehindForeignNewer(t *testing.T) {
 	defer c.mu.Unlock()
 	if len(c.recs) != 1 || got[0] != `{"f":"own1"}` {
 		t.Fatalf("idle own file not found behind a foreign one: %v", c.recs)
+	}
+}
+
+// Pi appends and closes its file per entry, so nobody holds a new file
+// open. With no other agent of the same kind in the folder, a new file is
+// the session's own /new; the old file is dropped.
+func TestExclusiveUnheldNewFileIsOwnNewWhenNoForeignAgent(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID, env.Agent = "s_unheld0001", "pi"
+	env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	env.Procs = &fakeProcs{tree: []int{100}}
+	oldF, newF := filepath.Join(h, "old.jsonl"), filepath.Join(h, "new.jsonl")
+	writeLine(t, oldF, `{"f":"old1"}`)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+	c.wait(t, 1)
+	time.Sleep(60 * time.Millisecond)
+	writeLine(t, newF, `{"f":"new1"}`)
+	c.wait(t, 2)
+	writeLine(t, oldF, `{"f":"old2"}`)
+	time.Sleep(300 * time.Millisecond)
+	writeLine(t, newF, `{"f":"new2"}`)
+	c.wait(t, 3)
+	time.Sleep(100 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.recs) != 3 || c.recs[1] != `{"f":"new1"}` || c.recs[2] != `{"f":"new2"}` {
+		t.Fatalf("records = %v", c.recs)
+	}
+}
+
+// Another agent of the same kind in the same folder makes an unheld new
+// file ambiguous: the session keeps its file. In another folder it does
+// not matter. A lookup that fails is ambiguous too.
+func TestExclusiveUnheldNewFileWithForeignAgent(t *testing.T) {
+	cases := []struct {
+		name    string
+		others  func(cwd string) map[string]bool
+		err     error
+		follows bool
+	}{
+		{"same folder", func(cwd string) map[string]bool { return map[string]bool{cwd: true} }, nil, false},
+		{"other folder", func(string) map[string]bool { return map[string]bool{"/elsewhere": true} }, nil, true},
+		{"lookup fails", func(string) map[string]bool { return nil }, context.DeadlineExceeded, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env, h := testEnv(t)
+			env.SessionID, env.Agent = "s_amb0000001", "omp"
+			env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+			env.Procs = &fakeProcs{tree: []int{100}, others: tc.others(env.Cwd), err: tc.err}
+			oldF, newF := filepath.Join(h, "old.jsonl"), filepath.Join(h, "new.jsonl")
+			writeLine(t, oldF, `{"f":"old1"}`)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			c := &collector{}
+			go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+			c.wait(t, 1)
+			time.Sleep(60 * time.Millisecond)
+			writeLine(t, newF, `{"f":"new1"}`)
+			time.Sleep(400 * time.Millisecond)
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			if followed := len(c.recs) == 2; followed != tc.follows {
+				t.Fatalf("follows = %v, want %v: %v", followed, tc.follows, c.recs)
+			}
+		})
 	}
 }

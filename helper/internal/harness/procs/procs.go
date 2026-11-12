@@ -43,6 +43,115 @@ func (Session) Holders(ctx context.Context, paths []string) (map[string][]int, e
 	return Holders(ctx, paths)
 }
 
+// Others reports whether a process running one of commands has cwd as its
+// working directory and is not in the session's tree. It is an error when
+// the tree or the processes cannot be listed: the caller must then treat
+// the answer as unknown.
+func (s Session) Others(ctx context.Context, commands []string, cwd string) (bool, error) {
+	tree := s.Tree(ctx)
+	if len(tree) == 0 {
+		return false, errors.New("procs: session tree unknown")
+	}
+	out, err := exec.CommandContext(ctx, "ps", "-A", "-o", "pid=,command=").Output()
+	if err != nil {
+		return false, err
+	}
+	own := map[int]bool{}
+	for _, p := range tree {
+		own[p] = true
+	}
+	var pids []int
+	for _, pid := range MatchCommands(string(out), commands) {
+		if !own[pid] {
+			pids = append(pids, pid)
+		}
+	}
+	if len(pids) == 0 {
+		return false, nil
+	}
+	dirs, err := workingDirs(ctx, pids)
+	if err != nil {
+		return false, err
+	}
+	want := resolveDir(cwd)
+	for _, d := range dirs {
+		if resolveDir(d) == want {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func resolveDir(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return filepath.Clean(p)
+}
+
+// interpreters are programs an agent written in a scripting language runs
+// under: `node /path/bin/pi` is the pi agent.
+var interpreters = map[string]bool{"node": true, "bun": true, "deno": true, "python": true, "python3": true, "sh": true, "bash": true}
+
+// MatchCommands reads `ps -o pid=,command=` output and returns the pids
+// whose program (or, behind an interpreter, whose script) has one of the
+// base names in commands.
+func MatchCommands(out string, commands []string) []int {
+	want := map[string]bool{}
+	for _, c := range commands {
+		if c != "" {
+			want[c] = true
+		}
+	}
+	var pids []int
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 {
+			continue
+		}
+		pid, err := strconv.Atoi(f[0])
+		if err != nil {
+			continue
+		}
+		prog := filepath.Base(f[1])
+		if want[prog] {
+			pids = append(pids, pid)
+		} else if interpreters[prog] && len(f) > 2 && want[filepath.Base(f[2])] {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+// workingDirs returns the current directories of pids: /proc/<pid>/cwd on
+// Linux, lsof elsewhere. A process that is gone is skipped.
+func workingDirs(ctx context.Context, pids []int) ([]string, error) {
+	var dirs []string
+	if _, err := os.Stat("/proc/self/cwd"); err == nil {
+		for _, p := range pids {
+			if d, err := os.Readlink("/proc/" + strconv.Itoa(p) + "/cwd"); err == nil {
+				dirs = append(dirs, d)
+			}
+		}
+		return dirs, nil
+	}
+	list := make([]string, len(pids))
+	for i, p := range pids {
+		list[i] = strconv.Itoa(p)
+	}
+	out, err := exec.CommandContext(ctx, "lsof", "-nP", "-a", "-d", "cwd", "-Fn", "-p", strings.Join(list, ",")).Output()
+	var exit *exec.ExitError
+	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
+		return nil, err
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if len(line) > 1 && line[0] == 'n' {
+			dirs = append(dirs, line[1:])
+		}
+	}
+	return dirs, nil
+}
+
 // ParsePS reads "pid ppid" lines into a parent -> children table.
 func ParsePS(out string) map[int][]int {
 	table := map[int][]int{}

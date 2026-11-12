@@ -19,6 +19,8 @@ func (fakeProcs) Holders(context.Context, []string) (map[string][]int, error) {
 	return nil, nil
 }
 
+func (fakeProcs) Others(context.Context, []string, string) (bool, error) { return false, nil }
+
 var _ harness.Procs = fakeProcs{}
 
 // addSession writes a second session of the same folder, started later,
