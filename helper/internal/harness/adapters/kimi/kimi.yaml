@@ -13,6 +13,9 @@ capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands
   agents, background, plan, changes, status, resume, compact, needs.approvals, needs.questions]
 feeds:
   wire:
+    # exclusive: follow only a file this session's own agent process holds open (a /new moves it,
+    # the old file is dropped); a file another process holds is never taken; with no evidence the
+    # session keeps its file.
     jsonl: { glob: '~/.kimi-code/sessions/wd_*_{{slice (sha256 .cwd) 0 12}}/session_*/agents/main/wire.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
     mapper: kimi.wire
     stability: internal

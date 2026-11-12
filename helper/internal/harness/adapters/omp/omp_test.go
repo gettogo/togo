@@ -363,3 +363,28 @@ func TestProviderErrorEndsTurnWithNotice(t *testing.T) {
 		}
 	}
 }
+
+// A subagent file in the shared folder belongs to the main session named
+// in its header. One whose parent is another session (an omp the user ran
+// in a terminal) is not part of this conversation.
+func TestForeignSubagentFileIsDropped(t *testing.T) {
+	m := newSession(env())
+	sess := records(t, "session.jsonl", "session")
+	other := strings.ReplaceAll(string(mustRead(t, "subagent.jsonl")), "_0b7c1f2a9e.jsonl", "_ffffffffff.jsonl")
+	var foreign []harness.Record
+	for _, raw := range source.Records([]byte(other), 1<<20) {
+		foreign = append(foreign, harness.Record{Source: "subagents", At: t0, Data: raw})
+	}
+	if out := run(m, sess[:11], foreign); len(out.Items) != len(run(newSession(env()), sess[:11]).Items) {
+		t.Fatal("a foreign session's subagent was mapped")
+	}
+}
+
+func mustRead(t *testing.T, name string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

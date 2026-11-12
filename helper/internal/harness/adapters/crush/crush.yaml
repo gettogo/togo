@@ -14,7 +14,11 @@
 # session touched since Togo started this one (sub-agent sessions have a parent); the chat
 # feed follows its messages by updated_at, since Crush rewrites a message row as it streams
 # and adds a finish part when done (finish reason end_turn ends the turn, tool_use keeps it
-# going). A data_directory other than .crush in crush.json is not followed.
+# going). Attribution: crush.db records no process, so a session another Crush creates in this
+# project cannot be told from this Togo session's. The newest wins only until the chat has content;
+# after that the session stays, and only this Togo session's own `--session` relaunch moves it. A
+# session started inside the TUI (ctrl+n) is therefore not followed until the session is restarted.
+# A data_directory other than .crush in crush.json is not followed.
 # Sessions list from `crush session list --json`; changes apply by relaunching.
 adapter: crush
 name: Crush

@@ -20,6 +20,9 @@ input:
   dismiss: [Escape]
 feeds:
   session:          # newest session file for this folder; header {type: session, version: 3}
+    # exclusive: follow only a file this session's own agent process holds open (a /new moves it,
+    # the old file is dropped); a file another process holds is never taken; with no evidence the
+    # session keeps its file.
     jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true, exclusive: true }
     mapper: omp.session
     stability: documented

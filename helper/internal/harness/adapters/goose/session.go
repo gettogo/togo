@@ -27,10 +27,15 @@ type db struct {
 	asks     map[string]harness.Item        // confirmations and elicitations by item id
 	early    map[string]map[string][]string // elicitation answers stored before their request
 	b        *turns.Builder
+	// pin is a session id this Togo session's own relaunch asked for; it is
+	// the one switch allowed once the chat has content. shown is set when
+	// the followed session's messages were mapped.
+	pin   string
+	shown bool
 }
 
 func newDB(env harness.Env) *db {
-	return &db{env: env, state: map[string]string{}, sessions: map[string]sessionRow{}, asks: map[string]harness.Item{},
+	return &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{}, asks: map[string]harness.Item{},
 		early: map[string]map[string][]string{}, b: turns.New()}
 }
 
@@ -114,6 +119,7 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if json.Unmarshal(rec.Data, &r) != nil || r.Session != m.state["harness_session"] {
 			return nil, nil
 		}
+		m.shown = true
 		return m.message(r), nil
 	}
 	var s sessionRow
@@ -124,8 +130,12 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	return nil, nil
 }
 
-// session keeps the newest-updated session in this folder. When it changes
-// (a resume), the messages feed restarts on the new id and replays it.
+// session keeps the newest-updated session in this folder until it has
+// content. Goose's database records no process, so a session another
+// Goose creates in the same folder cannot be told from this one's: once
+// the chat has content it stays on its session, and only this Togo
+// session's own relaunch (--session-id, see Relaunched) moves it. Until
+// then the newest wins, which finds the row the TUI created at launch.
 func (m *db) session(s sessionRow) {
 	if !sameDir(s.WorkingDir, m.env.Cwd) {
 		return
@@ -137,14 +147,53 @@ func (m *db) session(s sessionRow) {
 			best = c
 		}
 	}
+	if m.pin != "" {
+		p, ok := m.sessions[m.pin]
+		if !ok {
+			return
+		}
+		best = p
+	} else if m.shown && m.state["harness_session"] != "" {
+		best = m.sessions[m.state["harness_session"]]
+	}
 	if best.ID != m.state["harness_session"] {
 		m.b.Reset()
 		m.asks, m.early = map[string]harness.Item{}, map[string]map[string][]string{}
 		m.state["harness_session"] = best.ID
+		m.shown = false
+	}
+	if m.pin != "" && best.ID == m.pin {
+		m.pin = ""
 	}
 	if best.Mode != "" {
 		m.state["mode"] = best.Mode
 	}
+}
+
+// Relaunched learns the session a relaunch resumes (`--session-id <id>`).
+func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id := sessionArg(argv); id != "" {
+		m.pin = id
+		if _, ok := m.sessions[id]; ok {
+			m.session(m.sessions[id])
+		}
+	}
+	return nil
+}
+
+// sessionArg is the id a `--session-id <id>` (or `--session-id=<id>`) names.
+func sessionArg(argv []string) string {
+	for i, a := range argv {
+		if v, ok := strings.CutPrefix(a, "--session-id="); ok {
+			return v
+		}
+		if a == "--session-id" && i+1 < len(argv) {
+			return argv[i+1]
+		}
+	}
+	return ""
 }
 
 func (m *db) message(r messageRow) []harness.Item {

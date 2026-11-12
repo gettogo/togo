@@ -10,6 +10,7 @@
 package vibe
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"os"
@@ -42,10 +43,13 @@ func AdapterFile() []byte { return adapterFile }
 // maxMeta bounds a meta.json read.
 const maxMeta = 256 << 10
 
-// journalFor finds the journal of the newest top-level Vibe session that
-// works in the session's folder and was written since the session
-// started, as a glob over its segments: Vibe starts a new segment after
-// each turn and keeps the last two.
+// journalFor finds the journal of the top-level Vibe session that works in
+// the session's folder and was written since the session started, as a
+// glob over its segments: Vibe starts a new segment after each turn and
+// keeps the last two. A journal held open by a process outside this
+// session's tree (a Vibe the user ran in a terminal) is never chosen, and
+// one held by the session's own process comes first; otherwise the newest
+// wins. hookstyle asks only until it has an answer, so the choice sticks.
 func journalFor(env harness.Env) string {
 	if env.Cwd == "" {
 		return ""
@@ -53,7 +57,13 @@ func journalFor(env harness.Env) string {
 	home := source.Expand("~", env.Vars[source.VarHome])
 	metas, _ := filepath.Glob(filepath.Join(home, ".vibe", "logs", "session", "unified", "*", "meta.json"))
 	created, _ := time.Parse(time.RFC3339, env.Vars["created"])
-	best, bestAt := "", time.Time{}
+	type cand struct {
+		glob string
+		at   time.Time
+		segs []string
+	}
+	var cands []cand
+	var all []string
 	for _, m := range metas {
 		st, err := os.Stat(m)
 		if err != nil || st.Size() > maxMeta {
@@ -61,7 +71,7 @@ func journalFor(env harness.Env) string {
 		}
 		dir := filepath.Join(filepath.Dir(m), "journal")
 		at := newestSegment(dir)
-		if at.IsZero() || (!created.IsZero() && at.Before(created.Add(-time.Minute))) || !at.After(bestAt) {
+		if at.IsZero() || (!created.IsZero() && at.Before(created.Add(-time.Minute))) {
 			continue
 		}
 		b, err := os.ReadFile(m)
@@ -81,7 +91,28 @@ func journalFor(env harness.Env) string {
 		if filepath.Clean(meta.Environment.WorkingDirectory) != filepath.Clean(env.Cwd) && filepath.Clean(meta.Origin) != filepath.Clean(env.Cwd) {
 			continue
 		}
-		best, bestAt = filepath.Join(dir, "*.jsonl"), at
+		segs, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+		cands = append(cands, cand{filepath.Join(dir, "*.jsonl"), at, segs})
+		all = append(all, segs...)
+	}
+	verdicts := source.Attribute(context.Background(), env, all)
+	best, bestAt, bestMine := "", time.Time{}, false
+	for _, c := range cands {
+		mine, foreign := false, false
+		for _, p := range c.segs {
+			switch verdicts[p] {
+			case source.Mine:
+				mine = true
+			case source.Foreign:
+				foreign = true
+			}
+		}
+		if foreign && !mine {
+			continue
+		}
+		if (mine && !bestMine) || (mine == bestMine && c.at.After(bestAt)) {
+			best, bestAt, bestMine = c.glob, c.at, mine
+		}
 	}
 	return best
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -150,6 +151,12 @@ func (s *session) header(e map[string]any, at time.Time) ([]harness.Item, []harn
 		return nil, nil
 	}
 	var agentID string
+	if hs := s.state["harness_session"]; hs != "" && !strings.HasSuffix(str(e, "parentSession"), "_"+hs+".jsonl") {
+		// A subagent of another omp's session in the same folder (one the
+		// user ran outside Togo, or an earlier session of this pane).
+		s.headers[id], s.cur = dropped, dropped
+		return nil, nil
+	}
 	if created, err := time.Parse(time.RFC3339, s.env.Vars["created"]); err == nil && len(s.pending) == 0 && at.Before(created.Add(-time.Minute)) {
 		// A subagent of an earlier session, read because its file was
 		// the newest: not part of this conversation.
