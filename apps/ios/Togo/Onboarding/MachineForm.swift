@@ -8,14 +8,24 @@ struct MachineForm: View {
     @Binding var draft: MachineDraft
     let showsErrors: Bool
     let importError: String?
-    let onImportKey: (_ text: String, _ label: String) -> Void
+    let onImportKey: (_ text: String, _ label: String, _ source: KeyImportSource) -> Void
+    var isEditing = false
+    /// The connection is being tested, so the checkmark shows progress.
+    var isWorking = false
+    /// False while editing a saved machine with no changes, so ✓ and ✕ never do the same thing.
+    var canSave = true
     let onConnect: () -> Void
 
     @FocusState private var focus: MachineDraft.Field?
     @State private var choosingKeyFile = false
     @State private var jumpShown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        ScrollViewReader { proxy in form(proxy) }
+    }
+
+    private func form(_ proxy: ScrollViewProxy) -> some View {
         Form {
             Section {
                 field(.name, String(localized: "onboard.form.name", defaultValue: "Name"), text: $draft.name, prompt: String(localized: "onboard.form.namePrompt", defaultValue: "MacBook, Studio, Build box"))
@@ -57,6 +67,7 @@ struct MachineForm: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
                 authDetail
+                    .id(MachineDraft.Field.key)
             } header: {
                 SectionHeading(String(localized: "onboard.form.signIn", defaultValue: "Sign in with"))
             } footer: {
@@ -115,12 +126,26 @@ struct MachineForm: View {
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(String(localized: "onboard.form.connect", defaultValue: "Connect"), systemImage: "checkmark", role: .confirm, action: onConnect)
+                if isWorking {
+                    ProgressView()
+                } else {
+                    Button(
+                        isEditing
+                            ? String(localized: "onboard.form.save", defaultValue: "Save")
+                            : String(localized: "onboard.form.add", defaultValue: "Add"),
+                        systemImage: "checkmark", role: .confirm
+                    ) {
+                        onConnect()
+                        revealFirstError(proxy)
+                    }
+                    // A saved machine with nothing changed has nothing to save; ✕ closes it.
+                    .disabled(!canSave)
+                }
             }
         }
         .fileImporter(isPresented: $choosingKeyFile, allowedContentTypes: [.data, .plainText]) { result in
             guard case .success(let url) = result, let text = Self.readKey(url) else { return }
-            onImportKey(text, url.lastPathComponent)
+            onImportKey(text, url.lastPathComponent, .file)
         }
         .onAppear {
             jumpShown = !draft.jump.isEmpty
@@ -134,16 +159,10 @@ struct MachineForm: View {
             EmptyView()
         case .importedKey:
             VStack(alignment: .leading, spacing: 8) {
-                Button {
-                    choosingKeyFile = true
-                } label: {
-                    Label(
-                        draft.importedKey?.label ?? String(localized: "onboard.form.chooseKey", defaultValue: "Choose a key file"),
-                        systemImage: draft.importedKey == nil ? "doc.badge.plus" : "key"
-                    )
-                    .foregroundStyle(Color.togoSnow)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(.rect)
+                // Two buttons share one row, so each keeps its own tap target; at large text they stack.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { chooseButton; pasteButton }
+                    VStack(alignment: .leading, spacing: 4) { chooseButton; pasteButton }
                 }
                 if let error = importError ?? visibleError(.key) { FieldError(text: error) }
             }
@@ -171,6 +190,36 @@ struct MachineForm: View {
         }
     }
 
+    private var chooseButton: some View {
+        Button {
+            choosingKeyFile = true
+        } label: {
+            Label(
+                draft.importedKey?.label ?? String(localized: "onboard.form.chooseKey", defaultValue: "Choose a key file"),
+                systemImage: draft.importedKey == nil ? "doc.badge.plus" : "key"
+            )
+            .foregroundStyle(Color.togoSnow)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    /// The system paste control reads the clipboard only on tap, so iOS shows no "Allow Paste"
+    /// prompt. The system fixes its look apart from shape, tint and label style.
+    private var pasteButton: some View {
+        PasteButton(payloadType: String.self) { strings in
+            let mark = ClipboardMark(SystemKeyPasteboard())
+            guard let text = strings.first, text.utf8.count < 64 * 1024 else { return }
+            onImportKey(text, String(localized: "onboard.form.pastedKeyLabel", defaultValue: "Pasted key"), .clipboard(mark))
+        }
+        .labelStyle(.titleAndIcon)
+        .buttonBorderShape(.capsule)
+        .tint(Color.togoSnow)
+        .frame(minHeight: 44)
+        .accessibilityLabel(String(localized: "onboard.form.pasteKeyA11y", defaultValue: "Paste key from clipboard"))
+    }
+
     private func field(
         _ field: MachineDraft.Field, _ label: String, text: Binding<String>, prompt: String, axis: Axis = .horizontal
     ) -> some View {
@@ -190,6 +239,7 @@ struct MachineForm: View {
                 .submitLabel(draft.field(after: field) == nil ? .go : .next)
                 .onSubmit { advance(from: field) }
         }
+        .id(field)
     }
 
     private func labelled(_ label: String, error: String? = nil, @ViewBuilder input: () -> some View) -> some View {
@@ -217,6 +267,16 @@ struct MachineForm: View {
 
     private func visibleError(_ field: MachineDraft.Field) -> String? {
         showsErrors ? draft.errors[field] : nil
+    }
+
+    /// A form with a problem off screen would look like Connect did nothing, so the first
+    /// field with an error scrolls into view (a synced machine's key may not be on this device).
+    private func revealFirstError(_ proxy: ScrollViewProxy) {
+        let errors = draft.errors
+        guard let first = MachineDraft.Field.allCases.first(where: { errors[$0] != nil }) else { return }
+        if first == .jump { jumpShown = true }
+        // motion: reveal — the form scrolls to the field that needs fixing
+        withAnimation(Motion.animation(.reveal, reduce: reduceMotion)) { proxy.scrollTo(first, anchor: .center) }
     }
 
     private func advance(from field: MachineDraft.Field) {

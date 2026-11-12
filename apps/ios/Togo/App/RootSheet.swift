@@ -110,9 +110,11 @@ extension AddMachineFlow {
     static func editing(
         _ record: HostRecord, store: AppStore, services: any OnboardingServices, tutorial: TutorialModel?
     ) -> AddMachineFlow {
-        stored(record, services: services, tutorial: tutorial, save: { try await store.services.saveHost($0) }) {
+        let flow = stored(record, services: services, tutorial: tutorial, save: { try await store.services.saveHost($0) }) {
             store.sheet = nil
         }
+        flow.originalDraft = flow.draft
+        return flow
     }
 
     /// Setting up a machine that came from another device: straight to connecting with this
@@ -129,6 +131,7 @@ extension AddMachineFlow {
         flow.draft.importedKey = nil
         flow.notificationAsk = .asking(store.services)
         flow.path = [.connect]
+        flow.retry()
         return flow
     }
 
@@ -166,6 +169,7 @@ extension AddMachineFlow {
         if let tutorial { flow.onDetected = { tutorial.record($0) } }
         flow.draft = draft
         flow.startsOnForm = true
+        flow.keepsNoHelper = record.noHelper
         return flow
     }
 }

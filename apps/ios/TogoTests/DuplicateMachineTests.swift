@@ -127,6 +127,41 @@ import TogoKit
         #expect(!services.deviceMachines.needsSetUp(synced, reach: .authNeeded), "this device's set-up moved to the kept record")
     }
 
+    @Test func aHelperFoundLaterSwitchesTheMachineToTheHelper() async throws {
+        let watches = Watches()
+        let services = services(watches: watches)
+        await services.start()
+        var plain = record(synced, "Studio", host: "studio.local", key: "phone-key")
+        plain.noHelper = true
+        try await services.saveHost(plain)
+        let first = try #require(watches[synced])
+        #expect(first.record.noHelper)
+
+        await services.helperFound(synced, path: "/opt/homebrew/bin/togo")
+
+        let stored = try #require(await services.hostStore.hosts().first)
+        #expect(!stored.noHelper)
+        #expect(stored.helperPath == "/opt/homebrew/bin/togo")
+        #expect(first.stopped.withLock { $0 }, "the plain tmux watch is replaced")
+        let second = try #require(watches[synced])
+        #expect(second !== first)
+        #expect(!second.record.noHelper && second.record.helperPath == "/opt/homebrew/bin/togo")
+    }
+
+    @Test func aHelperReportForAMachineThatHasOneChangesNothing() async throws {
+        let watches = Watches()
+        let services = services(watches: watches)
+        await services.start()
+        try await services.saveHost(record(synced, "Studio", host: "studio.local", key: "phone-key"))
+        let first = try #require(watches[synced])
+
+        await services.helperFound(synced, path: "/usr/local/bin/togo")
+
+        #expect(await services.hostStore.hosts().first?.helperPath == nil)
+        #expect(watches[synced] === first)
+        #expect(!first.stopped.withLock { $0 })
+    }
+
     @Test func twoMachinesWithTheSameNameStayTwo() async throws {
         let trusted = ["192.168.1.20": [Self.macKey], "192.168.1.30": ["SHA256:another-mac"]]
         let services = services(trusted: trusted)

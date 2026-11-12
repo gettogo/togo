@@ -4274,13 +4274,35 @@
         }
       }
     },
-    "onboard.form.connect" : {
+    "onboard.form.add" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect"
+            "value" : "Add"
+          }
+        }
+      }
+    },
+    "onboard.form.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "onboard.added.notice" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ added. Set up its agents in Settings › Agents."
           }
         }
       }

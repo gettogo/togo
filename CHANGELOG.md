@@ -25,6 +25,21 @@ First release.
 
 ## App
 
+### 1.0.1
+
+**Added**
+
+- Paste a private key when adding a machine. Togo clears it from the clipboard after import.
+- Update the helper from the Control Center when a new version is out, including Homebrew installs.
+
+**Changed**
+
+- The checkmark on the machine form saves and closes. You only see another screen if Togo needs an answer, like trusting a new host key.
+
+**Fixed**
+
+- A helper installed after the machine was added wasn't detected.
+
 ### 1.0.0
 
 First release.

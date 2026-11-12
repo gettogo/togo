@@ -340,4 +340,17 @@ private final class PreviewTerminalController: UIViewController {
         view.backgroundColor = engine.backgroundColor
     }
 }
+extension FakeAppServices {
+    /// A record for each fake machine, so editing one opens the real form in demos.
+    func hostRecord(_ id: HostID) -> HostRecord? {
+        guard let host = hosts.first(where: { $0.id == id }) else { return nil }
+        return HostRecord(
+            id: host.id,
+            profile: HostProfile(id: host.id, name: host.name, endpoint: HostEndpoint(host: host.address, user: "sam"), auth: .password),
+            symbol: host.symbol.rawValue,
+            helperPath: "/Users/sam/.togo/bin/togo"
+        )
+    }
+}
+
 #endif

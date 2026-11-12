@@ -33,6 +33,8 @@ struct UITestLaunch {
     /// Session 01 reviews the demo API and the new session sheet lists the registry's agents
     /// (`DemoAPIFixture`), for the website's screen captures.
     var demoAPI: Bool
+    /// The helper update check finds a newer release on every machine, and Update succeeds.
+    var helperUpdate: Bool
 
     static let current = UITestLaunch(arguments: ProcessInfo.processInfo.arguments)
 
@@ -53,6 +55,7 @@ struct UITestLaunch {
         demoRoster = arguments.contains("-ui-demo-roster")
         noKeyboard = arguments.contains("-ui-no-keyboard")
         demoAPI = arguments.contains("-ui-demo-api")
+        helperUpdate = arguments.contains("-ui-helper-update")
     }
 
     /// A defaults suite emptied on every launch, so one test's guide progress and settings

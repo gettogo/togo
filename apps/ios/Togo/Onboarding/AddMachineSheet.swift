@@ -5,6 +5,7 @@ import TogoKit
 struct AddMachineSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var flow: AddMachineFlow
+    @State private var confirmingDiscard = false
 
     init(flow: AddMachineFlow) {
         _flow = State(initialValue: flow)
@@ -24,7 +25,6 @@ struct AddMachineSheet: View {
                         .toolbar { cancel }
                 case .connect:
                     ConnectStep(flow: flow)
-                        .task(id: flow.attempt) { await flow.runAttempt() }
                         .toolbar { cancel }
                 case .notifications:
                     NotificationAskView(
@@ -37,6 +37,11 @@ struct AddMachineSheet: View {
         }
         .task {
             if !flow.startsOnForm { await flow.discover() }
+        }
+        // The attempt runs whether or not the connection step is on screen. Attempt 0 is
+        // nothing asked for yet.
+        .task(id: flow.attempt) {
+            if flow.attempt > 0 { await flow.runAttempt() }
         }
         .interactiveDismissDisabled(flow.startsOnForm || !flow.path.isEmpty)
         .onDisappear { flow.cancel() }
@@ -57,14 +62,24 @@ struct AddMachineSheet: View {
     private var form: some View {
         MachineForm(
             draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
-            onImportKey: { text, label in Task { await flow.importKey(text, label: label) } },
-            onConnect: flow.connect
+            onImportKey: { text, label, source in Task { await flow.importKey(text, label: label, source: source) } },
+            isEditing: flow.isEditing, isWorking: flow.isWorking, canSave: flow.hasChanges, onConnect: flow.connect
         )
     }
 
     private var cancel: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) { dismiss() }
+            Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) {
+                // Edits to a saved machine are not thrown away without asking.
+                if flow.isEditing, flow.hasChanges { confirmingDiscard = true } else { dismiss() }
+            }
+            .confirmationDialog(
+                String(localized: "onboard.discard.title", defaultValue: "Discard your changes?"),
+                isPresented: $confirmingDiscard, titleVisibility: .visible
+            ) {
+                Button(String(localized: "onboard.discard.confirm", defaultValue: "Discard changes"), role: .destructive) { dismiss() }
+                Button(String(localized: "onboard.discard.keep", defaultValue: "Keep editing"), role: .cancel) {}
+            }
         }
     }
 }
@@ -86,7 +101,18 @@ extension AddMachineFlow {
         let flow = AddMachineFlow(
             services: services,
             add: { try await store.services.addHost($0) },
-            finish: { _ in store.sheet = nil }
+            finish: { record in
+                store.sheet = nil
+                if !record.noHelper {
+                    store.notice = Notice(
+                        text: String(
+                            localized: "onboard.added.notice",
+                            defaultValue: "\(record.profile.name) added. Set up its agents in Settings › Agents."
+                        ),
+                        isError: false
+                    )
+                }
+            }
         )
         flow.alreadyAdded = { store.alreadyAdded($0) }
         return flow

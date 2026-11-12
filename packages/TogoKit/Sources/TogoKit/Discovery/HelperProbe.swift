@@ -102,7 +102,7 @@ public enum HelperProbe {
     public static func installCommand(os: String?) -> String {
         switch os {
         case nil, "Darwin", "Linux":
-            "curl -fsSL https://github.com/gettogo/togo/releases/latest/download/install.sh | sh"
+            "curl -fsSL https://togoapp.dev/install.sh | sh"
         default:
             "go install github.com/gettogo/togo/helper/cmd/togo@latest"
         }

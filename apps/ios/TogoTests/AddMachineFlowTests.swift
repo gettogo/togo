@@ -70,6 +70,7 @@ struct AddMachineFlowTests {
         await attempt.value
         #expect(services.trustAnswers == [true])
         #expect(flow.phase == .helper(OnboardingSamples.ready))
+        #expect(flow.path.last == .connect, "the question is asked on its own screen")
     }
 
     @Test func refusedHostKeyReturnsToTheForm() async {
@@ -120,6 +121,8 @@ struct AddMachineFlowTests {
         let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.noHelper)]), saved: saved)
         flow.connect()
         await flow.runAttempt()
+        #expect(saved.records.isEmpty, "a missing helper is the user's decision")
+        #expect(flow.path.last == .connect)
         await flow.save(withHelper: false)
         #expect(saved.records.count == 1)
         #expect(saved.records.first?.noHelper == true)
@@ -128,12 +131,120 @@ struct AddMachineFlowTests {
         #expect(saved.finished == saved.records.map(\.id))
     }
 
+    /// The checkmark finishes the job: a machine with the helper is saved without a second screen.
+    @Test func successSavesWithoutPushingAScreen() async {
+        let saved = SavedRecords()
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)]), saved: saved)
+        flow.connect()
+        #expect(flow.path == [.form], "testing happens in place")
+        #expect(flow.isWorking)
+        await flow.runAttempt()
+        #expect(flow.path == [.form])
+        #expect(saved.records.count == 1)
+        #expect(saved.finished == saved.records.map(\.id))
+        #expect(!flow.isWorking)
+    }
+
+    @Test func missingHelperPushesTheHelperScreen() async {
+        let saved = SavedRecords()
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.noHelper)]), saved: saved)
+        flow.connect()
+        await flow.runAttempt()
+        #expect(flow.path == [.form, .connect])
+        #expect(saved.records.isEmpty)
+    }
+
+    @Test func oldTmuxPushesTheHelperScreen() async {
+        let old = HelperReport(helper: .present(version: "0.3.0"), path: "/x/togo", tmux: "tmux 3.0", os: "Linux")
+        let saved = SavedRecords()
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(old)]), saved: saved)
+        flow.connect()
+        await flow.runAttempt()
+        #expect(flow.path == [.form, .connect])
+        #expect(saved.records.isEmpty)
+    }
+
+    @Test func failuresPushTheirScreen() async {
+        let flow = flow(FakeOnboardingServices(outcomes: [.unreachable]))
+        flow.connect()
+        await flow.runAttempt()
+        #expect(flow.path == [.form, .connect])
+        #expect(flow.phase == .unreachable)
+    }
+
+    /// Editing a machine saved without the helper does not ask about it again.
+    @Test func editingANoHelperMachineSavesWithoutAsking() async {
+        let saved = SavedRecords()
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.noHelper)]), saved: saved)
+        flow.keepsNoHelper = true
+        flow.connect()
+        await flow.runAttempt()
+        #expect(flow.path == [.form])
+        #expect(saved.records.count == 1)
+        #expect(saved.records.first?.noHelper == true)
+        #expect(saved.finished == saved.records.map(\.id))
+    }
+
+    @Test func addedMachineWithTheHelperLeavesANotice() async {
+        let store = AppStore(services: FakeAppServices())
+        store.sheet = .addMachine
+        let flow = AddMachineFlow.adding(store: store, services: FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)]))
+        flow.choose(OnboardingSamples.hosts[0])
+        flow.draft.user = "sam"
+        flow.connect()
+        await flow.runAttempt()
+        #expect(store.sheet == nil)
+        #expect(store.notice?.text.hasSuffix("added. Set up its agents in Settings › Agents.") == true)
+    }
+
+    @Test func storedMachineRemembersItWasSavedWithoutTheHelper() {
+        let id = UUID()
+        let record = HostRecord(
+            id: id,
+            profile: HostProfile(id: id, name: "Studio", endpoint: HostEndpoint(host: "studio.local", user: "sam"), auth: .key(id: "elsewhere")),
+            symbol: "desktop", noHelper: true
+        )
+        let flow = AddMachineFlow.editing(record, store: AppStore(services: FakeAppServices()), services: FakeOnboardingServices(), tutorial: nil)
+        #expect(flow.keepsNoHelper && flow.isEditing)
+    }
+
+    /// A saved machine has nothing to save until a field changes, so ✓ and ✕ never do the same thing.
+    @Test func editingHasNothingToSaveUntilAFieldChanges() {
+        let id = UUID()
+        let record = HostRecord(
+            id: id,
+            profile: HostProfile(id: id, name: "Studio", endpoint: HostEndpoint(host: "studio.local", user: "sam"), auth: .password),
+            symbol: "desktop"
+        )
+        let flow = AddMachineFlow.editing(record, store: AppStore(services: FakeAppServices()), services: FakeOnboardingServices(), tutorial: nil)
+        #expect(!flow.hasChanges)
+        flow.draft.name = "Studio Mac"
+        #expect(flow.hasChanges)
+        flow.draft.name = "Studio"
+        #expect(!flow.hasChanges, "changing a field back leaves nothing to save")
+    }
+
+    /// Check again on the helper screen saves and closes once the helper is found.
+    @Test func retryThatFindsTheHelperSaves() async {
+        let saved = SavedRecords()
+        let flow = flow(
+            FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.noHelper), .ready(OnboardingSamples.ready)]), saved: saved
+        )
+        flow.connect()
+        await flow.runAttempt()
+        #expect(saved.records.isEmpty)
+        flow.retry()
+        await flow.runAttempt()
+        #expect(saved.records.count == 1)
+        #expect(saved.records.first?.noHelper == false)
+        #expect(saved.finished == saved.records.map(\.id))
+    }
+
     @Test func saveWithHelperKeepsItsPath() async {
         let saved = SavedRecords()
         let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)]), saved: saved)
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         #expect(saved.records.first?.noHelper == false)
         #expect(saved.records.first?.helperPath == "/Users/sam/.togo/bin/togo")
     }
@@ -146,7 +257,6 @@ struct AddMachineFlowTests {
         flow.notificationAsk = .init(needed: { true }, turnOn: { turnedOn += 1 })
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         #expect(saved.records.count == 1, "the machine is saved before the question")
         #expect(flow.path.last == .notifications)
         #expect(saved.finished.isEmpty)
@@ -164,7 +274,6 @@ struct AddMachineFlowTests {
         flow.notificationAsk = .init(needed: { true }, turnOn: { turnedOn += 1 })
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         await flow.answerNotifications(turnOn: false)
         #expect(turnedOn == 0)
         #expect(saved.finished == saved.records.map(\.id))
@@ -181,7 +290,6 @@ struct AddMachineFlowTests {
         })
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         let first = Task { await flow.answerNotifications(turnOn: true) }
         let second = Task { await flow.answerNotifications(turnOn: true) }
         await first.value
@@ -232,7 +340,7 @@ struct AddMachineFlowTests {
             flow.notificationAsk = .init(needed: { needed }, turnOn: {})
             flow.connect()
             await flow.runAttempt()
-            await flow.save(withHelper: withHelper)
+            if !withHelper { await flow.save(withHelper: false) }
             #expect(!flow.path.contains(.notifications))
             #expect(saved.finished == saved.records.map(\.id), "the sheet closes straight after saving")
         }
@@ -252,7 +360,6 @@ struct AddMachineFlowTests {
         #expect(flow.draft.savePassword)
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         let id = try #require(saved.records.first?.id)
         #expect(services.savedPasswords == [SavedPassword(machine: id, password: "hunter2")])
     }
@@ -264,7 +371,6 @@ struct AddMachineFlowTests {
         flow.draft.savePassword = false
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         #expect(services.savedPasswords.map(\.password) == [nil])
     }
 
@@ -273,7 +379,6 @@ struct AddMachineFlowTests {
         let flow = flow(services)
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         #expect(services.savedPasswords.map(\.password) == [nil])
     }
 
@@ -284,7 +389,6 @@ struct AddMachineFlowTests {
         flow.draft.password = ""
         flow.connect()
         await flow.runAttempt()
-        await flow.save(withHelper: true)
         #expect(saved.records.count == 1)
         #expect(services.savedPasswords.isEmpty)
     }

@@ -14,8 +14,8 @@ private final class FakeHost: Sendable {
 
     var commands: [String] { log.withLock { $0 } }
 
-    func source() -> PlainTmuxSource {
-        PlainTmuxSource(host: "work-mac", now: { Date(timeIntervalSince1970: 100) }) {
+    func source(helperFound: (@Sendable (String) -> Void)? = nil) -> PlainTmuxSource {
+        PlainTmuxSource(host: "work-mac", now: { Date(timeIntervalSince1970: 100) }, helperFound: helperFound) {
             PlainTmuxDial(
                 run: { command in
                     self.log.withLock { $0.append(command) }
@@ -179,6 +179,62 @@ struct PlainTmuxSourceTests {
 
         _ = try await source.call(.kill(PlainTmux.id(forName: "togo-1")))
         #expect(host.commands.last?.contains("kill-session") == true)
+    }
+
+    /// What `HelperProbe.script` prints on a machine that has the helper.
+    private static let helperProbeOutput = "togo.path=/opt/homebrew/bin/togo\ntogo.version=togo 1.0.1\ntmux=tmux 3.5a\n"
+
+    @Test func reportsAHelperInstalledSinceTheMachineWasSaved() async throws {
+        let found = Mutex<[String]>([])
+        let host = FakeHost { command in
+            if command.contains("togo.path") { return (Self.helperProbeOutput, 0) }
+            return ("/usr/bin/tmux", 0)
+        }
+        let source = host.source(helperFound: { path in found.withLock { $0.append(path) } })
+        _ = try await source.open()
+
+        #expect(found.withLock { $0 } == ["/opt/homebrew/bin/togo"])
+        #expect(host.commands.filter { $0.contains("togo.path") }.count == 1, "probed once per connection")
+    }
+
+    @Test func reportsAnOldHelperToo() async throws {
+        let found = Mutex<[String]>([])
+        let host = FakeHost { command in
+            command.contains("togo.path") ? ("togo.path=/Users/sam/.togo/bin/togo\ntogo.version=\n", 0) : ("/usr/bin/tmux", 0)
+        }
+        let source = host.source(helperFound: { path in found.withLock { $0.append(path) } })
+        _ = try await source.open()
+
+        #expect(found.withLock { $0 } == ["/Users/sam/.togo/bin/togo"])
+    }
+
+    @Test func staysQuietWhileTheHelperIsStillMissing() async throws {
+        let found = Mutex<[String]>([])
+        let host = FakeHost { command in
+            command.contains("togo.path") ? ("tmux=tmux 3.5a\nos=Linux\n", 0) : ("/usr/bin/tmux", 0)
+        }
+        let source = host.source(helperFound: { path in found.withLock { $0.append(path) } })
+        let (presence, _) = try await source.open()
+
+        #expect(found.withLock { $0 }.isEmpty)
+        #expect(presence == .unknown)
+        #expect(host.commands.filter { $0.contains("togo.path") }.count == 1)
+    }
+
+    @Test func aFailedHelperProbeChangesNothing() async throws {
+        let found = Mutex<[String]>([])
+        let host = FakeHost { command in command.contains("togo.path") ? (Self.helperProbeOutput, 1) : ("/usr/bin/tmux", 0) }
+        let source = host.source(helperFound: { path in found.withLock { $0.append(path) } })
+        _ = try await source.open()
+
+        #expect(found.withLock { $0 }.isEmpty)
+    }
+
+    @Test func doesNotProbeWithoutAListener() async throws {
+        let host = FakeHost { _ in ("/usr/bin/tmux", 0) }
+        _ = try await host.source().open()
+
+        #expect(!host.commands.contains { $0.contains("togo.path") })
     }
 
     @Test func noTmuxReportsMissing() async throws {

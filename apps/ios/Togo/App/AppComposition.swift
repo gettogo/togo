@@ -18,6 +18,8 @@ import TogoMosh
     let tutorial: TutorialModel
     /// How features reach a machine's helper.
     let machineTools: any MachineTools
+    /// Which machines have a newer helper; asks over each machine's own connection.
+    private(set) var helperUpdates = HelperUpdates()
     /// Saved agent presets and the preset each folder last started with.
     let agentLibrary: AgentLibrary
     /// Nil under unit and UI tests and in a process without the app group.
@@ -100,6 +102,7 @@ import TogoMosh
                 (try? keys.info(id: $0))?.publicKeyLine
             }
         }
+        let relay = LiveServicesRelay()
         let services = LiveServices(
             hostRecords: hostRecords, settingsRecords: settingsRecords, syncSwitch: syncSwitch,
             device: DeviceSettings(backend: isolated ? MemoryBackend() : AppPush.deviceBackend()),
@@ -114,12 +117,17 @@ import TogoMosh
                     HostMonitor(
                         record: record,
                         factory: { record -> any SessionSource in
+                            let found: @Sendable (String) -> Void = { path in
+                                Task { @MainActor in await relay.target?.helperFound(record.id, path: path) }
+                            }
                             if let connection = await signedIn.take(record.id) {
                                 return record.noHelper
-                                    ? PlainTmuxSource(record: record, connected: connection)
+                                    ? PlainTmuxSource(record: record, connected: connection, helperFound: found)
                                     : HelperSource(record: record, connected: connection)
                             }
-                            return record.noHelper ? PlainTmuxSource(record: record, env: env) : HelperSource(record: record, env: env)
+                            return record.noHelper
+                                ? PlainTmuxSource(record: record, env: env, helperFound: found)
+                                : HelperSource(record: record, env: env)
                         },
                         path: SystemPathSource()
                     )
@@ -154,6 +162,7 @@ import TogoMosh
                 trustedHostKeys: { (try? await hostKeys.fingerprints(for: HostKeyTrust.hostID($0))) ?? [] }
             )
         )
+        relay.target = services
         live = services
         self.services = services
         let review = LiveReviewServices(
@@ -178,6 +187,13 @@ import TogoMosh
             prompter: { [weak services] in services?.userPrompter($0) }
         )
         self.machineTools = machineTools
+        helperUpdates = HelperUpdates(
+            helperPath: { [weak services] in services?.hostRecord($0)?.helperPath },
+            run: { [weak services] id, command, timeout in
+                guard let record = await services?.hostRecord(id) else { throw LiveServiceError.unknownMachine }
+                return try await helpers.connection(for: record).run(command, timeout: timeout)
+            }
+        )
         LinkCenter.shared.tunnel = LiveCallbackTunnel(
             helpers: helpers, records: { [weak services] in services?.hostRecord($0) }, review: review
         )
@@ -198,6 +214,7 @@ import TogoMosh
         LinkCenter.shared.awaitsCode = { [weak self] host, session in self?.pendingSecretRequest(host, session) != nil }
         services.onMachineRemoved = { [weak self] id in
             self?.forgetMachine(id)
+            self?.helperUpdates.forget(id)
             Task { await signedIn.discard(id) }
         }
         // A connection signed in with the old address or credentials must not serve the new ones.
@@ -255,6 +272,19 @@ import TogoMosh
         )
         uiTestMachines = machines
         appStorage = defaults
+        if launch.helperUpdate {
+            helperUpdates = HelperUpdates(
+                defaults: defaults,
+                helperPath: { _ in "/Users/sam/.togo/bin/togo" },
+                run: { _, command, _ in
+                    if command.contains("--check") {
+                        return (Data("togo v1.0.2 is available (installed: v1.0.1)\n".utf8), Data(), 0)
+                    }
+                    try await Task.sleep(for: .seconds(2))
+                    return (Data("Installed togo v1.0.2 at /Users/sam/.togo/bin/togo (previous binary kept at /Users/sam/.togo/bin/togo.previous)\nRestarted\n".utf8), Data(), 0)
+                }
+            )
+        }
         if launch.demoAPI {
             for agent in DemoAPIFixture.favorites { agentLibrary.toggleFavorite(agent) }
         }
@@ -413,4 +443,9 @@ extension AppComposition {
             $0.hostID == host && $0.sessionID == session && $0.phase == .open && $0.signIn?.secret == true
         }?.id
     }
+}
+
+/// Lets the machine watches, built before `LiveServices` exists, reach it later.
+@MainActor private final class LiveServicesRelay {
+    weak var target: LiveServices?
 }
