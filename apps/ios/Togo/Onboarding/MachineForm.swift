@@ -17,6 +17,10 @@ struct MachineForm: View {
 
     var body: some View {
         Form {
+            // On a saved machine only: an update to the helper, the update running, or Homebrew's command.
+            if let machine = draft.machineID {
+                HelperUpdateSection(machine: machine, name: draft.name)
+            }
             Section {
                 field(.name, String(localized: "onboard.form.name", defaultValue: "Name"), text: $draft.name, prompt: String(localized: "onboard.form.namePrompt", defaultValue: "MacBook, Studio, Build box"))
                     .textInputAutocapitalization(.words)

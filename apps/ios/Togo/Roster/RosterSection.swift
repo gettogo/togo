@@ -183,8 +183,10 @@ struct RosterSection: View {
             case .present, .outdated, .checking:
                 if case .present(let version, _) = machine.helper, helperUpdates?.available(machine.id, current: version) != nil {
                     // Short on purpose: the machine's name is in the heading above, and may be long.
-                    quiet(ControlCenterCopy.updateAvailable)
-                        .accessibilityLabel(ControlCenterCopy.updateAvailableFor(machine.name))
+                    MachineMessage(ControlCenterCopy.updateAvailable, action: ControlCenterCopy.details) {
+                        perform(.edit(machine.id))
+                    }
+                    .accessibilityLabel(ControlCenterCopy.updateAvailableFor(machine.name))
                 }
                 if case .outdated(let found) = machine.helper {
                     MachineMessage(ControlCenterCopy.helperOutdated(found), action: ControlCenterCopy.update) {

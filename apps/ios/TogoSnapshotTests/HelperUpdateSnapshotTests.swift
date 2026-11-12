@@ -4,7 +4,7 @@ import Testing
 import TogoKit
 @testable import Togo
 
-/// The helper release row on a machine's page, at the longest version text and the largest type.
+/// The helper release row on a machine's edit screen, at the longest version text and the largest type.
 /// The Control Center note is the single fixed line "Update available", so it has no name or
 /// version to lengthen it.
 @MainActor
@@ -26,10 +26,15 @@ struct HelperUpdateSnapshotTests {
         return model
     }
 
+    /// The screen a tap on a machine in Settings > Machines opens, with the update row at its top.
     private func page(_ updates: HelperUpdates, name: String = "Studio") -> some View {
-        NavigationStack {
-            List { HelperUpdateSection(machine: Self.machine, name: name) }
-                .groupedList()
+        var draft = MachineDraft()
+        draft.machineID = Self.machine
+        draft.name = name
+        draft.address = "studio.local"
+        draft.user = "dev"
+        return NavigationStack {
+            MachineForm(draft: .constant(draft), showsErrors: false, importError: nil, onImportKey: { _, _ in }, onConnect: {})
                 .navigationTitle(name)
                 .navigationBarTitleDisplayMode(.inline)
         }
