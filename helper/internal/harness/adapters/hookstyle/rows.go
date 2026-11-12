@@ -2,6 +2,7 @@ package hookstyle
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -17,6 +18,12 @@ func agentOps(p payload, at time.Time) []harness.Op {
 		row.State, row.Started = harness.RowDone, nil
 	}
 	return []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}}
+}
+
+// isPlanTool is a todo or plan tool by name.
+func isPlanTool(name string) bool {
+	low := strings.ToLower(name)
+	return strings.Contains(low, "todo") || low == "update_plan"
 }
 
 // planOps turns a task hook into a plan row.

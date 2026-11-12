@@ -23,8 +23,12 @@ func (t *transcript) toolUse(e entry, b block, at time.Time, turn, parent string
 		in = map[string]any{}
 	}
 	switch {
-	case planTools[b.Name]:
+	case planTools[b.Name] && t.planReadable(b.Name, in, parent):
 		return t.planUse(b, in, at, turn, parent)
+	case planTools[b.Name] && parent == "":
+		// Not the shape this reads: show the call as a step instead of
+		// dropping it, and say so in the log.
+		t.NoteUnrecognisedPlan()
 	case b.Name == "AskUserQuestion":
 		it := t.question(b, in, at, turn, parent)
 		t.questions[b.ID] = &it
@@ -310,6 +314,24 @@ func (t *transcript) planExit(b block, in map[string]any, at time.Time, turn, pa
 	}}
 	t.questions[b.ID] = &q
 	return append(items, q)
+}
+
+// planReadable is false for a main-session plan call whose input has none of
+// the fields planUse reads, so a format change cannot make it vanish.
+func (t *transcript) planReadable(name string, in map[string]any, parent string) bool {
+	if parent != "" {
+		return true
+	}
+	switch name {
+	case "TodoWrite":
+		_, ok := in["todos"].([]any)
+		return ok
+	case "TaskCreate":
+		return firstNonEmpty(str(in, "subject"), str(in, "description")) != ""
+	case "TaskUpdate":
+		return firstNonEmpty(str(in, "taskId"), str(in, "id")) != ""
+	}
+	return true
 }
 
 // planUse maps TodoWrite, TaskCreate and TaskUpdate onto the plan.

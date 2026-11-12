@@ -53,28 +53,11 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 			ops = append(ops, s.agentRow(a))
 		}
 	}
-	if strings.Contains(strings.ToLower(name), "todo") && parent == "" {
-		if rows := todoRows(args); len(rows) > 0 {
-			ops = append(ops, harness.Op{Op: harness.OpReplace, Section: harness.SectionPlan, Rows: rows})
-			items = append(items, planItem(callID, tid, at, rows))
-		}
+	if isTodoTool(name) && parent == "" {
+		pi, po := s.todoCall(callID, tid, args, at)
+		items, ops = append(items, pi...), append(ops, po...)
 	}
 	return items, ops
-}
-
-func planItem(callID, tid string, at time.Time, rows []harness.Row) harness.Item {
-	p := &harness.PlanBody{Total: len(rows)}
-	for _, r := range rows {
-		switch r.State {
-		case harness.RowDone, harness.RowSkipped:
-			p.Done++
-		case harness.RowActive:
-			if p.Current == "" {
-				p.Current = r.Title
-			}
-		}
-	}
-	return harness.Item{ID: "plan-" + callID, TurnID: tid, Kind: harness.KindPlan, At: at, Plan: p}
 }
 
 type task struct{ id, title, role string }
@@ -128,6 +111,10 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 	it.Tool = &b
 	items := []harness.Item{*it}
 	var ops []harness.Op
+	if isTodoTool(b.Name) && it.Parent == "" {
+		pi, po := s.todoResult(b.CallID, it.TurnID, m, it.At)
+		items, ops = append(items, pi...), append(ops, po...)
+	}
 	if q, ok := s.asks[b.CallID]; ok {
 		body := *q.Question
 		body.Answered = askAnswers(&body, m)

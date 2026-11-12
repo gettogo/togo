@@ -18,6 +18,7 @@ import (
 // so an entry belongs to the file whose entries it continues; an entry
 // without a known parent belongs to the file whose header came last.
 type session struct {
+	harness.PlanMiss
 	env harness.Env
 	cwd string
 
@@ -36,6 +37,10 @@ type session struct {
 	files     map[string]bool
 	cost      float64
 	usage     map[string]any
+
+	todo       []todoPhase            // the main session's plan
+	todoBefore map[string][]todoPhase // todo call id -> the plan before it
+	todoUnread map[string]bool        // todo calls whose arguments gave no rows
 }
 
 // dropped owns the entries of files that are not part of the session.
@@ -50,7 +55,8 @@ type turn struct {
 func newSession(env harness.Env) *session {
 	return &session{env: env, cwd: env.Cwd, state: map[string]string{}, parents: map[string]string{},
 		tools: map[string]*harness.Item{}, asks: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
-		headers: map[string]string{}, files: map[string]bool{}}
+		headers: map[string]string{}, files: map[string]bool{},
+		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}}
 }
 
 func (s *session) Name() string { return MapperSession }

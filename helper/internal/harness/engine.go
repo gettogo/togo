@@ -193,3 +193,21 @@ type Log interface {
 	Before(session string, before int64, limit int) (items []Item, more bool)
 	Forget(session string)
 }
+
+// PlanWatcher is a mapper that can tell the engine it met a todo or plan
+// tool call it could read no rows from, a format it does not know. The
+// engine logs that once per session so a harness update that changed the
+// format shows up in the log, not as a plan that silently never appears.
+type PlanWatcher interface {
+	PlanUnrecognised() bool
+}
+
+// PlanMiss implements PlanWatcher. A mapper embeds it and calls
+// NoteUnrecognisedPlan when a todo call gave no rows.
+type PlanMiss struct{ missed bool }
+
+// NoteUnrecognisedPlan records an unreadable todo or plan call.
+func (p *PlanMiss) NoteUnrecognisedPlan() { p.missed = true }
+
+// PlanUnrecognised reports whether such a call was seen.
+func (p *PlanMiss) PlanUnrecognised() bool { return p.missed }
