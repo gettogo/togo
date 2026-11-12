@@ -26,12 +26,55 @@ type claimWatch struct {
 	files   int
 }
 
-// watchGlobExclusive is watchGlob for a folder several sessions share.
-// The session's own file (written since it started) is taken at once,
-// as before; a file another session already follows is never joined; a
-// new file goes to the session that started first among those still
-// without a file, and only when every session has one may one that has a
-// file take it (a /new or a resume in that session).
+// maxHeldCandidates bounds the files asked about when a session has none.
+const maxHeldCandidates = 20
+
+// verdict is what the process evidence says about a candidate file.
+type verdict int
+
+const (
+	unknown verdict = iota // nobody holds it, or attribution is unavailable
+	mine                   // a process of the session's own tree holds it
+	foreign                // held by processes outside the tree, or the tree is unknown
+)
+
+// attribute sorts candidate paths by who holds them open. Without a Procs
+// every path is unknown.
+func attribute(ctx context.Context, env harness.Env, paths []string) map[string]verdict {
+	out := map[string]verdict{}
+	if env.Procs == nil || len(paths) == 0 {
+		return out
+	}
+	held, err := env.Procs.Holders(ctx, paths)
+	if err != nil || len(held) == 0 {
+		return out
+	}
+	own := map[int]bool{}
+	for _, p := range env.Procs.Tree(ctx) {
+		own[p] = true
+	}
+	for path, pids := range held {
+		out[path] = foreign
+		for _, p := range pids {
+			if own[p] {
+				out[path] = mine
+				break
+			}
+		}
+	}
+	return out
+}
+
+// watchGlobExclusive is watchGlob for a folder several sessions share,
+// and with agents the user started outside Togo. A session follows only
+// what its own agent process writes:
+//
+//   - A file held open by the session's process tree is taken; a /new or
+//     a resume moves the session there and the previous file is dropped.
+//   - A file held by any other process is never taken.
+//   - A file nobody holds is no evidence. A session with no file yet takes
+//     its own (written since it started) as before; one that has a file
+//     keeps it and never switches to the newest.
 func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
 	started := time.Now()
 	created, err := time.Parse(time.RFC3339, env.Vars["created"])
@@ -60,22 +103,55 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 	var lastGlob time.Time
 	every := globEvery
 	return pollLoop(ctx, func() error {
-		if time.Since(lastGlob) >= every || len(tails) == 0 {
+		// Asking who holds files costs a process listing, so with a process
+		// view the look-around is paced even while the session has no file.
+		if time.Since(lastGlob) >= every || (len(tails) == 0 && env.Procs == nil) {
 			lastGlob = time.Now()
 			ms, err := globConfined(pattern, env)
 			if err != nil {
 				return err
 			}
+			type cand struct {
+				m        match
+				eligible bool // may be taken without process evidence
+			}
+			var cands []cand
+			var paths []string
 			for i, m := range ms {
 				if _, ok := tails[m.path]; ok {
 					continue
 				}
-				own := i == 0 && len(tails) == 0 && !m.mtime.Before(created)
-				if !own && !m.mtime.After(started) {
-					continue
+				// With no file yet, an agent that was already writing before
+				// the watch began (a helper restart) is found by who holds it.
+				known := env.Procs != nil && len(tails) == 0 && i < maxHeldCandidates
+				eligible := (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started)
+				if known || eligible {
+					cands = append(cands, cand{m, eligible})
+					paths = append(paths, m.path)
 				}
-				if claim(pattern, id, m.path, len(tails) == 0) {
+			}
+			verdicts := attribute(ctx, env, paths)
+			for _, c := range cands {
+				m := c.m
+				switch verdicts[m.path] {
+				case foreign:
+					continue
+				case mine:
+					if !claimOwn(pattern, id, m.path) {
+						continue
+					}
+					for p := range tails {
+						releaseClaim(id, p)
+						delete(tails, p)
+					}
 					tails[m.path] = &tail{path: m.path, name: name, replay: true}
+				default:
+					if len(tails) > 0 || !c.eligible {
+						continue
+					}
+					if claim(pattern, id, m.path, true) {
+						tails[m.path] = &tail{path: m.path, name: name, replay: true}
+					}
 				}
 			}
 		}
@@ -86,6 +162,30 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 		}
 		return nil
 	})
+}
+
+// claimOwn records that session id follows path on the strength of its
+// own process holding it. It fails only if another session already does.
+func claimOwn(pattern, id, path string) bool {
+	claims.Lock()
+	defer claims.Unlock()
+	if o, ok := claims.owner[path]; ok && o != id {
+		return false
+	}
+	if _, ok := claims.owner[path]; !ok {
+		claims.owner[path] = id
+		claims.watchers[pattern][id].files++
+	}
+	return true
+}
+
+// releaseClaim lets go of a file the session stopped following.
+func releaseClaim(id, path string) {
+	claims.Lock()
+	defer claims.Unlock()
+	if claims.owner[path] == id {
+		delete(claims.owner, path)
+	}
 }
 
 // claim gives path to session id if nobody follows it and no session

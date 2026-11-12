@@ -88,6 +88,22 @@ type Env struct {
 	// helper runs for the session get on top of its own: the agent reads
 	// its API keys from there. Nil keeps the helper's environment.
 	Environ []string
+	// Procs says which processes are the session's agent and which files
+	// they hold open, so a source follows only what its own agent writes.
+	// Nil means attribution is unavailable.
+	Procs Procs
+}
+
+// Procs attributes files to the session's own agent process. A source that
+// shares a folder with agents the user started elsewhere (OMP, Pi, Kimi)
+// must not follow their conversations.
+type Procs interface {
+	// Tree returns the pids of the session's pane process and everything
+	// below it; empty when they cannot be listed.
+	Tree(ctx context.Context) []int
+	// Holders returns, for each path, the pids that have it open. A path
+	// nobody holds is absent.
+	Holders(ctx context.Context, paths []string) (map[string][]int, error)
 }
 
 // SourceSpec is the part of an adapter's source declaration a runner
