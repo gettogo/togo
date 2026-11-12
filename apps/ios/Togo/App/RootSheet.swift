@@ -110,9 +110,11 @@ extension AddMachineFlow {
     static func editing(
         _ record: HostRecord, store: AppStore, services: any OnboardingServices, tutorial: TutorialModel?
     ) -> AddMachineFlow {
-        stored(record, services: services, tutorial: tutorial, save: { try await store.services.saveHost($0) }) {
+        let flow = stored(record, services: services, tutorial: tutorial, save: { try await store.services.saveHost($0) }) {
             store.sheet = nil
         }
+        flow.originalDraft = flow.draft
+        return flow
     }
 
     /// Setting up a machine that came from another device: straight to connecting with this

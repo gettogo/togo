@@ -164,6 +164,12 @@ enum ConnectPhase: Equatable, Sendable {
     /// The draft is a saved machine, not a new one.
     var isEditing: Bool { draft.machineID != nil }
 
+    /// The saved machine as the form opened, for telling whether anything was changed.
+    var originalDraft: MachineDraft?
+
+    /// Whether there is anything to save: always for a new machine, only after an edit for a saved one.
+    var hasChanges: Bool { originalDraft.map { $0 != draft } ?? true }
+
     /// A connection or save is running without a screen of its own, so the form shows progress.
     var isWorking: Bool { (attempt > 0 && phase == .connecting) || saving }
 

@@ -208,6 +208,22 @@ struct AddMachineFlowTests {
         #expect(flow.keepsNoHelper && flow.isEditing)
     }
 
+    /// A saved machine has nothing to save until a field changes, so ✓ and ✕ never do the same thing.
+    @Test func editingHasNothingToSaveUntilAFieldChanges() {
+        let id = UUID()
+        let record = HostRecord(
+            id: id,
+            profile: HostProfile(id: id, name: "Studio", endpoint: HostEndpoint(host: "studio.local", user: "sam"), auth: .password),
+            symbol: "desktop"
+        )
+        let flow = AddMachineFlow.editing(record, store: AppStore(services: FakeAppServices()), services: FakeOnboardingServices(), tutorial: nil)
+        #expect(!flow.hasChanges)
+        flow.draft.name = "Studio Mac"
+        #expect(flow.hasChanges)
+        flow.draft.name = "Studio"
+        #expect(!flow.hasChanges, "changing a field back leaves nothing to save")
+    }
+
     /// Check again on the helper screen saves and closes once the helper is found.
     @Test func retryThatFindsTheHelperSaves() async {
         let saved = SavedRecords()

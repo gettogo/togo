@@ -12,6 +12,8 @@ struct MachineForm: View {
     var isEditing = false
     /// The connection is being tested, so the checkmark shows progress.
     var isWorking = false
+    /// False while editing a saved machine with no changes, so ✓ and ✕ never do the same thing.
+    var canSave = true
     let onConnect: () -> Void
 
     @FocusState private var focus: MachineDraft.Field?
@@ -136,6 +138,8 @@ struct MachineForm: View {
                         onConnect()
                         revealFirstError(proxy)
                     }
+                    // A saved machine with nothing changed has nothing to save; ✕ closes it.
+                    .disabled(!canSave)
                 }
             }
         }

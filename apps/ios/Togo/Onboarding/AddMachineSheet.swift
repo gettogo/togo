@@ -5,6 +5,7 @@ import TogoKit
 struct AddMachineSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var flow: AddMachineFlow
+    @State private var confirmingDiscard = false
 
     init(flow: AddMachineFlow) {
         _flow = State(initialValue: flow)
@@ -62,13 +63,23 @@ struct AddMachineSheet: View {
         MachineForm(
             draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
             onImportKey: { text, label, source in Task { await flow.importKey(text, label: label, source: source) } },
-            isEditing: flow.isEditing, isWorking: flow.isWorking, onConnect: flow.connect
+            isEditing: flow.isEditing, isWorking: flow.isWorking, canSave: flow.hasChanges, onConnect: flow.connect
         )
     }
 
     private var cancel: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) { dismiss() }
+            Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), systemImage: "xmark", role: .cancel) {
+                // Edits to a saved machine are not thrown away without asking.
+                if flow.isEditing, flow.hasChanges { confirmingDiscard = true } else { dismiss() }
+            }
+            .confirmationDialog(
+                String(localized: "onboard.discard.title", defaultValue: "Discard your changes?"),
+                isPresented: $confirmingDiscard, titleVisibility: .visible
+            ) {
+                Button(String(localized: "onboard.discard.confirm", defaultValue: "Discard changes"), role: .destructive) { dismiss() }
+                Button(String(localized: "onboard.discard.keep", defaultValue: "Keep editing"), role: .cancel) {}
+            }
         }
     }
 }
