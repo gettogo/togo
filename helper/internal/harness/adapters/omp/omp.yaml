@@ -26,8 +26,10 @@ feeds:
     jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true, exclusive: true }
     mapper: omp.session
     stability: documented
-  subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl
-    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*/*.jsonl', follow: true }
+  subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl. Only this
+    # session's folder (<stamp>_<id>): the feed waits for the session's id, so
+    # another omp's subagents in the same folder are never read.
+    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*_{{.state.harness_session}}/*.jsonl', follow: true }
     mapper: omp.session
     stability: internal
   config:           # model roles for the picker's role chips
