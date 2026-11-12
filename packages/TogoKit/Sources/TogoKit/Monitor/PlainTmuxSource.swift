@@ -251,8 +251,10 @@ actor PlainTmuxLink {
     private func lookForHelper(on dialed: PlainTmuxDial) async {
         guard let helperFound,
               let result = try? await dialed.run(HelperProbe.command), result.status == 0 else { return }
+        // Any helper counts, even an old one: the helper connection then reports its version,
+        // so an outdated helper can be updated rather than hidden behind "no helper".
         let report = HelperProbe.parse(String(decoding: result.stdout, as: UTF8.self))
-        if case .present = report.helper, let path = report.path { helperFound(path) }
+        if report.helper != .missing, let path = report.path { helperFound(path) }
     }
 
     func snapshot() async throws -> EventSnapshot {

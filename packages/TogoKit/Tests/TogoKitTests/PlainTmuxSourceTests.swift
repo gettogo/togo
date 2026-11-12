@@ -197,6 +197,17 @@ struct PlainTmuxSourceTests {
         #expect(host.commands.filter { $0.contains("togo.path") }.count == 1, "probed once per connection")
     }
 
+    @Test func reportsAnOldHelperToo() async throws {
+        let found = Mutex<[String]>([])
+        let host = FakeHost { command in
+            command.contains("togo.path") ? ("togo.path=/Users/sam/.togo/bin/togo\ntogo.version=\n", 0) : ("/usr/bin/tmux", 0)
+        }
+        let source = host.source(helperFound: { path in found.withLock { $0.append(path) } })
+        _ = try await source.open()
+
+        #expect(found.withLock { $0 } == ["/Users/sam/.togo/bin/togo"])
+    }
+
     @Test func staysQuietWhileTheHelperIsStillMissing() async throws {
         let found = Mutex<[String]>([])
         let host = FakeHost { command in
