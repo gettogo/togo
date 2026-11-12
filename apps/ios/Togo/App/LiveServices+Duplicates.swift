@@ -80,6 +80,19 @@ extension LiveServices {
         try? await saveHost(current)
     }
 
+    /// A machine saved without the helper turned out to have one. The record is saved with its
+    /// path, which restarts the machine's watch on the helper connection.
+    func helperFound(_ id: HostID, path: String) async {
+        guard var current = await hostStore.hosts().first(where: { $0.id == id }), current.noHelper else { return }
+        current.noHelper = false
+        current.helperPath = path
+        do {
+            try await saveHost(current)
+        } catch {
+            Self.duplicatesLog.error("Could not save the helper found on a machine: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// Records gone from `stored` that live on in a record still there, by the id they went
     /// into, after handing what this device keeps for each to that record. Those were merged,
     /// not removed: their machine keeps this device's key and pairing.
