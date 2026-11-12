@@ -212,12 +212,8 @@ extension XCTestCase {
         XCTAssertTrue(user.waitForExistence(timeout: 5), "The form has no User field")
         user.tap()
         user.typeText("sam")
-        app.buttons["Connect"].tap()
-
-        let save = app.buttons["Save"]
-        XCTAssertTrue(save.waitForExistence(timeout: 5), "Connecting never offers Save")
-        audit(app, glass: ["Cancel"])
-        save.tap()
+        // The checkmark tests the connection in place and saves; no second screen asks first.
+        app.buttons["Add"].tap()
 
         // Notifications are offered after the save; the system alert only follows "Turn on".
         let notNow = app.buttons["Not now"]

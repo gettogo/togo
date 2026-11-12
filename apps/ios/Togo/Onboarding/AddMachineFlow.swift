@@ -108,6 +108,9 @@ enum ConnectPhase: Equatable, Sendable {
     /// Editing or importing a machine opens on the form as the first screen, so Back never
     /// lands on a search for machines nobody asked for.
     var startsOnForm = false
+    /// The machine being edited was saved without the helper, so a missing helper is not
+    /// asked about again.
+    var keepsNoHelper = false
     var hosts: [DiscoveredHost] = []
     var discovery: DiscoveryPhase = .searching
     var draft = MachineDraft()
@@ -157,6 +160,12 @@ enum ConnectPhase: Equatable, Sendable {
         self.save = add
         self.finish = finish
     }
+
+    /// The draft is a saved machine, not a new one.
+    var isEditing: Bool { draft.machineID != nil }
+
+    /// A connection or save is running without a screen of its own, so the form shows progress.
+    var isWorking: Bool { (attempt > 0 && phase == .connecting) || saving }
 
     var machineName: String {
         draft.trimmedName.isEmpty ? String(localized: "onboard.machine.fallbackName", defaultValue: "the machine") : draft.trimmedName
@@ -237,13 +246,17 @@ enum ConnectPhase: Equatable, Sendable {
 
     // MARK: Connecting
 
-    /// Shows field errors in place when the form is not ready; otherwise moves to the
-    /// connection step, which starts the attempt.
+    /// Shows field errors in place when the form is not ready; otherwise starts the attempt
+    /// where it is. The connection step is pushed only when the attempt needs a decision.
     func connect() {
         showsErrors = true
-        guard draft.isValid else { return }
-        if path.last != .connect { path.append(.connect) }
+        guard draft.isValid, !isWorking else { return }
         retry()
+    }
+
+    /// Pushes the connection step when the attempt needs the user.
+    private func showConnect() {
+        if !path.contains(.connect) { path.append(.connect) }
     }
 
     func retry() {
@@ -257,8 +270,8 @@ enum ConnectPhase: Equatable, Sendable {
         retry()
     }
 
-    /// Runs one attempt. The connection step calls it from a task tied to `attempt`, so
-    /// leaving the step cancels it.
+    /// Runs one attempt. The sheet calls it from a task tied to `attempt`, so leaving the
+    /// sheet cancels it. A machine that connects with a usable helper is saved here.
     func runAttempt() async {
         phase = .connecting
         var deviceKey: KeyInfo?
@@ -283,10 +296,13 @@ enum ConnectPhase: Equatable, Sendable {
             await self?.askTrust(prompt) ?? false
         }
         guard !Task.isCancelled else { return }
+        var needsScreen = true
         switch outcome {
         case .ready(let report):
+            needsScreen = false
             phase = .helper(report)
             onDetected(SetupDetection(keyAccepted: draft.auth != .password, report: report))
+            await settle(report)
         case .hostKeyChanged(let change):
             phase = .hostKeyChanged(change)
         case .needsAnswer(let request):
@@ -301,11 +317,25 @@ enum ConnectPhase: Equatable, Sendable {
                 ))
             }
         case .cancelled:
+            needsScreen = false
             if path.last == .connect { path.removeLast() }
         case .unreachable:
             phase = .unreachable
         case .failed(let message):
             phase = .failed(message)
+        }
+        if needsScreen { showConnect() }
+    }
+
+    /// A machine with a usable helper is saved at once. Without one, the user decides on the
+    /// helper screen, unless the machine was already saved without it.
+    private func settle(_ report: HelperReport) async {
+        if case .missing = report.helper {
+            if keepsNoHelper { await save(withHelper: false) } else { showConnect() }
+        } else if report.tmuxSupported {
+            await save(withHelper: true)
+        } else {
+            showConnect()
         }
     }
 
@@ -335,6 +365,7 @@ enum ConnectPhase: Equatable, Sendable {
     private func askTrust(_ prompt: HostKeyPrompt) async -> Bool {
         pendingTrust?.resume(returning: false)
         phase = .hostKeyNew(prompt)
+        showConnect()
         return await withCheckedContinuation { pendingTrust = $0 }
     }
 
@@ -383,6 +414,7 @@ enum ConnectPhase: Equatable, Sendable {
             saveError = String(
                 localized: "onboard.save.failed", defaultValue: "Couldn't save \(machineName). Try again."
             )
+            showConnect()
             return
         }
         // Only a helper sends notifications, so only a machine saved with one is a reason to ask.

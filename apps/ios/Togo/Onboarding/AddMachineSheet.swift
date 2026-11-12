@@ -24,7 +24,6 @@ struct AddMachineSheet: View {
                         .toolbar { cancel }
                 case .connect:
                     ConnectStep(flow: flow)
-                        .task(id: flow.attempt) { await flow.runAttempt() }
                         .toolbar { cancel }
                 case .notifications:
                     NotificationAskView(
@@ -37,6 +36,11 @@ struct AddMachineSheet: View {
         }
         .task {
             if !flow.startsOnForm { await flow.discover() }
+        }
+        // The attempt runs whether or not the connection step is on screen. Attempt 0 is
+        // nothing asked for yet.
+        .task(id: flow.attempt) {
+            if flow.attempt > 0 { await flow.runAttempt() }
         }
         .interactiveDismissDisabled(flow.startsOnForm || !flow.path.isEmpty)
         .onDisappear { flow.cancel() }
@@ -58,7 +62,7 @@ struct AddMachineSheet: View {
         MachineForm(
             draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
             onImportKey: { text, label, source in Task { await flow.importKey(text, label: label, source: source) } },
-            onConnect: flow.connect
+            isEditing: flow.isEditing, isWorking: flow.isWorking, onConnect: flow.connect
         )
     }
 
@@ -86,7 +90,18 @@ extension AddMachineFlow {
         let flow = AddMachineFlow(
             services: services,
             add: { try await store.services.addHost($0) },
-            finish: { _ in store.sheet = nil }
+            finish: { record in
+                store.sheet = nil
+                if !record.noHelper {
+                    store.notice = Notice(
+                        text: String(
+                            localized: "onboard.added.notice",
+                            defaultValue: "\(record.profile.name) added. Set up its agents in Settings › Agents."
+                        ),
+                        isError: false
+                    )
+                }
+            }
         )
         flow.alreadyAdded = { store.alreadyAdded($0) }
         return flow

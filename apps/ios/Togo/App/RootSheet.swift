@@ -129,6 +129,7 @@ extension AddMachineFlow {
         flow.draft.importedKey = nil
         flow.notificationAsk = .asking(store.services)
         flow.path = [.connect]
+        flow.retry()
         return flow
     }
 
@@ -166,6 +167,7 @@ extension AddMachineFlow {
         if let tutorial { flow.onDetected = { tutorial.record($0) } }
         flow.draft = draft
         flow.startsOnForm = true
+        flow.keepsNoHelper = record.noHelper
         return flow
     }
 }

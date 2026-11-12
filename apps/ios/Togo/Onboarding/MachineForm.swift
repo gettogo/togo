@@ -9,6 +9,9 @@ struct MachineForm: View {
     let showsErrors: Bool
     let importError: String?
     let onImportKey: (_ text: String, _ label: String, _ source: KeyImportSource) -> Void
+    var isEditing = false
+    /// The connection is being tested, so the checkmark shows progress.
+    var isWorking = false
     let onConnect: () -> Void
 
     @FocusState private var focus: MachineDraft.Field?
@@ -121,9 +124,18 @@ struct MachineForm: View {
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(String(localized: "onboard.form.connect", defaultValue: "Connect"), systemImage: "checkmark", role: .confirm) {
-                    onConnect()
-                    revealFirstError(proxy)
+                if isWorking {
+                    ProgressView()
+                } else {
+                    Button(
+                        isEditing
+                            ? String(localized: "onboard.form.save", defaultValue: "Save")
+                            : String(localized: "onboard.form.add", defaultValue: "Add"),
+                        systemImage: "checkmark", role: .confirm
+                    ) {
+                        onConnect()
+                        revealFirstError(proxy)
+                    }
                 }
             }
         }
