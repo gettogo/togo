@@ -388,3 +388,34 @@ func TestExclusiveRemembersWhatItFollows(t *testing.T) {
 		t.Fatalf("remembered %q, want %q", got, f)
 	}
 }
+
+// (f) A pattern naming one file (the agent said which file the session
+// uses) is followed from its start, even an old file nobody holds and
+// with a newer one beside it.
+func TestExclusiveNamedFileIsFollowed(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID = "s_named00001"
+	env.Vars["created"] = time.Now().UTC().Format(time.RFC3339)
+	env.Procs = &fakeProcs{tree: []int{100}}
+	named, newer := filepath.Join(h, "old.jsonl"), filepath.Join(h, "newer.jsonl")
+	writeLine(t, named, `{"f":"resumed1"}`)
+	past := time.Now().Add(-24 * time.Hour)
+	if err := os.Chtimes(named, past, past); err != nil {
+		t.Fatal(err)
+	}
+	writeLine(t, newer, `{"f":"other"}`)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	spec := sspec("t", map[string]any{"glob": "~/old.jsonl", "follow": true, "exclusive": true})
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, spec, env, c.emit) }()
+	got := c.wait(t, 1)
+	writeLine(t, named, `{"f":"resumed2"}`)
+	c.wait(t, 2)
+	time.Sleep(100 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.recs) != 2 || got[0] != `{"f":"resumed1"}` || c.recs[1] != `{"f":"resumed2"}` {
+		t.Fatalf("named file not followed: %v", c.recs)
+	}
+}

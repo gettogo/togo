@@ -25,6 +25,8 @@ type session struct {
 	mu        sync.Mutex
 	state     map[string]string
 	dirAt     time.Time
+	crumbAt   time.Time         // when the terminal record was last read
+	crumb     string            // the session file omp's terminal record names
 	parents   map[string]string // entry id -> agent item id ("" for the main session)
 	cur       string            // parent of the file read last
 	turn      *turn
@@ -72,9 +74,26 @@ func (s *session) State() map[string]string {
 			s.state["session_dir"] = d
 		}
 	}
-	out := make(map[string]string, len(s.state)+2)
+	if time.Since(s.crumbAt) >= time.Second {
+		s.crumbAt = time.Now()
+		s.crumb = terminalSession(s.env)
+	}
+	out := make(map[string]string, len(s.state)+4)
 	for k, v := range s.state {
 		out[k] = v
+	}
+	// The feeds' files, under ~/.omp/agent/sessions: the one omp's terminal
+	// record names, else the folder's (claimed by process evidence), with
+	// subagents only from this session's own folder.
+	switch {
+	case s.crumb != "":
+		out["session_rel"] = s.crumb
+		out["subagent_rel"] = strings.TrimSuffix(s.crumb, ".jsonl") + "/*.jsonl"
+	case s.state["session_dir"] != "":
+		out["session_rel"] = s.state["session_dir"] + "/*.jsonl"
+		if hs := s.state["harness_session"]; hs != "" {
+			out["subagent_rel"] = s.state["session_dir"] + "/*_" + hs + "/*.jsonl"
+		}
 	}
 	if s.turn != nil {
 		out["turn"] = s.turn.item.ID

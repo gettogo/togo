@@ -15,6 +15,10 @@ import (
 // file is remembered under its run folder.
 const VarTogoHome = "togo_home"
 
+// VarTTY is the terminal device of the session's pane (/dev/ttys011), when
+// the helper knows it.
+const VarTTY = "tty"
+
 // followFile is where a session's followed file is remembered, "" when the
 // environment has no folder or the id is not a plain name.
 func followFile(env harness.Env) string {

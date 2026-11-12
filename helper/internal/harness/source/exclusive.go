@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,6 +80,9 @@ func Attribute(ctx context.Context, env harness.Env, paths []string) map[string]
 //     agent runs in the folder outside the session's tree (a /new by an
 //     agent that does not keep its file open); then it moves there.
 func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
+	if !strings.ContainsAny(pattern, "*?[") {
+		return followNamed(ctx, name, pattern, env, emit)
+	}
 	started := time.Now()
 	created, err := time.Parse(time.RFC3339, env.Vars["created"])
 	if err != nil {
@@ -317,4 +321,23 @@ func rank(path string, remembered bool, v map[string]Verdict) int {
 		return 1
 	}
 	return 2
+}
+
+// followNamed follows the one file an adapter named outright, because the
+// agent itself says which file the session uses (omp's terminal record):
+// no guessing among the folder's files. A file not written yet is waited
+// for.
+func followNamed(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
+	p, err := Confine(pattern, env)
+	if err != nil {
+		return err
+	}
+	saveFollow(env, p)
+	t := &tail{path: p, name: name, replay: true}
+	return pollLoop(ctx, func() error {
+		if err := t.poll(emit); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	})
 }
