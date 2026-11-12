@@ -54,6 +54,7 @@ struct MachineHelperView<Extra: View>: View {
 
         var body: some View {
             List {
+                HelperUpdateSection(machine: machine, name: name)
                 MachineNotifySection(name: name, supported: supportsNotify, model: model)
                 content
                 MachineIntegrationsSection(machine: machine)

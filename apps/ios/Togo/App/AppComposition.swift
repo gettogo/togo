@@ -18,6 +18,8 @@ import TogoMosh
     let tutorial: TutorialModel
     /// How features reach a machine's helper.
     let machineTools: any MachineTools
+    /// Which machines have a newer helper; asks over each machine's own connection.
+    private(set) var helperUpdates = HelperUpdates()
     /// Saved agent presets and the preset each folder last started with.
     let agentLibrary: AgentLibrary
     /// Nil under unit and UI tests and in a process without the app group.
@@ -178,6 +180,13 @@ import TogoMosh
             prompter: { [weak services] in services?.userPrompter($0) }
         )
         self.machineTools = machineTools
+        helperUpdates = HelperUpdates(
+            helperPath: { [weak services] in services?.hostRecord($0)?.helperPath },
+            run: { [weak services] id, command in
+                guard let record = await services?.hostRecord(id) else { throw LiveServiceError.unknownMachine }
+                return try await helpers.connection(for: record).run(command, timeout: .seconds(120))
+            }
+        )
         LinkCenter.shared.tunnel = LiveCallbackTunnel(
             helpers: helpers, records: { [weak services] in services?.hostRecord($0) }, review: review
         )
@@ -198,6 +207,7 @@ import TogoMosh
         LinkCenter.shared.awaitsCode = { [weak self] host, session in self?.pendingSecretRequest(host, session) != nil }
         services.onMachineRemoved = { [weak self] id in
             self?.forgetMachine(id)
+            self?.helperUpdates.forget(id)
             Task { await signedIn.discard(id) }
         }
         // A connection signed in with the old address or credentials must not serve the new ones.

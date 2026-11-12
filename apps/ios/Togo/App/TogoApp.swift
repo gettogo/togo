@@ -48,6 +48,7 @@ struct TogoApp: App {
                 // In a window of its own above the workspace cover, sheets and alerts.
                 .sceneShield(lock: resumeLock)
                 .environment(\.machineTools, composition.machineTools)
+                .environment(\.helperUpdates, composition.helperUpdates)
                 .environment(\.agentLibrary, composition.agentLibrary)
                 .environment(\.hardwareKeyboard, keyboard)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
