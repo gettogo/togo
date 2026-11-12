@@ -77,7 +77,7 @@ public enum HelperUpdate {
     public static func brewCheckCommand(helperPath: String?) -> String {
         brewScript(
             helperPath: helperPath,
-            steps: #""$b" update --quiet >/dev/null 2>&1; exec "$b" outdated --json=v2 togo"#)
+            steps: #""$b" update --quiet >/dev/null 2>&1; exec "$b" outdated --json=v2 gettogo/tap/togo"#)
     }
 
     /// The exec command that upgrades `togo` with Homebrew, asks the daemon to restart once idle,
@@ -85,7 +85,7 @@ public enum HelperUpdate {
     public static func brewUpgradeCommand(helperPath: String?) -> String {
         brewScript(
             helperPath: helperPath,
-            steps: #""$b" upgrade togo || exit $?; p=$("$b" --prefix) || exit $?; "#
+            steps: #""$b" upgrade gettogo/tap/togo || exit $?; p=$("$b" --prefix) || exit $?; "#
                 + #""$p/bin/togo" daemon restart --when-idle >/dev/null 2>&1; "$p/bin/togo" version; exit 0"#,
             extraEnvironment: ["HOMEBREW_NO_INSTALL_CLEANUP=1"])
     }
