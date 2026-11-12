@@ -155,7 +155,7 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 	cwd := source.Expand(info.Cwd, home)
 	env := harness.Env{SessionID: info.ID, Agent: info.Agent, Cwd: cwd, Argv: info.Command, Vars: map[string]string{
 		source.VarHome: home, "cwd": cwd, "cwd_key": CwdKey(cwd), "session": info.ID,
-		"created": info.CreatedAt.UTC().Format(time.RFC3339),
+		"created":          info.CreatedAt.UTC().Format(time.RFC3339),
 		source.VarTogoHome: e.cfg.TogoHome,
 	}}
 	if argv, ok := e.relaunchedArgv(info.ID); ok {
