@@ -5,6 +5,7 @@ import TogoKit
 /// then one line per session and the sessions a restart ended.
 struct RosterSection: View {
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.helperUpdates) private var helperUpdates
     let group: RosterModel.Group
     /// The first machine: its heading sits close under the filter row.
     var first = false
@@ -26,12 +27,19 @@ struct RosterSection: View {
 
     private var machine: MachineSection { group.machine }
 
+    private var checksHelper: Bool {
+        if case .present = machine.helper, machine.reachability == .online { return true }
+        return false
+    }
+
     var body: some View {
         // The heading is the section's first row, not its header: a plain list puts a padding of
         // its own above every section header, which SwiftUI cannot remove and which opened a
         // gap under the filter row (roster.md). As a row its spacing is the rows' insets.
         Section {
             headingRow
+                // On connecting: the machine is asked for a newer helper at most once a day.
+                .task(id: checksHelper) { if checksHelper { await helperUpdates?.checkIfDue(machine.id) } }
             status
             ForEach(group.lines) { line in
                 sessionLine(line)
@@ -173,6 +181,13 @@ struct RosterSection: View {
             case .newer:
                 quiet(ControlCenterCopy.helperNewer(machine.name))
             case .present, .outdated, .checking:
+                if case .present(let version, _) = machine.helper, helperUpdates?.available(machine.id, current: version) != nil {
+                    // Short on purpose: the machine's name is in the heading above, and may be long.
+                    MachineMessage(ControlCenterCopy.updateAvailable, action: ControlCenterCopy.details) {
+                        perform(.edit(machine.id))
+                    }
+                    .accessibilityLabel(ControlCenterCopy.updateAvailableFor(machine.name))
+                }
                 if case .outdated(let found) = machine.helper {
                     MachineMessage(ControlCenterCopy.helperOutdated(found), action: ControlCenterCopy.update) {
                         perform(.installHelper(machine.id))
