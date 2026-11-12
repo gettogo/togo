@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/procs"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/session"
 )
@@ -162,6 +163,10 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 		env.Endpoint = ep.url()
 		env.Auth = ep.auth()
 		env.Vars["port"], env.Vars["socket"] = strconv.Itoa(ep.port), ep.socket
+	}
+	if e.cfg.PanePIDs != nil {
+		id := info.ID
+		env.Procs = procs.Session{Panes: func(ctx context.Context) ([]int, error) { return e.cfg.PanePIDs(ctx, id) }}
 	}
 	if e.cfg.LoginPath != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
