@@ -147,15 +147,26 @@ func (m *missionState) computeSummary() harness.Summary {
 		s.Background = countRunning(sec.Rows)
 	}
 	if sec := m.section(harness.SectionPlan); sec != nil && len(sec.Rows) > 0 {
-		p := harness.Progress{Total: len(sec.Rows)}
-		for _, r := range sec.Rows {
-			if r.State == harness.RowDone || r.State == harness.RowSkipped {
-				p.Done++
-			}
-		}
+		p := harness.Progress{}
+		countTasks(sec.Rows, &p)
 		s.Plan = &p
 	}
 	return s
+}
+
+// countTasks adds the leaf rows to p: a row with children is a group (an
+// OMP phase), and its tasks are what the plan counts.
+func countTasks(rows []harness.Row, p *harness.Progress) {
+	for _, r := range rows {
+		if len(r.Children) > 0 {
+			countTasks(r.Children, p)
+			continue
+		}
+		p.Total++
+		if r.State == harness.RowDone || r.State == harness.RowSkipped {
+			p.Done++
+		}
+	}
 }
 
 func countRunning(rows []harness.Row) int {
