@@ -462,33 +462,24 @@ private struct MachineMessage: View {
     }
 }
 
-/// A machine's helper update, done in place: the note offers Update (or the brew command for a
-/// Homebrew install), shows the update running, then its result for a moment before leaving.
+/// A machine's helper update, done in place: the note offers Update, shows the update running,
+/// then its result for a moment before leaving.
 private struct HelperUpdateLine: View {
     let machine: HostID
     let name: String
     let current: String
     let updates: HelperUpdates
-    @State private var copied = false
 
     var body: some View {
         let phase = updates.phase(machine)
         switch phase {
         case .idle:
             if updates.available(machine, current: current) != nil {
-                if updates.isHomebrew(machine) {
-                    MachineMessage(HelperUpdateCopy.available, action: copied ? HelperUpdateCopy.copiedBrew : HelperUpdateCopy.copyBrew) {
-                        UIPasteboard.general.string = HelperUpdate.brewCommand
-                        copied = true
-                    }
-                    .accessibilityHint(HelperUpdateCopy.brewHint)
-                } else {
-                    MachineMessage(HelperUpdateCopy.available, action: HelperUpdateCopy.update) {
-                        Task { await updates.update(machine) }
-                    }
-                    .accessibilityLabel(HelperUpdateCopy.availableOn(name))
-                    .accessibilityAction(named: HelperUpdateCopy.updateOn(name)) { Task { await updates.update(machine) } }
+                MachineMessage(HelperUpdateCopy.available, action: HelperUpdateCopy.update) {
+                    Task { await updates.update(machine) }
                 }
+                .accessibilityLabel(HelperUpdateCopy.availableOn(name))
+                .accessibilityAction(named: HelperUpdateCopy.updateOn(name)) { Task { await updates.update(machine) } }
             }
         case .updating:
             HStack(spacing: 12) {

@@ -119,4 +119,72 @@ import TogoKit
         ledger.record(.upToDate(installed: "v1.0.0"), for: id, at: now)
         #expect(ledger.machines[id]?.homebrew == false)
     }
+
+    @Test func brewPathComesFromTheCellar() {
+        #expect(HelperUpdate.brewPath(helperPath: "/opt/homebrew/Cellar/togo/1.0.1/bin/togo") == "/opt/homebrew/bin/brew")
+        #expect(HelperUpdate.brewPath(helperPath: "/home/linuxbrew/.linuxbrew/Cellar/togo/1.0.1/bin/togo") == "/home/linuxbrew/.linuxbrew/bin/brew")
+        #expect(HelperUpdate.brewPath(helperPath: "/opt/homebrew/bin/togo") == nil)
+        #expect(HelperUpdate.brewPath(helperPath: "/Cellar/togo/1.0.1/bin/togo") == nil)
+        #expect(HelperUpdate.brewPath(helperPath: nil) == nil)
+    }
+
+    @Test func brewCommandsUseTheCellarPrefixOrTheDefaults() {
+        let known = HelperUpdate.brewCheckCommand(helperPath: "/opt/homebrew/Cellar/togo/1.0.1/bin/togo")
+        #expect(known.hasPrefix("/bin/sh -c "))
+        #expect(known.contains("/opt/homebrew/bin/brew"))
+        #expect(!known.contains("/usr/local/bin/brew"))
+        #expect(known.contains("NONINTERACTIVE=1 HOMEBREW_NO_ENV_HINTS=1"))
+        #expect(known.contains("update --quiet"))
+        #expect(known.contains("outdated --json=v2 togo"))
+        let unknown = HelperUpdate.brewCheckCommand(helperPath: "/Users/a/.togo/bin/togo")
+        #expect(unknown.contains("/opt/homebrew/bin/brew") && unknown.contains("/usr/local/bin/brew"))
+        let upgrade = HelperUpdate.brewUpgradeCommand(helperPath: nil)
+        #expect(upgrade.contains("HOMEBREW_NO_INSTALL_CLEANUP=1"))
+        #expect(upgrade.contains("upgrade togo"))
+        #expect(upgrade.contains("daemon restart --when-idle"))
+        #expect(!upgrade.contains("\n"))
+    }
+
+    @Test func brewCommandsQuoteTheHelperPath() {
+        let hostile = HelperUpdate.brewUpgradeCommand(helperPath: "/tmp/x'; rm -rf ~; '/Cellar/togo/1/bin/togo")
+        #expect(!hostile.contains("x'; rm"))
+    }
+
+    @Test func readsBrewOutdated() {
+        let json = #"{"formulae":[{"name":"togo","installed_versions":["1.0.1"],"current_version":"1.0.2","pinned":false}],"casks":[]}"#
+        #expect(HelperUpdate.parseBrewOutdated(stdout: json) == .available(latest: "v1.0.2", installed: "v1.0.1"))
+        #expect(HelperUpdate.parseBrewOutdated(stdout: "Warning: x\n" + json) == .available(latest: "v1.0.2", installed: "v1.0.1"))
+        #expect(HelperUpdate.parseBrewOutdated(stdout: #"{"formulae":[],"casks":[]}"#) == .upToDate(installed: ""))
+        #expect(HelperUpdate.parseBrewOutdated(stdout: "") == nil)
+        #expect(HelperUpdate.parseBrewOutdated(stdout: "Error: no") == nil)
+    }
+
+    @Test func readsBrewUpgrade() {
+        let out = "==> Upgrading gettogo/tap/togo\n==> Summary\ntogo v1.0.2 (darwin/arm64)\n"
+        #expect(HelperUpdate.parseBrewUpgrade(stdout: out, stderr: "", status: 0) == .updated(version: "v1.0.2"))
+        #expect(HelperUpdate.parseBrewUpgrade(stdout: "done\n", stderr: "", status: 0) == .updated(version: nil))
+        #expect(
+            HelperUpdate.parseBrewUpgrade(stdout: "", stderr: "Error: boom\n", status: 1) == .failed("Error: boom"))
+        #expect(
+            HelperUpdate.parseBrewUpgrade(stdout: "", stderr: "togo: Homebrew was not found on this machine\n", status: 127)
+                == .failed("Homebrew was not found on this machine"))
+    }
+
+    @Test func aHelperThatUpdatesItselfWithHomebrewCountsAsUpdated() {
+        let out = "Installed togo v1.0.2 with Homebrew\n"
+        #expect(HelperUpdate.parseUpdate(stdout: out, stderr: "", status: 0) == .updated(version: "v1.0.2"))
+        #expect(!HelperUpdate.isHomebrewRefusal(stdout: out, stderr: ""))
+        #expect(HelperUpdate.isHomebrewRefusal(stdout: "", stderr: "togo: Installed with Homebrew: run brew upgrade togo"))
+    }
+
+    @Test func brewAnswersKeepTheHomebrewMark() {
+        let id = UUID(), now = Date(timeIntervalSince1970: 0)
+        var ledger = HelperUpdateLedger()
+        ledger.record(.upToDate(installed: "v1.0.1"), for: id, at: now)
+        ledger.record(.available(latest: "v1.0.2", installed: "v1.0.1"), for: id, at: now, viaHomebrew: true)
+        #expect(ledger.machines[id]?.homebrew == true)
+        ledger.record(.upToDate(installed: ""), for: id, at: now, viaHomebrew: true)
+        #expect(ledger.machines[id]?.installed == "v1.0.1")
+        #expect(ledger.available(for: id, current: "1.0.1") == nil)
+    }
 }

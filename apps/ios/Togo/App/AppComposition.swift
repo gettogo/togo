@@ -189,9 +189,9 @@ import TogoMosh
         self.machineTools = machineTools
         helperUpdates = HelperUpdates(
             helperPath: { [weak services] in services?.hostRecord($0)?.helperPath },
-            run: { [weak services] id, command in
+            run: { [weak services] id, command, timeout in
                 guard let record = await services?.hostRecord(id) else { throw LiveServiceError.unknownMachine }
-                return try await helpers.connection(for: record).run(command, timeout: .seconds(120))
+                return try await helpers.connection(for: record).run(command, timeout: timeout)
             }
         )
         LinkCenter.shared.tunnel = LiveCallbackTunnel(
@@ -276,7 +276,7 @@ import TogoMosh
             helperUpdates = HelperUpdates(
                 defaults: defaults,
                 helperPath: { _ in "/Users/sam/.togo/bin/togo" },
-                run: { _, command in
+                run: { _, command, _ in
                     if command.contains("--check") {
                         return (Data("togo v1.0.2 is available (installed: v1.0.1)\n".utf8), Data(), 0)
                     }

@@ -38,8 +38,11 @@ public struct HelperUpdateState: Codable, Sendable, Equatable {
 /// Checking a machine's helper for a newer release, and updating it, by running the helper's own
 /// `update` command on the machine. The machine contacts the release server; the phone never does.
 public enum HelperUpdate {
-    /// What to run on a machine installed with Homebrew.
-    public static let brewCommand = "brew upgrade togo"
+    /// How long a Homebrew step may take: `brew update` and `brew upgrade` fetch and build.
+    public static let brewTimeout = Duration.seconds(300)
+
+    /// Where Homebrew puts its binary when the helper's own path does not say, in order.
+    static let defaultBrewPaths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
 
     /// The exec command for `togo update --check`.
     public static func checkCommand(helperPath: String?) -> String {
@@ -61,6 +64,73 @@ public enum HelperUpdate {
                 + #"if [ -x "$t" ]; then exec "$t" "# + words + #"; fi; done; exec togo "# + words
         )
     }
+
+    /// The `brew` that owns a helper at `<prefix>/Cellar/togo/<version>/bin/togo`, else nil.
+    public static func brewPath(helperPath: String?) -> String? {
+        guard let helperPath, let range = helperPath.range(of: "/Cellar/togo/") else { return nil }
+        let prefix = helperPath[..<range.lowerBound]
+        return prefix.isEmpty ? nil : prefix + "/bin/brew"
+    }
+
+    /// The exec command that asks Homebrew whether `togo` is outdated, for a machine whose helper
+    /// refused `update --check`. Prints `brew outdated --json=v2 togo`; read it with `parseBrewOutdated`.
+    public static func brewCheckCommand(helperPath: String?) -> String {
+        brewScript(
+            helperPath: helperPath,
+            steps: #""$b" update --quiet >/dev/null 2>&1; exec "$b" outdated --json=v2 togo"#)
+    }
+
+    /// The exec command that upgrades `togo` with Homebrew, asks the daemon to restart once idle,
+    /// and prints the installed version last. Read it with `parseBrewUpgrade`.
+    public static func brewUpgradeCommand(helperPath: String?) -> String {
+        brewScript(
+            helperPath: helperPath,
+            steps: #""$b" upgrade togo || exit $?; p=$("$b" --prefix) || exit $?; "#
+                + #""$p/bin/togo" daemon restart --when-idle >/dev/null 2>&1; "$p/bin/togo" version; exit 0"#,
+            extraEnvironment: ["HOMEBREW_NO_INSTALL_CLEANUP=1"])
+    }
+
+    /// One `/bin/sh` script: finds the first `brew` that exists, then runs `steps` with `$b` set.
+    /// `steps` are fixed words; the only outside text, the helper path, goes through `shellQuote`.
+    private static func brewScript(helperPath: String?, steps: String, extraEnvironment: [String] = []) -> String {
+        let candidates = brewPath(helperPath: helperPath).map { [$0] } ?? defaultBrewPaths
+        let environment = (["NONINTERACTIVE=1", "HOMEBREW_NO_ENV_HINTS=1"] + extraEnvironment).joined(separator: " ")
+        return shellCommand(
+            "export \(environment); for b in \(shellQuote(candidates)); do if [ -x \"$b\" ]; then \(steps); fi; done; "
+                + #"echo "togo: Homebrew was not found on this machine" >&2; exit 127"#)
+    }
+
+    /// Reads `brew outdated --json=v2 togo`: an empty list means current. The up-to-date case has
+    /// no version to report, so its `installed` is empty. Nil for anything that is not that JSON.
+    public static func parseBrewOutdated(stdout: String) -> HelperUpdateCheck? {
+        struct Report: Decodable {
+            struct Formula: Decodable {
+                let installedVersions: [String]
+                let currentVersion: String
+            }
+            let formulae: [Formula]
+        }
+        guard let start = stdout.firstIndex(of: "{") else { return nil }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let report = try? decoder.decode(Report.self, from: Data(stdout[start...].utf8)) else { return nil }
+        guard let formula = report.formulae.first else { return .upToDate(installed: "") }
+        guard !formula.currentVersion.isEmpty else { return nil }
+        return .available(latest: withV(formula.currentVersion), installed: formula.installedVersions.last.map(withV) ?? "")
+    }
+
+    /// Reads the output of `brewUpgradeCommand`: the last `togo <version>` line is the version now installed.
+    public static func parseBrewUpgrade(stdout: String, stderr: String, status: Int32) -> HelperUpdateOutcome {
+        guard status == 0 else { return .failed(errorText(stderr: stderr, stdout: stdout, status: status)) }
+        var version: String?
+        for line in stdout.split(whereSeparator: \.isNewline) {
+            let words = line.split(separator: " ").map(String.init)
+            if words.count >= 2, words[0] == "togo", isVersion(words[1]) { version = words[1] }
+        }
+        return .updated(version: version)
+    }
+
+    private static func withV(_ version: String) -> String { version.hasPrefix("v") ? version : "v" + version }
 
     /// Whether a path is plainly inside a Homebrew prefix. A bare `/usr/local/bin/togo` could be
     /// either, so the helper's own refusal decides for that.
@@ -131,6 +201,11 @@ public enum HelperUpdate {
 
     // MARK: Parsing helpers
 
+    /// Whether the helper said Homebrew owns its updates (a helper before 1.0.2).
+    public static func isHomebrewRefusal(stdout: String, stderr: String) -> Bool {
+        isHomebrewRefusal(stderr) || isHomebrewRefusal(stdout)
+    }
+
     private static func isHomebrewRefusal(_ text: String) -> Bool {
         text.contains("Installed with Homebrew")
     }
@@ -167,18 +242,19 @@ public struct HelperUpdateLedger: Codable, Sendable, Equatable {
 
     /// Records a check. A check that could not be read keeps what was known and only moves the
     /// time, so it is tried again tomorrow.
-    public mutating func record(_ check: HelperUpdateCheck?, for id: UUID, at now: Date) {
+    /// `viaHomebrew` marks an answer the app got from Homebrew because the helper could not give one.
+    public mutating func record(_ check: HelperUpdateCheck?, for id: UUID, at now: Date, viaHomebrew: Bool = false) {
         var state = machines[id] ?? HelperUpdateState(checkedAt: now)
         state.checkedAt = now
         switch check {
         case .available(let latest, let installed):
             state.latest = latest
-            state.installed = installed
-            state.homebrew = false
+            if !installed.isEmpty { state.installed = installed }
+            state.homebrew = viaHomebrew
         case .upToDate(let installed):
             state.latest = nil
-            state.installed = installed
-            state.homebrew = false
+            if !installed.isEmpty { state.installed = installed }
+            state.homebrew = viaHomebrew
         case .homebrew:
             state.latest = nil
             state.homebrew = true
