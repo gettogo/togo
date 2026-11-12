@@ -4,6 +4,21 @@ The helper and the app are versioned separately. A newer helper always works wit
 
 ## Helper
 
+### 1.0.3
+
+**Fixed**
+
+- A session's chat could switch to a conversation of the same agent started outside Togo in the same folder, along with its working state and alerts. This affected OMP, Pi, Kimi, Goose, Crush, Vibe and Cline. Each session now follows only its own agent.
+- A Codex started outside Togo in the same folder could send its approvals and alerts to a Togo Codex session. They are now ignored.
+- OMP's todo list didn't show in the chat or mission control. It shows again, grouped by phase.
+- In OMP, /resume and /new in the terminal didn't move the chat to the new conversation. The chat now follows within a couple of seconds.
+- After the helper restarted, an open chat could show "Nothing said yet" until you left and came back. It now shows the whole conversation.
+
+**Changed**
+
+- A todo list the helper can't read shows as a tool step in the chat instead of disappearing.
+- In Goose and Crush, a conversation you start inside the agent shows in the chat once the session restarts. This keeps another Goose or Crush in the same folder out of the chat.
+
 ### 1.0.2
 
 **Changed**
