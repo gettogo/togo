@@ -19,7 +19,7 @@ func init() {
 	register("update", func(ctx context.Context, args []string, _ map[string]string, _ io.Reader, stdout, stderr io.Writer) int {
 		return runUpdate(ctx, args, stdout, stderr)
 	})
-	addUsage("  update [--check] [--version vX.Y.Z]           install the latest signed release")
+	addUsage("  update [--check] [--version vX.Y.Z]           install the latest signed release (runs brew upgrade for Homebrew installs)")
 }
 
 // updateSource is where releases come from: the pinned key and the
@@ -57,8 +57,9 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	if err != nil {
 		return fail(stderr, err)
 	}
-	if daemon.InCellar(exe) {
-		return fail(stderr, errors.New("Installed with Homebrew: run brew upgrade togo"))
+	brewPrefix, homebrew := daemon.CellarPrefix(exe)
+	if homebrew && !*check && (*want != "" || *allowDowngrade) {
+		return fail(stderr, errors.New("--version and --allow-downgrade are not supported for a Homebrew install"))
 	}
 	src, err := updateSource()
 	if err != nil {
@@ -86,6 +87,12 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		}
 		target = latest
 	}
+	if homebrew {
+		if err := brewUpgrade(ctx, brewPrefix, target, stdout); err != nil {
+			return fail(stderr, err)
+		}
+		return restartAfterUpdate(ctx, stdout, stderr)
+	}
 	if update.Compare(target, current) < 0 && !*allowDowngrade {
 		return fail(stderr, fmt.Errorf("%s is older than the installed %s; add --allow-downgrade to install it", target, current))
 	}
@@ -95,6 +102,10 @@ func runUpdate(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 	fmt.Fprintf(stdout, "Installed togo %s at %s (previous binary kept at %s)\n", target, exe, exe+update.PreviousSuffix)
 
+	return restartAfterUpdate(ctx, stdout, stderr)
+}
+
+func restartAfterUpdate(ctx context.Context, stdout, stderr io.Writer) int {
 	home, err := state.Home()
 	if err != nil {
 		return fail(stderr, err)
