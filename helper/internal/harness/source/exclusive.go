@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -114,9 +115,16 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 			if err != nil {
 				return err
 			}
+			// remembered is the file this session followed before a helper
+			// restart; it comes first.
+			remembered := ""
+			if len(tails) == 0 {
+				remembered = loadFollow(env)
+			}
 			type cand struct {
-				m        match
-				eligible bool // may be taken without process evidence
+				m       match
+				pick    bool // may be taken without process evidence
+				remembr bool
 			}
 			var cands []cand
 			var paths []string
@@ -124,20 +132,37 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 				if _, ok := tails[m.path]; ok {
 					continue
 				}
+				rem := m.path == remembered
+				var pick bool
+				if env.Procs == nil {
+					// No process view: the newest file written since the
+					// session began, or any file that changed since the watch.
+					pick = (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started)
+				} else {
+					// Created just after the session began, or new since the
+					// watch with no other agent of the kind to have made it
+					// (decided below).
+					pick = m.mtime.After(started) || (len(tails) == 0 && bornAfter(m.born, created))
+				}
 				// With no file yet, an agent that was already writing before
 				// the watch began (a helper restart) is found by who holds it.
 				known := env.Procs != nil && len(tails) == 0 && i < maxHeldCandidates
-				// Without a process view only the newest file may be the
-				// session's own; with one, foreign files are skipped below,
-				// so the newest file nobody else holds is.
-				first := i == 0 || env.Procs != nil
-				eligible := (first && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started)
-				if known || eligible {
-					cands = append(cands, cand{m, eligible})
+				if known || pick || rem {
+					cands = append(cands, cand{m, pick, rem})
 					paths = append(paths, m.path)
 				}
 			}
 			verdicts := Attribute(ctx, env, paths)
+			take := func(m match) {
+				for p := range tails {
+					releaseClaim(id, p)
+					delete(tails, p)
+					dropped[p] = true
+				}
+				delete(dropped, m.path)
+				tails[m.path] = &tail{path: m.path, name: name, replay: true}
+				saveFollow(env, m.path)
+			}
 			switched := false
 			var amb *bool
 			ambiguous := func() bool {
@@ -151,6 +176,19 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 				}
 				return *amb
 			}
+			// A file the session's own process holds wins; then the
+			// remembered one; then, for a session with no file, the unheld
+			// file born first after the session began.
+			sort.SliceStable(cands, func(i, j int) bool {
+				ri, rj := rank(cands[i].m.path, cands[i].remembr, verdicts), rank(cands[j].m.path, cands[j].remembr, verdicts)
+				if ri != rj {
+					return ri < rj
+				}
+				if len(tails) == 0 && !cands[i].m.born.Equal(cands[j].m.born) && !cands[i].m.born.IsZero() && !cands[j].m.born.IsZero() {
+					return cands[i].m.born.Before(cands[j].m.born)
+				}
+				return false
+			})
 			for _, c := range cands {
 				m := c.m
 				switch verdicts[m.path] {
@@ -160,36 +198,43 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 					if !claimOwn(pattern, id, m.path) {
 						continue
 					}
-					for p := range tails {
-						releaseClaim(id, p)
-						delete(tails, p)
-						dropped[p] = true
-					}
-					delete(dropped, m.path)
-					tails[m.path] = &tail{path: m.path, name: name, replay: true}
+					take(m)
+					switched = true
 				default:
-					if len(tails) > 0 {
+					switch {
+					case switched:
+						continue
+					case c.remembr && len(tails) == 0:
+						if claimOwn(pattern, id, m.path) {
+							take(m)
+							switched = true
+						}
+					case len(tails) > 0:
 						// Nobody holds the new file (an agent that appends
 						// and closes per entry, like Pi): it is this
 						// session's /new only if no other agent of the kind
 						// runs in the folder to have made it.
-						if switched || dropped[m.path] || !m.mtime.After(started) || ambiguous() || !claimOwn(pattern, id, m.path) {
+						if dropped[m.path] || !m.mtime.After(started) || ambiguous() || !claimOwn(pattern, id, m.path) {
 							continue
 						}
-						for p := range tails {
-							releaseClaim(id, p)
-							delete(tails, p)
-							dropped[p] = true
-						}
-						tails[m.path] = &tail{path: m.path, name: name, replay: true}
+						take(m)
 						switched = true
-						continue
-					}
-					if !c.eligible {
-						continue
-					}
-					if claim(pattern, id, m.path, true) {
-						tails[m.path] = &tail{path: m.path, name: name, replay: true}
+					case env.Procs == nil:
+						if c.pick && claim(pattern, id, m.path, true) {
+							tails[m.path] = &tail{path: m.path, name: name, replay: true}
+							saveFollow(env, m.path)
+						}
+					default:
+						// First file, nothing remembered: one created just
+						// after the session began is its own. A file that
+						// merely is newer qualifies only when no other agent
+						// of the kind runs in the folder.
+						inWindow := bornAfter(m.born, created)
+						if !c.pick || !(inWindow || (m.mtime.After(started) && !ambiguous())) || !claimOwn(pattern, id, m.path) {
+							continue
+						}
+						take(m)
+						switched = true
 					}
 				}
 			}
@@ -249,4 +294,27 @@ func claim(pattern, id, path string, empty bool) bool {
 	claims.owner[path] = id
 	me.files++
 	return true
+}
+
+// bornWindow is how soon after a session began its agent creates its file.
+const bornWindow = 2 * time.Minute
+
+// bornAfter reports whether a file was created within bornWindow after t
+// (a little before it, for clocks that lose the fraction of a second).
+func bornAfter(born, t time.Time) bool {
+	if born.IsZero() || t.IsZero() {
+		return false
+	}
+	return !born.Before(t.Add(-2*time.Second)) && born.Before(t.Add(bornWindow))
+}
+
+// rank orders candidates: held by the session's process, then remembered.
+func rank(path string, remembered bool, v map[string]Verdict) int {
+	switch {
+	case v[path] == Mine:
+		return 0
+	case remembered:
+		return 1
+	}
+	return 2
 }

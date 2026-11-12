@@ -176,7 +176,7 @@ func TestExclusiveKeepsFileWithoutEvidence(t *testing.T) {
 	env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
 	procs := &fakeProcs{tree: []int{100}, others: map[string]bool{env.Cwd: true}}
 	env.Procs = procs
-	first, other := filepath.Join(h, "first.jsonl"), filepath.Join(h, "other.jsonl")
+	first, other := filepath.Join(h, stamped(time.Now().Add(-55*time.Second), "first")), filepath.Join(h, "other.jsonl")
 	writeLine(t, first, `{"f":"first1"}`)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -193,16 +193,19 @@ func TestExclusiveKeepsFileWithoutEvidence(t *testing.T) {
 	}
 }
 
-// (e) After a helper restart, an idle session whose own file nobody holds
-// still finds it when a newer file in the folder belongs to a foreign
-// process: the newest file the session may claim is its own, not none.
+// (e) After a helper restart with nothing remembered, an idle session whose
+// own file nobody holds still finds it when a newer file in the folder
+// belongs to a foreign process: its own file was created just after the
+// session began.
 func TestExclusiveIdleOwnFileBehindForeignNewer(t *testing.T) {
 	env, h := testEnv(t)
 	env.SessionID = "s_idleown001"
-	env.Vars["created"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	created := time.Now().Add(-time.Hour).UTC()
+	env.Vars["created"] = created.Format(time.RFC3339)
 	procs := &fakeProcs{tree: []int{100, 101}}
 	env.Procs = procs
-	own, foreign := filepath.Join(h, "own.jsonl"), filepath.Join(h, "foreign.jsonl")
+	own := filepath.Join(h, created.Add(30*time.Second).Format("2006-01-02T15-04-05-000Z")+"_own.jsonl")
+	foreign := filepath.Join(h, "foreign.jsonl")
 	writeLine(t, own, `{"f":"own1"}`)
 	past := time.Now().Add(-30 * time.Minute)
 	if err := os.Chtimes(own, past, past); err != nil {
@@ -231,7 +234,7 @@ func TestExclusiveUnheldNewFileIsOwnNewWhenNoForeignAgent(t *testing.T) {
 	env.SessionID, env.Agent = "s_unheld0001", "pi"
 	env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
 	env.Procs = &fakeProcs{tree: []int{100}}
-	oldF, newF := filepath.Join(h, "old.jsonl"), filepath.Join(h, "new.jsonl")
+	oldF, newF := filepath.Join(h, stamped(time.Now().Add(-55*time.Second), "old")), filepath.Join(h, "new.jsonl")
 	writeLine(t, oldF, `{"f":"old1"}`)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -273,7 +276,7 @@ func TestExclusiveUnheldNewFileWithForeignAgent(t *testing.T) {
 			env.SessionID, env.Agent = "s_amb0000001", "omp"
 			env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
 			env.Procs = &fakeProcs{tree: []int{100}, others: tc.others(env.Cwd), err: tc.err}
-			oldF, newF := filepath.Join(h, "old.jsonl"), filepath.Join(h, "new.jsonl")
+			oldF, newF := filepath.Join(h, stamped(time.Now().Add(-55*time.Second), "old")), filepath.Join(h, "new.jsonl")
 			writeLine(t, oldF, `{"f":"old1"}`)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -289,5 +292,99 @@ func TestExclusiveUnheldNewFileWithForeignAgent(t *testing.T) {
 				t.Fatalf("follows = %v, want %v: %v", followed, tc.follows, c.recs)
 			}
 		})
+	}
+}
+
+// stamped names a file as OMP and Pi do, by creation time, which is how a
+// session's own unheld file is recognised on any platform.
+func stamped(at time.Time, id string) string {
+	return at.UTC().Format("2006-01-02T15-04-05-000Z") + "_" + id + ".jsonl"
+}
+
+func touch(t *testing.T, path string, at time.Time) {
+	t.Helper()
+	if err := os.Chtimes(path, at, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The live case: the session's own file is idle, created right after the
+// session; behind it sit a newer file of a foreign agent that has exited
+// (nobody holds it) and a newer file a live foreign agent holds. The
+// session keeps to its own.
+func TestExclusivePicksOwnIdleFileOverNewerForeignOnes(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID, env.Agent = "s_live000001", "omp"
+	created := time.Date(2026, 11, 11, 23, 21, 7, 0, time.UTC)
+	env.Vars["created"] = created.Format(time.RFC3339)
+	own := filepath.Join(h, "2026-11-11T23-21-08-526Z_own.jsonl")
+	dead := filepath.Join(h, "2026-11-12T15-57-52-145Z_dead.jsonl")
+	live := filepath.Join(h, "2026-11-12T16-00-00-000Z_live.jsonl")
+	writeLine(t, own, `{"f":"own"}`)
+	writeLine(t, dead, `{"f":"dead"}`)
+	touch(t, own, time.Now().Add(-10*time.Hour))
+	touch(t, dead, time.Now().Add(-5*time.Hour))
+	procs := &fakeProcs{tree: []int{100}, others: map[string]bool{env.Cwd: true}}
+	env.Procs = procs
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+	time.Sleep(100 * time.Millisecond)
+	writeLine(t, live, `{"f":"live"}`)
+	procs.hold(live, 999)
+	got := c.wait(t, 1)
+	time.Sleep(300 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.recs) != 1 || got[0] != `{"f":"own"}` {
+		t.Fatalf("records = %v", c.recs)
+	}
+}
+
+// After a helper restart the session goes back to the file it followed,
+// not to a newer one that merely looks eligible.
+func TestExclusiveResumesRememberedFile(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID, env.Agent = "s_remember01", "omp"
+	created := time.Now().Add(-time.Hour)
+	env.Vars["created"] = created.UTC().Format(time.RFC3339)
+	env.Vars["togo_home"] = filepath.Join(h, ".togo")
+	env.Procs = &fakeProcs{tree: []int{100}}
+	remembered := filepath.Join(h, "2026-01-01T00-00-00-000Z_old.jsonl")
+	other := filepath.Join(h, created.Add(10*time.Second).UTC().Format("2006-01-02T15-04-05-000Z")+"_new.jsonl")
+	writeLine(t, remembered, `{"f":"remembered"}`)
+	writeLine(t, other, `{"f":"other"}`)
+	touch(t, remembered, time.Now().Add(-30*time.Minute))
+	saveFollow(env, remembered)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+	got := c.wait(t, 1)
+	time.Sleep(300 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.recs) != 1 || got[0] != `{"f":"remembered"}` {
+		t.Fatalf("records = %v", c.recs)
+	}
+}
+
+// The file a session takes is remembered for the next run.
+func TestExclusiveRemembersWhatItFollows(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID, env.Agent = "s_remember02", "omp"
+	env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	env.Vars["togo_home"] = filepath.Join(h, ".togo")
+	env.Procs = &fakeProcs{tree: []int{100}}
+	f := filepath.Join(h, stamped(time.Now().Add(-55*time.Second), "a"))
+	writeLine(t, f, `{"f":"a"}`)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+	c.wait(t, 1)
+	if got := loadFollow(env); got != f {
+		t.Fatalf("remembered %q, want %q", got, f)
 	}
 }
