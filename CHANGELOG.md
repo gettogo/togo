@@ -4,6 +4,12 @@ The helper and the app are versioned separately. A newer helper always works wit
 
 ## Helper
 
+### 1.0.2
+
+**Changed**
+
+- `togo update` updates Homebrew installs by running `brew upgrade` for you, and `togo update --check` works for them.
+
 ### 1.0.1 (2026-11-11)
 
 **Fixed**

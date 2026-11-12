@@ -37,6 +37,9 @@ func InCellar(exe string) bool {
 	return ok
 }
 
+// CellarPrefix returns the Homebrew prefix of a Cellar install of togo.
+func CellarPrefix(exe string) (string, bool) { return cellarPrefix(exe) }
+
 // cellarPrefix splits <prefix>/Cellar/togo/<version>/bin/togo and returns
 // <prefix>.
 func cellarPrefix(exe string) (string, bool) {
