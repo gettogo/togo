@@ -29,19 +29,19 @@ type claimWatch struct {
 // maxHeldCandidates bounds the files asked about when a session has none.
 const maxHeldCandidates = 20
 
-// verdict is what the process evidence says about a candidate file.
-type verdict int
+// Verdict is what the process evidence says about a candidate file.
+type Verdict int
 
 const (
-	unknown verdict = iota // nobody holds it, or attribution is unavailable
-	mine                   // a process of the session's own tree holds it
-	foreign                // held by processes outside the tree, or the tree is unknown
+	Unknown Verdict = iota // nobody holds it, or attribution is unavailable
+	Mine                   // a process of the session's own tree holds it
+	Foreign                // held by processes outside the tree, or the tree is unknown
 )
 
-// attribute sorts candidate paths by who holds them open. Without a Procs
-// every path is unknown.
-func attribute(ctx context.Context, env harness.Env, paths []string) map[string]verdict {
-	out := map[string]verdict{}
+// Attribute sorts paths by who holds them open. Without a Procs, or for a
+// path nobody holds, the verdict is Unknown (absent from the map).
+func Attribute(ctx context.Context, env harness.Env, paths []string) map[string]Verdict {
+	out := map[string]Verdict{}
 	if env.Procs == nil || len(paths) == 0 {
 		return out
 	}
@@ -54,10 +54,10 @@ func attribute(ctx context.Context, env harness.Env, paths []string) map[string]
 		own[p] = true
 	}
 	for path, pids := range held {
-		out[path] = foreign
+		out[path] = Foreign
 		for _, p := range pids {
 			if own[p] {
-				out[path] = mine
+				out[path] = Mine
 				break
 			}
 		}
@@ -130,13 +130,13 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 					paths = append(paths, m.path)
 				}
 			}
-			verdicts := attribute(ctx, env, paths)
+			verdicts := Attribute(ctx, env, paths)
 			for _, c := range cands {
 				m := c.m
 				switch verdicts[m.path] {
-				case foreign:
+				case Foreign:
 					continue
-				case mine:
+				case Mine:
 					if !claimOwn(pattern, id, m.path) {
 						continue
 					}

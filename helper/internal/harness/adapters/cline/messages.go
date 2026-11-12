@@ -1,10 +1,12 @@
 package cline
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,6 +60,8 @@ type messages struct {
 	// so Cline waits for the user and the turn is not over.
 	lastAsking bool
 	lastMsgs   []message
+	tree       []int
+	treeAt     time.Time
 }
 
 func newMessages(env harness.Env) *messages {
@@ -117,6 +121,8 @@ func (m *messages) lock(id string) {
 }
 
 type manifest struct {
+	// Pid is the Cline process that runs the session.
+	Pid       int    `json:"pid"`
 	Cwd       string `json:"cwd"`
 	StartedAt string `json:"started_at"`
 	Model     string `json:"model"`
@@ -157,6 +163,29 @@ func (m *messages) belongs(id, updated string) bool {
 	}
 	return false
 }
+
+// owner says whether the session's Cline process is in this Togo session's
+// process tree. Unknown when the manifest has no pid or the tree cannot be
+// listed.
+func (m *messages) owner(id string) source.Verdict {
+	mf, ok := m.manifest(id)
+	if !ok || mf.Pid <= 0 || m.env.Procs == nil {
+		return source.Unknown
+	}
+	if time.Since(m.treeAt) > treeEvery {
+		m.tree, m.treeAt = m.env.Procs.Tree(context.Background()), time.Now()
+	}
+	if len(m.tree) == 0 {
+		return source.Unknown
+	}
+	if slices.Contains(m.tree, mf.Pid) {
+		return source.Mine
+	}
+	return source.Foreign
+}
+
+// treeEvery bounds how often the process tree is listed.
+const treeEvery = 2 * time.Second
 
 func sameDir(a, b string) bool {
 	if a == "" || b == "" {
@@ -230,9 +259,20 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	defer m.mu.Unlock()
 	if d.SessionID != m.session {
 		// A session of this folder newer than the one followed: a resume
-		// or a fresh start in the same pane.
+		// or a fresh start in the same pane. It must be this session's own
+		// Cline process (the manifest names its pid), not one the user
+		// started in a terminal; with no way to tell, the session followed
+		// stays.
 		if !m.belongs(d.SessionID, d.UpdatedAt) || (m.session != "" && d.UpdatedAt <= m.updated) {
 			return nil, nil
+		}
+		switch m.owner(d.SessionID) {
+		case source.Foreign:
+			return nil, nil
+		case source.Unknown:
+			if m.session != "" {
+				return nil, nil
+			}
 		}
 		m.lock(d.SessionID)
 		m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
