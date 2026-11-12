@@ -56,11 +56,6 @@ enum ControlCenterCopy {
     static let tryAgain = String(localized: "cc.machine.tryAgain", defaultValue: "Try again")
     static let signInAgain = String(localized: "cc.machine.signInAgain", defaultValue: "Sign in again")
     static let edit = String(localized: "cc.machine.edit", defaultValue: "Edit")
-    static let details = String(localized: "cc.machine.details", defaultValue: "Details")
-    static let updateAvailable = String(localized: "cc.machine.updateAvailable", defaultValue: "Update available")
-    static func updateAvailableFor(_ machine: String) -> String {
-        String(localized: "cc.machine.updateAvailableFor", defaultValue: "Helper update available on \(machine)")
-    }
     static let update = String(localized: "cc.machine.update", defaultValue: "Update")
 
     /// A connected helper older than this app needs; Update walks through installing the new one.

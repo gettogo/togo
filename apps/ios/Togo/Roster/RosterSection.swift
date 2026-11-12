@@ -1,5 +1,6 @@
 import SwiftUI
 import TogoKit
+import UIKit
 
 /// One machine in the roster: its name and count, a line for whatever keeps it from being live,
 /// then one line per session and the sessions a restart ended.
@@ -181,12 +182,8 @@ struct RosterSection: View {
             case .newer:
                 quiet(ControlCenterCopy.helperNewer(machine.name))
             case .present, .outdated, .checking:
-                if case .present(let version, _) = machine.helper, helperUpdates?.available(machine.id, current: version) != nil {
-                    // Short on purpose: the machine's name is in the heading above, and may be long.
-                    MachineMessage(ControlCenterCopy.updateAvailable, action: ControlCenterCopy.details) {
-                        perform(.edit(machine.id))
-                    }
-                    .accessibilityLabel(ControlCenterCopy.updateAvailableFor(machine.name))
+                if case .present(let version, _) = machine.helper, let helperUpdates {
+                    HelperUpdateLine(machine: machine.id, name: machine.name, current: version, updates: helperUpdates)
                 }
                 if case .outdated(let found) = machine.helper {
                     MachineMessage(ControlCenterCopy.helperOutdated(found), action: ControlCenterCopy.update) {
@@ -458,7 +455,68 @@ private struct MachineMessage: View {
                 .buttonStyle(.borderless)
                 .frame(minHeight: 44)
         }
+        // The 44-point button already gives the row its height; the list's own padding on top
+        // of it left a gap under the machine's heading.
+        .listRowInsets(.vertical, 0)
         .listRowBackground(Color.togoInk)
+    }
+}
+
+/// A machine's helper update, done in place: the note offers Update (or the brew command for a
+/// Homebrew install), shows the update running, then its result for a moment before leaving.
+private struct HelperUpdateLine: View {
+    let machine: HostID
+    let name: String
+    let current: String
+    let updates: HelperUpdates
+    @State private var copied = false
+
+    var body: some View {
+        let phase = updates.phase(machine)
+        switch phase {
+        case .idle:
+            if updates.available(machine, current: current) != nil {
+                if updates.isHomebrew(machine) {
+                    MachineMessage(HelperUpdateCopy.available, action: copied ? HelperUpdateCopy.copiedBrew : HelperUpdateCopy.copyBrew) {
+                        UIPasteboard.general.string = HelperUpdate.brewCommand
+                        copied = true
+                    }
+                    .accessibilityHint(HelperUpdateCopy.brewHint)
+                } else {
+                    MachineMessage(HelperUpdateCopy.available, action: HelperUpdateCopy.update) {
+                        Task { await updates.update(machine) }
+                    }
+                    .accessibilityLabel(HelperUpdateCopy.availableOn(name))
+                    .accessibilityAction(named: HelperUpdateCopy.updateOn(name)) { Task { await updates.update(machine) } }
+                }
+            }
+        case .updating:
+            HStack(spacing: 12) {
+                Text(HelperUpdateCopy.updating)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ProgressView()
+            }
+            .frame(minHeight: 44)
+            .listRowInsets(.vertical, 0)
+            .listRowBackground(Color.togoInk)
+        case .updated(let version):
+            Text(HelperUpdateCopy.updated(version.map(HelperUpdate.display)))
+                .font(.subheadline)
+                .foregroundStyle(Color.togoMute)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .listRowInsets(.vertical, 0)
+                .listRowBackground(Color.togoInk)
+                .task {
+                    try? await Task.sleep(for: .seconds(4))
+                    updates.settle(machine)
+                }
+        case .failed(let message):
+            MachineMessage("\(HelperUpdateCopy.failed) \(message)", action: HelperUpdateCopy.tryAgain) {
+                Task { await updates.update(machine) }
+            }
+        }
     }
 }
 

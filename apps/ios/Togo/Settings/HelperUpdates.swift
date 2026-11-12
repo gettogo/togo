@@ -97,6 +97,11 @@ import TogoKit
         }
     }
 
+    /// Puts a finished update or failure away, so its line leaves the Control Center.
+    func settle(_ host: HostID) {
+        if phase(host) != .updating { phases[host] = nil }
+    }
+
     #if DEBUG
     /// Shows a phase without running anything, for previews and snapshots.
     func show(_ phase: Phase, for host: HostID) { phases[host] = phase }
@@ -121,18 +126,22 @@ extension EnvironmentValues {
 /// The words for the update row and note. The Control Center note is short on purpose: it sits
 /// beside a machine's name, which may be long.
 enum HelperUpdateCopy {
-    static var noteAvailable: String { settingsText("helperUpdate.note", "Update available") }
-    static var title: String { settingsText("helperUpdate.title", "Helper") }
-    static func installed(_ version: String) -> String { settingsText("helperUpdate.installed", "Helper \(version)") }
-    static func available(_ version: String) -> String { settingsText("helperUpdate.available", "\(version) available") }
+    /// Short on purpose: it sits under the machine's name, which may be long.
+    static var available: String { settingsText("helperUpdate.note", "Helper update available") }
+    static func availableOn(_ machine: String) -> String {
+        settingsText("helperUpdate.noteOn", "Helper update available on \(machine)")
+    }
     static var update: String { settingsText("helperUpdate.update", "Update") }
-    static var updating: String { settingsText("helperUpdate.updating", "Updating…") }
+    static func updateOn(_ machine: String) -> String { settingsText("helperUpdate.updateOn", "Update the helper on \(machine)") }
+    static var updating: String { settingsText("helperUpdate.updating", "Updating the helper…") }
     static func updated(_ version: String?) -> String {
-        version.map { settingsText("helperUpdate.updatedTo", "Updated to \($0)") } ?? settingsText("helperUpdate.updated", "Helper updated")
+        version.map { settingsText("helperUpdate.updatedTo", "Helper updated to \($0)") }
+            ?? settingsText("helperUpdate.updated", "Helper updated")
     }
-    static var homebrew: String {
-        settingsText("helperUpdate.homebrew", "Installed with Homebrew. Run this on the machine:")
-    }
-    static var copy: String { settingsText("helperUpdate.copy", "Copy") }
-    static var copied: String { settingsText("helperUpdate.copied", "Copied") }
+    static var failed: String { settingsText("helperUpdate.failed", "The helper didn't update.") }
+    static var tryAgain: String { settingsText("helperUpdate.tryAgain", "Try again") }
+    /// Homebrew updates its own install, so the app hands over the command instead of running one.
+    static var copyBrew: String { settingsText("helperUpdate.copyBrew", "Copy brew command") }
+    static var copiedBrew: String { settingsText("helperUpdate.copiedBrew", "Copied") }
+    static var brewHint: String { settingsText("helperUpdate.brewHint", "Run brew upgrade togo on the machine") }
 }

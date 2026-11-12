@@ -30,7 +30,6 @@ struct MachineImport {
 }
 
 struct MachinesSettingsView: View {
-    @Environment(\.helperUpdates) private var helperUpdates
     let machines: [SettingsMachine]
     let add: () -> Void
     let edit: (HostID) -> Void
@@ -125,15 +124,6 @@ struct MachinesSettingsView: View {
         }
     }
 
-    /// Whether the helper can be updated: it is too old for this app, or the machine said a newer release exists.
-    private func offersUpdate(_ machine: SettingsMachine) -> Bool {
-        if case .outdated = machine.helper { return true }
-        if case .present(let version, _) = machine.helper {
-            return helperUpdates?.available(machine.id, current: version) != nil
-        }
-        return false
-    }
-
     private var list: some View {
         List {
             Section {
@@ -152,7 +142,7 @@ struct MachinesSettingsView: View {
                         .tint(.red)
                     }
                     .contextMenu {
-                        if offersUpdate(machine) {
+                        if case .outdated = machine.helper {
                             // Editing connects again and walks through installing the new helper.
                             Button(settingsText("settings.machines.updateHelper", "Update helper"), systemImage: "arrow.down.circle") {
                                 edit(machine.id)

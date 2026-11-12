@@ -272,6 +272,19 @@ import TogoMosh
         )
         uiTestMachines = machines
         appStorage = defaults
+        if launch.helperUpdate {
+            helperUpdates = HelperUpdates(
+                defaults: defaults,
+                helperPath: { _ in "/Users/sam/.togo/bin/togo" },
+                run: { _, command in
+                    if command.contains("--check") {
+                        return (Data("togo v1.0.2 is available (installed: v1.0.1)\n".utf8), Data(), 0)
+                    }
+                    try await Task.sleep(for: .seconds(2))
+                    return (Data("Installed togo v1.0.2 at /Users/sam/.togo/bin/togo (previous binary kept at /Users/sam/.togo/bin/togo.previous)\nRestarted\n".utf8), Data(), 0)
+                }
+            )
+        }
         if launch.demoAPI {
             for agent in DemoAPIFixture.favorites { agentLibrary.toggleFavorite(agent) }
         }

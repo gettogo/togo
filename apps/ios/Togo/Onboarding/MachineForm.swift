@@ -14,13 +14,14 @@ struct MachineForm: View {
     @FocusState private var focus: MachineDraft.Field?
     @State private var choosingKeyFile = false
     @State private var jumpShown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        ScrollViewReader { proxy in form(proxy) }
+    }
+
+    private func form(_ proxy: ScrollViewProxy) -> some View {
         Form {
-            // On a saved machine only: an update to the helper, the update running, or Homebrew's command.
-            if let machine = draft.machineID {
-                HelperUpdateSection(machine: machine, name: draft.name)
-            }
             Section {
                 field(.name, String(localized: "onboard.form.name", defaultValue: "Name"), text: $draft.name, prompt: String(localized: "onboard.form.namePrompt", defaultValue: "MacBook, Studio, Build box"))
                     .textInputAutocapitalization(.words)
@@ -61,6 +62,7 @@ struct MachineForm: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
                 authDetail
+                    .id(MachineDraft.Field.key)
             } header: {
                 SectionHeading(String(localized: "onboard.form.signIn", defaultValue: "Sign in with"))
             } footer: {
@@ -119,7 +121,10 @@ struct MachineForm: View {
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(String(localized: "onboard.form.connect", defaultValue: "Connect"), systemImage: "checkmark", role: .confirm, action: onConnect)
+                Button(String(localized: "onboard.form.connect", defaultValue: "Connect"), systemImage: "checkmark", role: .confirm) {
+                    onConnect()
+                    revealFirstError(proxy)
+                }
             }
         }
         .fileImporter(isPresented: $choosingKeyFile, allowedContentTypes: [.data, .plainText]) { result in
@@ -218,6 +223,7 @@ struct MachineForm: View {
                 .submitLabel(draft.field(after: field) == nil ? .go : .next)
                 .onSubmit { advance(from: field) }
         }
+        .id(field)
     }
 
     private func labelled(_ label: String, error: String? = nil, @ViewBuilder input: () -> some View) -> some View {
@@ -245,6 +251,16 @@ struct MachineForm: View {
 
     private func visibleError(_ field: MachineDraft.Field) -> String? {
         showsErrors ? draft.errors[field] : nil
+    }
+
+    /// A form with a problem off screen would look like Connect did nothing, so the first
+    /// field with an error scrolls into view (a synced machine's key may not be on this device).
+    private func revealFirstError(_ proxy: ScrollViewProxy) {
+        let errors = draft.errors
+        guard let first = MachineDraft.Field.allCases.first(where: { errors[$0] != nil }) else { return }
+        if first == .jump { jumpShown = true }
+        // motion: reveal — the form scrolls to the field that needs fixing
+        withAnimation(Motion.animation(.reveal, reduce: reduceMotion)) { proxy.scrollTo(first, anchor: .center) }
     }
 
     private func advance(from field: MachineDraft.Field) {
