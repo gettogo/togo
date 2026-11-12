@@ -34,7 +34,7 @@ struct HelperUpdateSnapshotTests {
         draft.address = "studio.local"
         draft.user = "dev"
         return NavigationStack {
-            MachineForm(draft: .constant(draft), showsErrors: false, importError: nil, onImportKey: { _, _ in }, onConnect: {})
+            MachineForm(draft: .constant(draft), showsErrors: false, importError: nil, onImportKey: { _, _, _ in }, onConnect: {})
                 .navigationTitle(name)
                 .navigationBarTitleDisplayMode(.inline)
         }
