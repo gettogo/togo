@@ -34,22 +34,23 @@ type sess struct {
 	mu sync.Mutex
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
-	starting sync.Mutex
-	env      harness.Env
-	version  string
-	gateOK   bool
-	gateWhy  string
-	degraded map[string]bool
-	mappers  map[string]harness.Mapper // by mapper name, shared by feeds
-	feeds    map[string]*feedRun
-	last     map[string]json.RawMessage // latest record per feed
-	anchors  map[string]*harness.Anchor
-	mission  *missionState
-	subs     map[harness.Subscriber]*subQueue
-	queue    []queued
-	sent     map[string]bool // queued prompts already typed, by item id
-	phone    []phoneText
-	working  bool
+	starting   sync.Mutex
+	env        harness.Env
+	version    string
+	planWarned bool // the unrecognised-todo-format line was logged
+	gateOK     bool
+	gateWhy    string
+	degraded   map[string]bool
+	mappers    map[string]harness.Mapper // by mapper name, shared by feeds
+	feeds      map[string]*feedRun
+	last       map[string]json.RawMessage // latest record per feed
+	anchors    map[string]*harness.Anchor
+	mission    *missionState
+	subs       map[harness.Subscriber]*subQueue
+	queue      []queued
+	sent       map[string]bool // queued prompts already typed, by item id
+	phone      []phoneText
+	working    bool
 	// stoppedAt is when a stop last ended the turn (see stopHold).
 	stoppedAt time.Time
 	// feedWorking is what the mappers last said about the turn, and
@@ -575,6 +576,7 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 		return
 	}
 	items, ops := safeMap(m, rec, s.e.cfg.Logf)
+	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {
 		s.hookFiredLocked()
@@ -583,6 +585,22 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 	if run := s.feeds[rec.Source]; run != nil {
 		run.failures = 0
 	}
+}
+
+// warnPlanLocked logs once per session that the mapper met a todo or plan
+// call it could not read. It names the adapter and the agent's version and
+// nothing the agent wrote.
+func (s *sess) warnPlanLocked(m harness.Mapper) {
+	w, ok := m.(harness.PlanWatcher)
+	if !ok || s.planWarned || !w.PlanUnrecognised() {
+		return
+	}
+	s.planWarned = true
+	ver := s.version
+	if ver == "" {
+		ver = "unknown"
+	}
+	s.e.cfg.Logf("harness: unrecognised todo format (adapter %s, agent version %s)", s.ad.Adapter.Adapter, ver)
 }
 
 func safeMap(m harness.Mapper, rec harness.Record, logf func(string, ...any)) (items []harness.Item, ops []harness.Op) {
