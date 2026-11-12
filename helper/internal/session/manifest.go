@@ -75,7 +75,15 @@ func (m *Manifest) Put(e ManifestEntry) error {
 
 // Remove deletes the entry with id. A missing entry is not an error.
 func (m *Manifest) Remove(id string) error {
-	return m.update(func(list []ManifestEntry) []ManifestEntry { return without(list, id) })
+	if err := m.update(func(list []ManifestEntry) []ManifestEntry { return without(list, id) }); err != nil {
+		return err
+	}
+	// The chat feed remembers the file it follows next to the record
+	// (run/follow-<id>.json); it goes with the session.
+	if id == filepath.Base(id) && !strings.HasPrefix(id, ".") {
+		_ = os.Remove(filepath.Join(filepath.Dir(m.Path), "run", "follow-"+id+".json"))
+	}
+	return nil
 }
 
 // All returns the valid entries.

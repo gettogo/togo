@@ -57,6 +57,8 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		},
 		Git:        git.Status,
 		Ports:      pl.List,
+		PanePIDs:   svc.Tmux.PanePIDs,
+		PaneTTY:    svc.Tmux.PaneTTY,
 		LoginPath:  func(ctx context.Context) string { return loginPath(ctx, svc, home) },
 		LoginEnv:   state.LoginEnv,
 		Home:       home,

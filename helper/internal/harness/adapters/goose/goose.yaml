@@ -10,6 +10,10 @@
 # ends in an assistant message with an error part ({type: error, kind: authentication |
 # contextLengthExceeded | other, message}, read from a real 1.57 database): it maps to an
 # error notice and the turn ends failed.
+# Attribution: sessions.db records no process, so a session another Goose creates in this folder
+# cannot be told from this Togo session's. The newest row wins only until the chat has content; after
+# that the session stays, and only this Togo session's own `--session-id` relaunch moves it. A new
+# session started inside the TUI is therefore not followed until the session is restarted.
 # Writes: documented in-TUI commands with arguments (`/mode`, `/model`), relaunch with
 # `session --resume --session-id`. Sessions: `goose session list --format json --working_dir`.
 adapter: goose

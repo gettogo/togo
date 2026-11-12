@@ -65,6 +65,13 @@ type Config struct {
 	Relaunch func(ctx context.Context, id string, argv []string) error
 	Git      func(ctx context.Context, dir string) (gitx.Status, error)
 	Ports    func(ctx context.Context, id string) ([]ports.Listener, error)
+	// PanePIDs lists the pane processes of a session's tmux session; with
+	// it a source can tell which files the session's own agent holds.
+	PanePIDs func(ctx context.Context, id string) ([]int, error)
+	// PaneTTY is the terminal device of a session's pane (/dev/ttys011);
+	// adapters whose agent records its session per terminal read it as
+	// the "tty" variable.
+	PaneTTY func(ctx context.Context, id string) (string, error)
 	// LoginPath is the PATH programs are looked up in.
 	LoginPath func(ctx context.Context) string
 	// LoginEnv is the login shell's environment; nil keeps the helper's.

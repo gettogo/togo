@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,12 +18,15 @@ import (
 // so an entry belongs to the file whose entries it continues; an entry
 // without a known parent belongs to the file whose header came last.
 type session struct {
+	harness.PlanMiss
 	env harness.Env
 	cwd string
 
 	mu        sync.Mutex
 	state     map[string]string
 	dirAt     time.Time
+	crumbAt   time.Time         // when the terminal record was last read
+	crumb     string            // the session file omp's terminal record names
 	parents   map[string]string // entry id -> agent item id ("" for the main session)
 	cur       string            // parent of the file read last
 	turn      *turn
@@ -35,6 +39,10 @@ type session struct {
 	files     map[string]bool
 	cost      float64
 	usage     map[string]any
+
+	todo       []todoPhase            // the main session's plan
+	todoBefore map[string][]todoPhase // todo call id -> the plan before it
+	todoUnread map[string]bool        // todo calls whose arguments gave no rows
 }
 
 // dropped owns the entries of files that are not part of the session.
@@ -49,7 +57,8 @@ type turn struct {
 func newSession(env harness.Env) *session {
 	return &session{env: env, cwd: env.Cwd, state: map[string]string{}, parents: map[string]string{},
 		tools: map[string]*harness.Item{}, asks: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
-		headers: map[string]string{}, files: map[string]bool{}}
+		headers: map[string]string{}, files: map[string]bool{},
+		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}}
 }
 
 func (s *session) Name() string { return MapperSession }
@@ -65,9 +74,26 @@ func (s *session) State() map[string]string {
 			s.state["session_dir"] = d
 		}
 	}
-	out := make(map[string]string, len(s.state)+2)
+	if time.Since(s.crumbAt) >= time.Second {
+		s.crumbAt = time.Now()
+		s.crumb = terminalSession(s.env)
+	}
+	out := make(map[string]string, len(s.state)+4)
 	for k, v := range s.state {
 		out[k] = v
+	}
+	// The feeds' files, under ~/.omp/agent/sessions: the one omp's terminal
+	// record names, else the folder's (claimed by process evidence), with
+	// subagents only from this session's own folder.
+	switch {
+	case s.crumb != "":
+		out["session_rel"] = s.crumb
+		out["subagent_rel"] = strings.TrimSuffix(s.crumb, ".jsonl") + "/*.jsonl"
+	case s.state["session_dir"] != "":
+		out["session_rel"] = s.state["session_dir"] + "/*.jsonl"
+		if hs := s.state["harness_session"]; hs != "" {
+			out["subagent_rel"] = s.state["session_dir"] + "/*_" + hs + "/*.jsonl"
+		}
 	}
 	if s.turn != nil {
 		out["turn"] = s.turn.item.ID
@@ -150,6 +176,12 @@ func (s *session) header(e map[string]any, at time.Time) ([]harness.Item, []harn
 		return nil, nil
 	}
 	var agentID string
+	if hs := s.state["harness_session"]; hs != "" && !strings.HasSuffix(str(e, "parentSession"), "_"+hs+".jsonl") {
+		// A subagent of another omp's session in the same folder (one the
+		// user ran outside Togo, or an earlier session of this pane).
+		s.headers[id], s.cur = dropped, dropped
+		return nil, nil
+	}
 	if created, err := time.Parse(time.RFC3339, s.env.Vars["created"]); err == nil && len(s.pending) == 0 && at.Before(created.Add(-time.Minute)) {
 		// A subagent of an earlier session, read because its file was
 		// the newest: not part of this conversation.

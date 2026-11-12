@@ -135,6 +135,7 @@ type match struct {
 	path  string
 	mtime time.Time
 	size  int64
+	born  time.Time // creation time, zero when unknown
 }
 
 // globConfined expands, matches and confines a glob, newest first.
@@ -157,7 +158,7 @@ func globConfined(pattern string, env harness.Env) ([]match, error) {
 		if err != nil || !st.Mode().IsRegular() {
 			continue
 		}
-		out = append(out, match{path: real, mtime: st.ModTime(), size: st.Size()})
+		out = append(out, match{path: real, mtime: st.ModTime(), size: st.Size(), born: birth(real, st)})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].mtime.After(out[j].mtime) })
 	if len(out) > MaxGlobFiles {

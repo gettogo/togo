@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/procs"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/session"
 )
@@ -34,22 +35,23 @@ type sess struct {
 	mu sync.Mutex
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
-	starting sync.Mutex
-	env      harness.Env
-	version  string
-	gateOK   bool
-	gateWhy  string
-	degraded map[string]bool
-	mappers  map[string]harness.Mapper // by mapper name, shared by feeds
-	feeds    map[string]*feedRun
-	last     map[string]json.RawMessage // latest record per feed
-	anchors  map[string]*harness.Anchor
-	mission  *missionState
-	subs     map[harness.Subscriber]*subQueue
-	queue    []queued
-	sent     map[string]bool // queued prompts already typed, by item id
-	phone    []phoneText
-	working  bool
+	starting   sync.Mutex
+	env        harness.Env
+	version    string
+	planWarned bool // the unrecognised-todo-format line was logged
+	gateOK     bool
+	gateWhy    string
+	degraded   map[string]bool
+	mappers    map[string]harness.Mapper // by mapper name, shared by feeds
+	feeds      map[string]*feedRun
+	last       map[string]json.RawMessage // latest record per feed
+	anchors    map[string]*harness.Anchor
+	mission    *missionState
+	subs       map[harness.Subscriber]*subQueue
+	queue      []queued
+	sent       map[string]bool // queued prompts already typed, by item id
+	phone      []phoneText
+	working    bool
 	// stoppedAt is when a stop last ended the turn (see stopHold).
 	stoppedAt time.Time
 	// feedWorking is what the mappers last said about the turn, and
@@ -153,7 +155,8 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 	cwd := source.Expand(info.Cwd, home)
 	env := harness.Env{SessionID: info.ID, Agent: info.Agent, Cwd: cwd, Argv: info.Command, Vars: map[string]string{
 		source.VarHome: home, "cwd": cwd, "cwd_key": CwdKey(cwd), "session": info.ID,
-		"created": info.CreatedAt.UTC().Format(time.RFC3339),
+		"created":          info.CreatedAt.UTC().Format(time.RFC3339),
+		source.VarTogoHome: e.cfg.TogoHome,
 	}}
 	if argv, ok := e.relaunchedArgv(info.ID); ok {
 		env.Argv = argv
@@ -162,6 +165,17 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 		env.Endpoint = ep.url()
 		env.Auth = ep.auth()
 		env.Vars["port"], env.Vars["socket"] = strconv.Itoa(ep.port), ep.socket
+	}
+	if e.cfg.PanePIDs != nil {
+		id := info.ID
+		env.Procs = procs.Session{Panes: func(ctx context.Context) ([]int, error) { return e.cfg.PanePIDs(ctx, id) }}
+	}
+	if e.cfg.PaneTTY != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if tty, err := e.cfg.PaneTTY(ctx, info.ID); err == nil && tty != "" {
+			env.Vars[source.VarTTY] = tty
+		}
+		cancel()
 	}
 	if e.cfg.LoginPath != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -255,6 +269,7 @@ func (s *sess) start() {
 	s.syncFeedsLocked()
 	s.mu.Unlock()
 	go s.seedAtStart()
+	go s.resyncStateFeeds()
 	if s.e.cfg.OnSummary != nil {
 		s.e.cfg.OnSummary(s.id)
 	}
@@ -452,7 +467,7 @@ func (s *sess) templateDataLocked(args map[string]any) map[string]any {
 // session has no value for them.
 var reservedVars = map[string]bool{
 	"home": true, "cwd": true, "cwd_key": true, "session": true, "created": true,
-	"port": true, "socket": true, "path": true, "state": true, "endpoint": true,
+	"port": true, "socket": true, "path": true, "state": true, "endpoint": true, "tty": true,
 }
 
 var stateRef = regexp.MustCompile(`\.state\.([A-Za-z0-9_]+)`)
@@ -575,6 +590,7 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 		return
 	}
 	items, ops := safeMap(m, rec, s.e.cfg.Logf)
+	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {
 		s.hookFiredLocked()
@@ -583,6 +599,22 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 	if run := s.feeds[rec.Source]; run != nil {
 		run.failures = 0
 	}
+}
+
+// warnPlanLocked logs once per session that the mapper met a todo or plan
+// call it could not read. It names the adapter and the agent's version and
+// nothing the agent wrote.
+func (s *sess) warnPlanLocked(m harness.Mapper) {
+	w, ok := m.(harness.PlanWatcher)
+	if !ok || s.planWarned || !w.PlanUnrecognised() {
+		return
+	}
+	s.planWarned = true
+	ver := s.version
+	if ver == "" {
+		ver = "unknown"
+	}
+	s.e.cfg.Logf("harness: unrecognised todo format (adapter %s, agent version %s)", s.ad.Adapter.Adapter, ver)
 }
 
 func safeMap(m harness.Mapper, rec harness.Record, logf func(string, ...any)) (items []harness.Item, ops []harness.Op) {
@@ -795,4 +827,41 @@ func (s *sess) setWorkingLocked(w bool) {
 		s.drainLocked()
 		go s.seedFromScreen(seedSettle)
 	}
+}
+
+// stateFeedEvery is how often feeds whose path comes from state are checked
+// while no record arrives: an agent can switch its session file while idle
+// (omp's /resume writes nothing until the next turn).
+var stateFeedEvery = 2 * time.Second
+
+// resyncStateFeeds re-renders state-dependent feeds until the session stops,
+// so a session file the agent switched to is followed without a record.
+func (s *sess) resyncStateFeeds() {
+	if !s.hasStateFeeds() {
+		return
+	}
+	t := time.NewTicker(stateFeedEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-t.C:
+		}
+		s.mu.Lock()
+		if s.gateOK {
+			s.syncFeedsLocked()
+		}
+		s.mu.Unlock()
+	}
+}
+
+// hasStateFeeds reports whether any feed's block refers to state.
+func (s *sess) hasStateFeeds() bool {
+	for _, name := range s.ad.feedOrder {
+		if raw, err := rawOf(s.ad.Feeds[name].Kinds); err == nil && stateRef.Match(raw) {
+			return true
+		}
+	}
+	return false
 }

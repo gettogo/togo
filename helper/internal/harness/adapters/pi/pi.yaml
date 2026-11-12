@@ -14,6 +14,9 @@ capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands
   changes, status, resume, compact]
 feeds:
   session:
+    # exclusive: follow only a file this session's own agent process holds open (a /new moves it,
+    # the old file is dropped); a file another process holds is never taken; with no evidence the
+    # session keeps its file.
     jsonl: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
     mapper: pi.session
     stability: documented

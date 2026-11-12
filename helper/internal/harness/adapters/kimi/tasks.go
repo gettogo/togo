@@ -89,6 +89,10 @@ func (w *Wire) plan(raw json.RawMessage, at time.Time) ([]harness.Item, []harnes
 		} `json:"todos"`
 	}
 	if json.Unmarshal(raw, &a) != nil || len(a.Todos) == 0 {
+		var probe map[string]json.RawMessage
+		if json.Unmarshal(raw, &probe) != nil || probe["todos"] == nil {
+			w.NoteUnrecognisedPlan() // the call stays a tool step
+		}
 		return nil, nil
 	}
 	rows := make([]harness.Row, 0, len(a.Todos))

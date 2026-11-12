@@ -68,6 +68,7 @@ const replyPoll = 50 * time.Millisecond
 // conversation. Task and todo hooks become plan rows, subagent hooks
 // agent rows.
 type Mapper struct {
+	harness.PlanMiss
 	env  harness.Env
 	opts Options
 
@@ -77,6 +78,7 @@ type Mapper struct {
 	turn      string
 	started   time.Time
 	steps     map[string]bool
+	planned   bool                // a task hook made plan rows
 	running   map[string][]string // tool name -> running call ids, oldest first
 	tools     map[string]harness.Item
 	asks      map[string]harness.Item // open ask-tool questions by call id
@@ -274,7 +276,9 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case SubagentStart, SubagentStop:
 		return nil, agentOps(p, at)
 	case TaskCreated, TaskCompleted:
-		return nil, planOps(p)
+		ops := planOps(p)
+		m.planned = m.planned || len(ops) > 0
+		return nil, ops
 	}
 	return nil, nil
 }
@@ -373,6 +377,11 @@ func (m *Mapper) toolStart(p payload, at time.Time) harness.Item {
 	m.running[p.ToolName] = append(m.running[p.ToolName], id)
 	m.steps[id] = true
 	title, cat, subj := ToolTitle(p.ToolName, p.ToolInput)
+	if !m.planned && isPlanTool(p.ToolName) {
+		// Todo calls are read from the task hooks only; with none seen the
+		// call stays a plain step and the log says the format is unread.
+		m.NoteUnrecognisedPlan()
+	}
 	x := harness.Item{ID: id, TurnID: m.turn, Kind: harness.KindTool, At: at, Tool: &harness.ToolBody{
 		CallID: id, Name: p.ToolName, Title: Truncate(title, harness.MaxTitle), Category: cat, Subject: subj,
 		State: harness.StateRunning, Started: at}}

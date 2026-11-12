@@ -19,12 +19,17 @@ input:
   clear: [C-u]
   dismiss: [Escape]
 feeds:
-  session:          # newest session file for this folder; header {type: session, version: 3}
-    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*.jsonl', follow: true, exclusive: true }
+  session:          # header {type: session, version: 3}. session_rel is the file omp's
+    # terminal record (~/.omp/agent/terminal-sessions/<tty>) names for the pane: start, /new and
+    # /resume move it. Without a record it is the folder's files, exclusive: only a file this
+    # session's own agent holds open is taken (a /new moves it, the old file is dropped); a file
+    # another process holds never is; with no evidence the session keeps its file.
+    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_rel}}', follow: true, exclusive: true }
     mapper: omp.session
     stability: documented
-  subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl
-    jsonl: { glob: '~/.omp/agent/sessions/{{.state.session_dir}}/*/*.jsonl', follow: true }
+  subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl, only the
+    # followed session's own folder, so another omp's subagents in the same folder are never read.
+    jsonl: { glob: '~/.omp/agent/sessions/{{.state.subagent_rel}}', follow: true }
     mapper: omp.session
     stability: internal
   config:           # model roles for the picker's role chips

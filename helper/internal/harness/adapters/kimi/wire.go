@@ -15,6 +15,7 @@ import (
 // treats the stream as one conversation; a metadata header starts a new
 // file and ends whatever turn was open.
 type Wire struct {
+	harness.PlanMiss
 	env harness.Env
 
 	mu       sync.Mutex

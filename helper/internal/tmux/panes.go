@@ -74,3 +74,18 @@ func (c *Client) TapCommands(ctx context.Context) (map[string]string, error) {
 	}
 	return cmds, nil
 }
+
+// PaneTTY returns the terminal device of the session's first pane, such as
+// /dev/ttys011, or "" when the session has no pane.
+func (c *Client) PaneTTY(ctx context.Context, session string) (string, error) {
+	out, err := c.run(ctx, "list-panes", "-s", "-t", "="+escapeArg(session)+":", "-F", "#{pane_tty}")
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Fields(out) {
+		if strings.HasPrefix(line, "/dev/") {
+			return line, nil
+		}
+	}
+	return "", nil
+}

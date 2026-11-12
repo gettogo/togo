@@ -7,7 +7,11 @@
 # token limits, the no-key onboarding before its OpenRouter sign-in question, a typed reply it
 # refused) are notices; an error aider gives up on ends the turn failed (errors.go). The launch
 # command line it logs after the header is dropped. Approvals are line prompts the existing prompt
-# detector answers. Writes: typed prompts and documented slash commands with arguments.
+# detector answers. Attribution: every aider in a git root appends to the same
+# .aider.chat.history.md and writes no pid, process or session tag, so lines from an aider the user
+# ran in a terminal in the same folder cannot be told from this session's; only runs that started
+# since this session are read (a newer header is the earliest evidence available). Use
+# --chat-history-file to keep two aiders apart. Writes: typed prompts and documented slash commands with arguments.
 adapter: aider
 name: Aider
 revision: 1

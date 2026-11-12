@@ -5,7 +5,6 @@
 package codex
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +14,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/detect"
@@ -28,26 +26,15 @@ const (
 	maxPayload     = 1 << 20
 	maxMessageRune = 256
 	maxCommandRune = 1024
-	lookupTimeout  = 2 * time.Second
 )
 
 // ErrDropped means the payload was valid but cannot be attributed to exactly
 // one managed session, so no event is produced.
 var ErrDropped = errors.New("codex hook dropped: session not resolved")
 
-// Candidate is a managed session the adapter may attribute an event to.
-type Candidate struct {
-	ID    string
-	Agent string
-	Cwd   string
-}
-
 // Adapter maps Codex payloads to events and remembers which managed session
 // each Codex session id belongs to.
 type Adapter struct {
-	// Sessions lists managed sessions; it is only consulted when the hook
-	// environment carries no TOGO_SESSION.
-	Sessions func(ctx context.Context) ([]Candidate, error)
 	// Logf receives one-line diagnostics. It never gets payload text.
 	Logf func(format string, args ...any)
 
@@ -216,26 +203,10 @@ func (a *Adapter) resolve(env map[string]string, agentID, cwd string) (string, e
 	if id := a.recall(agentID); id != "" {
 		return id, nil
 	}
-	if a.Sessions == nil || cwd == "" {
-		return "", a.drop("no session hint", cwd)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), lookupTimeout)
-	defer cancel()
-	cands, err := a.Sessions(ctx)
-	if err != nil {
-		return "", a.drop("session lookup failed", cwd)
-	}
-	var match []string
-	for _, c := range cands {
-		if c.Agent == agentName && c.Cwd == cwd {
-			match = append(match, c.ID)
-		}
-	}
-	if len(match) != 1 {
-		return "", a.drop(fmt.Sprintf("%d sessions match cwd", len(match)), cwd)
-	}
-	a.remember(agentID, match[0])
-	return match[0], nil
+	// No TOGO_SESSION: a Codex the user started outside Togo. Matching it
+	// to a Togo session by folder would attribute its approvals and
+	// completions to the wrong session.
+	return "", a.drop("not a Togo session", cwd)
 }
 
 func (a *Adapter) drop(why, cwd string) error {

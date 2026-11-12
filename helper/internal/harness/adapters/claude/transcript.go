@@ -16,6 +16,7 @@ import (
 // conversation items. One instance serves both feeds of a session, so a
 // subagent's records find the Agent call that started them.
 type transcript struct {
+	harness.PlanMiss
 	env harness.Env
 	cwd string
 

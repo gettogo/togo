@@ -24,10 +24,15 @@ type db struct {
 	done     map[string]bool  // messages already mapped whole
 	asks     map[string]asked // question tool calls by call id
 	b        *turns.Builder
+	// pin is a session id this Togo session's own relaunch asked for; it is
+	// the one switch allowed once the chat has content. shown is set when
+	// the followed session's messages were mapped.
+	pin   string
+	shown bool
 }
 
 func newDB(env harness.Env) *db {
-	return &db{env: env, state: map[string]string{}, sessions: map[string]sessionRow{},
+	return &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{},
 		done: map[string]bool{}, asks: map[string]asked{}, b: turns.New()}
 }
 
@@ -92,12 +97,23 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if json.Unmarshal(rec.Data, &r) != nil || r.ID == "" || r.Session != m.state["harness_session"] || m.done[r.ID] {
 			return nil, nil
 		}
+		m.shown = true
 		return m.message(r), nil
 	}
 	var s sessionRow
 	if json.Unmarshal(rec.Data, &s) != nil || s.ID == "" {
 		return nil, nil
 	}
+	m.session(s)
+	return nil, nil
+}
+
+// session keeps the newest-updated session until it has content. Crush's
+// database names no process, so a session another Crush creates in the
+// same project cannot be told from this one's: once the chat has content
+// it stays on its session, and only this Togo session's own relaunch
+// (--session, see Relaunched) moves it.
+func (m *db) session(s sessionRow) {
 	m.sessions[s.ID] = s
 	best := sessionRow{}
 	for _, c := range m.sessions {
@@ -105,13 +121,52 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			best = c
 		}
 	}
+	if m.pin != "" {
+		p, ok := m.sessions[m.pin]
+		if !ok {
+			return
+		}
+		best = p
+	} else if m.shown && m.state["harness_session"] != "" {
+		best = m.sessions[m.state["harness_session"]]
+	}
 	if best.ID != m.state["harness_session"] {
 		m.b.Reset()
 		m.done = map[string]bool{}
 		m.asks = map[string]asked{}
 		m.state["harness_session"] = best.ID
+		m.shown = false
 	}
-	return nil, nil
+	if m.pin != "" && best.ID == m.pin {
+		m.pin = ""
+	}
+}
+
+// Relaunched learns the session a relaunch resumes (`--session <id>`).
+func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id := sessionArg(argv); id != "" {
+		m.pin = id
+		if r, ok := m.sessions[id]; ok {
+			m.session(r)
+		}
+	}
+	return nil
+}
+
+// sessionArg is the id a `--session <id>`, `-s <id>` or `--session=<id>`
+// names.
+func sessionArg(argv []string) string {
+	for i, a := range argv {
+		if v, ok := strings.CutPrefix(a, "--session="); ok {
+			return v
+		}
+		if (a == "--session" || a == "-s") && i+1 < len(argv) {
+			return argv[i+1]
+		}
+	}
+	return ""
 }
 
 func (m *db) message(r messageRow) []harness.Item {

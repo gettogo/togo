@@ -88,6 +88,26 @@ type Env struct {
 	// helper runs for the session get on top of its own: the agent reads
 	// its API keys from there. Nil keeps the helper's environment.
 	Environ []string
+	// Procs says which processes are the session's agent and which files
+	// they hold open, so a source follows only what its own agent writes.
+	// Nil means attribution is unavailable.
+	Procs Procs
+}
+
+// Procs attributes files to the session's own agent process. A source that
+// shares a folder with agents the user started elsewhere (OMP, Pi, Kimi)
+// must not follow their conversations.
+type Procs interface {
+	// Tree returns the pids of the session's pane process and everything
+	// below it; empty when they cannot be listed.
+	Tree(ctx context.Context) []int
+	// Holders returns, for each path, the pids that have it open. A path
+	// nobody holds is absent.
+	Holders(ctx context.Context, paths []string) (map[string][]int, error)
+	// Others reports whether a process whose command is one of commands
+	// runs in cwd outside the session's process tree. An error means it
+	// could not be told.
+	Others(ctx context.Context, commands []string, cwd string) (bool, error)
 }
 
 // SourceSpec is the part of an adapter's source declaration a runner
@@ -177,3 +197,21 @@ type Log interface {
 	Before(session string, before int64, limit int) (items []Item, more bool)
 	Forget(session string)
 }
+
+// PlanWatcher is a mapper that can tell the engine it met a todo or plan
+// tool call it could read no rows from, a format it does not know. The
+// engine logs that once per session so a harness update that changed the
+// format shows up in the log, not as a plan that silently never appears.
+type PlanWatcher interface {
+	PlanUnrecognised() bool
+}
+
+// PlanMiss implements PlanWatcher. A mapper embeds it and calls
+// NoteUnrecognisedPlan when a todo call gave no rows.
+type PlanMiss struct{ missed bool }
+
+// NoteUnrecognisedPlan records an unreadable todo or plan call.
+func (p *PlanMiss) NoteUnrecognisedPlan() { p.missed = true }
+
+// PlanUnrecognised reports whether such a call was seen.
+func (p *PlanMiss) PlanUnrecognised() bool { return p.missed }

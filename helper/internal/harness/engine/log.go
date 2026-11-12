@@ -109,6 +109,11 @@ func (l *Log) Since(session string, after int64, limit int) ([]harness.Item, int
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	r := l.get(session)
+	if after > r.seq {
+		// A cursor this log never reached is from before a helper restart
+		// (another epoch): start over rather than answer "nothing newer".
+		after = 0
+	}
 	start := len(r.items)
 	for i, it := range r.items {
 		if it.Seq > after {

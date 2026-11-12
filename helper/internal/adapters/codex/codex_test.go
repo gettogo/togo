@@ -1,7 +1,6 @@
 package codex
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -18,10 +17,6 @@ func fixture(t *testing.T, name string) string {
 		t.Fatal(err)
 	}
 	return string(b)
-}
-
-func lister(c ...Candidate) func(context.Context) ([]Candidate, error) {
-	return func(context.Context) ([]Candidate, error) { return c, nil }
 }
 
 func TestMapFixtures(t *testing.T) {
@@ -54,40 +49,28 @@ func TestMapFixtures(t *testing.T) {
 	}
 }
 
-func TestSharedDaemonResolvesByUniqueCwd(t *testing.T) {
-	a := &Adapter{Sessions: lister(
-		Candidate{"s_one", "codex", "/work/app"},
-		Candidate{"s_two", "codex", "/work/other"},
-		Candidate{"s_three", "claude", "/work/app"},
-	)}
-	ev, err := a.Map("Stop", strings.NewReader(fixture(t, "stop.json")), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ev.SessionID == nil || *ev.SessionID != "s_one" {
-		t.Fatalf("session = %v", ev.SessionID)
-	}
-}
-
-func TestAmbiguousCwdDropped(t *testing.T) {
+// A Codex the user started in a terminal has no TOGO_SESSION. Its hooks
+// must never be attributed to a Togo Codex session in the same folder, even
+// when that folder matches exactly one of them.
+func TestHookWithoutTogoSessionIsDropped(t *testing.T) {
 	var logged string
 	a := &Adapter{
-		Sessions: lister(Candidate{"s_one", "codex", "/work/app"}, Candidate{"s_two", "codex", "/work/app"}),
-		Logf:     func(f string, args ...any) { logged = f },
+		Logf: func(f string, args ...any) { logged = f },
 	}
-	_, err := a.Map("Stop", strings.NewReader(fixture(t, "stop.json")), nil)
-	if !errors.Is(err, ErrDropped) || logged == "" {
-		t.Fatalf("err = %v, logged = %q", err, logged)
+	for _, c := range []struct{ event, file string }{{"Stop", "stop.json"}, {"PermissionRequest", "permission_request.json"}} {
+		_, err := a.Map(c.event, strings.NewReader(fixture(t, c.file)), nil)
+		if !errors.Is(err, ErrDropped) || logged == "" {
+			t.Fatalf("%s: err = %v, logged = %q", c.event, err, logged)
+		}
 	}
 }
 
 func TestAgentSessionIdRemembered(t *testing.T) {
-	cands := []Candidate{{"s_one", "codex", "/work/app"}}
-	a := &Adapter{Sessions: func(context.Context) ([]Candidate, error) { return cands, nil }}
-	if _, err := a.Map("UserPromptSubmit", strings.NewReader(fixture(t, "user_prompt_submit.json")), nil); err != nil {
+	a := &Adapter{}
+	env := map[string]string{"TOGO_SESSION": "s_one"}
+	if _, err := a.Map("UserPromptSubmit", strings.NewReader(fixture(t, "user_prompt_submit.json")), env); err != nil {
 		t.Fatal(err)
 	}
-	cands = append(cands, Candidate{"s_two", "codex", "/work/app"})
 	ev, err := a.Map("Stop", strings.NewReader(fixture(t, "stop.json")), nil)
 	if err != nil || *ev.SessionID != "s_one" {
 		t.Fatalf("ev = %+v, err = %v", ev, err)

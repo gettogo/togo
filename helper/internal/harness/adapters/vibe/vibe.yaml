@@ -4,7 +4,8 @@
 # the snapshot it folds into after each turn, picked by meta.json's working_directory; layout from
 # Vibe 3.1.0's local harness, checked against live sessions. Hooks that use Vibe's claude_code
 # protocol (pre_tool, post_tool, post_agent; payload unverified) are read when present.
-# Writes: built-in agents are the modes and change by relaunch with --continue; /compact typed.
+# A journal held open by a process outside this session's tree is never chosen; the choice is made
+# once (hookstyle asks until it has an answer). Writes: built-in agents are the modes and change by relaunch with --continue; /compact typed.
 adapter: vibe
 name: Mistral Vibe
 revision: 1
