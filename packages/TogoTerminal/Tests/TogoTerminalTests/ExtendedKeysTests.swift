@@ -73,4 +73,31 @@ import Testing
             charactersIgnoringModifiers: "\r", modifiers: .shift, keyCode: 0x28, optionAsMeta: true,
             mode: .legacy) == nil)
     }
+
+    @Test(arguments: [("@", "q"), ("{", "8"), ("|", "7"), ("£", "3"), ("å", "a"), ("", "e")])
+    func optionTextCompositionIsLeftToUIKit(characters: String, base: String) {
+        #expect(KeyEncoder.extendedHardware(
+            characters: characters, charactersIgnoringModifiers: base, modifiers: .alternate,
+            keyCode: 4, optionAsMeta: false, mode: .modifyOtherKeys) == nil)
+        #expect(KeyEncoder.hardware(characters: characters, charactersIgnoringModifiers: base,
+                                    modifiers: .alternate, optionAsMeta: false) == nil)
+    }
+
+    @Test(arguments: [("@", "q", 64), (":", ";", 58), ("å", "a", 97)])
+    func extendedMetaUsesTheSameCharacterAsLegacy(characters: String, base: String, code: Int) {
+        #expect(KeyEncoder.extendedHardware(
+            characters: characters, charactersIgnoringModifiers: base, modifiers: .alternate,
+            keyCode: 4, optionAsMeta: true, mode: .modifyOtherKeys)
+            == Array("\(esc)[27;3;\(code)~".utf8))
+        #expect(KeyEncoder.hardware(characters: characters, charactersIgnoringModifiers: base,
+                                    modifiers: .alternate, optionAsMeta: true) == [0x1b, UInt8(code)])
+    }
+
+    @Test(arguments: [false, true])
+    func controlOptionKeepsControlWithEitherPolicy(meta: Bool) {
+        #expect(KeyEncoder.extendedHardware(
+            characters: "ç", charactersIgnoringModifiers: "c", modifiers: [.control, .alternate],
+            keyCode: 6, optionAsMeta: meta, mode: .modifyOtherKeys)
+            == Array("\(esc)[27;\(meta ? 7 : 5);99~".utf8))
+    }
 }

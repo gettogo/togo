@@ -41,12 +41,17 @@ struct TerminalKeysEditor: Equatable {
 struct KeyboardSettingsView: View {
     let keys: TerminalKeysConfig
     let update: (TerminalKeysConfig) -> Void
+    @Binding var optionAsMeta: Bool
     /// Where the next shortcut goes: nil for every agent.
     @State private var target: String?
 
     var body: some View {
         List {
             Section {
+                Toggle(isOn: $optionAsMeta) {
+                    settingsRow(settingsText("settings.keys.meta", "Use Option as Meta"),
+                                settingsText("settings.keys.meta.detail", "Turn off to type characters such as @, brackets and accents with Option."))
+                }
                 Picker(selection: binding(\.showColumn)) {
                     Text(settingsText("settings.keys.show.typing", "While typing")).tag(TerminalKeysConfig.ShowColumn.whileTyping)
                     Text(settingsText("settings.keys.show.demand", "Also on demand")).tag(TerminalKeysConfig.ShowColumn.alsoOnDemand)

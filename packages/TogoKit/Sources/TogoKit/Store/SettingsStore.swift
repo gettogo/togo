@@ -40,6 +40,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var cursor: String = "block"
     /// VoiceOver speaks new terminal output once it settles.
     public var readNewOutput = true
+    /// Off lets the hardware keyboard use Option to compose characters.
+    public var optionAsMeta = false
     /// Y, N and R alone answer the request in the prompt bar from a hardware keyboard. Speech
     /// input can type single letters, so it can be turned off (WCAG 2.1.4); ⌘↩ and ⌘. stay.
     public var singleKeyAnswers = true
@@ -80,7 +82,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case themeID, fontName, fontSize, cursor, readNewOutput, singleKeyAnswers, keyBar, importedThemes, gestures, resumeLock, transport
+        case themeID, fontName, fontSize, cursor, readNewOutput, optionAsMeta, singleKeyAnswers, keyBar, importedThemes, gestures, resumeLock, transport
         case relayURL, liveActivities
     }
 
@@ -92,6 +94,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? d.fontSize
         cursor = try c.decodeIfPresent(String.self, forKey: .cursor) ?? d.cursor
         readNewOutput = try c.decodeIfPresent(Bool.self, forKey: .readNewOutput) ?? d.readNewOutput
+        optionAsMeta = try c.decodeIfPresent(Bool.self, forKey: .optionAsMeta) ?? d.optionAsMeta
         singleKeyAnswers = try c.decodeIfPresent(Bool.self, forKey: .singleKeyAnswers) ?? d.singleKeyAnswers
         keyBar = try? c.decodeIfPresent(Data.self, forKey: .keyBar)
         importedThemes = try? c.decodeIfPresent(Data.self, forKey: .importedThemes)

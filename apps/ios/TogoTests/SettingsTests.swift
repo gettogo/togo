@@ -6,6 +6,15 @@ import TogoTerminal
 @testable import Togo
 
 @MainActor struct SettingsTests {
+    @Test(arguments: [false, true])
+    func optionKeyChoiceReachesTheTerminal(meta: Bool) throws {
+        let data = Data("{\"optionAsMeta\":\(meta)}".utf8)
+        let settings = try JSONDecoder().decode(AppSettings.self, from: data)
+        #expect(LiveTerminal.terminalSettings(settings).optionAsMeta == meta)
+        let saved = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
+        #expect(saved["optionAsMeta"] as? Bool == meta)
+    }
+
     /// Turning command text off or on reaches a machine through its relay; until the machine
     /// confirms over SSH, the page says the change is on its way.
     @Test func commandChoicePendingUntilTheMachineConfirms() {

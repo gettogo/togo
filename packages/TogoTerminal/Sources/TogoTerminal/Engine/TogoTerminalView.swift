@@ -391,6 +391,7 @@ final class TogoTerminalView: TerminalView {
         isHeld: @escaping @MainActor () -> Bool
     ) -> Bool {
         let extended = KeyEncoder.extendedHardware(
+            characters: characters,
             charactersIgnoringModifiers: charactersIgnoringModifiers, modifiers: modifiers, keyCode: keyCode,
             optionAsMeta: optionAsMetaKey, mode: extendedKeyMode?() ?? .legacy)
         guard let bytes = extended ?? KeyEncoder.hardware(
