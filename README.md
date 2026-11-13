@@ -59,6 +59,9 @@ You're in line for coffee and an agent stops to ask whether it can run a databas
 - **Answer where the request finds you.** Approvals appear in chat, notifications, Live Activities and on Apple Watch. Answer questions and their choices in the app.
 - **Start work from your phone.** Pick a machine, a folder and an agent. It starts in tmux and appears at your desk too.
 - **See the rest of the session.** Mission control gathers subagents, background shells, plans, changes, ports and status where the agent reports them.
+- **Finish the review from your phone.** Browse files and commit history, send comments on a diff, stage or discard changes, and commit. Open a host's dev server through an SSH-forwarded preview.
+- **Send images and dictate locally.** Attach screenshots, mark up an image before sending it, or dictate with Apple's on-device speech or a downloaded Whisper model.
+- **Keep a full terminal with you.** SSH, Mosh and Eternal Terminal are included, with session reattachment and terminal text selection, copy and paste.
 - **Use the screen you have.** On iPad and an open iPhone Duo, keep the session list beside your work. On Watch, approve or deny a waiting request.
 
 <p align="center">
@@ -74,19 +77,33 @@ You're in line for coffee and an agent stops to ask whether it can run a databas
 | App download | **Free** | Free | Free | Paid |
 | Native agent chat | **✓** | Pro | ✓ | ✓ |
 | Full terminal | **✓** | ✓ | ✓ | Web only |
-| Git diff review | **✓** | Pro | ✓ | ✓ |
-| Approval actions | **✓** | Pro | ✓ | ✓ |
-| Phone connection | **SSH** | SSH | Relay / Tailscale | Hub |
+| Mosh transport | **✓** | Pro | N/D | N/D |
+| Eternal Terminal | **✓** | Pro | N/D | N/D |
+| Chat connection | **SSH** | SSH | Relay / Tailscale | Hub |
 | Sessions run in | **tmux** | tmux / other muxes | Paseo daemon | CLI / Runner |
+| Push notifications | **✓** | ✓ | ✓ | ✓ |
+| In-app approvals | **✓** | Pro | ✓ | ✓ |
+| Lock Screen approval buttons | **✓** | Pro | N/D | N/D |
+| Live Activities / Dynamic Island | **✓** | ✓ | N/D | N/D |
+| Apple Watch approvals | **✓** | Pro | N/D | N/D |
+| Git diff review | **✓** | Pro | ✓ | ✓ |
+| Stage / commit UI | **✓** | N/D | ✓ | N/D |
+| Browse files / past commits | **✓** | Pro | ✓ | Files only |
+| Diff comments to the agent | **✓** | Desktop | ✓ | N/D |
+| Dev-server previews | **✓** | Pro | Desktop | N/D |
+| Image attachments | **✓** | Pro | ✓ | ✓ |
+| Image markup | **✓** | Pro | N/D | N/D |
+| Dictation | **On-device** | On-device / cloud | Host / cloud | Hub provider |
 | Open-source app | **✓** | No | ✓ | ✓ |
 
-✓ Included at the app price above. **Pro** requires a paid upgrade. Moshi offers five trial inbox actions. HAPI's Web/PWA is free. Model and hosting costs are separate for all four.
+✓ Included at the app price above. **Pro** requires a paid upgrade. **N/D** Not documented for the mobile app. Moshi offers five trial inbox actions. HAPI's Web/PWA is free. Model and hosting costs are separate for all four.
 
 <details>
 <summary><strong>Sources and agent coverage · checked 13 November 2026</strong></summary>
 
-- **Moshi:** [Chat View requirements](https://getmoshi.app/docs/chat-view#requirements), [Free vs Pro](https://getmoshi.app/docs/subscription), and its [open-source comparison](https://getmoshi.app/compare/paseo). Watch actions also require Pro; Togo includes them.
-- **Paseo:** [Free and open source](https://paseo.sh/), [development environment](https://paseo.sh/docs/why), and [mobile connectivity](https://paseo.sh/docs/connectivity). It also offers worktrees, orchestration and desktop/web clients.
+- **Togo:** [Transports and approvals](docs/architecture.md), [review UI](apps/ios/Togo/Review), [image markup](apps/ios/Togo/Compose/ImagePasteFlow.swift) and [on-device speech](apps/ios/Togo/Compose/Dictation). Eternal Terminal needs `etserver` on the host and an explicit transport choice. Agent controls and image input depend on the harness.
+- **Moshi:** [Chat View requirements](https://getmoshi.app/docs/chat-view#requirements), [Free vs Pro](https://getmoshi.app/docs/subscription), [Live Activities](https://getmoshi.app/docs/live-activity), [notifications](https://getmoshi.app/docs/notifications), [diff viewer](https://getmoshi.app/docs/diff-viewer), [browser previews](https://getmoshi.app/docs/browser-preview) and its [comparison with Paseo](https://getmoshi.app/compare/paseo).
+- **Paseo:** [Free and open source](https://paseo.sh/), [development environment](https://paseo.sh/docs/why), [mobile connectivity](https://paseo.sh/docs/connectivity), [voice](https://paseo.sh/docs/voice) and [changelog](https://paseo.sh/changelog). It also offers worktrees, orchestration and desktop/web clients.
 - **HAPI:** [Native app pricing and features](https://hapi.run/docs/guide/native-apps), including its web-only terminal.
 
 Aider, Cline, Crush, Kilo Code and Mistral Vibe all have native chat in Togo; Moshi currently lists them as [terminal-only integrations](https://getmoshi.app/docs/hooks#tier-c-every-terminal-agent). Check the [controls for your harness](#supported-agents).

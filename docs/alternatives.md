@@ -12,6 +12,23 @@ The phone sends chat and control requests through an SSH exec channel. The helpe
 
 Local model inference stays wherever your harness runs it. Togo uses that harness's existing model configuration; it does not run the model on the phone. You still need a reachable, awake host.
 
+## Included in Togo
+
+Every feature below is included in the free app:
+
+| Area | Shipping features |
+|---|---|
+| Agents | Native chat for 16 harnesses; messages, tool activity, questions, model/mode controls and mission control where the agent supports them. |
+| Connections | SSH, Mosh and Eternal Terminal; tmux sessions, reattachment, Tailscale addresses, jump hosts over SSH/Mosh, host-key pinning and device-held keys. ET needs `etserver` and an explicit transport choice; it does not use jump hosts. |
+| Away from the desk | Create sessions from the phone, push notifications, in-app answers, Lock Screen approval buttons, Live Activities, Dynamic Island and Apple Watch approvals. |
+| Review | File browsing, commit history, git diffs, comments sent back to the session, staging/unstaging, discarding changes, commits/amend and SSH-forwarded dev-server previews. |
+| Input | Image attachments and markup, terminal text selection/copy/paste, and on-device dictation with Apple's speech engine or downloaded Whisper models. Image input depends on the harness. |
+| Host tools | Keep-awake controls and Wake-on-LAN, plus the helper's `ask`, `notify`, `job` and `awake` commands for scripts. |
+
+Implementation: [transports and session handling](architecture.md), [review screens](../apps/ios/Togo/Review), [image input](../apps/ios/Togo/Compose/ImagePasteFlow.swift), [dictation engines](../apps/ios/Togo/Compose/Dictation) and [host controls](../apps/ios/Togo/App/LiveMachineTools.swift).
+
+The README grid compares the mobile clients. N/D means a capability is not documented for that mobile app. A shell can still perform tasks such as `git commit` without a staging and commit UI. Browser-only and desktop-only features are labelled separately.
+
 ## Moshi
 
 Moshi is a close comparison: it also combines a mobile terminal, transcript-backed chat and a direct connection to your host. Its [Chat View](https://getmoshi.app/docs/chat-view) requires Pro or remaining trial uses. Its [Free vs Pro documentation](https://getmoshi.app/docs/subscription) also places Mosh, diff review and Watch actions in Pro, with five trial inbox actions before a paid unlock. Togo includes those features in its free app, with source for the app, helper and relay available here.
@@ -20,6 +37,8 @@ Agent coverage differs in both directions. Moshi's [integration tiers](https://g
 
 Moshi also supports [other multiplexers](https://getmoshi.app/docs/multiplexer), including Herdr, and ships on Android. Togo currently manages tmux sessions on Mac or Linux and ships on Apple mobile devices. Herdr support is planned.
 
+For the other mobile features in the grid, see Moshi's [Live Activity](https://getmoshi.app/docs/live-activity), [notification actions](https://getmoshi.app/docs/notifications), [diff/file viewer](https://getmoshi.app/docs/diff-viewer), [browser preview](https://getmoshi.app/docs/browser-preview) and [voice](https://getmoshi.app/docs/voice) documentation. Its [Paseo comparison](https://getmoshi.app/compare/paseo) describes desktop code comments and its closed-source licensing.
+
 ## Paseo
 
 Paseo is also [free and open source](https://paseo.sh/). It has [broad native and ACP agent support](https://paseo.sh/agents), including OpenCode, OMP and Pi. Price and support for those harnesses are shared strengths.
@@ -27,6 +46,8 @@ Paseo is also [free and open source](https://paseo.sh/). It has [broad native an
 The distinction is the workflow. Togo gives you mobile chat and controls over SSH around a running tmux session that a plain terminal can join. Paseo provides a [full development environment](https://paseo.sh/docs/why) with desktop, mobile and web clients, worktrees, orchestration and a desktop browser. It can also run headless without its desktop app.
 
 Paseo's [connectivity docs](https://paseo.sh/docs/connectivity) distinguish desktop/CLI SSH tunneling from mobile access: its phone clients use an end-to-end encrypted relay or connect directly to the daemon over Tailscale. Togo's phone opens the SSH control channel itself; its relay handles notifications and approval replies. Both offer direct access to your own machine, with different connection setups.
+
+Paseo's [changelog](https://paseo.sh/changelog) documents git actions, inline diff comments and mobile attachments. Its [voice guide](https://paseo.sh/docs/voice) describes local speech models downloaded by the daemon and optional cloud speech. The [browser is a desktop feature](https://paseo.sh/docs/why); mobile provides terminals, files and diffs.
 
 ## HAPI
 
