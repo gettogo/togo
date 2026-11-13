@@ -49,12 +49,16 @@ struct TogoApp: App {
                 .sceneShield(lock: resumeLock)
                 .environment(\.machineTools, composition.machineTools)
                 .environment(\.helperUpdates, composition.helperUpdates)
+                .environment(\.appUpdates, composition.appUpdates)
                 .environment(\.agentLibrary, composition.agentLibrary)
                 .environment(\.hardwareKeyboard, keyboard)
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
                     resumeLock.protectedDataBecameUnavailable()
                 }
-                .task { composition.start() }
+                .task {
+                    composition.start()
+                    await composition.appUpdates.checkIfDue()
+                }
                 .defaultAppStorage(composition.appStorage)
         }
         .commands { AppCommands() }
@@ -63,6 +67,7 @@ struct TogoApp: App {
             resumeLock.scenePhaseChanged(to: phase)
             switch phase {
             case .active:
+                Task { await composition.appUpdates.checkIfDue() }
                 composition.live?.setForeground(true)
                 composition.review?.setForeground(true)
                 // At a cold launch Live Activities and widgets wait for the first screen too.

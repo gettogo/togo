@@ -20,6 +20,8 @@ import TogoMosh
     let machineTools: any MachineTools
     /// Which machines have a newer helper; asks over each machine's own connection.
     private(set) var helperUpdates = HelperUpdates()
+    /// Published App Store releases, shared by all windows on this device.
+    private(set) var appUpdates = AppUpdates()
     /// Saved agent presets and the preset each folder last started with.
     let agentLibrary: AgentLibrary
     /// Nil under unit and UI tests and in a process without the app group.
@@ -46,6 +48,7 @@ import TogoMosh
     /// Under unit tests the app host must not reach the keychain's machines or iCloud, so
     /// `isolated` keeps every record in memory.
     init(isolated: Bool) {
+        if !isolated { appUpdates = .live() }
         #if DEBUG
         // The native end-to-end tests sign in on a simulator with no passcode or face.
         let secrets: any SecretStore = E2EHost.enabled ? E2EHost.PlainSecrets() : KeychainSecretStore()
