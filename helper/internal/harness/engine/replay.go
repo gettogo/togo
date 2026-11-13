@@ -18,6 +18,9 @@ func (s *sess) restore(ctx context.Context, mapper string, rec harness.Record) {
 	if m == nil {
 		return
 	}
+	// Let existing clients show loading before replay starts. Their open waits
+	// for this lock, so they still receive only the completed snapshot.
+	s.notifyLocked(harness.Notification{Kind: harness.NoteReset, Reason: "history"})
 	s.restoring = true
 	defer func() { s.restoring = false }()
 	for _, raw := range rec.Replay {
@@ -37,7 +40,4 @@ func (s *sess) restore(ctx context.Context, mapper string, rec harness.Record) {
 	if run := s.feeds[rec.Source]; run != nil {
 		run.failures = 0
 	}
-	// Existing clients reopen on reset and load without arrival animations.
-	// The whole snapshot is committed before another open can take the lock.
-	s.notifyLocked(harness.Notification{Kind: harness.NoteReset, Reason: "history"})
 }
