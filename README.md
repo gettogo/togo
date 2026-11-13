@@ -1,6 +1,6 @@
 <h1 align="center">Togo</h1>
 
-<p align="center"><strong>Every coding agent. One native app.</strong></p>
+<p align="center"><strong>Your coding agents. One native app.</strong></p>
 
 <p align="center">
   Native chat for OpenCode, OMP, Pi and 13 more coding agents.<br>
@@ -13,6 +13,7 @@
   <a href="https://apps.apple.com/app/togo-agent-remote/id6833273877">Download on the App Store</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#supported-agents">Supported agents</a> ·
+  <a href="#how-togo-compares">Compare</a> ·
   <a href="https://togoapp.dev/docs/">Docs</a> ·
   <a href="#roadmap">Roadmap</a> ·
   <a href="#contributing">Contribute</a> ·
@@ -32,9 +33,11 @@
 
 ## One app for the agents you already use
 
-Togo maps each supported agent's hooks, session logs or local API into the same native chat. Read the conversation and tool work, answer requests, and change the model or mode where the agent supports it. The agent's real terminal is one tap away.
+Togo is for people who use OpenCode, OMP, Pi or a mix of coding agents and want to keep working away from their desk. Your harness keeps its configuration, tools and model access, including local models. Togo gives it a native SwiftUI chat on your phone.
 
-Your sessions run in tmux on your machine. Start one from your phone or attach from your desk. Keep using your agents, models and provider accounts; Togo connects to the work already running there.
+Each of the [16 agent adapters](helper/internal/harness/adapters) maps the agent's hooks, session logs or local API into messages, tool work and the controls that agent supports. Read a turn, send the next instruction, answer a question or change models. Open the real terminal when you need the agent's own interface or a shell.
+
+**The chat and terminal belong to the same running session.** Start a Togo session from your phone or the CLI; it lives in tmux on your Mac or Linux machine. Run `togo attach 1` at your desk to join it. Chat and controls connect directly over SSH, with no session traffic passing through a Togo relay. A separate relay handles encrypted notifications and signed approval replies.
 
 <table>
   <tr>
@@ -61,6 +64,22 @@ You're in line for coffee and an agent stops to ask whether it can run a databas
 <p align="center">
   <img src=".github/assets/devices.webp" alt="Togo on iPad with the session list, OpenCode chat and mission control; an Apple Watch beside it shows a waiting request" width="100%">
 </p>
+
+## How Togo compares
+
+**Native chat for 16 agents, the same session's terminal, Mosh, diff review, staging, commits and Lock Screen / Watch approvals are all included.** The App Store download, helper and relay are free and open source. Your model provider or hosting costs are separate.
+
+| Alternative | The difference that matters |
+|---|---|
+| **Moshi** | Its [Chat View requires Pro](https://getmoshi.app/docs/chat-view#requirements). Its [Pro tier](https://getmoshi.app/docs/subscription) also unlocks Mosh, diff review and Watch actions; inbox actions have a five-action trial. Togo includes those capabilities without a paid unlock. |
+| **Paseo** | Also [free and open source](https://paseo.sh/), with broad agent support, worktrees, orchestration and clients across desktop and mobile. Choose Togo for native Apple chat over SSH and sessions you can join with a plain tmux terminal. Paseo's [mobile connection](https://paseo.sh/docs/connectivity) uses its encrypted relay or a direct Tailscale connection to its daemon. |
+| **HAPI** | Its [Web/PWA is free; native app downloads are paid](https://hapi.run/docs/guide/native-apps). Its remote terminal is currently web-only. Togo includes both chat and the full terminal in the free native app. |
+
+Using Aider, Cline, Crush, Kilo Code or Mistral Vibe? All five have native chat in Togo; Moshi currently lists them as [terminal-only integrations](https://getmoshi.app/docs/hooks#tier-c-every-terminal-agent). Check the [controls for your harness](#supported-agents).
+
+[Compare T3 Code, Orca, Happy, KittyLitter, Termius, Blink Shell, ShellFish and first-party remotes](docs/alternatives.md), including where another tool may fit better. Checked against each project's own documentation on **13 November 2026**.
+
+Togo currently needs iOS/iPadOS 26, SSH and tmux on macOS or Linux. Android, web and desktop clients are outside its current scope. Herdr, task worktrees and cross-agent handoff are on the [roadmap](#roadmap), not shipping features.
 
 ## Quick start
 
