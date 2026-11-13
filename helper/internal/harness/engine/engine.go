@@ -210,10 +210,10 @@ func (e *Engine) Forget(id string) {
 	}
 	e.log.Forget(id)
 	e.cache.forget(id)
-	e.dropRelaunch(id)
 	source.Hooks.Forget(id)
 	unlock := e.endpointOps.lock(id)
 	e.retireEndpoint(id)
+	e.dropRelaunch(id)
 	unlock()
 	typing.Delete(id)
 	draining.Delete(id)

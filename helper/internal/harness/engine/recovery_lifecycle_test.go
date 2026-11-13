@@ -277,3 +277,42 @@ func TestRecoveryFollowsTheServerOwnedSocketSymlink(t *testing.T) {
 		t.Fatal("kept owned socket symlink")
 	}
 }
+
+type recoverySessions func(context.Context, string) (session.Session, error)
+
+func (f recoverySessions) Resolve(ctx context.Context, id string) (session.Session, error) {
+	return f(ctx, id)
+}
+
+func TestForgetDuringRecoveryClearsRelaunchArguments(t *testing.T) {
+	const id = "s_abcdefghij"
+	e := fakeServerEngine(t, "serve")
+	e.noteRelaunch(id, []string{"fakesrv", "--resume", "conversation"})
+	if e.EndpointArgs("fakesrv", id, "") == nil {
+		t.Fatal("server did not start")
+	}
+	t.Cleanup(func() { e.Forget(id) })
+	entered, release := make(chan struct{}), make(chan struct{})
+	cfg := e.cfg
+	cfg.Sessions = recoverySessions(func(context.Context, string) (session.Session, error) {
+		close(entered)
+		<-release
+		return session.Session{ID: id, Agent: "fakesrv", Managed: true}, nil
+	})
+	next := New(cfg)
+	restored, forgotten := make(chan struct{}), make(chan struct{})
+	go func() { next.endpointFor(id); close(restored) }()
+	<-entered
+	go func() { next.Forget(id); close(forgotten) }()
+	waitFor(t, func() bool {
+		next.endpointOps.mu.Lock()
+		defer next.endpointOps.mu.Unlock()
+		return next.endpointOps.byID[id].users == 2
+	})
+	close(release)
+	<-restored
+	<-forgotten
+	if _, ok := next.relaunchedArgv(id); ok {
+		t.Fatal("removal retained arguments published by concurrent recovery")
+	}
+}
