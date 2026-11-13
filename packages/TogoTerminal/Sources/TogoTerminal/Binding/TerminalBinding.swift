@@ -155,8 +155,11 @@ import Foundation
     /// what is left of the budget. At least one piece goes in every frame, so output always moves.
     private func frame() {
         let start = now()
+        // Parsing cost varies between chunks. Leave the existing 20% sizing margin
+        // across the whole frame too, for bookkeeping and the engine's change callbacks.
+        let parseBudget = frameBudget * 4 / 5
         var fed = 0
-        var size = min(nanosPerByte.map { Self.chunk(for: frameBudget, nanosPerByte: $0) } ?? Self.firstChunk, Self.firstChunk)
+        var size = min(nanosPerByte.map { Self.chunk(for: parseBudget, nanosPerByte: $0) } ?? Self.firstChunk, Self.firstChunk)
         while pendingBytes > 0 {
             let count = min(size, pendingBytes)
             let before = now()
@@ -165,23 +168,24 @@ import Foundation
             head += count
             fed += count
             learn(cost: after - before, bytes: count)
-            let left = frameBudget - (after - start)
+            let left = parseBudget - (after - start)
             guard left > .zero, let perByte = nanosPerByte else { break }
             size = Self.chunk(for: left, nanosPerByte: perByte)
-            guard Double(Self.minChunk) * perByte < Self.nanoseconds(left) else { break }
+            guard Double(Self.minChunk) * perByte < Self.nanoseconds(left) * 0.8 else { break }
         }
-        noteFrame(work: now() - start, bytes: fed)
-        if head == buffer.count {
+        let drained = head == buffer.count
+        if drained {
             buffer.removeAll(keepingCapacity: true)
             head = 0
             isTicking = false
             ticker.stop()
-            endBurst()
         } else if head >= Self.maxPending {
             buffer.removeFirst(head)
             head = 0
         }
         wakeFrameWaiters()
+        noteFrame(work: now() - start, bytes: fed)
+        if drained { endBurst() }
     }
 
     /// The largest piece expected to parse within `time`, with a margin for variance.
