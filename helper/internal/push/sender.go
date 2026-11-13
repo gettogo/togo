@@ -223,12 +223,12 @@ func (s *Sender) send(ctx context.Context, m Message) []Result {
 	if len(alerted)+len(started) > 0 {
 		m.watchAlert = true
 	}
-	res := s.deliver(ctx, m, func(d Device) bool { return !alerted[d.DeviceID] && !started[d.DeviceID] })
+	res := s.deliver(ctx, m, func(d Device) bool { return !alerted[d.DeviceID] && started[d.DeviceID] == nil })
 	for id := range alerted {
 		res = append(res, Result{DeviceID: id})
 	}
-	for id := range started {
-		s.confirmStart(m, id)
+	for id, attempt := range started {
+		s.confirmStart(m, id, attempt)
 		res = append(res, Result{DeviceID: id})
 	}
 	if m.Plaintext.Kind == wire.PushNeedsYou && len(alerted)+len(started) > 0 {
@@ -236,7 +236,7 @@ func (s *Sender) send(ctx context.Context, m Message) []Result {
 		// the app silently too: its widget, Siri count and Watch replies know it is waiting.
 		bg := m
 		bg.Kind = relayBackground
-		s.deliver(ctx, bg, func(d Device) bool { return alerted[d.DeviceID] || started[d.DeviceID] })
+		s.deliver(ctx, bg, func(d Device) bool { return alerted[d.DeviceID] || started[d.DeviceID] != nil })
 	}
 	return res
 }
@@ -244,23 +244,36 @@ func (s *Sender) send(ctx context.Context, m Message) []Result {
 // confirmStart sends m to device id after liveStartConfirm unless the
 // activity the start made has registered its update token by then, or the
 // request is no longer waiting.
-func (s *Sender) confirmStart(m Message, id string) {
-	time.AfterFunc(liveStartConfirm, func() {
-		list, err := s.Devices.List()
-		if err != nil {
+func (s *Sender) confirmStart(m Message, id string, attempt *liveStartAttempt) {
+	time.AfterFunc(liveStartConfirm, func() { s.startUnconfirmed(m, id, attempt) })
+}
+
+func (s *Sender) startUnconfirmed(m Message, id string, attempt *liveStartAttempt) {
+	list, err := s.Devices.List()
+	s.liveMu.Lock()
+	dl := s.liveDev[id]
+	if attempt == nil || dl == nil || dl.started != attempt {
+		s.liveMu.Unlock()
+		return
+	}
+	// Accepted by APNs is not confirmation that an activity started. Release this
+	// attempt even if its request already closed, so a later cycle may start.
+	dl.started = nil
+	s.liveMu.Unlock()
+	if err != nil {
+		s.logf("push: could not confirm Live Activity: device state unreadable")
+		return
+	}
+	for _, d := range list {
+		if d.DeviceID == id && d.LiveActivityToken != "" {
 			return
 		}
-		for _, d := range list {
-			if d.DeviceID == id && d.LiveActivityToken != "" {
-				return
-			}
-		}
-		if rid := m.Plaintext.RequestID; rid != "" && (!s.Live.Shows(wire.PushNeedsYou, rid, "") ||
-			s.Remind != nil && s.Remind.Pending != nil && !s.Remind.Pending(rid)) {
-			return
-		}
-		s.deliver(context.Background(), m, func(d Device) bool { return d.DeviceID == id })
-	})
+	}
+	if rid := m.Plaintext.RequestID; rid != "" && (!s.Live.Shows(wire.PushNeedsYou, rid, "") ||
+		s.Remind != nil && s.Remind.Pending != nil && !s.Remind.Pending(rid)) {
+		return
+	}
+	s.deliver(context.Background(), m, func(d Device) bool { return d.DeviceID == id })
 }
 
 // shortHost is the machine name as `hostname -s` prints it, cut to the

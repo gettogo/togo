@@ -11,11 +11,17 @@ import (
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
+// liveStartAttempt identifies one accepted start until its update token arrives.
+// Pointer identity keeps an old confirmation timeout from clearing a later attempt.
+type liveStartAttempt struct {
+	requestID string
+}
+
 // deviceLive is what the Sender knows about one device's activity.
 type deviceLive struct {
-	token    string // update token the activity was last seen with
-	started  bool   // a start went out and no update token has come back yet
-	startDue bool   // send a start on the next change with something waiting
+	token    string            // update token the activity was last seen with
+	started  *liveStartAttempt // a start went out and no update token has come back yet
+	startDue bool              // send a start on the next change with something waiting
 	lastAt   time.Time
 	last     LiveState
 	pending  *LiveState // an update held back by liveCoalesce
@@ -85,7 +91,7 @@ func (s *Sender) pumpLive(ctx context.Context) {
 // the current state again if nothing changed, in place of the push.
 // alerted holds those devices; started holds devices sent a start, whose
 // own alert stands in for the push until the activity is confirmed.
-func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted, started map[string]bool) {
+func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted map[string]bool, started map[string]*liveStartAttempt) {
 	s.liveMu.Lock()
 	defer s.liveMu.Unlock()
 	now := s.now()
@@ -99,7 +105,7 @@ func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted, starte
 		s.logf("push: %v", err)
 		return nil, nil
 	}
-	alerted, started = map[string]bool{}, map[string]bool{}
+	alerted, started = map[string]bool{}, map[string]*liveStartAttempt{}
 	s.liveGen = gen
 	seen := map[string]bool{}
 	hostID := ""
@@ -123,7 +129,7 @@ func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted, starte
 		}
 		fresh := d.LiveActivityToken != "" && d.LiveActivityToken != dl.token
 		if fresh {
-			dl.token, dl.started, dl.startDue = d.LiveActivityToken, false, false
+			dl.token, dl.started, dl.startDue = d.LiveActivityToken, nil, false
 		}
 		if d.LiveActivityToken == "" {
 			dl.token, dl.pending = "", nil
@@ -151,8 +157,8 @@ func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted, starte
 		if dl.alerted {
 			alerted[d.DeviceID] = true
 		}
-		if alert && dl.started && !wasStarted {
-			started[d.DeviceID] = true
+		if alert && dl.started != nil && dl.started != wasStarted {
+			started[d.DeviceID] = dl.started
 		}
 		dl.alert, dl.alerted = false, false
 	}
@@ -170,6 +176,10 @@ func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted, starte
 // failed start (retried once) or after the relay reported the update token
 // gone.
 func (s *Sender) liveEvent(ctx context.Context, d Device, dl *deviceLive, st LiveState, ev string, host func() string, now time.Time) bool {
+	// A new waiting cycle must not inherit an earlier unconfirmed start.
+	if ev == liveStart && dl.token == "" {
+		dl.started = nil
+	}
 	wantStart := ev == liveStart || (dl.startDue && ev == liveUpdate && st.Waiting > 0)
 	switch {
 	case dl.token != "" && ev == liveEnd:
@@ -183,17 +193,21 @@ func (s *Sender) liveEvent(ctx context.Context, d Device, dl *deviceLive, st Liv
 	case dl.token != "":
 		s.queueUpdate(ctx, d, dl, st, now)
 		return true
-	case wantStart && d.LiveActivityStartToken != "" && !dl.started && host() != "":
+	case wantStart && d.LiveActivityStartToken != "" && dl.started == nil && host() != "":
 		retry := dl.startDue && ev != liveStart
 		dl.startDue = false
 		if err := s.sendLive(ctx, d, dl, liveStart, st, &liveAttributes{HostID: host()}, now); err != nil {
 			dl.startDue = !retry
 			return true
 		}
-		dl.started = true
+		requestID := ""
+		if st.RequestID != nil {
+			requestID = *st.RequestID
+		}
+		dl.started = &liveStartAttempt{requestID: requestID}
 		return true
 	case ev == liveEnd:
-		dl.started, dl.startDue = false, false
+		dl.started, dl.startDue = nil, false
 	}
 	return false
 }
@@ -258,7 +272,7 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 	s.logf("push: device %s live activity %s: %v", idHash(d.DeviceID), ev, err)
 	var refused *errStatus
 	if ev != liveStart && errors.As(err, &refused) && refused.deadToken {
-		dl.token, dl.startDue, dl.started = "", true, false
+		dl.token, dl.startDue, dl.started = "", true, nil
 	}
 	return err
 }
