@@ -38,9 +38,10 @@ type AppServer struct {
 }
 
 type threadInfo struct {
-	parent string // the agent item id of a subagent thread; "" for top level
-	top    bool
-	agent  harness.Item // complete stable identity, also used for row updates
+	parent     string // the agent item id of a subagent thread; "" for top level
+	top        bool
+	agent      harness.Item      // complete stable identity, also used for row updates
+	activities map[string]string // last item ID for each of the four activity kinds
 }
 
 type turnInfo struct {
@@ -216,13 +217,15 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 		ops = append(ops, agentRow(x))
 	}
 	for _, t := range r.Thread.Turns {
-		items = append(items, a.history(id, t, at)...)
+		history, historyOps := a.history(id, t, at)
+		items = append(items, history...)
+		ops = append(ops, historyOps...)
 	}
 	return items, ops
 }
 
 // history replays one finished or running turn from a resume result.
-func (a *AppServer) history(thread string, t turnPayload, at time.Time) []harness.Item {
+func (a *AppServer) history(thread string, t turnPayload, at time.Time) ([]harness.Item, []harness.Op) {
 	started := orNow(secs(t.StartedAt), at)
 	var ended *time.Time
 	if e := secs(t.CompletedAt); !e.IsZero() {
@@ -231,7 +234,13 @@ func (a *AppServer) history(thread string, t turnPayload, at time.Time) []harnes
 	w := where{turn: t.ID, parent: a.parentOf(thread), started: started, ended: ended, at: started}
 	ti := a.turn(t.ID, thread, started)
 	var items []harness.Item
+	var ops []harness.Op
 	for _, it := range t.Items {
+		if it.Type == "subAgentActivity" {
+			agents, agentOps := a.activity(it, thread, orNow(ms(it.StartedAtMs), started), orNow(ms(it.CompletedAtMs), orNow(derefTime(ended), at)))
+			items, ops = append(items, agents...), append(ops, agentOps...)
+			continue
+		}
 		for _, x := range convert(it, w, true) {
 			a.count(ti, &x)
 			items = append(items, x)
@@ -244,7 +253,7 @@ func (a *AppServer) history(thread string, t turnPayload, at time.Time) []harnes
 		a.state["turn"] = t.ID
 		a.state["working"], a.state["idle"] = "true", "false"
 	}
-	return items
+	return items, ops
 }
 
 func (a *AppServer) turn(id, thread string, started time.Time) *turnInfo {
@@ -403,18 +412,21 @@ func (a *AppServer) itemEvent(params json.RawMessage, at time.Time, final bool) 
 	id := p.Item.ID
 	started := a.started[id]
 	if !final {
-		started = orNow(ms(p.StartedAtMs), at)
+		started = orNow(ms(p.StartedAtMs), orNow(ms(p.Item.StartedAtMs), at))
 		a.started[id] = started
 	}
 	if started.IsZero() {
-		started = at
+		started = orNow(ms(p.Item.StartedAtMs), at)
 	}
 	w := where{turn: p.TurnID, parent: a.parentOf(p.ThreadID), started: started, at: started}
 	if final {
-		e := orNow(ms(p.DoneAtMs), at)
+		e := orNow(ms(p.DoneAtMs), orNow(ms(p.Item.CompletedAtMs), at))
 		w.ended = &e
 		delete(a.started, id)
 		delete(a.streams, id)
+	}
+	if p.Item.Type == "subAgentActivity" {
+		return a.activity(p.Item, p.ThreadID, started, orNow(derefTime(w.ended), started))
 	}
 	ti := a.turns[p.TurnID]
 	items := convert(p.Item, w, final)
