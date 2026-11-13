@@ -1,6 +1,6 @@
 <h1 align="center">Togo</h1>
 
-<p align="center"><strong>Every coding agent. One native app.</strong></p>
+<p align="center"><strong>Your coding agents. One native app.</strong></p>
 
 <p align="center">
   Native chat for OpenCode, OMP, Pi and 13 more coding agents.<br>
@@ -13,6 +13,7 @@
   <a href="https://apps.apple.com/app/togo-agent-remote/id6833273877">Download on the App Store</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#supported-agents">Supported agents</a> ·
+  <a href="#how-togo-compares">Compare</a> ·
   <a href="https://togoapp.dev/docs/">Docs</a> ·
   <a href="#roadmap">Roadmap</a> ·
   <a href="#contributing">Contribute</a> ·
@@ -32,9 +33,11 @@
 
 ## One app for the agents you already use
 
-Togo maps each supported agent's hooks, session logs or local API into the same native chat. Read the conversation and tool work, answer requests, and change the model or mode where the agent supports it. The agent's real terminal is one tap away.
+Togo is for people who use OpenCode, OMP, Pi or a mix of coding agents and want to keep working away from their desk. Your harness keeps its configuration, tools and model access, including local models. Togo gives it a native SwiftUI chat on your phone.
 
-Your sessions run in tmux on your machine. Start one from your phone or attach from your desk. Keep using your agents, models and provider accounts; Togo connects to the work already running there.
+Each of the [16 agent adapters](helper/internal/harness/adapters) maps the agent's hooks, session logs or local API into messages, tool work and the controls that agent supports. Read a turn, send the next instruction, answer a question or change models. Open the real terminal when you need the agent's own interface or a shell.
+
+**The chat and terminal belong to the same running session.** Start a Togo session from your phone or the CLI; it lives in tmux on your Mac or Linux machine. Run `togo attach 1` at your desk to join it. Chat and controls connect directly over SSH, with no session traffic passing through a Togo relay. A separate relay handles encrypted notifications and signed approval replies.
 
 <table>
   <tr>
@@ -56,11 +59,60 @@ You're in line for coffee and an agent stops to ask whether it can run a databas
 - **Answer where the request finds you.** Approvals appear in chat, notifications, Live Activities and on Apple Watch. Answer questions and their choices in the app.
 - **Start work from your phone.** Pick a machine, a folder and an agent. It starts in tmux and appears at your desk too.
 - **See the rest of the session.** Mission control gathers subagents, background shells, plans, changes, ports and status where the agent reports them.
+- **Finish the review from your phone.** Browse files and commit history, send comments on a diff, stage or discard changes, and commit. Open a host's dev server through an SSH-forwarded preview.
+- **Send images and dictate locally.** Attach screenshots, mark up an image before sending it, or dictate with Apple's on-device speech or a downloaded Whisper model.
+- **Keep a full terminal with you.** SSH, Mosh and Eternal Terminal are included, with session reattachment and terminal text selection, copy and paste.
 - **Use the screen you have.** On iPad and an open iPhone Duo, keep the session list beside your work. On Watch, approve or deny a waiting request.
 
 <p align="center">
   <img src=".github/assets/devices.webp" alt="Togo on iPad with the session list, OpenCode chat and mission control; an Apple Watch beside it shows a waiting request" width="100%">
 </p>
+
+## How Togo compares
+
+**16 native agent chats. A real terminal. No paid unlocks.**
+
+| Mobile app | **Togo** | Moshi | Paseo | HAPI |
+|---|:---:|:---:|:---:|:---:|
+| App download | **Free** | Free | Free | Paid |
+| Native agent chat | **✓** | Pro | ✓ | ✓ |
+| Full terminal | **✓** | ✓ | ✓ | Web only |
+| Mosh transport | **✓** | Pro | N/D | N/D |
+| Eternal Terminal | **✓** | Pro | N/D | N/D |
+| Chat connection | **SSH** | SSH | Relay / Tailscale | Hub |
+| Sessions run in | **tmux** | tmux / other muxes | Paseo daemon | CLI / Runner |
+| Push notifications | **✓** | ✓ | ✓ | ✓ |
+| In-app approvals | **✓** | Pro | ✓ | ✓ |
+| Lock Screen approval buttons | **✓** | Pro | N/D | N/D |
+| Live Activities / Dynamic Island | **✓** | ✓ | N/D | N/D |
+| Apple Watch approvals | **✓** | Pro | N/D | N/D |
+| Git diff review | **✓** | Pro | ✓ | ✓ |
+| Stage / commit UI | **✓** | N/D | ✓ | N/D |
+| Browse files / past commits | **✓** | Pro | ✓ | Files only |
+| Diff comments to the agent | **✓** | Desktop | ✓ | N/D |
+| Dev-server previews | **✓** | Pro | Desktop | N/D |
+| Image attachments | **✓** | Pro | ✓ | ✓ |
+| Image markup | **✓** | Pro | N/D | N/D |
+| Dictation | **On-device** | On-device / cloud | Host / cloud | Hub provider |
+| Open-source app | **✓** | No | ✓ | ✓ |
+
+✓ Included at the app price above. **Pro** requires a paid upgrade. **N/D** Not documented for the mobile app. Moshi offers five trial inbox actions. HAPI's Web/PWA is free. Model and hosting costs are separate for all four.
+
+<details>
+<summary><strong>Sources and agent coverage · checked 13 November 2026</strong></summary>
+
+- **Togo:** [Transports and approvals](docs/architecture.md), [review UI](apps/ios/Togo/Review), [image markup](apps/ios/Togo/Compose/ImagePasteFlow.swift) and [on-device speech](apps/ios/Togo/Compose/Dictation). Eternal Terminal needs `etserver` on the host and an explicit transport choice. Agent controls and image input depend on the harness.
+- **Moshi:** [Chat View requirements](https://getmoshi.app/docs/chat-view#requirements), [Free vs Pro](https://getmoshi.app/docs/subscription), [Live Activities](https://getmoshi.app/docs/live-activity), [notifications](https://getmoshi.app/docs/notifications), [diff viewer](https://getmoshi.app/docs/diff-viewer), [browser previews](https://getmoshi.app/docs/browser-preview) and its [comparison with Paseo](https://getmoshi.app/compare/paseo).
+- **Paseo:** [Free and open source](https://paseo.sh/), [development environment](https://paseo.sh/docs/why), [mobile connectivity](https://paseo.sh/docs/connectivity), [voice](https://paseo.sh/docs/voice) and [changelog](https://paseo.sh/changelog). It also offers worktrees, orchestration and desktop/web clients.
+- **HAPI:** [Native app pricing and features](https://hapi.run/docs/guide/native-apps), including its web-only terminal.
+
+Aider, Cline, Crush, Kilo Code and Mistral Vibe all have native chat in Togo; Moshi currently lists them as [terminal-only integrations](https://getmoshi.app/docs/hooks#tier-c-every-terminal-agent). Check the [controls for your harness](#supported-agents).
+
+</details>
+
+[Full comparison, including T3 Code, Orca, Happy, KittyLitter, Termius, Blink Shell, ShellFish and first-party remotes](docs/alternatives.md).
+
+**Current limits:** iOS/iPadOS 26, Mac/Linux and tmux. Herdr, task worktrees and cross-agent handoff are on the [roadmap](#roadmap).
 
 ## Quick start
 
