@@ -30,7 +30,7 @@ struct TogoLiveActivity: Widget {
                         .dynamicIsland(verticalPlacement: .belowIfTooWide)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    IslandExpandedTrailing(state: context.state, isStale: context.isStale)
+                    IslandExpandedTrailing(state: context.state, isStale: context.isStale, feedback: card.feedback)
                         .dynamicIsland(verticalPlacement: .belowIfTooWide)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
