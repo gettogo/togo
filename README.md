@@ -67,19 +67,35 @@ You're in line for coffee and an agent stops to ask whether it can run a databas
 
 ## How Togo compares
 
-**Native chat for 16 agents, the same session's terminal, Mosh, diff review, staging, commits and Lock Screen / Watch approvals are all included.** The App Store download, helper and relay are free and open source. Your model provider or hosting costs are separate.
+**16 native agent chats. A real terminal. No paid unlocks.**
 
-| Alternative | The difference that matters |
-|---|---|
-| **Moshi** | Its [Chat View requires Pro](https://getmoshi.app/docs/chat-view#requirements). Its [Pro tier](https://getmoshi.app/docs/subscription) also unlocks Mosh, diff review and Watch actions; inbox actions have a five-action trial. Togo includes those capabilities without a paid unlock. |
-| **Paseo** | Also [free and open source](https://paseo.sh/), with broad agent support, worktrees, orchestration and clients across desktop and mobile. Choose Togo for native Apple chat over SSH and sessions you can join with a plain tmux terminal. Paseo's [mobile connection](https://paseo.sh/docs/connectivity) uses its encrypted relay or a direct Tailscale connection to its daemon. |
-| **HAPI** | Its [Web/PWA is free; native app downloads are paid](https://hapi.run/docs/guide/native-apps). Its remote terminal is currently web-only. Togo includes both chat and the full terminal in the free native app. |
+| Mobile app | **Togo** | Moshi | Paseo | HAPI |
+|---|:---:|:---:|:---:|:---:|
+| App download | **Free** | Free | Free | Paid |
+| Native agent chat | **✓** | Pro | ✓ | ✓ |
+| Full terminal | **✓** | ✓ | ✓ | Web only |
+| Git diff review | **✓** | Pro | ✓ | ✓ |
+| Approval actions | **✓** | Pro | ✓ | ✓ |
+| Phone connection | **SSH** | SSH | Relay / Tailscale | Hub |
+| Sessions run in | **tmux** | tmux / other muxes | Paseo daemon | CLI / Runner |
+| Open-source app | **✓** | No | ✓ | ✓ |
 
-Using Aider, Cline, Crush, Kilo Code or Mistral Vibe? All five have native chat in Togo; Moshi currently lists them as [terminal-only integrations](https://getmoshi.app/docs/hooks#tier-c-every-terminal-agent). Check the [controls for your harness](#supported-agents).
+✓ Included at the app price above. **Pro** requires a paid upgrade. Moshi offers five trial inbox actions. HAPI's Web/PWA is free. Model and hosting costs are separate for all four.
 
-[Compare T3 Code, Orca, Happy, KittyLitter, Termius, Blink Shell, ShellFish and first-party remotes](docs/alternatives.md), including where another tool may fit better. Checked against each project's own documentation on **13 November 2026**.
+<details>
+<summary><strong>Sources and agent coverage · checked 13 November 2026</strong></summary>
 
-Togo currently needs iOS/iPadOS 26, SSH and tmux on macOS or Linux. Android, web and desktop clients are outside its current scope. Herdr, task worktrees and cross-agent handoff are on the [roadmap](#roadmap), not shipping features.
+- **Moshi:** [Chat View requirements](https://getmoshi.app/docs/chat-view#requirements), [Free vs Pro](https://getmoshi.app/docs/subscription), and its [open-source comparison](https://getmoshi.app/compare/paseo). Watch actions also require Pro; Togo includes them.
+- **Paseo:** [Free and open source](https://paseo.sh/), [development environment](https://paseo.sh/docs/why), and [mobile connectivity](https://paseo.sh/docs/connectivity). It also offers worktrees, orchestration and desktop/web clients.
+- **HAPI:** [Native app pricing and features](https://hapi.run/docs/guide/native-apps), including its web-only terminal.
+
+Aider, Cline, Crush, Kilo Code and Mistral Vibe all have native chat in Togo; Moshi currently lists them as [terminal-only integrations](https://getmoshi.app/docs/hooks#tier-c-every-terminal-agent). Check the [controls for your harness](#supported-agents).
+
+</details>
+
+[Full comparison, including T3 Code, Orca, Happy, KittyLitter, Termius, Blink Shell, ShellFish and first-party remotes](docs/alternatives.md).
+
+**Current limits:** iOS/iPadOS 26, Mac/Linux and tmux. Herdr, task worktrees and cross-agent handoff are on the [roadmap](#roadmap).
 
 ## Quick start
 
