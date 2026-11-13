@@ -19,6 +19,8 @@ type liveStartAttempt struct {
 
 // deviceLive is what the Sender knows about one device's activity.
 type deviceLive struct {
+	readyRequest string // request whose shared display data was acknowledged
+
 	token    string            // update token the activity was last seen with
 	started  *liveStartAttempt // a start went out and no update token has come back yet
 	startDue bool              // send a start on the next change with something waiting
@@ -96,6 +98,11 @@ func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted map[str
 	defer s.liveMu.Unlock()
 	now := s.now()
 	st, ev, ok := s.Live.Next(now)
+	if !ok {
+		if current, shown := s.Live.Current(); shown {
+			st = current
+		}
+	}
 	gen := s.Devices.Gen()
 	if !ok && !alert && !s.anyPendingLocked() && gen == s.liveGen {
 		return nil, nil
@@ -139,6 +146,15 @@ func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted map[str
 		handled := false
 		if ok {
 			handled = s.liveEvent(ctx, d, dl, st, ev, host, now)
+		}
+		ready := st.RequestID != nil && d.ContextRequestID == *st.RequestID && d.ContextRequestID != ""
+		if ready && dl.readyRequest != d.ContextRequestID {
+			dl.readyRequest = d.ContextRequestID
+			// The renderer cannot open Keychain reliably. A fresh envelope redraws it
+			// after the app or notification extension has saved its fallback data.
+			if !handled && !fresh && dl.token != "" {
+				s.queueUpdate(ctx, d, dl, st, now)
+			}
 		}
 		if fresh && !handled {
 			if cur, shown := s.Live.Current(); shown {

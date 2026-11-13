@@ -37,7 +37,8 @@ type Config struct {
 	Answer  AnswerFunc
 	// Register stores tokens from a verified registration. Nil drops
 	// registrations.
-	Register RegisterFunc
+	Register     RegisterFunc
+	ContextReady ContextReadyFunc
 	// EndLive forgets the Live Activity a verified registration reports
 	// ended. Nil ignores the report.
 	EndLive EndLiveFunc
@@ -370,7 +371,15 @@ func (r *runner) handle(ctx context.Context, f frame) bool {
 		return true
 	}
 	what := "answer"
-	if m.Register != nil {
+	if m.Context != nil {
+		what = "request receipt"
+		if r.cfg.ContextReady == nil {
+			r.cfg.Logf("mailbox: request receipt %s ignored", tag)
+			return true
+		}
+		g := m.Context
+		err = r.cfg.ContextReady(g.DeviceID, g.RequestID, g.TokenHash, g.TS)
+	} else if m.Register != nil {
 		what = "registration"
 		if r.cfg.Register == nil {
 			r.cfg.Logf("mailbox: registration %s ignored", tag)
@@ -386,6 +395,9 @@ func (r *runner) handle(ctx context.Context, f frame) bool {
 		err = r.cfg.Answer(ctx, m.Answer.RequestID, m.Answer.Decision, ByPhone)
 	}
 	if err != nil {
+		if m.Context != nil {
+			r.v.release(m.replayKey())
+		}
 		if ctx.Err() != nil {
 			r.v.release(m.replayKey())
 			return false
