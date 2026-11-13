@@ -6,7 +6,6 @@ package engine
 
 import (
 	"context"
-	"os"
 	"slices"
 	"sync"
 	"time"
@@ -93,14 +92,15 @@ type Config struct {
 
 // Engine implements harness.Engine.
 type Engine struct {
-	cfg      Config
-	adapters map[string]*adapter
-	gate     gate
-	log      *Log
-	red      harness.Redactor
-	cache    cache
-	eps      endpoints
-	srv      servers
+	cfg         Config
+	adapters    map[string]*adapter
+	gate        gate
+	log         *Log
+	red         harness.Redactor
+	cache       cache
+	eps         endpoints
+	srv         servers
+	endpointOps endpointOperations
 
 	mu       sync.Mutex
 	sessions map[string]*sess
@@ -212,21 +212,9 @@ func (e *Engine) Forget(id string) {
 	e.cache.forget(id)
 	e.dropRelaunch(id)
 	source.Hooks.Forget(id)
-	e.stopServer(id)
-	e.eps.mu.Lock()
-	ep, hadEP := e.eps.byID[id]
-	delete(e.eps.byID, id)
-	e.eps.mu.Unlock()
-	if hadEP {
-		if r, ok := harness.LookupRunner("rpc"); ok {
-			if f, ok := r.(interface{ Forget(endpoint string) }); ok {
-				f.Forget(ep.url())
-			}
-		}
-		if ep.socket != "" {
-			_ = os.Remove(ep.socket)
-		}
-	}
+	unlock := e.endpointOps.lock(id)
+	e.retireEndpoint(id)
+	unlock()
 	typing.Delete(id)
 	draining.Delete(id)
 }

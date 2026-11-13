@@ -128,7 +128,15 @@ func newSess(e *Engine, info session.Session) *sess {
 		subs: map[harness.Subscriber]*subQueue{}, pending: map[string]harness.Item{}, lastPart: map[string]time.Time{}, sentText: map[string]string{},
 	}
 	if info.Managed {
-		s.ad = e.adapterFor(info.Agent, info.Command, e.envFor(info))
+		env := e.envFor(info)
+		if ep, ok := e.endpointFor(info.ID); ok {
+			if a := e.adapters[ep.adapter]; a != nil && a.matches(info.Agent, env.Argv) {
+				s.ad = a
+			}
+		}
+		if s.ad == nil {
+			s.ad = e.adapterFor(info.Agent, info.Command, env)
+		}
 	}
 	if s.ad == nil {
 		close(s.ready)
@@ -160,13 +168,13 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 		"created":          info.CreatedAt.UTC().Format(time.RFC3339),
 		source.VarTogoHome: e.cfg.TogoHome,
 	}}
-	if argv, ok := e.relaunchedArgv(info.ID); ok {
-		env.Argv = argv
-	}
 	if ep, ok := e.endpointFor(info.ID); ok {
 		env.Endpoint = ep.url()
 		env.Auth = ep.auth()
 		env.Vars["port"], env.Vars["socket"] = strconv.Itoa(ep.port), ep.socket
+	}
+	if argv, ok := e.relaunchedArgv(info.ID); ok {
+		env.Argv = argv
 	}
 	if e.cfg.PanePIDs != nil {
 		id := info.ID
@@ -213,6 +221,9 @@ var gateRetries = []time.Duration{2 * time.Second, 8 * time.Second}
 
 // checkGate runs the version gate, asking again after a transient failure.
 func (s *sess) checkGate() gateResult {
+	if ep, ok := s.e.endpointFor(s.id); ok && ep.recovered && ep.adapter == s.ad.Adapter.Adapter {
+		return judgeVersion(ep.version, "", s.ad.Harness.Range)
+	}
 	for i := 0; ; i++ {
 		ctx, cancel := context.WithTimeout(s.ctx, gateTimeout+time.Second)
 		r := s.e.gate.check(ctx, s.ad, s.env)
