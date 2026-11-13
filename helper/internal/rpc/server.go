@@ -73,16 +73,16 @@ type helloHelper struct {
 // An oversized or truncated frame leaves the stream unframed, so Serve stops
 // without replying and returns ErrFrameTooLarge or io.ErrUnexpectedEOF.
 //
-// When the stream ends, Serve cancels the context given to handlers, closes
-// the Conn and waits for concurrent handlers to return.
+// When the stream ends, Serve closes the Conn before canceling handlers,
+// then waits for concurrent handlers to return.
 func Serve(ctx context.Context, r io.Reader, w io.Writer, h Handler, info HelperInfo) error {
 	ctx, cancel := context.WithCancel(ctx)
 	conn := newConn(w)
 	ctx = withConn(ctx, conn)
 	var inflight sync.WaitGroup
 	defer func() {
-		cancel()
 		conn.close()
+		cancel()
 		inflight.Wait()
 	}()
 

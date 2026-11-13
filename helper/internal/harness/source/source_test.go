@@ -140,7 +140,13 @@ type collector struct {
 
 func (c *collector) emit(r harness.Record) {
 	c.mu.Lock()
-	c.recs = append(c.recs, string(r.Data))
+	if r.Replay != nil {
+		for _, raw := range r.Replay {
+			c.recs = append(c.recs, string(raw))
+		}
+	} else {
+		c.recs = append(c.recs, string(r.Data))
+	}
 	c.mu.Unlock()
 }
 

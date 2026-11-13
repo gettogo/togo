@@ -26,8 +26,10 @@ var serverReady = 8 * time.Second
 // session. Each runs in its own process group, so stopping it stops what
 // it spawned.
 type servers struct {
-	mu   sync.Mutex
-	byID map[string]*exec.Cmd
+	mu      sync.Mutex
+	byID    map[string]*exec.Cmd
+	owners  map[string]processIdentity
+	adopted map[string]bool
 }
 
 // startServer starts the adapter's endpoint server for one session and
@@ -78,15 +80,25 @@ func (e *Engine) startServer(a *adapter, sessionID, dir string, ep endpoint, dat
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	owner, err := identifyProcess(cmd.Process.Pid)
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return errors.New("server process identity is unavailable")
+	}
 	go func() { _ = cmd.Wait() }()
 	e.srv.mu.Lock()
 	if e.srv.byID == nil {
 		e.srv.byID = map[string]*exec.Cmd{}
 	}
 	e.srv.byID[sessionID] = cmd
+	if e.srv.owners == nil {
+		e.srv.owners = map[string]processIdentity{}
+	}
+	e.srv.owners[sessionID] = owner
 	e.srv.mu.Unlock()
 	if err := waitHealthy(ctx, ep, a.Endpoint.Health); err != nil {
-		e.stopServer(sessionID)
+		e.cleanupFailedEndpoint(sessionID, ep)
 		return err
 	}
 	return nil
@@ -97,10 +109,29 @@ func (e *Engine) startServer(a *adapter, sessionID, dir string, ep endpoint, dat
 func (e *Engine) stopServer(sessionID string) {
 	e.srv.mu.Lock()
 	cmd := e.srv.byID[sessionID]
+	owner, known := e.srv.owners[sessionID]
+	adopted := e.srv.adopted[sessionID]
 	delete(e.srv.byID, sessionID)
+	delete(e.srv.owners, sessionID)
+	delete(e.srv.adopted, sessionID)
 	e.srv.mu.Unlock()
-	if cmd != nil && cmd.Process != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	if adopted && cmd != nil && cmd.Process != nil {
+		defer cmd.Process.Release()
+	}
+	if !known {
+		if record, err := e.readEndpointRecord(sessionID); err == nil && record.Server != nil {
+			owner, known = *record.Server, true
+		}
+	}
+	if !known || !owner.ownsGroup() {
+		return
+	}
+	_ = syscall.Kill(-owner.PID, syscall.SIGTERM)
+	for deadline := time.Now().Add(serverReady); owner.ownsGroup() && time.Now().Before(deadline); {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if owner.ownsGroup() {
+		_ = syscall.Kill(-owner.PID, syscall.SIGKILL)
 	}
 }
 

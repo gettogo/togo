@@ -245,12 +245,24 @@ func (a *AppServer) threadStatus(params json.RawMessage, at time.Time) ([]harnes
 		return nil, nil
 	}
 	if t := a.threads[p.ThreadID]; t != nil && t.parent != "" {
-		st := harness.StateIdle
-		if p.Status.Type == "active" {
-			st = harness.StateRunning
+		x := a.agentItem(p.ThreadID, t.agent.Parent, at)
+		switch p.Status.Type {
+		case "active":
+			if x.Agent.State == harness.StateRunning || x.Agent.State == harness.StateWaiting {
+				x.Agent.State = harness.StateRunning
+			}
+		case "systemError":
+			if x.Agent.Ended == nil {
+				x.Agent.State, x.Agent.Ended = harness.StateFailed, ptr(at)
+			}
+		case "idle", "notLoaded":
+			// Transport activity is not the agent's lifecycle. Its collab
+			// result says whether it finished or still waits for work.
+		default:
+			return nil, nil
 		}
-		row := harness.Row{ID: p.ThreadID, State: st, Open: &harness.Open{Kind: harness.OpenChat, Ref: t.parent}}
-		return nil, []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}}
+		t.agent = x
+		return []harness.Item{x}, []harness.Op{agentRow(x)}
 	}
 	if p.ThreadID != a.main {
 		return nil, nil

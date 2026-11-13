@@ -38,8 +38,10 @@ type AppServer struct {
 }
 
 type threadInfo struct {
-	parent string // the agent item id of a subagent thread; "" for top level
-	top    bool
+	parent     string // the agent item id of a subagent thread; "" for top level
+	top        bool
+	agent      harness.Item      // complete stable identity, also used for row updates
+	activities map[string]string // last item ID for each of the four activity kinds
 }
 
 type turnInfo struct {
@@ -162,6 +164,7 @@ func (a *AppServer) setMain(thread string) {
 type resumeResult struct {
 	Thread struct {
 		ID             string  `json:"id"`
+		CreatedAt      int64   `json:"createdAt"`
 		ParentThreadID *string `json:"parentThreadId"`
 		AgentNickname  *string `json:"agentNickname"`
 		AgentRole      *string `json:"agentRole"`
@@ -209,35 +212,20 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 		a.applySettings(r.Model, r.ReasoningEffort, r.ApprovalPolicy)
 		ops = append(ops, a.statusOp())
 	} else {
-		agentID := "agent-" + id
-		a.threads[id] = &threadInfo{parent: agentID}
-		name := "Subagent"
-		if r.Thread.AgentNickname != nil && *r.Thread.AgentNickname != "" {
-			name = *r.Thread.AgentNickname
-		} else if r.Thread.Name != nil && *r.Thread.Name != "" {
-			name = *r.Thread.Name
-		}
-		role := ""
-		if r.Thread.AgentRole != nil {
-			role = *r.Thread.AgentRole
-		}
-		st := harness.StateIdle
-		if r.Thread.Status.Type == "active" {
-			st = harness.StateRunning
-		}
-		x := harness.Item{ID: agentID, Parent: a.parentOf(*r.Thread.ParentThreadID), Kind: harness.KindAgent, At: at,
-			Agent: &harness.AgentBody{AgentID: id, Name: truncate(name, harness.MaxTitle), Role: role, State: st, Started: at}}
+		x := a.resumedAgent(r, at)
 		items = append(items, x)
 		ops = append(ops, agentRow(x))
 	}
 	for _, t := range r.Thread.Turns {
-		items = append(items, a.history(id, t, at)...)
+		history, historyOps := a.history(id, t, at)
+		items = append(items, history...)
+		ops = append(ops, historyOps...)
 	}
 	return items, ops
 }
 
 // history replays one finished or running turn from a resume result.
-func (a *AppServer) history(thread string, t turnPayload, at time.Time) []harness.Item {
+func (a *AppServer) history(thread string, t turnPayload, at time.Time) ([]harness.Item, []harness.Op) {
 	started := orNow(secs(t.StartedAt), at)
 	var ended *time.Time
 	if e := secs(t.CompletedAt); !e.IsZero() {
@@ -246,7 +234,13 @@ func (a *AppServer) history(thread string, t turnPayload, at time.Time) []harnes
 	w := where{turn: t.ID, parent: a.parentOf(thread), started: started, ended: ended, at: started}
 	ti := a.turn(t.ID, thread, started)
 	var items []harness.Item
+	var ops []harness.Op
 	for _, it := range t.Items {
+		if it.Type == "subAgentActivity" {
+			agents, agentOps := a.activity(it, thread, orNow(ms(it.StartedAtMs), started), orNow(ms(it.CompletedAtMs), orNow(derefTime(ended), at)))
+			items, ops = append(items, agents...), append(ops, agentOps...)
+			continue
+		}
 		for _, x := range convert(it, w, true) {
 			a.count(ti, &x)
 			items = append(items, x)
@@ -259,7 +253,7 @@ func (a *AppServer) history(thread string, t turnPayload, at time.Time) []harnes
 		a.state["turn"] = t.ID
 		a.state["working"], a.state["idle"] = "true", "false"
 	}
-	return items
+	return items, ops
 }
 
 func (a *AppServer) turn(id, thread string, started time.Time) *turnInfo {
@@ -418,18 +412,21 @@ func (a *AppServer) itemEvent(params json.RawMessage, at time.Time, final bool) 
 	id := p.Item.ID
 	started := a.started[id]
 	if !final {
-		started = orNow(ms(p.StartedAtMs), at)
+		started = orNow(ms(p.StartedAtMs), orNow(ms(p.Item.StartedAtMs), at))
 		a.started[id] = started
 	}
 	if started.IsZero() {
-		started = at
+		started = orNow(ms(p.Item.StartedAtMs), at)
 	}
 	w := where{turn: p.TurnID, parent: a.parentOf(p.ThreadID), started: started, at: started}
 	if final {
-		e := orNow(ms(p.DoneAtMs), at)
+		e := orNow(ms(p.DoneAtMs), orNow(ms(p.Item.CompletedAtMs), at))
 		w.ended = &e
 		delete(a.started, id)
 		delete(a.streams, id)
+	}
+	if p.Item.Type == "subAgentActivity" {
+		return a.activity(p.Item, p.ThreadID, started, orNow(derefTime(w.ended), started))
 	}
 	ti := a.turns[p.TurnID]
 	items := convert(p.Item, w, final)
@@ -451,38 +448,4 @@ func (a *AppServer) itemEvent(params json.RawMessage, at time.Time, final bool) 
 		ops = append(ops, agOps...)
 	}
 	return items, ops
-}
-
-// collab announces the agents a collab call spawned or reports on.
-func (a *AppServer) collab(it threadItem, thread string, at time.Time) ([]harness.Item, []harness.Op) {
-	var items []harness.Item
-	var ops []harness.Op
-	name := "Subagent"
-	if it.Prompt != nil && *it.Prompt != "" {
-		name = strings.TrimSpace(strings.SplitN(*it.Prompt, "\n", 2)[0])
-	}
-	for _, tid := range it.ReceiverThreadIDs {
-		agentID := "agent-" + tid
-		if a.threads[tid] == nil {
-			a.threads[tid] = &threadInfo{parent: agentID}
-		}
-		st := harness.StateRunning
-		if s, ok := it.AgentsStates[tid]; ok {
-			st = runState(s.Status)
-		}
-		body := &harness.AgentBody{AgentID: tid, Name: truncate(name, harness.MaxTitle), State: st, Started: at}
-		if st != harness.StateRunning {
-			body.Ended = ptr(at)
-		}
-		x := harness.Item{ID: agentID, Parent: a.parentOf(thread), Kind: harness.KindAgent, At: at, Agent: body}
-		items = append(items, x)
-		ops = append(ops, agentRow(x))
-	}
-	return items, ops
-}
-
-func agentRow(x harness.Item) harness.Op {
-	row := harness.Row{ID: x.Agent.AgentID, Title: x.Agent.Name, Subtitle: x.Agent.Role, State: x.Agent.State,
-		Started: ptr(x.Agent.Started), Open: &harness.Open{Kind: harness.OpenChat, Ref: x.ID}}
-	return harness.Op{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}
 }

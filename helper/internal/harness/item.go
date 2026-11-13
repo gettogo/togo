@@ -349,4 +349,8 @@ type Record struct {
 	Source string
 	At     time.Time
 	Data   json.RawMessage
+	// Replay is a source's initial snapshot, in mapper order. The engine
+	// restores it atomically instead of publishing historical transitions.
+	// Nil means an ordinary live record; Data keeps its usual mapper shape.
+	Replay []json.RawMessage
 }

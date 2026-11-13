@@ -27,8 +27,10 @@ var ErrStaleRegistration = errors.New("push: registration older than the last on
 // reordered one is refused even after a restart.
 type Device struct {
 	wire.Device
-	Dead       bool  `json:"dead,omitempty"`
-	RegisterTS int64 `json:"registerTs,omitempty"`
+	Dead             bool   `json:"dead,omitempty"`
+	RegisterTS       int64  `json:"registerTs,omitempty"`
+	ContextRequestID string `json:"contextRequestId,omitempty"`
+	ContextTS        int64  `json:"contextTs,omitempty"`
 }
 
 type devicesJSON struct {
@@ -68,12 +70,19 @@ func (d *Devices) Put(dev wire.Device) error {
 	}
 	// The registration clock survives pairing again, so a registration
 	// captured before the re-pair cannot be replayed after it.
-	var regTS int64
+	var regTS, contextTS int64
+	var contextRequestID string
 	if i := slices.IndexFunc(list, func(x Device) bool { return x.DeviceID == dev.DeviceID }); i >= 0 {
 		regTS = list[i].RegisterTS
+		if list[i].ApprovalKey == dev.ApprovalKey && list[i].X25519 == dev.X25519 {
+			contextTS = list[i].ContextTS
+			if list[i].APNsToken == dev.APNsToken {
+				contextRequestID = list[i].ContextRequestID
+			}
+		}
 	}
 	list = slices.DeleteFunc(list, func(x Device) bool { return x.DeviceID == dev.DeviceID })
-	return d.write(append(list, Device{Device: dev, RegisterTS: regTS}))
+	return d.write(append(list, Device{Device: dev, RegisterTS: regTS, ContextTS: contextTS, ContextRequestID: contextRequestID}))
 }
 
 // Remove unpairs id. It returns ErrUnknownDevice when id is not paired.
@@ -150,6 +159,7 @@ func (d *Devices) UpdateTokens(id, apnsToken, laToken, laStartToken string, comm
 	dev.LiveActivityCommand = command
 	if apnsToken != "" && apnsToken != dev.APNsToken {
 		dev.Dead = false // APNs refused the old token; this one is new
+		dev.ContextRequestID = ""
 	}
 	for _, f := range []struct {
 		dst *string

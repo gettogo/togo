@@ -3368,7 +3368,7 @@
       ]
     },
     "AnswerPlaintext": {
-      "description": "Plaintext sealed (label answer, aad hostId) by the phone and posted to the relay mailbox, encoded as compact UTF-8 JSON. decision is limited to approve, deny and option:<n>; text answers travel only over SSH. ts is Unix time in milliseconds on the phone. sig is the Ed25519 signature, base64url without padding (86 chars), by the device's approvalKey over the UTF-8 bytes of \"togo-approval/v1\\n\" + hostId + \"\\n\" + requestId + \"\\n\" + decision + \"\\n\" + ts, where ts is written in decimal ASCII without leading zeros, each field is exactly the value in this object (hostId from push.pair), and there is no trailing newline. Senders omit type on answers, because helpers that predate it reject unknown fields; receivers accept it absent or \"answer\". Only RegisterPlaintext, which shares the mailbox, carries a type.",
+      "description": "Plaintext sealed (label answer, aad hostId) by the phone and posted to the relay mailbox, encoded as compact UTF-8 JSON. decision is limited to approve, deny and option:<n>; text answers travel only over SSH. ts is Unix time in milliseconds on the phone. sig is the Ed25519 signature, base64url without padding (86 chars), by the device's approvalKey over the UTF-8 bytes of \"togo-approval/v1\\n\" + hostId + \"\\n\" + requestId + \"\\n\" + decision + \"\\n\" + ts, where ts is written in decimal ASCII without leading zeros, each field is exactly the value in this object (hostId from push.pair), and there is no trailing newline. Senders omit type on answers, because helpers that predate it reject unknown fields; receivers accept it absent or \"answer\". RegisterPlaintext and LiveContextPlaintext share the mailbox and carry their own types.",
       "type": "object",
       "properties": {
         "type": {
@@ -3398,6 +3398,38 @@
         "decision",
         "ts",
         "deviceId",
+        "sig"
+      ],
+      "additionalProperties": false
+    },
+    "LiveContextPlaintext": {
+      "description": "Saved Live Activity request data, sealed with label answer and aad hostId. Send only to helpers advertising livecontext.v1. This is not an answer. sig is Ed25519 over UTF-8 togo-live-context/v1\\nhostId\\ndeviceId\\nrequestId\\ntokenHash\\nts, with no trailing newline. The host validates the paired device, current pending request, 600-second freshness window and separate replay identity before recording readiness for that device/request.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "live_context"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/DeviceId"
+        },
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "tokenHash": { "description": "SHA-256 of the lowercase hexadecimal APNs token currently registered for this device.", "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "ts": {
+          "type": "integer"
+        },
+        "sig": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        }
+      },
+      "required": [
+        "type",
+        "deviceId",
+        "requestId",
+        "tokenHash",
+        "ts",
         "sig"
       ],
       "additionalProperties": false
@@ -3558,7 +3590,8 @@
           "enum": [
             "push",
             "answer",
-            "register"
+            "register",
+            "live_context"
           ]
         },
         "plaintext": {
@@ -3572,6 +3605,22 @@
       ],
       "additionalProperties": false,
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "live_context"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "plaintext": {
+                "$ref": "#/$defs/LiveContextPlaintext"
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {

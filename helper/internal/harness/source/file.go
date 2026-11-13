@@ -327,6 +327,7 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	if st.Size() < t.offset {
 		// Truncated or replaced: start over.
 		t.offset, t.pending = 0, nil
+		t.replay = true
 	}
 	t.size, t.mtime = st.Size(), st.ModTime()
 	fh, err := openRegular(t.path)
@@ -335,6 +336,7 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	defer fh.Close()
 	var recs []json.RawMessage
+	replaying := t.replay
 	if t.replay {
 		t.replay = false
 		// Replay at most the last MaxFileRead bytes, then the last
@@ -384,6 +386,10 @@ func (t *tail) poll(emit func(harness.Record)) error {
 		recs = recs[len(recs)-MaxRecords:]
 	}
 	now := time.Now()
+	if replaying && len(recs) > 0 {
+		emit(harness.Record{Source: t.name, At: now, Replay: recs})
+		return nil
+	}
 	for _, r := range recs {
 		emit(harness.Record{Source: t.name, At: now, Data: r})
 	}

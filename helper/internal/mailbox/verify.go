@@ -85,10 +85,14 @@ type Verifier struct {
 type Message struct {
 	Answer   *wire.AnswerPlaintext
 	Register *wire.RegisterPlaintext
+	Context  *wire.LiveContextPlaintext
 }
 
 // replayKey is the key the message was reserved under.
 func (m Message) replayKey() string {
+	if m.Context != nil {
+		return contextKey(*m.Context)
+	}
 	if m.Register != nil {
 		return registerKey(*m.Register)
 	}
@@ -138,6 +142,12 @@ func (v *Verifier) Open(ciphertext string) (Message, error) {
 			return Message{}, err
 		}
 		return Message{Answer: &a}, nil
+	case wire.PlaintextLiveContext:
+		r, err := v.verifyContext(pt)
+		if err != nil {
+			return Message{}, err
+		}
+		return Message{Context: &r}, nil
 	case wire.PlaintextRegister:
 		r, err := v.verifyRegister(pt)
 		if err != nil {

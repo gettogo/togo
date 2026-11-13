@@ -96,6 +96,7 @@ type sqliteWatch struct {
 	cursor int64
 	seen   map[string]string
 	fails  int
+	loaded bool
 }
 
 func (w *sqliteWatch) poll(ctx context.Context, env harness.Env, emit func(harness.Record)) error {
@@ -124,6 +125,7 @@ func (w *sqliteWatch) poll(ctx context.Context, env harness.Env, emit func(harne
 // sits at the cursor (or changes), and a query without one returns all.
 func (w *sqliteWatch) step(rows []json.RawMessage, emit func(harness.Record)) {
 	next := make(map[string]string, len(rows))
+	var initial []json.RawMessage
 	for _, r := range rows {
 		var obj map[string]json.RawMessage
 		if json.Unmarshal(r, &obj) != nil {
@@ -142,9 +144,17 @@ func (w *sqliteWatch) step(rows []json.RawMessage, emit func(harness.Record)) {
 		if w.seen[key] == string(r) {
 			continue
 		}
-		emit(harness.Record{Source: w.name, At: time.Now(), Data: r})
+		if !w.loaded {
+			initial = append(initial, r)
+		} else {
+			emit(harness.Record{Source: w.name, At: time.Now(), Data: r})
+		}
 	}
 	w.seen = next
+	if !w.loaded && len(initial) > 0 {
+		emit(harness.Record{Source: w.name, At: time.Now(), Replay: initial})
+	}
+	w.loaded = true
 }
 
 // querySQLite runs one read-only query. Parameters go in as hex blobs cast
