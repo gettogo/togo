@@ -1,9 +1,11 @@
 package omp
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/source"
@@ -25,7 +27,21 @@ func terminalSession(env harness.Env) string {
 	name := strings.ReplaceAll(strings.TrimPrefix(tty, "/dev/"), "/", "-")
 	home := source.Expand("~", env.Vars[source.VarHome])
 	agent := filepath.Join(home, ".omp", "agent")
-	b, err := os.ReadFile(filepath.Join(agent, "terminal-sessions", name))
+	record, err := os.Open(filepath.Join(agent, "terminal-sessions", name))
+	if err != nil {
+		return ""
+	}
+	defer record.Close()
+	info, err := record.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	// A tty can be reused before the new agent updates its record. The
+	// record must belong to this session's lifetime, not the old occupant.
+	if created, err := time.Parse(time.RFC3339, env.Vars["created"]); err == nil && info.ModTime().Before(created) {
+		return ""
+	}
+	b, err := io.ReadAll(record)
 	if err != nil {
 		return ""
 	}
