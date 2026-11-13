@@ -327,7 +327,9 @@ import UIKit
         do {
             for try await element in services.feed(subject, after: feed.openAfter) {
                 switch element {
-                case .opened(let result):
+                case .opened(let incoming):
+                    let result = try await completeOpen(incoming)
+                    try Task.checkCancellation()
                     opened = true
                     phase = .live
                     let outcome = feed.load(result)

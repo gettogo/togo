@@ -37,6 +37,12 @@ struct ChatView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
+                if store.timeline.historyUnavailable {
+                    Text(ChatCopy.historyUnavailable)
+                        .font(.footnote).foregroundStyle(Color.togoMute)
+                        .chatColumn()
+                        .accessibilityIdentifier("chat.historyUnavailable")
+                }
                 // "Earlier" is a navigation affordance at the top: it is simply there or not.
                 if showsEarlierButton {
                     earlier.chatColumn()

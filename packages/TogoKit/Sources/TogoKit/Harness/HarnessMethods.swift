@@ -140,16 +140,23 @@ public struct HarnessOpenResult: Codable, Hashable, Sendable {
     /// Older items exist; page them with `harness.history`.
     public var more: Bool
     public var mission: HarnessMission
+    /// All retained items after this bound through cursor are in this response.
+    public var coveredAfter: Int?
+    /// Highest sequence discarded by ring capacity, not by item replacement.
+    public var discardedThrough: Int?
 
-    public init(epoch: String, cursor: Int, items: [HarnessItem], more: Bool, mission: HarnessMission) {
+    public init(epoch: String, cursor: Int, items: [HarnessItem], more: Bool, mission: HarnessMission,
+                coveredAfter: Int? = nil, discardedThrough: Int? = nil) {
         self.epoch = epoch
         self.cursor = cursor
         self.items = items
         self.more = more
         self.mission = mission
+        self.coveredAfter = coveredAfter
+        self.discardedThrough = discardedThrough
     }
 
-    private enum CodingKeys: String, CodingKey { case epoch, cursor, items, more, mission }
+    private enum CodingKeys: String, CodingKey { case epoch, cursor, items, more, mission, coveredAfter, discardedThrough }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -158,6 +165,8 @@ public struct HarnessOpenResult: Codable, Hashable, Sendable {
         items = try c.decode(LenientItems.self, forKey: .items).items
         more = try c.decode(Bool.self, forKey: .more)
         mission = try c.decode(HarnessMission.self, forKey: .mission)
+        coveredAfter = try c.decodeIfPresent(Int.self, forKey: .coveredAfter)
+        discardedThrough = try c.decodeIfPresent(Int.self, forKey: .discardedThrough)
     }
 }
 
@@ -198,18 +207,24 @@ public struct HarnessHistoryParams: Codable, Hashable, Sendable {
 public struct HarnessPage: Codable, Hashable, Sendable {
     public var items: [HarnessItem]
     public var more: Bool
+    public var epoch: String?
+    public var discardedThrough: Int?
 
-    public init(items: [HarnessItem], more: Bool) {
+    public init(items: [HarnessItem], more: Bool, epoch: String? = nil, discardedThrough: Int? = nil) {
         self.items = items
         self.more = more
+        self.epoch = epoch
+        self.discardedThrough = discardedThrough
     }
 
-    private enum CodingKeys: String, CodingKey { case items, more }
+    private enum CodingKeys: String, CodingKey { case items, more, epoch, discardedThrough }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         items = try c.decode(LenientItems.self, forKey: .items).items
         more = try c.decode(Bool.self, forKey: .more)
+        epoch = try c.decodeIfPresent(String.self, forKey: .epoch)
+        discardedThrough = try c.decodeIfPresent(Int.self, forKey: .discardedThrough)
     }
 }
 
