@@ -37,7 +37,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			ops = append(ops, s.questionLocked(&it)...)
 			s.offerLocked(it)
 		}
-		if txt := partialText(it); txt != nil && txt.Partial {
+		if txt := partialText(it); txt != nil && txt.Partial && !s.restoring {
 			if t, ok := s.lastPart[it.ID]; ok && now.Sub(t) < partialEvery {
 				s.pending[it.ID] = it
 				s.schedulePartialLocked(it.ID)
@@ -223,6 +223,9 @@ func (s *sess) missionDeltaLocked(d *harness.Delta) {
 }
 
 func (s *sess) storeSummaryLocked() {
+	if s.restoring {
+		return
+	}
 	sum := s.mission.summary
 	if sum.Plan != nil {
 		p := *sum.Plan
@@ -232,6 +235,9 @@ func (s *sess) storeSummaryLocked() {
 }
 
 func (s *sess) notifyLocked(n harness.Notification) {
+	if s.restoring {
+		return
+	}
 	n.SessionID, n.TS, n.Epoch = s.id, s.e.cfg.Now(), s.e.log.Epoch(s.id)
 	for _, q := range s.subs {
 		q.push(n)
@@ -239,7 +245,7 @@ func (s *sess) notifyLocked(n harness.Notification) {
 }
 
 func (s *sess) summaryChangedLocked() {
-	if s.e.cfg.OnSummary == nil || s.summaryT != nil {
+	if s.restoring || s.e.cfg.OnSummary == nil || s.summaryT != nil {
 		return
 	}
 	s.summaryT = time.AfterFunc(summaryEvery, func() {

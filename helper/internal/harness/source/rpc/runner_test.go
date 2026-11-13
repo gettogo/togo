@@ -159,14 +159,18 @@ func feedSpec(t *testing.T, b spec.RPC) harness.SourceSpec {
 }
 
 type recorder struct {
-	mu   sync.Mutex
-	recs []Message
+	mu        sync.Mutex
+	recs      []Message
+	restoring int
 }
 
 func (r *recorder) emit(rec harness.Record) {
 	var m Message
 	json.Unmarshal(rec.Data, &m)
 	r.mu.Lock()
+	if rec.Replay != nil {
+		r.restoring++
+	}
 	r.recs = append(r.recs, m)
 	r.mu.Unlock()
 }
@@ -220,6 +224,12 @@ func TestWatchAttachesStreamsAndAnswers(t *testing.T) {
 	waitFor(t, "resume record", func() bool { return rec.has(MethodResume) })
 	if f.count(MethodResume) != 1 {
 		t.Fatalf("resumed %d times", f.count(MethodResume))
+	}
+	rec.mu.Lock()
+	restored := rec.restoring
+	rec.mu.Unlock()
+	if restored != 1 {
+		t.Fatalf("resume was not delivered as a restoration: %d", restored)
 	}
 
 	f.broadcast(`{"method":"turn/started","params":{"threadId":"thr-1","turn":{"id":"u1"}}}`)

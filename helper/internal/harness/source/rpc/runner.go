@@ -266,7 +266,11 @@ func (r *Runner) watchOnce(ctx context.Context, name string, b spec.RPC, env har
 			if err != nil {
 				continue
 			}
-			emit(harness.Record{Source: name, At: time.Now(), Data: httpsrc.Scrub(data)})
+			rec := harness.Record{Source: name, At: time.Now(), Data: httpsrc.Scrub(data)}
+			if m.Method == MethodResume && m.IsNotification() {
+				rec.Replay = []json.RawMessage{rec.Data}
+			}
+			emit(rec)
 		}
 	}
 }

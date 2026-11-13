@@ -33,6 +33,8 @@ type sess struct {
 	once   sync.Once
 
 	mu sync.Mutex
+	// restoring suppresses intermediate history notifications under mu.
+	restoring bool
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
 	starting   sync.Mutex
@@ -578,6 +580,10 @@ func (s *sess) degradeLocked(caps []string) {
 
 // record maps one record and publishes the result.
 func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
+	if rec.Replay != nil {
+		s.restore(ctx, mapper, rec)
+		return
+	}
 	rec.Data = s.e.red.JSON(rec.Data)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -820,7 +826,7 @@ func (s *sess) setWorkingLocked(w bool) {
 	if d := s.mission.setWorking(w); d != nil {
 		s.missionDeltaLocked(d)
 	}
-	if was && !w {
+	if was && !w && !s.restoring {
 		s.closeIdleLocked()
 		s.afterTurnLocked()
 		s.e.turnEnded(s)

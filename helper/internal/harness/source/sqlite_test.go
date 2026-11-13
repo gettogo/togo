@@ -53,7 +53,15 @@ func TestSQLiteWatchEmitsNewAndChanged(t *testing.T) {
 	q := spec.SQLite{Path: p, Query: "select id, at, v from m where at >= :cursor order by at", Cursor: "at", Key: "id"}
 	w := &sqliteWatch{q: q, path: p, name: "db", seen: map[string]string{}}
 	var got []string
-	emit := func(r harness.Record) { got = append(got, string(r.Data)) }
+	emit := func(r harness.Record) {
+		if r.Replay != nil {
+			for _, raw := range r.Replay {
+				got = append(got, string(raw))
+			}
+		} else {
+			got = append(got, string(r.Data))
+		}
+	}
 	poll := func() {
 		if err := w.poll(context.Background(), env, emit); err != nil {
 			t.Fatal(err)
