@@ -167,10 +167,12 @@ func restartDaemon(ctx context.Context, home, reason string, whenIdle bool, stdo
 		fmt.Fprintln(stdout, "No daemon is running; the next connection starts one")
 		return nil
 	}
-	res, err := daemon.RequestShutdown(ctx, socket, wire.ShutdownParams{Reason: reason, When: wire.ShutdownIdle})
+	watch, err := daemon.BeginShutdown(ctx, socket, wire.ShutdownParams{Reason: reason, When: wire.ShutdownIdle})
 	if err != nil {
 		return fmt.Errorf("restart: %w", err)
 	}
+	defer watch.Close()
+	res := watch.Result
 	wait := restartExitWait
 	if res.Deferred {
 		fmt.Fprintf(stdout, "Restart waits for %s\n", pendingApprovals(res.Pending))
@@ -179,12 +181,20 @@ func restartDaemon(ctx context.Context, home, reason string, whenIdle bool, stdo
 		}
 		wait = restartPendingWait
 	}
-	if !waitStopped(ctx, home, wait) {
-		if res.Deferred {
+	waitCtx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	if err := watch.Wait(waitCtx); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if res.Deferred && errors.Is(err, context.DeadlineExceeded) {
 			fmt.Fprintln(stdout, "Still waiting; the daemon restarts once they are answered")
 			return nil
 		}
-		return errors.New("restart: the daemon did not stop")
+		return fmt.Errorf("restart: waiting for the daemon to stop: %w", err)
+	}
+	if err := waitRestartBoundary(waitCtx, home); err != nil {
+		return fmt.Errorf("restart: waiting for daemon cleanup: %w", err)
 	}
 	if err := ensureDaemon(ctx, home); err != nil {
 		return fmt.Errorf("restart: %w", err)
@@ -210,20 +220,27 @@ func daemonRunning(home string) bool {
 	return errors.Is(err, sockd.ErrLocked)
 }
 
-// waitStopped polls until no daemon holds the lock for home.
-func waitStopped(ctx context.Context, home string, wait time.Duration) bool {
-	deadline := time.Now().Add(wait)
-	for daemonRunning(home) {
-		if time.Now().After(deadline) {
-			return false
+// waitRestartBoundary runs after the original daemon has closed its shutdown
+// connection and listener. Wait for its lock to be released before spawning a
+// daemon, or for the service manager's replacement to bind its own listener.
+func waitRestartBoundary(ctx context.Context, home string) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !daemonRunning(home) {
+			return nil
+		}
+		if c, err := sockd.Dial(ctx, daemon.SocketPath(home)); err == nil {
+			c.Close()
+			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return false
+			return ctx.Err()
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
-	return true
 }
 
 // ensureDaemon waits for the service manager to start the daemon again when

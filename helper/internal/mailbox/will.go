@@ -39,9 +39,7 @@ func (r *runner) sendWill(ctx context.Context, conn *websocket.Conn, relayURL st
 	}
 	// Its own deadline, not ctx: the websocket closes the connection when a
 	// write's context ends, which would lose a disarm sent just after.
-	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	if err := conn.Write(wctx, websocket.MessageText, frame); err != nil {
+	if err := writeControl(ctx, conn, frame); err != nil {
 		return err
 	}
 	*last = frame
@@ -73,7 +71,23 @@ func (r *runner) disarmOnStop(conn *websocket.Conn) {
 	defer cancel()
 	if err := conn.Write(ctx, websocket.MessageText, []byte(DisarmFrame)); err != nil {
 		r.cfg.Logf("mailbox: disarm not sent")
+		return
 	}
+	// Drain the preceding frame through the peer's transport before a
+	// replacement can open. Pong confirms transport receipt, not storage by
+	// the relay's application handler. Ping shares the disarm deadline;
+	// the caller forcibly closes the socket on either success or failure.
+	if err := conn.Ping(ctx); err != nil {
+		r.cfg.Logf("mailbox: disarm transport did not drain")
+	}
+}
+
+// Session cancellation must not close a socket under its final disarm.
+// Each in-flight control write retains its existing independent deadline.
+func writeControl(ctx context.Context, conn *websocket.Conn, frame []byte) error {
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	return conn.Write(wctx, websocket.MessageText, frame)
 }
 
 // clearStopMarker removes a marker left by an earlier stop, so a later

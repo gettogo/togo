@@ -37,7 +37,8 @@ type Config struct {
 	Answer  AnswerFunc
 	// Register stores tokens from a verified registration. Nil drops
 	// registrations.
-	Register RegisterFunc
+	Register     RegisterFunc
+	ContextReady ContextReadyFunc
 	// EndLive forgets the Live Activity a verified registration reports
 	// ended. Nil ignores the report.
 	EndLive EndLiveFunc
@@ -120,7 +121,7 @@ func (r *runner) supervise(ctx context.Context) error {
 	live := map[string]context.CancelFunc{}
 	// exited is closed when a relay's worker has returned. A relay dropped
 	// and wanted again waits for its old worker, so the old connection's
-	// disarm can never land after the new connection's will.
+	// transport drains before a replacement connection can open.
 	exited := map[string]chan struct{}{}
 	defer func() {
 		for _, cancel := range live {
@@ -161,11 +162,10 @@ func (r *runner) supervise(ctx context.Context) error {
 				defer wg.Done()
 				defer close(done)
 				if prev != nil {
-					select {
-					case <-prev:
-					case <-cctx.Done():
-						return
-					}
+					<-prev
+				}
+				if cctx.Err() != nil {
+					return
 				}
 				r.relayLoop(cctx, u)
 			}()
@@ -257,10 +257,15 @@ func (r *runner) session(ctx context.Context, relayURL string) (time.Duration, w
 	conn.SetReadLimit(64 << 10)
 
 	sctx, stop := context.WithCancel(ctx)
-	defer stop()
 	var lastRead atomic.Int64
 	lastRead.Store(time.Now().UnixNano())
-	go r.pinger(sctx, conn, &lastRead)
+	pingDone := make(chan struct{})
+	go func() {
+		defer close(pingDone)
+		r.pinger(sctx, conn, &lastRead)
+	}()
+	stopPinger := func() { stop(); <-pingDone }
+	defer stopPinger()
 
 	// Reads use a context that outlives ctx: the websocket closes the
 	// connection when a read's context ends, and a deliberate stop still
@@ -288,8 +293,13 @@ func (r *runner) session(ctx context.Context, relayURL string) (time.Duration, w
 	for {
 		select {
 		case res := <-done:
+			if ctx.Err() != nil {
+				stopPinger()
+				r.disarmOnStop(conn)
+			}
 			return res.up, res.code
 		case <-ctx.Done():
+			stopPinger()
 			r.disarmOnStop(conn)
 			conn.CloseNow()
 			res := <-done
@@ -320,11 +330,9 @@ func (r *runner) readLoop(ctx, rctx, sctx context.Context, conn *websocket.Conn,
 		if json.Unmarshal(data, &f) != nil || f.Type != "msg" || f.ID == "" {
 			continue // pong or noise; nothing to ack
 		}
-		if r.handle(sctx, f) {
+		if r.handle(sctx, f) && ctx.Err() == nil {
 			ack, _ := json.Marshal(frame{Type: "ack", ID: f.ID})
-			wctx, wcancel := context.WithTimeout(sctx, 10*time.Second)
-			err := conn.Write(wctx, websocket.MessageText, ack)
-			wcancel()
+			err := writeControl(sctx, conn, ack)
 			if err != nil {
 				return time.Since(start), websocket.CloseStatus(err)
 			}
@@ -345,14 +353,15 @@ func (r *runner) pinger(ctx context.Context, conn *websocket.Conn, lastRead *ato
 			return
 		case <-t.C:
 		}
+		if ctx.Err() != nil {
+			return
+		}
 		if time.Since(time.Unix(0, lastRead.Load())) > 3*r.cfg.PingInterval {
 			r.cfg.Logf("mailbox: relay silent, reconnecting")
 			conn.CloseNow()
 			return
 		}
-		wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		err := conn.Write(wctx, websocket.MessageText, ping)
-		cancel()
+		err := writeControl(ctx, conn, ping)
 		if err != nil {
 			return
 		}
@@ -370,7 +379,15 @@ func (r *runner) handle(ctx context.Context, f frame) bool {
 		return true
 	}
 	what := "answer"
-	if m.Register != nil {
+	if m.Context != nil {
+		what = "request receipt"
+		if r.cfg.ContextReady == nil {
+			r.cfg.Logf("mailbox: request receipt %s ignored", tag)
+			return true
+		}
+		g := m.Context
+		err = r.cfg.ContextReady(g.DeviceID, g.RequestID, g.TokenHash, g.TS)
+	} else if m.Register != nil {
 		what = "registration"
 		if r.cfg.Register == nil {
 			r.cfg.Logf("mailbox: registration %s ignored", tag)
@@ -386,6 +403,9 @@ func (r *runner) handle(ctx context.Context, f frame) bool {
 		err = r.cfg.Answer(ctx, m.Answer.RequestID, m.Answer.Decision, ByPhone)
 	}
 	if err != nil {
+		if m.Context != nil {
+			r.v.release(m.replayKey())
+		}
 		if ctx.Err() != nil {
 			r.v.release(m.replayKey())
 			return false

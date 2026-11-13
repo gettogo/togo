@@ -1,0 +1,12 @@
+{
+  "description": "Device dev_test-1 confirms saved request r_abcdefghij for host h_mmg42klgyqzwneiskrelxms3j7. Signed by the test Ed25519 seed of 32 bytes 0x11; seal with label answer and aad hostId. This receipt never answers the request.",
+  "kind": "live_context",
+  "plaintext": {
+    "type": "live_context",
+    "deviceId": "dev_test-1",
+    "requestId": "r_abcdefghij",
+    "tokenHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ts": 1793707200000,
+    "sig": "PjjBM3zi-K1Wg-fZ1PYxAsKL9qNCNyKdiQyyNQms4rHDXx08_ZuGkLE4Ky--KfzbRC0ly1sunTho9QcJnDLoAA"
+  }
+}

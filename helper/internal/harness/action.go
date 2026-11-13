@@ -159,12 +159,19 @@ type OpenResult struct {
 	// More is true when older items exist before Items[0] (harness.history).
 	More    bool    `json:"more"`
 	Mission Mission `json:"mission"`
+	// CoveredAfter is the lower bound after which this response contains
+	// every retained item through Cursor, including count/byte truncation.
+	CoveredAfter *int64 `json:"coveredAfter,omitempty"`
+	// DiscardedThrough advances only when ring capacity evicts an item.
+	DiscardedThrough *int64 `json:"discardedThrough,omitempty"`
 }
 
 // Page is harness.history's result.
 type Page struct {
-	Items []Item `json:"items"`
-	More  bool   `json:"more"`
+	Items            []Item `json:"items"`
+	More             bool   `json:"more"`
+	Epoch            string `json:"epoch,omitempty"`
+	DiscardedThrough *int64 `json:"discardedThrough,omitempty"`
 }
 
 // Location is harness.locate's result.

@@ -85,7 +85,9 @@ type endpoint struct {
 	socket string
 	// envName and password are the harness's server password, when its
 	// adapter declares one; user is the Basic auth user name.
-	envName, password, user string
+	envName, password, user      string
+	adapter, version, generation string
+	recovered                    bool
 }
 
 // auth is the Authorization header the helper sends, or "".
@@ -127,14 +129,25 @@ func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 	if a == nil || a.Endpoint == nil {
 		return nil
 	}
-	if !e.versionFits(a) {
+	gate := e.gate.check(context.Background(), a, e.gateEnv())
+	if !gate.ok && strings.HasPrefix(gate.reason, "version ") {
 		// Launch flags belong to the versions the adapter knows: OpenCode
 		// 2.x refuses 1.x's --port and exits (seen live after it updated
 		// itself), so a harness outside the range starts plain.
 		e.cfg.Logf("harness: %s starts without its endpoint: version outside the adapter's range", a.Adapter.Adapter)
 		return nil
 	}
-	ep := endpoint{kind: a.Endpoint.Kind}
+	unlock := e.endpointOps.lock(sessionID)
+	defer unlock()
+	e.eps.mu.Lock()
+	previous, hadPrevious := e.eps.byID[sessionID]
+	e.eps.mu.Unlock()
+	if current, err := e.readEndpointRecord(sessionID); err == nil && hadPrevious && previous.generation != current.Generation {
+		e.cfg.Logf("harness: %s starts without its endpoint: instance was replaced", a.Adapter.Adapter)
+		return nil
+	}
+	e.retireEndpoint(sessionID)
+	ep := endpoint{kind: a.Endpoint.Kind, adapter: a.Adapter.Adapter, version: gate.version, generation: randomEpoch()}
 	switch ep.kind {
 	case spec.EndpointHTTP:
 		port, err := freePort()
@@ -165,7 +178,10 @@ func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 			e.cfg.Logf("harness: socket path too long for %s", a.Adapter.Adapter)
 			return nil
 		}
-		_ = os.Remove(ep.socket)
+		if _, err := os.Lstat(ep.socket); !os.IsNotExist(err) {
+			e.cfg.Logf("harness: %s starts without its endpoint: socket is not available", a.Adapter.Adapter)
+			return nil
+		}
 	default:
 		return nil
 	}
@@ -186,6 +202,11 @@ func (e *Engine) EndpointArgs(agentID, sessionID, dir string) []string {
 			e.cfg.Logf("harness: %s server for %s: %v", a.Adapter.Adapter, sessionID, err)
 			return nil
 		}
+	}
+	if err := e.saveEndpoint(sessionID, dir, ep); err != nil {
+		e.cleanupFailedEndpoint(sessionID, ep)
+		e.cfg.Logf("harness: %s starts without its endpoint: recovery metadata could not be saved", a.Adapter.Adapter)
+		return nil
 	}
 	e.eps.mu.Lock()
 	if e.eps.byID == nil {
@@ -237,10 +258,15 @@ func (e *Engine) restart(id string) {
 
 // endpointFor returns the address picked for a session, if any.
 func (e *Engine) endpointFor(id string) (endpoint, bool) {
+	unlock := e.endpointOps.lock(id)
+	defer unlock()
 	e.eps.mu.Lock()
-	defer e.eps.mu.Unlock()
 	ep, ok := e.eps.byID[id]
-	return ep, ok
+	e.eps.mu.Unlock()
+	if ok {
+		return ep, true
+	}
+	return e.restoreEndpoint(id)
 }
 
 // freePort asks the kernel for a free loopback port.
@@ -262,15 +288,6 @@ func (e *Engine) EndpointEnv(sessionID string) map[string]string {
 		return nil
 	}
 	return map[string]string{ep.envName: ep.password}
-}
-
-// versionFits reports whether the installed harness is inside the
-// adapter's version range. Only a version read and found outside it
-// counts against it: a probe that could not run (a timeout, no login
-// PATH yet) keeps the flags.
-func (e *Engine) versionFits(a *adapter) bool {
-	r := e.gate.check(context.Background(), a, e.gateEnv())
-	return r.ok || !strings.HasPrefix(r.reason, "version ")
 }
 
 // gateEnv is the environment version commands run in.

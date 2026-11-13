@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/source"
@@ -68,6 +69,43 @@ func TestTerminalSessionRejectsOtherRecords(t *testing.T) {
 	_ = os.Remove(filepath.Join(home, ".omp", "agent", "terminal-sessions", "ttys011"))
 	if got := terminalSession(env); got != "" {
 		t.Fatalf("another terminal's record was used: %q", got)
+	}
+}
+
+func TestTerminalSessionRejectsRecordFromReusedTerminal(t *testing.T) {
+	env, home := crumbEnv(t)
+	created := time.Now().UTC().Truncate(time.Second)
+	env.Vars["created"] = created.Format(time.RFC3339)
+	file := filepath.Join(home, ".omp", "agent", "sessions", "-project", "previous.jsonl")
+	writeCrumb(t, home, "ttys011", env.Cwd+"\n"+file+"\nfresh\ncwdstat 1 2")
+	record := filepath.Join(home, ".omp", "agent", "terminal-sessions", "ttys011")
+	previous := created.Add(-time.Minute)
+	if err := os.Chtimes(record, previous, previous); err != nil {
+		t.Fatal(err)
+	}
+	if got := terminalSession(env); got != "" {
+		t.Fatalf("new session followed the previous terminal occupant: %q", got)
+	}
+	if got := newSession(env).State()["session_rel"]; got == "-project/previous.jsonl" {
+		t.Fatal("stale terminal record selected as the new session's feed")
+	}
+}
+
+func TestTerminalSessionKeepsResumedRecordAcrossHelperRestart(t *testing.T) {
+	env, home := crumbEnv(t)
+	created := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	env.Vars["created"] = created.Format(time.RFC3339)
+	file := filepath.Join(home, ".omp", "agent", "sessions", "-project", "2026-01-01T00-00-00-000Z_resumed.jsonl")
+	writeCrumb(t, home, "ttys011", env.Cwd+"\n"+file+"\ncwdstat 1 2")
+	record := filepath.Join(home, ".omp", "agent", "terminal-sessions", "ttys011")
+	resumed := created.Add(time.Minute)
+	if err := os.Chtimes(record, resumed, resumed); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if got := newSession(env).State()["session_rel"]; got != "-project/2026-01-01T00-00-00-000Z_resumed.jsonl" {
+			t.Fatalf("helper instance %d lost the active resumed conversation: %q", i, got)
+		}
 	}
 }
 

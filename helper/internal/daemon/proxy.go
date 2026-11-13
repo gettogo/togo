@@ -111,48 +111,12 @@ func probe(ctx context.Context, socket string) (string, error) {
 // RequestShutdown sends local.shutdown to the daemon on socket over a
 // connection of its own and returns the daemon's answer.
 func RequestShutdown(ctx context.Context, socket string, p wire.ShutdownParams) (wire.ShutdownResult, error) {
-	c, err := sockd.Dial(ctx, socket)
+	watch, err := BeginShutdown(ctx, socket, p)
 	if err != nil {
 		return wire.ShutdownResult{}, err
 	}
-	defer c.Close()
-	if err := c.SetDeadline(time.Now().Add(probeTimeout)); err != nil {
-		return wire.ShutdownResult{}, err
-	}
-	params, err := json.Marshal(p)
-	if err != nil {
-		return wire.ShutdownResult{}, err
-	}
-	call := `{"jsonrpc":"2.0","id":2,"method":"` + wire.MethodLocalShutdown + `","params":` + string(params) + `}`
-	for _, frame := range []string{probeHello, call} {
-		if err := rpc.WriteFrame(c, []byte(frame)); err != nil {
-			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %w", err)
-		}
-	}
-	for {
-		payload, err := rpc.ReadFrame(c)
-		if err != nil {
-			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %w", err)
-		}
-		var reply struct {
-			ID     int                  `json:"id"`
-			Result *wire.ShutdownResult `json:"result"`
-			Error  *rpc.Error           `json:"error"`
-		}
-		if err := json.Unmarshal(payload, &reply); err != nil {
-			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %w", err)
-		}
-		if reply.ID != 2 {
-			continue
-		}
-		if reply.Error != nil {
-			return wire.ShutdownResult{}, fmt.Errorf("shutdown request: %s", reply.Error.Message)
-		}
-		if reply.Result == nil {
-			return wire.ShutdownResult{}, errors.New("shutdown request: empty reply")
-		}
-		return *reply.Result, nil
-	}
+	defer watch.Close()
+	return watch.Result, nil
 }
 
 // Start launches `exe daemon` detached from the caller, in its own session

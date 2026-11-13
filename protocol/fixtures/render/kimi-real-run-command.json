@@ -43,6 +43,6 @@
     "title": "03 Kimi Code",
     "subtitle": "▶ Run this command?",
     "body": "make",
-    "category": "togo.request"
+    "category": "togo.request.reply"
   }
 }

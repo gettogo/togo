@@ -446,13 +446,13 @@
    "id": "agent-019a0000-0000-7000-8000-000000000002",
    "seq": 0,
    "kind": "agent",
-   "at": "2026-11-06T12:00:02.7Z",
+   "at": "2026-11-06T12:00:02.6Z",
    "agent": {
     "agentId": "019a0000-0000-7000-8000-000000000002",
     "name": "Scout",
     "role": "explorer",
     "state": "running",
-    "startedAt": "2026-11-06T12:00:02.7Z",
+    "startedAt": "2026-11-06T12:00:02.6Z",
     "endedAt": null
    }
   },
@@ -655,7 +655,7 @@
     "title": "Scout",
     "subtitle": "explorer",
     "state": "running",
-    "startedAt": "2026-11-06T12:00:02.7Z",
+    "startedAt": "2026-11-06T12:00:02.6Z",
     "open": {
      "kind": "chat",
      "ref": "agent-019a0000-0000-7000-8000-000000000002"

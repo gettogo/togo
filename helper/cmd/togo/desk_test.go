@@ -285,6 +285,12 @@ func TestNewAgentSessionReportsExit(t *testing.T) {
 	// The pane's login shell looks claude up on PATH; only the stand-in
 	// may be found there.
 	t.Setenv("PATH", bin+":/usr/bin:/bin")
+	// Debian's /etc/profile replaces PATH, so restore the fixture's path
+	// from this test home's login profile as a real user would.
+	profile := "export PATH='" + strings.ReplaceAll(bin+":/usr/bin:/bin", "'", "'\\''") + "'\n"
+	if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), ".profile"), []byte(profile), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	if code, _, stderr := runCLI(t, nil, "new", "claude", "--dir", t.TempDir(), "--detach"); code != 0 {
 		t.Fatalf("new claude: code=%d stderr=%q", code, stderr)

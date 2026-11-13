@@ -28,17 +28,18 @@ type fakeRelay struct {
 	hostID string
 	bearer string
 
-	mu      sync.Mutex
-	next    int
-	pending []frame
-	conn    *websocket.Conn
-	dials   []time.Time
-	reject  int // upgrades still to refuse with 503
-	acked   chan string
-	conned  chan struct{}
-	unknown []string    // ack ids that matched nothing
-	wills   chan string // will frames received
-	willAt  []int       // dials so far when each will frame arrived
+	mu         sync.Mutex
+	next       int
+	pending    []frame
+	conn       *websocket.Conn
+	dials      []time.Time
+	reject     int // upgrades still to refuse with 503
+	acked      chan string
+	conned     chan struct{}
+	unknown    []string     // ack ids that matched nothing
+	wills      chan string  // will frames received
+	willAt     []int        // dials so far when each will frame arrived
+	beforeWill func(string) // optional barrier before the relay handles a will
 }
 
 func newFakeRelay(t *testing.T, keys Keys) *fakeRelay {
@@ -97,10 +98,7 @@ func (r *fakeRelay) serve(w http.ResponseWriter, req *http.Request) {
 		case "ack":
 			r.ack(f.ID)
 		case "will":
-			r.mu.Lock()
-			r.willAt = append(r.willAt, len(r.dials))
-			r.mu.Unlock()
-			r.wills <- string(data)
+			r.recordWill(string(data))
 		}
 	}
 }

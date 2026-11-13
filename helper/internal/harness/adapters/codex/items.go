@@ -43,6 +43,11 @@ type threadItem struct {
 	AgentsStates      map[string]agentState `json:"agentsStates"`
 	Prompt            *string               `json:"prompt"`
 	Model             *string               `json:"model"`
+	ActivityKind      string                `json:"kind"`
+	AgentThreadID     string                `json:"agentThreadId"`
+	AgentPath         string                `json:"agentPath"`
+	StartedAtMs       int64                 `json:"startedAtMs"`
+	CompletedAtMs     int64                 `json:"completedAtMs"`
 
 	// functionCallOutput (Codex 0.150 and later): a tool's output, a
 	// string or Responses content items.
