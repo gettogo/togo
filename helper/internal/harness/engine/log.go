@@ -24,9 +24,10 @@ type Log struct {
 }
 
 type ring struct {
-	epoch string
-	seq   int64
-	items []harness.Item // ascending Seq
+	epoch     string
+	seq       int64
+	items     []harness.Item // ascending Seq
+	discarded int64
 }
 
 var _ harness.Log = (*Log)(nil)
@@ -84,6 +85,9 @@ func (l *Log) Append(session string, items []harness.Item) []harness.Item {
 		limit = MaxItems
 	}
 	if n := len(r.items) - limit; n > 0 {
+		for _, it := range r.items[:n] {
+			r.discarded = max(r.discarded, it.Seq)
+		}
 		r.items = append([]harness.Item(nil), r.items[n:]...)
 	}
 	return out
@@ -151,4 +155,11 @@ func (l *Log) Forget(session string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.sessions, session)
+}
+
+// RetentionFloor records eviction, not the holes left by replaced revisions.
+func (l *Log) RetentionFloor(session string) int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.get(session).discarded
 }

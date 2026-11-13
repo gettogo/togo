@@ -3024,6 +3024,8 @@
       "properties": {
         "epoch": { "type": "string" },
         "cursor": { "type": "integer", "minimum": 0 },
+        "coveredAfter": { "type": "integer", "minimum": 0, "description": "Every retained item after this bound through cursor is included. Count and byte truncation move the bound forward." },
+        "discardedThrough": { "type": "integer", "minimum": 0, "description": "Highest sequence evicted by ring capacity; replacements do not advance it." },
         "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } },
         "more": { "type": "boolean" },
         "mission": { "$ref": "#/$defs/HarnessMission" }
@@ -3043,7 +3045,7 @@
     },
     "HarnessPage": {
       "type": "object",
-      "properties": { "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } }, "more": { "type": "boolean" } },
+      "properties": { "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } }, "more": { "type": "boolean" }, "epoch": { "type": "string" }, "discardedThrough": { "type": "integer", "minimum": 0 } },
       "required": ["items", "more"],
       "additionalProperties": false
     },

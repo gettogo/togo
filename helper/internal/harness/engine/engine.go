@@ -327,11 +327,21 @@ func (e *Engine) Open(ctx context.Context, sub harness.Subscriber, id string, af
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	items, cursor, more := e.log.Since(id, after, limit)
+	items, cursor, more := e.log.Since(id, after, 0)
+	covered := after
+	if after > cursor {
+		covered = 0
+	}
+	if limit > 0 && len(items) > limit {
+		items, more = items[len(items)-limit:], true
+		covered = items[0].Seq - 1
+	}
 	if fit, cut := newestFitting(items, pageBytes); cut {
 		items, more = fit, true
+		covered = items[0].Seq - 1
 	}
-	res := harness.OpenResult{Epoch: e.log.Epoch(id), Cursor: cursor, Items: items, More: more, Mission: s.mission.snapshot()}
+	res := harness.OpenResult{Epoch: e.log.Epoch(id), Cursor: cursor, Items: items, More: more, Mission: s.mission.snapshot(),
+		CoveredAfter: &covered, DiscardedThrough: e.retentionFloor(id)}
 	if res.Items == nil {
 		res.Items = []harness.Item{}
 	}
@@ -389,9 +399,12 @@ func (e *Engine) Close(_ context.Context, sub harness.Subscriber, id string) err
 
 // History pages older items.
 func (e *Engine) History(ctx context.Context, id string, before int64, limit int) (harness.Page, error) {
-	if _, err := e.served(ctx, id); err != nil {
+	s, err := e.served(ctx, id)
+	if err != nil {
 		return harness.Page{}, err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	items, more := e.log.Before(id, before, limit)
 	if fit, cut := newestFitting(items, pageBytes); cut {
 		items, more = fit, true
@@ -399,7 +412,12 @@ func (e *Engine) History(ctx context.Context, id string, before int64, limit int
 	if items == nil {
 		items = []harness.Item{}
 	}
-	return harness.Page{Items: items, More: more}, nil
+	return harness.Page{Items: items, More: more, Epoch: e.log.Epoch(id), DiscardedThrough: e.retentionFloor(id)}, nil
+}
+
+func (e *Engine) retentionFloor(id string) *int64 {
+	floor := e.log.RetentionFloor(id)
+	return &floor
 }
 
 // Locate resolves an anchor against the pane.
