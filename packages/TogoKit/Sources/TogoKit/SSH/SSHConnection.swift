@@ -237,7 +237,7 @@ public actor SSHConnection: TCPChannelOpener {
     private func authorise(reason: String) async throws -> LAContext {
         do {
             return try await biometrics.context(reason: reason)
-        } catch let error as LAError where [.userCancel, .appCancel, .systemCancel].contains(error.code) {
+        } catch let error as LAError where error.code == .userCancel {
             throw SSHError.cancelled
         }
     }

@@ -1,6 +1,4 @@
 import Foundation
-@preconcurrency import LocalAuthentication
-
 /// Keeps one machine's sessions and approvals current over a live `SessionSource`.
 ///
 /// Each connection starts from a snapshot, then folds events in seq order. A seq gap
@@ -11,15 +9,6 @@ import Foundation
 /// Snapshot calls never overlap. Events read while one is in flight are held and
 /// replayed on top of its result, because the snapshot may or may not contain them.
 public actor HostMonitor {
-    typealias Probe = @Sendable (HostRecord, any LinkClock, @escaping @Sendable () -> Void) async throws -> Void
-
-    static let backoff = TerminalLink.backoff
-    static let failuresBeforeOffline = 3
-    static let offlineRetry: Duration = .seconds(8)
-    static let pollInterval: Duration = .seconds(5)
-    /// Long enough to answer a notification from the lock screen without reconnecting.
-    static let backgroundGrace: Duration = .seconds(30)
-
     /// Newest state only; a slow reader skips intermediate ones. Single consumer: LiveServices.
     public nonisolated let snapshots: AsyncStream<HostSnapshot>
     private let sink: AsyncStream<HostSnapshot>.Continuation
@@ -77,25 +66,6 @@ public actor HostMonitor {
         self.now = now
         state = HostSnapshot(hostID: record.id)
         (snapshots, sink) = AsyncStream<HostSnapshot>.makeStream(bufferingPolicy: .bufferingNewest(1))
-    }
-
-    /// Any known route answering is enough, as for terminals: a Mac saved by its LAN address
-    /// is still reached over Tailscale away from home, since the connection races them all.
-    private static let wakeProbe: Probe = { record, clock, onWaking in
-        let target = record.profile.jumps.first ?? record.profile.endpoint
-        let hosts = await probeHosts(record.profile, book: .shared)
-        try await WakeProbe.reach(
-            host: record.profile.jumps.isEmpty ? record.profile.name : target.host, port: target.port, clock: clock,
-            onWaking: { _ in onWaking() },
-            attempt: { await WakeProbe.anyReachable(hosts: hosts, port: target.port, timeout: .seconds(2)) }
-        )
-    }
-
-    /// The hosts the wake probe tries: every route for a direct machine, the first jump otherwise.
-    static func probeHosts(_ profile: HostProfile, book: RouteBook) async -> [String] {
-        guard profile.jumps.isEmpty else { return [profile.jumps[0].host] }
-        let routes = await book.candidates(for: profile)
-        return routes.isEmpty ? [profile.endpoint.host] : routes
     }
 
     // MARK: - Public API
@@ -255,7 +225,7 @@ public actor HostMonitor {
                 // A trip to the background during the attempt can refuse a key unlock on
                 // its own; that is an ordinary failure, not a reason to wait for sign-in.
                 if backgroundingsAtStart == backgroundings,
-                   let reach = heldReach(for: failure.error, helper: failure.helper) {
+                   let reach = Self.heldReach(for: failure.error, helper: failure.helper) {
                     endAttempts(run)
                     isHeld = true
                     setReach(reach)
@@ -390,28 +360,6 @@ public actor HostMonitor {
         retire()
     }
 
-    /// Errors only the user can resolve. A helper that is missing or too old cannot
-    /// give a snapshot until it is installed or updated, so retrying is pointless too.
-    private func heldReach(for error: any Error, helper: HelperPresence?) -> HostSnapshot.Reach? {
-        switch error {
-        case SSHError.authFailed, SSHError.cancelled, SSHError.hostKeyRejected:
-            return .authNeeded
-        case SSHError.hostKeyChanged:
-            return .hostKeyChanged
-        case KeyError.missing:
-            return .keyMissing
-        // The keychain or Face ID would not unlock the key or password; only the user can.
-        case is SecretStoreError, is LAError:
-            return .authNeeded
-        default:
-            break
-        }
-        switch helper {
-        case .missing?, .outdated?, .newer?: return .failed(error.localizedDescription)
-        case .unknown?, .present?, nil: return nil
-        }
-    }
-
     private func markWaking() {
         guard attempt != nil, state.reach == .connecting else { return }
         setReach(.waking)
@@ -535,30 +483,6 @@ public actor HostMonitor {
         switch state.reach {
         case .offline, .failed, .deviceOffline: true
         default: false
-        }
-    }
-
-    /// Offline only when the machine itself did not answer. A machine that answers but whose
-    /// helper does not, as while it restarts, reads as failed with the reason, and the
-    /// attempts go on.
-    static func awayReach(for error: any Error) -> HostSnapshot.Reach {
-        switch error {
-        case SSHError.unreachable, SSHError.timeout:
-            .offline(error.localizedDescription)
-        default:
-            .failed(plainReason(error))
-        }
-    }
-
-    /// Togo's own errors word themselves; a raw transport error from below (NIO, POSIX) would
-    /// read as "The operation couldn't be completed (NIOCore.ChannelError error 6)", so it
-    /// says what happened instead.
-    static func plainReason(_ error: any Error) -> String {
-        switch error {
-        case is SSHError, is HelperError, is HelperSourceError, is KeyError:
-            error.localizedDescription
-        default:
-            SSHError.channelClosed(exitStatus: nil).localizedDescription
         }
     }
 

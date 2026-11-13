@@ -380,9 +380,9 @@ struct TerminalLinkTests {
         await link.stop()
     }
 
-    @Test func keychainRefusalStopsRetrying() async throws {
+    @Test func rejectedKeychainAuthenticationStopsRetrying() async throws {
         let first = FakeTransport()
-        let script = ScriptedConnect([.attach(first, .ssh), .fail(SecretStoreError(status: -25308)), .attach(FakeTransport(), .ssh)])
+        let script = ScriptedConnect([.attach(first, .ssh), .fail(SecretStoreError(status: -25293)), .attach(FakeTransport(), .ssh)])
         let link = Self.link(script)
         let log = StateLog(link)
         await link.start()
