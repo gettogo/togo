@@ -33,7 +33,7 @@ struct StatusPrimitive: View {
             let cells = StatusLogic.cells(status)
             let compact = StatusLogic.compactAction(status)
             if !cells.isEmpty {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 1)], spacing: 1) {
+                StatusCellsLayout {
                     ForEach(cells, id: \.label) { cell in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(cell.label).font(.caption).foregroundStyle(Color.togoMute)
@@ -42,7 +42,7 @@ struct StatusPrimitive: View {
                                 .foregroundStyle(Color.togoSnow)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                         .background(Color.togoGrouped)

@@ -122,7 +122,7 @@ enum WorkingLogic {
             case .tool(let tool) where tool.state.isLive:
                 return phrase(tool)
             case .agent(let agent) where agent.state.isLive:
-                return WorkingCopy.agent(agent.name)
+                return WorkingCopy.agent(AgentLabel.name(agent))
             case .thinking(let text) where text.partial:
                 return WorkingCopy.thinking
             default:

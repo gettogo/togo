@@ -117,13 +117,14 @@ struct MissionControlView: View {
                 .buttonStyle(.plain)
                 .contextMenu { menu(row, kind: kind) }
         default:
+            let displayed = kind == .agents ? AgentLabel.resolved(row, in: store.timeline) : row
             let target = MissionLayout.target(for: row, in: kind)
             Button { open(row, kind: kind) } label: {
-                MissionRowView(row: row, opens: target != nil, openLabel: target.map(openLabel))
+                MissionRowView(row: displayed, opens: target != nil, openLabel: target.map(openLabel))
             }
             .buttonStyle(.plain)
             .disabled(target == nil)
-            .contextMenu { menu(row, kind: kind) }
+            .contextMenu { menu(displayed, kind: kind) }
         }
     }
 

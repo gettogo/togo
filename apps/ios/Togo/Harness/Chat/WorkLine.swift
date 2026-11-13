@@ -310,7 +310,7 @@ struct StepInfo {
             output = text.text
         case .agent(let agent):
             symbol = "person.2"
-            title = [agent.name, agent.role].compactMap(\.self).joined(separator: "  ")
+            title = AgentLabel.line(agent)
             state = agent.state
             duration = agent.endedAt.map { $0.date.timeIntervalSince(agent.startedAt.date) }
             output = agent.summary
