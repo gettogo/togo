@@ -40,6 +40,7 @@ type AppServer struct {
 type threadInfo struct {
 	parent string // the agent item id of a subagent thread; "" for top level
 	top    bool
+	agent  harness.Item // complete stable identity, also used for row updates
 }
 
 type turnInfo struct {
@@ -162,6 +163,7 @@ func (a *AppServer) setMain(thread string) {
 type resumeResult struct {
 	Thread struct {
 		ID             string  `json:"id"`
+		CreatedAt      int64   `json:"createdAt"`
 		ParentThreadID *string `json:"parentThreadId"`
 		AgentNickname  *string `json:"agentNickname"`
 		AgentRole      *string `json:"agentRole"`
@@ -209,24 +211,7 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 		a.applySettings(r.Model, r.ReasoningEffort, r.ApprovalPolicy)
 		ops = append(ops, a.statusOp())
 	} else {
-		agentID := "agent-" + id
-		a.threads[id] = &threadInfo{parent: agentID}
-		name := "Subagent"
-		if r.Thread.AgentNickname != nil && *r.Thread.AgentNickname != "" {
-			name = *r.Thread.AgentNickname
-		} else if r.Thread.Name != nil && *r.Thread.Name != "" {
-			name = *r.Thread.Name
-		}
-		role := ""
-		if r.Thread.AgentRole != nil {
-			role = *r.Thread.AgentRole
-		}
-		st := harness.StateIdle
-		if r.Thread.Status.Type == "active" {
-			st = harness.StateRunning
-		}
-		x := harness.Item{ID: agentID, Parent: a.parentOf(*r.Thread.ParentThreadID), Kind: harness.KindAgent, At: at,
-			Agent: &harness.AgentBody{AgentID: id, Name: truncate(name, harness.MaxTitle), Role: role, State: st, Started: at}}
+		x := a.resumedAgent(r, at)
 		items = append(items, x)
 		ops = append(ops, agentRow(x))
 	}
@@ -451,38 +436,4 @@ func (a *AppServer) itemEvent(params json.RawMessage, at time.Time, final bool) 
 		ops = append(ops, agOps...)
 	}
 	return items, ops
-}
-
-// collab announces the agents a collab call spawned or reports on.
-func (a *AppServer) collab(it threadItem, thread string, at time.Time) ([]harness.Item, []harness.Op) {
-	var items []harness.Item
-	var ops []harness.Op
-	name := "Subagent"
-	if it.Prompt != nil && *it.Prompt != "" {
-		name = strings.TrimSpace(strings.SplitN(*it.Prompt, "\n", 2)[0])
-	}
-	for _, tid := range it.ReceiverThreadIDs {
-		agentID := "agent-" + tid
-		if a.threads[tid] == nil {
-			a.threads[tid] = &threadInfo{parent: agentID}
-		}
-		st := harness.StateRunning
-		if s, ok := it.AgentsStates[tid]; ok {
-			st = runState(s.Status)
-		}
-		body := &harness.AgentBody{AgentID: tid, Name: truncate(name, harness.MaxTitle), State: st, Started: at}
-		if st != harness.StateRunning {
-			body.Ended = ptr(at)
-		}
-		x := harness.Item{ID: agentID, Parent: a.parentOf(thread), Kind: harness.KindAgent, At: at, Agent: body}
-		items = append(items, x)
-		ops = append(ops, agentRow(x))
-	}
-	return items, ops
-}
-
-func agentRow(x harness.Item) harness.Op {
-	row := harness.Row{ID: x.Agent.AgentID, Title: x.Agent.Name, Subtitle: x.Agent.Role, State: x.Agent.State,
-		Started: ptr(x.Agent.Started), Open: &harness.Open{Kind: harness.OpenChat, Ref: x.ID}}
-	return harness.Op{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}
 }
