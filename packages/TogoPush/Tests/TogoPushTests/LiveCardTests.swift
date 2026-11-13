@@ -4,6 +4,19 @@ import UserNotifications
 import TogoPush
 
 struct LiveCardTests {
+    @Test func savedApprovalKeepsItsLiveActivityButtons() {
+        let request = PendingRequest(
+            requestId: "r_aaaaaaaaaa", hostId: "h_mmg42klgyqzwneiskrelxms3j7", sessionId: "s_abcdefghij",
+            bib: "03", agent: "shell", host: nil, title: "Approve this check?", subject: nil,
+            options: [PushOption(n: 1, label: "Approve", role: "approve"), PushOption(n: 2, label: "Deny", role: "deny")],
+            receivedAt: Date(), answered: nil
+        )
+        let context = LiveContext(pending: request)
+        #expect(context.ask == request.title)
+        #expect(context.answer == .approveDeny)
+        #expect(card(context: context).answer == .approveDeny)
+    }
+
     func card(
         status: String = "needs_you", waiting: Int = 1, requestId: String? = "r_aaaaaaaaaa", command: String? = nil,
         context: LiveContext? = nil, machine: String? = nil, stale: Bool = false, agent: String = "claude",
