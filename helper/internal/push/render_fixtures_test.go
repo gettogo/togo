@@ -236,7 +236,7 @@ func renderNotification(p wire.PushPlaintext) renderExpect {
 			body = detect.CleanLine(u.Host + u.Path)
 		}
 	}
-	cat := category(p.Options, p.RequestID)
+	cat := category(p.Options, p.RequestID, p.AllowText)
 	if cat == "togo.info" && body == "" {
 		// No button can answer it: the body says where to.
 		body = "Open to answer"
@@ -263,19 +263,26 @@ func agentDisplay(agent string) string {
 	return string(unicode.ToUpper(r)) + a[n:]
 }
 
-func category(opts []wire.Option, requestID string) string {
+func category(opts []wire.Option, requestID string, allowText bool) string {
 	roles := []string{}
 	for _, o := range opts {
 		roles = append(roles, o.Role)
 	}
 	switch approve, deny := slices.Contains(roles, wire.RoleApprove), slices.Contains(roles, wire.RoleDeny); {
+	case approve && deny && allowText:
+		return "togo.request.reply"
 	case approve && deny:
 		return "togo.request"
+	case deny && allowText:
+		return "togo.request.deny.reply"
 	case deny:
 		return "togo.request.deny"
 	case len(opts) > 0 && len(opts) <= 4 && !approve && !slices.Contains(roles, wire.RoleApproveAlways):
 		// A single question's own options, one button each.
 		return "togo.choice." + requestID
+	}
+	if allowText {
+		return "togo.request.text"
 	}
 	return "togo.info"
 }
