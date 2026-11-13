@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 	"time"
 
@@ -237,12 +236,13 @@ func TestSpoofedExitIgnoredOnRealPane(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	flag := filepath.Join(dir, "stop")
+	ready := filepath.Join(dir, "ready")
 	// The polling loop runs in a child shell, so the agent is a process of
 	// its own for the whole wait. Polling in the pane's own shell would
 	// leave it alone in the foreground between sleeps, which reads as a
 	// pane back at its prompt.
-	agent := `/bin/sh -c 'while [ ! -e "$1" ]; do /bin/sleep 0.05; done' sh "$1"; exec /bin/sh -i`
-	err := c.NewSession(ctx, tmux.NewSessionOpts{Name: sid, Dir: dir, Command: []string{"/bin/sh", "-c", agent, "sh", flag},
+	agent := `/bin/sh -c ': > "$2"; while [ ! -e "$1" ]; do /bin/sleep 0.05; done' sh "$1" "$2"; exec /bin/sh -i`
+	err := c.NewSession(ctx, tmux.NewSessionOpts{Name: sid, Dir: dir, Command: []string{"/bin/sh", "-c", agent, "sh", flag, ready},
 		Env: map[string]string{"ENV": "", "PS1": "$ "}})
 	if err != nil {
 		t.Fatal(err)
@@ -251,14 +251,13 @@ func TestSpoofedExitIgnoredOnRealPane(t *testing.T) {
 	x := &exitSink{harness: h}
 	h.w.cfg = Config{Tmux: c, TogoPath: "/opt/togo/bin/togo", Status: x, Pub: h}
 	h.w.agentGone = h.w.paneGone
-	// Wait for the stand-in to be in the foreground.
+	// Wait for the stand-in itself to confirm startup.
 	for deadline := time.Now().Add(10 * time.Second); ; {
-		fg, err := c.Foreground(ctx, sid)
-		if err == nil && slices.ContainsFunc(fg.Foreground, func(p tmux.Proc) bool { return p.PID != fg.PanePID && p.Name == "sh" }) {
+		if _, err := os.Stat(ready); err == nil {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("stand-in agent never ran: %+v %v", fg, err)
+			t.Fatal("stand-in agent never ran")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
