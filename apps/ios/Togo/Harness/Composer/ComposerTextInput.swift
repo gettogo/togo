@@ -32,8 +32,10 @@ struct ComposerTextInput: UIViewRepresentable {
             parent.dictated(view.text)
             // Update the native field in the same input transaction. A later
             // delegate callback then reads the settled text, never an old echo.
-            view.text = parent.text
-            view.selectedRange = NSRange(location: (view.text as NSString).length, length: 0)
+            if view.text != parent.text {
+                view.text = parent.text
+                view.selectedRange = NSRange(location: (view.text as NSString).length, length: 0)
+            }
         }
         view.onKey = { context.coordinator.parent.key($0, $1, $2) }
         return view
@@ -94,18 +96,29 @@ struct ComposerTextInput: UIViewRepresentable {
 
     override var insertDictationResultPlaceholder: Any {
         onDictationStarted()
-        return super.insertDictationResultPlaceholder
+        return NSObject()
+    }
+
+    override func frame(forDictationResultPlaceholder placeholder: Any) -> CGRect {
+        guard let selection = selectedTextRange else { return .zero }
+        return caretRect(for: selection.start)
+    }
+
+    override func removeDictationResultPlaceholder(_ placeholder: Any, willInsertResult: Bool) {
+        if !willInsertResult { onDictationFailed() }
     }
 
     override func insertDictationResult(_ dictationResult: [UIDictationPhrase]) {
         insertingDictation = true
         defer { insertingDictation = false }
-        super.insertDictationResult(dictationResult)
+        // UITextView does not implement these optional UITextInput
+        // callbacks. Insert the recognized phrases through its ordinary
+        // text input API, keeping delegate edits inside this transaction.
+        for phrase in dictationResult { insertText(phrase.text) }
         onDictationResult()
     }
 
     override func dictationRecognitionFailed() {
-        super.dictationRecognitionFailed()
         onDictationFailed()
     }
 
