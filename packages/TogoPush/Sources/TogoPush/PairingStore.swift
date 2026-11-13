@@ -15,10 +15,14 @@ public struct Pairing: Codable, Sendable, Equatable, Identifiable {
     public var tokenHash: String
     /// Whether the user allowed command text in Live Activity pushes for this machine.
     public var liveActivityCommand: Bool
+    /// The helper accepts signed receipts for shared Live Activity request data.
+    public var liveContextReceipts: Bool?
+    /// Fingerprint binding a request-data receipt to this notification registration.
+    public var apnsTokenHash: String?
 
     public init(
         hostId: String, hostKey: String, relayURL: URL, machineName: String, appHostID: UUID?, pairedAt: Date,
-        tokenHash: String, liveActivityCommand: Bool
+        tokenHash: String, liveActivityCommand: Bool, liveContextReceipts: Bool? = nil, apnsTokenHash: String? = nil
     ) {
         self.hostId = hostId
         self.hostKey = hostKey
@@ -28,6 +32,8 @@ public struct Pairing: Codable, Sendable, Equatable, Identifiable {
         self.pairedAt = pairedAt
         self.tokenHash = tokenHash
         self.liveActivityCommand = liveActivityCommand
+        self.liveContextReceipts = liveContextReceipts
+        self.apnsTokenHash = apnsTokenHash
     }
 }
 

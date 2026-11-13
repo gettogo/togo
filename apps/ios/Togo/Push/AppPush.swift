@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import os
 import Synchronization
 import TogoKit
 import TogoPush
@@ -121,6 +122,7 @@ import WidgetKit
         ))
         self.actions = actions
         let live = self.live, pending = self.pending
+        let receipts = LiveContextReceiptSender(keys: keys, pairings: pairings, pending: pending)
         clear = ClearHandler(dependencies: .init(
             core: NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { Date() }),
             pending: pending, notifications: notifications,
@@ -128,6 +130,10 @@ import WidgetKit
                 // A request answered anywhere takes its Live Activity with it.
                 Task { await live.reconcile(pending.all(), cleared: [id]) }
                 watch?.cleared(id)
+            },
+            received: { host, id in
+                do { try await receipts.send(hostID: host, requestID: id) }
+                catch { Logger(subsystem: "app.togo", category: "push").error("Request-data receipt failed; normal notification remains available") }
             }
         ))
         AppDelegate.registrar = registrar

@@ -306,6 +306,30 @@ struct NotificationActionHandlerTests {
         #expect(live.sent.isEmpty)
     }
 
+    @Test func backgroundReceiptFollowsSharedStoreWrite() async throws {
+        let keys = InMemoryDeviceKeys()
+        let id = "r_bbbbbbbbbb"
+        var savedBeforeReceipt = false
+        let clear = ClearHandler(dependencies: .init(
+            core: NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { start }),
+            pending: pending, notifications: notifications, reloadWidgets: {},
+            received: { host, receivedID in
+                let saved = pending.request(receivedID)
+                savedBeforeReceipt = host == hostID && receivedID == id && saved?.title == "Approve?"
+                    && saved?.options.map(\.role) == ["approve", "deny"] && saved?.answered == nil
+            }
+        ))
+        let payload = PushPayload(kind: .needsYou, title: "Approve?", body: "", requestId: id,
+                                  options: [PushOption(n: 1, label: "Yes", role: "approve"),
+                                            PushOption(n: 2, label: "No", role: "deny")],
+                                  ts: Int64(Date().timeIntervalSince1970 * 1000))
+        let envelope = try Seal.seal(to: keys.agreementKey().publicKey, JSONEncoder().encode(payload),
+                                     label: Labels.push, aad: Data("\(hostID)|\(try keys.deviceID())".utf8))
+        #expect(await clear.didReceiveRemoteNotification(["c": envelope]))
+        #expect(savedBeforeReceipt)
+        #expect(pending.request(id)?.answered == nil)
+    }
+
     @Test func clearRemovesDelivered() async throws {
         let keys = InMemoryDeviceKeys()
         var widgetReloads = 0

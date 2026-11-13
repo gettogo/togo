@@ -186,8 +186,10 @@ extension RelayRegisterSender: PushTokenRegistering {}
         let hash = Self.tokenHash(apns: apnsToken, live: live, watches: watches, sshKey: sshKey, doneSilent: doneSilent)
         // A choice sent through the mailbox is confirmed over SSH, even when it matches the old one.
         let reportsLive = reconnected && live.update != nil
+        let contextReceipts = capabilities.contains(Capability.liveContext)
+        let apnsHash = SHA256.hash(data: Data(apnsToken.utf8)).map { String(format: "%02x", $0) }.joined()
         if let stored, stored.tokenHash == hash, stored.relayURL == relay, stored.liveActivityCommand == command,
-           sentChoice[stored.hostId] == nil, !reportsLive {
+           sentChoice[stored.hostId] == nil, !reportsLive, stored.liveContextReceipts == contextReceipts, stored.apnsTokenHash == apnsHash {
             return
         }
 
@@ -210,7 +212,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
             pairedAt: clock(), tokenHash: Self.tokenHash(
                 apns: apnsToken, live: live, watches: pairedWatches, sshKey: sshKey, doneSilent: doneSilent
             ),
-            liveActivityCommand: command
+            liveActivityCommand: command, liveContextReceipts: contextReceipts, apnsTokenHash: apnsHash
         )
         if let removal = removedWhilePairing.removeValue(forKey: hostID) {
             // Removed while the helper was pairing: it holds this device now, so tell it to forget.

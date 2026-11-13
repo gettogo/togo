@@ -3,6 +3,10 @@ import Foundation
 /// The exact bytes a device signs with its Ed25519 key. The helper builds the same strings,
 /// so any change here is a protocol change.
 public enum Signing {
+    public static func liveContextBytes(hostID: String, deviceID: String, requestID: String, tokenHash: String, ts: Int64) -> Data {
+        Data("togo-live-context/v1\n\(hostID)\n\(deviceID)\n\(requestID)\n\(tokenHash)\n\(ts)".utf8)
+    }
+
     /// `togo-approval/v1\n<hostId>\n<requestId>\n<decision>\n<ts>`.
     public static func approvalBytes(hostID: String, requestID: String, decision: String, ts: Int64) -> Data {
         Data("togo-approval/v1\n\(hostID)\n\(requestID)\n\(decision)\n\(ts)".utf8)

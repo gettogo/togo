@@ -188,15 +188,29 @@ public struct NotificationServiceCore: Sendable {
 /// Hands the system exactly one content per push: the finished one, or the generic one when
 /// time runs out first.
 public final class DeliveryGate: Sendable {
+    /// UNNotificationContent is immutable; copying also freezes mutable subclass inputs.
+    private struct Snapshot: @unchecked Sendable {
+        let value: UNNotificationContent
+        init(_ content: UNNotificationContent) { value = content.copy() as! UNNotificationContent }
+    }
+
     private struct Pending {
         var deliver: (@Sendable (UNNotificationContent) -> Void)?
-        var fallback: UNNotificationContent
+        var fallback: Snapshot
     }
 
     private let state: Mutex<Pending>
 
     public init(deliver: @escaping @Sendable (UNNotificationContent) -> Void) {
-        state = Mutex(Pending(deliver: deliver, fallback: NotificationServiceCore.generic()))
+        state = Mutex(Pending(deliver: deliver, fallback: Snapshot(NotificationServiceCore.generic())))
+    }
+
+    /// Keep already decoded actions if the OS expires the extension while its receipt is sent.
+    public func prepare(_ content: UNNotificationContent) {
+        let snapshot = Snapshot(content)
+        state.withLock { pending in
+            if pending.deliver != nil { pending.fallback = snapshot }
+        }
     }
 
     public func finish(_ content: UNNotificationContent) {
@@ -213,7 +227,7 @@ public final class DeliveryGate: Sendable {
             defer { pending.deliver = nil }
             return (pending.deliver, pending.deliver == nil ? nil : pending.fallback)
         }
-        if let deliver, let fallback { deliver(fallback) }
+        if let deliver, let fallback { deliver(fallback.value) }
     }
 }
 

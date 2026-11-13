@@ -1,4 +1,5 @@
 import Foundation
+import os
 import TogoPush
 import UserNotifications
 import WidgetKit
@@ -29,20 +30,28 @@ final class NotificationService: UNNotificationServiceExtension {
             clock: { Date() }
         )
         let result = core.process(request.content)
+        gate.prepare(result.content)
         // After the request is stored, so a question's own option buttons are registered
         // before the system shows it.
         NotificationCategorySet.register()
         if result.pendingChanged {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
         }
-        guard let host = result.clearsOfflineOf else {
-            gate.finish(result.content)
-            return
-        }
-        // This machine is answering again: take its "stopped answering" alert away first.
+        let info = result.pendingChanged ? result.content.userInfo[NotificationServiceCore.infoKey] as? [String: Any] : nil
+        let receiptHost = info?["hostId"] as? String
+        let receiptRequest = info?["requestId"] as? String
+        let offlineHost = result.clearsOfflineOf
         let content = UncheckedContent(result.content)
+        let receipts = LiveContextReceiptSender(
+            keys: KeychainDeviceKeys(accessGroup: nil), pairings: PairingStore(directory: directory),
+            pending: PendingStore(directory: directory, clock: { Date() })
+        )
         Task {
-            await OfflineNotifications.removeDelivered(hostId: host)
+            if let host = offlineHost { await OfflineNotifications.removeDelivered(hostId: host) }
+            if let host = receiptHost, let id = receiptRequest {
+                do { try await receipts.send(hostID: host, requestID: id) }
+                catch { Logger(subsystem: "app.togo", category: "push").error("Request-data receipt failed; notification still delivered") }
+            }
             gate.finish(content.value)
         }
     }
