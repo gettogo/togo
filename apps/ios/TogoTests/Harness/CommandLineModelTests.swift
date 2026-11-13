@@ -314,6 +314,38 @@ import TogoKit
         #expect(model.notice == ComposerCopy.notSent)
     }
 
+    @Test(arguments: [("f", "f"), ("fix the test", "fix the test"), ("fix the test", "Fix the test!")])
+    func freshInputAfterSendIsPreserved(sent: String, typed: String) async throws {
+        let model = make()
+        model.draft = sent
+        await model.submit()
+        model.typed(typed)
+        try await Task.sleep(for: .milliseconds(5))
+        #expect(model.draft == typed)
+    }
+
+    @Test func lateDictationDropsOnlyTheSentWords() async {
+        let model = make()
+        model.dictationStarted()
+        model.draft = "fix the test"
+        await model.submit()
+        model.dictated("fix the test. Then run it")
+        #expect(model.draft == "Then run it")
+    }
+
+    @Test func newTypingOrANewDictationDoesNotBelongToThePreviousSend() async {
+        let model = make()
+        model.dictationStarted()
+        model.draft = "f"
+        await model.submit()
+        model.typed("f")
+        #expect(model.draft == "f")
+        model.draft = ""
+        model.dictationStarted()
+        model.dictated("f")
+        #expect(model.draft == "f")
+    }
+
     /// A palette whose list failed to load says so and loads again on Try again, instead of
     /// spinning for ever.
     @Test func aFailedPaletteCanTryAgain() async {

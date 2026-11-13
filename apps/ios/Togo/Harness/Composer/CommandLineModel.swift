@@ -78,6 +78,7 @@ import TogoKit
     private var historyIndex: Int?
     /// The last Send's words, so a late dictation result does not put them back (`SentEcho`).
     @ObservationIgnored private var sentEcho: SentEcho?
+    @ObservationIgnored private var keyboardDictating = false
     private var cache: (kind: HarnessCompleteParams.Kind, query: String, items: [HarnessCompletion])?
 
     @ObservationIgnored let store: HarnessSessionStore
@@ -354,7 +355,7 @@ import TogoKit
         defer { sending = false }
         let written = draft
         draft = ""
-        sentEcho = SentEcho(text: written, at: .now)
+        sentEcho = keyboardDictating ? SentEcho(text: written, at: .now) : nil
         closeMenu()
         historyIndex = nil
         notice = nil
@@ -378,9 +379,25 @@ import TogoKit
         }
     }
 
-    /// What the keyboard writes into the field. A late dictation result that brings back the
-    /// words just sent is dropped; what was said after them stays.
+    /// A fresh edit, including a paste. Content never identifies an edit as dictation.
     func typed(_ text: String, now: ContinuousClock.Instant = .now) {
+        if !text.isEmpty { sentEcho = nil }
+        draft = text
+    }
+
+    func dictationStarted() {
+        sentEcho = nil
+        keyboardDictating = true
+    }
+
+    func dictationFailed() {
+        keyboardDictating = false
+        sentEcho = nil
+    }
+
+    /// Only the native text input's dictation-result callback can enter this path.
+    func dictated(_ text: String, now: ContinuousClock.Instant = .now) {
+        keyboardDictating = false
         if let echo = sentEcho {
             switch echo.outcome(of: text, previous: draft, now: now) {
             case .waiting:
@@ -388,13 +405,7 @@ import TogoKit
             case .other:
                 sentEcho = nil
             case .echo(let kept):
-                // The field shows what the keyboard wrote: it is let in, then replaced on the next
-                // turn, so the field is told of the change even when `kept` is what the draft holds.
-                draft = text
-                Task { @MainActor [weak self] in
-                    guard let self, self.draft == text else { return }
-                    self.draft = kept
-                }
+                draft = kept
                 return
             }
         }

@@ -23,7 +23,7 @@ struct SmartCommandLine: View {
     @Bindable var model: CommandLineModel
     /// Where a screen's non-screen open targets go, such as a diff or a URL.
     var onOpen: (HarnessOpen) -> Void = { _ in }
-    @FocusState private var focused: Bool
+    @State private var focused = false
     @State private var shown: ComposerParts
     @State private var leaving: Set<ComposerParts.Part> = []
     /// Pictures and files pasted into the field go to the attachments, not into the text.
@@ -219,26 +219,24 @@ struct SmartCommandLine: View {
         HStack(alignment: .bottom, spacing: 10) {
             PromptChevron()
                 .padding(.bottom, 12)
-            TextField(
-                // What the keyboard writes goes through `typed`, which drops a late dictation
-                // result that would put the words just sent back in the field.
-                text: Binding(get: { model.draft }, set: { model.typed($0) }),
-                prompt: Text(placeholder).foregroundStyle(Color.togoMute),
-                axis: .vertical
-            ) { Text(placeholder) }
+            ComposerTextInput(
+                text: $model.draft, focused: $focused, placeholder: placeholder, assists: assists,
+                typed: { model.typed($0) }, dictated: { model.dictated($0) },
+                dictationStarted: { model.dictationStarted() }, dictationFailed: { model.dictationFailed() }, key: key
+            )
+            .overlay(alignment: .topLeading) {
+                if model.draft.isEmpty {
+                    Text(placeholder).font(.mono(.body)).foregroundStyle(Color.togoMute)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
             .font(.mono(.body))
             .foregroundStyle(Color.togoSnow)
-            .lineLimit(1...6)
-            // A prompt is natural language; a "/" command or an "@" file is typed exactly.
-            .textInputAutocapitalization(assists ? .sentences : .never)
-            .autocorrectionDisabled(!assists)
             // Prompts hold commands, flags and paths an agent may run: `--` stays two hyphens
             // and quotes stay straight, as the terminal takes them.
             .straightPunctuation($model.draft)
-            .focused($focused)
             .accessibilityIdentifier("composer.field")
             .padding(.vertical, 12)
-            .onKeyPress(phases: .down, action: key)
             sendButton
                 .padding(.bottom, 4)
         }
@@ -350,17 +348,17 @@ struct SmartCommandLine: View {
             : .regular.tint(Color.togoRaised.opacity(0.6))
     }
 
-    private func key(_ press: KeyPress) -> KeyPress.Result {
+    private func key(_ inputKey: KeyEquivalent, _ modifiers: EventModifiers, _ characters: String) -> KeyPress.Result {
         let menuOpen = model.menu != .none
         // Control-U empties the field and, while the peek runs, the agent's line with it.
-        let controlU = (press.key == KeyEquivalent("u") && press.modifiers.contains(.control)) || press.characters == "\u{15}"
+        let controlU = (inputKey == KeyEquivalent("u") && modifiers.contains(.control)) || characters == "\u{15}"
         if controlU, model.peekActive {
             model.draft = ""
             return .handled
         }
-        switch press.key {
+        switch inputKey {
         case .return:
-            if press.modifiers.contains(.shift) { return .ignored }
+            if modifiers.contains(.shift) { return .ignored }
             KeyboardDictation.end()
             Task { await model.returnPressed() }
             return .handled
@@ -379,7 +377,7 @@ struct SmartCommandLine: View {
             return before == model.draft ? .ignored : .handled
         case .tab:
             // Shift+Tab steps the mode, as at the desk; focus stays in the field.
-            if press.modifiers.contains(.shift), !menuOpen, model.nextMode != nil {
+            if modifiers.contains(.shift), !menuOpen, model.nextMode != nil {
                 Task { await model.cycleMode() }
                 return .handled
             }
