@@ -5,9 +5,9 @@ import UserNotifications
 
 /// A machine's open helper connection, used before the relay when the app has one.
 @MainActor protocol LiveAnswering: AnyObject {
-    /// Whether the app holds a live control channel to the machine this pairing belongs to.
-    func hasLiveChannel(_ pairing: Pairing) -> Bool
-    func answer(_ pairing: Pairing, requestId: String, decision: Decision) async throws
+    /// False only when no send was attempted, so relay fallback is safe.
+    /// A failure after attempting delivery throws instead.
+    func answerIfConnected(_ pairing: Pairing, requestId: String, decision: Decision) async throws -> Bool
 }
 
 /// A delivered notification that belongs to a request.
@@ -133,9 +133,8 @@ struct DeliveredRequest: Hashable, Sendable {
         guard deps.pending.claim(requestId, hostId: hostId) else { return .repeated }
 
         do {
-            if let live = deps.live, live.hasLiveChannel(pairing) {
-                try await live.answer(pairing, requestId: requestId, decision: wire)
-            } else {
+            let sentLive = try await deps.live?.answerIfConnected(pairing, requestId: requestId, decision: wire) ?? false
+            if !sentLive {
                 try await deps.relay.send(requestId: requestId, decision: decision, pairing: pairing)
             }
         } catch HelperError.conflict {

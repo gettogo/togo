@@ -40,7 +40,7 @@ struct IslandCompactTrailing: View {
     let card: LiveCard
     var isStale = false
 
-    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
+    private var status: LiveStatus { LiveStatus(state.status, stale: isStale, feedback: card.feedback) }
 
     var body: some View {
         Group {
@@ -77,7 +77,9 @@ struct IslandCompactTrailing: View {
 
     static func symbol(_ status: LiveStatus) -> String {
         switch status {
-        case .done: "checkmark"
+        case .done, .answeredElsewhere: "checkmark"
+        case .sent: "paperplane"
+        case .sendFailed: "exclamationmark.triangle"
         case .ended: "stop.fill"
         case .failed: "exclamationmark.triangle"
         case .offline: "wifi.slash"
@@ -95,7 +97,7 @@ struct IslandMinimal: View {
 
     var body: some View {
         Group {
-            if LiveStatus(state.status, stale: isStale) == .needsYou {
+            if LiveStatus(state.status, stale: isStale, feedback: card.feedback) == .needsYou {
                 IslandBeacon(size: 10)
                     .accessibilityHidden(false)
                     .accessibilityLabel(LiveCopy.waiting(max(1, state.waiting)))
@@ -104,7 +106,7 @@ struct IslandMinimal: View {
                     .font(.caption)
                     .foregroundStyle(Color.togoSnow)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(LiveStatus(state.status, stale: isStale).word(reason: state.reason))
+                    .accessibilityLabel(LiveStatus(state.status, stale: isStale, feedback: card.feedback).word(reason: state.reason))
             }
         }
         // motion: state change — the system crossfades between entries in place; nothing moves.
@@ -123,7 +125,7 @@ struct IslandExpandedLeading: View {
     let card: LiveCard
     var isStale = false
 
-    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
+    private var status: LiveStatus { LiveStatus(state.status, stale: isStale, feedback: card.feedback) }
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -184,10 +186,11 @@ struct IslandExpandedLeading: View {
 struct IslandExpandedTrailing: View {
     let state: TogoActivityAttributes.ContentState
     var isStale = false
+    var feedback: LiveAnswerFeedback? = nil
 
     var body: some View {
         Group {
-            if LiveStatus(state.status, stale: isStale).showsElapsed {
+            if LiveStatus(state.status, stale: isStale, feedback: feedback ?? state.answerFeedback).showsElapsed {
                 LiveClock(since: state.since)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)

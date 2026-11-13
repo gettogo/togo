@@ -42,10 +42,13 @@ public struct TogoActivityAttributes: ActivityAttributes {
         /// The session, step and request context, sealed for this device (see `LiveContext`).
         /// Absent from older helpers and relays.
         public var ctx: String?
+        /// Local delivery feedback. The helper's pushes omit it; the saved request preserves
+        /// an in-flight or sent answer if an older push arrives afterward.
+        public var answerFeedback: LiveAnswerFeedback?
 
         public init(
             bib: String?, agent: String, status: String, waiting: Int, since: Int, requestId: String?,
-            command: String?, reason: String? = nil, ctx: String? = nil
+            command: String?, reason: String? = nil, ctx: String? = nil, answerFeedback: LiveAnswerFeedback? = nil
         ) {
             self.bib = bib
             self.agent = agent
@@ -56,6 +59,7 @@ public struct TogoActivityAttributes: ActivityAttributes {
             self.command = command
             self.reason = reason
             self.ctx = ctx
+            self.answerFeedback = answerFeedback
         }
 
         /// A field a pushed state leaves out takes a default instead of failing the decode:
@@ -72,6 +76,7 @@ public struct TogoActivityAttributes: ActivityAttributes {
             command = try? c.decodeIfPresent(String.self, forKey: .command)
             reason = try? c.decodeIfPresent(String.self, forKey: .reason)
             ctx = try? c.decodeIfPresent(String.self, forKey: .ctx)
+            answerFeedback = try? c.decodeIfPresent(LiveAnswerFeedback.self, forKey: .answerFeedback)
         }
     }
 

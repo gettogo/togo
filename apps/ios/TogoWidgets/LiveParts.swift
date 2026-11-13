@@ -137,9 +137,16 @@ enum LiveContextSource {
                 return opened
             }
         }
-        guard let requestId = state.requestId, let directory = SharedGroup.storeDirectory(SharedGroup.ios),
-              let pending = PendingStore(directory: directory, clock: { Date() }).request(requestId)
+        guard let requestId = state.requestId, let directory = SharedGroup.storeDirectory(SharedGroup.ios)
         else { return nil }
+        let pending = PendingStore(directory: directory, clock: { Date() }).request(requestId)
+        return fallback(state, hostId: hostId, pending: pending)
+    }
+
+    static func fallback(
+        _ state: TogoActivityAttributes.ContentState, hostId: String, pending: PendingRequest?
+    ) -> LiveContext? {
+        guard let pending, pending.hostId == hostId, pending.requestId == state.requestId else { return nil }
         return LiveContext(pending: pending)
     }
 
@@ -147,12 +154,18 @@ enum LiveContextSource {
     static func card(_ state: TogoActivityAttributes.ContentState, hostId: String, stale: Bool) -> LiveCard {
         let pairings = LiveCopy.sharedPairings()
         let several = (pairings?.all().count ?? 0) > 1
+        let pending = state.requestId.flatMap { requestId in
+            SharedGroup.storeDirectory(SharedGroup.ios).flatMap {
+                PendingStore(directory: $0, clock: { Date() }).request(requestId)
+            }
+        }.flatMap { $0.hostId == hostId ? $0 : nil }
         return LiveCard(
             agent: state.agent, status: state.status, waiting: state.waiting, requestId: state.requestId,
             command: state.command, context: context(state, hostId: hostId),
             machine: several ? LiveCopy.machineName(hostId: hostId, pairings: pairings) : nil, stale: stale,
             showsCommand: pairings?.pairing(hostId: hostId)?.appHostID
-                .map(SharedSettings.readLiveActivityCommandMachines().contains) ?? false
+                .map(SharedSettings.readLiveActivityCommandMachines().contains) ?? false,
+            feedback: LiveAnswerFeedback.resolve(pending, local: state.answerFeedback, now: Date())
         )
     }
 }

@@ -1,3 +1,4 @@
+import ActivityKit
 import AppIntents
 import Foundation
 import TogoPush
@@ -17,34 +18,68 @@ enum LiveAnswer {
     static func send(_ decision: String, hostId: String, requestId: String) async throws {
         guard let directory = SharedGroup.storeDirectory(SharedGroup.ios),
               let pairing = PairingStore(directory: directory).pairing(hostId: hostId)
-        else { throw Failure.unavailable }
+        else {
+            await refresh(.failed, hostId: hostId, requestId: requestId)
+            throw Failure.unavailable
+        }
         // The waiting widget counts open requests: an answer here takes one off at once,
         // rather than when the widget's next entry is due, up to ten minutes later.
         let pending = PendingStore(directory: directory, clock: { Date() }) {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
         }
-        guard pending.claim(requestId, hostId: hostId) else { return }
-        #if DEBUG
-        // The app's recorded demo (`-ui-demo-live`) has no relay: it reads the answer from the store.
-        if SharedSettings.defaults?.bool(forKey: "ui.demo.liveAnswers") == true {
-            pending.mark(requestId, decision == "deny" ? .denied : .approved)
+        let sender = RelayAnswerSender(keys: KeychainDeviceKeys(accessGroup: nil), pending: pending, clock: { Date() })
+        try await perform(decision, hostId: hostId, requestId: requestId, pending: pending) {
+            #if DEBUG
+            if SharedSettings.defaults?.bool(forKey: "ui.demo.liveAnswers") == true { return }
+            #endif
+            try await sender.send(requestId: requestId, decision: decision, pairing: pairing)
+        } refresh: { feedback in
+            await refresh(feedback, hostId: hostId, requestId: requestId)
+        }
+    }
+
+    static func perform(
+        _ decision: String, hostId: String, requestId: String, pending: PendingStore,
+        send: @Sendable () async throws -> Void,
+        refresh: @Sendable (LiveAnswerFeedback) async -> Void
+    ) async throws {
+        if let request = pending.request(requestId), request.hostId != hostId { throw Failure.unavailable }
+        guard pending.claim(requestId, hostId: hostId) else {
+            if let feedback = LiveAnswerFeedback.resolve(pending.request(requestId), local: nil, now: Date()) {
+                await refresh(feedback)
+            }
             return
         }
-        #endif
-        let sender = RelayAnswerSender(keys: KeychainDeviceKeys(accessGroup: nil), pending: pending, clock: { Date() })
+        await refresh(.sending)
         do {
-            try await sender.send(requestId: requestId, decision: decision, pairing: pairing)
+            try await send()
         } catch {
-            // Nothing reached the machine: the request can be answered again.
             pending.release(requestId)
+            await refresh(.failed)
             throw error
         }
         pending.mark(requestId, decision == "deny" ? .denied : .approved)
+        await refresh(.sent)
+    }
+
+    /// Mutate only the activity still showing this request. A late result must not replace
+    /// another request the helper has already moved to. The delivery field forces a render
+    /// even though the helper's status and timer have not changed.
+    private static func refresh(_ feedback: LiveAnswerFeedback, hostId: String, requestId: String) async {
+        for activity in Activity<TogoActivityAttributes>.activities where activity.attributes.hostId == hostId {
+            let content = activity.content
+            var state = content.state
+            guard state.status == "needs_you", state.requestId == requestId else { continue }
+            state.answerFeedback = feedback
+            await activity.update(ActivityContent(
+                state: state, staleDate: content.staleDate, relevanceScore: content.relevanceScore
+            ))
+        }
     }
 }
 
 /// Approve, for when approving needs the device unlocked (the default).
-struct ApproveRequestIntent: AppIntent {
+struct ApproveRequestIntent: LiveActivityIntent {
     static let title = LocalizedStringResource("live.intent.approve", defaultValue: "Approve")
     static let isDiscoverable = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
@@ -66,7 +101,7 @@ struct ApproveRequestIntent: AppIntent {
 }
 
 /// Approve, for a user who turned on approving without unlocking.
-struct ApproveUnlockedRequestIntent: AppIntent {
+struct ApproveUnlockedRequestIntent: LiveActivityIntent {
     static let title = LocalizedStringResource("live.intent.approve", defaultValue: "Approve")
     static let isDiscoverable = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
@@ -93,7 +128,7 @@ struct ApproveUnlockedRequestIntent: AppIntent {
 }
 
 /// Deny only stops the agent, so it never needs the device unlocked.
-struct DenyRequestIntent: AppIntent {
+struct DenyRequestIntent: LiveActivityIntent {
     static let title = LocalizedStringResource("live.intent.deny", defaultValue: "Deny")
     static let isDiscoverable = false
     static let authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed

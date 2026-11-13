@@ -98,7 +98,7 @@ struct Mailbox: Sendable {
         Int64((date.timeIntervalSince1970 * 1000).rounded(.down))
     }
 
-    func post(_ plaintext: some Encodable, to pairing: Pairing) async throws {
+    func post(_ plaintext: some Encodable, to pairing: Pairing, timeout: TimeInterval? = nil) async throws {
         guard let hostKeyData = Base64URL.decode(pairing.hostKey),
               let hostKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: hostKeyData)
         else { throw SealError.badKey }
@@ -109,6 +109,7 @@ struct Mailbox: Sendable {
         )
 
         var request = URLRequest(url: pairing.relayURL.appending(path: "v1/mailbox/\(pairing.hostId)"))
+        if let timeout { request.timeoutInterval = timeout }
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try JSONEncoder().encode(["ciphertext": envelope])

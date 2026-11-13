@@ -15,6 +15,7 @@ public enum Capability {
     public static let gitFiles = "gitfiles.v1"
     public static let ports = "ports.v1"
     public static let push = "push.v1"
+    public static let liveContext = "livecontext.v1"
     public static let capture = "capture.v1"
     public static let launch = "launch.v1"
     public static let lifecycle = "lifecycle.v1"

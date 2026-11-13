@@ -17,6 +17,9 @@ enum ChatCopy {
     static let emptyTitle = String(localized: "chat.empty.title", defaultValue: "Nothing said yet")
     static let emptyDetail = String(localized: "chat.empty.detail.short", defaultValue: "Write below to start.")
     static let earlier = String(localized: "chat.earlier", defaultValue: "Show earlier")
+    static let historyUnavailable = String(
+        localized: "chat.history.unavailable", defaultValue: "Some messages from before reconnection are no longer available."
+    )
 
     static let copy = String(localized: "chat.copy", defaultValue: "Copy")
     static let copyCode = String(localized: "chat.copyCode", defaultValue: "Copy code")

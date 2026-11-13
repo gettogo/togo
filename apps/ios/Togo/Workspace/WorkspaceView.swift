@@ -358,6 +358,7 @@ struct WorkspaceView: View {
                     Button(layer.layer == .chat ? ChatCopy.terminal : ChatCopy.chat,
                            systemImage: layer.layer == .chat ? "terminal" : "bubble.left.and.text.bubble.right") {
                         LayerToolbarItem.resignKeyboard()
+                        // motion: state change — fade between this session's chat and terminal.
                         withAnimation(Motion.animation(.fade, reduce: reduceMotion)) { layer.toggle() }
                     }
                 }

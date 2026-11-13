@@ -328,14 +328,18 @@ import struct TogoPush.Pairing
         await services.start()
         try await services.saveHost(record(Samples.studio, "Studio"))
         let watch = try #require(watches[Samples.studio])
-        #expect(!services.hasLiveChannel(pairing(Samples.studio)))
+        #expect(try await services.answerIfConnected(pairing(Samples.studio), requestId: "before-open", decision: .approve) == false)
 
         watch.sink.yield(HostSnapshot(hostID: Samples.studio, reach: .online, sessions: []))
-        await eventually { services.hasLiveChannel(pairing(Samples.studio)) }
-        #expect(services.hasLiveChannel(pairing(Samples.studio)))
-        #expect(!services.hasLiveChannel(pairing(nil)))
+        await eventually { services.isOnline(Samples.studio) }
+        watch.controlReady.withLock { $0 = true }
+        #expect(try await services.answerIfConnected(pairing(nil), requestId: "unknown", decision: .approve) == false)
 
-        try await services.answer(pairing(Samples.studio), requestId: "r1", decision: .approve)
+        #expect(try await services.answerIfConnected(pairing(Samples.studio), requestId: "r1", decision: .approve))
+        #expect(watch.ops.withLock { $0 } == ["answer r1"])
+        await watch.stop()
+        #expect(services.isOnline(Samples.studio))
+        #expect(try await services.answerIfConnected(pairing(Samples.studio), requestId: "retired", decision: .approve) == false)
         #expect(watch.ops.withLock { $0 } == ["answer r1"])
     }
 

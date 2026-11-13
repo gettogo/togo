@@ -169,6 +169,17 @@ struct NotificationServiceCoreTests {
         #expect(all.first == Seen.generic, "expired before the open finished")
     }
 
+    @Test func expiryKeepsDecodedActionsWhileReceiptIsSending() throws {
+        let delivered = Mutex<[Seen]>([])
+        let gate = DeliveryGate { content in delivered.withLock { $0.append(Seen(content)) } }
+        pair(Self.hostID, name: "studio")
+        let decoded = core.process(try generic()).content
+        gate.prepare(decoded)
+        gate.expire()
+        gate.finish(decoded)
+        #expect(delivered.withLock { $0 } == [Seen(decoded)])
+    }
+
     @Test func finishedDeliveryIsKept() throws {
         let delivered = Mutex<[Seen]>([])
         let gate = DeliveryGate { content in delivered.withLock { $0.append(Seen(content)) } }

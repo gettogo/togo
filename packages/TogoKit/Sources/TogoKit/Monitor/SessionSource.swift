@@ -9,6 +9,7 @@ public protocol SessionSource: Sendable {
     /// Empty when the host has no `events.v1`. Ends when the connection does. Single consumer: HostMonitor.
     var events: AsyncStream<EventEnvelope> { get }
     func call(_ op: SessionOp) async throws -> Session?
+    func canAnswerRequests() async -> Bool
     /// Applies to the next `snapshot`, which subscribes with this foreground flag.
     func setForeground(_ on: Bool) async
     /// The machine's keep-awake state, or nil when the host has no `awake.v1`.
@@ -19,6 +20,7 @@ public protocol SessionSource: Sendable {
 }
 
 extension SessionSource {
+    public func canAnswerRequests() async -> Bool { false }
     public func setForeground(_ on: Bool) async {}
     public func awakeStatus() async throws -> AwakeStatus? { nil }
     public func hostInfo() async throws -> HostInfo? { nil }
@@ -86,6 +88,7 @@ public struct HelperSource: SessionSource {
     public func open() async throws -> (HelperPresence, Set<String>) { try await link.open() }
     public func snapshot() async throws -> EventSnapshot { try await link.snapshot() }
     public func call(_ op: SessionOp) async throws -> Session? { try await link.call(op) }
+    public func canAnswerRequests() async -> Bool { await link.canAnswerRequests() }
     public func setForeground(_ on: Bool) async { await link.setForeground(on) }
     public func awakeStatus() async throws -> AwakeStatus? { try await link.awakeStatus() }
     public func hostInfo() async throws -> HostInfo? { try await link.hostInfo() }
@@ -214,6 +217,11 @@ actor HelperLink {
             }
             throw HelperError.timeout(method: method)
         }
+    }
+
+    func canAnswerRequests() async -> Bool {
+        guard !isClosed, let client else { return false }
+        return await client.canAnswerRequests
     }
 
     private func perform(_ op: SessionOp, on client: HelperClient) async throws -> Session? {

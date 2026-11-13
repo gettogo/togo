@@ -327,7 +327,9 @@ import UIKit
         do {
             for try await element in services.feed(subject, after: feed.openAfter) {
                 switch element {
-                case .opened(let result):
+                case .opened(let incoming):
+                    let result = try await completeOpen(incoming)
+                    try Task.checkCancellation()
                     opened = true
                     phase = .live
                     let outcome = feed.load(result)
@@ -342,7 +344,7 @@ import UIKit
                 }
             }
             return .dropped(opened: opened)
-        } catch HelperError.refused {
+        } catch let error as HelperError where error.isFallback {
             return .refused
         } catch HelperError.unsupported {
             return .refused
@@ -545,7 +547,7 @@ import UIKit
                 rows = SessionNote.merge(notes, into: SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt))
             }
             markSent()
-        } catch HelperError.conflict(let reason) where reason == "busy" {
+        } catch let error as HelperError where error.conflictReason == "busy" {
             // The turn is still going; the next change of the mission tries again.
             queue.requeue(prompt.id)
             return

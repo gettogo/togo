@@ -25,7 +25,7 @@ enum HarnessFeed: Sendable {
 /// `.opened` and then every `harness` notification for the session, and calls harness.close when
 /// the consumer cancels. It finishes (or throws) when the connection drops; the consumer opens
 /// again with its cursor.
-@MainActor protocol HarnessServices: AnyObject {
+@MainActor protocol HarnessServices: AnyObject, Sendable {
     func describe(_ s: HarnessSubject) async throws -> HarnessDescriptor
     func feed(_ s: HarnessSubject, after: Int) -> AsyncThrowingStream<HarnessFeed, any Error>
     func history(_ s: HarnessSubject, before: Int) async throws -> HarnessPage

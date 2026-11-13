@@ -210,7 +210,8 @@ struct SettingsView: View {
         case .terminal:
             TerminalSettingsView(settings: settings, fonts: values.fonts, update: actions.update)
         case .keyboard:
-            KeyboardSettingsView(keys: settings.terminalKeys, update: updateKeys)
+            KeyboardSettingsView(keys: settings.terminalKeys, update: updateKeys,
+                                 optionAsMeta: settings.binding(\.optionAsMeta, actions.update))
         case .shortcuts:
             ShortcutBuilderView { item in
                 var keys = settings.terminalKeys

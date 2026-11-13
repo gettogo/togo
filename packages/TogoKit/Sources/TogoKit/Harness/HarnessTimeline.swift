@@ -32,6 +32,7 @@ public struct HarnessTimeline: Sendable {
     public private(set) var cursor: Int = 0
     public private(set) var items: [HarnessItem] = []
     public private(set) var hasOlder = false
+    public private(set) var historyUnavailable = false
     private var index: [String: Int] = [:]
     /// Sent items shown before the items between the cursor and them arrived, by seq. A later
     /// arrival with a lower seq goes before them, so a prompt never draws above output it
@@ -47,12 +48,14 @@ public struct HarnessTimeline: Sendable {
 
     public mutating func load(_ result: HarnessOpenResult) {
         if epoch == result.epoch {
+            if cursor > 0, let floor = result.discardedThrough, floor > cursor { historyUnavailable = true }
             // A tail that does not fit what is held is skipped; the next update repairs it.
             for item in result.items.sorted(by: { $0.seq < $1.seq }) { _ = upsert(item) }
             cursor = max(cursor, result.cursor)
             settleAhead()
             if items.isEmpty { hasOlder = result.more }
         } else {
+            historyUnavailable = false
             epoch = result.epoch
             cursor = result.cursor
             // A tail with nothing to continue is useless here; drop it rather than show a fragment.
@@ -118,6 +121,7 @@ public struct HarnessTimeline: Sendable {
     private mutating func upsert(_ item: HarnessItem) -> Bool {
         var item = item
         if let at = index[item.id] {
+            if items[at].seq > item.seq { return true }
             if item.isTail {
                 guard let whole = items[at].body.continued(by: item.body) else { return false }
                 item.body = whole

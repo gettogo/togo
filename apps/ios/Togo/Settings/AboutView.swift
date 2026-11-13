@@ -23,6 +23,7 @@ struct AboutView: View {
                 } label: {
                     Text(settingsText("settings.about.version", "Version"))
                 }
+                webLink(settingsText("appUpdate.store", "App Store"), AppStoreLookup.storeURL)
                 Link(destination: Self.sourceURL) {
                     LabeledContent(settingsText("settings.about.source", "Source code")) {
                         HStack(spacing: 6) {

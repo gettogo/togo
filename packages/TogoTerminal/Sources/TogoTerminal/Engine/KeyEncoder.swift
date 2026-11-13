@@ -117,6 +117,16 @@ extension KeyEncoder {
         modifiers: UIKeyModifierFlags,
         optionAsMeta: Bool
     ) -> [UInt8]? {
+        guard let stroke = hardwareStroke(characters: characters, charactersIgnoringModifiers: charactersIgnoringModifiers,
+                                          modifiers: modifiers, optionAsMeta: optionAsMeta) else { return nil }
+        let bytes = encode(stroke, applicationCursor: false)
+        return bytes.isEmpty ? nil : bytes
+    }
+
+    /// One printable-chord policy for legacy and extended-key encoding.
+    static func hardwareStroke(
+        characters: String, charactersIgnoringModifiers: String, modifiers: UIKeyModifierFlags, optionAsMeta: Bool
+    ) -> KeyStroke? {
         guard !modifiers.contains(.command) else { return nil }
         let ctrl = modifiers.contains(.control)
         let meta = optionAsMeta && modifiers.contains(.alternate)
@@ -136,8 +146,7 @@ extension KeyEncoder {
             return nil
         }
         // An unmapped chord (Ctrl-1, Ctrl-é) goes back to SwiftTerm rather than vanishing here.
-        let bytes = encode(KeyStroke(.char(character), keyModifiers), applicationCursor: false)
-        return bytes.isEmpty ? nil : bytes
+        return KeyStroke(.char(character), keyModifiers)
     }
 
     /// Named keys arrive as multi-character strings such as `UIKeyInputUpArrow`.

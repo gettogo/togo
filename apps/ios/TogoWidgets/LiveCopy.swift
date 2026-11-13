@@ -10,10 +10,20 @@ import TogoPush
 /// else as not updated, both without the accent or a running clock.
 enum LiveStatus: Equatable {
     case needsYou, working, done, ended, failed, offline, other, expired, notUpdated
+    case sending, sent, sendFailed, answeredElsewhere
 
-    init(_ raw: String, stale: Bool = false) {
+    init(_ raw: String, stale: Bool = false, feedback: LiveAnswerFeedback? = nil) {
         if stale {
             self = raw == "needs_you" ? .expired : .notUpdated
+            return
+        }
+        if raw == "needs_you", let feedback {
+            switch feedback {
+            case .sending: self = .sending
+            case .sent: self = .sent
+            case .failed: self = .sendFailed
+            case .answeredElsewhere: self = .answeredElsewhere
+            }
             return
         }
         switch raw {
@@ -38,6 +48,10 @@ enum LiveStatus: Equatable {
         case .other: String(localized: "live.status.other", defaultValue: "Waiting")
         case .expired: String(localized: "live.status.expired", defaultValue: "Request expired")
         case .notUpdated: String(localized: "live.status.notUpdated", defaultValue: "Not updated")
+        case .sending: String(localized: "live.answer.sending", defaultValue: "Sending")
+        case .sent: String(localized: "live.answer.sent", defaultValue: "Answer sent")
+        case .sendFailed: String(localized: "live.answer.failed", defaultValue: "Could not send")
+        case .answeredElsewhere: String(localized: "live.answer.elsewhere", defaultValue: "Answered elsewhere")
         }
     }
 

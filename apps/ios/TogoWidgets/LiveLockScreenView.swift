@@ -22,7 +22,7 @@ struct LiveStatusText: View {
     private static func color(_ status: LiveStatus) -> Color {
         switch status {
         case .needsYou: Color.togoAccentText
-        case .expired, .notUpdated, .offline: Color.togoMute
+        case .expired, .notUpdated, .offline, .sending, .sent, .answeredElsewhere: Color.togoMute
         default: Color.togoSnow
         }
     }
@@ -41,7 +41,7 @@ struct LiveLockScreenView: View {
     var hostId = ""
     var isStale = false
 
-    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
+    private var status: LiveStatus { LiveStatus(state.status, stale: isStale, feedback: card.feedback) }
 
     /// Deny and Approve show: a request one tap may answer, still inside its window.
     private var answerable: Bool { !hostId.isEmpty && !isStale && state.requestId != nil && card.answer != nil }
@@ -131,7 +131,7 @@ struct LiveSmallView: View {
     let card: LiveCard
     var isStale = false
 
-    private var status: LiveStatus { LiveStatus(state.status, stale: isStale) }
+    private var status: LiveStatus { LiveStatus(state.status, stale: isStale, feedback: card.feedback) }
 
     /// The agent's name, else the title (which falls back to "Session").
     private var name: String { card.agentName.isEmpty ? card.title : card.agentName }

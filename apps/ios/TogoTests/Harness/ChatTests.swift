@@ -69,6 +69,26 @@ struct ChatTests {
         #expect(chat.rows.count == 3)
     }
 
+    @Test func reconnectFillsTheMiddleBeforeAcknowledgingCursor() async throws {
+        let services = FakeHarnessServices(descriptor: Self.claude)
+        let items = (1...250).map { n in
+            HarnessItem(id: "u\(n)", seq: n, at: HarnessSamples.at,
+                        body: .user(.init(text: "message \(n)", queued: false, source: "terminal")))
+        }
+        let mission = try HarnessFixtures.open().mission
+        let first = HarnessOpenResult(epoch: "e1", cursor: 10, items: Array(items.prefix(10)), more: false, mission: mission)
+        let second = HarnessOpenResult(epoch: "e1", cursor: 250, items: Array(items.suffix(200)), more: true,
+                                       mission: mission, coveredAfter: 50, discardedThrough: 0)
+        services.feeds = [.init(elements: [.opened(first)], end: .fail), .init(elements: [.opened(second)], end: .hold)]
+        services.historyPage = { HarnessPage(items: Array(items.prefix(50)), more: false, epoch: "e1", discardedThrough: 0) }
+        let chat = store(services)
+        chat.launch()
+        defer { chat.stop() }
+        try await until { chat.timeline.cursor == 250 }
+        #expect(chat.timeline.items.map(\.id) == items.map(\.id))
+        #expect(!chat.timeline.historyUnavailable)
+    }
+
     @Test func sessionWithoutAdapterStaysTerminalOnly() async throws {
         let services = FakeHarnessServices(descriptor: HarnessDescriptor())
         let chat = store(services)
@@ -95,6 +115,21 @@ struct ChatTests {
         await chat.start()
         #expect(chat.shownLayer == .terminal)
         #expect(chat.fallback == ChatCopy.fallback)
+    }
+
+    @Test(arguments: ["fallback", "no_adapter"])
+    func wireRefusedFeedFallsBackWithoutReconnecting(reason: String) async throws {
+        let services = FakeHarnessServices(descriptor: Self.claude)
+        let data = Data("{\"code\":-32008,\"message\":\"refused\",\"data\":{\"reason\":\"\(reason)\",\"message\":\"Use the terminal\"}}".utf8)
+        let rpc = try JSONDecoder().decode(RPCErrorObject.self, from: data)
+        services.feeds = [.init(stream: AsyncThrowingStream { $0.finish(throwing: HelperError.rpc(rpc)) })]
+        let chat = store(services)
+        chat.launch()
+        defer { chat.stop() }
+        try await until { chat.phase == .terminalOnly || services.opens.count > 1 }
+        #expect(chat.shownLayer == .terminal)
+        #expect(chat.fallback == ChatCopy.fallback)
+        #expect(services.opens.count == 1)
     }
 
     @Test func chosenLayerIsKept() async throws {

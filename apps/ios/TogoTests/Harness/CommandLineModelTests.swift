@@ -292,6 +292,18 @@ import TogoKit
         #expect(model.notice == nil)
     }
 
+    @Test func wireBusyRefusalQueuesInstead() async throws {
+        let session = Session()
+        let rpc = try JSONDecoder().decode(RPCErrorObject.self, from: Data(#"{"code":-32006,"message":"conflict","data":{"reason":"busy"}}"#.utf8))
+        session.sendErrors = [HelperError.rpc(rpc)]
+        let model = make(session)
+        model.draft = "go on"
+        await model.submit()
+        #expect(session.sends.map(\.1) == [.now, .queue])
+        #expect(model.draft.isEmpty)
+        #expect(model.notice == nil)
+    }
+
     @Test func aFailedSendPutsTheWordsBack() async {
         let session = Session()
         session.sendErrors = [Offline()]
@@ -300,6 +312,38 @@ import TogoKit
         await model.submit()
         #expect(model.draft == "deploy it")
         #expect(model.notice == ComposerCopy.notSent)
+    }
+
+    @Test(arguments: [("f", "f"), ("fix the test", "fix the test"), ("fix the test", "Fix the test!")])
+    func freshInputAfterSendIsPreserved(sent: String, typed: String) async throws {
+        let model = make()
+        model.draft = sent
+        await model.submit()
+        model.typed(typed)
+        try await Task.sleep(for: .milliseconds(5))
+        #expect(model.draft == typed)
+    }
+
+    @Test func lateDictationDropsOnlyTheSentWords() async {
+        let model = make()
+        model.dictationStarted()
+        model.draft = "fix the test"
+        await model.submit()
+        model.dictated("fix the test. Then run it")
+        #expect(model.draft == "Then run it")
+    }
+
+    @Test func newTypingOrANewDictationDoesNotBelongToThePreviousSend() async {
+        let model = make()
+        model.dictationStarted()
+        model.draft = "f"
+        await model.submit()
+        model.typed("f")
+        #expect(model.draft == "f")
+        model.draft = ""
+        model.dictationStarted()
+        model.dictated("f")
+        #expect(model.draft == "f")
     }
 
     /// A palette whose list failed to load says so and loads again on Try again, instead of

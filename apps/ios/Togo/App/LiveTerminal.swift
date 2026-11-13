@@ -148,6 +148,7 @@ import UIKit
             fontName: settings.fontName == SettingsValues.systemFonts[0] ? nil : settings.fontName,
             fontSize: CGFloat(settings.fontSize),
             cursor: CursorShape(rawValue: settings.cursor) ?? .block,
+            optionAsMeta: settings.optionAsMeta,
             themeID: settings.themeID,
             readNewOutput: settings.readNewOutput
         )

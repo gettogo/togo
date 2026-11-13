@@ -15,6 +15,7 @@ import WidgetKit
         var reloadWidgets: () -> Void = { WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting) }
         /// Tells the Watch the request is gone, when it is reachable.
         var cleared: (String) -> Void = { _ in }
+        var received: (String, String) async -> Void = { _, _ in }
     }
 
     private let deps: Dependencies
@@ -33,7 +34,9 @@ import WidgetKit
             await deps.notifications.removeOffline(hostId: opened.pairing.hostId)
         }
         if opened.payload.kind == .needsYou {
-            return record(opened.payload, hostId: opened.pairing.hostId, machine: opened.pairing.machineName)
+            let changed = record(opened.payload, hostId: opened.pairing.hostId, machine: opened.pairing.machineName)
+            if let id = opened.payload.requestId { await deps.received(opened.pairing.hostId, id) }
+            return changed
         }
         guard opened.payload.kind == .clear, let requestId = opened.payload.requestId else { return false }
         await clear([requestId])

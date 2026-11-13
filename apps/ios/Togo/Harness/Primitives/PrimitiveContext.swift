@@ -76,20 +76,3 @@ extension PrimitiveContext {
         return context
     }
 }
-
-extension HelperError {
-    /// The helper refused because no native route serves this: open the terminal instead.
-    var isFallback: Bool {
-        let reasons: Set<String> = ["fallback", "no_adapter"]
-        switch self {
-        case .refused(let reason):
-            return reasons.contains(reason)
-        case .rpc(let object):
-            guard object.code == RPCErrorCode.refused,
-                  case let .object(data)? = object.data, case let .string(reason)? = data["reason"] else { return false }
-            return reasons.contains(reason)
-        default:
-            return false
-        }
-    }
-}

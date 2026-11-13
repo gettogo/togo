@@ -66,6 +66,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
     private static let sentChoicesKey = "push.commandChoiceSent"
     /// Mailbox sends run one after another, so a later choice is never stamped before an earlier one.
     private var commandSend: Task<Void, Never>?
+    private let foreground: (@MainActor () -> Bool)?
     private let deviceName: String
     private let clock: @Sendable () -> Date
     private var pairing: Set<HostID> = []
@@ -92,7 +93,8 @@ extension RelayRegisterSender: PushTokenRegistering {}
         hostedRelay: URL? = PushEnvironment.defaultRelay,
         sentChoices: UserDefaults = .standard,
         deviceName: String = UIDevice.current.name,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        foreground: (@MainActor () -> Bool)? = nil
     ) {
         self.keys = keys
         self.store = store
@@ -108,6 +110,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         // The helper counts the name in Unicode scalars and takes at most 64.
         self.deviceName = String(String.UnicodeScalarView(deviceName.unicodeScalars.prefix(64)))
         self.clock = clock
+        self.foreground = foreground
     }
 
     /// Machines with a stored pairing, by the app's id.
@@ -183,8 +186,10 @@ extension RelayRegisterSender: PushTokenRegistering {}
         let hash = Self.tokenHash(apns: apnsToken, live: live, watches: watches, sshKey: sshKey, doneSilent: doneSilent)
         // A choice sent through the mailbox is confirmed over SSH, even when it matches the old one.
         let reportsLive = reconnected && live.update != nil
+        let contextReceipts = capabilities.contains(Capability.liveContext)
+        let apnsHash = SHA256.hash(data: Data(apnsToken.utf8)).map { String(format: "%02x", $0) }.joined()
         if let stored, stored.tokenHash == hash, stored.relayURL == relay, stored.liveActivityCommand == command,
-           sentChoice[stored.hostId] == nil, !reportsLive {
+           sentChoice[stored.hostId] == nil, !reportsLive, stored.liveContextReceipts == contextReceipts, stored.apnsTokenHash == apnsHash {
             return
         }
 
@@ -207,7 +212,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
             pairedAt: clock(), tokenHash: Self.tokenHash(
                 apns: apnsToken, live: live, watches: pairedWatches, sshKey: sshKey, doneSilent: doneSilent
             ),
-            liveActivityCommand: command
+            liveActivityCommand: command, liveContextReceipts: contextReceipts, apnsTokenHash: apnsHash
         )
         if let removal = removedWhilePairing.removeValue(forKey: hostID) {
             // Removed while the helper was pairing: it holds this device now, so tell it to forget.
@@ -343,9 +348,11 @@ extension RelayRegisterSender: PushTokenRegistering {}
         }
     }
 
+    private var inForeground: Bool { foreground?() ?? isForeground }
+
     /// The APNs or Live Activity tokens changed.
     func tokensChanged() async {
-        guard !isForeground else {
+        guard !inForeground else {
             onRepairNeeded()
             return
         }
@@ -371,7 +378,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         let tokens = (apns: registrar.apnsToken, liveActivity: live.update, liveActivityStart: live.start)
         let command = pairing.appHostID.map(settings.liveActivityCommand(for:)) ?? pairing.liveActivityCommand
         try? await register.send(tokens, liveActivityCommand: command, liveActivityEnded: token, pairing: pairing)
-        if isForeground { onRepairNeeded() }
+        if inForeground { onRepairNeeded() }
     }
 
     /// The command text choice changed. Each paired machine hears a choice that differs from

@@ -13,6 +13,7 @@ import UIKit
 struct RosterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.machineTools) private var machineTools
+    @Environment(\.appUpdates) private var appUpdates
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @Environment(\.hardwareKeyboard) private var hardwareKeyboard
     @Bindable var store: AppStore
@@ -106,7 +107,10 @@ struct RosterView: View {
 
     @ViewBuilder private var content: some View {
         if hasNoMachines {
-            RosterNoMachines { store.showSheet(.addMachine) }
+            VStack(spacing: 0) {
+                appUpdateNotice.padding(.horizontal, 20)
+                RosterNoMachines { store.showSheet(.addMachine) }
+            }
         } else {
             // Lines arriving and leaving glide on `resize`; nothing else in the list animates.
             IdentityKeyed(store.rosterShown, key: RosterShown.shape, quiet: RosterShown.quiet) { shown in
@@ -117,7 +121,12 @@ struct RosterView: View {
         }
     }
 
-    // MARK: List
+    @ViewBuilder private var appUpdateNotice: some View {
+        if let appUpdates, let version = appUpdates.availableVersion {
+            AppUpdateNotice(version: version) { appUpdates.dismiss() }
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 
     private func list(_ shown: RosterShown, now: Date) -> some View {
         let roster = shown.model
@@ -145,6 +154,9 @@ struct RosterView: View {
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityIdentifier("roster.deviceOffline")
                     }
+                    appUpdateNotice
+                        .listRowBackground(Color.togoInk)
+                        .listRowSeparator(.hidden)
                     if let notice = shown.notice {
                         Label(notice.text, systemImage: notice.isError ? "exclamationmark.circle" : "info.circle")
                             .font(.subheadline)

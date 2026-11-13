@@ -10,6 +10,7 @@ protocol HostWatch: Sendable {
     func setForeground(_ on: Bool) async
     func refresh() async
     func perform(_ op: SessionOp) async throws -> Session?
+    func answerIfConnected(requestID: String, decision: Decision) async throws -> Bool
 }
 
 extension HostMonitor: HostWatch {}

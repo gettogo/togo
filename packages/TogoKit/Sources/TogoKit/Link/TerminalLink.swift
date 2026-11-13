@@ -1,5 +1,4 @@
 import Foundation
-@preconcurrency import LocalAuthentication
 
 public enum LinkState: Sendable, Equatable {
     case waking(String)
@@ -318,38 +317,6 @@ public actor TerminalLink {
     private static func close(_ attachment: Attachment) async {
         await attachment.transport.close()
         await attachment.connection.close()
-    }
-
-    /// Failures the user has to act on; retrying them would only repeat the prompt or the block.
-    private static func isPermanent(_ error: any Error) -> Bool {
-        switch error {
-        case SSHError.hostKeyChanged, SSHError.hostKeyRejected, SSHError.authFailed, SSHError.cancelled:
-            true
-        // Reaches here only when Mosh was chosen explicitly; Auto falls back to the next kind.
-        // No UDP reply means a firewall or network in between blocks Mosh; retrying cannot help.
-        case MoshBootstrapError.serverMissing, MoshConnectError.noUDPReply, TransportAddressError.linkLocalOnly:
-            true
-        // Thrown only when no kind may run for this host: an explicit kind that is
-        // unavailable, or Auto with every kind skipped.
-        case is ConnectorError:
-            true
-        // The keychain or Face ID refused the key or password: only the user can unlock it,
-        // and retrying on our own would only put the prompt up again and again.
-        case is SecretStoreError, is LAError:
-            true
-        default:
-            false
-        }
-    }
-
-    /// The machine did not answer at all, after the wake probe already waited for it. On the
-    /// first attach that is reported at once; a machine that answers but whose helper or
-    /// session is not ready yet is retried with backoff like a dropped link.
-    private static func isUnreachable(_ error: any Error) -> Bool {
-        switch error {
-        case SSHError.unreachable, SSHError.timeout: true
-        default: false
-        }
     }
 
     // MARK: - Transport events

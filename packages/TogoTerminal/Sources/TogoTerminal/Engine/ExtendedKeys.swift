@@ -91,6 +91,7 @@ extension KeyEncoder {
     /// A hardware press under `modifyOtherKeys`, or nil to take the usual path. Kitty presses
     /// never come here: SwiftTerm reports those itself.
     static func extendedHardware(
+        characters: String? = nil,
         charactersIgnoringModifiers: String, modifiers: UIKeyModifierFlags, keyCode: Int, optionAsMeta: Bool,
         mode: ExtendedKeyMode
     ) -> [UInt8]? {
@@ -106,8 +107,10 @@ extension KeyEncoder {
         case .keyboardDeleteOrBackspace: key = .backspace
         case .keyboardEscape: key = .escape
         default:
-            guard charactersIgnoringModifiers.count == 1, let c = charactersIgnoringModifiers.first else { return nil }
-            key = .char(c)
+            guard let stroke = hardwareStroke(characters: characters ?? charactersIgnoringModifiers,
+                                              charactersIgnoringModifiers: charactersIgnoringModifiers,
+                                              modifiers: modifiers, optionAsMeta: optionAsMeta) else { return nil }
+            return extended(KeyStroke(stroke.key, keyModifiers), mode: mode)
         }
         return extended(KeyStroke(key, keyModifiers), mode: mode)
     }

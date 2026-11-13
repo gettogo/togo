@@ -23,11 +23,15 @@ final class FakeRelay: AnswerSending {
 
 @MainActor final class FakeLive: LiveAnswering {
     var live = true
+    var ready = true
+    var error: HelperError?
     var sent: [String] = []
 
-    func hasLiveChannel(_ pairing: Pairing) -> Bool { live }
-    func answer(_ pairing: Pairing, requestId: String, decision: Decision) async throws {
+    func answerIfConnected(_ pairing: Pairing, requestId: String, decision: Decision) async throws -> Bool {
+        guard live, ready else { return false }
+        if let error { throw error }
         sent.append("\(requestId) \(decision.wire)")
+        return true
     }
 }
 
@@ -173,6 +177,22 @@ struct NotificationActionHandlerTests {
         #expect(notifications.removed == [[requestID]])
     }
 
+    @Test func retiredTransportUsesRelayDespiteCachedOnline() async {
+        live.ready = false
+        let h = handler(live: true)
+        #expect(await h.answer(hostId: hostID, requestId: requestID, decision: "approve") == .sent)
+        #expect(relay.sent.withLock { $0 } == ["\(hostID) \(requestID) approve"])
+        #expect(live.sent.isEmpty)
+    }
+
+    @Test func uncertainLiveFailureDoesNotAlsoSendToRelay() async {
+        live.error = .timeout(method: "approval.answer")
+        let h = handler(live: true)
+        #expect(await h.answer(hostId: hostID, requestId: requestID, decision: "approve") == .failed)
+        #expect(relay.sent.withLock { $0 }.isEmpty)
+        #expect(notifications.failures.count == 1)
+    }
+
     @Test func approveUsesRelayWhenNot() async {
         live.live = false
         let h = NotificationActionHandler(dependencies: .init(
@@ -284,6 +304,30 @@ struct NotificationActionHandlerTests {
         #expect(await viaSSH.answer(hostId: hostID, requestId: requestID, decision: "option:2") == .failed)
         #expect(await viaSSH.answer(hostId: hostID, requestId: requestID, decision: "option:1") == .repeated)
         #expect(live.sent.isEmpty)
+    }
+
+    @Test func backgroundReceiptFollowsSharedStoreWrite() async throws {
+        let keys = InMemoryDeviceKeys()
+        let id = "r_bbbbbbbbbb"
+        var savedBeforeReceipt = false
+        let clear = ClearHandler(dependencies: .init(
+            core: NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { start }),
+            pending: pending, notifications: notifications, reloadWidgets: {},
+            received: { host, receivedID in
+                let saved = pending.request(receivedID)
+                savedBeforeReceipt = host == hostID && receivedID == id && saved?.title == "Approve?"
+                    && saved?.options.map(\.role) == ["approve", "deny"] && saved?.answered == nil
+            }
+        ))
+        let payload = PushPayload(kind: .needsYou, title: "Approve?", body: "", requestId: id,
+                                  options: [PushOption(n: 1, label: "Yes", role: "approve"),
+                                            PushOption(n: 2, label: "No", role: "deny")],
+                                  ts: Int64(Date().timeIntervalSince1970 * 1000))
+        let envelope = try Seal.seal(to: keys.agreementKey().publicKey, JSONEncoder().encode(payload),
+                                     label: Labels.push, aad: Data("\(hostID)|\(try keys.deviceID())".utf8))
+        #expect(await clear.didReceiveRemoteNotification(["c": envelope]))
+        #expect(savedBeforeReceipt)
+        #expect(pending.request(id)?.answered == nil)
     }
 
     @Test func clearRemovesDelivered() async throws {

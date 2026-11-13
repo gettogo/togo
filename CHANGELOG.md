@@ -4,6 +4,20 @@ The helper and the app are versioned separately. A newer helper always works wit
 
 ## Helper
 
+### 1.0.4 (2026-11-13)
+
+**Fixed**
+
+- New agent sessions could reopen an old conversation. They now start fresh unless you choose a conversation to resume.
+- Resumed conversations could replay completed work as new activity. History now loads as one snapshot, with a loading signal before replay begins.
+- Earlier chat messages could be skipped when reconnecting. The helper now identifies missing history so the app can retrieve it.
+- Live API-backed sessions could lose their connection after a helper restart, including sessions started through symlinked folders. Their endpoint and credentials now recover together.
+- Agent updates could lose names, roles and clocks, and current Codex worker activity could go missing. Those details now survive updates and replay.
+- Approval requests could arrive as a Live Activity without their question or actions. A normal actionable notification now remains available until the device confirms it saved the request.
+- Restart could report failure after the service manager had already replaced the daemon. It now verifies the replacement against the original shutdown request.
+- Removing and re-adding a paired relay could interrupt withdrawal of its offline notification. The old connection now drains before its replacement opens.
+- Disconnecting while a request waited for input could block RPC shutdown. The connection now closes before waiting requests are canceled.
+
 ### 1.0.3
 
 **Fixed**
@@ -39,6 +53,23 @@ The helper and the app are versioned separately. A newer helper always works wit
 First release.
 
 ## App
+
+### 1.0.2 (2026-11-13)
+
+**Fixed**
+
+- Typing or pasting after Send could lose new text, and late dictation could restore words already sent. New input stays intact and sent words stay cleared.
+- Option text input differed between terminal encoders, and review shortcuts could act on the wrong pane. Both now follow the selected input mode and focused pane.
+- Chat could skip earlier messages or show no progress while a saved conversation loaded. It now retrieves missing history and shows progress while keeping the current messages visible.
+- Approval notifications and Live Activities could omit the question or actions, or give no answer feedback. They now show the request and report answer delivery.
+- A temporary credential interruption could incorrectly require signing in again. Connections now retry without a manual refresh.
+- Agent rows could be blank and status values could misalign when they wrapped. Labels stay readable and status columns remain aligned at larger text sizes.
+- Large terminal output bursts could stall rendering. Output now leaves time to keep the screen responsive.
+- An agent's refusal or busy response could be mistaken for success. The app now reports it consistently.
+
+**Added**
+
+- A notice appears in the session list when a newer compatible app version is available in the App Store.
 
 ### 1.0.1
 

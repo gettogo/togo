@@ -38,10 +38,18 @@ public struct LiveContext: Codable, Sendable, Equatable {
     }
 
     /// The request as the notification service extension stored it: what the activity shows
-    /// when it carries no context (an older helper or relay). The session title and step are
-    /// not known there, and nothing is answered in place.
-    public init(pending: PendingRequest) {
-        self.init(ask: pending.title.isEmpty ? nil : pending.title, subject: pending.subject)
+    /// when it carries no context, including an activity started by the app. The same roles
+    /// that offer notification actions offer Live Activity actions while the request is open.
+    public init(pending: PendingRequest, now: Date = Date()) {
+        let age = now.timeIntervalSince(pending.receivedAt)
+        var answer: Answer?
+        if pending.isOpen(at: now), age >= -NotificationServiceCore.maxSkew, age < RequestLifetime.seconds {
+            let roles = Set(pending.options.map(\.role))
+            if roles.contains("deny") {
+                answer = roles.contains("approve") ? .approveDeny : .deny
+            }
+        }
+        self.init(ask: pending.title.isEmpty ? nil : pending.title, subject: pending.subject, answer: answer)
     }
 
     /// Opens a context sealed for this device by the machine `hostId`. Nil when the keys are

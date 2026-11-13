@@ -69,13 +69,15 @@ public struct LiveCard: Equatable, Sendable {
     public var more: Int
     /// Buttons that may answer in place; nil when the app has to.
     public var answer: LiveContext.Answer?
+    public var feedback: LiveAnswerFeedback?
 
     public init(
         agent: String, status: String, waiting: Int, requestId: String?, command: String?, context: LiveContext?,
-        machine: String?, stale: Bool, showsCommand: Bool = true
+        machine: String?, stale: Bool, showsCommand: Bool = true, feedback: LiveAnswerFeedback? = nil
     ) {
         let phase: Phase = stale ? .other : status == "needs_you" ? .needsYou : status == "working" ? .working : .other
         self.phase = phase
+        self.feedback = phase == .needsYou ? feedback : nil
         agentID = agent
         agentName = AgentName.display(agent)
         let title = context?.title.map { PromptText.clean($0, maxLines: 1) } ?? ""
@@ -104,7 +106,7 @@ public struct LiveCard: Equatable, Sendable {
             if !ask.isEmpty, detail == nil || ask.contains(" ") {
                 self.ask = ask
             }
-            if requestId != nil { answer = context?.answer }
+            if requestId != nil, self.feedback?.blocksAnswer != true { answer = context?.answer }
         case .other:
             break
         }

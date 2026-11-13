@@ -126,7 +126,7 @@ struct MissionRowView: View {
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
                     : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
                 layout {
-                    Text(verbatim: row.title)
+                    Text(verbatim: AgentLabel.title(row))
                         .font(.body)
                         .foregroundStyle(Color.togoSnow)
                         .fixedSize(horizontal: false, vertical: true)
@@ -135,7 +135,7 @@ struct MissionRowView: View {
                         MissionClock(start: start)
                     }
                 }
-                if let subtitle = row.subtitle, !subtitle.isEmpty {
+                if let subtitle = AgentLabel.subtitle(row) {
                     Text(verbatim: subtitle)
                         .font(.mono(.caption))
                         .foregroundStyle(Color.togoMute)
@@ -162,12 +162,12 @@ struct MissionRowView: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
-        .voiceControlNames(VoiceControlNames.make([row.title]))
+        .voiceControlNames(VoiceControlNames.make([AgentLabel.title(row)]))
         .accessibilityHint(openLabel ?? "")
     }
 
     private var spoken: String {
-        [row.title, PrimitiveStateLook(row.state).label, row.subtitle]
+        [AgentLabel.title(row), PrimitiveStateLook(row.state).label, AgentLabel.subtitle(row)]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
