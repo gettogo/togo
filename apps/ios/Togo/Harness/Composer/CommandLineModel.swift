@@ -366,7 +366,7 @@ import TogoKit
         do {
             try await send(text, mode: mode, images: images)
             attachments.clear()
-        } catch HelperError.conflict("busy") where mode == .now {
+        } catch let error as HelperError where mode == .now && error.conflictReason == "busy" {
             do {
                 try await send(text, mode: .queue, images: images)
                 attachments.clear()

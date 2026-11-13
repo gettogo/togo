@@ -292,6 +292,18 @@ import TogoKit
         #expect(model.notice == nil)
     }
 
+    @Test func wireBusyRefusalQueuesInstead() async throws {
+        let session = Session()
+        let rpc = try JSONDecoder().decode(RPCErrorObject.self, from: Data(#"{"code":-32006,"message":"conflict","data":{"reason":"busy"}}"#.utf8))
+        session.sendErrors = [HelperError.rpc(rpc)]
+        let model = make(session)
+        model.draft = "go on"
+        await model.submit()
+        #expect(session.sends.map(\.1) == [.now, .queue])
+        #expect(model.draft.isEmpty)
+        #expect(model.notice == nil)
+    }
+
     @Test func aFailedSendPutsTheWordsBack() async {
         let session = Session()
         session.sendErrors = [Offline()]

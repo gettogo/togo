@@ -97,6 +97,21 @@ struct ChatTests {
         #expect(chat.fallback == ChatCopy.fallback)
     }
 
+    @Test(arguments: ["fallback", "no_adapter"])
+    func wireRefusedFeedFallsBackWithoutReconnecting(reason: String) async throws {
+        let services = FakeHarnessServices(descriptor: Self.claude)
+        let data = Data("{\"code\":-32008,\"message\":\"refused\",\"data\":{\"reason\":\"\(reason)\",\"message\":\"Use the terminal\"}}".utf8)
+        let rpc = try JSONDecoder().decode(RPCErrorObject.self, from: data)
+        services.feeds = [.init(stream: AsyncThrowingStream { $0.finish(throwing: HelperError.rpc(rpc)) })]
+        let chat = store(services)
+        chat.launch()
+        defer { chat.stop() }
+        try await until { chat.phase == .terminalOnly || services.opens.count > 1 }
+        #expect(chat.shownLayer == .terminal)
+        #expect(chat.fallback == ChatCopy.fallback)
+        #expect(services.opens.count == 1)
+    }
+
     @Test func chosenLayerIsKept() async throws {
         let services = FakeHarnessServices(descriptor: Self.claude)
         services.feeds = [.init(elements: [.opened(try HarnessFixtures.open())], end: .hold)]
