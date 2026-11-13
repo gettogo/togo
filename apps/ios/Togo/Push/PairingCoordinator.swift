@@ -66,6 +66,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
     private static let sentChoicesKey = "push.commandChoiceSent"
     /// Mailbox sends run one after another, so a later choice is never stamped before an earlier one.
     private var commandSend: Task<Void, Never>?
+    private let foreground: (@MainActor () -> Bool)?
     private let deviceName: String
     private let clock: @Sendable () -> Date
     private var pairing: Set<HostID> = []
@@ -92,7 +93,8 @@ extension RelayRegisterSender: PushTokenRegistering {}
         hostedRelay: URL? = PushEnvironment.defaultRelay,
         sentChoices: UserDefaults = .standard,
         deviceName: String = UIDevice.current.name,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        foreground: (@MainActor () -> Bool)? = nil
     ) {
         self.keys = keys
         self.store = store
@@ -108,6 +110,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         // The helper counts the name in Unicode scalars and takes at most 64.
         self.deviceName = String(String.UnicodeScalarView(deviceName.unicodeScalars.prefix(64)))
         self.clock = clock
+        self.foreground = foreground
     }
 
     /// Machines with a stored pairing, by the app's id.
@@ -343,9 +346,11 @@ extension RelayRegisterSender: PushTokenRegistering {}
         }
     }
 
+    private var inForeground: Bool { foreground?() ?? isForeground }
+
     /// The APNs or Live Activity tokens changed.
     func tokensChanged() async {
-        guard !isForeground else {
+        guard !inForeground else {
             onRepairNeeded()
             return
         }
@@ -371,7 +376,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
         let tokens = (apns: registrar.apnsToken, liveActivity: live.update, liveActivityStart: live.start)
         let command = pairing.appHostID.map(settings.liveActivityCommand(for:)) ?? pairing.liveActivityCommand
         try? await register.send(tokens, liveActivityCommand: command, liveActivityEnded: token, pairing: pairing)
-        if isForeground { onRepairNeeded() }
+        if inForeground { onRepairNeeded() }
     }
 
     /// The command text choice changed. Each paired machine hears a choice that differs from

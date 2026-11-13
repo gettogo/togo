@@ -76,7 +76,8 @@ private final class RecordingRegister: PushTokenRegistering {
     }
 
     private func coordinator(
-        _ inputs: Inputs = Inputs(), permission: PushRegistrar.Authorization = .authorized
+        _ inputs: Inputs = Inputs(), permission: PushRegistrar.Authorization = .authorized,
+        runtimeForeground: (@MainActor () -> Bool)? = nil
     ) async -> (PairingCoordinator, PushRegistrar) {
         let registrar = PushRegistrar(permissions: FakePermissions(permission), registerForRemote: {})
         await registrar.refresh()
@@ -86,7 +87,7 @@ private final class RecordingRegister: PushTokenRegistering {
             settings: { inputs.settings }, liveTokens: { id in (id.flatMap { inputs.updateTokens[$0] }, inputs.startToken) },
             watch: { inputs.watches },
             register: register, hostedRelay: Self.relay, sentChoices: sentChoices, deviceName: "Sam's iPhone",
-            clock: { Samples.now }
+            clock: { Samples.now }, foreground: runtimeForeground
         )
         return (coordinator, registrar)
     }
@@ -94,6 +95,28 @@ private final class RecordingRegister: PushTokenRegistering {
     private func online(_ coordinator: PairingCoordinator, capabilities: Set<String> = ["push.v1"]) async {
         let helper = self.helper
         await coordinator.machineOnline(hostID: machine, name: "Studio", capabilities: capabilities) { try await helper.pair($0) }
+    }
+
+    @Test func backgroundLaunchRoutesTokensWithoutAWindow() async {
+        let inputs = Inputs()
+        inputs.updateTokens["h_studio"] = "aaaa"
+        let (coordinator, _) = await coordinator(inputs, runtimeForeground: { false })
+        await online(coordinator)
+        #expect(coordinator.isForeground)
+        await coordinator.tokensChanged()
+        #expect(register.sent.withLock { $0.count } == 1)
+        #expect(register.live.withLock { $0["h_studio"] } == "aaaa")
+    }
+
+    @Test func activeApplicationUsesRepairDespiteAnOldBackgroundFlag() async {
+        let (coordinator, _) = await coordinator(runtimeForeground: { true })
+        await online(coordinator)
+        coordinator.isForeground = false
+        var repairs = 0
+        coordinator.onRepairNeeded = { repairs += 1 }
+        await coordinator.tokensChanged()
+        #expect(repairs == 1)
+        #expect(register.sent.withLock { $0.isEmpty })
     }
 
     @Test func pairsWhenPushCapable() async throws {

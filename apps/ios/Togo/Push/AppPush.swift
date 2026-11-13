@@ -26,6 +26,7 @@ import WidgetKit
     private var sharedDoneSilent: Bool?
     private let path = NWPathMonitor()
     private var watchFeed: Task<Void, Never>?
+    private var liveTask: Task<Void, Never>?
     private var pendingStart: (@MainActor () -> Void)?
 
     /// Reads settings from the services, which are built after this.
@@ -66,7 +67,8 @@ import WidgetKit
             settings: { source.services?.settings ?? AppSettings() },
             liveTokens: { hostId in (hostId.flatMap(live.updateToken(hostId:)), live.startToken) },
             watch: { watch?.devices ?? [] },
-            keyRemovals: PendingKeyRemovalStore(file: directory.appending(path: "pending-key-removals.json"))
+            keyRemovals: PendingKeyRemovalStore(file: directory.appending(path: "pending-key-removals.json")),
+            foreground: { UIApplication.shared.applicationState == .active }
         )
         let pairing = self.pairing
         link.pairing = pairing
@@ -141,15 +143,13 @@ import WidgetKit
         // The system hands a notification tap that launched the app only to a delegate set
         // during launch, so this one line cannot wait for the first screen.
         UNUserNotificationCenter.current().delegate = router
+        // A push-to-start wake has no first frame. Follow its update token immediately,
+        // and register notification actions before a background notification can arrive.
+        Task.detached(priority: .utility) { NotificationCategories.register() }
+        if liveTask == nil { liveTask = Task { await live.start() } }
         pendingStart = { [weak self, weak services] in
             guard let self, let services else { return }
-            // Both talk to system daemons and are safe off the main thread, so they do not
-            // take a frame from the first screen.
-            Task.detached(priority: .utility) {
-                NotificationCategories.register()
-            }
             watchNetwork(services)
-            Task { await live.start() }
         }
         // The Watch link starts at launch, not with the first screen: a reply from the Watch
         // can launch the app in the background, where no window ever appears.
@@ -159,8 +159,10 @@ import WidgetKit
         }
     }
 
-    /// Registers the lock-screen actions, wakes the Watch session and starts following the
-    /// network and Live Activities. Runs once the first screen is up; later calls do nothing.
+    deinit { liveTask?.cancel() }
+
+    /// Starts following the network once the first screen is up; later calls do nothing.
+    /// Live Activity tokens, notification actions and the Watch link already run at launch.
     func start() {
         let work = pendingStart
         pendingStart = nil
