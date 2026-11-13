@@ -199,6 +199,9 @@ public actor SSHConnection: TCPChannelOpener {
             do {
                 saved = try await unlocking(reason: reason) { try secrets.get(Self.passwordAccount(profile.id), context: $0) }
             } catch let error as SecretStoreError {
+                // Unavailable access can recover with the saved password. Asking for a
+                // replacement here would repeat that prompt on every automatic retry.
+                if CredentialAccess.isTemporary(error) { throw error }
                 // Unreadable even after a fresh unlock: ask for the password where someone can
                 // answer, and keep the keychain's answer where no one can.
                 let prompt = AuthPrompt.password(user: profile.endpoint.user, host: profile.endpoint.host)
