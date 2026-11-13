@@ -298,12 +298,8 @@ extension NotificationResponse {
 }
 
 extension LiveServices: LiveAnswering {
-    func hasLiveChannel(_ pairing: Pairing) -> Bool {
-        pairing.appHostID.map(isOnline) ?? false
-    }
-
-    func answer(_ pairing: Pairing, requestId: String, decision: Decision) async throws {
-        guard let id = pairing.appHostID else { throw LiveServiceError.unknownMachine }
-        try await answer(hostID: id, requestID: requestId, decision: decision)
+    func answerIfConnected(_ pairing: Pairing, requestId: String, decision: Decision) async throws -> Bool {
+        guard let id = pairing.appHostID, let watch = watches[id] else { return false }
+        return try await watch.answerIfConnected(requestID: requestId, decision: decision)
     }
 }

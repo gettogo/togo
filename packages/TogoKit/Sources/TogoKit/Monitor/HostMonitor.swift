@@ -180,6 +180,26 @@ public actor HostMonitor {
 
     // MARK: - Connecting
 
+    /// Claims the current transport before attempting an answer. Cached reachability
+    /// may remain online after background retirement; it is never used here.
+    public func answerIfConnected(requestID: String, decision: Decision) async throws -> Bool {
+        guard !isStopped, let source else { return false }
+        let tag = generation
+        guard await source.canAnswerRequests(), tag == generation, !isStopped else { return false }
+        let op = SessionOp.answer(requestID, decision)
+        do {
+            _ = try await source.call(op)
+        } catch let error as HelperError where error == .closed {
+            connectionLost(tag)
+            throw error
+        }
+        if !hasEvents, tag == generation {
+            applyLocally(op, result: nil)
+            publish()
+        }
+        return true
+    }
+
     private func beginAttempts(failures: Int = 0) {
         cancelAttempts()
         let run = attemptGeneration

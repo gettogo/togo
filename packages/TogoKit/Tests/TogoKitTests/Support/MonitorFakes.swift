@@ -145,6 +145,8 @@ final class FakeSource: SessionSource {
         return nil
     }
 
+    func canAnswerRequests() async -> Bool { !isClosed }
+
     func close() async {
         state.withLock { $0.isClosed = true }
         sink.finish()

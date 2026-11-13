@@ -23,11 +23,15 @@ final class FakeRelay: AnswerSending {
 
 @MainActor final class FakeLive: LiveAnswering {
     var live = true
+    var ready = true
+    var error: HelperError?
     var sent: [String] = []
 
-    func hasLiveChannel(_ pairing: Pairing) -> Bool { live }
-    func answer(_ pairing: Pairing, requestId: String, decision: Decision) async throws {
+    func answerIfConnected(_ pairing: Pairing, requestId: String, decision: Decision) async throws -> Bool {
+        guard live, ready else { return false }
+        if let error { throw error }
         sent.append("\(requestId) \(decision.wire)")
+        return true
     }
 }
 
@@ -171,6 +175,22 @@ struct NotificationActionHandlerTests {
         #expect(relay.sent.withLock { $0 }.isEmpty)
         #expect(pending.request(requestID)?.answered == .approved)
         #expect(notifications.removed == [[requestID]])
+    }
+
+    @Test func retiredTransportUsesRelayDespiteCachedOnline() async {
+        live.ready = false
+        let h = handler(live: true)
+        #expect(await h.answer(hostId: hostID, requestId: requestID, decision: "approve") == .sent)
+        #expect(relay.sent.withLock { $0 } == ["\(hostID) \(requestID) approve"])
+        #expect(live.sent.isEmpty)
+    }
+
+    @Test func uncertainLiveFailureDoesNotAlsoSendToRelay() async {
+        live.error = .timeout(method: "approval.answer")
+        let h = handler(live: true)
+        #expect(await h.answer(hostId: hostID, requestId: requestID, decision: "approve") == .failed)
+        #expect(relay.sent.withLock { $0 }.isEmpty)
+        #expect(notifications.failures.count == 1)
     }
 
     @Test func approveUsesRelayWhenNot() async {

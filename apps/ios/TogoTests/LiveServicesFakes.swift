@@ -10,6 +10,7 @@ final class FakeWatch: HostWatch {
     let foregrounds = Mutex<[Bool]>([])
     let ops = Mutex<[String]>([])
     let stopped = Mutex(false)
+    let controlReady = Mutex(false)
     let record: HostRecord
 
     init(record: HostRecord) {
@@ -35,6 +36,12 @@ final class FakeWatch: HostWatch {
     func perform(_ op: SessionOp) async throws -> Session? {
         if case .answer(let id, _) = op { ops.withLock { $0.append("answer \(id)") } }
         return nil
+    }
+
+    func answerIfConnected(requestID: String, decision: Decision) async throws -> Bool {
+        guard controlReady.withLock({ $0 }), !stopped.withLock({ $0 }) else { return false }
+        _ = try await perform(.answer(requestID, decision))
+        return true
     }
 }
 

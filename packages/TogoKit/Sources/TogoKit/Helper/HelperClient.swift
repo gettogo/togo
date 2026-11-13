@@ -56,6 +56,11 @@ public actor HelperClient {
     /// The protocol this app speaks.
     public static let protocolVersion = 1
 
+    /// A preflight only: failure after a call starts still has uncertain delivery.
+    public var canAnswerRequests: Bool {
+        !isClosed && capabilities?.contains(Capability.approvals) == true
+    }
+
     public func hello(client: ClientInfo) async throws -> HelloResult {
         let params = HelloParams(protocol: Self.protocolVersion, client: client, capabilities: [])
         let result: HelloResult = try await call(.hello, params)

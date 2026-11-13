@@ -414,6 +414,7 @@ struct HostMonitorTests {
         // Subscribed again without the foreground flag, so pushes resume.
         #expect(first.foregroundFlags == [true, false])
         #expect(first.snapshotCalls == 2)
+        #expect(try await monitor.answerIfConnected(requestID: "within-grace", decision: .approve))
         #expect(await eventually { clock.pending == [.seconds(30)] })
         clock.advance(.seconds(29))
         #expect(!first.isClosed)
@@ -421,10 +422,15 @@ struct HostMonitorTests {
         #expect(await eventually { first.isClosed })
         #expect(factory.calls == 1)
 
+        // Cached reachability still describes the last snapshot, not a sendable source.
+        #expect(log.reach == .online)
+        #expect(try await monitor.answerIfConnected(requestID: "retired", decision: .approve) == false)
+
         await monitor.setForeground(true)
         #expect(await eventually { factory.calls == 2 && log.reach == .online })
         #expect(second.foregroundFlags == [true])
         await monitor.stop()
+        #expect(try await monitor.answerIfConnected(requestID: "stopped", decision: .approve) == false)
     }
 
     @Test func backgroundReturnInsideGraceKeepsConnection() async throws {
