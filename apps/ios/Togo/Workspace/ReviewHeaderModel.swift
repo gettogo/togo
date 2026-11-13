@@ -171,13 +171,13 @@ extension AppStore {
 
     /// Whether ⌘⇧D, ⌘⇧O or ⌘⇧P can open `tab` for the session on screen.
     func canOpenReview(_ tab: ReviewTab) -> Bool {
-        guard workspaceOpen, let selected = selectedTab, let row = session(for: selected) else { return false }
+        guard workspaceOpen, let focused = focusedTab, let row = session(for: focused) else { return false }
         let subject = reviewSubject(for: row)
         return tab == .ports ? subject.canPorts : subject.canRead
     }
 
     func openReview(_ tab: ReviewTab) {
-        guard canOpenReview(tab), let selected = selectedTab, let row = session(for: selected) else { return }
+        guard canOpenReview(tab), let focused = focusedTab, let row = session(for: focused) else { return }
         review(row, tab: tab)
     }
 
