@@ -110,9 +110,21 @@ struct ChatView: View {
             including: store.composerMenuOpen ? .all : .subviews
         )
         .overlay {
-            placeholder
-                // motion: state change — "Reading" gives way to the empty state in place, never a jump.
-                .motion(.fade, value: placeholderKind)
+            if !ChatLoadingState.hasContent(store) {
+                ChatLoadingView(state: loadingState)
+                    // motion: state change — reading gives way to the empty state in place.
+                    .motion(.fade, value: loadingState)
+            }
+        }
+        .overlay(alignment: .top) {
+            if ChatLoadingState.hasContent(store), loadingState.isProgress {
+                // The status stays in the pane without changing scroll geometry or anchors.
+                ChatLoadingView(state: loadingState, inline: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.togoInk)
+                    .allowsHitTesting(false)
+            }
         }
         // The one owner of the scrolling: the foot anchor through every size change, the
         // scrolls to what needs the user, and the "Needs you" capsule while a card is off
@@ -369,15 +381,7 @@ struct ChatView: View {
         store.timeline.hasOlder && store.has(HarnessCapability.history)
     }
 
-    /// Which placeholder shows, so changing it crossfades.
-    private var placeholderKind: Int {
-        guard rows.isEmpty, store.queue.isEmpty, store.liveWork == nil else { return 0 }
-        return switch store.phase {
-        case .describing, .opening: 1
-        case .reconnecting: 2
-        case .live, .terminalOnly: 3
-        }
-    }
+    private var loadingState: ChatLoadingState { ChatLoadingState(store) }
 
     private var earlier: some View {
         Button(ChatCopy.earlier) { Task { await store.loadOlder() } }
@@ -385,26 +389,6 @@ struct ChatView: View {
             .foregroundStyle(Color.togoMute)
             .frame(maxWidth: .infinity, minHeight: 44)
             .disabled(store.loadingOlder)
-    }
-
-    @ViewBuilder private var placeholder: some View {
-        if rows.isEmpty, store.queue.isEmpty, store.liveWork == nil {
-            switch store.phase {
-            case .describing, .opening:
-                ProgressView(ChatCopy.reading)
-                    .foregroundStyle(Color.togoMute)
-            case .reconnecting:
-                ProgressView(ChatCopy.reconnecting)
-                    .foregroundStyle(Color.togoMute)
-            case .live, .terminalOnly:
-                ContentUnavailableView {
-                    Label(ChatCopy.emptyTitle, systemImage: "bubble.left.and.text.bubble.right")
-                } description: {
-                    Text(ChatCopy.emptyDetail)
-                }
-                .foregroundStyle(Color.togoMute)
-            }
-        }
     }
 
     // MARK: Accessibility
