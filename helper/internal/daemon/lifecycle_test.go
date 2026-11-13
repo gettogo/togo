@@ -17,7 +17,6 @@ import (
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
-	"github.com/gettogo/togo/helper/internal/tmux"
 	"github.com/gettogo/togo/helper/internal/tmux/tmuxtest"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -258,10 +257,11 @@ func TestWrapperExitReportCounts(t *testing.T) {
 			}
 			t.Setenv("PATH", "/usr/bin:/bin")
 			flag, called := filepath.Join(home, "stop"), filepath.Join(home, "called")
+			ready := filepath.Join(home, "agent-running")
 			agent := filepath.Join(home, "agent")
 			togo := filepath.Join(home, "togo")
 			for p, body := range map[string]string{
-				agent: "#!/bin/sh\nwhile [ ! -e " + flag + " ]; do sleep 0.05; done\nexit 3\n",
+				agent: "#!/bin/sh\n: > " + ready + "\nwhile [ ! -e " + flag + " ]; do sleep 0.05; done\nexit 3\n",
 			} {
 				if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
 					t.Fatal(err)
@@ -281,21 +281,11 @@ func TestWrapperExitReportCounts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// Wait for the agent itself (a script, not the pane's own
-			// process): a login shell's startup children, such as zsh's
-			// path_helper, also sit in the foreground before it starts.
+			// A login profile can also run a child sh. Only the actual
+			// agent's marker proves it reached the waiting loop.
+			waitFile(t, ready)
 			code := 3
 			sig := wire.Signal{SessionID: sess.ID, Kind: wire.SignalExit, Code: &code}
-			for deadline := time.Now().Add(10 * time.Second); ; {
-				fg, err := tm.Foreground(context.Background(), sess.ID)
-				if err == nil && slices.ContainsFunc(fg.Foreground, func(p tmux.Proc) bool { return p.PID != fg.PanePID && (p.Name == "sh" || p.Name == "agent") }) {
-					break
-				}
-				if time.Now().After(deadline) {
-					t.Fatalf("the agent never ran: %+v %v", fg, err)
-				}
-				time.Sleep(20 * time.Millisecond)
-			}
 			if err := c.Watch.Signal(context.Background(), sig); err != nil || c.Watch.Ended(sess.ID) {
 				t.Fatalf("a report while the agent runs counted (err %v)", err)
 			}
