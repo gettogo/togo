@@ -58,9 +58,7 @@
           }
         }
       ],
-      "more": false,
-      "epoch": "e1",
-      "discardedThrough": 0
+      "more": false
     }
   }
 }

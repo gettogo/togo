@@ -237,9 +237,7 @@
             }
           }
         ]
-      },
-      "coveredAfter": 0,
-      "discardedThrough": 0
+      }
     }
   }
 }
