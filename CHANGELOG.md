@@ -16,6 +16,7 @@ The helper and the app are versioned separately. A newer helper always works wit
 - Approval requests could arrive as a Live Activity without their question or actions. A normal actionable notification now remains available until the device confirms it saved the request.
 - Restart could report failure after the service manager had already replaced the daemon. It now verifies the replacement against the original shutdown request.
 - Removing and re-adding a paired relay could interrupt withdrawal of its offline notification. The old connection now drains before its replacement opens.
+- Disconnecting while a request waited for input could block RPC shutdown. The connection now closes before waiting requests are canceled.
 
 ### 1.0.3
 
