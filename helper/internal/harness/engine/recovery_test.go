@@ -40,15 +40,36 @@ func TestNewEngineRecoversTheExistingServer(t *testing.T) {
 }
 
 func TestNewEngineKeepsTheExistingHTTPPassword(t *testing.T) {
+	t.Run("empty directory", func(t *testing.T) { testRecoveredHTTPPassword(t, false) })
+	t.Run("symlink directory and legacy record", func(t *testing.T) { testRecoveredHTTPPassword(t, true) })
+}
+
+func testRecoveredHTTPPassword(t *testing.T, symlink bool) {
 	const id = "s_abcdefghij"
 	home := t.TempDir()
+	dir, real := "", ""
+	if symlink {
+		real = filepath.Join(t.TempDir(), "project")
+		if err := os.Mkdir(real, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		var err error
+		real, err = filepath.EvalSymlinks(real)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir = filepath.Join(t.TempDir(), "project-link")
+		if err := os.Symlink(real, dir); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var port int
-	cfg := Config{TogoHome: home, Sessions: fakeSessions{id: session.Session{ID: id, Agent: "fakepw", Managed: true}},
+	cfg := Config{TogoHome: home, Sessions: fakeSessions{id: session.Session{ID: id, Agent: "fakepw", Cwd: real, Managed: true}},
 		Ports: func(context.Context, string) ([]ports.Listener, error) {
 			return []ports.Listener{{Port: port, PID: os.Getpid()}}, nil
 		}}
 	e := New(cfg)
-	if e.EndpointArgs("fakepw", id, "") == nil {
+	if e.EndpointArgs("fakepw", id, dir) == nil {
 		t.Fatal("endpoint not allocated")
 	}
 	t.Cleanup(func() { e.Forget(id) })
@@ -65,6 +86,20 @@ func TestNewEngineKeepsTheExistingHTTPPassword(t *testing.T) {
 	})}
 	go server.Serve(listener)
 	t.Cleanup(func() { server.Close() })
+	if symlink {
+		record, err := e.readEndpointRecord(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record.Dir != real {
+			t.Errorf("saved directory %q, want canonical %q", record.Dir, real)
+		}
+		// Records written by the earlier helper contain the original alias.
+		record.Dir = dir
+		if err := e.writeEndpointRecord(record); err != nil {
+			t.Fatal(err)
+		}
+	}
 	next := New(cfg)
 	restored, ok := next.endpointFor(id)
 	if !ok || restored.url() != before.url() || restored.auth() != before.auth() {
@@ -72,6 +107,12 @@ func TestNewEngineKeepsTheExistingHTTPPassword(t *testing.T) {
 	}
 	if err := checkHealth(context.Background(), restored, "/"); err != nil {
 		t.Fatal("restored credentials did not reach the existing HTTP server")
+	}
+	if symlink {
+		record, err := next.readEndpointRecord(id)
+		if err != nil || record.Dir != real {
+			t.Fatalf("recovered directory %q, %v; want %q", record.Dir, err, real)
+		}
 	}
 	files, _ := filepath.Glob(filepath.Join(home, "run", "harness", "*.json"))
 	if len(files) != 1 {

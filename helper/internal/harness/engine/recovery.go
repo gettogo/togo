@@ -174,7 +174,25 @@ func (e *Engine) listenerIdentity(ctx context.Context, id string, port int) (*pr
 	return nil, errors.New("endpoint is not owned by the session")
 }
 
+// canonicalEndpointDir keeps aliases such as /tmp and /private/tmp from
+// changing endpoint ownership when tmux reports the physical directory.
+func canonicalEndpointDir(dir string) (string, error) {
+	if dir == "" {
+		return "", nil
+	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(resolved)
+}
+
 func (e *Engine) saveEndpoint(id, dir string, ep endpoint) error {
+	canonical, err := canonicalEndpointDir(dir)
+	if err != nil {
+		return fmt.Errorf("endpoint working directory: %w", err)
+	}
+	dir = canonical
 	record := endpointRecord{Version: 1, ID: id, Generation: ep.generation, Adapter: ep.adapter, HarnessVersion: ep.version,
 		Dir: dir, LaunchedAt: e.cfg.Now(), Kind: ep.kind, Port: ep.port, Socket: ep.socket, SocketKey: fileIdentity(ep.socket),
 		EnvName: ep.envName, Password: ep.password, User: ep.user}
@@ -196,13 +214,22 @@ func (e *Engine) restoreEndpoint(id string) (endpoint, bool) {
 	if err != nil {
 		return endpoint{}, false
 	}
+	canonical, err := canonicalEndpointDir(record.Dir)
+	if err != nil {
+		return endpoint{}, false
+	}
+	record.Dir = canonical
 	ctx, cancel := context.WithTimeout(context.Background(), serverReady)
 	defer cancel()
 	a := e.adapters[record.Adapter]
 	if e.cfg.Sessions != nil {
 		info, err := e.cfg.Sessions.Resolve(ctx, id)
+		if err != nil {
+			return endpoint{}, false
+		}
+		cwd, err := canonicalEndpointDir(source.Expand(info.Cwd, e.cfg.Home))
 		if err != nil || !info.Managed || !a.matches(info.Agent, info.Command) ||
-			filepath.Clean(source.Expand(info.Cwd, e.cfg.Home)) != filepath.Clean(record.Dir) ||
+			cwd != record.Dir ||
 			(!record.CreatedAt.IsZero() && !record.CreatedAt.Equal(info.CreatedAt)) || info.CreatedAt.After(record.LaunchedAt) {
 			return endpoint{}, false
 		}
