@@ -3,7 +3,7 @@ import SwiftUI
 /// The status block has at most four cells. Measure one adaptive row at a
 /// time so wrapped values share a top edge and a full-height background.
 struct StatusCellsLayout: SwiftUI.Layout {
-    private let minimum: CGFloat = 104
+    var minimum: CGFloat = 104
     private let spacing: CGFloat = 1
 
     private struct Rows {

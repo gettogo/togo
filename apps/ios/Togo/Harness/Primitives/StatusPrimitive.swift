@@ -15,6 +15,7 @@ struct StatusPrimitive: View {
     /// Drawn inside another scroll view, such as a mission control section: no scroll of its own.
     var embedded = false
     @State private var actions = PrimitiveActions()
+    @ScaledMetric(relativeTo: .subheadline) private var minimumCellWidth: CGFloat = 104
 
     var body: some View {
         Group {
@@ -33,7 +34,7 @@ struct StatusPrimitive: View {
             let cells = StatusLogic.cells(status)
             let compact = StatusLogic.compactAction(status)
             if !cells.isEmpty {
-                StatusCellsLayout {
+                StatusCellsLayout(minimum: minimumCellWidth) {
                     ForEach(cells, id: \.label) { cell in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(cell.label).font(.caption).foregroundStyle(Color.togoMute)
