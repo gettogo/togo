@@ -31,6 +31,10 @@ capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt,
 # The terminal attaches a pasted file only when the paste is nothing but file
 # paths; pasted with the text, a path stays text. So one paste per path.
 images: { insert: per_path }
+# The composer's footer ("┃  Build · <model> <provider>") shows once the TUI can take a
+# prompt. One typed before it (the TUI restarts when a model is picked before the first
+# prompt) is lost, so a prompt waits for this row.
+ready: '^\s*┃\s+\S.* · \S'
 feeds:
   events:
     sse: { path: /api/event }

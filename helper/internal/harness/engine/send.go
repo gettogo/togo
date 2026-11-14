@@ -207,6 +207,7 @@ func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []
 	if im := s.ad.Images; im != nil {
 		insert = im.Insert
 	}
+	e.awaitReady(ctx, s)
 	if err := e.screenClear(ctx, s); err != nil {
 		return err
 	}

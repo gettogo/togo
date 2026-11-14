@@ -39,6 +39,10 @@ type Adapter struct {
 	// Input says how to read the harness's input line off the screen, so
 	// typed text lands in an empty line and its Enter is seen to submit.
 	Input *Input `yaml:"input"`
+	// Ready is a regexp of a screen row that shows once the terminal can
+	// take a prompt (its composer's footer). A prompt is typed only after
+	// it shows: one typed while the agent starts is lost.
+	Ready string `yaml:"ready"`
 }
 
 // Input describes the input line of a harness's TUI.
