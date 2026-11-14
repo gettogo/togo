@@ -1,0 +1,32 @@
+{
+  "description": "A native renderer lease tied to this RPC connection and original process generation.",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "surface.open",
+    "params": {
+      "id": "s_abcdefghij",
+      "options": {
+        "kinds": [
+          "col",
+          "text",
+          "editor",
+          "button",
+          "card"
+        ],
+        "cols": 80,
+        "dark": true,
+        "reduceMotion": false
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "id": "s_abcdefghij",
+      "token": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "generation": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  }
+}
