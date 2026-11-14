@@ -35,9 +35,11 @@ feeds:
     mapper: opencode2.events
     stability: documented
 sources:
+  # The terminal's session list asks for archived=false; an archived session is
+  # not one to resume. The select drops one too, should a server ignore the filter.
   sessions:
-    http: { path: '/api/session?directory={{.cwd | urlquery}}&limit=50' }
-    select: '[.data[] | select(.parentID == null)] | sort_by(-.time.updated)'
+    http: { path: '/api/session?directory={{.cwd | urlquery}}&limit=50&archived=false' }
+    select: '[.data[] | select(.parentID == null and .time.archived == null)] | sort_by(-.time.updated)'
     cache: 30s
     stability: documented
   # Provider and model answers carry settings, headers and request bodies, where keys
