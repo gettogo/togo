@@ -201,7 +201,13 @@ func TestOriginalOMPTransport(t *testing.T) {
 	copyMode("send-keys", "-t", before.Pane, "-X", "cancel")
 	command, _ := json.Marshal(map[string]any{"ev": "send", "sf": editorView.ID, "id": editor.ID, "text": "/resume"})
 	empty := ""
-	if _, err := liveInput(ctx, svc, owner, surface.InputParams{ID: created.ID, Lease: lease.Token, Surface: editorView.ID, Instance: editorView.Instance, Event: command, ExpectedText: &empty}); err != nil {
+	sent, err := liveInput(ctx, svc, owner, surface.InputParams{ID: created.ID, Lease: lease.Token, Surface: editorView.ID, Instance: editorView.Instance, Event: command, ExpectedText: &empty})
+	// The program's own editor submitted the command: the receipt, which
+	// arrives whether or not the picker has been drawn yet.
+	if err == nil && (sent.Consumed == nil || !*sent.Consumed) {
+		t.Errorf("/resume was dispatched without the program's submit receipt: %+v", sent)
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	for {

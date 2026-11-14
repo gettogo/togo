@@ -67,6 +67,56 @@ export function applyPickerQuery(tui, event) {
   return true
 }
 
+// How long a send may wait for the original editor to submit it.
+export const SUBMIT_WATCH_MS = 2000
+
+// watchSubmit reports when the original editor's own submit callback receives
+// the text of one native send. It wraps the focused component's public
+// onSubmit for a single call: the original runs exactly once with the same
+// receiver and arguments, and its return value or exception passes through.
+// The callback is put back after that call, after SUBMIT_WATCH_MS, or when the
+// returned function is called, and only while it is still this wrapper, so a
+// callback the program installed meanwhile is never replaced. A submit of any
+// other text is not a receipt. Returns undefined when there is nothing to watch.
+export function watchSubmit(tui, event, taken, ended = () => {}) {
+  if (typeof event?.text !== 'string') return undefined
+  const focused = tui?.getFocused?.()
+  if (!focused || typeof focused !== 'object' || typeof focused.onSubmit !== 'function') return undefined
+  const tag = Object.getOwnPropertySymbols(focused).find(key => key.description === 'native.id')
+  if (!tag) return undefined
+  // The event names the editor's text node, inside the focused component's
+  // own id namespace (component "l", node "l.line/input"). The helper has
+  // already checked that node is the focused, sendable one.
+  const id = focused[tag]
+  if (typeof id !== 'string' || !id || typeof event.id !== 'string' ||
+    !(event.id === id || event.id.startsWith(id + '.') || event.id.startsWith(id + '/'))) return undefined
+  const original = focused.onSubmit
+  const own = Object.prototype.hasOwnProperty.call(focused, 'onSubmit')
+  let done = false, timer
+  function restore() {
+    if (done) return
+    done = true
+    clearTimeout(timer)
+    if (focused.onSubmit === wrapper) {
+      if (own) focused.onSubmit = original
+      else delete focused.onSubmit
+    }
+    ended()
+  }
+  function wrapper(...args) {
+    const live = !done
+    restore()
+    if (live && typeof args[0] === 'string' && args[0].trim() === event.text.trim()) {
+      try { taken() } catch { /* A failed report must not stop the submit. */ }
+    }
+    return original.apply(this, args)
+  }
+  focused.onSubmit = wrapper
+  timer = setTimeout(restore, SUBMIT_WATCH_MS)
+  timer.unref?.()
+  return restore
+}
+
 // Authenticated commands own the renderer and dispatch semantic events inside
 // the original TUI. Event payloads are removed before confirming acceptance.
 export default function (pi) {
@@ -85,6 +135,9 @@ export default function (pi) {
   let owner = '', deadline = 0, seq = 0, epoch = 0, available = false, reason = ''
   let stopped = false, processing = false, rerun = false
   let publishedNative
+  // The sequence of the last native send whose text the original editor's
+  // own submit callback received. Proof the program took it, not that it is done.
+  let consumed = 0, unwatchSubmit
   let publishedGeneration = false
   const location = () => ({
     conversation: String(ctx?.sessionManager?.getSessionId?.() ?? ''),
@@ -94,7 +147,7 @@ export default function (pi) {
     if (stopped) return
     const value = { version: 1, generation: config.generation, pid: process.pid,
       pane: process.env.TMUX_PANE ?? '', cwd: process.cwd(), ...location(),
-      epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq }
+      epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed }
     const json = JSON.stringify(value)
     if (Buffer.byteLength(json) > MAX_FILE) return
     const temporary = path.join(root, `.state-${process.pid}.tmp`)
@@ -127,6 +180,7 @@ export default function (pi) {
     tui.requestRender(true)
   }
   function release() {
+    unwatchSubmit?.()
     deadline = 0
     owner = ''
     if (tui && (tui.nativeRendering || process.env.PI_TUI_NATIVE === '1')) switchRenderer(false)
@@ -162,6 +216,11 @@ export default function (pi) {
         if (request.event.ev === 'action' && request.event.act === 'togo.query') {
           if (!applyPickerQuery(tui, request.event)) throw new Error('unsupported picker query')
         } else {
+          if (request.event.ev === 'send') {
+            unwatchSubmit?.()
+            unwatchSubmit = watchSubmit(tui, request.event, () => { consumed = request.seq; publish() },
+              () => { unwatchSubmit = undefined })
+          }
           tui.injectDebugInput('\x1b_tsp;e;' + body + '\x1b\\')
         }
       } else return
@@ -248,6 +307,7 @@ export default function (pi) {
     deadline = 0
     publish()
     stopped = true
+    unwatchSubmit?.()
     watcher?.close()
     stopInput?.()
     clearInterval(timer)

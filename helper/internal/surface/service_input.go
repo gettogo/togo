@@ -132,10 +132,25 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 		return DispatchResult{}, err
 	}
 	wire, err := Encode('e', p.Event)
-	if err == nil {
-		err = s.backend.dispatch(ctx, p.ID, r.runtime, r.lease.Token, wire)
+	if err != nil {
+		return DispatchResult{}, err
 	}
+	if sender, ok := s.backend.(sendReceipts); ok && ev == "send" {
+		consumed, err := sender.dispatchSend(ctx, p.ID, r.runtime, r.lease.Token, wire)
+		result := DispatchResult{Dispatched: err == nil}
+		if err == nil && consumed {
+			result.Consumed = &consumed
+		}
+		return result, err
+	}
+	err = s.backend.dispatch(ctx, p.ID, r.runtime, r.lease.Token, wire)
 	return DispatchResult{Dispatched: err == nil}, err
+}
+
+// sendReceipts is a backend that can tell whether the program's own editor
+// submitted a dispatched send.
+type sendReceipts interface {
+	dispatchSend(ctx context.Context, id string, run runtimeInfo, owner string, data []byte) (consumed bool, err error)
 }
 
 func validatePickerQuery(fields map[string]json.RawMessage, node *Node) error {

@@ -64,6 +64,9 @@ type CompanionState struct {
 	Native       bool   `json:"native"`
 	Owner        string `json:"owner"`
 	Seq          uint64 `json:"seq"`
+	// Consumed is the sequence of the last send whose text the program's own
+	// editor submitted. Absent from companions that do not report it.
+	Consumed uint64 `json:"consumed,omitempty"`
 }
 
 // PrepareLaunch preserves the user's argv and profile. Only supported
@@ -185,6 +188,48 @@ func (c *Companions) Dispatch(ctx context.Context, config CompanionConfig, previ
 	}
 	_, err := c.command(ctx, config, previous, "event", owner, event)
 	return err
+}
+
+// ReceiptWait bounds the wait for the program to submit a dispatched send.
+// It is shorter than the companion's own watch, so a late receipt is simply
+// not reported.
+const ReceiptWait = time.Second
+
+// DispatchSend dispatches a send and reports whether the program's own
+// editor submitted that text: proof the program took it, never that the
+// command finished or that nothing more will be drawn. False means not
+// proven within ReceiptWait (an older companion, a deferred paste, an editor
+// that refused it): it is not a failure and never a reason to send again.
+func (c *Companions) DispatchSend(ctx context.Context, config CompanionConfig, previous CompanionState, owner string, event json.RawMessage) (bool, error) {
+	if len(event) > MaxAPCBytes || !json.Valid(event) {
+		return false, ErrLimit
+	}
+	sent, err := c.command(ctx, config, previous, "event", owner, event)
+	if err != nil {
+		return false, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, ReceiptWait)
+	defer cancel()
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for current := sent; ; {
+		if current.Consumed == sent.Seq {
+			return true, nil
+		}
+		// The conversation or the program's context moved on: this send's
+		// receipt can no longer arrive.
+		if current.Conversation != sent.Conversation || current.Epoch != sent.Epoch {
+			return false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return false, nil
+		case <-tick.C:
+		}
+		if next, err := c.State(config); err == nil {
+			current = next
+		}
+	}
 }
 
 func (c *Companions) command(ctx context.Context, config CompanionConfig, previous CompanionState, mode, owner string, event json.RawMessage) (CompanionState, error) {

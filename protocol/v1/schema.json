@@ -2705,6 +2705,10 @@
       "properties": {
         "dispatched": {
           "type": "boolean"
+        },
+        "consumed": {
+          "const": true,
+          "description": "Present only for a send whose text the program's own editor submitted. Absent means not proven; it is not a failure and never a reason to send again."
         }
       },
       "required": [

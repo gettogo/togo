@@ -5,7 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import companion, { applyPickerQuery } from '../omp.mjs'
+import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -154,4 +154,124 @@ for (const watched of [true, false]) test(`companion preserves authenticated con
     mock.restoreAll()
     syncBuiltinESMExports()
   }
+})
+
+// The receipt for a native send: the original editor's own submit callback
+// received that text. Acceptance only, never completion.
+function editorFor(id, onSubmit) {
+  const editor = { [Symbol('native.id')]: id }
+  if (onSubmit) editor.onSubmit = onSubmit
+  return editor
+}
+
+test('submit receipt runs the original once with its receiver, arguments and result', async () => {
+  const calls = []
+  const editor = editorFor('editor', function (...args) { calls.push([this, args]); return Promise.resolve('original result') })
+  const original = editor.onSubmit
+  let taken = 0, ended = 0
+  const stop = watchSubmit({ getFocused: () => editor }, { id: 'editor', ev: 'send', text: '/resume' }, () => taken++, () => ended++)
+  assert.equal(typeof stop, 'function')
+  assert.notEqual(editor.onSubmit, original)
+  const result = editor.onSubmit('/resume', 'extra')
+  assert.equal(await result, 'original result')
+  assert.deepEqual(calls, [[editor, ['/resume', 'extra']]])
+  assert.equal(taken, 1)
+  assert.equal(ended, 1)
+  // One send, one receipt: the callback is the program's own again.
+  assert.equal(editor.onSubmit, original)
+  editor.onSubmit('/resume')
+  assert.equal(taken, 1)
+  assert.equal(calls.length, 2)
+  stop()
+  assert.equal(ended, 1)
+})
+
+test('submit receipt compares the text the editor trims', () => {
+  const editor = editorFor('editor', () => {})
+  let taken = 0
+  watchSubmit({ getFocused: () => editor }, { id: 'editor', text: '  /togo-form \n' }, () => taken++)
+  editor.onSubmit('/togo-form')
+  assert.equal(taken, 1)
+})
+
+test('another text, another component or no callback is no receipt', () => {
+  let taken = 0
+  const seen = []
+  const editor = editorFor('editor', text => { seen.push(text) })
+  const original = editor.onSubmit
+  watchSubmit({ getFocused: () => editor }, { id: 'editor', text: '/resume' }, () => taken++)
+  editor.onSubmit('something typed at the desk')
+  assert.deepEqual(seen, ['something typed at the desk'])
+  assert.equal(taken, 0)
+  assert.equal(editor.onSubmit, original)
+
+  assert.equal(watchSubmit({ getFocused: () => editor }, { id: 'other', text: '/resume' }, () => taken++), undefined)
+  assert.equal(watchSubmit({ getFocused: () => editor }, { id: 'editorial.line/input', text: '/resume' }, () => taken++), undefined)
+  assert.equal(watchSubmit({ getFocused: () => editorFor('editor') }, { id: 'editor', text: '/resume' }, () => taken++), undefined)
+  assert.equal(watchSubmit({ getFocused: () => undefined }, { id: 'editor', text: '/resume' }, () => taken++), undefined)
+  assert.equal(watchSubmit({ getFocused: () => editor }, { id: 'editor' }, () => taken++), undefined)
+  assert.equal(watchSubmit({}, { id: 'editor', text: '/resume' }, () => taken++), undefined)
+  assert.equal(editor.onSubmit, original)
+  assert.equal(taken, 0)
+})
+
+test('an exception from the original passes through and still counts as taken', () => {
+  const editor = editorFor('editor', () => { throw new Error('original failed') })
+  const original = editor.onSubmit
+  let taken = 0
+  watchSubmit({ getFocused: () => editor }, { id: 'editor', text: '/x' }, () => { taken++; throw new Error('report failed') })
+  assert.throws(() => editor.onSubmit('/x'), /original failed/)
+  assert.equal(taken, 1)
+  assert.equal(editor.onSubmit, original)
+})
+
+test('a callback the program installs meanwhile is never replaced', () => {
+  const editor = editorFor('editor', () => {})
+  let taken = 0
+  const stop = watchSubmit({ getFocused: () => editor }, { id: 'editor', text: '/x' }, () => taken++)
+  const replacement = () => {}
+  editor.onSubmit = replacement
+  stop()
+  assert.equal(editor.onSubmit, replacement)
+  assert.equal(taken, 0)
+})
+
+test('a callback inherited from the prototype is uncovered again, not copied', () => {
+  class Editor { onSubmit() { return 'inherited' } }
+  const editor = new Editor()
+  editor[Symbol('native.id')] = 'editor'
+  const stop = watchSubmit({ getFocused: () => editor }, { id: 'editor', text: '/x' }, () => {})
+  assert.equal(Object.hasOwn(editor, 'onSubmit'), true)
+  stop()
+  assert.equal(Object.hasOwn(editor, 'onSubmit'), false)
+  assert.equal(editor.onSubmit(), 'inherited')
+})
+
+test('a send the editor defers gives no receipt and the watch ends by itself', () => {
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const editor = editorFor('editor', () => {})
+    const original = editor.onSubmit
+    let taken = 0, ended = 0
+    watchSubmit({ getFocused: () => editor }, { id: 'editor', text: '/x' }, () => taken++, () => ended++)
+    const wrapper = editor.onSubmit
+    mock.timers.tick(SUBMIT_WATCH_MS - 1)
+    assert.equal(editor.onSubmit, wrapper)
+    mock.timers.tick(1)
+    assert.equal(editor.onSubmit, original)
+    assert.equal(ended, 1)
+    // A reference kept from before still submits, without a late receipt.
+    wrapper('/x')
+    assert.equal(taken, 0)
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('the send names the text node inside the focused editor', () => {
+  const editor = editorFor('l', () => {})
+  let taken = 0
+  watchSubmit({ getFocused: () => editor }, { id: 'l.line/input', text: '/model' }, () => taken++)
+  editor.onSubmit('/model')
+  assert.equal(taken, 1)
 })

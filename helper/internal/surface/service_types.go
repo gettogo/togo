@@ -71,4 +71,8 @@ type InputParams struct {
 // DispatchResult confirms transport only; the program must confirm the effect.
 type DispatchResult struct {
 	Dispatched bool `json:"dispatched"`
+	// Consumed is set, and true, only for a send whose text the program's
+	// own editor submitted. Absent means not proven: it does not mean the
+	// send failed, and it is never a reason to send again.
+	Consumed *bool `json:"consumed,omitempty"`
 }

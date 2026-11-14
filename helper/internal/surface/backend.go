@@ -205,6 +205,24 @@ func (b *paneBackend) dispatch(ctx context.Context, id string, run runtimeInfo, 
 	return b.companions.Dispatch(ctx, run.config, state, owner, m.Body)
 }
 
+// dispatchSend is dispatch for a send, with the program's receipt.
+func (b *paneBackend) dispatchSend(ctx context.Context, id string, run runtimeInfo, owner string, data []byte) (bool, error) {
+	m, err := wireMessage(data)
+	if err != nil || m.Verb != 'e' {
+		return false, ErrMalformed
+	}
+	run.control.Lock()
+	defer run.control.Unlock()
+	state, err := b.validate(ctx, id, run)
+	if err != nil {
+		return false, err
+	}
+	if state.Owner != owner || !state.Native {
+		return false, errLease
+	}
+	return b.companions.DispatchSend(ctx, run.config, state, owner, m.Body)
+}
+
 func wireMessage(data []byte) (Message, error) {
 	if len(data) > MaxAPCBytes+16 {
 		return Message{}, ErrLimit
