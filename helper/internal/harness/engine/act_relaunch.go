@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ group:
 		}
 		argv = append(argv, vals...)
 	}
+	argv = append(argv, carried(s.env.Argv, r.Carry, argv)...)
 	if !sameProgram(argv[0], s.info.Command, s.info.Agent) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "Only the session's own agent can be restarted"}, nil
 	}
@@ -103,4 +105,48 @@ func (a *adapter) modeIDs() map[string]bool {
 // ("--dangerously-skip-permissions" as a resume id) must stay a value.
 func flagFromInput(tmpl, rendered string) bool {
 	return strings.Contains(tmpl, "{{") && strings.HasPrefix(rendered, "-") && !strings.HasPrefix(tmpl, "-")
+}
+
+// carried returns the options of the running command line that the adapter
+// says a restart keeps, in their order, leaving out any the new command
+// line already sets. Nothing after "--" is read: that is prompt text.
+func carried(current []string, c *spec.Carry, next []string) []string {
+	if c == nil || len(current) < 2 {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, a := range next {
+		if name, _, ok := strings.Cut(a, "="); ok && strings.HasPrefix(name, "-") {
+			set[name] = true
+		} else if strings.HasPrefix(a, "-") {
+			set[a] = true
+		}
+	}
+	var out []string
+	for i := 1; i < len(current); i++ {
+		a := current[i]
+		if a == "--" {
+			break
+		}
+		name, _, joined := strings.Cut(a, "=")
+		switch {
+		case joined && slices.Contains(c.Values, name):
+			if !set[name] && len(a) <= maxArgString {
+				out = append(out, a)
+			}
+		case slices.Contains(c.Values, a):
+			if i+1 >= len(current) {
+				break
+			}
+			if v := current[i+1]; !set[a] && len(v) <= maxArgString {
+				out = append(out, a, v)
+			}
+			i++ // its value is never read as an option of its own
+		case slices.Contains(c.Flags, a):
+			if !set[a] {
+				out = append(out, a)
+			}
+		}
+	}
+	return out
 }

@@ -400,6 +400,19 @@ type Relaunch struct {
 	// keeps what the session already runs with (its mode, effort, model)
 	// without a branch for every combination.
 	Keep [][]string `yaml:"keep"`
+	// Carry names the options of the session's current command line that a
+	// restart keeps: the profile, the tools and folders it was started
+	// with. Only what is listed is kept, so a restart never repeats a
+	// prompt, a resume id or a one-off flag of the old command line.
+	Carry *Carry `yaml:"carry"`
+}
+
+// Carry lists the command-line options a relaunch keeps from the running
+// command: Values take one argument ("--model x" or "--model=x"), Flags
+// take none. An option the new command line already sets is not repeated.
+type Carry struct {
+	Values []string `yaml:"values"`
+	Flags  []string `yaml:"flags"`
 }
 
 // Write sets a key in a harness config file (json or toml), atomically.
