@@ -75,11 +75,16 @@ sources:
     cache: 5m
     stability: documented
   # Integrations that take a key and have no connection: the model picker's
-  # "Not set up" section, where an API key connects one.
+  # "Not set up" section, where an API key connects one. An integration
+  # lists its sign-in methods (key, env, oauth, external, command). The key
+  # is the only one a route here can finish: a browser sign-in, a form or a
+  # local login runs in OpenCode's own dialog, which /connect opens in the
+  # terminal, so a row names those under its title. One without a key
+  # method is not listed: the section asks for a key.
   unconnected:
     http: { path: '/api/integration?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     redact: ['.data[].connections']
-    select: '[.data[] | select(((.connections // []) | length) == 0 and any(.methods[]; .type == "key")) | {id: .id, name: .name}] | sort_by(.name | ascii_downcase)'
+    select: '[.data[] | select(((.connections // []) | length) == 0 and any(.methods[]; .type == "key")) | {id: .id, name: .name, more: ([.methods[] | select(.type == "oauth" or .type == "external" or .type == "command") | (.label // .id)] | if length > 0 then "More sign-ins in /connect: " + join(", ") else "" end)}] | sort_by(.name | ascii_downcase)'
     cache: 5m
     stability: documented
   # Agents and commands change when OpenCode reloads its config. The server says so
@@ -130,7 +135,7 @@ screens:
     map: { item.id: .id, item.title: .name, item.group: .providerName, selected: $state.model_ref }
     filters: [{ id: provider, label: Provider, kind: choice, field: provider }]
     on_select: set_model
-    setup: { source: unconnected, map: { item.id: .id, item.title: .name }, action: add_provider_key, input: secret }
+    setup: { source: unconnected, map: { item.id: .id, item.title: .name, item.subtitle: .more }, action: add_provider_key, input: secret }
   # A variant is part of the session's model, so a pick goes through the
   # model switch. The mapper does not report the variant yet: until it sets
   # model_variant, no row is marked as the current one.
