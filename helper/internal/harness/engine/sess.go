@@ -35,6 +35,9 @@ type sess struct {
 	mu sync.Mutex
 	// restoring suppresses intermediate history notifications under mu.
 	restoring bool
+	// conv is the conversation the chat shows, as the mappers named it
+	// (see conversation.go).
+	conv string
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
 	starting   sync.Mutex
@@ -275,8 +278,7 @@ func (s *sess) start() {
 	for _, name := range s.ad.feedOrder {
 		mname := s.ad.Feeds[name].Mapper
 		if _, ok := s.mappers[mname]; !ok {
-			f, _ := harness.LookupMapper(mname)
-			s.mappers[mname] = f(s.env)
+			s.mappers[mname] = s.e.mapperFor(mname, s.env)
 		}
 	}
 	s.storeSummaryLocked()
@@ -608,6 +610,11 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 		return
 	}
 	items, ops := safeMap(m, rec, s.e.cfg.Logf)
+	if s.movedLocked() {
+		m = s.startOverLocked(mapper)
+		items, ops = safeMap(m, rec, s.e.cfg.Logf)
+		s.movedLocked()
+	}
 	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {

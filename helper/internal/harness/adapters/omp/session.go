@@ -121,7 +121,16 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		return nil, nil
 	case "session":
-		return s.header(e, at)
+		return s.header(e, at, rec.Source == feedSession)
+	case "reset_boundary":
+		// /clear keeps the conversation and its file but empties the
+		// agent's context: say so where it happened.
+		var out []harness.Item
+		if s.turn != nil && !s.turn.ended {
+			out = append(out, s.endTurn(harness.StateOK, at))
+		}
+		return append(out, harness.Item{ID: "reset-" + str(e, "id"), Kind: harness.KindNotice, At: at,
+			Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeCompacted, Text: "Context cleared. The agent no longer sees the messages above."}}), nil
 	}
 	parent := s.parentOf(e)
 	if parent == dropped {
@@ -156,15 +165,24 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	return nil, nil
 }
 
-// header starts a session file: the main session's, or a subagent's when
-// it names a parent session.
-func (s *session) header(e map[string]any, at time.Time) ([]harness.Item, []harness.Op) {
+// feedSession is the feed of the conversation the terminal shows.
+const feedSession = "session"
+
+// header starts a session file: the main session's, or a subagent's. A file
+// the session feed reads is the terminal's own conversation whatever its
+// header says of a parent: /fork writes a new main conversation that names
+// the one it came from (seen on 18.20). A file of the subagents feed, or of
+// a mapper fed without feed names, is a subagent's when it names a parent.
+func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.Item, []harness.Op) {
 	id := str(e, "id")
 	parent := e["parentSession"]
-	if parent == nil || parent == "" {
+	if main || parent == nil || parent == "" {
 		s.cur = ""
 		if id != "" {
 			s.state["harness_session"] = id
+			// Naming the conversation lets the engine start the chat over
+			// when the terminal moves to another one (/new, /resume, /fork).
+			s.state["conversation"] = id
 		}
 		if t := str(e, "title"); t != "" {
 			s.state["title"] = t

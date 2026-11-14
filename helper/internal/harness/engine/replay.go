@@ -23,13 +23,22 @@ func (s *sess) restore(ctx context.Context, mapper string, rec harness.Record) {
 	s.notifyLocked(harness.Notification{Kind: harness.NoteReset, Reason: "history"})
 	s.restoring = true
 	defer func() { s.restoring = false }()
-	for _, raw := range rec.Replay {
+	moved := false
+	for i := 0; i < len(rec.Replay); i++ {
 		if ctx.Err() != nil {
 			return
 		}
-		one := harness.Record{Source: rec.Source, At: rec.At, Data: s.e.red.JSON(raw)}
+		one := harness.Record{Source: rec.Source, At: rec.At, Data: s.e.red.JSON(rec.Replay[i])}
 		s.last[rec.Source] = one.Data
 		items, ops := safeMap(m, one, s.e.cfg.Logf)
+		if !moved && s.movedLocked() {
+			// The file is another conversation's (the terminal moved to it):
+			// the chat starts over and the snapshot is read from its start.
+			moved = true
+			m = s.startOverLocked(mapper)
+			i = -1
+			continue
+		}
 		s.publishLocked(items, ops)
 		s.afterRecordLocked()
 	}
