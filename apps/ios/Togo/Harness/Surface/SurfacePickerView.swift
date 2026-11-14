@@ -39,8 +39,8 @@ struct SurfacePickerView: View {
             if !subtitle.isEmpty { Text(verbatim: subtitle).foregroundStyle(.secondary) }
             regions("scopes", action: "scope")
             regions("tabs", action: "tab")
-            if let query = SurfaceValues.string(properties["query"]), !query.isEmpty {
-                Text(verbatim: query).font(.subheadline)
+            if SurfaceValues.string(properties["query"]) != nil {
+                SurfacePickerQuery(node: node, context: context)
             }
             if properties["state"] == .string("loading") { ProgressView(SurfaceCopy.waiting) }
             let message = SurfaceValues.text(properties["message"])

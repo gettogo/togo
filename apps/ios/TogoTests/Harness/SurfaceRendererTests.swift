@@ -129,6 +129,28 @@ import UIKit
         #expect(!SurfaceValues.disabled(nil))
     }
 
+    @Test func queryDraftWaitsForTheOriginalPickerToReflectIt() throws {
+        let url = try #require(Bundle(for: SurfaceFixtureBundle.self).url(forResource: "omp-native-picker", withExtension: "json"))
+        var scene = try originalFormScene()
+        var picker = try JSONDecoder().decode(SurfaceNode.self, from: Data(contentsOf: url))
+        picker.properties["query"] = .string("")
+        scene.views[0].document.root = picker
+        let drafts = SurfaceDrafts()
+        let key = SurfaceDrafts.Key(surface: scene.views[0].id, instance: scene.views[0].instance,
+                                   node: picker.id, anchor: picker.id, property: "query")
+        let text = "100%! <div> /resume 🧑🏽‍💻"
+        drafts.set(text, key: key, producer: "")
+        drafts.reconcile(scene)
+        #expect(drafts.draft(key)?.text == text)
+        scene.views[0].document.root.properties["query"] = .string("desk query")
+        drafts.reconcile(scene)
+        #expect(drafts.draft(key)?.base == "")
+        #expect(drafts.draft(key)?.text == text)
+        scene.views[0].document.root.properties["query"] = .string(text)
+        drafts.reconcile(scene)
+        #expect(drafts.draft(key) == nil)
+    }
+
     @Test func hiddenTextSpansAreNotExposedAsOrdinaryText() {
         #expect(SurfaceValues.text(.array([
             .object(["t": .string("visible"), "s": .string("strong")]),

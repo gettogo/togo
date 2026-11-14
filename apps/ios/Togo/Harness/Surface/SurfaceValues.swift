@@ -104,6 +104,8 @@ enum SurfaceCopy {
     static let inputChanged = String(localized: "surface.inputChanged", defaultValue: "The input changed at the desk. Your draft is kept here.")
     static let selected = String(localized: "surface.selected", defaultValue: "Selected")
     static let choose = String(localized: "surface.choose", defaultValue: "Choose")
+    static let search = String(localized: "surface.search", defaultValue: "Search")
+    static let searchTooLong = String(localized: "surface.searchTooLong", defaultValue: "Search is too long. Shorten it to apply.")
 }
 
 extension HarnessSessionStore {

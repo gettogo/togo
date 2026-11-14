@@ -11,6 +11,7 @@ import TogoKit
         var field: String? = nil
         /// The containing form field stays mounted while its Input loses focus.
         var anchor: String? = nil
+        var property = "text"
     }
 
     struct Draft {
@@ -48,7 +49,7 @@ import TogoKit
                 if let number = SurfaceValues.number(value), Double(draft.text) == number { return false }
                 return SurfaceValues.string(value) != draft.text
             }
-            return SurfaceValues.string(node.properties["text"]) != draft.text
+            return SurfaceValues.string(node.properties[key.property]) != draft.text
         }
     }
 
