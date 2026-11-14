@@ -112,6 +112,9 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 		return harness.ActionResult{}, err
 	}
 	args["target"] = req.Target
+	if req.Action == harness.ActionAnswer {
+		s.dropInapplicable(e.log, req.Target, args)
+	}
 	if _, ok := args["id"]; !ok && req.Target != "" {
 		// Templates name the chosen item .id; a caller that sends only the
 		// target means that item.

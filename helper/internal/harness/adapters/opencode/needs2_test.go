@@ -200,3 +200,123 @@ func TestFormWithAnUnusableFieldNameIsForTheTerminal(t *testing.T) {
 		t.Fatalf("row %+v", row)
 	}
 }
+
+const formConditional = "frm_1db847bed001hTnyKeq6w1UenA~" + formsSession
+
+// The recorded form has a required boolean with a default, a required
+// choice shown only while the boolean is true, a list with a default, a
+// note shown only while the list includes "mac", a number with a default
+// and a note shown only while the boolean is not true.
+func TestFormFieldMeaningIsKept(t *testing.T) {
+	_, seen, _ := formsRun(t)
+	got := seen[formConditional]
+	if len(got) == 0 {
+		t.Fatal("the form was not shown")
+	}
+	if a := got[0].Question.Answerable; a != nil && !*a {
+		t.Fatal("the form cannot be answered")
+	}
+	type want struct {
+		id       string
+		required bool
+		def      string
+		when     string
+	}
+	wants := []want{
+		{"notify!", true, "false", ""},
+		{"channel", true, "mail", "notify!=true"},
+		{"targets[]", false, "ios", ""},
+		{"mac_note", false, "", "targets[]=mac"},
+		{"retries#", false, "2", ""},
+		{"quiet_reason", false, "", "notify!=false"},
+	}
+	qs := got[0].Question.Questions
+	if len(qs) != len(wants) {
+		t.Fatalf("%d questions: %s", len(qs), questionIDs(got[0]))
+	}
+	for i, w := range wants {
+		q := qs[i]
+		when := ""
+		if q.When != nil {
+			when = q.When.Question + "=" + strings.Join(q.When.Equals, "|")
+		}
+		if q.ID != w.id || q.Required != w.required || strings.Join(q.Default, ",") != w.def || when != w.when {
+			t.Errorf("question %d = %s required %v default %v when %q, want %+v", i, q.ID, q.Required, q.Default, when, w)
+		}
+	}
+	// The recorded reply left the fields that did not apply unanswered.
+	done := got[len(got)-1].Question.Answered
+	if strings.Join(done["notify!"], ",") != "false" || len(done["channel"]) != 0 {
+		t.Fatalf("answered %v", done)
+	}
+}
+
+func condForm(fields string) harness.Record {
+	return harness.Record{Data: []byte(`{"id":"evt_2","created":1794684255500,"type":"form.created","location":{"directory":"/tmp/work"},
+		"data":{"form":{"id":"frm_1","sessionID":"ses_a","title":"t","fields":[` + fields + `]}}}`)}
+}
+
+// A condition the question model cannot say exactly (several at once, "is
+// not" on free text or a list, one on a field that is not shown) is never
+// approximated: the form is shown and answered in the terminal.
+func TestFormConditionThatCannotBeKeptIsForTheTerminal(t *testing.T) {
+	const flag, kind = `{"key":"flag","type":"boolean"}`, `{"key":"kind","type":"string","options":[{"value":"a","label":"A"},{"value":"b","label":"B"},{"value":"c","label":"C"}],"custom":false}`
+	cases := []struct {
+		name, fields string
+		answerable   bool
+		when         string
+	}{
+		{"is, on a choice", kind + `,{"key":"x","type":"string","when":[{"key":"kind","op":"eq","value":"b"}]}`, true, "kind=b"},
+		{"is not, on a closed choice", kind + `,{"key":"x","type":"string","when":[{"key":"kind","op":"neq","value":"b"}]}`, true, "kind=a|c"},
+		{"is, on a number", `{"key":"n","type":"number"},{"key":"x","type":"string","when":[{"key":"n","op":"eq","value":2.50}]}`, true, "n#=2.5"},
+		{"no conditions", flag + `,{"key":"x","type":"string","when":[]}`, true, ""},
+		{"two conditions", flag + `,` + kind + `,{"key":"x","type":"string","when":[{"key":"flag","op":"eq","value":true},{"key":"kind","op":"eq","value":"a"}]}`, false, ""},
+		{"is not, on free text", `{"key":"name","type":"string"},{"key":"x","type":"string","when":[{"key":"name","op":"neq","value":"a"}]}`, false, ""},
+		{"is not, on a list", `{"key":"tags","type":"multiselect","options":[{"value":"a","label":"A"}]},{"key":"x","type":"string","when":[{"key":"tags","op":"neq","value":"a"}]}`, false, ""},
+		{"on a hidden field", `{"key":"flag","type":"boolean","hidden":true},{"key":"x","type":"string","when":[{"key":"flag","op":"eq","value":true}]}`, false, ""},
+		{"on a later field", `{"key":"x","type":"string","when":[{"key":"flag","op":"eq","value":true}]},` + flag, false, ""},
+		{"unknown comparison", flag + `,{"key":"x","type":"string","when":[{"key":"flag","op":"gt","value":true}]}`, false, ""},
+	}
+	for _, c := range cases {
+		e := NewEvents2(harness.Env{Cwd: "/tmp/work"})
+		e.Map(harness.Record{Data: []byte(`{"id":"evt_1","type":"session.created","location":{"directory":"/tmp/work"},"data":{"sessionID":"ses_a"}}`)})
+		items, _ := e.Map(condForm(c.fields))
+		if len(items) != 1 {
+			t.Fatalf("%s: items %+v", c.name, items)
+		}
+		body := items[0].Question
+		if got := body.Answerable == nil || *body.Answerable; got != c.answerable {
+			t.Errorf("%s: answerable %v", c.name, got)
+		}
+		x := body.Questions[len(body.Questions)-1]
+		if c.name == "on a later field" {
+			x = body.Questions[0]
+		}
+		when := ""
+		if x.When != nil {
+			when = x.When.Question + "=" + strings.Join(x.When.Equals, "|")
+		}
+		if when != c.when {
+			t.Errorf("%s: when %q, want %q", c.name, when, c.when)
+		}
+	}
+}
+
+// Defaults are bounded and typed; a secret field's default is not shown.
+func TestFormDefaults(t *testing.T) {
+	long := strings.Repeat("x", 5000)
+	e := NewEvents2(harness.Env{Cwd: "/tmp/work"})
+	e.Map(harness.Record{Data: []byte(`{"id":"evt_1","type":"session.created","location":{"directory":"/tmp/work"},"data":{"sessionID":"ses_a"}}`)})
+	items, _ := e.Map(condForm(`{"key":"a","type":"string","default":"` + long + `"},{"key":"b","type":"boolean","default":true},
+		{"key":"c","type":"number","default":1.50},{"key":"d","type":"string","default":7},{"key":"api_token","type":"string","default":"abc"},
+		{"key":"e","type":"multiselect","options":[{"value":"x","label":"X"}],"default":["x","y"]},{"key":"f","type":"string","default":""}`))
+	if len(items) != 1 {
+		t.Fatalf("items %+v", items)
+	}
+	want := []string{"", "true", "1.5", "", "", "x,y", ""}
+	for i, q := range items[0].Question.Questions {
+		if got := strings.Join(q.Default, ","); got != want[i] {
+			t.Errorf("%s default %q, want %q", q.ID, got, want[i])
+		}
+	}
+}

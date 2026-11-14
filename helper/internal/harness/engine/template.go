@@ -139,8 +139,9 @@ func formFilter(v any) (string, error) {
 				vals = []string{}
 			}
 			out[key] = vals
-		case len(vals) == 0:
-			// left unanswered: the field is not sent
+		case len(vals) == 0, mark != "" && strings.TrimSpace(vals[0]) == "":
+			// left unanswered: the field is not sent. An empty yes/no or
+			// number is no answer either, not false and not an error.
 		case mark == "!":
 			out[key] = vals[0] == "true"
 		case mark == "#":

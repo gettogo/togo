@@ -1,10 +1,10 @@
 package opencode
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,13 +37,16 @@ type form2 struct {
 }
 
 type field2 struct {
-	Key         string `json:"key"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Type        string `json:"type"`
-	Hidden      bool   `json:"hidden"`
-	Custom      *bool  `json:"custom"`
-	URL         string `json:"url"`
+	Key         string          `json:"key"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	Type        string          `json:"type"`
+	Hidden      bool            `json:"hidden"`
+	Required    bool            `json:"required"`
+	Default     json.RawMessage `json:"default"`
+	When        []when2         `json:"when"`
+	Custom      *bool           `json:"custom"`
+	URL         string          `json:"url"`
 	Options     []struct {
 		Value       string `json:"value"`
 		Label       string `json:"label"`
@@ -155,55 +158,7 @@ func (e *Events2) form(d ev2, loc *location2, at time.Time) ([]harness.Item, []h
 	} else if !e.follows(f.SessionID) {
 		return nil, nil
 	}
-	question := f.Metadata["kind"] == "question"
-	answerable := true
-	var qs []harness.Question
-	for i, fl := range f.Fields {
-		if fl.Key == "" && question {
-			// The helper strips every "key" field from what a harness
-			// sends (it names provider keys elsewhere), so the field key
-			// is gone; the question tool names its fields q0, q1... (seen
-			// on 2.2.5).
-			fl.Key = "q" + strconv.Itoa(i)
-		}
-		if fl.Hidden || len(qs) == MaxQuestions {
-			continue
-		}
-		if !replyKey.MatchString(fl.Key) {
-			// A reply cannot name this field, so it cannot be complete:
-			// the form is shown whole and answered in the terminal.
-			answerable = false
-			fl.Key = "?" + strconv.Itoa(i)
-		}
-		q := harness.Question{ID: fl.Key, Header: fl.Title, Prompt: fl.Description}
-		if q.Prompt == "" {
-			q.Prompt, q.Header = fl.Title, ""
-		}
-		for _, o := range fl.Options {
-			label := o.Label
-			if label == "" {
-				label = o.Value
-			}
-			q.Options = append(q.Options, harness.Choice{ID: o.Value, Label: label, Detail: o.Description})
-		}
-		switch fl.Type {
-		case "multiselect":
-			q.ID += "[]"
-			q.Multi = true
-			q.AllowText = fl.Custom != nil && *fl.Custom
-		case "boolean":
-			q.ID += "!"
-			q.Options = []harness.Choice{{ID: "true", Label: "Yes"}, {ID: "false", Label: "No"}}
-		case "number", "integer":
-			q.ID += "#"
-			q.AllowText = true
-		case "external":
-			q.Prompt = strings.TrimSpace(q.Prompt + " " + fl.URL)
-		default:
-			q.AllowText = len(q.Options) == 0 || fl.Custom == nil || *fl.Custom
-		}
-		qs = append(qs, q)
-	}
+	qs, answerable := formQuestions(f)
 	if len(qs) == 0 {
 		return nil, nil
 	}
