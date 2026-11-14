@@ -88,11 +88,17 @@ func TestOriginalOMPTransport(t *testing.T) {
 		"icon", "spinner", "progress", "list", "item", "tabs", "editor", "input", "button", "status", "seg",
 		"overlay", "toast", "picker", "prefs", "image", "meter", "kv", "table",
 	}}
+	if !svc.Available(ctx, created.ID) || svc.Held(created.ID) {
+		t.Fatal("live availability probe acquired or missed the original runtime")
+	}
 	lease, err := svc.Open(ctx, owner, created.ID, options)
 	if err != nil {
 		st, stateErr := companions.State(config)
 		t.Logf("companion native=%v available=%v reason=%q epoch=%d seq=%d read=%v", st.Native, st.Available, st.Reason, st.Epoch, st.Seq, stateErr)
 		t.Fatal(err)
+	}
+	if !svc.Held(created.ID) {
+		t.Fatal("active native lease not visible to typing guard")
 	}
 	var scene surface.Scene
 	for {
@@ -233,6 +239,9 @@ func TestOriginalOMPTransport(t *testing.T) {
 	}
 	if err := svc.Close(ctx, owner, surface.LeaseRef{ID: created.ID, Lease: lease.Token}); err != nil {
 		t.Fatal(err)
+	}
+	if svc.Held(created.ID) || !svc.Available(ctx, created.ID) {
+		t.Fatal("close did not release typing guard while preserving original runtime")
 	}
 	// Reacquire after the observer has stopped. Close APCs may have been missed;
 	// the held inline document must still be adoptable on a fresh handshake.

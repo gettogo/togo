@@ -21,6 +21,10 @@ const MaxRenderers = 4
 
 // Service owns native renderers over the existing authenticated RPC stream.
 type Service struct {
+	// BeforeOpen serializes native admission with typed input. Configure before Run.
+	// The returned function releases the input gate after the reservation only.
+	BeforeOpen func(string) func()
+
 	mu      sync.Mutex
 	runs    map[string]*renderer
 	backend runtimeBackend
@@ -95,14 +99,10 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 	runctx, cancel := context.WithCancel(context.Background())
 	r := &renderer{owner: owner, lease: Lease{ID: id, Token: randomID()}, cancel: cancel,
 		done: make(chan struct{}), lastRead: time.Now(), acks: map[uint64]int64{}}
-	s.mu.Lock()
-	if s.stopped || s.runs[id] != nil || len(s.runs) >= MaxRenderers {
-		s.mu.Unlock()
+	if err := s.reserve(ctx, id, r); err != nil {
 		cancel()
-		return Lease{}, errBusy
+		return Lease{}, err
 	}
-	s.runs[id] = r
-	s.mu.Unlock()
 	fail := func(err error) (Lease, error) {
 		cancel()
 		if r.cache != nil {
