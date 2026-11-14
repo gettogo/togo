@@ -75,7 +75,7 @@ extension CommandLineModel {
                 taken(text)
                 await perform(command, typed: true)
             } else {
-                routes.showTerminal()
+                if !nativeCommandsAvailable { routes.showTerminal() }
                 await send(line: text)
             }
         case .open(.mission):

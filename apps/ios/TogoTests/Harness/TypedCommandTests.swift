@@ -30,6 +30,8 @@ import TogoKit
         private(set) var sends: [String] = []
         private(set) var runs: [(String, [String: JSONValue]?)] = []
         private(set) var completes = 0
+        var nativeCommands: [String] = []
+        var nativeFailure = false
         var terminal = 0
         var mission = 0
 
@@ -51,6 +53,10 @@ import TogoKit
                     return HarnessActionResult(result: .applied)
                 }
             )
+            routes.nativeCommand = { text in
+                self.nativeCommands.append(text)
+                if self.nativeFailure { throw ChatSurfaceInteraction.Failure(message: "Command not confirmed") }
+            }
             routes.showTerminal = { self.terminal += 1 }
             routes.showMission = { self.mission += 1 }
             routes.agent = { "OMP" }
@@ -201,6 +207,61 @@ import TogoKit
         await composer.returnPressed()
         #expect(session.sends.isEmpty)
         #expect(composer.paletteOpen)
+    }
+
+    @Test func terminalCommandsUseTheOriginalNativeRouteWhenAvailable() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.surface)
+        let composer = await send("/tools", session)
+        #expect(session.nativeCommands == ["/tools"])
+        #expect(session.sends.isEmpty)
+        #expect(session.terminal == 0)
+        #expect(composer.draft.isEmpty)
+    }
+
+    @Test func unlistedExtensionCommandsUseTheSameNativeRouteWithLiteralArguments() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.surface)
+        _ = await send("/togo-form <div> 100%! 🧑🏽‍💻", session)
+        #expect(session.nativeCommands == ["/togo-form <div> 100%! 🧑🏽‍💻"])
+        #expect(session.sends.isEmpty)
+        #expect(session.terminal == 0)
+    }
+
+    @Test func nativeCommandFailureKeepsTextAndDoesNotRetryThroughTheTerminal() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.surface)
+        session.nativeFailure = true
+        let composer = await send("/tools", session)
+        #expect(session.nativeCommands == ["/tools"])
+        #expect(session.sends.isEmpty)
+        #expect(session.terminal == 0)
+        #expect(composer.draft == "/tools")
+        #expect(composer.notice != nil)
+    }
+
+    @Test func nativeAvailabilityDoesNotReplaceAPINativeChoicesOrOrdinaryPrompts() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.surface)
+        _ = await send("/model sonnet", session)
+        _ = await send("fix the test", session)
+        _ = await send("/Users/me/a.go is broken", session)
+        #expect(session.nativeCommands.isEmpty)
+        #expect(session.runs.first?.0 == "set_model")
+        #expect(session.sends == ["fix the test", "/Users/me/a.go is broken"])
+    }
+
+    @Test func nativeTerminalCommandWorksFromReturnAndPaletteDispatch() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.surface)
+        let composer = make(session)
+        composer.draft = "/tools"
+        await composer.draftChanged()
+        await composer.returnPressed()
+        await composer.perform(tools, typed: true)
+        #expect(session.nativeCommands == ["/tools", "/tools"])
+        #expect(session.sends.isEmpty)
+        #expect(session.terminal == 0)
     }
 
     // MARK: The chat

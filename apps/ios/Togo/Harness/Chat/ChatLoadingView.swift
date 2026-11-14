@@ -14,7 +14,7 @@ enum ChatLoadingState: Equatable {
     }
 
     @MainActor static func hasContent(_ store: HarnessSessionStore) -> Bool {
-        !store.rows.isEmpty || !store.queue.isEmpty || store.liveWork != nil
+        !store.rows.isEmpty || !store.queue.isEmpty || store.liveWork != nil || store.interaction != nil
     }
 
     var isProgress: Bool { self == .reading || self == .reconnecting }

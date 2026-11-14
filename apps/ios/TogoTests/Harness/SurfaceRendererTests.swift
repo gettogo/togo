@@ -17,6 +17,17 @@ import UIKit
         #expect(SurfacePickerContent.entries(node.properties).isEmpty)
     }
 
+    @Test func chatShowsOriginalFormsWithoutDuplicatingTheTranscriptOrComposer() throws {
+        let scene = try originalFormScene()
+        let root = scene.views[0].document.root
+        let form = try #require(SurfaceValues.chatInteraction(root, mode: .inline))
+        #expect(form.properties["role"] == .string("omp.editor.ask"))
+        var ordinary = root
+        ordinary.children = []
+        #expect(SurfaceValues.chatInteraction(ordinary, mode: .inline) == nil)
+        #expect(SurfaceValues.chatInteraction(ordinary, mode: .screen)?.id == ordinary.id)
+    }
+
     @Test func wholeFieldEditUsesUTF16OffsetsAndPreservesLiteralText() {
         let event = SurfaceValues.edit(from: "🧑🏽‍💻 draft", to: "<div>\n100%! /resume")
         #expect(event["len"] == .number(Double("🧑🏽‍💻 draft".utf16.count)))

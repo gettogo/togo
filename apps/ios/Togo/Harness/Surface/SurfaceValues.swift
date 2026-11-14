@@ -11,6 +11,14 @@ enum SurfaceValues {
         return form(root) ?? root
     }
 
+    static func chatInteraction(_ root: SurfaceNode, mode: SurfaceView.Mode) -> SurfaceNode? {
+        guard root.properties["hidden"] != .bool(true) else { return nil }
+        if mode != .inline { return root }
+        if let layer = root.children.first(where: { $0.id == "layer" }),
+           let modal = layer.children.last(where: { $0.properties["hidden"] != .bool(true) }) { return modal }
+        return form(root)
+    }
+
     private static func form(_ node: SurfaceNode) -> SurfaceNode? {
         guard node.properties["hidden"] != .bool(true) else { return nil }
         if node.properties["role"] == .string("omp.editor.ask") { return node }
@@ -90,12 +98,20 @@ enum SurfaceValues {
 }
 
 enum SurfaceCopy {
+    static let open = String(localized: "surface.open", defaultValue: "Open")
+    static let openForm = String(localized: "surface.openForm", defaultValue: "Open this form in chat.")
+    static let deskDraft = String(localized: "surface.deskDraft", defaultValue: "Text is waiting in Terminal. Send or clear it there before running another command.")
+    static let agentWorking = String(localized: "surface.agentWorking", defaultValue: "The agent is working. Run this command after the turn finishes.")
+    static let commandSent = String(localized: "surface.commandSent", defaultValue: "Command sent")
+    static let openingForm = String(localized: "surface.openingForm", defaultValue: "Opening form…")
+    static let openingCommand = String(localized: "surface.openingCommand", defaultValue: "Opening command…")
+    static let finishCurrent = String(localized: "surface.finishCurrent", defaultValue: "Finish or close the current screen before sending another command.")
     static let interface = String(localized: "surface.interface", defaultValue: "Harness interface")
     static let close = String(localized: "surface.close", defaultValue: "Close")
     static let terminal = String(localized: "surface.terminal", defaultValue: "Terminal")
     static let loading = String(localized: "surface.loading", defaultValue: "Opening the harness interface…")
     static let unavailable = String(localized: "surface.unavailable", defaultValue: "This interface couldn't open here. Continue in Terminal.")
-    static let unconfirmed = String(localized: "surface.unconfirmed", defaultValue: "Change not confirmed. Check Terminal before trying again.")
+    static let unconfirmed = String(localized: "surface.unconfirmed", defaultValue: "Change not confirmed. It may already have reached the agent. Check Terminal before trying again.")
     static let empty = String(localized: "surface.empty", defaultValue: "The harness hasn't shown an interface yet.")
     static let apply = String(localized: "surface.apply", defaultValue: "Apply")
     static let send = String(localized: "surface.send", defaultValue: "Send")
@@ -106,10 +122,4 @@ enum SurfaceCopy {
     static let choose = String(localized: "surface.choose", defaultValue: "Choose")
     static let search = String(localized: "surface.search", defaultValue: "Search")
     static let searchTooLong = String(localized: "surface.searchTooLong", defaultValue: "Search is too long. Shorten it to apply.")
-}
-
-extension HarnessSessionStore {
-    var surfaceAvailable: Bool {
-        subject.capabilities.contains(Capability.surface) && descriptor?.adapter?.id == "omp"
-    }
 }

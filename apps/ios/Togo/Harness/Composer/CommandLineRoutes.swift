@@ -43,6 +43,7 @@ extension CommandLineModel {
         var showTerminal: @MainActor () -> Void = {}
         /// Mission control, at Status or Changes.
         var showMission: @MainActor () -> Void = {}
+        var nativeCommand: (@MainActor (String) async throws -> Void)?
 
         /// Pictures go through `fs.upload` where the machine's helper serves it.
         @MainActor static func uploadRoute(_ store: HarnessSessionStore) -> ComposerAttachments.Upload? {
@@ -85,7 +86,8 @@ extension CommandLineModel {
                     store.mission.mission?.sections.lazy.compactMap { $0.status?.actions?.first { $0.id == id } }.first
                 },
                 showTerminal: { store.layer = .terminal },
-                showMission: { store.showsMission = true }
+                showMission: { store.showsMission = true },
+                nativeCommand: { try await store.runNativeCommand($0) }
             )
         }
 

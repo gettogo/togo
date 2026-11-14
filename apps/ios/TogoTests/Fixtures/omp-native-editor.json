@@ -1,0 +1,11 @@
+{
+  "id": "m.line/input",
+  "k": "editor",
+  "p": {
+    "cursor": 0,
+    "maxLines": 18,
+    "placeholder": "What are we cooking?",
+    "sendable": true,
+    "text": ""
+  }
+}

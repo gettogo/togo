@@ -3,6 +3,12 @@ import TogoKit
 @testable import Togo
 
 @MainActor final class FakeHarnessServices: HarnessServices {
+    var nativeConnection: (any SurfaceConnection)?
+    func surfaceConnection(_ s: HarnessSubject) async throws -> any SurfaceConnection {
+        guard let nativeConnection else { throw HarnessUnavailable() }
+        return nativeConnection
+    }
+
     var sentImages: [[String]] = []
     var uploads: [String] = []
 

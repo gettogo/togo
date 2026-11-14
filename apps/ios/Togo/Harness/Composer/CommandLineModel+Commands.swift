@@ -99,7 +99,7 @@ extension CommandLineModel {
         case .terminal(let line):
             paletteOpen = false
             // The pane shows the terminal as the command goes: its result, or its dialog, is there.
-            routes.showTerminal()
+            if !nativeCommandsAvailable { routes.showTerminal() }
             await send(line: line)
             return .close
         case .run(let run):

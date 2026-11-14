@@ -72,9 +72,16 @@ public struct SurfaceReadResult: Codable, Sendable {
     }
 }
 
-/// Transport acceptance alone; application is confirmed by a subsequent frame.
+/// Dispatch alone does not confirm an effect. For sends, consumed proves the
+/// original composer accepted the text, not that its command has completed.
 public struct SurfaceDispatchResult: Codable, Sendable {
     public var dispatched: Bool
+    public var consumed: Bool?
+
+    public init(dispatched: Bool, consumed: Bool? = nil) {
+        self.dispatched = dispatched
+        self.consumed = consumed
+    }
 }
 
 public enum SurfaceProtocolError: Error, Equatable, Sendable {

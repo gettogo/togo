@@ -107,7 +107,8 @@ extension HarnessSessionStore {
     // MARK: Actions
 
     func run(action: String, target: String? = nil, args: [String: JSONValue]? = nil) async throws -> HarnessActionResult {
-        try await services.act(subject, action: action, target: target, args: args)
+        try await prepareHarnessInput()
+        return try await services.act(subject, action: action, target: target, args: args)
     }
 
     func screen(_ id: String, query: [String: String]? = nil) async throws -> HarnessScreen {

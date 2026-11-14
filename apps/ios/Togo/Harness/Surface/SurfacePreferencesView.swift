@@ -34,6 +34,7 @@ struct SurfacePreferencesView: View {
                 }
             }
             ForEach(node.children) { child in AnyView(SurfaceNodeView(node: child, context: context)) }
+            Button(SurfaceCopy.close) { context.send(node, "action", ["act": .string("close")]) }
         }
     }
 }

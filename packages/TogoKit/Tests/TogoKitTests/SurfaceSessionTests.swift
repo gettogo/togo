@@ -10,6 +10,7 @@ import Testing
         var closing = false
         var closeGate: AsyncStream<Void>?
         var inputs = 0
+        var consumed: Bool?
         var ackError: HelperError?
         var inputGate: AsyncStream<Void>?
         var ackGate: AsyncStream<Void>?
@@ -35,7 +36,7 @@ import Testing
         func surfaceInput(_ lease: SurfaceLease, surface: String, instance: UInt64, event: JSONValue, expectedText: String?) async throws -> SurfaceDispatchResult {
             inputs += 1
             if let inputGate { for await _ in inputGate { break } }
-            return SurfaceDispatchResult(dispatched: true)
+            return SurfaceDispatchResult(dispatched: true, consumed: consumed)
         }
         func surfaceAck(_ lease: SurfaceLease, view: SurfaceView) async throws {
             if let ackGate { for await _ in ackGate { break } }
@@ -77,6 +78,23 @@ import Testing
         try await wait { session.notice == .unconfirmed }
         #expect(connection.inputs == 1)
         #expect(session.pending == nil)
+        task.cancel()
+        await task.value
+    }
+
+    @Test func originalSubmitReceiptSettlesSendWithoutClaimingAFrame() async throws {
+        let connection = try Connection()
+        connection.consumed = true
+        let session = SurfaceSession(id: connection.lease.id, makeConnection: { connection }, pollInterval: .milliseconds(10))
+        let task = Task { await session.run(options: options) }
+        try await wait { session.scene != nil }
+        let revision = session.scene?.revision
+        let outcome = await session.input(surface: "s:1", node: "input", event: ["ev": .string("send"), "text": .string("/resume")], expectedText: "")
+        #expect(outcome == .dispatched)
+        #expect(session.pending == nil)
+        #expect(session.notice == nil)
+        #expect(session.scene?.revision == revision)
+        #expect(connection.inputs == 1)
         task.cancel()
         await task.value
     }
@@ -138,7 +156,7 @@ import Testing
         #expect(!session.canInteract)
         continuation.yield(())
         continuation.finish()
-        await sending.value
+        _ = await sending.value
         #expect(session.pending == nil)
         task.cancel()
         await task.value

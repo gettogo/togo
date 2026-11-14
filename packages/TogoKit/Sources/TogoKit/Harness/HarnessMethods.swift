@@ -3,6 +3,7 @@ import Foundation
 /// Session capabilities a harness adapter advertises in `harness.describe`. The app shows a
 /// layer, a mission control section or a control only when its flag is present.
 public enum HarnessCapability {
+    public static let surface = "surface"
     public static let chat = "chat"
     public static let chatStream = "chat.stream"
     public static let history = "chat.history"

@@ -92,8 +92,7 @@ import UIKit
     var pendingJump: TerminalJump?
     /// The pill asked for mission control.
     var showsMission = false
-    /// The original harness interface, owned by this tab's visible sheet.
-    var showsSurface = false
+    let nativeInteractions = NativeChatState()
     @ObservationIgnored let surfaceDrafts = SurfaceDrafts()
     /// Why the native layers are not showing, when they fell back to the terminal.
     private(set) var fallback: String?
@@ -238,6 +237,8 @@ import UIKit
     private func invalidateConversation() {
         guard !changingConversation else { return }
         changingConversation = true
+        retireInteraction(pumpQueue: false)
+        nativeInteractions.requests.reset()
         conversation = UUID()
         phase = .opening
         pumpTask?.cancel()
@@ -352,6 +353,7 @@ import UIKit
     }
 
     func stop() {
+        retireInteraction(pumpQueue: false)
         runTask?.cancel()
         runTask = nil
         pumpTask?.cancel()
@@ -433,6 +435,7 @@ import UIKit
     }
 
     private func endNative(_ reason: String?) {
+        retireInteraction(pumpQueue: false)
         if descriptor == nil { descriptor = HarnessDescriptor() }
         fallback = reason
         phase = .terminalOnly
@@ -474,6 +477,7 @@ import UIKit
         if queued != queuedItems { queuedItems = queued }
         rememberMode()
         refreshWorking(conversation)
+        updateNativeQuestion()
         pump()
     }
 
@@ -494,6 +498,4 @@ import UIKit
     func refreshRows() {
         setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: true)
     }
-
-
 }

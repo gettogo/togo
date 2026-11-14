@@ -76,7 +76,6 @@ struct ChatPanes: View {
             }
             // A subagent's own conversation, from a work step or a mission row.
             .modifier(OptionalSubagentChat(harness: harness, actions: store.chatActions(for: id)))
-            .modifier(SurfacePresenter(store: harness, visible: shown))
             // Links in the chat and the sheets it opens go through the chat's router.
             .environment(\.openURL, OpenURLAction { [store] url in store.openChatLink(url, from: id) })
             .frame(width: rect.width, height: max(0, rect.height - top))

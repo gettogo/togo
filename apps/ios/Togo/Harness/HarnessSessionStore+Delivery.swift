@@ -16,6 +16,7 @@ extension HarnessSessionStore {
     /// throws when the helper refuses it.
     func send(_ text: String, mode: HarnessSendParams.Mode = .queue, images: [String] = []) async throws {
         let binding = conversation
+        try await prepareHarnessInput()
         if mode == .now {
             guard phase == .live else { throw HarnessUnavailable() }
             let item = try await services.send(subject, text: text, mode: .now, images: images)
@@ -63,7 +64,7 @@ extension HarnessSessionStore {
     /// True when a prompt sent now reaches the session: the agent is idle, or the harness holds
     /// prompts itself while it works.
     var canSendNow: Bool {
-        phase == .live && feed.isLoaded && (!working || has(HarnessCapability.queue))
+        phase == .live && feed.isLoaded && interaction == nil && !nativeInteractions.stopping && (!working || has(HarnessCapability.queue))
     }
 
     /// Sends what the queue holds once the session can take it. Only while the feed runs: a

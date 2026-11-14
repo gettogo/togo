@@ -1,7 +1,6 @@
 import SwiftUI
 import TogoKit
 import UIKit
-
 /// The calm, full-window conversation built from the session's items: prompts, folded work
 /// lines, replies, and inline approvals and questions. The composer sits at its foot, placed by
 /// the workspace; the chat keeps its height clear and starts at the top, with no band above it.
@@ -12,7 +11,6 @@ struct ChatView: View {
     /// The chat is on screen, so ⌘↩ and ⌘. answer from it; kept alive under the terminal it
     /// answers nothing the person cannot see.
     var answersKeys = true
-
     @State private var expanded: [String: Disclosure] = [:]
     @State private var detail: HarnessItem?
     @State private var selecting: SelectedText?
@@ -25,7 +23,6 @@ struct ChatView: View {
     /// they follow it without animation: what is there on open is simply there.
     @State private var live: WorkingState?
     @State private var showsEarlierButton: Bool
-
     init(store: HarnessSessionStore, actions: ChatActions = .inert, answersKeys: Bool = true) {
         self.store = store
         self.actions = actions
@@ -33,7 +30,6 @@ struct ChatView: View {
         _live = State(initialValue: store.liveWork)
         _showsEarlierButton = State(initialValue: Self.showsEarlier(store))
     }
-
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
@@ -51,13 +47,24 @@ struct ChatView: View {
                 // Rows arriving while the chat is open land in the store's `resize`
                 // transaction; rows on first render, from Earlier or by scrolling land at once.
                 ForEach(rows) { row in
-                    gapped(row, gap: gaps[row.id])
+                    Group {
+                        if let interaction = store.interaction, interaction.requestID == row.id {
+                            ChatSurfaceInteractionView(store: store, model: interaction)
+                        } else {
+                            gapped(row, gap: gaps[row.id])
+                        }
+                    }
                         .chatColumn()
                         .id(row.id)
                         .modifier(NeedsVisibility(id: row.isNeeds ? row.id : nil, scroll: scroll))
                         .accessibilityRotorEntry(id: row.id, in: rotorSpace)
                         // motion: preventing a jump — the conversation glides up to make room while the new row only fades in place; a needs card instead grows in place as it is scrolled into view (attention).
                         .transition(row.isNeeds ? Motion.unfold(reduce: reduceMotion) : Motion.arrive(reduce: reduceMotion))
+                }
+                if let interaction = store.interaction, interaction.requestID == nil {
+                    ChatSurfaceInteractionView(store: store, model: interaction)
+                        .chatColumn()
+                        .id("chat.harnessInteraction")
                 }
                 // The chat's one live indicator stays at the foot for the whole turn: one view,
                 // so waiting and working morph in place. Stop lives in the composer.
@@ -101,6 +108,9 @@ struct ChatView: View {
             .id(ChatScroll.contentID)
         }
         .id(store.conversation)
+        .onChange(of: store.shownLayer) { _, layer in
+            if layer == .terminal { store.retireInteraction() }
+        }
         .onChange(of: store.conversation) {
             expanded = [:]
             detail = nil
@@ -139,6 +149,7 @@ struct ChatView: View {
         // or at the foot if that row has gone.
         .modifier(ChatScrolling(store: store, marks: needsMarks, scroll: scroll, has: { id in rows.contains { $0.id == id } }))
         .background(Color.togoInk)
+        .modifier(ChatSurfaceLifecycle(store: store))
         .environment(\.chatImageFetch, imageFetch)
         .accessibilityRotor(ChatCopy.rotorPrompts) { rotor(where: \.isPrompt) }
         .accessibilityRotor(ChatCopy.rotorNeeds) { rotor(where: \.isNeeds) }
@@ -338,7 +349,8 @@ struct ChatView: View {
             }
             .contextMenu { terminalButton(item) }
         case .question(let question):
-            QuestionRow(item: item, question: question, showInTerminal: terminalAction(item)) { args in
+            QuestionRow(item: item, question: question, showInTerminal: terminalAction(item),
+                        openNative: store.canOpenNativeQuestion(item) ? { store.openNativeQuestion(item.id) } : nil) { args in
                 await store.answerReporting(item, args: args)
             }
             .contextMenu { terminalButton(item) }

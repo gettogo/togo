@@ -6,6 +6,7 @@ import Observation
 @MainActor @Observable public final class SurfaceSession {
     public enum Phase: Sendable { case loading, active, unavailable, suspended }
     public enum Notice: Sendable { case unconfirmed, unavailable }
+    public enum InputOutcome: Sendable { case notDispatched, dispatched, unconfirmed }
     public struct Pending: Sendable {
         public let surface: String
         public let node: String
@@ -168,13 +169,13 @@ import Observation
 
     /// Dispatches once, then waits for a producer document to reflect a change.
     /// A timeout remains visible and does not silently repeat the action.
-    public func input(
+    @discardableResult public func input(
         surface: String, node: String, event: [String: JSONValue], expectedText: String? = nil
-    ) async {
+    ) async -> InputOutcome {
         guard canInteract, let connection, let lease, let view = scene?.views.first(where: { $0.id == surface }),
               !view.closed, view.listen, !view.document.suspended,
               let target = view.document.root.node(id: node), target.properties["disabled"] != .bool(true),
-              target.properties["hidden"] != .bool(true), case .string(let kind)? = event["ev"] else { return }
+              target.properties["hidden"] != .bool(true), case .string(let kind)? = event["ev"] else { return .notDispatched }
         var event = event
         event["id"] = .string(node)
         event["sf"] = .string(surface)
@@ -186,18 +187,22 @@ import Observation
         do {
             let result = try await connection.surfaceInput(lease, surface: surface, instance: view.instance,
                                                           event: .object(event), expectedText: expectedText)
-            guard self.lease == lease, pending?.token == token else { return }
+            guard self.lease == lease, pending?.token == token else { return .unconfirmed }
             if result.dispatched {
                 pending?.dispatched = true
-                if let scene { settlePending(scene) }
+                if kind == "send", result.consumed == true { pending = nil }
+                else if let scene { settlePending(scene) }
+                return .dispatched
             } else {
                 pending = nil
                 notice = .unconfirmed
+                return .unconfirmed
             }
         } catch {
-            guard self.lease == lease, pending?.token == token else { return }
+            guard self.lease == lease, pending?.token == token else { return .unconfirmed }
             pending = nil
             notice = .unconfirmed
+            return .unconfirmed
         }
     }
 
