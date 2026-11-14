@@ -53,6 +53,7 @@ type runtimeBackend interface {
 type paneBackend struct {
 	sessions   *session.Service
 	companions *Companions
+	logf       func(string, ...any)
 }
 
 func (b *paneBackend) startup(ctx context.Context) error {
@@ -77,6 +78,14 @@ func (b *paneBackend) resolve(ctx context.Context, id string) (runtimeInfo, erro
 				if err == nil {
 					run := runtimeInfo{config: config, state: state, birth: birth, control: &sync.Mutex{}}
 					if _, err := b.validate(ctx, id, run); err == nil {
+						cleanup, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+						if err := b.companions.Prune(cleanup); err != nil && b.logf != nil {
+							b.logf("surface: stale generation cleanup failed: %v", err)
+						}
+						cancel()
+						if err := b.companions.pruneEpochs(ctx, config, state.Epoch); err != nil && b.logf != nil {
+							b.logf("surface: old epoch cleanup failed: %v", err)
+						}
 						return run, nil
 					}
 				}

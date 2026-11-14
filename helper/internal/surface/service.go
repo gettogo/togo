@@ -15,6 +15,10 @@ import (
 var errLease = errors.New("surface: renderer is no longer active; reopen the interface")
 var errBusy = errors.New("surface: another renderer owns this interface")
 
+// MaxRenderers bounds concurrent owning connections independently of how many
+// surfaces one original program may describe. Keep the existing resource cap.
+const MaxRenderers = 4
+
 // Service owns native renderers over the existing authenticated RPC stream.
 type Service struct {
 	mu      sync.Mutex
@@ -44,7 +48,7 @@ type renderer struct {
 
 // NewService constructs the original-runtime companion and surface transport.
 func NewService(home string, sessions *session.Service, logf func(string, ...any)) *Service {
-	return newService(&paneBackend{sessions: sessions, companions: &Companions{Home: home}}, logf)
+	return newService(&paneBackend{sessions: sessions, companions: &Companions{Home: home}, logf: logf}, logf)
 }
 
 func newService(backend runtimeBackend, logf func(string, ...any)) *Service {
@@ -92,7 +96,7 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 	r := &renderer{owner: owner, lease: Lease{ID: id, Token: randomID()}, cancel: cancel,
 		done: make(chan struct{}), lastRead: time.Now(), acks: map[uint64]int64{}}
 	s.mu.Lock()
-	if s.stopped || s.runs[id] != nil || len(s.runs) >= MaxViews {
+	if s.stopped || s.runs[id] != nil || len(s.runs) >= MaxRenderers {
 		s.mu.Unlock()
 		cancel()
 		return Lease{}, errBusy
@@ -275,7 +279,7 @@ func (s *Service) start() {
 			ctx, cancel := context.WithTimeout(context.Background(), CompanionWait)
 			defer cancel()
 			if err := backend.startup(ctx); err != nil && s.logf != nil {
-				s.logf("surface: stale marker cleanup failed: %v", err)
+				s.logf("surface: startup cleanup failed: %v", err)
 			}
 		}
 	})
