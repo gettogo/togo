@@ -34,10 +34,15 @@ images: { insert: per_path }
 feeds:
   events:
     sse: { path: /api/event }
-    # The stream tells what happens from now on. The session log holds the same events
-    # from the conversation's start (checked on 2.2.5), so a chat opened after a helper
-    # restart, or moved to another conversation, shows what was said before.
-    history: { path: '/api/experimental/session/{{.conversation}}/log' }
+    # The stream tells what happens from now on. The conversation's messages are read
+    # from the messages route (the 200 newest, oldest first), so a chat opened after a
+    # helper restart, or moved to another conversation, shows what was said before. The
+    # session log route would give the events themselves, but on 2.2.5 it answers with
+    # its sync marker and no past events.
+    history:
+      path: '/api/session/{{.conversation}}/message?limit=200&order=desc'
+      items: '.data | reverse'
+      as: session.message
     mapper: opencode2.events
     stability: documented
 sources:

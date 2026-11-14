@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
-	"github.com/gettogo/togo/helper/internal/harness/source/httpsrc"
+	"github.com/gettogo/togo/helper/internal/harness/spec"
 	"github.com/gettogo/togo/helper/internal/session"
 )
 
@@ -23,11 +24,9 @@ import (
 //
 // The past is replayed through a fresh mapper, so nothing the old one
 // counted is counted twice. Live records of the feed that arrive while the
-// past is read are held and mapped after it, leaving out the ones the past
-// already holds (by event id), so no event is lost or applied twice.
-
-// historyEnd is the event type that ends a history read.
-const historyEnd = "log.synced"
+// past is read are held and mapped after it, so none is lost; a mapper
+// keys its items by the harness's own ids, so one the past already holds
+// is the same item again.
 
 // historyTimeout bounds one history read.
 const historyTimeout = 20 * time.Second
@@ -96,9 +95,8 @@ func (s *sess) resumeHistory() {
 }
 
 func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
-	path := strings.ReplaceAll(s.ad.Feeds[feed].History.Path, "{{.conversation}}", conv)
 	ctx, cancel := context.WithTimeout(s.ctx, historyTimeout)
-	events, err := httpsrc.ReadLog(ctx, s.env, path, historyEnd)
+	events, err := e.readHistory(ctx, s, s.ad.Feeds[feed].History, conv)
 	cancel()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -108,36 +106,64 @@ func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 		return
 	}
 	moved := s.convGen != gen || (s.conv != "" && s.conv != conv)
-	if err != nil || moved {
-		if err != nil {
-			e.cfg.Logf("harness: %s: the conversation's earlier messages could not be read: %v", s.ad.Adapter.Adapter, err)
-			if s.hydrated == conv {
-				s.hydrated = "" // asked again on the next record
-			}
-		}
-		// The chat moved on, or the past could not be read: the held
-		// records are mapped as they would have been.
-		for _, rec := range heldOf(held) {
-			s.recordLocked(mapper, rec)
-		}
-		return
-	}
-	seen := map[string]bool{}
-	for _, raw := range events {
-		if id := eventID(raw); id != "" {
-			seen[id] = true
+	if err != nil && !moved {
+		e.cfg.Logf("harness: %s: the conversation's earlier messages could not be read: %v", s.ad.Adapter.Adapter, err)
+		if s.hydrated == conv {
+			s.hydrated = "" // asked again on the next record
 		}
 	}
-	if len(events) > 0 {
+	if err == nil && !moved && len(events) > 0 {
 		s.mappers[mapper] = e.mapperFor(mapper, s.env)
-		s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: httpsrc.Newest(events, httpsrc.MaxLogEvents)})
+		s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: events})
 	}
+	// Held records are mapped as they would have been, after the past.
 	for _, rec := range heldOf(held) {
-		if id := eventID(rec.Data); id != "" && seen[id] {
-			continue
-		}
 		s.recordLocked(mapper, rec)
 	}
+}
+
+// maxHistory bounds the records one history read replays.
+const maxHistory = 2000
+
+// readHistory asks the harness for the conversation's past and returns it
+// as the feed mapper's records, oldest first.
+func (e *Engine) readHistory(ctx context.Context, s *sess, h *spec.History, conv string) ([]json.RawMessage, error) {
+	r, ok := harness.LookupRunner(spec.KindHTTP)
+	if !ok {
+		return nil, errors.New("no http runner")
+	}
+	raw, err := json.Marshal(spec.HTTP{Method: "GET", Path: strings.ReplaceAll(h.Path, "{{.conversation}}", conv)})
+	if err != nil {
+		return nil, err
+	}
+	out, err := r.Fetch(ctx, harness.SourceSpec{Name: "history", Kind: spec.KindHTTP, Raw: raw}, s.env)
+	if err != nil {
+		return nil, err
+	}
+	v, err := decode(out)
+	if err != nil {
+		return nil, errors.New("history is not JSON")
+	}
+	if h.Items != "" {
+		if v, err = JQFirst(h.Items, v, nil); err != nil {
+			return nil, err
+		}
+	}
+	list, _ := v.([]any)
+	if len(list) > maxHistory {
+		list = list[len(list)-maxHistory:]
+	}
+	events := make([]json.RawMessage, 0, len(list))
+	for _, el := range list {
+		var rec any = el
+		if h.As != "" {
+			rec = map[string]any{"type": h.As, "conversation": conv, "data": el}
+		}
+		if b, err := json.Marshal(rec); err == nil {
+			events = append(events, b)
+		}
+	}
+	return events, nil
 }
 
 func heldOf(h *heldRecords) []harness.Record {
@@ -145,14 +171,6 @@ func heldOf(h *heldRecords) []harness.Record {
 		return nil
 	}
 	return h.recs
-}
-
-func eventID(raw json.RawMessage) string {
-	var head struct {
-		ID string `json:"id"`
-	}
-	_ = json.Unmarshal(raw, &head)
-	return head.ID
 }
 
 func (e *Engine) conversationPath(id string) string {

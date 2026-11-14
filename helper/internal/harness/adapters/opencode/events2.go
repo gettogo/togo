@@ -43,6 +43,7 @@ type Events2 struct {
 	redone      string          // id of the last revert.cleared event
 	shells      map[string]bool // background shells shown as rows (shells2.go)
 	shellsEnded []string        // shells that ended with no row, newest last
+	pastTurn    string          // turn of the past message being mapped (history2.go)
 	loc         located         // the followed conversation's folder (needs2.go)
 }
 
@@ -92,6 +93,9 @@ type event2 struct {
 	Created int64           `json:"created"`
 	Type    string          `json:"type"`
 	Data    json.RawMessage `json:"data"`
+	// Conversation is the session a loaded past message belongs to
+	// (history2.go).
+	Conversation string `json:"conversation"`
 	// Location is the folder the event happened in (needs2.go reads it).
 	Location *location2 `json:"location"`
 }
@@ -185,6 +189,8 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	defer e.mu.Unlock()
 	defer e.locate(d.SessionID, ev.Location)
 	switch ev.Type {
+	case historyMessage:
+		return e.pastMessage(ev.Conversation, ev.Data)
 	case httpsrc.Reconnected:
 		e.lostTrack()
 		// A reload while the stream was down sent its events to nobody.

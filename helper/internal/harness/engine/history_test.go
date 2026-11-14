@@ -29,24 +29,20 @@ capabilities: [chat, chat.history]
 feeds:
   events:
     hook: { events: [Event] }
-    history: { path: '/log/{{.conversation}}' }
+    history: { path: '/log/{{.conversation}}', items: .data }
     mapper: fake.events
     stability: documented
 `))
 }
 
-// histServer serves a conversation's past as an event stream that ends
-// with log.synced, as OpenCode's session log does.
+// histServer serves a conversation's past as a JSON list, oldest first.
 func histServer(t *testing.T, logs map[string][]string, hits *atomic.Int64) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 		conv := strings.TrimPrefix(r.URL.Path, "/log/")
-		w.Header().Set("Content-Type", "text/event-stream")
-		for _, ev := range logs[conv] {
-			fmt.Fprintf(w, "data: %s\n\n", ev)
-		}
-		fmt.Fprint(w, "data: {\"type\":\"log.synced\"}\n\n")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"data":[%s]}`, strings.Join(logs[conv], ","))
 	}))
 	t.Cleanup(srv.Close)
 	return srv

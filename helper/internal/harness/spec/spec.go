@@ -138,12 +138,23 @@ type Feed struct {
 	// Mapper names the Go mapper, e.g. claude.transcript.
 	Mapper    string `yaml:"mapper"`
 	Stability string `yaml:"stability"`
-	// History is where an event feed's past can be read: an SSE endpoint
-	// that sends a conversation's events from its start and then ends. A
-	// stream tells only what happens from now on, so without it a chat
-	// opened after a helper restart, or moved to another conversation,
-	// shows nothing earlier. {{.conversation}} is the conversation's id.
-	History *HTTP `yaml:"history"`
+	// History is where an event feed's past can be read. A stream tells
+	// only what happens from now on, so without it a chat opened after a
+	// helper restart, or moved to another conversation, shows nothing
+	// earlier.
+	History *History `yaml:"history"`
+}
+
+// History reads a conversation's past over the harness's HTTP API.
+type History struct {
+	// Path is the request path; {{.conversation}} is the conversation's id.
+	Path string `yaml:"path"`
+	// Items is jq over the answer that lists the past, oldest first.
+	Items string `yaml:"items"`
+	// As, when set, is the record type each listed element is wrapped in
+	// for the feed's mapper: {"type": As, "conversation": id, "data": element}.
+	// Without it the elements are the mapper's records as they are.
+	As string `yaml:"as"`
 }
 
 // Source is a fetch-on-demand input for screens. One kind block is set.

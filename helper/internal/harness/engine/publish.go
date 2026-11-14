@@ -268,7 +268,16 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 				u.Source = "unknown"
 			}
 			if !u.Queued {
-				if p, ok := s.matchPhoneLocked(it.ID, u.Text); ok {
+				if id, ok := s.phoneAlias[it.ID]; ok {
+					// The agent's record of a prompt the phone sent, seen
+					// again (its conversation's past was loaded): the same
+					// item, not a second one.
+					it.ID, u.Source = id, "phone"
+				} else if p, ok := s.matchPhoneLocked(it.ID, u.Text); ok {
+					if s.phoneAlias == nil {
+						s.phoneAlias = map[string]string{}
+					}
+					s.phoneAlias[it.ID] = p.id
 					it.ID, u.Source = p.id, "phone"
 					// The phone's paths can be fetched; the agent's copy of a
 					// picture may be only described.

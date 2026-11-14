@@ -99,6 +99,7 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 	s.mappers[mapper] = fresh
 	s.conv = ""
 	s.queue, s.sent, s.phone = nil, map[string]bool{}, nil
+	s.phoneAlias = nil
 	s.anchors = map[string]*harness.Anchor{}
 	s.pending, s.sentText, s.lastPart = map[string]harness.Item{}, map[string]string{}, map[string]time.Time{}
 	s.mission, s.srcRows = newMission(s.missionCaps()), nil

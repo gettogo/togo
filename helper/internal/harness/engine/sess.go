@@ -63,6 +63,10 @@ type sess struct {
 	queue      []queued
 	sent       map[string]bool // queued prompts already typed, by item id
 	phone      []phoneText
+	// phoneAlias maps the agent's id of a prompt to the phone item that
+	// took its place, so the record seen again stays that item. Cleared
+	// when the chat starts over.
+	phoneAlias map[string]string
 	working    bool
 	// stoppedAt is when a stop last ended the turn (see stopHold).
 	stoppedAt time.Time
