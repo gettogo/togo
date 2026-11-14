@@ -101,7 +101,9 @@ func StartFake(t testing.TB, home, version string, pending func() int) *Fake {
 	d.SetPending(pending)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		done <- daemon.Run(ctx, daemon.Config{
 			Home:   home,
 			Daemon: d,
@@ -109,7 +111,15 @@ func StartFake(t testing.TB, home, version string, pending func() int) *Fake {
 			Build:  func(context.Context) (rpc.Handler, error) { return pong{}, nil },
 		})
 	}()
-	t.Cleanup(cancel)
+	t.Cleanup(func() {
+		cancel()
+		// Callers may have already consumed Done while checking shutdown.
+		select {
+		case <-stopped:
+		case <-time.After(5 * time.Second):
+			t.Error("fake daemon did not stop")
+		}
+	})
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		c, err := sockd.Dial(context.Background(), daemon.SocketPath(home))
