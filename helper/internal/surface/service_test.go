@@ -72,7 +72,7 @@ func (f *fakeRuntime) send(_ context.Context, _ string, _ runtimeInfo, data []by
 	return nil
 }
 
-func nativeFixture(t *testing.T) (*Service, *fakeRuntime, *rpc.Conn, Lease) {
+func nativeFixture(t testing.TB) (*Service, *fakeRuntime, *rpc.Conn, Lease) {
 	t.Helper()
 	root := t.TempDir()
 	f := &fakeRuntime{valid: true, data: make(chan []byte, 16), info: runtimeInfo{
@@ -100,6 +100,23 @@ func nativeFixture(t *testing.T) (*Service, *fakeRuntime, *rpc.Conn, Lease) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return s, f, owner, lease
+}
+
+func BenchmarkUnchangedSurfaceRead(b *testing.B) {
+	s, _, owner, lease := nativeFixture(b)
+	first, err := s.Read(owner, ReadParams{ID: lease.ID, Lease: lease.Token})
+	if err != nil {
+		b.Fatal(err)
+	}
+	p := ReadParams{ID: lease.ID, Lease: lease.Token, Revision: first.Revision}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		result, err := s.Read(owner, p)
+		if err != nil || !result.Unchanged {
+			b.Fatal("unchanged read failed", err)
+		}
+	}
 }
 
 func TestSurfaceLeaseRejectsAnotherConnectionAndDoesNotFakeACK(t *testing.T) {

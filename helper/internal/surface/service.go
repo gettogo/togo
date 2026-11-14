@@ -112,7 +112,7 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 	if err != nil {
 		return fail(err)
 	}
-	r.runtime, r.lease.Generation = run, run.config.Generation
+	r.runtime, r.lease.Generation = run, run.wireGeneration()
 	r.cache, err = OpenCache(run.cacheDir(), run.identity(), options)
 	if err != nil {
 		return fail(err)

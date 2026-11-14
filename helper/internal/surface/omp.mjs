@@ -101,7 +101,24 @@ export default function (pi) {
     try { release() } catch { reason = 'renderer_transition_failed'; available = false }
     ctx = next
     epoch++
+    bindInput()
     publish()
+  }
+  function bindInput() {
+    stopInput?.()
+    if (typeof ctx?.ui?.onTerminalInput !== 'function') {
+      available = false
+      reason = 'unsupported_runtime'
+      return
+    }
+    stopInput = ctx.ui.onTerminalInput(data => {
+      // Raw keyboard input restores the terminal before passing on the key.
+      // TSP events and terminal capability reports keep native ownership.
+      if (deadline && typeof data === 'string' && !data.startsWith('\x1b_tsp;') && !terminalReport(data)) {
+        reason = 'terminal_input'
+        try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() }
+      }
+    })
   }
   pi.on('session_start', async (_event, next) => {
     if (tui) { changed(next); return }
@@ -115,14 +132,7 @@ export default function (pi) {
       })
       if (typeof tui?.start !== 'function' || typeof tui?.stop !== 'function' || typeof tui?.requestRender !== 'function') throw new Error('unsupported')
       available = true
-      stopInput = ctx.ui.onTerminalInput(data => {
-        // Native app controls use TSP events. Raw keyboard input means the
-        // terminal is being used: restore its renderer before passing the key.
-        if (deadline && typeof data === 'string' && !data.startsWith('\x1b_tsp;') && !terminalReport(data)) {
-          reason = 'terminal_input'
-          try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() }
-        }
-      })
+      bindInput()
       watcher = fs.watch(root, (_event, file) => { if (!file || String(file) === 'command.json') processCommand() })
       watcher.on('error', () => { try { release() } catch {}; available = false; reason = 'control_unavailable'; publish() })
       timer = setInterval(() => {

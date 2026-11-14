@@ -73,6 +73,11 @@ test('companion authenticates control, preserves context and expires its rendere
     command({ ...config, seq: 5, mode: 'native', owner: 'renderer', conversation: 'stale-conversation', leaseMs: 1000 })
     await new Promise(resolve => setTimeout(resolve, 100))
     assert.equal(state().seq, 4)
+    // OMP clears extension input listeners when it switches conversations.
+    terminalInput = undefined
+    ctx.sessionManager.getSessionId = () => 'conversation-two'
+    await events.get('session_start')({}, ctx)
+    assert.equal(typeof terminalInput, 'function')
   } finally {
     await events.get('session_shutdown')?.({}, ctx)
     for (const [name, value] of [['TOGO_SURFACE_CONFIG', saved.config], ['TMUX_PANE', saved.pane], ['PI_TUI_NATIVE', saved.native]]) {

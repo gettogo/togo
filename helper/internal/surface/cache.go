@@ -220,16 +220,24 @@ func (c *Cache) checkpoint() error {
 
 // Snapshot returns immutable wire bytes of the latest durable scene.
 func (c *Cache) Snapshot() ([]byte, uint64, error) {
+	raw, revision, _, err := c.snapshot(0)
+	return raw, revision, err
+}
+
+func (c *Cache) snapshot(after uint64) ([]byte, uint64, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.fatal != nil {
-		return nil, 0, c.fatal
+		return nil, 0, false, c.fatal
 	}
 	if c.pending {
-		return nil, 0, ErrCachePending
+		return nil, 0, false, ErrCachePending
+	}
+	if after != 0 && after == c.scene.Revision {
+		return nil, c.scene.Revision, true, nil
 	}
 	raw, err := json.Marshal(c.scene)
-	return raw, c.scene.Revision, err
+	return raw, c.scene.Revision, false, err
 }
 
 // Inspect runs a nonblocking read of durable scene state under its lock.

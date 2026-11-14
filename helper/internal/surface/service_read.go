@@ -29,7 +29,7 @@ func (s *Service) Read(owner *rpc.Conn, p ReadParams) (ReadResult, error) {
 		if p.Offset != 0 {
 			return result, ErrMalformed
 		}
-		raw, revision, err := r.cache.Snapshot()
+		raw, revision, unchanged, err := r.cache.snapshot(p.Revision)
 		if errors.Is(err, ErrCachePending) {
 			result.Pending = true
 			return result, nil
@@ -39,7 +39,7 @@ func (s *Service) Read(owner *rpc.Conn, p ReadParams) (ReadResult, error) {
 		}
 		r.lastRead = time.Now()
 		result.Revision = revision
-		if p.Revision != 0 && p.Revision == revision {
+		if unchanged {
 			result.Unchanged = true
 			return result, nil
 		}

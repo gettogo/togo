@@ -2,6 +2,9 @@ package surface
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -24,6 +27,14 @@ type runtimeInfo struct {
 
 func (r runtimeInfo) identity() CacheIdentity {
 	return CacheIdentity{Generation: r.config.Generation, PID: r.state.PID, Birth: r.birth, Conversation: r.state.Conversation, Epoch: r.state.Epoch}
+}
+
+// A process can keep running while its conversation changes. App drafts and
+// snapshots must bind to the conversation epoch as well as the launch.
+func (r runtimeInfo) wireGeneration() string {
+	raw, _ := json.Marshal(r.identity())
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:16])
 }
 
 func (r runtimeInfo) cacheDir() string {
