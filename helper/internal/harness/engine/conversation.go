@@ -77,6 +77,10 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 // chat it may not belong to, and it is never sent again.
 var errMoved = &harness.FallbackError{Reason: "source", Detail: "The agent moved to another conversation while this was being sent. It may not have arrived; check the terminal before sending it again."}
 
+// errNotSent is the answer to a prompt that was still waiting its turn when
+// the agent moved to another conversation: it was written for the old one.
+var errNotSent = &harness.FallbackError{Reason: "source", Detail: "The agent moved to another conversation before this was sent, so it was not sent."}
+
 // uncertainNoticeLocked tells the new conversation's chat about a queued
 // prompt that was on its way during the move.
 func (s *sess) uncertainNoticeLocked(prompt string) {

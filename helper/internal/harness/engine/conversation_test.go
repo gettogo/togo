@@ -215,6 +215,26 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		t.Errorf("new chat shows %q as sent", users)
 	}
 
+	// A send still waiting for the typing lock when the agent moves is not
+	// sent at all.
+	os.Remove(filepath.Join(home, "release"))
+	l := typingLock(id)
+	l.Lock()
+	go func() {
+		_, err := e.Send(ctx, harness.SendRequest{Session: id, Text: "waiting", Mode: harness.SendNow})
+		done <- err
+	}()
+	time.Sleep(100 * time.Millisecond)
+	deliver(id, map[string]any{"state": map[string]string{"conversation": "B2"}})
+	waitFor(t, func() bool { return e.log.Epoch(id) == "e3" })
+	l.Unlock()
+	if err := <-done; !errors.As(err, &moved) || !strings.Contains(moved.Detail, "was not sent") {
+		t.Fatalf("send that waited across the move = %v, want the not-sent error", err)
+	}
+	if strings.Contains(sentLog(), "waiting") {
+		t.Error("a prompt written for the old conversation was sent to the new one")
+	}
+
 	// A queued send that is on its way.
 	os.Remove(filepath.Join(home, "release"))
 	status.Store("working")
@@ -222,7 +242,7 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 	status.Store("idle")
 	waitFor(t, func() bool { return strings.Contains(sentLog(), "queued") })
 	deliver(id, map[string]any{"state": map[string]string{"conversation": "C"}})
-	waitFor(t, func() bool { return e.log.Epoch(id) == "e3" })
+	waitFor(t, func() bool { return e.log.Epoch(id) == "e4" })
 	if err := os.WriteFile(filepath.Join(home, "release"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}

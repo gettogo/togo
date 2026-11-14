@@ -24,14 +24,27 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		return harness.SendResult{}, err
 	}
 	images := harness.ImageRefs(req.Images)
+	// The prompt belongs to the conversation the chat showed when it was
+	// asked for. Waiting for the typing lock and reading the screen take
+	// time; if the agent moves to another conversation meanwhile, the
+	// prompt is not sent to it.
+	s.mu.Lock()
+	gen := s.convGen
+	s.mu.Unlock()
 	if act, ok := s.ad.Actions[actionCommand]; ok && len(req.Images) == 0 {
 		if name, args, ok := slashCommand(req.Text); ok {
 			// The harness API takes a / line as a command, not as prompt
 			// text the model would read (OpenCode's /init).
-			if err := e.runCommand(ctx, s, act, name, args); err != nil {
+			err := e.runCommand(ctx, s, act, name, args)
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if s.convGen != gen {
+				return harness.SendResult{}, errMoved
+			}
+			if err != nil {
 				return harness.SendResult{}, err
 			}
-			return e.userItem(s, req.Text, nil, false), nil
+			return s.userItemLocked(req.Text, nil, false), nil
 		}
 	}
 	api, viaAPI := e.sendAction(s)
@@ -49,6 +62,10 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 	defer l.Unlock()
 	blocked := e.asking(ctx, s, viaAPI)
 	s.mu.Lock()
+	if s.convGen != gen {
+		s.mu.Unlock()
+		return harness.SendResult{}, errNotSent
+	}
 	working := s.stateLocked()["working"] == "true"
 	if working || len(s.queue) > 0 || blocked != "" {
 		if req.Mode == harness.SendNow && blocked != "" {
@@ -68,7 +85,6 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		s.mu.Unlock()
 		return harness.SendResult{Item: stored}, nil
 	}
-	gen := s.convGen
 	s.mu.Unlock()
 	if viaAPI {
 		err = e.sendAPI(ctx, s, api, req.Text, req.Images)
