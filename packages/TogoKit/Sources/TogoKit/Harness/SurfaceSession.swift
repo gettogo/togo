@@ -15,6 +15,7 @@ import Observation
         let desiredText: String?
         let deadline: ContinuousClock.Instant
         let token: UUID
+        var dispatched = false
     }
 
     public private(set) var phase: Phase = .suspended
@@ -101,6 +102,7 @@ import Observation
             while !Task.isCancelled {
                 let next = try await client.surfaceSnapshot(lease, revision: revision, kinds: Set(options.kinds))
                 try Task.checkCancellation()
+                guard self.lease == lease else { break }
                 if let next {
                     scene = next
                     revision = next.revision
@@ -149,7 +151,15 @@ import Observation
             for view in scene.views where !view.closed {
                 let receipt = Receipt(instance: view.instance, sequence: view.document.sequence)
                 if receipts[view.id] == receipt { continue }
-                do { try await connection.surfaceAck(lease, view: view) } catch { continue }
+                do { try await connection.surfaceAck(lease, view: view) } catch {
+                    guard self.lease == lease else { return }
+                    self.lease = nil
+                    phase = .unavailable
+                    notice = pending == nil ? .unavailable : .unconfirmed
+                    pending = nil
+                    await connection.close()
+                    return
+                }
                 guard self.lease == lease else { return }
                 receipts[view.id] = receipt
             }
@@ -177,7 +187,13 @@ import Observation
             let result = try await connection.surfaceInput(lease, surface: surface, instance: view.instance,
                                                           event: .object(event), expectedText: expectedText)
             guard self.lease == lease, pending?.token == token else { return }
-            if !result.dispatched { pending = nil; notice = .unconfirmed }
+            if result.dispatched {
+                pending?.dispatched = true
+                if let scene { settlePending(scene) }
+            } else {
+                pending = nil
+                notice = .unconfirmed
+            }
         } catch {
             guard self.lease == lease, pending?.token == token else { return }
             pending = nil
@@ -186,7 +202,7 @@ import Observation
     }
 
     private func settlePending(_ next: SurfaceScene) {
-        guard let pending else { return }
+        guard let pending, pending.dispatched else { return }
         guard let view = next.views.first(where: { $0.id == pending.surface }), !view.closed,
               view.instance == pending.instance, let node = view.document.root.node(id: pending.node) else {
             self.pending = nil

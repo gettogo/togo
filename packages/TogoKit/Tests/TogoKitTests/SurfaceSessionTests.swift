@@ -10,7 +10,10 @@ import Testing
         var closing = false
         var closeGate: AsyncStream<Void>?
         var inputs = 0
-        let lease: SurfaceLease
+        var ackError: HelperError?
+        var inputGate: AsyncStream<Void>?
+        var ackGate: AsyncStream<Void>?
+        var lease: SurfaceLease
 
         init() throws {
             struct Exchange<T: Decodable>: Decodable {
@@ -31,9 +34,14 @@ import Testing
         }
         func surfaceInput(_ lease: SurfaceLease, surface: String, instance: UInt64, event: JSONValue, expectedText: String?) async throws -> SurfaceDispatchResult {
             inputs += 1
+            if let inputGate { for await _ in inputGate { break } }
             return SurfaceDispatchResult(dispatched: true)
         }
-        func surfaceAck(_ lease: SurfaceLease, view: SurfaceView) async throws { acknowledgments.append(view.document.sequence) }
+        func surfaceAck(_ lease: SurfaceLease, view: SurfaceView) async throws {
+            if let ackGate { for await _ in ackGate { break } }
+            if let ackError { throw ackError }
+            acknowledgments.append(view.document.sequence)
+        }
         func surfaceClose(_ lease: SurfaceLease) async throws {}
         func close() async {
             closing = true
@@ -90,6 +98,81 @@ import Testing
         #expect(session.notice == nil)
         task.cancel()
         await task.value
+    }
+
+    @Test func failedDisplayReceiptReleasesTheRendererVisibly() async throws {
+        let connection = try Connection()
+        connection.ackError = .closed
+        let session = SurfaceSession(id: connection.lease.id, makeConnection: { connection }, pollInterval: .milliseconds(10))
+        let task = Task { await session.run(options: options) }
+        try await wait { session.scene != nil }
+        let scene = try #require(session.scene)
+        await session.displayed(revision: scene.revision, generation: connection.lease.generation)
+        #expect(session.phase == .unavailable)
+        #expect(session.notice == .unavailable)
+        #expect(connection.closed)
+        #expect(connection.acknowledgments.isEmpty)
+        task.cancel()
+        await task.value
+    }
+
+    @Test func producerChangesCannotReleaseAnActionStillWaitingForDispatch() async throws {
+        let connection = try Connection()
+        let initial = try #require(connection.next)
+        let (gate, continuation) = AsyncStream<Void>.makeStream()
+        connection.inputGate = gate
+        let session = SurfaceSession(id: connection.lease.id, makeConnection: { connection }, pollInterval: .milliseconds(10))
+        let task = Task { await session.run(options: options) }
+        try await wait { session.scene != nil }
+        let sending = Task {
+            await session.input(surface: "s:1", node: "input", event: ["ev": .string("edit"), "text": .string("hello"),
+                "from": .number(0), "to": .number(0), "len": .number(0), "cursor": .number(5)])
+        }
+        try await wait { connection.inputs == 1 }
+        var next = initial
+        next.revision += 1
+        next.views[0].document.root.children[0].properties["text"] = .string("hello")
+        connection.next = next
+        try await wait { session.scene?.revision == next.revision }
+        #expect(session.pending != nil)
+        #expect(!session.canInteract)
+        continuation.yield(())
+        continuation.finish()
+        await sending.value
+        #expect(session.pending == nil)
+        task.cancel()
+        await task.value
+    }
+
+    @Test func lateReceiptFailureCannotSuspendAReplacementConnection() async throws {
+        let old = try Connection()
+        let replacement = try Connection()
+        replacement.lease.token = String(repeating: "c", count: 64)
+        let (gate, continuation) = AsyncStream<Void>.makeStream()
+        old.ackGate = gate
+        old.ackError = .closed
+        var opens = 0
+        let session = SurfaceSession(id: old.lease.id, makeConnection: {
+            opens += 1
+            return opens == 1 ? old : replacement
+        }, pollInterval: .milliseconds(10))
+        let oldRun = Task { await session.run(options: options) }
+        try await wait { session.scene != nil }
+        let oldScene = try #require(session.scene)
+        let acknowledgment = Task { await session.displayed(revision: oldScene.revision, generation: old.lease.generation) }
+        await Task.yield()
+        let newRun = Task { await session.run(options: options) }
+        try await wait { opens == 2 && session.phase == .active }
+        continuation.yield(())
+        continuation.finish()
+        await acknowledgment.value
+        #expect(session.phase == .active)
+        #expect(session.notice == nil)
+        #expect(!replacement.closed)
+        oldRun.cancel()
+        newRun.cancel()
+        await oldRun.value
+        await newRun.value
     }
 
     @Test func anOldStopCannotSuspendANewRun() async throws {

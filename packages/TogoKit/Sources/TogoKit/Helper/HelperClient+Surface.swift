@@ -34,24 +34,38 @@ extension HelperClient {
 
     /// Called only after the view displayed this exact instance and sequence.
     public func surfaceAck(_ lease: SurfaceLease, view: SurfaceView) async throws {
-        let _: EmptyResult = try await readyCall(.surfaceAck,
-            SurfaceAckParams(id: lease.id, lease: lease.token, surface: view.id, instance: view.instance, sequence: view.document.sequence),
-            needs: Capability.surface)
+        let _: EmptyResult = try await surfaceReadyCall(.surfaceAck,
+            SurfaceAckParams(id: lease.id, lease: lease.token, surface: view.id, instance: view.instance, sequence: view.document.sequence))
     }
 
-    /// No automatic retries: a disconnected reply has uncertain delivery. The
+    /// Only an explicit pre-dispatch pending refusal can be retried. A
+    /// disconnected reply has uncertain delivery and is never replayed. The
     /// producer's subsequent document confirms the effect, not `dispatched`.
     public func surfaceInput(
         _ lease: SurfaceLease, surface: String, instance: UInt64, event: JSONValue, expectedText: String? = nil
     ) async throws -> SurfaceDispatchResult {
         guard try JSONEncoder().encode(event).count <= 65_536 else { throw SurfaceProtocolError.invalidSnapshot }
-        return try await readyCall(.surfaceInput,
-            SurfaceInputParams(id: lease.id, lease: lease.token, surface: surface, instance: instance, event: event, expectedText: expectedText),
-            needs: Capability.surface)
+        return try await surfaceReadyCall(.surfaceInput,
+            SurfaceInputParams(id: lease.id, lease: lease.token, surface: surface, instance: instance, event: event, expectedText: expectedText))
     }
 
     public func surfaceClose(_ lease: SurfaceLease) async throws {
         let _: EmptyResult = try await readyCall(.surfaceClose, SurfaceLeaseParams(id: lease.id, lease: lease.token), needs: Capability.surface)
+    }
+
+    private func surfaceReadyCall<P: Encodable & Sendable, R: Decodable>(_ method: Method, _ params: P) async throws -> R {
+        // Cache durability can briefly block admission. This retry window is
+        // below the UI's 4-second confirmation timer and 6-second lease. The
+        // helper guarantees that a pending refusal ran no backend dispatch.
+        let deadline = ContinuousClock.now + .seconds(2)
+        while true {
+            try Task.checkCancellation()
+            do { return try await readyCall(method, params, needs: Capability.surface) }
+            catch let error as HelperError {
+                guard error.refusalReason == "pending", ContinuousClock.now < deadline else { throw error }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+        }
     }
 
     private static func surfaceHex(_ value: String, count: Int) -> Bool {
