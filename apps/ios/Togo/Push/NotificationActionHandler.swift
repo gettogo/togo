@@ -24,6 +24,7 @@ struct DeliveredRequest: Hashable, Sendable {
     func removeOffline(hostId: String) async
     /// "Could not send. Open Togo to answer." in the request's thread.
     func postSendFailure(threadID: String) async
+    func postAnswerUnconfirmed(threadID: String) async
 }
 
 /// Answers a request from a notification action or a Live Activity button, in the app's
@@ -141,6 +142,10 @@ struct DeliveredRequest: Hashable, Sendable {
             deps.pending.mark(requestId, .elsewhere)
             await deps.notifications.removeDelivered(requestIds: [requestId])
             return .stale
+        } catch let error as HelperError where error.refusalReason == "unconfirmed" {
+            deps.pending.release(requestId)
+            await deps.notifications.postAnswerUnconfirmed(threadID: thread)
+            return .failed
         } catch {
             return await failed(requestId, thread: thread)
         }
@@ -150,7 +155,8 @@ struct DeliveredRequest: Hashable, Sendable {
     }
 
     private func failed(_ requestId: String, thread: String) async -> Outcome {
-        // Nothing reached the machine, so the user may answer again from the app.
+        // Delivery may be uncertain. No relay fallback or automatic retry; the
+        // request stays available for the user to check in the session.
         deps.pending.release(requestId)
         await deps.notifications.postSendFailure(threadID: thread)
         return .failed
@@ -205,9 +211,17 @@ struct DeliveredRequest: Hashable, Sendable {
     }
 
     func postSendFailure(threadID: String) async {
+        await post(threadID: threadID, message: String(localized: "notif.sendFailed", defaultValue: "Could not send. Open Togo to answer."))
+    }
+
+    func postAnswerUnconfirmed(threadID: String) async {
+        await post(threadID: threadID, message: HelperError.refused("unconfirmed").localizedDescription)
+    }
+
+    private func post(threadID: String, message: String) async {
         let content = UNMutableNotificationContent()
         content.title = "Togo"
-        content.body = String(localized: "notif.sendFailed", defaultValue: "Could not send. Open Togo to answer.")
+        content.body = message
         content.categoryIdentifier = NotificationCategoryID.info
         content.threadIdentifier = threadID
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)

@@ -76,6 +76,7 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
 
     private static func describeRefused(_ reason: String) -> String {
         switch reason {
+        case "unconfirmed": String(localized: "Answer not confirmed. Check the session before answering again.", bundle: .module)
         case "needs_admin_setup": String(localized: "This needs a one-time setup on the machine first.", bundle: .module)
         default: String(localized: "The Togo helper on the machine turned that down.", bundle: .module)
         }
@@ -124,7 +125,8 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         case RPCErrorCode.conflict: String(localized: "That request was already answered.", bundle: .module)
         // The helper says why in its own words when it can ("That mode is not in this
         // session's cycle"); otherwise the reason picks the sentence.
-        case RPCErrorCode.refused: error.refusalMessage ?? describeRefused(error.reason ?? "")
+        case RPCErrorCode.refused:
+            error.reason == "unconfirmed" ? describeRefused("unconfirmed") : error.refusalMessage ?? describeRefused(error.reason ?? "")
         case RPCErrorCode.notManaged: String(localized: "That session was not started from Togo, so it cannot be changed from here.", bundle: .module)
         case RPCErrorCode.invalidParams: String(localized: "The Togo helper on the machine turned that request down. Update the app or the helper.", bundle: .module)
         default: String(localized: "The Togo helper on the machine could not do that.", bundle: .module)

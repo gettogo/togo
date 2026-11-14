@@ -40,6 +40,7 @@ final class FakeRelay: AnswerSending {
     var removed: [Set<String>] = []
     var failures: [String] = []
     var offlineRemoved: [String] = []
+    var unconfirmed: [String] = []
 
     func removeOffline(hostId: String) async { offlineRemoved.append(hostId) }
     func delivered() async -> [DeliveredRequest] { shown }
@@ -48,6 +49,7 @@ final class FakeRelay: AnswerSending {
         shown.removeAll { requestIds.contains($0.requestId) }
     }
     func postSendFailure(threadID: String) async { failures.append(threadID) }
+    func postAnswerUnconfirmed(threadID: String) async { unconfirmed.append(threadID) }
 }
 
 /// Captures what the relay sender posts and answers 202.
@@ -191,6 +193,17 @@ struct NotificationActionHandlerTests {
         #expect(await h.answer(hostId: hostID, requestId: requestID, decision: "approve") == .failed)
         #expect(relay.sent.withLock { $0 }.isEmpty)
         #expect(notifications.failures.count == 1)
+    }
+
+    @Test func unconfirmedAnswerStaysOpenAndNeverFallsBackToRelay() async {
+        live.error = .refused("unconfirmed")
+        #expect(await handler(live: true).answer(hostId: hostID, requestId: requestID, decision: "deny") == .failed)
+        #expect(pending.request(requestID)?.answered == nil)
+        #expect(notifications.shown.count == 1)
+        #expect(notifications.removed.isEmpty)
+        #expect(notifications.failures.isEmpty)
+        #expect(notifications.unconfirmed == [hostID])
+        #expect(relay.sent.withLock { $0 }.isEmpty)
     }
 
     @Test func approveUsesRelayWhenNot() async {

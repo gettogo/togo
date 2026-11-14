@@ -39,6 +39,14 @@ struct NeedsCardTests {
         #expect(AppStore.answerFailure(HelperError.conflict("gone"), machine: "Studio") != ControlCenterCopy.answerFailed("Studio"))
     }
 
+    @Test func anUnconfirmedAnswerDoesNotSayItWasAnsweredElsewhere() {
+        let error = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.refused, message: "not confirmed",
+            data: .object(["reason": .string("unconfirmed")])))
+        #expect(!ServiceErrors.isAlreadyAnswered(error))
+        #expect(ServiceErrors.message(error) == "Answer not confirmed. Check the session before answering again.")
+        #expect(ServiceErrors.message(error) == ServiceErrors.message(HelperError.refused("unconfirmed")))
+    }
+
     // MARK: Questions
 
     private let question = HarnessItem.Question(questions: [

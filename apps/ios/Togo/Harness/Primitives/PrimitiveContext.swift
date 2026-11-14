@@ -58,6 +58,8 @@ extension PrimitiveContext {
                     return nil
                 } catch let error as HelperError where error.isFallback {
                     return HarnessActionResult(result: .fallback)
+                } catch let error as HelperError where error.refusalReason == "unconfirmed" {
+                    return HarnessActionResult(result: .failed, message: ServiceErrors.message(error))
                 } catch {
                     return HarnessActionResult(result: .failed, message: PrimitiveCopy.noAnswer)
                 }
