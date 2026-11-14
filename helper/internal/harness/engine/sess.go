@@ -40,6 +40,11 @@ type sess struct {
 	// (see conversation.go).
 	conv    string
 	convGen uint64
+	// hydrated is the conversation whose earlier messages were asked for,
+	// and held are a feed's live records kept back while they load (see
+	// history.go).
+	hydrated string
+	held     *heldRecords
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
 	starting   sync.Mutex
@@ -287,6 +292,7 @@ func (s *sess) start() {
 	s.syncFeedsLocked()
 	s.mu.Unlock()
 	go s.seedAtStart()
+	go s.resumeHistory()
 	go s.resyncStateFeeds()
 	if s.e.cfg.OnSummary != nil {
 		s.e.cfg.OnSummary(s.id)
@@ -606,6 +612,15 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 	if ctx.Err() != nil {
 		return
 	}
+	if s.heldForHistoryLocked(rec) {
+		return
+	}
+	s.recordLocked(mapper, rec)
+	s.wantHistoryLocked(mapper, rec.Source)
+}
+
+// recordLocked maps one live record (already redacted) and publishes it.
+func (s *sess) recordLocked(mapper string, rec harness.Record) {
 	s.last[rec.Source] = rec.Data
 	m := s.mappers[mapper]
 	if m == nil {

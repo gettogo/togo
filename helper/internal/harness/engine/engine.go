@@ -211,6 +211,7 @@ func (e *Engine) Forget(id string) {
 	e.log.Forget(id)
 	e.cache.forget(id)
 	source.Hooks.Forget(id)
+	e.forgetConversation(id)
 	unlock := e.endpointOps.lock(id)
 	e.retireEndpoint(id)
 	e.dropRelaunch(id)

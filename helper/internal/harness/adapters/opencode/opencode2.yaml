@@ -32,6 +32,10 @@ images: { insert: together }   # how image paths are pasted into the input
 feeds:
   events:
     sse: { path: /api/event }
+    # The stream tells what happens from now on. The session log holds the same events
+    # from the conversation's start (checked on 2.2.5), so a chat opened after a helper
+    # restart, or moved to another conversation, shows what was said before.
+    history: { path: '/api/experimental/session/{{.conversation}}/log' }
     mapper: opencode2.events
     stability: documented
 sources:

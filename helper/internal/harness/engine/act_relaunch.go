@@ -53,6 +53,9 @@ group:
 	// Noted first: the relaunch drops the session's state, and what is
 	// rebuilt reads the agent as it now runs.
 	e.noteRelaunch(s.id, argv)
+	// The restarted agent may open another conversation: the one this
+	// session showed is no longer what a helper restart should load.
+	e.forgetConversation(s.id)
 	if err := e.cfg.Relaunch(ctx, s.id, argv); err != nil {
 		e.dropRelaunch(s.id)
 		if had {

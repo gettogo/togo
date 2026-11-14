@@ -14,6 +14,11 @@ func (s *sess) restore(ctx context.Context, mapper string, rec harness.Record) {
 	if ctx.Err() != nil {
 		return
 	}
+	s.restoreLocked(ctx, mapper, rec)
+	s.wantHistoryLocked(mapper, rec.Source)
+}
+
+func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Record) {
 	m := s.mappers[mapper]
 	if m == nil {
 		return

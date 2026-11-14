@@ -138,6 +138,12 @@ type Feed struct {
 	// Mapper names the Go mapper, e.g. claude.transcript.
 	Mapper    string `yaml:"mapper"`
 	Stability string `yaml:"stability"`
+	// History is where an event feed's past can be read: an SSE endpoint
+	// that sends a conversation's events from its start and then ends. A
+	// stream tells only what happens from now on, so without it a chat
+	// opened after a helper restart, or moved to another conversation,
+	// shows nothing earlier. {{.conversation}} is the conversation's id.
+	History *HTTP `yaml:"history"`
 }
 
 // Source is a fetch-on-demand input for screens. One kind block is set.
