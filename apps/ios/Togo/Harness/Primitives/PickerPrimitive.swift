@@ -12,7 +12,8 @@ import TogoKit
 struct PickerPrimitive: View {
     @Environment(\.browseLayout) var layout
     @Environment(\.accessibilityReduceMotion) var reduceMotion
-    let picker: HarnessScreen.Picker
+    let initialPicker: HarnessScreen.Picker
+    var picker: HarnessScreen.Picker { initialPicker.searchMode == "remote" ? remote.result ?? initialPicker : initialPicker }
     /// The screen's title, for the chat's line: "Model Sonnet".
     var title = ""
     let context: PrimitiveContext
@@ -27,9 +28,21 @@ struct PickerPrimitive: View {
     @State var failure: String?
     /// The item whose selection failed, for Try again.
     @State var failedItem: PickerModel.Item?
+    @State private var remote = RemotePickerSearch()
+    @State private var searchRetry = 0
+
+    private struct Search: Equatable {
+        var query: String
+        var source: HarnessScreen.Picker
+        var retry: Int
+    }
+
+    var searchBlocked: Bool {
+        initialPicker.searchMode == "remote" && !remote.isCurrent(query: model.query, source: initialPicker)
+    }
 
     init(picker: HarnessScreen.Picker, title: String = "", context: PrimitiveContext, chrome: ScreenChrome?) {
-        self.picker = picker
+        self.initialPicker = picker
         self.title = title
         self.context = context
         self.chrome = chrome
@@ -51,6 +64,10 @@ struct PickerPrimitive: View {
             }
         }
         .primitiveActions(actions, context: context)
+        .task(id: Search(query: model.query, source: initialPicker, retry: searchRetry)) {
+            guard initialPicker.searchMode == "remote" else { return }
+            await remote.load(query: model.query, source: initialPicker, read: context.searchScreen)
+        }
     }
 
     private var stack: some View {
@@ -70,6 +87,7 @@ struct PickerPrimitive: View {
             item: item, picker: picker, actions: actions, context: context,
             onSelect: { select(item) }, onAssign: { assign($0, item) }
         )
+        .disabled(searchBlocked)
     }
 
     /// Waiting for an item to give a role changes the list's footer in a `resize` transaction
@@ -85,6 +103,17 @@ struct PickerPrimitive: View {
         let groups = model.groups(picker)
         let setup = model.setupItems(picker)
         return List(selection: split ? listSelection : nil) {
+            if initialPicker.searchMode == "remote", searchBlocked {
+                if remote.failed {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(PrimitiveCopy.noAnswer).foregroundStyle(PrimitiveTint.fail)
+                        Button(PrimitiveCopy.tryAgain) { searchRetry += 1 }
+                    }
+                } else {
+                    HStack { ProgressView(); Text(PrimitiveCopy.loading) }
+                        .accessibilityElement(children: .combine)
+                }
+            }
             if let failure {
                 // Errors land at once, at the list that failed (motion principles v2 §2).
                 VStack(alignment: .leading, spacing: 8) {
@@ -108,7 +137,7 @@ struct PickerPrimitive: View {
             ForEach(groups) { group in
                 Section {
                     if split || model.isExpanded(group, alone: groups.count == 1) {
-                        ForEach(group.items) { item in row(item, split: split) }
+                        ForEach(group.items) { item in row(item, split: split).disabled(searchBlocked) }
                     }
                 } header: {
                     if groups.count > 1 || group.name != nil {
@@ -124,12 +153,13 @@ struct PickerPrimitive: View {
                     toggle: { model.toggle(id: PickerModel.setupID) },
                     run: { item, value in setUp(item, with: action, value: value) }
                 )
+                .disabled(searchBlocked)
             }
         }
         .groupedList()
         .overlay {
             // Search results never animate (motion v2 §2): "No matches" is simply there.
-            if groups.isEmpty, setup.isEmpty { empty }
+            if groups.isEmpty, setup.isEmpty, !searchBlocked { empty }
         }
     }
 

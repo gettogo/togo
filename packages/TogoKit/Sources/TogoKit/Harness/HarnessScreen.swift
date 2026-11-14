@@ -100,6 +100,8 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var items: [Item]
         public var selected: String?
         public var searchable: Bool
+        /// "remote" delegates query matching to the harness; absent stays local.
+        public var searchMode: String?
         public var filters: [Filter]?
         public var onSelect: String
         /// Asked (or applied with Undo) before `onSelect` runs, when set.
@@ -156,7 +158,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public init(items: [Item], selected: String? = nil, searchable: Bool, filters: [Filter]? = nil,
                     onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil,
                     setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil,
-                    onSelectLabel: String? = nil) {
+                    onSelectLabel: String? = nil, searchMode: String? = nil) {
             self.items = items
             self.onSelectLabel = onSelectLabel
             self.setup = setup
@@ -164,6 +166,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             self.setupInput = setupInput
             self.selected = selected
             self.searchable = searchable
+            self.searchMode = searchMode
             self.filters = filters
             self.onSelect = onSelect
             self.onSelectConfirm = onSelectConfirm

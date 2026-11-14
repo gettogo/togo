@@ -111,7 +111,7 @@ struct PickerModel: Equatable {
 
     /// Whether the item passes the search, every filter and the sidebar's group.
     func shows(_ item: Item, in picker: HarnessScreen.Picker, except skipped: String? = nil, ignoringGroup: Bool = false) -> Bool {
-        guard Self.matches(item, query: query) else { return false }
+        guard picker.searchMode == "remote" || Self.matches(item, query: query) else { return false }
         for filter in picker.filters ?? [] where filter.id != skipped {
             guard Self.matches(item, filter: filter, value: filterValues[filter.id]) else { return false }
         }

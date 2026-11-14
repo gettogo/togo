@@ -37,6 +37,8 @@ struct PrimitiveContext {
     /// Pushes a sign-in page on the presentation's own stack. nil where there is none: the
     /// agent's page then comes as a sheet over the screen, which stays up under it.
     var signIn: (@MainActor (SignInPageModel) -> Void)? = nil
+    /// Server search for a picker that explicitly requests remote matching.
+    var searchScreen: (@MainActor (String) async throws -> HarnessScreen)? = nil
 
     @MainActor static let inert = PrimitiveContext(
         run: { _, _, _ in nil }, openScreen: { _ in }, open: { _ in }, showTerminal: {}
