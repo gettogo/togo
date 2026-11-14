@@ -86,6 +86,9 @@ func (e *Engine) typeCommand(ctx context.Context, s *sess, text string, submit, 
 		l.Lock()
 		if !whenIdle || e.idleNow(s) {
 			defer l.Unlock()
+			if err := e.heldNatively(s); err != nil {
+				return err
+			}
 			if err := e.screenClear(ctx, s); err != nil {
 				return err
 			}
@@ -107,6 +110,9 @@ func (e *Engine) sendKeys(ctx context.Context, s *sess, cycling bool, keys ...st
 		l := typingLock(s.id)
 		l.Lock()
 		defer l.Unlock()
+		if err := e.heldNatively(s); err != nil {
+			return err
+		}
 		if err := e.screenClear(ctx, s); err != nil {
 			return err
 		}

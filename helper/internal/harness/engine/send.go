@@ -140,6 +140,9 @@ func (e *Engine) asking(ctx context.Context, s *sess, viaAPI bool) string {
 		return askingText(s, "")
 	}
 	if !viaAPI {
+		if err := e.heldNatively(s); err != nil {
+			return err.Detail
+		}
 		return e.blockedBy(ctx, s)
 	}
 	if e.cfg.Approvals != nil {
@@ -206,6 +209,9 @@ func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []
 	insert := harness.InsertTogether
 	if im := s.ad.Images; im != nil {
 		insert = im.Insert
+	}
+	if err := e.heldNatively(s); err != nil {
+		return err
 	}
 	e.awaitReady(ctx, s)
 	if err := e.screenClear(ctx, s); err != nil {

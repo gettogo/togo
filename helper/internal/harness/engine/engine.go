@@ -75,6 +75,14 @@ type Config struct {
 	LoginPath func(ctx context.Context) string
 	// LoginEnv is the login shell's environment; nil keeps the helper's.
 	LoginEnv func(ctx context.Context) []string
+	// SurfaceHeld reports whether a phone holds the session's terminal
+	// natively right now (the agent draws for the phone, not the pane).
+	// Keys typed then would be taken as someone at the desk and end the
+	// native screen, so nothing is typed while it is true. Nil means never.
+	SurfaceHeld func(session string) bool
+	// SurfaceAvailable reports, without taking anything, whether the
+	// session's running agent can show its screens natively. Nil means no.
+	SurfaceAvailable func(ctx context.Context, session string) bool
 	// Home is the user's home folder; AdapterDir holds user overrides;
 	// TogoHome holds the sockets picked for harness endpoints.
 	Home       string
@@ -265,6 +273,7 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 	}
 	s.waitReady(ctx)
 	modes := e.modeList(ctx, s)
+	surface := e.cfg.SurfaceAvailable != nil && e.cfg.SurfaceAvailable(ctx, id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a := s.ad
@@ -277,6 +286,9 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 	}
 	if d.Capabilities == nil {
 		d.Capabilities = []string{}
+	}
+	if surface && s.gateOK {
+		d.Capabilities = append(d.Capabilities, harness.CapSurface)
 	}
 	if e.cfg.Approvals != nil && s.gateOK && !harness.Has(d.Capabilities, harness.CapNeedsApprovals) {
 		// The screen detector serves every agent: the chat shows its
