@@ -26,7 +26,7 @@ endpoint:
 # which skips the helper's send checks. The helper decides how a prompt travels by
 # whether the adapter has a `send` action, not by this capability.
 capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
-  files, mode, model, needs.approvals, needs.questions, agents, changes, ports, status,
+  files, mode, model, needs.approvals, needs.questions, agents, background, changes, ports, status,
   resume, compact, mcp, settings]
 images: { insert: together }   # how image paths are pasted into the input
 feeds:
@@ -85,6 +85,14 @@ sources:
   children:
     http: { path: '/api/session?parentID={{.state.harness_session | urlquery}}' }
     select: '[.data[] | {id: .id, title: (.title // "Subagent"), state: (if (.time.busy // 0) > (.time.idle // 0) then "running" else "done" end)}]'
+    stability: documented
+  # Shell commands OpenCode runs in the background, tagged with the session that
+  # started them; only running ones are listed. The mapper shows a shell from its
+  # shell.created on. This list brings back the ones a stream reconnect or a helper
+  # restart lost sight of.
+  shells:
+    http: { path: '/api/shell?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    select: '[.data[] | select(.metadata.sessionID == $state.harness_session) | {id: .id, title: (.command | gsub("\\s+"; " ") | .[:200]), state: .status}]'
     stability: documented
   mcp:
     http: { path: '/api/mcp?location%5Bdirectory%5D={{.cwd | urlquery}}' }
@@ -212,3 +220,4 @@ commands:
   select: '[.[] | {name: .name, detail: .description, hint: ""}]'
 mission:
   agents: { source: children }
+  background: { source: shells, refresh: 10s }

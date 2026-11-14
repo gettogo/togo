@@ -1,0 +1,20 @@
+data: {"id": "evt_1db84dcb5001xcPGwkW2DsjiEV", "created": 1794684279989, "type": "session.created", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "slug": "witty-sailor", "version": "2.2.5", "projectID": "8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0", "location": {"directory": "/tmp/work"}, "subpath": ""}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 0, "version": 1}}
+
+data: {"id": "evt_1db8591de001lZzsbx7iUPQ5rK", "created": 1794684326366, "type": "shell.created", "location": {"directory": "/tmp/work"}, "data": {"info": {"id": "sh_1db8591dc001c1fvxQVvjdy1G9", "status": "running", "command": "printf TOGO_C_STARTED; sleep 3; printf TOGO_C_DONE", "cwd": "/tmp/work", "shell": "/bin/zsh", "file": "/tmp/opencode/data/opencode/shell/8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0/sh_1db8591dc001c1fvxQVvjdy1G9.out", "metadata": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"}, "time": {"started": 1794684326364}}}}
+
+data: {"id": "evt_1db859da10017VY7qytgus4w1c", "created": 1794684329377, "type": "shell.exited", "location": {"directory": "/tmp/work"}, "data": {"id": "sh_1db8591dc001c1fvxQVvjdy1G9", "exit": 0, "status": "exited"}}
+
+data: {"id": "evt_1db85a58c001UtukTseCyhf1WY", "created": 1794684331404, "type": "shell.created", "location": {"directory": "/tmp/work"}, "data": {"info": {"id": "sh_1db85a58b001dHiZYKTWvoHtqi", "status": "running", "command": "sleep 60", "cwd": "/tmp/work", "shell": "/bin/zsh", "file": "/tmp/opencode/data/opencode/shell/8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0/sh_1db85a58b001dHiZYKTWvoHtqi.out", "metadata": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"}, "time": {"started": 1794684331403}}}}
+
+data: {"id": "evt_1db85a999001DblUuJBXcyAQAA", "created": 1794684332441, "type": "shell.exited", "location": {"directory": "/tmp/work"}, "data": {"id": "sh_1db85a58b001dHiZYKTWvoHtqi", "status": "killed"}}
+
+data: {"id": "evt_1db85a999002AQU7BWpomXmfbG", "created": 1794684332441, "type": "shell.deleted", "location": {"directory": "/tmp/work"}, "data": {"id": "sh_1db85a58b001dHiZYKTWvoHtqi"}}
+
+data: {"id": "evt_1db85a9a4001fkHvmm0GUlQu9I", "created": 1794684332452, "type": "shell.created", "location": {"directory": "/tmp/work"}, "data": {"info": {"id": "sh_1db85a9a3001Cm1m8o0xc3DlSh", "status": "running", "command": "exit 3", "cwd": "/tmp/work", "shell": "/bin/zsh", "file": "/tmp/opencode/data/opencode/shell/8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0/sh_1db85a9a3001Cm1m8o0xc3DlSh.out", "metadata": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"}, "time": {"started": 1794684332451}}}}
+
+data: {"id": "evt_1db85a9a8001Jzn3u3bF3sWlaP", "created": 1794684332456, "type": "shell.exited", "location": {"directory": "/tmp/work"}, "data": {"id": "sh_1db85a9a3001Cm1m8o0xc3DlSh", "exit": 3, "status": "exited"}}
+
+data: {"id": "evt_1db85a9ae001787NkJ6RFf6iiH", "created": 1794684332462, "type": "shell.created", "location": {"directory": "/tmp/work"}, "data": {"info": {"id": "sh_1db85a9ad001yFPYASUiNgxM37", "status": "running", "command": "sleep 30", "cwd": "/tmp/work", "shell": "/bin/zsh", "file": "/tmp/opencode/data/opencode/shell/8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0/sh_1db85a9ad001yFPYASUiNgxM37.out", "metadata": {}, "time": {"started": 1794684332461}}}}
+
+data: {"id": "evt_1db85ad980013SILd5BYlXqXk9", "created": 1794684333464, "type": "shell.exited", "location": {"directory": "/tmp/work"}, "data": {"id": "sh_1db85a9ad001yFPYASUiNgxM37", "status": "timeout"}}
+

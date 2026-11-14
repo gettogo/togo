@@ -27,20 +27,22 @@ const MapperEvents2 = "opencode2.events"
 type Events2 struct {
 	env harness.Env
 
-	mu       sync.Mutex
-	state    map[string]string
-	main     string
-	children map[string]*session // child session id -> its agent
-	texts    map[string]*part    // streamed text and reasoning by item id
-	tools    map[string]harness.Item
-	inputs   map[string]json.RawMessage // tool input by call id
-	turns    map[string]*turn
-	turnOf   map[string]string // session -> its running turn
-	inbox    map[string]string // undelivered user prompt per session
-	open     map[string]harness.Item
-	prompts  []prompt2 // the main session's prompts, in order (revert2.go)
-	undo     *undo2    // the staged undo the chat shows a notice for
-	redone   string    // id of the last revert.cleared event
+	mu          sync.Mutex
+	state       map[string]string
+	main        string
+	children    map[string]*session // child session id -> its agent
+	texts       map[string]*part    // streamed text and reasoning by item id
+	tools       map[string]harness.Item
+	inputs      map[string]json.RawMessage // tool input by call id
+	turns       map[string]*turn
+	turnOf      map[string]string // session -> its running turn
+	inbox       map[string]string // undelivered user prompt per session
+	open        map[string]harness.Item
+	prompts     []prompt2       // the main session's prompts, in order (revert2.go)
+	undo        *undo2          // the staged undo the chat shows a notice for
+	redone      string          // id of the last revert.cleared event
+	shells      map[string]bool // background shells shown as rows (shells2.go)
+	shellsEnded []string        // shells that ended with no row, newest last
 }
 
 // NewEvents2 returns a 2.x mapper for one session.
@@ -122,6 +124,7 @@ type ev2 struct {
 	ContextUsed *int            `json:"contextUsed"`
 	Location    *location2      `json:"location"`
 	Revert      *revert2        `json:"revert"`
+	Info        *shell2         `json:"info"`
 }
 
 type location2 struct {
@@ -181,7 +184,8 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		e.lostTrack()
 		// A reload while the stream was down sent its events to nobody.
 		e.state["commands_rev"], e.state["agents_rev"] = lostRev(at), lostRev(at)
-		return e.dropOpen()
+		items, ops := e.dropOpen()
+		return items, append(ops, e.dropShells()...)
 	case "command.updated":
 		// The server read its commands again (a config reload, a new file):
 		// the cached commands source is renewed by this value (cache_rev).
@@ -260,6 +264,10 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 	case "session.revert.staged", "session.revert.cleared", "session.revert.committed":
 		return e.reverted(ev.Type, ev.ID, d, at)
+	case "shell.created":
+		return e.shellCreated(d)
+	case "shell.exited", "shell.deleted":
+		return e.shellEnded(d.ID)
 	case "permission.asked":
 		return e.permission2(d, at)
 	case "permission.replied":
@@ -277,6 +285,7 @@ func (e *Events2) setMain(id string) {
 		// The folder a move named was the last conversation's.
 		delete(e.state, "conversation_cwd")
 		e.forgetUndo()
+		e.forgetShells()
 	}
 	e.main = id
 	e.state["harness_session"] = id
