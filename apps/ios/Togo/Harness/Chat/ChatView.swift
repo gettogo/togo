@@ -100,6 +100,13 @@ struct ChatView: View {
             // The content as a whole: what a scroll to the foot aims at.
             .id(ChatScroll.contentID)
         }
+        .id(store.conversation)
+        .onChange(of: store.conversation) {
+            expanded = [:]
+            detail = nil
+            selecting = nil
+            live = nil
+        }
         // The gap above the composer, kept by every scroll: at the foot and to a needs card.
         .chatScrollMargins()
         .scrollDismissesKeyboard(.interactively)
@@ -182,7 +189,7 @@ struct ChatView: View {
             guard case .needs(let item) = row, case .approval(let approval) = item.body else { return nil }
             return approval.requestId
         }
-        if answersKeys, let target = ChatKeyAnswers.target(requestIDs: ids, card: actions.card) {
+        if answersKeys, store.phase == .live, let target = ChatKeyAnswers.target(requestIDs: ids, card: actions.card) {
             ZStack {
                 Button(ChatCopy.approve) { actions.answer(target.requestID, target.approve) }
                     .keyboardShortcut(.return, modifiers: .command)
@@ -272,6 +279,7 @@ struct ChatView: View {
                         // Queued prompts show only here, so their Take back is on the row itself.
                         if user.queued {
                             Button(ComposerCopy.cancelQueued) { Task { await store.cancelQueued(item: item) } }
+                                .disabled(store.phase != .live)
                                 .buttonStyle(PlainAnswerStyle())
                                 .font(.footnote)
                         }
@@ -306,6 +314,7 @@ struct ChatView: View {
             }
         case .needs(let item):
             needsView(item)
+                .disabled(store.phase != .live)
         case .notice(let item):
             if case .notice(let notice) = item.body, row.isContinued {
                 TurnMarkerRow(notice: notice, gap: gap)

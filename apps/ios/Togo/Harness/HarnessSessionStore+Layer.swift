@@ -257,13 +257,22 @@ extension HarnessSessionStore {
 
     /// Runs what was held for the turn's end, oldest first, and notes each in the chat.
     func runDeferred() {
+        guard phase == .live, deferredTask == nil, !deferred.isEmpty else { return }
         let held = deferred
+        let binding = conversation
         deferred = []
         guard !held.isEmpty else { return }
-        Task { [weak self] in
+        deferredTask = Task { [weak self] in
+            defer {
+                if self?.conversation == binding {
+                    self?.deferredTask = nil
+                    if self?.working == false { self?.runDeferred() }
+                }
+            }
             for change in held {
-                guard let self else { return }
+                guard let self, self.conversation == binding, self.phase == .live, !Task.isCancelled else { return }
                 let result = try? await self.run(action: change.action, target: change.target, args: change.args)
+                guard self.conversation == binding, !Task.isCancelled else { return }
                 switch result?.result {
                 case .failed?, nil: self.note(result?.message ?? PrimitiveCopy.failed, code: "error")
                 default: self.note(change.note, code: "model")

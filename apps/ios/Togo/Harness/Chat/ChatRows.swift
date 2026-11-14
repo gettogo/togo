@@ -102,7 +102,8 @@ struct PendingPromptRow: View {
         switch prompt.state {
         case .waiting: ChatCopy.queued
         case .sending: ChatCopy.sending
-        case .failed(let message): ChatCopy.notSent + ". " + message
+        case .failed(let message): ChatCopy.sendFailed + ". " + message
+        case .unconfirmed: ChatCopy.deliveryUnconfirmed
         }
     }
 }

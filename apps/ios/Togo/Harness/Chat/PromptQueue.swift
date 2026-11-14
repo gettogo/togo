@@ -10,6 +10,8 @@ struct PendingPrompt: Identifiable, Equatable, Sendable {
         case sending
         /// The helper refused it or could not be reached; `message` says why.
         case failed(String)
+        /// Its conversation changed while it was on the way; delivery is unknown.
+        case unconfirmed
 
         var isFailed: Bool { if case .failed = self { true } else { false } }
     }
@@ -63,6 +65,11 @@ struct PromptQueue: Equatable, Sendable {
         prompts[at].state = .failed(message)
     }
 
+    mutating func unconfirmed(_ id: UUID) {
+        guard let at = prompts.firstIndex(where: { $0.id == id }) else { return }
+        prompts[at].state = .unconfirmed
+    }
+
     /// The helper was busy: back to waiting, still first.
     mutating func requeue(_ id: UUID) {
         guard let at = prompts.firstIndex(where: { $0.id == id }) else { return }
@@ -71,6 +78,14 @@ struct PromptQueue: Equatable, Sendable {
 
     mutating func retry(_ id: UUID) {
         requeue(id)
+    }
+
+    /// Retains text for review, without retargeting old work automatically.
+    mutating func conversationChanged() {
+        for i in prompts.indices {
+            if prompts[i].state == .sending { prompts[i].state = .unconfirmed }
+            else if prompts[i].state == .waiting { prompts[i].state = .failed(ChatCopy.conversationChanged) }
+        }
     }
 
     /// Takes a waiting or failed prompt away. One on its way cannot be called back.

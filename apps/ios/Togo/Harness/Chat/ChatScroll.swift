@@ -137,6 +137,17 @@ enum ChatScroll {
     @ObservationIgnored var pinned = true
     /// The row at the chat's bottom edge, so a rebuilt chat returns to it.
     @ObservationIgnored private(set) var settledRow: String?
+    @ObservationIgnored private var conversation = UUID()
+
+    func reset() {
+        conversation = UUID()
+        request = nil
+        visibleNeeds = []
+        capsule = nil
+        dragging = false
+        pinned = true
+        settledRow = nil
+    }
 
     /// Scrolls on `resize`, the same role that grows a card, so the chat makes room and brings
     /// the card up as one movement. A card still growing is followed once more when it has
@@ -144,9 +155,10 @@ enum ChatScroll {
     func go(_ target: ChatScroll.Target, reduce: Bool, settle: Bool = false) {
         ask(target, reduce: reduce)
         guard settle else { return }
+        let binding = conversation
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(400))
-            guard let self, !self.dragging else { return }
+            guard let self, self.conversation == binding, !self.dragging else { return }
             self.ask(target, reduce: reduce)
         }
     }

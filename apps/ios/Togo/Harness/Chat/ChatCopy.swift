@@ -53,7 +53,11 @@ enum ChatCopy {
 
     static let queued = String(localized: "chat.prompt.queued", defaultValue: "Queued")
     static let sending = String(localized: "chat.prompt.sending", defaultValue: "Sending")
-    static let notSent = String(localized: "chat.prompt.notSent", defaultValue: "Not sent")
+    static let conversationChanged = String(localized: "chat.prompt.conversationChanged", defaultValue: "The conversation changed. Review this prompt before sending it here.")
+    static let deliveryUnconfirmed = String(localized: "chat.prompt.deliveryUnconfirmed", defaultValue: "Delivery couldn't be confirmed. Check the terminal before sending again.")
+    static let changesCanceled = String(localized: "chat.changes.canceled", defaultValue: "The conversation changed. Pending model and mode changes were canceled.")
+    static let changeUnconfirmed = String(localized: "chat.changes.unconfirmed", defaultValue: "The conversation changed. Check the previous conversation for changes already sent. Remaining changes were canceled.")
+    static let sendFailed = String(localized: "chat.prompt.sendFailed", defaultValue: "Send failed")
     static let cancel = String(localized: "chat.prompt.cancel", defaultValue: "Cancel")
     static let tryAgain = String(localized: "chat.prompt.retry", defaultValue: "Try again")
     static let fromDesk = String(localized: "chat.prompt.desk", defaultValue: "Typed at the desk")
