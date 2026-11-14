@@ -32,6 +32,7 @@ type session struct {
 	turn      *turn
 	tools     map[string]*harness.Item
 	asks      map[string]*harness.Item // ask call id -> its open question item
+	jobs      map[string]*harness.Item // async jobs by omp job id (jobs.go)
 	taskCalls map[string][]string      // task call id -> agent item ids
 	pending   []string                 // agent item ids still waiting for their file
 	agents    map[string]*harness.Item
@@ -58,7 +59,7 @@ func newSession(env harness.Env) *session {
 	return &session{env: env, cwd: env.Cwd, state: map[string]string{}, parents: map[string]string{},
 		tools: map[string]*harness.Item{}, asks: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
 		headers: map[string]string{}, files: map[string]bool{},
-		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}}
+		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}, jobs: map[string]*harness.Item{}}
 }
 
 func (s *session) Name() string { return MapperSession }
@@ -122,6 +123,11 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return nil, nil
 	case "session":
 		return s.header(e, at, rec.Source == feedSession)
+	case "custom_message":
+		if str(e, "customType") == "async-result" && rec.Source == feedSession {
+			return s.jobsSettled(e, at)
+		}
+		return nil, nil
 	case "reset_boundary":
 		// /clear keeps the conversation and its file but empties the
 		// agent's context: say so where it happened.

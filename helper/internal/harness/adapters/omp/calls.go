@@ -118,6 +118,10 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 	it.Tool = &b
 	items := []harness.Item{*it}
 	var ops []harness.Op
+	if it.Parent == "" {
+		ji, jo := s.jobStarted(it, details, at)
+		items, ops = append(items, ji...), append(ops, jo...)
+	}
 	if isTodoTool(b.Name) && it.Parent == "" {
 		pi, po := s.todoResult(b.CallID, it.TurnID, m, it.At)
 		items, ops = append(items, pi...), append(ops, po...)
