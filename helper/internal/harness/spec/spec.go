@@ -246,6 +246,10 @@ type RPC struct {
 	Notifications []string `yaml:"notifications"`
 	// Child, when set, is a one-shot process speaking the RPC on stdio.
 	Child []string `yaml:"child"`
+	// ChildCarry lists the options of the session's own command line the
+	// child is started with too, so it answers as the running agent would
+	// (the same extensions and skills switched on or off).
+	ChildCarry *Carry `yaml:"child_carry"`
 	// Framing is how a child frames its messages: jsonrpc (JSON-RPC 2.0,
 	// the default) or typed ({"type": method, "id": n} commands answered
 	// by {"type": "response", "id": n, "success", "data"}, as omp's rpc

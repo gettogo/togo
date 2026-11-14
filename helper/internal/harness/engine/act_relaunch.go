@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -108,45 +107,7 @@ func flagFromInput(tmpl, rendered string) bool {
 }
 
 // carried returns the options of the running command line that the adapter
-// says a restart keeps, in their order, leaving out any the new command
-// line already sets. Nothing after "--" is read: that is prompt text.
+// says a restart keeps (see spec.Carry.Pick).
 func carried(current []string, c *spec.Carry, next []string) []string {
-	if c == nil || len(current) < 2 {
-		return nil
-	}
-	set := map[string]bool{}
-	for _, a := range next {
-		if name, _, ok := strings.Cut(a, "="); ok && strings.HasPrefix(name, "-") {
-			set[name] = true
-		} else if strings.HasPrefix(a, "-") {
-			set[a] = true
-		}
-	}
-	var out []string
-	for i := 1; i < len(current); i++ {
-		a := current[i]
-		if a == "--" {
-			break
-		}
-		name, _, joined := strings.Cut(a, "=")
-		switch {
-		case joined && slices.Contains(c.Values, name):
-			if !set[name] && len(a) <= maxArgString {
-				out = append(out, a)
-			}
-		case slices.Contains(c.Values, a):
-			if i+1 >= len(current) {
-				break
-			}
-			if v := current[i+1]; !set[a] && len(v) <= maxArgString {
-				out = append(out, a, v)
-			}
-			i++ // its value is never read as an option of its own
-		case slices.Contains(c.Flags, a):
-			if !set[a] {
-				out = append(out, a)
-			}
-		}
-	}
-	return out
+	return c.Pick(current, next, maxArgString)
 }

@@ -49,9 +49,19 @@ sources:
     cache: 1m
     timeout: 10s
     stability: documented
+  # The commands come from a second omp started for the question, with the session's own
+  # extension, skill and profile options, so it lists what the running omp has: started
+  # with --no-extensions for every session, it offered skill commands the session had
+  # switched off and missed the commands of an extension loaded with -e (seen on 18.20).
   commands:
-    rpc: { method: get_available_commands, child: [omp, --mode, rpc, --no-session, --no-extensions], framing: typed }
-    cache: 1h
+    rpc:
+      method: get_available_commands
+      child: [omp, --mode, rpc, --no-session]
+      child_carry:
+        values: [--profile, --config, --extension, -e, --trusted-extension, --plugin-dir, --skills, --hook]
+        flags: [--no-extensions, --no-skills, --no-rules, --no-context-files]
+      framing: typed
+    cache: 10m
     timeout: 12s
     stability: documented
   # Providers /login can sign in to, for the picker's "Not set up" section.
