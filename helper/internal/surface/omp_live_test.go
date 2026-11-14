@@ -261,6 +261,7 @@ func TestOriginalOMPTransport(t *testing.T) {
 		case <-time.After(30 * time.Millisecond):
 		}
 	}
+	checkLiveColorReplyHandback(t, ctx, tmux, companions, config)
 	if err := svc.Close(ctx, owner, surface.LeaseRef{ID: created.ID, Lease: second.Token}); err != nil {
 		t.Fatal(err)
 	}

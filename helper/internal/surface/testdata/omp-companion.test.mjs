@@ -116,7 +116,14 @@ for (const watched of [true, false]) test(`companion preserves authenticated con
     // tmux answers the Sixel capability query after OMP's input listeners.
     terminalInput('\x1b[?2;3;0S')
     assert.equal(state().native, true)
-    terminalInput('desktop keystroke')
+    // Captured from real tmux after OMP restarted its terminal. The earlier
+    // color probe had already settled, so OMP forwarded the late reply.
+    const report = JSON.parse(fs.readFileSync(new URL('./terminal-color-reply.json', import.meta.url))).reply
+    for (const color of [report, report.slice(0, -1) + '\x1b\\', '\x1b]10;rgb:ff/00/7f\x07']) {
+      assert.deepEqual(terminalInput(color), {consume: true}, 'late color reply must not reach the editor')
+      assert.equal(state().native, true, 'late color reply must not release native ownership')
+    }
+    terminalInput(watched ? 'desktop keystroke' : '\x1b]11;human text\x07')
     await waitFor(() => !state().native && state().reason === 'terminal_input')
     command({ ...config, seq: 5, mode: 'native', owner: 'renderer', conversation: 'conversation-one', leaseMs: 2000 })
     await waitFor(() => state().seq === 5 && state().native)

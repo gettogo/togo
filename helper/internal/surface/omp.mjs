@@ -8,6 +8,13 @@ const MAX_EVENT = 64 * 1024
 const MAX_COMMAND = MAX_FILE + 6 * MAX_EVENT
 const MAX_LEASE = 8000
 
+// A color reply can outlive OMP's pending probe across stop()/start(). OMP
+// then forwards it to extension input listeners. Consume only a complete,
+// validated reply; queries, paste and arbitrary OSC content stay user input.
+function terminalColorReport(data) {
+  return /^\x1b\](?:10|11);rgba?:[0-9a-fA-F]{1,4}\/[0-9a-fA-F]{1,4}\/[0-9a-fA-F]{1,4}(?:\x07|\x1b\\)$/.test(data)
+}
+
 // OMP consumes these capability reports after extension input listeners. They
 // are machine responses, never desktop gestures; notably tmux answers Sixel.
 function terminalReport(data) {
@@ -185,6 +192,7 @@ export default function (pi) {
       return
     }
     stopInput = ctx.ui.onTerminalInput(data => {
+      if (typeof data === 'string' && terminalColorReport(data)) return { consume: true }
       // Raw keyboard input restores the terminal before passing on the key.
       // TSP events and terminal capability reports keep native ownership.
       if (deadline && typeof data === 'string' && !data.startsWith('\x1b_tsp;') && !terminalReport(data)) {
