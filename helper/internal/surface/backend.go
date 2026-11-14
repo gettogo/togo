@@ -64,17 +64,23 @@ func (b *paneBackend) resolve(ctx context.Context, id string) (runtimeInfo, erro
 	if err != nil || !sess.Managed || sess.Agent != "omp" {
 		return runtimeInfo{}, errRuntimeChanged
 	}
-	config, err := b.companions.Current(id)
-	if err != nil {
-		return runtimeInfo{}, err
-	}
 	ctx, cancel := context.WithTimeout(ctx, CompanionWait)
 	defer cancel()
-	var state CompanionState
 	for {
-		state, err = b.companions.State(config)
+		// The original process publishes only after it starts. A failed
+		// replacement may leave a valid older mapping, which remains usable.
+		config, err := b.companions.Current(id)
 		if err == nil {
-			break
+			state, err := b.companions.State(config)
+			if err == nil && state.Available && state.Conversation != "" {
+				birth, err := procs.Birth(state.PID)
+				if err == nil {
+					run := runtimeInfo{config: config, state: state, birth: birth, control: &sync.Mutex{}}
+					if _, err := b.validate(ctx, id, run); err == nil {
+						return run, nil
+					}
+				}
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -82,16 +88,6 @@ func (b *paneBackend) resolve(ctx context.Context, id string) (runtimeInfo, erro
 		case <-time.After(30 * time.Millisecond):
 		}
 	}
-	if !state.Available || state.Conversation == "" {
-		return runtimeInfo{}, errRuntimeChanged
-	}
-	birth, err := procs.Birth(state.PID)
-	if err != nil {
-		return runtimeInfo{}, errRuntimeChanged
-	}
-	run := runtimeInfo{config: config, state: state, birth: birth, control: &sync.Mutex{}}
-	_, err = b.validate(ctx, id, run)
-	return run, err
 }
 
 func (b *paneBackend) validate(ctx context.Context, id string, run runtimeInfo) (CompanionState, error) {

@@ -109,9 +109,6 @@ func (c *Companions) PrepareLaunch(ctx context.Context, id, agent string, launch
 	if err := writeJSON(config.Path, config); err != nil {
 		return launch, err
 	}
-	if err := writeJSON(filepath.Join(root, "current.json"), map[string]string{"generation": config.Generation}); err != nil {
-		return launch, err
-	}
 	args := slices.Clone(launch.Args)
 	at := slices.Index(args, "--")
 	if at < 0 {

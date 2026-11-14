@@ -70,6 +70,7 @@ func TestOriginalOMPTransport(t *testing.T) {
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
+	checkUnstartedReplacement(t, ctx, companions, created.ID, binary, config.Generation)
 	svc := surface.NewService(home, sessions, t.Logf)
 	t.Logf("original OMP pid=%d", before.PID)
 	defer svc.Stop()

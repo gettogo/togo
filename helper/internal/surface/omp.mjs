@@ -78,6 +78,7 @@ export default function (pi) {
   let owner = '', deadline = 0, seq = 0, epoch = 0, available = false, reason = ''
   let stopped = false, processing = false, rerun = false
   let publishedNative
+  let publishedGeneration = false
   const location = () => ({
     conversation: String(ctx?.sessionManager?.getSessionId?.() ?? ''),
     sessionFile: String(ctx?.sessionManager?.getSessionFile?.() ?? ''),
@@ -93,6 +94,13 @@ export default function (pi) {
     try {
       fs.writeFileSync(temporary, json, { mode: 0o600 })
       fs.renameSync(temporary, path.join(root, 'state.json'))
+      if (!publishedGeneration) {
+        const parent = path.dirname(root)
+        const current = path.join(parent, `.current-${process.pid}-${config.generation}.tmp`)
+        fs.writeFileSync(current, JSON.stringify({generation: config.generation}), {mode: 0o600})
+        fs.renameSync(current, path.join(parent, 'current.json'))
+        publishedGeneration = true
+      }
       publishedNative = value.native
     } catch { /* Helper removal cannot prevent the in-process lease expiry. */ }
   }

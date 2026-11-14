@@ -27,9 +27,9 @@ func TestCompanionLaunchPreservesArgumentsAndKeepsSecretsOutOfArgv(t *testing.T)
 	if len(got.Args) != 6 || !reflect.DeepEqual(got.Args[:2], old.Args[:2]) || got.Args[2] != "-e" || got.Args[4] != "--" || got.Args[5] != "literal" {
 		t.Fatalf("launch arguments changed: %v", got.Args)
 	}
-	current, err := c.Current("s_abcdefghij")
-	if err != nil {
-		t.Fatal(err)
+	current := preparedCompanion(t, got)
+	if _, err := c.Current("s_abcdefghij"); err == nil {
+		t.Fatal("preparation published an unstarted runtime")
 	}
 	if len(current.Token) != 64 || len(current.Generation) != 32 || got.Env["TOGO_SURFACE_CONFIG"] != current.Path {
 		t.Fatal("missing private per-run configuration")
@@ -75,13 +75,38 @@ func TestCompanionSkipsNativeOptOutBeforeWritingAnything(t *testing.T) {
 	}
 }
 
-func TestCompanionRejectsForeignAndOversizedState(t *testing.T) {
+func TestPendingPreparationKeepsThePublishedGeneration(t *testing.T) {
 	c := testCompanions(t)
-	_, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
+	id := "s_abcdefghij"
+	old, err := c.PrepareLaunch(context.Background(), id, "omp", session.Launch{Program: "omp"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, _ := c.Current("s_abcdefghij")
+	var first CompanionConfig
+	if err := readJSON(old.Env["TOGO_SURFACE_CONFIG"], &first); err != nil {
+		t.Fatal(err)
+	}
+	root, _ := c.sessionDir(id)
+	if err := writeJSON(filepath.Join(root, "current.json"), map[string]string{"generation": first.Generation}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.PrepareLaunch(context.Background(), id, "omp", session.Launch{Program: "omp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := c.Current(id)
+	if err != nil || current.Generation != first.Generation {
+		t.Fatal("unstarted replacement hid the published runtime", err)
+	}
+}
+
+func TestCompanionRejectsForeignAndOversizedState(t *testing.T) {
+	c := testCompanions(t)
+	launch, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := preparedCompanion(t, launch)
 	raw, _ := json.Marshal(CompanionState{Generation: "foreign", PID: os.Getpid(), Pane: "%0", Available: true})
 	os.WriteFile(filepath.Join(filepath.Dir(run.Path), "state.json"), raw, 0o600)
 	if _, err := c.State(run); err == nil {
@@ -106,11 +131,11 @@ func TestOMPCompanionControlAndLease(t *testing.T) {
 
 func TestCompanionDispatchBoundsEncodedTextAndWaitsForAcceptance(t *testing.T) {
 	c := testCompanions(t)
-	_, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
+	launch, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, _ := c.Current("s_abcdefghij")
+	run := preparedCompanion(t, launch)
 	before := CompanionState{Version: 1, Generation: run.Generation, PID: os.Getpid(), Pane: "%0",
 		Conversation: "one", Available: true, Native: true, Owner: "renderer", Seq: 1}
 	file := filepath.Join(filepath.Dir(run.Path), "command.json")
@@ -161,4 +186,15 @@ func TestCompanionDispatchBoundsEncodedTextAndWaitsForAcceptance(t *testing.T) {
 func testCompanions(t *testing.T) *Companions {
 	t.Helper()
 	return &Companions{Home: t.TempDir(), probeVersion: func(context.Context, session.Launch) (string, error) { return "omp/18.20.0", nil }}
+}
+
+func preparedCompanion(t *testing.T, launch session.Launch) CompanionConfig {
+	t.Helper()
+	path := launch.Env["TOGO_SURFACE_CONFIG"]
+	var config CompanionConfig
+	if err := readJSON(path, &config); err != nil {
+		t.Fatal(err)
+	}
+	config.Path = path
+	return config
 }

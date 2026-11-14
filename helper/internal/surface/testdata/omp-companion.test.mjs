@@ -5,8 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { pathToFileURL } from 'node:url'
-import { applyPickerQuery } from '../omp.mjs'
+import companion, { applyPickerQuery } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -45,7 +44,9 @@ test('ambiguous query owners are refused without editing either', () => {
 })
 
 for (const watched of [true, false]) test(`companion preserves authenticated control with ${watched ? 'watch' : 'poll'} delivery`, async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'togo-surface-'))
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'togo-surface-'))
+  const root = path.join(directory, 'a'.repeat(32))
+  fs.mkdirSync(root)
   const saved = { config: process.env.TOGO_SURFACE_CONFIG, pane: process.env.TMUX_PANE, native: process.env.PI_TUI_NATIVE }
   const config = { version: 1, id: 's_abcdefghij', generation: 'a'.repeat(32), token: 'b'.repeat(64) }
   process.env.TOGO_SURFACE_CONFIG = path.join(root, 'config.json')
@@ -92,10 +93,10 @@ for (const watched of [true, false]) test(`companion preserves authenticated con
       mock.method(fsDefault, 'watch', () => { throw new Error('watch unavailable') })
       syncBuiltinESMExports()
     }
-    const module = await import(pathToFileURL(path.resolve('omp.mjs')))
-    module.default({ on(name, fn) { events.set(name, fn) } })
+    companion({ on(name, fn) { events.set(name, fn) } })
     await events.get('session_start')({}, ctx)
     await waitFor(() => state().available)
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'current.json'))).generation, config.generation)
     assert.equal(process.env.PI_TUI_NATIVE, undefined, 'idle companion must not change tool environment')
     command({ ...config, seq: 1, mode: 'native', owner: 'renderer', conversation: 'conversation-one', leaseMs: 1000, token: 'wrong' })
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -132,15 +133,17 @@ for (const watched of [true, false]) test(`companion preserves authenticated con
     assert.equal(state().seq, 6)
     // OMP clears extension input listeners when it switches conversations.
     terminalInput = undefined
+    fs.writeFileSync(path.join(directory, 'current.json'), JSON.stringify({generation:'c'.repeat(32)}))
     ctx.sessionManager.getSessionId = () => 'conversation-two'
     await events.get('session_start')({}, ctx)
     assert.equal(typeof terminalInput, 'function')
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'current.json'))).generation, 'c'.repeat(32), 'old runtime must not reclaim the published marker')
   } finally {
     await events.get('session_shutdown')?.({}, ctx)
     for (const [name, value] of [['TOGO_SURFACE_CONFIG', saved.config], ['TMUX_PANE', saved.pane], ['PI_TUI_NATIVE', saved.native]]) {
       if (value === undefined) delete process.env[name]; else process.env[name] = value
     }
-    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(directory, { recursive: true, force: true })
     mock.restoreAll()
     syncBuiltinESMExports()
   }
