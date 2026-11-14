@@ -14,16 +14,24 @@ test('companion authenticates control, preserves context and expires its rendere
   delete process.env.PI_TUI_NATIVE
   fs.writeFileSync(process.env.TOGO_SURFACE_CONFIG, JSON.stringify(config), { mode: 0o600 })
   const events = new Map()
+  let terminalInput
   const tui = {
     nativeRendering: false,
     stop() { this.nativeRendering = false },
-    start() { this.nativeRendering = process.env.PI_TUI_NATIVE === '1' },
+    start() {
+      // The real OMP TUI confirms native rendering asynchronously after hello.
+      if (process.env.PI_TUI_NATIVE === '1') setTimeout(() => { this.nativeRendering = true }, 30)
+      else this.nativeRendering = false
+    },
     requestRender() {},
   }
   const ctx = {
     hasUI: true,
     sessionManager: { getSessionId: () => 'conversation-one', getSessionFile: () => '/workspace/session.jsonl' },
-    ui: { custom: async factory => { factory(tui, null, null, () => {}) } },
+    ui: {
+      custom: async factory => { factory(tui, null, null, () => {}) },
+      onTerminalInput(listener) { terminalInput = listener; return () => { terminalInput = undefined } },
+    },
   }
   async function waitFor(fn) {
     const until = Date.now() + 2500
@@ -55,9 +63,16 @@ test('companion authenticates control, preserves context and expires its rendere
     assert.equal(state().conversation, 'conversation-one')
     assert.equal(state().pid, process.pid)
     assert.equal(fs.statSync(path.join(root, 'state.json')).mode & 0o777, 0o600)
-    command({ ...config, seq: 4, mode: 'native', owner: 'renderer', conversation: 'stale-conversation', leaseMs: 1000 })
+    command({ ...config, seq: 4, mode: 'native', owner: 'renderer', conversation: 'conversation-one', leaseMs: 1000 })
+    await waitFor(() => state().seq === 4 && state().native)
+    // tmux answers the Sixel capability query after OMP's input listeners.
+    terminalInput('\x1b[?2;3;0S')
+    assert.equal(state().native, true)
+    terminalInput('desktop keystroke')
+    await waitFor(() => !state().native && state().reason === 'terminal_input')
+    command({ ...config, seq: 5, mode: 'native', owner: 'renderer', conversation: 'stale-conversation', leaseMs: 1000 })
     await new Promise(resolve => setTimeout(resolve, 100))
-    assert.equal(state().seq, 2)
+    assert.equal(state().seq, 4)
   } finally {
     await events.get('session_shutdown')?.({}, ctx)
     for (const [name, value] of [['TOGO_SURFACE_CONFIG', saved.config], ['TMUX_PANE', saved.pane], ['PI_TUI_NATIVE', saved.native]]) {

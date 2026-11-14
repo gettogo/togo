@@ -1,4 +1,4 @@
-package engine
+package procs
 
 import (
 	"errors"
@@ -7,12 +7,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func processBirth(pid int) (string, error) {
+// Birth returns a live process's kernel start identity, preventing PID reuse
+// from being mistaken for continued ownership of an endpoint or pane.
+func Birth(pid int) (string, error) {
 	info, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
 	if err != nil {
 		return "", err
 	}
-	const zombie = 5 // SZOMB in sys/proc.h: waiting to be collected by its parent.
+	const zombie = 5
 	if int(info.Proc.P_pid) != pid || info.Proc.P_stat == 0 || info.Proc.P_stat == zombie {
 		return "", errors.New("process is no longer running")
 	}

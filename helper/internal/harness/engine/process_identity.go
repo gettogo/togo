@@ -1,6 +1,12 @@
 package engine
 
-import "syscall"
+import (
+	"syscall"
+
+	"github.com/gettogo/togo/helper/internal/harness/procs"
+)
+
+func processBirth(pid int) (string, error) { return procs.Birth(pid) }
 
 // A pid alone is not ownership: the kernel may give it to another process.
 type processIdentity struct {

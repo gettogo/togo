@@ -32,6 +32,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/push"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/surface"
 	"github.com/gettogo/togo/helper/internal/upload"
 	"github.com/gettogo/togo/helper/internal/watch"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -57,6 +58,7 @@ var Capabilities = []string{
 	wire.CapRestore,
 	harness.Capability,
 	integrations.Capability,
+	surface.Capability,
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read
@@ -64,7 +66,7 @@ var Capabilities = []string{
 // runs lsof, git and fs touch the disk, describe and history may wait on
 // the version gate) are here too, so an Approve or a Send never queues
 // behind them.
-var Concurrent = append(append(append(append([]string{}, local.Concurrent...), browser.Concurrent...), harness.Concurrent...), readOnlySlow...)
+var Concurrent = append(append(append(append(append([]string{}, local.Concurrent...), browser.Concurrent...), harness.Concurrent...), surface.Concurrent...), readOnlySlow...)
 
 var readOnlySlow = []string{
 	wire.MethodPortsList,
@@ -105,6 +107,7 @@ type Components struct {
 	Will      *push.WillKeeper
 	Browser   *browser.Service
 	Harness   *engine.Engine
+	Surface   *surface.Service
 
 	logf       func(format string, args ...any)
 	followups  chan string
@@ -196,6 +199,8 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	}
 	git := gitx.Git{}
 	c.Harness = newHarness(c, svc, &git, o)
+	c.Surface = surface.NewService(o.Home, svc, logf)
+	svc.PrepareLaunch = (&surface.Companions{Home: o.Home}).PrepareLaunch
 	integ := integrations.New(o.Home, o.TogoPath)
 
 	ext := map[string]api.Method{}
@@ -220,6 +225,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		{wire.MethodSessionRestorable: api.Restorable(svc), wire.MethodSessionDismiss: api.Dismiss(svc)},
 		{wire.MethodSessionRestore: api.Restore(svc, c.restored)},
 		harness.Methods(c.Harness),
+		c.Surface.Methods(),
 		integ.Methods(),
 	} {
 		for name := range m {
@@ -285,6 +291,7 @@ func (c *Components) Run(ctx context.Context) {
 	wg.Go(func() { c.runFollowups(ctx) })
 	wg.Go(func() { c.Awake.Run(ctx) })
 	wg.Go(func() { c.Will.Run(ctx) })
+	wg.Go(func() { c.Surface.Run(ctx) })
 	wg.Go(func() { c.Hub.RunActivity(ctx) })
 	wg.Wait()
 }

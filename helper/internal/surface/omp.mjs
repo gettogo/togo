@@ -5,6 +5,15 @@ import { performance } from 'node:perf_hooks'
 const MAX_FILE = 32 * 1024
 const MAX_LEASE = 8000
 
+// OMP consumes these capability reports after extension input listeners. They
+// are machine responses, never desktop gestures; notably tmux answers Sixel.
+function terminalReport(data) {
+  return /^\x1b\[\?[0-9;]+S$/.test(data) ||
+    /^\x1b\[[46];[0-9]+;[0-9]+t$/.test(data) ||
+    /^\x1b\[[?>][0-9;]+c$/.test(data) ||
+    /^\x1b\[\?[0-9]+;[0-9]+\$y$/.test(data)
+}
+
 // Controls affect renderer ownership only. Conversation text never enters this
 // channel, and a missing helper restores ANSI inside the original OMP process.
 export default function (pi) {
@@ -20,9 +29,10 @@ export default function (pi) {
   const originalNative = process.env.PI_TUI_NATIVE
   const allowed = originalNative !== '0'
   process.env.PI_TUI_NATIVE = '0'
-  let ctx, tui, watcher, timer
+  let ctx, tui, watcher, timer, stopInput
   let owner = '', deadline = 0, seq = 0, epoch = 0, available = false, reason = ''
   let stopped = false, processing = false, rerun = false
+  let publishedNative
   const location = () => ({
     conversation: String(ctx?.sessionManager?.getSessionId?.() ?? ''),
     sessionFile: String(ctx?.sessionManager?.getSessionFile?.() ?? ''),
@@ -38,6 +48,7 @@ export default function (pi) {
     try {
       fs.writeFileSync(temporary, json, { mode: 0o600 })
       fs.renameSync(temporary, path.join(root, 'state.json'))
+      publishedNative = value.native
     } catch { /* Helper removal cannot prevent the in-process lease expiry. */ }
   }
   function switchRenderer(native) {
@@ -64,6 +75,7 @@ export default function (pi) {
         !Number.isSafeInteger(request.seq) || request.seq <= seq || typeof request.owner !== 'string' || request.owner.length > 128 ||
         request.conversation !== location().conversation || (request.epoch ?? 0) !== epoch) return
       if (owner && request.owner !== owner) return
+      reason = ''
       if (request.mode === 'native' || request.mode === 'renew') {
         if (!Number.isInteger(request.leaseMs) || request.leaseMs < 1000 || request.leaseMs > MAX_LEASE || !request.owner) return
         if (request.mode === 'renew' && (!owner || deadline <= performance.now())) return
@@ -95,7 +107,7 @@ export default function (pi) {
     if (tui) { changed(next); return }
     ctx = next
     try {
-      if (!allowed || !ctx?.hasUI || typeof ctx.ui?.custom !== 'function') throw new Error('unsupported')
+      if (!allowed || !ctx?.hasUI || typeof ctx.ui?.custom !== 'function' || typeof ctx.ui?.onTerminalInput !== 'function') throw new Error('unsupported')
       await ctx.ui.custom((rootTUI, _theme, _keys, done) => {
         tui = rootTUI
         done(undefined)
@@ -103,12 +115,23 @@ export default function (pi) {
       })
       if (typeof tui?.start !== 'function' || typeof tui?.stop !== 'function' || typeof tui?.requestRender !== 'function') throw new Error('unsupported')
       available = true
+      stopInput = ctx.ui.onTerminalInput(data => {
+        // Native app controls use TSP events. Raw keyboard input means the
+        // terminal is being used: restore its renderer before passing the key.
+        if (deadline && typeof data === 'string' && !data.startsWith('\x1b_tsp;') && !terminalReport(data)) {
+          reason = 'terminal_input'
+          try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() }
+        }
+      })
       watcher = fs.watch(root, (_event, file) => { if (!file || String(file) === 'command.json') processCommand() })
       watcher.on('error', () => { try { release() } catch {}; available = false; reason = 'control_unavailable'; publish() })
       timer = setInterval(() => {
         if (deadline && performance.now() >= deadline) {
           try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() }
         }
+        // start() probes asynchronously. Publish the confirmed renderer state,
+        // including a protocol fallback, rather than only the requested mode.
+        if (Boolean(tui?.nativeRendering) !== publishedNative) publish()
       }, 250)
       timer.unref?.()
       publish()
@@ -131,6 +154,7 @@ export default function (pi) {
     publish()
     stopped = true
     watcher?.close()
+    stopInput?.()
     clearInterval(timer)
     if (originalNative === undefined) delete process.env.PI_TUI_NATIVE
     else process.env.PI_TUI_NATIVE = originalNative

@@ -178,9 +178,11 @@ func (c *Companions) Command(ctx context.Context, config CompanionConfig, previo
 		current, err := c.State(config)
 		if err == nil && current.Seq == request.Seq && current.Conversation == previous.Conversation && current.Epoch == previous.Epoch {
 			if current.Reason != "" || !current.Available {
-				return current, errors.New("surface: companion could not change renderer")
+				return current, fmt.Errorf("surface: companion could not change renderer (%s)", current.Reason)
 			}
-			return current, nil
+			if current.Native == (mode != "ansi") {
+				return current, nil
+			}
 		}
 		select {
 		case <-ctx.Done():

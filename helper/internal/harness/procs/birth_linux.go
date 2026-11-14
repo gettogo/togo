@@ -1,4 +1,4 @@
-package engine
+package procs
 
 import (
 	"fmt"
@@ -7,13 +7,13 @@ import (
 	"strings"
 )
 
-func processBirth(pid int) (string, error) {
+// Birth returns a live process's boot and start identity, preventing PID reuse
+// from being mistaken for continued ownership of an endpoint or pane.
+func Birth(pid int) (string, error) {
 	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
 		return "", err
 	}
-	// comm may itself contain spaces and parentheses; fields after its last
-	// ')' begin with state (field 3), and starttime is field 22.
 	end := strings.LastIndexByte(string(b), ')')
 	if end < 0 {
 		return "", fmt.Errorf("invalid process identity")
