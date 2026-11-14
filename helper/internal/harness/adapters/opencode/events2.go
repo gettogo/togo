@@ -38,6 +38,9 @@ type Events2 struct {
 	turnOf   map[string]string // session -> its running turn
 	inbox    map[string]string // undelivered user prompt per session
 	open     map[string]harness.Item
+	prompts  []prompt2 // the main session's prompts, in order (revert2.go)
+	undo     *undo2    // the staged undo the chat shows a notice for
+	redone   string    // id of the last revert.cleared event
 }
 
 // NewEvents2 returns a 2.x mapper for one session.
@@ -118,6 +121,7 @@ type ev2 struct {
 	Answer      map[string]any  `json:"answer"`
 	ContextUsed *int            `json:"contextUsed"`
 	Location    *location2      `json:"location"`
+	Revert      *revert2        `json:"revert"`
 }
 
 type location2 struct {
@@ -254,6 +258,8 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if e.follows(d.SessionID) {
 			return []harness.Item{e.notice("compacted-"+ev.ID, e.turnFor(d.SessionID), d.SessionID, at, "info", harness.NoticeCompacted, "Context compacted")}, nil
 		}
+	case "session.revert.staged", "session.revert.cleared", "session.revert.committed":
+		return e.reverted(ev.Type, ev.ID, d, at)
 	case "permission.asked":
 		return e.permission2(d, at)
 	case "permission.replied":
@@ -270,6 +276,7 @@ func (e *Events2) setMain(id string) {
 	if id != e.main {
 		// The folder a move named was the last conversation's.
 		delete(e.state, "conversation_cwd")
+		e.forgetUndo()
 	}
 	e.main = id
 	e.state["harness_session"] = id
@@ -338,7 +345,7 @@ func (e *Events2) enqueued(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 		e.inbox[d.SessionID] = turn
 	}
 	x := textItem(d.InboxID, turn, e.parent(d.SessionID), harness.KindUser, at, d.Item.Payload.Text, false)
-	return []harness.Item{x}, nil
+	return append(e.prompted(d, at), x), nil
 }
 
 // started opens a turn, named after the prompt that started it (an item
