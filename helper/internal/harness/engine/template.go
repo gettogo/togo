@@ -12,6 +12,8 @@ import (
 	"text/template"
 	"time"
 	"unicode/utf8"
+
+	"github.com/gettogo/togo/helper/internal/harness"
 )
 
 // Templates render adapter strings such as "/model {{.id}}" with filters
@@ -97,10 +99,11 @@ func slotsFilter(v any) (string, error) {
 // formFilter turns answers keyed by form field into OpenCode 2.x's form
 // reply object. A key's mark says the value's type: "key[]" a list of
 // strings, "key!" a boolean, "key#" a number, a bare key one string. Keys
-// are plain names; at most MaxSlots are taken.
+// are plain names; at most harness.MaxQuestions are taken, one per question
+// of an item.
 func formFilter(v any) (string, error) {
 	m, ok := v.(map[string]any)
-	if !ok || len(m) > MaxSlots {
+	if !ok || len(m) > harness.MaxQuestions {
 		return "", fmt.Errorf("form: answers are not an object")
 	}
 	out := map[string]any{}

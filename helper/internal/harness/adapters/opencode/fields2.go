@@ -46,15 +46,23 @@ func formQuestions(f *form2) (qs []harness.Question, answerable bool) {
 			// 2.2.5); kept for a record whose names were stripped.
 			fl.Key = "q" + strconv.Itoa(i)
 		}
-		if fl.Hidden || len(qs) == MaxQuestions {
+		if fl.Hidden {
 			continue
+		}
+		if len(qs) == harness.MaxQuestions {
+			// More than an app shows: the rest is not cut off silently.
+			// The form is shown as far as it goes and answered in the
+			// terminal, since a reply without these fields is refused.
+			answerable = false
+			break
 		}
 		if !replyKey.MatchString(fl.Key) {
 			// A reply cannot name this field, so it cannot be complete.
 			answerable = false
 			fl.Key = "?" + strconv.Itoa(i)
 		}
-		q := harness.Question{ID: fl.Key, Header: fl.Title, Prompt: fl.Description, Required: fl.Required}
+		required := fl.Required // OpenCode says for every field: sent as true or false, never left out
+		q := harness.Question{ID: fl.Key, Header: fl.Title, Prompt: fl.Description, Required: &required}
 		if q.Prompt == "" {
 			q.Prompt, q.Header = fl.Title, ""
 		}

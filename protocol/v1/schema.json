@@ -2903,7 +2903,7 @@
         "options": { "type": "array", "items": { "$ref": "#/$defs/HarnessChoice" } },
         "multi": { "type": "boolean" },
         "allowText": { "type": "boolean" },
-        "required": { "description": "True when the form cannot be submitted without an answer to this question. Absent means false.", "type": "boolean" },
+        "required": { "description": "Whether the form can be submitted without an answer to this question. Absent means the source does not say, and the app keeps its rule of asking for an answer to every question; a form source that knows sends true or false.", "type": "boolean" },
         "default": { "description": "The answer the harness starts with: option ids, or one text value.", "type": "array", "items": { "type": "string" } },
         "when": {
           "description": "The question applies only while the named question's current answer includes one of equals (booleans are \"true\" and \"false\"). A question that does not apply is not shown, validated or sent. Absent means it always applies.",

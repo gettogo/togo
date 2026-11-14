@@ -224,9 +224,11 @@ type Question struct {
 	Options   []Choice `json:"options"`
 	Multi     bool     `json:"multi"`
 	AllowText bool     `json:"allowText"`
-	// Required is true when the form cannot be submitted without an
-	// answer to this question.
-	Required bool `json:"required,omitempty"`
+	// Required says whether the form can be submitted without an answer
+	// to this question. Nil is a question from a source that does not say:
+	// an app then keeps its old rule, which asks for an answer to every
+	// question. A form source that knows sets true or false.
+	Required *bool `json:"required,omitempty"`
 	// Default is the answer the harness starts with: option ids, or one
 	// text value.
 	Default []string `json:"default,omitempty"`

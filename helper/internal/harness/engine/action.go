@@ -40,10 +40,16 @@ func checkArgs(args map[string]json.RawMessage) (map[string]any, error) {
 			return nil, invalidArgs("an arg names a value only the helper sets")
 		}
 		var v any
-		if err := json.Unmarshal(raw, &v); err != nil {
+		err := json.Unmarshal(raw, &v)
+		if err != nil {
 			return nil, invalidArgs("args must be JSON")
 		}
-		if err := checkArgValue(k, v, k == "text" || k == "answers"); err != nil {
+		if answers, ok := v.(map[string]any); ok && k == "answers" {
+			err = checkAnswers(answers)
+		} else {
+			err = checkArgValue(k, v, k == "text" || k == "answers")
+		}
+		if err != nil {
 			return nil, err
 		}
 		out[k] = v

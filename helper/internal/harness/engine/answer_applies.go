@@ -1,5 +1,7 @@
 package engine
 
+import "github.com/gettogo/togo/helper/internal/harness"
+
 // dropInapplicable removes, from an answer action's args, the answers to
 // questions of the target item that do not apply given the other answers
 // (harness.Question.When). An app that does not know conditions shows
@@ -36,4 +38,19 @@ func (s *sess) dropInapplicable(log *Log, target string, args map[string]any) {
 			return
 		}
 	}
+}
+
+// checkAnswers bounds the answers arg of an answer action: one answer per
+// question of an item, so as many keys as an item has questions, each
+// value held to what any text arg is.
+func checkAnswers(answers map[string]any) error {
+	if len(answers) > harness.MaxQuestions {
+		return invalidArgs("too many answers")
+	}
+	for k, v := range answers {
+		if err := checkArgValue(k, v, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -240,8 +241,8 @@ func TestFormFieldMeaningIsKept(t *testing.T) {
 		if q.When != nil {
 			when = q.When.Question + "=" + strings.Join(q.When.Equals, "|")
 		}
-		if q.ID != w.id || q.Required != w.required || strings.Join(q.Default, ",") != w.def || when != w.when {
-			t.Errorf("question %d = %s required %v default %v when %q, want %+v", i, q.ID, q.Required, q.Default, when, w)
+		if q.ID != w.id || q.Required == nil || *q.Required != w.required || strings.Join(q.Default, ",") != w.def || when != w.when {
+			t.Errorf("question %d = %s default %v when %q, want %+v", i, q.ID, q.Default, when, w)
 		}
 	}
 	// The recorded reply left the fields that did not apply unanswered.
@@ -318,5 +319,54 @@ func TestFormDefaults(t *testing.T) {
 		if got := strings.Join(q.Default, ","); got != want[i] {
 			t.Errorf("%s default %q, want %q", q.ID, got, want[i])
 		}
+	}
+}
+
+// Recorded forms of 17, 64 and 65 required fields. Up to 64 are shown and
+// answered whole; a longer form is shown as far as the app takes it and
+// answered in the terminal, never cut and offered for an answer that
+// OpenCode would refuse ("Missing required form field").
+func TestFormFieldLimit(t *testing.T) {
+	_, seen, ops := formsRun(t)
+	for _, c := range []struct {
+		id         string
+		questions  int
+		answerable bool
+	}{
+		{"frm_1db847bf8001ppfcLBvsjTQGa8~" + formsSession, 17, true},
+		{"frm_1db847c03001CKM0gMXqcjko6A~" + formsSession, 64, true},
+		{"frm_1db847c0d001xZZuE1Ay00mVFp~" + formsSession, 64, false},
+	} {
+		got := seen[c.id]
+		if len(got) == 0 {
+			t.Fatalf("%s was not shown", c.id)
+		}
+		body := got[0].Question
+		if len(body.Questions) != c.questions || body.Questions[c.questions-1].ID != "f"+strconv.Itoa(c.questions-1) {
+			t.Errorf("%s: %d questions, last %s", c.id, len(body.Questions), body.Questions[len(body.Questions)-1].ID)
+		}
+		if answerable := body.Answerable == nil || *body.Answerable; answerable != c.answerable {
+			t.Errorf("%s: answerable %v", c.id, answerable)
+		}
+		for _, o := range ops {
+			if o.Op == harness.OpUpsert && o.Row != nil && o.Row.ID == c.id && (len(o.Row.Actions) == 1) != c.answerable {
+				t.Errorf("%s: row actions %+v", c.id, o.Row.Actions)
+			}
+		}
+	}
+}
+
+// Hidden fields are not shown and do not count towards the limit.
+func TestFormFieldLimitCountsShownFields(t *testing.T) {
+	var fields []string
+	for i := 0; i < 64; i++ {
+		fields = append(fields, `{"key":"f`+strconv.Itoa(i)+`","type":"string"}`)
+	}
+	fields = append(fields, `{"key":"quiet","type":"string","hidden":true}`)
+	e := NewEvents2(harness.Env{Cwd: "/tmp/work"})
+	e.Map(harness.Record{Data: []byte(`{"id":"evt_1","type":"session.created","location":{"directory":"/tmp/work"},"data":{"sessionID":"ses_a"}}`)})
+	items, _ := e.Map(condForm(strings.Join(fields, ",")))
+	if len(items) != 1 || len(items[0].Question.Questions) != 64 || items[0].Question.Answerable != nil {
+		t.Fatalf("items %+v", items)
 	}
 }

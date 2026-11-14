@@ -28,8 +28,8 @@ actions:
 // it: channel applies while notify is true, mac_note while targets
 // includes mac, quiet_reason while notify is false.
 var conditional = harness.Item{ID: "frm_1~ses_1", Kind: harness.KindQuestion, Question: &harness.QuestionBody{Questions: []harness.Question{
-	{ID: "notify!", Prompt: "Send a notice", Required: true, Default: []string{"false"}, Options: []harness.Choice{{ID: "true", Label: "Yes"}, {ID: "false", Label: "No"}}},
-	{ID: "channel", Prompt: "Channel", Required: true, Default: []string{"mail"}, Options: []harness.Choice{{ID: "mail", Label: "Mail"}, {ID: "chat", Label: "Chat"}},
+	{ID: "notify!", Prompt: "Send a notice", Required: boolPtr(true), Default: []string{"false"}, Options: []harness.Choice{{ID: "true", Label: "Yes"}, {ID: "false", Label: "No"}}},
+	{ID: "channel", Prompt: "Channel", Required: boolPtr(true), Default: []string{"mail"}, Options: []harness.Choice{{ID: "mail", Label: "Mail"}, {ID: "chat", Label: "Chat"}},
 		When: &harness.QuestionWhen{Question: "notify!", Equals: []string{"true"}}},
 	{ID: "targets[]", Prompt: "Targets", Multi: true, Default: []string{"ios"}, Options: []harness.Choice{{ID: "ios", Label: "iOS"}, {ID: "mac", Label: "Mac"}}},
 	{ID: "mac_note", Prompt: "Mac note", AllowText: true, When: &harness.QuestionWhen{Question: "targets[]", Equals: []string{"mac"}}},
@@ -131,3 +131,54 @@ func TestFormFilterLeavesEmptyAnswersOut(t *testing.T) {
 		t.Fatal("a number that is not one was accepted")
 	}
 }
+
+// A form of 64 questions is answered whole (OpenCode 2.2.5 takes forms
+// that long); one more answer than the app can show is refused, and no
+// other arg may grow past the usual bound.
+func TestAnswerActionTakesSixtyFourAnswers(t *testing.T) {
+	const id = "s_fakeform04"
+	item := harness.Item{ID: "frm_3~ses_1", Kind: harness.KindQuestion, Question: &harness.QuestionBody{}}
+	answers, want := map[string][]string{}, map[string]string{}
+	for i := 0; i < harness.MaxQuestions; i++ {
+		key := "f" + itoa(int64(i))
+		item.Question.Questions = append(item.Question.Questions, harness.Question{ID: key, Prompt: "Field", AllowText: true, Required: boolPtr(true)})
+		answers[key], want[key] = []string{"v" + key}, "v"+key
+	}
+	e, sent := formEngine(t, id, item)
+	raw, _ := json.Marshal(answers)
+	if res := answerForm(t, e, id, item.ID, string(raw)); res.Result != harness.ResultApplied {
+		t.Fatalf("result %+v", res)
+	}
+	var got map[string]string
+	if err := json.Unmarshal([]byte(sent()), &got); err != nil || len(got) != harness.MaxQuestions || got["f63"] != "vf63" {
+		t.Fatalf("sent %d answers (%v): %s", len(got), err, sent())
+	}
+
+	answers["extra"] = []string{"x"}
+	raw, _ = json.Marshal(answers)
+	if _, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: harness.ActionAnswer, Target: item.ID,
+		Args: map[string]json.RawMessage{"answers": raw}}); err == nil {
+		t.Fatal("65 answers were accepted")
+	}
+	delete(answers, "extra")
+	raw, _ = json.Marshal(answers)
+	if _, err := checkArgs(map[string]json.RawMessage{"other": raw}); err == nil {
+		t.Fatal("an arg that is not answers took 64 keys")
+	}
+	if _, err := checkArgs(map[string]json.RawMessage{"answers": json.RawMessage(`{"a":{"b":` + string(raw) + `}}`)}); err == nil {
+		t.Fatal("an object inside an answer took 64 keys")
+	}
+	many := map[string]any{}
+	for k := range answers {
+		many[k] = []any{"x"}
+	}
+	if _, err := formFilter(many); err != nil {
+		t.Fatalf("form filter refused 64 answers: %v", err)
+	}
+	many["extra"] = []any{"x"}
+	if _, err := formFilter(many); err == nil {
+		t.Fatal("form filter took 65 answers")
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
