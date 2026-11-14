@@ -10,6 +10,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/tmux"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -120,10 +121,12 @@ func TestAnswerThatDoesNotTakeStaysOpen(t *testing.T) {
 	err := st.Answer(context.Background(), id, "deny", wire.ByPhone)
 	var ce *api.CodeError
 	if !errors.As(err, &ce) {
-		t.Fatalf("answer = %v, want a conflict", err)
+		t.Fatalf("answer = %v, want a refusal", err)
 	}
-	if c, ok := ce.Data.(Conflict); !ok || c.Reason != wire.ConflictUnconfirmed {
-		t.Fatalf("conflict = %+v, want unconfirmed", ce.Data)
+	// Not a conflict: released apps read every -32006 on an answer as
+	// "answered elsewhere" and drop the request.
+	if d, ok := ce.Data.(map[string]string); !ok || ce.Code != rpc.CodeRefused || d["reason"] != wire.RefusedUnconfirmed {
+		t.Fatalf("error = %d %+v, want refused/unconfirmed", ce.Code, ce.Data)
 	}
 	if p := st.Pending(sess); len(p) != 1 || p[0].RequestID != id {
 		t.Fatalf("pending = %+v, want the request still open", p)

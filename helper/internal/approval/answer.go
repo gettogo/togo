@@ -90,7 +90,7 @@ func (s *Store) Answer(ctx context.Context, requestID, raw, by string) error {
 		if errors.Is(err, errUnconfirmed) {
 			// The request stays open: answering it again reads the screen
 			// afresh, and the desk can still answer it.
-			return conflict(wire.ConflictUnconfirmed, "")
+			return &api.CodeError{Code: rpc.CodeRefused, Data: map[string]string{"reason": wire.RefusedUnconfirmed}}
 		}
 		return err
 	}

@@ -117,13 +117,16 @@ const (
 	ConflictSymlink    = "symlink"
 	ConflictMissing    = "missing"
 	ConflictNotRegular = "not_regular"
-	// ConflictUnconfirmed: the answer's keys were sent but the prompt is
-	// still on screen. The request stays open; nothing says it was taken.
-	ConflictUnconfirmed = "unconfirmed"
 
 	ByDesk  = "desk"
 	ByPhone = "phone"
 )
+
+// RefusedUnconfirmed is the -32008 reason of an approval.answer whose keys
+// were sent while the prompt stayed on screen: whether the program took the
+// answer is not known. It is not a conflict (-32006), which clients read as
+// "answered elsewhere" and drop the request for; the request stays open.
+const RefusedUnconfirmed = "unconfirmed"
 
 // Conflict reasons for refused git writes, carried in -32006 data. Nothing
 // in the repository changed when one is returned, except for partial (a
