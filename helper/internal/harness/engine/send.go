@@ -34,29 +34,20 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 			return e.userItem(s, req.Text, nil, false), nil
 		}
 	}
-	if act, ok := s.ad.Actions["send"]; ok && !e.sendNotYet(s, act) {
-		// Through the harness API every path and the text go in the one request.
-		text := harness.Together(req.Text, req.Images)
-		raw, _ := json.Marshal(text)
-		res, err := e.run(ctx, s, "send", act, map[string]any{"text": text, "value": json.RawMessage(raw), "images": req.Images})
-		if err != nil {
-			return harness.SendResult{}, err
-		}
-		if res.Result == harness.ResultFailed || res.Result == harness.ResultFallback {
-			return harness.SendResult{}, &harness.FallbackError{Reason: "source", Detail: res.Message}
-		}
-		return e.userItem(s, req.Text, images, false), nil
-	}
-	if e.cfg.Typist == nil {
+	api, viaAPI := e.sendAction(s)
+	if !viaAPI && e.cfg.Typist == nil {
 		return harness.SendResult{}, &harness.FallbackError{Reason: "source", Detail: "no typist"}
 	}
-	// Typing takes the session's typing lock, so a prompt never lands
+	// Sending takes the session's typing lock, so a prompt never lands
 	// between the key presses of a mode cycle or a typed command; while
-	// prompts are queued a new one goes behind them.
+	// prompts are queued a new one goes behind them. The rule is the same
+	// whichever way the prompt travels: a prompt sent through the harness
+	// API while a turn runs would be taken as steering (OpenCode) or start
+	// at once (Kilo), which is neither "now" nor "queue".
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
-	blocked := e.blockedBy(ctx, s)
+	blocked := e.asking(ctx, s, viaAPI)
 	s.mu.Lock()
 	working := s.stateLocked()["working"] == "true"
 	if working || len(s.queue) > 0 || blocked != "" {
@@ -78,10 +69,51 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		return harness.SendResult{Item: stored}, nil
 	}
 	s.mu.Unlock()
-	if err := e.typePrompt(ctx, s, req.Text, req.Images); err != nil {
+	if viaAPI {
+		if err := e.sendAPI(ctx, s, api, req.Text, req.Images); err != nil {
+			return harness.SendResult{}, err
+		}
+	} else if err := e.typePrompt(ctx, s, req.Text, req.Images); err != nil {
 		return harness.SendResult{}, err
 	}
 	return e.userItem(s, req.Text, images, false), nil
+}
+
+// sendAction is the adapter's API send action, when prompts go that way
+// now: it has one and the harness session it names exists.
+func (e *Engine) sendAction(s *sess) (spec.Action, bool) {
+	act, ok := s.ad.Actions["send"]
+	return act, ok && !e.sendNotYet(s, act)
+}
+
+// sendAPI sends a prompt through the harness API: every path and the text
+// go in the one request.
+func (e *Engine) sendAPI(ctx context.Context, s *sess, act spec.Action, text string, images []string) error {
+	together := harness.Together(text, images)
+	raw, _ := json.Marshal(together)
+	res, err := e.run(ctx, s, "send", act, map[string]any{"text": together, "value": json.RawMessage(raw), "images": images})
+	if err != nil {
+		return err
+	}
+	if res.Result == harness.ResultFailed || res.Result == harness.ResultFallback {
+		return &harness.FallbackError{Reason: "source", Detail: res.Message}
+	}
+	return nil
+}
+
+// asking is what holds a prompt back besides a running turn: a question
+// the agent waits on. An API harness reports its questions itself, so its
+// screen is not read for one.
+func (e *Engine) asking(ctx context.Context, s *sess, viaAPI bool) string {
+	if !viaAPI {
+		return e.blockedBy(ctx, s)
+	}
+	if e.cfg.Approvals != nil {
+		if p := e.cfg.Approvals.Pending(s.id); len(p) > 0 {
+			return askingText(s, p[0].Title)
+		}
+	}
+	return ""
 }
 
 // actionCommand is the action that runs a / line through the harness's
@@ -195,7 +227,10 @@ func (s *sess) newUserItemLocked(text string, images []harness.ImageRef, queued 
 
 // drainLocked starts typing the next queued prompt (see drainQueue).
 func (s *sess) drainLocked() {
-	if len(s.queue) == 0 || s.e.cfg.Typist == nil {
+	if len(s.queue) == 0 {
+		return
+	}
+	if _, api := s.ad.Actions["send"]; !api && s.e.cfg.Typist == nil {
 		return
 	}
 	go s.e.drainQueue(s)

@@ -64,7 +64,11 @@ func (e *Engine) typeNext(s *sess) bool {
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
-	if !e.idleNow(s) || e.blockedBy(s.ctx, s) != "" {
+	api, viaAPI := e.sendAction(s)
+	if !viaAPI && e.cfg.Typist == nil {
+		return false
+	}
+	if !e.idleNow(s) || e.asking(s.ctx, s, viaAPI) != "" {
 		// A question on screen holds the queue until it is answered.
 		return false
 	}
@@ -78,8 +82,21 @@ func (e *Engine) typeNext(s *sess) bool {
 	s.markSentLocked(next.item.ID)
 	s.mu.Unlock()
 	u := next.item.User
-	if err := e.typePrompt(s.ctx, s, u.Text, harness.ImagePaths(u.Images)); err != nil {
-		e.cfg.Logf("harness: typing a queued prompt failed: %v", err)
+	var err error
+	if viaAPI {
+		err = e.sendAPI(s.ctx, s, api, u.Text, harness.ImagePaths(u.Images))
+	} else {
+		err = e.typePrompt(s.ctx, s, u.Text, harness.ImagePaths(u.Images))
+	}
+	if err != nil {
+		e.cfg.Logf("harness: sending a queued prompt failed: %v", err)
+		if viaAPI {
+			// A request that failed may still have reached the harness, so
+			// it is not sent again: the prompt leaves the queue and the
+			// chat says so.
+			e.dropUnsent(s, next.item)
+			return false
+		}
 		s.mu.Lock()
 		delete(s.sent, next.item.ID)
 		s.queue = append([]queued{next}, s.queue...)
@@ -97,6 +114,29 @@ func (e *Engine) typeNext(s *sess) bool {
 	s.failedHold = false // a new prompt starts a new turn
 	s.publishLocked([]harness.Item{it}, nil)
 	return true
+}
+
+// dropUnsent withdraws a queued prompt whose API request failed and leaves
+// a notice with its text, so the user can send it again.
+func (e *Engine) dropUnsent(s *sess, it harness.Item) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u := *it.User
+	u.Queued, u.Withdrawn = false, true
+	it.User = &u
+	text := s.ad.Name + " returned an error for a queued prompt. It may not have arrived and was not sent again: " + clipNotice(u.Text)
+	s.publishLocked([]harness.Item{it, {ID: "unsent-" + it.ID, Kind: harness.KindNotice, At: e.cfg.Now(),
+		Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError, Reason: "refused", Text: text}}}, nil)
+}
+
+// clipNotice shortens a prompt quoted inside a notice.
+func clipNotice(text string) string {
+	const limit = 200
+	r := []rune(text)
+	if len(r) <= limit {
+		return text
+	}
+	return string(r[:limit]) + "…"
 }
 
 func (s *sess) queueLen() int {
