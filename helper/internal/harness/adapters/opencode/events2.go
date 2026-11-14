@@ -248,6 +248,7 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 func (e *Events2) setMain(id string) {
 	e.main = id
 	e.state["harness_session"] = id
+	e.state["conversation"] = id
 }
 
 func (e *Events2) setAgentModel(agent string, m *modelRef2) {

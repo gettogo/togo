@@ -21,7 +21,7 @@ endpoint:
   # the same variable to it.
   password_env: OPENCODE_PASSWORD
   username: opencode
-capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
+capabilities: [chat, chat.stream, chat.anchors, send.queue, interrupt, commands,
   files, mode, model, needs.approvals, needs.questions, agents, changes, ports, status,
   resume, compact, mcp, settings]
 images: { insert: together }   # how image paths are pasted into the input
@@ -150,9 +150,11 @@ actions:
   show_session:
     relaunch: { argv: [opencode, --session, '{{.state.harness_session}}'] }
     stability: documented
-  send:
-    http: { method: POST, path: '/api/session/{{.state.harness_session}}/prompt', body: '{"text": {{.text | json}}}' }
-    stability: documented
+  # Prompts are typed into the TUI, not posted to /api/session/{id}/prompt. The API
+  # needs a session id, and nothing reports which session the TUI shows: after /new or
+  # a fork in the terminal a posted prompt went to the session left behind (seen on
+  # 2.2.5, 2.3.0 and 1.19.5). A typed prompt lands in the session on screen; the
+  # mapper then follows it there (session.inbox.enqueued) and the chat starts over.
   # 2.x has no TUI control route: a resumed session is a restart on it.
   resume:
     relaunch: { argv: [opencode, --session, '{{.id}}'] }

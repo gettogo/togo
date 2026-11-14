@@ -130,6 +130,14 @@ func (e *Engine) sendAPI(ctx context.Context, s *sess, act spec.Action, text str
 // the agent waits on. An API harness reports its questions itself, so its
 // screen is not read for one.
 func (e *Engine) asking(ctx context.Context, s *sess, viaAPI bool) string {
+	// A question the harness reported itself (a form, a permission) holds
+	// a prompt whichever way it travels: typed, it would land in the dialog.
+	s.mu.Lock()
+	open := len(s.needs.open) > 0
+	s.mu.Unlock()
+	if open {
+		return askingText(s, "")
+	}
 	if !viaAPI {
 		return e.blockedBy(ctx, s)
 	}
