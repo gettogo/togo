@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,25 +27,37 @@ const StateConversation = "conversation"
 const StateCwd = "conversation_cwd"
 
 // filesDir is the folder the @ menu lists: the one the conversation was
-// moved to when a mapper names it, else the session's. The mapper's word
-// is a path the harness sent, so it is confined as a source's path is (the
-// home, the session folder, the agent's own roots) and must be a folder.
-// One that is not is not listed; the menu keeps to the session folder.
-func (s *sess) filesDir() string {
+// moved to when a mapper names it, else the folder the session's agent is
+// in now, else the one the session started in. An agent can change folder
+// under a running session (omp's /move, seen on 18.20: the menu kept
+// listing the folder the session started in); the session's own record
+// follows the pane, so it is asked again each time.
+//
+// The mapper's word is a path the harness sent, so it is confined as a
+// source's path is (the home, the session folder, the agent's own roots).
+// A folder that is not one, or cannot be read, is not listed.
+func (s *sess) filesDir(ctx context.Context) string {
+	isDir := func(p string) bool {
+		fi, err := os.Stat(p)
+		return err == nil && fi.IsDir()
+	}
 	s.mu.Lock()
 	dir := s.stateLocked()[StateCwd]
 	s.mu.Unlock()
-	if !filepath.IsAbs(dir) {
+	if filepath.IsAbs(dir) {
+		if real, err := source.Confine(dir, s.env); err == nil && isDir(real) {
+			return real
+		}
 		return s.env.Cwd
 	}
-	real, err := source.Confine(dir, s.env)
-	if err != nil {
-		return s.env.Cwd
+	if s.e.cfg.Sessions != nil {
+		if info, err := s.e.cfg.Sessions.Resolve(ctx, s.id); err == nil {
+			if now := source.Expand(info.Cwd, s.e.cfg.Home); filepath.IsAbs(now) && isDir(now) {
+				return now
+			}
+		}
 	}
-	if fi, err := os.Stat(real); err != nil || !fi.IsDir() {
-		return s.env.Cwd
-	}
-	return real
+	return s.env.Cwd
 }
 
 // movedLocked reports whether the mappers now name a conversation other

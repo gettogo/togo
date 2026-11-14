@@ -82,3 +82,55 @@ func TestFileCompletionFollowsTheConversationFolder(t *testing.T) {
 		}
 	}
 }
+
+// Seen live on omp 18.20: /move took the agent to another folder, the
+// session's own record followed it, and the @ menu kept listing the folder
+// the session started in. With no folder named by a mapper, the menu lists
+// the folder the session's agent is in now.
+func TestFileCompletionFollowsTheSessionsCurrentFolder(t *testing.T) {
+	const id = "s_fakemoved02"
+	home := t.TempDir()
+	project, alternate := filepath.Join(home, "project"), filepath.Join(home, "alternate")
+	for p, name := range map[string]string{project: "README.md", alternate: "SENTINEL.txt"} {
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sessions := fakeSessions{id: session.Session{ID: id, Agent: "fakereload", Managed: true, Cwd: project, Command: []string{"fakereload"}}}
+	e := New(Config{
+		Sessions: sessions, Typist: &seqPane{}, Marker: &fakeMarker{}, Home: home,
+		LoginPath: func(context.Context) string { return "/bin:/usr/bin" },
+		Log:       &Log{NewEpoch: func() string { return "e1" }}, Scale: 0.05,
+	})
+	t.Cleanup(func() { e.Forget(id) })
+	ctx := context.Background()
+	titles := func() string {
+		res, err := e.Complete(ctx, harness.CompleteRequest{Session: id, Kind: harness.CompleteFile})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, it := range res.Items {
+			out = append(out, it.Title)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := titles(); got != "README.md" {
+		t.Fatalf("before the move: %q", got)
+	}
+	moved := sessions[id]
+	moved.Cwd = alternate
+	sessions[id] = moved
+	if got := titles(); got != "SENTINEL.txt" {
+		t.Errorf("after the move: %q, want the folder the agent is in now", got)
+	}
+	// A folder that is gone falls back to the one the session started in.
+	moved.Cwd = filepath.Join(home, "removed")
+	sessions[id] = moved
+	if got := titles(); got != "README.md" {
+		t.Errorf("after the folder went away: %q", got)
+	}
+}
