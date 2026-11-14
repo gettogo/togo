@@ -28,7 +28,9 @@ endpoint:
 capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
   files, mode, model, needs.approvals, needs.questions, agents, background, changes, ports, status,
   resume, compact, mcp, settings]
-images: { insert: together }   # how image paths are pasted into the input
+# The terminal attaches a pasted file only when the paste is nothing but file
+# paths; pasted with the text, a path stays text. So one paste per path.
+images: { insert: per_path }
 feeds:
   events:
     sse: { path: /api/event }

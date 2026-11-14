@@ -392,8 +392,9 @@ func (s *sess) notePhoneLocked(id, text string, images []harness.ImageRef) {
 	s.phone = append(keep, phoneText{id: id, text: strings.TrimSpace(text), images: images, at: now})
 }
 
-// imagePlaceholder is how an agent writes a pasted picture into the prompt text.
-var imagePlaceholder = regexp.MustCompile(`\[Image #\d+\]`)
+// imagePlaceholder is how an agent writes a pasted picture into the prompt
+// text: "[Image #1]" (Claude Code) or "[Image 1]" (OpenCode 2).
+var imagePlaceholder = regexp.MustCompile(`\[Image #?\d+\]`)
 
 // matchPhoneLocked finds the phone prompt the agent's record of text is.
 // A prompt sent with pictures matches once the pasted paths and the
