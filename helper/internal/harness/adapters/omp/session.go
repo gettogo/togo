@@ -161,6 +161,16 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if parent == "" {
 			return s.compaction(e, at)
 		}
+	case "custom":
+		// /todo in the terminal edits the list by hand and saves the whole
+		// list (seen on 18.20: "/todo done" wrote user_todo_edit and the
+		// plan stayed 0/2). It replaces the plan like a todo result does.
+		if parent == "" && str(e, "customType") == "user_todo_edit" {
+			if phases, ok := phasesFromDetails(obj(e["data"])); ok {
+				s.todo = phases
+				return []harness.Item{planFrom("edit-"+str(e, "id"), s.turnID(), at, phases)}, []harness.Op{replacePlan(todoRowsFrom(phases))}
+			}
+		}
 	}
 	return nil, nil
 }

@@ -198,3 +198,18 @@ func TestUnrecognisedTodoStaysAToolStep(t *testing.T) {
 		t.Fatal("not flagged")
 	}
 }
+
+// Seen live on omp 18.20: "/todo done" in the terminal marked both tasks
+// completed and saved a user_todo_edit entry; the plan in the app stayed at
+// 0 of 2. The entry carries the whole list and replaces the plan.
+func TestManualTodoEditReplacesThePlan(t *testing.T) {
+	m := newSession(env())
+	out := run(m, []harness.Record{
+		todoCall("c1", `{"op":"init","list":[{"phase":"init","items":["OMP_LOCAL_TASK_ONE","OMP_LOCAL_TASK_TWO"]}]}`),
+		{Source: "session", At: t0, Data: json.RawMessage(`{"type":"custom","customType":"user_todo_edit","data":{"phases":[{"name":"init","tasks":[{"content":"OMP_LOCAL_TASK_ONE","status":"completed"},{"content":"OMP_LOCAL_TASK_TWO","status":"completed"}]}]},"id":"756a9eae","parentId":"22c8390c","timestamp":"2026-11-14T00:53:19.091Z","runtime":{"version":"18.20.0"}}`)},
+	})
+	rows := lastPlan(out)
+	if got := states(rows); got != "init=done{OMP_LOCAL_TASK_ONE=done,OMP_LOCAL_TASK_TWO=done}" {
+		t.Fatalf("plan after the manual edit = %q, want both tasks done", got)
+	}
+}
