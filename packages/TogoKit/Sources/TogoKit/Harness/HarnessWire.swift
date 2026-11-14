@@ -82,14 +82,32 @@ public struct HarnessQuestion: Codable, Hashable, Sendable, Identifiable {
     public var options: [HarnessChoice]
     public var multi: Bool
     public var allowText: Bool
+    /// Nil preserves the legacy rule that every question needs an answer.
+    public var required: Bool?
+    public var `default`: [String]?
+    public var when: Condition?
 
-    public init(id: String, header: String? = nil, prompt: String, options: [HarnessChoice], multi: Bool, allowText: Bool) {
+    public struct Condition: Codable, Hashable, Sendable {
+        public var question: String
+        public var equals: [String]
+
+        public init(question: String, equals: [String]) {
+            self.question = question
+            self.equals = equals
+        }
+    }
+
+    public init(id: String, header: String? = nil, prompt: String, options: [HarnessChoice], multi: Bool, allowText: Bool,
+                required: Bool? = nil, default: [String]? = nil, when: Condition? = nil) {
         self.id = id
         self.header = header
         self.prompt = prompt
         self.options = options
         self.multi = multi
         self.allowText = allowText
+        self.required = required
+        self.default = `default`
+        self.when = when
     }
 
     /// A missing or null `options` reads as none, so an older helper's question without
@@ -102,6 +120,9 @@ public struct HarnessQuestion: Codable, Hashable, Sendable, Identifiable {
         options = try c.decodeIfPresent([HarnessChoice].self, forKey: .options) ?? []
         multi = try c.decode(Bool.self, forKey: .multi)
         allowText = try c.decode(Bool.self, forKey: .allowText)
+        required = try c.decodeIfPresent(Bool.self, forKey: .required)
+        `default` = try c.decodeIfPresent([String].self, forKey: .default)
+        when = try c.decodeIfPresent(Condition.self, forKey: .when)
     }
 }
 
