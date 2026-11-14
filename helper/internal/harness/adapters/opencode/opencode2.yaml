@@ -157,7 +157,8 @@ actions:
   set_provider_key:
     http: { method: POST, path: '/api/integration/{{.target}}/connect/key?location%5Bdirectory%5D={{.cwd | urlquery}}', body: '{"key": {{.value | json}}}' }
     stability: unverified
-  # A / line from the composer or the palette runs as the server's command.
+  # A / line from the composer or the palette runs as the server's command,
+  # unless it names one of the terminal's own (commands.static, kind terminal).
   command:
     http: { method: POST, path: '/api/session/{{.state.harness_session}}/command', body: '{"name": {{.command | json}}, "text": {{.arguments | json}}}' }
     stability: documented
@@ -221,6 +222,37 @@ commands:
     - { name: models, detail: Choose the model, screen: model }
     - { name: sessions, detail: Resume a session, screen: resume }
     - { name: compact, detail: Summarise the session, action: compact }
+    - { name: mcps, detail: MCP servers, screen: mcp }
+    - { name: diff, detail: Review changes, opens: changes }
+    # The terminal's own commands: the server does not list or run them, so
+    # they are typed, and the terminal's / menu runs its first row on Enter.
+    # Only names that are that first row before and inside a conversation
+    # are here (seen on 2.2.5, and unconditional in the 2.3.0 source). Left
+    # out: /undo, /redo, /fork, /rename, /timeline, /copy, /export and
+    # /terminal exist only inside a conversation, and outside one the menu
+    # runs another command or leaves the text in the input line; /update,
+    # /restart and /highlights are not always there; /cd and /btw take an
+    # argument their menu completes without sending.
+    - { name: new, detail: Start a new session, kind: terminal }
+    - { name: clear, detail: Close this session and start a new one, kind: terminal }
+    - { name: open, detail: Open a session or project, kind: terminal }
+    - { name: agents, detail: Switch agent, kind: terminal }
+    - { name: variants, detail: Switch model variant, kind: terminal }
+    - { name: connect, detail: Sign in to a provider, kind: terminal }
+    - { name: usage, detail: Provider usage and limits, kind: terminal }
+    - { name: stats, detail: Usage statistics, kind: terminal }
+    - { name: status, detail: Server and connection status, kind: terminal }
+    - { name: skills, detail: Pick a skill for the prompt, kind: terminal }
+    - { name: worktrees, detail: Manage workspaces, kind: terminal }
+    - { name: plugins, detail: Plugins, kind: terminal }
+    - { name: settings, detail: Open settings, kind: terminal }
+    - { name: themes, detail: Switch theme, kind: terminal }
+    - { name: editor, detail: Write the prompt in your editor, kind: terminal }
+    - { name: pair, detail: Pair a device, kind: terminal }
+    - { name: reload, detail: Reload configuration, kind: terminal }
+    - { name: debug, detail: Debug info, kind: terminal }
+    - { name: help, detail: Help, kind: terminal }
+    - { name: exit, detail: Quit OpenCode, kind: terminal, role: destructive }
   source: commands
   select: '[.[] | {name: .name, detail: .description, hint: ""}]'
 mission:

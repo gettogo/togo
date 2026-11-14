@@ -32,7 +32,8 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 	gen := s.convGen
 	s.mu.Unlock()
 	if act, ok := s.ad.Actions[actionCommand]; ok && len(req.Images) == 0 {
-		if name, args, ok := slashCommand(req.Text); ok {
+		// A command of the terminal's own is not the API's: it is typed below.
+		if name, args, ok := slashCommand(req.Text); ok && !s.ad.TypedCommand(name) {
 			// The harness API takes a / line as a command, not as prompt
 			// text the model would read (OpenCode's /init).
 			err := e.runCommand(ctx, s, act, name, args)
