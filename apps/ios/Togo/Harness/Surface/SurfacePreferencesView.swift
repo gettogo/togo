@@ -46,7 +46,7 @@ private struct SurfacePreferenceRow: View {
     private var control: [String: JSONValue] { SurfaceValues.object(row["control"]) }
     private var label: String { SurfaceValues.text(row["label"]) }
     private var key: SurfaceDrafts.Key {
-        .init(surface: context.view.id, instance: context.view.instance, node: node.id, field: id)
+        .init(surface: context.view.id, instance: context.view.instance, node: node.id, field: id, anchor: node.id)
     }
     private var producer: String {
         SurfaceValues.string(control["value"]) ?? SurfaceValues.number(control["value"]).map { String($0) } ?? ""

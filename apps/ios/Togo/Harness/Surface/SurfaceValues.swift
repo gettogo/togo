@@ -20,6 +20,18 @@ enum SurfaceValues {
         return nil
     }
 
+    static func draftAnchor(for id: String, in root: SurfaceNode) -> String {
+        func find(_ node: SurfaceNode, field: String?) -> String? {
+            let field = node.properties["role"] == .string("omp.ask.field") ? node.id : field
+            if node.id == id { return field ?? id }
+            for child in node.children {
+                if let found = find(child, field: field) { return found }
+            }
+            return nil
+        }
+        return find(root, field: nil) ?? id
+    }
+
     static func string(_ value: JSONValue?) -> String? {
         if case .string(let text) = value { return text }
         return nil

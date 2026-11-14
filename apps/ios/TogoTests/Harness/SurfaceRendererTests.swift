@@ -57,6 +57,71 @@ import UIKit
         #expect(drafts.draft(key) == nil)
     }
 
+    @Test func unfocusedOriginalFieldKeepsItsUnappliedPhoneDraft() throws {
+        let scene = try originalFormScene()
+        func input(_ node: SurfaceNode) -> SurfaceNode? {
+            if node.kind == "input" { return node }
+            return node.children.lazy.compactMap(input).first
+        }
+        let field = try #require(input(scene.views[0].document.root))
+        let drafts = SurfaceDrafts()
+        drafts.bind("runtime")
+        let key = SurfaceDrafts.Key(surface: scene.views[0].id, instance: scene.views[0].instance, node: field.id)
+        drafts.set("unapplied phone text", key: key, producer: SurfaceValues.string(field.properties["text"]) ?? "")
+        // Original OMP replaces an unfocused Input with a text well; its field
+        // remains, and the same Input returns when the field gets focus again.
+        func unfocus(_ node: SurfaceNode) -> SurfaceNode {
+            var result = node
+            result.children = node.children.filter { $0.id != field.id }.map(unfocus)
+            return result
+        }
+        var missing = scene
+        missing.views[0].document.root = unfocus(scene.views[0].document.root)
+        drafts.reconcile(missing)
+        #expect(drafts.draft(key)?.text == "unapplied phone text")
+        drafts.reconcile(scene)
+        #expect(drafts.draft(key)?.text == "unapplied phone text")
+        missing.views = []
+        drafts.reconcile(missing)
+        #expect(drafts.draft(key) == nil)
+    }
+
+    private func originalFormScene() throws -> SurfaceScene {
+        let url = try #require(Bundle(for: SurfaceFixtureBundle.self).url(forResource: "omp-native-form", withExtension: "json"))
+        let form = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+        let value: [String: Any] = [
+            "program": "omp", "features": ["edit"], "revision": 1,
+            "options": ["kinds": SurfaceNodeView.kinds.sorted(), "cols": 80, "dark": true, "reduceMotion": false],
+            "views": [["id": "s:1", "mode": "inline", "listen": true, "closed": false, "instance": 1,
+                       "document": ["root": ["id": "s:1", "k": "col", "c": [form]], "sequence": 1,
+                                    "revision": 1, "suspended": false]]]
+        ]
+        return try SurfaceScene.decode(JSONSerialization.data(withJSONObject: value), kinds: SurfaceNodeView.kinds)
+    }
+
+    @Test func aClosedOriginalFormDoesNotLendItsDraftToAnotherField() throws {
+        var scene = try originalFormScene()
+        func input(_ node: SurfaceNode) -> SurfaceNode? {
+            if node.kind == "input" { return node }
+            return node.children.lazy.compactMap(input).first
+        }
+        let root = scene.views[0].document.root
+        let field = try #require(input(root))
+        let anchor = SurfaceValues.draftAnchor(for: field.id, in: root)
+        #expect(root.node(id: anchor)?.properties["role"] == .string("omp.ask.field"))
+        let key = SurfaceDrafts.Key(surface: scene.views[0].id, instance: scene.views[0].instance, node: field.id, anchor: anchor)
+        let drafts = SurfaceDrafts()
+        drafts.set("held", key: key, producer: "original")
+        func remove(_ node: SurfaceNode) -> SurfaceNode {
+            var result = node
+            result.children = node.children.filter { $0.id != anchor }.map(remove)
+            return result
+        }
+        scene.views[0].document.root = remove(root)
+        drafts.reconcile(scene)
+        #expect(drafts.draft(key) == nil)
+    }
+
     @Test func aDisabledReasonAlsoDisablesTheControl() {
         #expect(SurfaceValues.disabled(.string("Unavailable for this model")))
         #expect(SurfaceValues.disabled(.bool(true)))

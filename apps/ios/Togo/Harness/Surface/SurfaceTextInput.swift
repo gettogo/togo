@@ -7,7 +7,8 @@ struct SurfaceTextInput: View {
     let context: SurfaceContext
 
     private var key: SurfaceDrafts.Key {
-        .init(surface: context.view.id, instance: context.view.instance, node: node.id)
+        .init(surface: context.view.id, instance: context.view.instance, node: node.id,
+              anchor: SurfaceValues.draftAnchor(for: node.id, in: context.view.document.root))
     }
     private var producer: String { SurfaceValues.string(node.properties["text"]) ?? "" }
     private var draft: SurfaceDrafts.Draft? { context.drafts.draft(key) }

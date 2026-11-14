@@ -9,6 +9,8 @@ import TogoKit
         var instance: UInt64
         var node: String
         var field: String? = nil
+        /// The containing form field stays mounted while its Input loses focus.
+        var anchor: String? = nil
     }
 
     struct Draft {
@@ -34,13 +36,17 @@ import TogoKit
     func reconcile(_ scene: SurfaceScene) {
         values = values.filter { key, draft in
             guard let view = scene.views.first(where: { $0.id == key.surface && $0.instance == key.instance }),
-                  !view.closed, let node = view.document.root.node(id: key.node) else { return false }
+                  !view.closed else { return false }
+            if let anchor = key.anchor, view.document.root.node(id: anchor) == nil { return false }
+            guard let node = view.document.root.node(id: key.node) else { return true }
             if let field = key.field {
                 let rows = SurfaceValues.array(node.properties["sections"]).flatMap {
                     SurfaceValues.array(SurfaceValues.object($0)["rows"])
                 }.map(SurfaceValues.object)
-                guard let row = rows.first(where: { SurfaceValues.string($0["id"]) == field }) else { return false }
-                return SurfaceValues.string(SurfaceValues.object(row["control"])["value"]) != draft.text
+                guard let row = rows.first(where: { SurfaceValues.string($0["id"]) == field }) else { return true }
+                let value = SurfaceValues.object(row["control"])["value"]
+                if let number = SurfaceValues.number(value), Double(draft.text) == number { return false }
+                return SurfaceValues.string(value) != draft.text
             }
             return SurfaceValues.string(node.properties["text"]) != draft.text
         }
