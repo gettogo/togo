@@ -2,6 +2,7 @@ import SwiftUI
 import TogoKit
 
 struct SurfaceTextInput: View {
+    @FocusState private var focused: Bool
     let node: SurfaceNode
     let context: SurfaceContext
 
@@ -18,6 +19,7 @@ struct SurfaceTextInput: View {
         VStack(alignment: .leading, spacing: 8) {
             TextField(SurfaceValues.text(node.properties["placeholder"]), text: binding, axis: node.kind == "editor" ? .vertical : .horizontal)
                 .textFieldStyle(.roundedBorder)
+                .focused($focused)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .disabled(node.properties["readonly"] == .bool(true) || node.properties["typeahead"] == .bool(true))
@@ -40,6 +42,10 @@ struct SurfaceTextInput: View {
                 }
                 .disabled((draft?.text ?? producer).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+        }
+        .onChange(of: context.view.document.focus, initial: true) { _, id in focused = id == node.id }
+        .onChange(of: focused) { _, active in
+            if active, context.view.document.focus != node.id { context.send(node, "focus") }
         }
     }
 }

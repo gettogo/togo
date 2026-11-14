@@ -24,7 +24,7 @@ struct SurfaceNodeView: View {
     static let kinds: Set<String> = [
         "col", "row", "card", "section", "rule", "spacer", "text", "md", "code", "diff", "badge", "kbd",
         "icon", "spinner", "progress", "list", "item", "tabs", "editor", "input", "button", "status", "seg",
-        "overlay", "toast", "picker", "prefs"
+        "overlay", "toast", "picker", "prefs", "image", "meter", "kv", "table"
     ]
     let node: SurfaceNode
     let context: SurfaceContext
@@ -34,6 +34,7 @@ struct SurfaceNodeView: View {
             content
                 .disabled(!context.session.canInteract || SurfaceValues.disabled(node.properties["disabled"]))
                 .accessibilityIdentifier("surface.node.\(node.id)")
+                .contextMenu { SurfaceNodeActions(node: node, context: context) }
         }
     }
 
@@ -68,6 +69,32 @@ struct SurfaceNodeView: View {
         case "progress":
             ProgressView(value: SurfaceValues.number(properties["value"]).map { min(1, max(0, $0)) }) {
                 Text(verbatim: SurfaceValues.text(properties["label"]))
+            }
+        case "meter": meter
+        case "image":
+            if properties["builtin"] == .string("omp") {
+                Text(verbatim: SurfaceValues.string(properties["alt"]) ?? "omp").font(.title).bold()
+            } else {
+                Label(SurfaceValues.string(properties["alt"]) ?? SurfaceCopy.interface, systemImage: "photo")
+                Text(SurfaceCopy.unsupported).font(.footnote).foregroundStyle(.secondary)
+            }
+        case "kv":
+            ForEach(SurfaceValues.array(properties["items"]), id: \.self) { value in
+                let item = SurfaceValues.object(value)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: SurfaceValues.text(item["k"])).font(.headline)
+                    Text(verbatim: SurfaceValues.text(item["v"]))
+                }
+            }
+        case "table":
+            ForEach(SurfaceValues.entries(properties["rows"])) { row in
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(SurfaceValues.entries(properties["cols"])) { column in
+                        LabeledContent(SurfaceValues.text(column.properties["head"])) {
+                            Text(verbatim: SurfaceValues.text(SurfaceValues.object(row.properties["cells"])[column.id]))
+                        }
+                    }
+                }
             }
         case "list": list
         case "item": Text(verbatim: SurfaceValues.text(properties["label"]))
@@ -129,19 +156,45 @@ struct SurfaceNodeView: View {
         VStack(alignment: .leading, spacing: 8) {
             if node.children.isEmpty { Text(verbatim: SurfaceValues.text(properties["empty"])) }
             ForEach(node.children) { child in
-                Button {
-                    context.send(node, "activate", ["item": .string(child.id)])
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: SurfaceValues.text(child.properties["label"]))
-                        let detail = SurfaceValues.text(child.properties["detail"])
-                        if !detail.isEmpty { Text(verbatim: detail).font(.caption).foregroundStyle(.secondary) }
+                if child.kind == "item" {
+                    Button {
+                        context.send(node, "select", ["item": .string(child.id)])
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(verbatim: SurfaceValues.text(child.properties["label"]))
+                            let detail = SurfaceValues.text(child.properties["detail"])
+                            if !detail.isEmpty { Text(verbatim: detail).font(.caption).foregroundStyle(.secondary) }
+                            let value = SurfaceValues.text(child.properties["value"])
+                            if !value.isEmpty { Text(verbatim: value).font(.caption) }
+                            if child.properties["icon"] == .string("check") {
+                                Image(systemName: "checkmark").accessibilityLabel(SurfaceCopy.selected)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .disabled(SurfaceValues.disabled(child.properties["disabled"]))
+                    .contextMenu { SurfaceNodeActions(node: child, context: context) }
+                } else {
+                    AnyView(SurfaceNodeView(node: child, context: context))
                 }
-                .disabled(SurfaceValues.disabled(child.properties["disabled"]))
+            }
+            if let selected = SurfaceValues.string(properties["selected"]),
+               node.children.contains(where: { $0.id == selected && !SurfaceValues.disabled($0.properties["disabled"]) }) {
+                Button(SurfaceCopy.choose) { context.send(node, "activate", ["item": .string(selected)]) }
             }
         }
+    }
+
+    @ViewBuilder private var meter: some View {
+        if let value = SurfaceValues.number(properties["value"]) {
+            ProgressView(value: min(1, max(0, value))) {
+                Text(verbatim: SurfaceValues.text(properties["label"]))
+            }
+        } else {
+            Text(verbatim: SurfaceValues.string(properties["title"]) ?? SurfaceCopy.unavailable)
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+        if click != nil { actionButton(SurfaceValues.string(properties["aria"]) ?? SurfaceValues.string(properties["title"]) ?? SurfaceCopy.interface) }
     }
 
     private var tabs: some View {

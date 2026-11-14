@@ -7,7 +7,17 @@ enum SurfaceValues {
     /// replaces the underlay instead of placing the dialog below chat history.
     static func presentedNode(_ root: SurfaceNode) -> SurfaceNode {
         let layer = root.children.first { $0.id == "layer" }
-        return layer?.children.last { $0.properties["hidden"] != .bool(true) } ?? root
+        if let modal = layer?.children.last(where: { $0.properties["hidden"] != .bool(true) }) { return modal }
+        return form(root) ?? root
+    }
+
+    private static func form(_ node: SurfaceNode) -> SurfaceNode? {
+        guard node.properties["hidden"] != .bool(true) else { return nil }
+        if node.properties["role"] == .string("omp.editor.ask") { return node }
+        for child in node.children {
+            if let found = form(child) { return found }
+        }
+        return nil
     }
 
     static func string(_ value: JSONValue?) -> String? {
@@ -80,6 +90,8 @@ enum SurfaceCopy {
     static let waiting = String(localized: "surface.waiting", defaultValue: "Waiting for the harness…")
     static let unsupported = String(localized: "surface.unsupported", defaultValue: "Continue with this control in Terminal.")
     static let inputChanged = String(localized: "surface.inputChanged", defaultValue: "The input changed at the desk. Your draft is kept here.")
+    static let selected = String(localized: "surface.selected", defaultValue: "Selected")
+    static let choose = String(localized: "surface.choose", defaultValue: "Choose")
 }
 
 extension HarnessSessionStore {

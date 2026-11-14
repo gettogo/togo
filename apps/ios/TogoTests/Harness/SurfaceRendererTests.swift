@@ -25,6 +25,26 @@ import UIKit
         #expect(event["cursor"] == .number(Double("<div>\n100%! /resume".utf16.count)))
     }
 
+    @Test func originalInlineFormTakesTheSheetInsteadOfPastOutput() throws {
+        let bundle = Bundle(for: SurfaceFixtureBundle.self)
+        let url = try #require(bundle.url(forResource: "omp-native-form", withExtension: "json"))
+        let data = try Data(contentsOf: url)
+        let form = try JSONSerialization.jsonObject(with: data)
+        let wrapper: [String: Any] = ["id": "session", "k": "col", "c": [
+            ["id": "past", "k": "text", "p": ["text": "Past output"]],
+            ["id": "dock", "k": "col", "c": [form]]
+        ]]
+        let root = try JSONDecoder().decode(SurfaceNode.self, from: JSONSerialization.data(withJSONObject: wrapper))
+        let shown = SurfaceValues.presentedNode(root)
+        #expect(shown.properties["role"] == .string("omp.editor.ask"))
+        #expect(shown.id != root.id)
+        func check(_ node: SurfaceNode) {
+            #expect(SurfaceNodeView.kinds.contains(node.kind))
+            node.children.forEach(check)
+        }
+        check(shown)
+    }
+
     @Test func draftsSurviveLayoutAndSameRuntimeReopenButNotAnotherRuntime() {
         let drafts = SurfaceDrafts()
         let key = SurfaceDrafts.Key(surface: "session", instance: 1, node: "input")
