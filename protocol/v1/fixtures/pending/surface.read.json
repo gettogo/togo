@@ -1,0 +1,27 @@
+{
+  "description": "One complete immutable document snapshot, with unpadded base64url bytes. Reading it does not acknowledge display.",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "surface.read",
+    "params": {
+      "id": "s_abcdefghij",
+      "lease": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "generation": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "revision": 3,
+      "snapshot": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "offset": 0,
+      "nextOffset": 428,
+      "total": 428,
+      "data": "eyJwcm9ncmFtIjoib21wIiwiZmVhdHVyZXMiOlsiZWRpdCIsInVuZG8iLCJzZW5kIl0sInZpZXdzIjpbeyJpZCI6InM6MSIsIm1vZGUiOiJpbmxpbmUiLCJsaXN0ZW4iOnRydWUsImNsb3NlZCI6ZmFsc2UsImluc3RhbmNlIjoxLCJkb2N1bWVudCI6eyJyb290Ijp7ImlkIjoiczoxIiwiayI6ImNvbCIsImMiOlt7ImlkIjoiaW5wdXQiLCJrIjoiZWRpdG9yIiwicCI6eyJ0ZXh0IjoiIiwiY3Vyc29yIjowLCJzZW5kYWJsZSI6dHJ1ZX19XX0sInNlcXVlbmNlIjoxLCJyZXZpc2lvbiI6MSwiZm9jdXMiOiJpbnB1dCIsInN1c3BlbmRlZCI6ZmFsc2V9fV0sInJldmlzaW9uIjozLCJvcHRpb25zIjp7ImtpbmRzIjpbImNvbCIsInRleHQiLCJlZGl0b3IiLCJidXR0b24iLCJjYXJkIl0sImNvbHMiOjgwLCJkYXJrIjp0cnVlLCJyZWR1Y2VNb3Rpb24iOmZhbHNlfX0",
+      "unchanged": false,
+      "pending": false
+    }
+  }
+}
