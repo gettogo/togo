@@ -143,6 +143,7 @@ func newSess(e *Engine, info session.Session) *sess {
 		return s
 	}
 	s.env = e.envFor(info)
+	harness.ApplyRoots(s.ad.Adapter.Adapter, &s.env)
 	s.mission = newMission(s.missionCaps())
 	return s
 }

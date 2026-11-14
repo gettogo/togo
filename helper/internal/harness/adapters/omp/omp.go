@@ -146,7 +146,7 @@ func sessionDir(env harness.Env) string {
 	if len(names) == 0 {
 		return ""
 	}
-	root := filepath.Join(home, ".omp", "agent", "sessions")
+	root := filepath.Join(agentRoot(env), "sessions")
 	best, bestAt := "", time.Time{}
 	for _, n := range names {
 		st, err := os.Stat(filepath.Join(root, n))

@@ -65,7 +65,8 @@ func Expand(p, home string) string {
 }
 
 // Confine resolves p (after ~ expansion) through symlinks and checks it
-// lies under the home folder or the session cwd. It returns the resolved
+// lies under the home folder, the session cwd or one of the agent's own
+// storage roots. It returns the resolved
 // path.
 func Confine(p string, env harness.Env) (string, error) {
 	h := home(env)
@@ -80,7 +81,7 @@ func Confine(p string, env harness.Env) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, root := range []string{h, Expand(env.Cwd, h)} {
+	for _, root := range append([]string{h, Expand(env.Cwd, h)}, env.Roots...) {
 		if root == "" {
 			continue
 		}

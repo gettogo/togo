@@ -92,6 +92,9 @@ type Env struct {
 	// they hold open, so a source follows only what its own agent writes.
 	// Nil means attribution is unavailable.
 	Procs Procs
+	// Roots are folders outside the home and the session folder that
+	// sources may read: the agent's own storage when it was moved.
+	Roots []string
 }
 
 // Procs attributes files to the session's own agent process. A source that
