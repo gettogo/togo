@@ -44,11 +44,22 @@ func TestPreparedOMPLaunchKeepsOriginalStoredArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// This fixture checks argv handling, not harness behavior. Its version
+	// response is the real OMP CLI shape required by the optional launch gate.
+	code = append([]byte("#!/bin/sh\nif [ \"$1\" = --version ]; then echo omp/18.20.0; exit 0; fi\n"), strings.SplitN(string(code), "\n", 2)[1]...)
 	if err := os.WriteFile(filepath.Join(bin, "omp"), code, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	companions := &surface.Companions{Home: t.TempDir()}
-	s.PrepareLaunch = companions.PrepareLaunch
+	s.PrepareLaunch = func(ctx context.Context, id, agent string, run session.Launch) (session.Launch, error) {
+		// Probe the same fixture the pane's explicit test PATH runs, even if
+		// another test already warmed the process-wide login PATH cache.
+		program := run.Program
+		run.Program = filepath.Join(bin, "omp")
+		next, err := companions.PrepareLaunch(ctx, id, agent, run)
+		next.Program = program
+		return next, err
+	}
 	dir := realpath(t, t.TempDir())
 	args := []string{"--profile", "work", "--", "literal"}
 	created := mustCreate(t, s, session.CreateOpts{Agent: "omp", Cwd: dir, Args: args})

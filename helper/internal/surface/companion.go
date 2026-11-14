@@ -35,7 +35,10 @@ var companionFiles embed.FS
 var generationPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // Companions materializes optional, per-run harness companions under TOGO_HOME.
-type Companions struct{ Home string }
+type Companions struct {
+	Home         string
+	probeVersion func(context.Context, session.Launch) (string, error)
+}
 
 // CompanionConfig is private launch configuration; Token never goes over RPC.
 type CompanionConfig struct {
@@ -65,8 +68,24 @@ type CompanionState struct {
 
 // PrepareLaunch preserves the user's argv and profile. Only supported
 // interactive OMP launches receive the explicit companion extension.
-func (c *Companions) PrepareLaunch(_ context.Context, id, agent string, launch session.Launch) (session.Launch, error) {
+func (c *Companions) PrepareLaunch(ctx context.Context, id, agent string, launch session.Launch) (session.Launch, error) {
 	if agent != "omp" || !interactiveOMP(launch.Args) {
+		return launch, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if !nativeAllowed(ctx, launch) {
+		return launch, nil
+	}
+	probe := c.probeVersion
+	if probe == nil {
+		probe = ompVersion
+	}
+	version, err := probe(ctx, launch)
+	if err != nil {
+		return launch, fmt.Errorf("surface: optional runtime version probe: %w", err)
+	}
+	if !supportedOMPVersion(version) {
 		return launch, nil
 	}
 	root, err := c.sessionDir(id)

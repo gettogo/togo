@@ -15,7 +15,7 @@ import (
 )
 
 func TestCompanionLaunchPreservesArgumentsAndKeepsSecretsOutOfArgv(t *testing.T) {
-	c := &Companions{Home: t.TempDir()}
+	c := testCompanions(t)
 	old := session.Launch{Program: "omp", Args: []string{"--profile", "work", "--", "literal"}, Env: map[string]string{"EXISTING": "kept"}}
 	got, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", old)
 	if err != nil {
@@ -46,7 +46,7 @@ func TestCompanionLaunchPreservesArgumentsAndKeepsSecretsOutOfArgv(t *testing.T)
 }
 
 func TestCompanionSkipsNoninteractiveAndOtherHarnessLaunches(t *testing.T) {
-	c := &Companions{Home: t.TempDir()}
+	c := testCompanions(t)
 	for _, args := range [][]string{{"--mode", "rpc"}, {"--mode=rpc"}, {"--print", "hello"}, {"config", "list"}} {
 		old := session.Launch{Program: "omp", Args: args}
 		got, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", old)
@@ -61,8 +61,22 @@ func TestCompanionSkipsNoninteractiveAndOtherHarnessLaunches(t *testing.T) {
 	}
 }
 
+func TestCompanionSkipsNativeOptOutBeforeWritingAnything(t *testing.T) {
+	t.Setenv("PI_TUI_NATIVE", "0")
+	c := testCompanions(t)
+	old := session.Launch{Program: "omp", Args: []string{"--profile", "work"}}
+	got, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", old)
+	if err != nil || !reflect.DeepEqual(got, old) {
+		t.Fatalf("disabled native launch changed: %v %v", got, err)
+	}
+	entries, err := os.ReadDir(c.Home)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("disabled native launch wrote private run files", err)
+	}
+}
+
 func TestCompanionRejectsForeignAndOversizedState(t *testing.T) {
-	c := &Companions{Home: t.TempDir()}
+	c := testCompanions(t)
 	_, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +105,7 @@ func TestOMPCompanionControlAndLease(t *testing.T) {
 }
 
 func TestCompanionDispatchBoundsEncodedTextAndWaitsForAcceptance(t *testing.T) {
-	c := &Companions{Home: t.TempDir()}
+	c := testCompanions(t)
 	_, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
 	if err != nil {
 		t.Fatal(err)
@@ -142,4 +156,9 @@ func TestCompanionDispatchBoundsEncodedTextAndWaitsForAcceptance(t *testing.T) {
 	if err := <-result; err != nil {
 		t.Fatal(err)
 	}
+}
+
+func testCompanions(t *testing.T) *Companions {
+	t.Helper()
+	return &Companions{Home: t.TempDir(), probeVersion: func(context.Context, session.Launch) (string, error) { return "omp/18.20.0", nil }}
 }
