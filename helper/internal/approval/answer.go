@@ -87,6 +87,11 @@ func (s *Store) Answer(ctx context.Context, requestID, raw, by string) error {
 			s.closeIfPending(e, wire.ResolutionGone)
 			return conflict(wire.ConflictPromptGone, "")
 		}
+		if errors.Is(err, errUnconfirmed) {
+			// The request stays open: answering it again reads the screen
+			// afresh, and the desk can still answer it.
+			return conflict(wire.ConflictUnconfirmed, "")
+		}
 		return err
 	}
 	s.closeIfPending(e, by)
@@ -185,7 +190,25 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		if !ok || len(keys) == 0 {
 			return errPromptGone
 		}
-		return s.send(ctx, tgt, false, keys...)
+		if n := len(keys); n > 1 {
+			// Moves, then the key that confirms. Sent in one batch, a menu
+			// can take the moves and drop the confirm (seen live on omp
+			// 18.20: Deny stayed selected and the tool call kept waiting).
+			// The moves go first; the confirm follows once the screen
+			// shows the cursor on the option, and only then.
+			if err := s.send(ctx, tgt, false, keys[:n-1]...); err != nil {
+				return err
+			}
+			last, err := s.awaitSelected(ctx, tgt, fingerprint, opt.Label)
+			if err != nil {
+				return err
+			}
+			keys = last
+		}
+		if err := s.send(ctx, tgt, false, keys...); err != nil {
+			return err
+		}
+		return s.awaitTaken(ctx, tgt, fingerprint)
 	}
 	p, ok := detect.Detect(screen)
 	if !ok || p.Fingerprint != fingerprint {
@@ -213,7 +236,68 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		}
 		return s.send(ctx, tgt, false, "Enter")
 	}
-	return s.send(ctx, tgt, false, "Escape")
+	if err := s.send(ctx, tgt, false, "Escape"); err != nil {
+		return err
+	}
+	return s.awaitTaken(ctx, tgt, fingerprint)
+}
+
+// errUnconfirmed means the answer's keys were sent and the prompt did not
+// leave the screen: nothing shows the program took the answer.
+var errUnconfirmed = errors.New("approval: the prompt is still on screen after the answer")
+
+// How long an answer waits for the cursor to reach its option, and for the
+// prompt to leave once confirmed. A menu redraws within a frame or two; a
+// program busy starting the approved tool can take a moment to clear it.
+var (
+	answerSelect  = 2 * time.Second
+	answerConfirm = 3 * time.Second
+	answerPoll    = 80 * time.Millisecond
+)
+
+// awaitSelected waits for the screen to show the cursor on the option
+// labelled label, which is when one key confirms it, and returns that key.
+// A prompt that left meanwhile was answered at the desk.
+func (s *Store) awaitSelected(ctx context.Context, tgt, fingerprint, label string) ([]string, error) {
+	deadline := time.Now().Add(answerSelect)
+	for {
+		screen, err := s.cfg.Tmux.CapturePane(ctx, tgt)
+		if err != nil {
+			return nil, fmt.Errorf("capture pane: %w", err)
+		}
+		keys, ok := detect.KeysFor(screen, fingerprint, label)
+		if !ok {
+			return nil, errPromptGone
+		}
+		if len(keys) == 1 {
+			return keys, nil
+		}
+		if !time.Now().Before(deadline) || ctx.Err() != nil {
+			// The cursor never arrived. No confirm key was sent, so
+			// nothing was chosen.
+			return nil, errUnconfirmed
+		}
+		time.Sleep(answerPoll)
+	}
+}
+
+// awaitTaken waits for the prompt to leave the screen (or become another
+// prompt) after its answer was sent.
+func (s *Store) awaitTaken(ctx context.Context, tgt, fingerprint string) error {
+	deadline := time.Now().Add(answerConfirm)
+	for {
+		screen, err := s.cfg.Tmux.CapturePane(ctx, tgt)
+		if err != nil {
+			return fmt.Errorf("capture pane: %w", err)
+		}
+		if p, ok := detect.Detect(screen); !ok || p.Fingerprint != fingerprint {
+			return nil
+		}
+		if !time.Now().Before(deadline) || ctx.Err() != nil {
+			return errUnconfirmed
+		}
+		time.Sleep(answerPoll)
+	}
 }
 
 func (s *Store) send(ctx context.Context, tgt string, literal bool, keys ...string) error {

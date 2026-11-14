@@ -45,6 +45,8 @@ func (f *fakeTmux) SendKeys(_ context.Context, _ string, _ bool, keys ...string)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sent = append(f.sent, keys)
+	// The program takes the answer and the prompt leaves the screen.
+	f.screen = ""
 	return nil
 }
 

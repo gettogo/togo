@@ -117,6 +117,9 @@ const (
 	ConflictSymlink    = "symlink"
 	ConflictMissing    = "missing"
 	ConflictNotRegular = "not_regular"
+	// ConflictUnconfirmed: the answer's keys were sent but the prompt is
+	// still on screen. The request stays open; nothing says it was taken.
+	ConflictUnconfirmed = "unconfirmed"
 
 	ByDesk  = "desk"
 	ByPhone = "phone"
