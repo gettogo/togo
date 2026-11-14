@@ -20,18 +20,19 @@ input:
   dismiss: [Escape]
 feeds:
   # omp_agent is omp's agent folder: ~/.omp/agent unless PI_CONFIG_DIR, PI_CODING_AGENT_DIR
-  # or a profile moved it (roots.go).
+  # or a profile moved it; omp_sessions is <agent>/sessions unless omp's XDG layout moved
+  # it (roots.go).
   session:          # header {type: session, version: 3}. session_rel is the file omp's
     # terminal record (~/.omp/agent/terminal-sessions/<tty>) names for the pane: start, /new and
     # /resume move it. Without a record it is the folder's files, exclusive: only a file this
     # session's own agent holds open is taken (a /new moves it, the old file is dropped); a file
     # another process holds never is; with no evidence the session keeps its file.
-    jsonl: { glob: '{{.omp_agent}}/sessions/{{.state.session_rel}}', follow: true, exclusive: true }
+    jsonl: { glob: '{{.omp_sessions}}/{{.state.session_rel}}', follow: true, exclusive: true }
     mapper: omp.session
     stability: documented
   subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl, only the
     # followed session's own folder, so another omp's subagents in the same folder are never read.
-    jsonl: { glob: '{{.omp_agent}}/sessions/{{.state.subagent_rel}}', follow: true }
+    jsonl: { glob: '{{.omp_sessions}}/{{.state.subagent_rel}}', follow: true }
     mapper: omp.session
     stability: internal
   config:           # model roles for the picker's role chips

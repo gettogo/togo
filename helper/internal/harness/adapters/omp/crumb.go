@@ -25,8 +25,7 @@ func terminalSession(env harness.Env) string {
 	}
 	// omp names the record after the device without /dev/, slashes as dashes.
 	name := strings.ReplaceAll(strings.TrimPrefix(tty, "/dev/"), "/", "-")
-	agent := agentRoot(env)
-	record, err := os.Open(filepath.Join(agent, "terminal-sessions", name))
+	record, err := os.Open(filepath.Join(terminalRoot(env), name))
 	if err != nil {
 		return ""
 	}
@@ -49,7 +48,7 @@ func terminalSession(env harness.Env) string {
 		return ""
 	}
 	file := filepath.Clean(strings.TrimSpace(lines[1]))
-	rel, err := filepath.Rel(filepath.Join(agent, "sessions"), file)
+	rel, err := filepath.Rel(sessionsRoot(env), file)
 	if err != nil || !filepath.IsLocal(rel) || filepath.Ext(rel) != ".jsonl" || strings.ContainsAny(rel, "*?[") {
 		return ""
 	}

@@ -75,3 +75,53 @@ func TestTerminalRecordIsReadFromAMovedAgentFolder(t *testing.T) {
 		t.Error("Confine allowed a path outside every root")
 	}
 }
+
+// omp moves its sessions and terminal records to the XDG folders once the
+// user has migrated (`omp config init-xdg` creates $XDG_DATA_HOME/omp): the
+// folder is used only when it exists and no agent folder override is set.
+func TestSessionsFollowOmpsXDGLayout(t *testing.T) {
+	home, data, state := t.TempDir(), t.TempDir(), t.TempDir()
+	env := func(environ ...string) harness.Env {
+		e := harness.Env{Argv: []string{"omp"}, Environ: environ, Vars: map[string]string{source.VarHome: home}}
+		harness.ApplyRoots("omp", &e)
+		return e
+	}
+	xdg := []string{"XDG_DATA_HOME=" + data, "XDG_STATE_HOME=" + state}
+	// Not migrated: the XDG folders hold no omp folder.
+	if e := env(xdg...); e.Vars[VarSessions] != filepath.Join(home, ".omp", "agent", "sessions") {
+		t.Errorf("before migration: sessions = %q", e.Vars[VarSessions])
+	}
+	for _, d := range []string{filepath.Join(data, "omp"), filepath.Join(state, "omp"), filepath.Join(data, "omp", "profiles", "work")} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := env(xdg...)
+	if e.Vars[VarSessions] != filepath.Join(data, "omp", "sessions") || e.Vars[VarTerminal] != filepath.Join(state, "omp", "terminal-sessions") {
+		t.Errorf("migrated: sessions %q, terminal %q", e.Vars[VarSessions], e.Vars[VarTerminal])
+	}
+	if e.Vars[VarAgent] != filepath.Join(home, ".omp", "agent") {
+		t.Errorf("config stays in the agent folder: %q", e.Vars[VarAgent])
+	}
+	// A source may read the moved sessions folder though it is outside home.
+	found := false
+	for _, r := range e.Roots {
+		found = found || r == filepath.Join(data, "omp", "sessions")
+	}
+	if !found {
+		t.Errorf("the sessions folder is not a readable root: %q", e.Roots)
+	}
+	// A profile uses its own XDG folder, and only where it exists.
+	p := env(append(xdg, "OMP_PROFILE=work")...)
+	if p.Vars[VarSessions] != filepath.Join(data, "omp", "profiles", "work", "sessions") {
+		t.Errorf("profile sessions = %q", p.Vars[VarSessions])
+	}
+	if p.Vars[VarTerminal] != filepath.Join(home, ".omp", "profiles", "work", "agent", "terminal-sessions") {
+		t.Errorf("profile terminal records (state not migrated for it) = %q", p.Vars[VarTerminal])
+	}
+	// An agent folder override keeps everything under it.
+	o := env(append(xdg, "PI_CODING_AGENT_DIR=/srv/agent")...)
+	if o.Vars[VarSessions] != "/srv/agent/sessions" {
+		t.Errorf("override sessions = %q", o.Vars[VarSessions])
+	}
+}
