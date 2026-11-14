@@ -18,7 +18,12 @@ public struct HarnessNativeRequests: Sendable {
     /// not been attached yet, marking it attached. Nil when there is none, or
     /// when the session cannot show the screen now: nothing is marked then, so
     /// the question is offered once it can.
-    public mutating func next(in items: [HarnessItem], available: Bool) -> String? {
+    ///
+    /// `skipping` holds ids that must not be offered by this call, such as
+    /// the questions that were already waiting when a command was sent. They
+    /// are neither returned nor marked, and still count as waiting, so one
+    /// that was attached before stays attached.
+    public mutating func next(in items: [HarnessItem], available: Bool, skipping: Set<String> = []) -> String? {
         var waiting: [(id: String, seq: Int)] = []
         for item in items {
             guard case .question(let question) = item.body, !question.isAnswerable,
@@ -27,7 +32,7 @@ public struct HarnessNativeRequests: Sendable {
         }
         attached.formIntersection(waiting.map(\.id))
         guard available else { return nil }
-        let oldest = waiting.filter { !attached.contains($0.id) }.min { $0.seq < $1.seq }
+        let oldest = waiting.filter { !attached.contains($0.id) && !skipping.contains($0.id) }.min { $0.seq < $1.seq }
         guard let oldest else { return nil }
         attached.insert(oldest.id)
         return oldest.id

@@ -78,6 +78,22 @@ struct HarnessNativeRequestsTests {
         #expect(requests.next(in: items, available: true) == "form")
     }
 
+    /// A command's own form is matched to the question it adds, without
+    /// disturbing what is known about questions that were waiting before it.
+    @Test func skippedQuestionsAreNeitherOfferedNorForgotten() {
+        var requests = HarnessNativeRequests()
+        let earlier = Self.question("earlier", seq: 1)
+        #expect(requests.next(in: [earlier], available: true) == "earlier")
+        let items = [earlier, Self.question("fromCommand", seq: 5)]
+        #expect(requests.next(in: items, available: true, skipping: ["earlier"]) == "fromCommand")
+        // The earlier one is still attached: it is not offered again afterwards.
+        #expect(requests.next(in: items, available: true) == nil)
+        // A skipped one that was never attached stays available for later.
+        var fresh = HarnessNativeRequests()
+        #expect(fresh.next(in: items, available: true, skipping: ["earlier"]) == "fromCommand")
+        #expect(fresh.next(in: items, available: true) == "earlier")
+    }
+
     /// The helper's wire form of a question shown only in the terminal.
     @Test func readsTheWireFormOfATerminalOnlyQuestion() throws {
         let wire = #"{"id":"ask-1","seq":7,"at":"2026-11-14T10:00:00Z","kind":"question","question":{"questions":[{"id":"memo","prompt":"Memo","options":[],"multi":false,"allowText":true}],"answerable":false}}"#
