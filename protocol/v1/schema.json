@@ -2902,7 +2902,16 @@
         "prompt": { "type": "string" },
         "options": { "type": "array", "items": { "$ref": "#/$defs/HarnessChoice" } },
         "multi": { "type": "boolean" },
-        "allowText": { "type": "boolean" }
+        "allowText": { "type": "boolean" },
+        "required": { "description": "True when the form cannot be submitted without an answer to this question. Absent means false.", "type": "boolean" },
+        "default": { "description": "The answer the harness starts with: option ids, or one text value.", "type": "array", "items": { "type": "string" } },
+        "when": {
+          "description": "The question applies only while the named question's current answer includes one of equals (booleans are \"true\" and \"false\"). A question that does not apply is not shown, validated or sent. Absent means it always applies.",
+          "type": "object",
+          "properties": { "question": { "type": "string" }, "equals": { "type": "array", "items": { "type": "string" } } },
+          "required": ["question", "equals"],
+          "additionalProperties": false
+        }
       },
       "required": ["id", "prompt", "options", "multi", "allowText"],
       "additionalProperties": false
