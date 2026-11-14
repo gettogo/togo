@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -222,5 +223,74 @@ func TestSurfaceChunksUseProtocolBase64URL(t *testing.T) {
 	}
 	if result["data"] != "__8" {
 		t.Fatalf("chunk encoding: %v", result["data"])
+	}
+}
+
+func waitSurfaceSequence(t *testing.T, s *Service, owner *rpc.Conn, lease Lease, sequence int64) {
+	t.Helper()
+	for until := time.Now().Add(2 * time.Second); time.Now().Before(until); {
+		chunk, err := s.Read(owner, ReadParams{ID: lease.ID, Lease: lease.Token})
+		if err != nil {
+			t.Fatal("recoverable input ended the renderer", err)
+		}
+		var scene Scene
+		if json.Unmarshal(chunk.Data, &scene) == nil && len(scene.Views) > 0 && scene.Views[0].Document.Sequence == sequence {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("valid frame after invalid input was not applied")
+}
+
+func TestSurfaceRecoversAtValidMessagesAfterMalformedInput(t *testing.T) {
+	for name, bad := range map[string][]byte{"envelope": apc(`!;{}`), "duplicate": apc(`o;{"id":"one"}`)} {
+		t.Run(name, func(t *testing.T) {
+			s, f, owner, lease := nativeFixture(t)
+			f.data <- append(bad, apc(`f;{"sf":"one","s":2,"ops":[["set","input",{"text":"continued"}]]}`)...)
+			waitSurfaceSequence(t, s, owner, lease, 2)
+		})
+	}
+}
+
+func TestSurfaceBoundsRejectedOperationReplies(t *testing.T) {
+	s, f, owner, lease := nativeFixture(t)
+	body := `f;{"sf":"one","s":2,"ops":[` + strings.TrimSuffix(strings.Repeat(`["bad"],`, MaxOperations), ",") + `]}`
+	f.data <- append(apc(body), apc(`f;{"sf":"one","s":3,"ops":[]}`)...)
+	waitSurfaceSequence(t, s, owner, lease, 3)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	count := 0
+	for _, m := range f.sent {
+		if m.Verb == 'e' {
+			count++
+		}
+	}
+	if count > 1 {
+		t.Fatalf("one invalid frame produced %d terminal round trips", count)
+	}
+}
+
+func TestPendingSurfaceReadCountsAsVisibleHeartbeat(t *testing.T) {
+	s, _, owner, lease := nativeFixture(t)
+	r, _ := s.lookup(owner, lease.ID, lease.Token)
+	r.cache.mu.Lock()
+	r.cache.pending = true
+	r.cache.mu.Unlock()
+	r.mu.Lock()
+	r.lastRead = time.Now().Add(-RendererLease)
+	before := r.lastRead
+	r.mu.Unlock()
+	result, err := s.Read(owner, ReadParams{ID: lease.ID, Lease: lease.Token})
+	if err != nil || !result.Pending {
+		t.Fatal("pending read unavailable", err)
+	}
+	r.mu.Lock()
+	after := r.lastRead
+	r.mu.Unlock()
+	r.cache.mu.Lock()
+	r.cache.pending = false
+	r.cache.mu.Unlock()
+	if !after.After(before) {
+		t.Fatal("visible renderer heartbeat was discarded while a frame was committing")
 	}
 }

@@ -31,6 +31,7 @@ func (s *Service) Read(owner *rpc.Conn, p ReadParams) (ReadResult, error) {
 		}
 		raw, revision, unchanged, err := r.cache.snapshot(p.Revision)
 		if errors.Is(err, ErrCachePending) {
+			r.lastRead = time.Now()
 			result.Pending = true
 			return result, nil
 		}

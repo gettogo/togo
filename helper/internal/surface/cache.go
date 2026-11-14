@@ -19,6 +19,11 @@ const maxSnapshotBytes = MaxDocumentBytes + 64*1024
 // ErrCachePending means a received document update is not durable yet.
 var ErrCachePending = errors.New("surface: document update is being committed")
 
+type cacheFailure struct{ cause error }
+
+func (e *cacheFailure) Error() string { return "surface: document cache unavailable" }
+func (e *cacheFailure) Unwrap() error { return e.cause }
+
 // CacheIdentity binds stored documents to one original process and conversation.
 type CacheIdentity struct {
 	Generation   string `json:"generation"`
@@ -153,7 +158,7 @@ func (c *Cache) Apply(m Message) ([]Message, error) {
 	c.mu.Lock()
 	if c.file == nil || c.fatal != nil {
 		c.mu.Unlock()
-		return nil, errors.New("surface: document cache unavailable")
+		return nil, &cacheFailure{cause: c.fatal}
 	}
 	before := c.scene.Revision
 	replies, err := c.scene.Handle(m)
@@ -182,6 +187,9 @@ func (c *Cache) Apply(m Message) ([]Message, error) {
 		}
 	}
 	c.mu.Lock()
+	if err != nil {
+		err = &cacheFailure{cause: err}
+	}
 	c.pending, c.fatal = false, err
 	c.mu.Unlock()
 	return replies, err

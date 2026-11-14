@@ -135,6 +135,12 @@ func (s *Scene) hello(raw []byte) ([]Message, error) {
 		return nil, ErrLimit
 	}
 	s.Program = q.App
+	// A new renderer handshake may follow a helper crash, so the old close
+	// messages may never have reached this cache. Retain inline data for adopt,
+	// but no previous view remains live under the new renderer.
+	for _, view := range s.Views {
+		view.Closed = true
+	}
 	s.Features = s.Features[:0]
 	for _, feature := range []string{"edit", "undo", "send"} {
 		if slices.Contains(q.Features, feature) {

@@ -22,6 +22,7 @@ type Service struct {
 	backend runtimeBackend
 	logf    func(string, ...any)
 	stopped bool
+	startup sync.Once
 }
 
 type renderer struct {
@@ -85,6 +86,7 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 	if err := validateOptions(options); err != nil {
 		return Lease{}, err
 	}
+	s.start()
 	options.Kinds = append([]string(nil), options.Kinds...)
 	runctx, cancel := context.WithCancel(context.Background())
 	r := &renderer{owner: owner, lease: Lease{ID: id, Token: randomID()}, cancel: cancel,
@@ -120,29 +122,14 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 	ready, observed := make(chan struct{}), make(chan error, 1)
 	var once sync.Once
 	go func() {
-		var parser Parser
-		observed <- s.backend.observe(runctx, id, run, func() { once.Do(func() { close(ready) }) }, func(data []byte) error {
-			messages, errs := parser.Feed(data, time.Now())
-			if len(errs) != 0 {
-				return errs[0]
+		stream := receiver{cache: r.cache, logf: s.logf, send: func(reply Message) error {
+			wire, err := Encode(reply.Verb, reply.Body)
+			if err != nil {
+				return err
 			}
-			for _, m := range messages {
-				replies, err := r.cache.Apply(m)
-				if err != nil {
-					return err
-				}
-				for _, reply := range replies {
-					wire, err := Encode(reply.Verb, reply.Body)
-					if err != nil {
-						return err
-					}
-					if err := s.backend.send(runctx, id, run, wire); err != nil {
-						return err
-					}
-				}
-			}
-			return nil
-		})
+			return s.backend.send(runctx, id, run, wire)
+		}}
+		observed <- s.backend.observe(runctx, id, run, func() { once.Do(func() { close(ready) }) }, stream.feed)
 	}()
 	select {
 	case <-ready:
@@ -280,4 +267,16 @@ func (s *Service) Stop() {
 }
 
 // Run binds daemon shutdown to renderer cleanup.
-func (s *Service) Run(ctx context.Context) { <-ctx.Done(); s.Stop() }
+func (s *Service) Run(ctx context.Context) { s.start(); <-ctx.Done(); s.Stop() }
+
+func (s *Service) start() {
+	s.startup.Do(func() {
+		if backend, ok := s.backend.(interface{ startup(context.Context) error }); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), CompanionWait)
+			defer cancel()
+			if err := backend.startup(ctx); err != nil && s.logf != nil {
+				s.logf("surface: stale marker cleanup failed: %v", err)
+			}
+		}
+	})
+}

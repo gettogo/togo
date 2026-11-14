@@ -54,6 +54,10 @@ type paneBackend struct {
 	companions *Companions
 }
 
+func (b *paneBackend) startup(ctx context.Context) error {
+	return b.sessions.Tmux.ReleaseStaleSurfaces(ctx)
+}
+
 func (b *paneBackend) resolve(ctx context.Context, id string) (runtimeInfo, error) {
 	sess, err := b.sessions.Resolve(ctx, id)
 	if err != nil || !sess.Managed || sess.Agent != "omp" {
@@ -119,6 +123,13 @@ func (b *paneBackend) observe(ctx context.Context, id string, run runtimeInfo, r
 func (b *paneBackend) control(ctx context.Context, id string, run runtimeInfo, owner, mode string) error {
 	run.control.Lock()
 	defer run.control.Unlock()
+	if mode == "ansi" {
+		// Discovery belongs to this lease, not to the current OMP epoch.
+		// Clear it even when process/conversation validation now fails.
+		if err := b.sessions.Tmux.ReleaseSurface(ctx, id, owner); err != nil {
+			return err
+		}
+	}
 	state, err := b.validate(ctx, id, run)
 	if err != nil {
 		return err
@@ -133,12 +144,11 @@ func (b *paneBackend) control(ctx context.Context, id string, run runtimeInfo, o
 		return errRuntimeChanged
 	}
 	if mode == "native" {
-		if err := b.sessions.Tmux.SetOption(ctx, id, "@tern-tsp", "1"); err != nil {
+		if err := b.sessions.Tmux.ClaimSurface(ctx, id, owner); err != nil {
 			return err
 		}
 	}
 	if mode == "ansi" {
-		_ = b.sessions.Tmux.UnsetOption(ctx, id, "@tern-tsp")
 		owner = state.Owner
 	}
 	_, err = b.companions.Command(ctx, run.config, state, mode, owner)

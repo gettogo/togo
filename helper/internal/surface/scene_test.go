@@ -65,3 +65,20 @@ func TestSceneRestoresDocumentIndexesAndRejectsCorruptedSnapshots(t *testing.T) 
 		t.Fatal("inconsistent snapshot accepted")
 	}
 }
+
+func TestFreshHelloAllowsScreenReplacementAndInlineAdoption(t *testing.T) {
+	s := testScene()
+	s.Handle(sceneMessage('o', `{"id":"screen","mode":"screen"}`))
+	s.Handle(sceneMessage('o', `{"id":"inline","mode":"inline"}`))
+	s.Handle(sceneMessage('f', `{"sf":"inline","s":1,"ops":[["add","text","inline",null,{"id":"text","k":"text","p":{"text":"held"}}]]}`))
+	s.Handle(sceneMessage('q', `{"q":"hello","v":[1],"app":"fixture"}`))
+	if _, err := s.Handle(sceneMessage('o', `{"id":"screen","mode":"screen"}`)); err != nil {
+		t.Fatal("screen remained live across a new renderer hello", err)
+	}
+	if _, err := s.Handle(sceneMessage('o', `{"id":"inline","adopt":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	if s.View("inline").Document.nodes["text"].node.Props["text"] != "held" {
+		t.Fatal("fresh hello discarded adoptable inline history")
+	}
+}

@@ -157,6 +157,36 @@ func TestOriginalOMPTransport(t *testing.T) {
 	if err := svc.Close(ctx, owner, surface.LeaseRef{ID: created.ID, Lease: lease.Token}); err != nil {
 		t.Fatal(err)
 	}
+	// Reacquire after the observer has stopped. Close APCs may have been missed;
+	// the held inline document must still be adoptable on a fresh handshake.
+	second, err := svc.Open(ctx, owner, created.ID, options)
+	if err != nil {
+		t.Fatal("native reopen failed", err)
+	}
+	for {
+		chunk, err := svc.Read(owner, surface.ReadParams{ID: created.ID, Lease: second.Token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var current surface.Scene
+		if json.Unmarshal(chunk.Data, &current) == nil {
+			ready := false
+			for _, v := range current.Views {
+				ready = ready || !v.Closed && v.Document.Sequence > 0
+			}
+			if ready {
+				break
+			}
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("reopened OMP did not restore a live document")
+		case <-time.After(30 * time.Millisecond):
+		}
+	}
+	if err := svc.Close(ctx, owner, surface.LeaseRef{ID: created.ID, Lease: second.Token}); err != nil {
+		t.Fatal(err)
+	}
 	after, err := companions.State(config)
 	if err != nil || after.Native || before.PID != after.PID || before.Conversation != after.Conversation {
 		t.Fatalf("original runtime not restored: %v", err)
