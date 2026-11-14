@@ -127,6 +127,9 @@ type Service struct {
 	ShimDir string
 	// Logf receives problems with stored session state. Nil discards them.
 	Logf func(format string, args ...any)
+	// PrepareLaunch adds optional per-run integration arguments/environment.
+	// Its result is never saved as the user's original session command.
+	PrepareLaunch func(ctx context.Context, id, agent string, launch Launch) (Launch, error)
 	// NewID and Now are test seams; nil means a random id and time.Now.
 	NewID func() string
 	Now   func() time.Time

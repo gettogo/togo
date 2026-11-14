@@ -16,6 +16,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/surface"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
@@ -32,6 +33,43 @@ func fakeBin(t *testing.T, names ...string) string {
 	}
 	t.Setenv("PATH", dir+string(filepath.ListSeparator)+os.Getenv("PATH"))
 	return dir
+}
+
+func TestPreparedOMPLaunchKeepsOriginalStoredArguments(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s := newService(t)
+	bin := fakeBin(t, "omp")
+	s.Path = bin + string(filepath.ListSeparator) + "/usr/bin:/bin"
+	code, err := os.ReadFile(echoProgram(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "omp"), code, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	companions := &surface.Companions{Home: t.TempDir()}
+	s.PrepareLaunch = companions.PrepareLaunch
+	dir := realpath(t, t.TempDir())
+	args := []string{"--profile", "work", "--", "literal"}
+	created := mustCreate(t, s, session.CreateOpts{Agent: "omp", Cwd: dir, Args: args})
+	if !reflect.DeepEqual(created.Command[1:], args) {
+		t.Fatalf("stored command includes private run arguments: %v", created.Command)
+	}
+	var got []string
+	for deadline := time.Now().Add(3 * time.Second); ; {
+		data, err := os.ReadFile(filepath.Join(dir, "argv.out"))
+		if err == nil {
+			got = strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("prepared launch did not reach the process")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(got) != 6 || got[2] != "-e" || filepath.Base(got[3]) != "omp-surface-v1.mjs" || got[4] != "--" || got[5] != "literal" {
+		t.Fatalf("incorrect per-run argv: %v", got)
+	}
 }
 
 func reason(t *testing.T, err error) string {
