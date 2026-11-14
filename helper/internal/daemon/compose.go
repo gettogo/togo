@@ -200,6 +200,10 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	git := gitx.Git{}
 	c.Harness = newHarness(c, svc, &git, o)
 	c.Surface = surface.NewService(o.Home, svc, logf)
+	// A native screen takes a session's terminal under the lock the engine
+	// types under, so no keys are on their way when it does and none
+	// start once it is held.
+	c.Surface.BeforeOpen = engine.LockTyping
 	svc.PrepareLaunch = (&surface.Companions{Home: o.Home}).PrepareLaunch
 	integ := integrations.New(o.Home, o.TogoPath)
 

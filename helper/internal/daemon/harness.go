@@ -42,7 +42,11 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		Marker:    &anchor.Marker{Home: o.Home, Pane: pane},
 		Approvals: c.Approvals,
 		Screen:    pane.Screen,
-		Status:    c.Hub.Status,
+		// The native surface service is built after the engine; both are
+		// read when called, never at construction.
+		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },
+		SurfaceAvailable: func(ctx context.Context, id string) bool { return c.Surface != nil && c.Surface.Available(ctx, id) },
+		Status:           c.Hub.Status,
 		Exit: func(id string) *wire.SessionExit {
 			_, x := c.Hub.Exit(id)
 			return x
