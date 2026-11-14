@@ -180,6 +180,17 @@ func (e *Engine) refreshMission(ctx context.Context, s *sess, section string) {
 		v, _ := JQFirst(def, elem, state)
 		return toString(v)
 	}
+	// A row a mapper keeps under the same id is the same thing (an OpenCode
+	// child session), and the fuller one: it opens the chat and can be
+	// stopped. The source's row for it is not listed beside it.
+	kept := map[string]bool{}
+	if sec := s.mission.section(section); sec != nil {
+		for _, r := range sec.Rows {
+			if !s.srcRows[section][r.ID] {
+				kept[r.ID] = true
+			}
+		}
+	}
 	var ops []harness.Op
 	seen := map[string]bool{}
 	for _, elem := range list {
@@ -189,7 +200,7 @@ func (e *Engine) refreshMission(ctx context.Context, s *sess, section string) {
 			Subtitle: pick("subtitle", elem, `.cwd // .status // empty`),
 			State:    runState(pick("state", elem, `.state // .status // empty`)),
 		}
-		if r.ID == "" {
+		if r.ID == "" || kept[r.ID] {
 			continue
 		}
 		r.ID = "src-" + r.ID
@@ -208,6 +219,23 @@ func (e *Engine) refreshMission(ctx context.Context, s *sess, section string) {
 	}
 	s.srcRows[section] = seen
 	s.publishLocked(nil, ops)
+}
+
+// unshadowLocked adds, for each row ops upsert, the removal of the row a
+// mission source listed for the same id: the mapper learned of something
+// the source had listed first, and one row stands for it from here on
+// (see refreshMission).
+func (s *sess) unshadowLocked(ops []harness.Op) []harness.Op {
+	for _, op := range ops {
+		if op.Op != harness.OpUpsert || op.Row == nil {
+			continue
+		}
+		if id := "src-" + op.Row.ID; s.srcRows[op.Section][id] {
+			delete(s.srcRows[op.Section], id)
+			ops = append(ops, harness.Op{Op: harness.OpRemove, Section: op.Section, ID: id})
+		}
+	}
+	return ops
 }
 
 func runState(s string) string {

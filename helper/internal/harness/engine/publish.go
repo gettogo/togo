@@ -67,7 +67,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			ops[i].Status = &st
 		}
 	}
-	if d := s.mission.apply(ops); d != nil {
+	if d := s.mission.apply(s.unshadowLocked(ops)); d != nil {
 		s.missionDeltaLocked(d)
 	}
 	s.relinkLocked()

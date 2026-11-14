@@ -132,3 +132,44 @@ func TestReloadMakesCommandsAndAgentsStale(t *testing.T) {
 		}
 	}
 }
+
+// Seen live on 2.3.0: one finished child session was two rows under Agents,
+// the mapper's (its chat and Stop) and the children source's. The engine
+// keeps one row when both name the child alike, so both must use the
+// session id. testdata/v2/children.json is what /api/session?parentID=
+// answered for a real child; the session.created event is built from that
+// child's own record in the event's recorded shape.
+func TestChildIsNamedAlikeByTheMapperAndTheChildrenSource(t *testing.T) {
+	const parent, child = "ses_e28f4c58affePFJ6qUEQH9BCR7", "ses_e28d51c92ffeuZKPOJEAMrXUPw"
+	a, err := spec.Parse(AdapterFile2())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := a.Mission[harness.SectionAgents].Source; got != "children" {
+		t.Fatalf("agents rows come from %q", got)
+	}
+	v, err := engine.JQFirst(a.Sources["children"].Select, fixture2(t, "children.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := v.([]any)
+	if len(rows) != 1 {
+		t.Fatalf("children source lists %v", rows)
+	}
+	listed := rows[0].(map[string]any)
+	if listed["id"] != child || listed["state"] != "done" {
+		t.Fatalf("children source row %v", listed)
+	}
+
+	m := NewEvents2(harness.Env{Argv: []string{"opencode", "--session", parent}})
+	created := `{"id":"evt_1d72c8a33001","created":1794611274611,"type":"session.created","data":{"sessionID":"` + child +
+		`","parentID":"` + parent + `","projectID":"be040d472edc93e9f486658824b9d19137761562","agent":"general",` +
+		`"slug":"audit-child","version":"2.3.0","title":"Audit read-only child","permissions":[],"location":{"directory":"/w/project"}}}`
+	_, ops := m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(created)})
+	if len(ops) != 1 || ops[0].Row == nil || ops[0].Section != harness.SectionAgents {
+		t.Fatalf("mapper ops %+v", ops)
+	}
+	if ops[0].Row.ID != listed["id"] {
+		t.Fatalf("the mapper names the child %q, the source %q", ops[0].Row.ID, listed["id"])
+	}
+}
