@@ -5,8 +5,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
+	"github.com/gettogo/togo/helper/internal/harness/source/httpsrc"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
 
@@ -86,5 +89,46 @@ func TestModesListCustomPrimaryAgents(t *testing.T) {
 	}
 	if got := strings.Join(ids, " "); got != "build plan audit-observer" {
 		t.Fatalf("agents source lists %s", got)
+	}
+}
+
+// Seen live on 2.3.0: a command added to the project was listed by
+// /api/command after a reload, and the / menu kept its five-minute copy.
+// The server says when its commands and agents changed (command.updated,
+// agent.updated); the mapper turns each into a new commands_rev or
+// agents_rev, and the two sources are read again when theirs changes.
+// testdata/v2/reload.sse is what a 2.2.5 server sent after
+// POST /api/location/reload with a new command and a new agent on disk.
+func TestReloadMakesCommandsAndAgentsStale(t *testing.T) {
+	a, err := spec.Parse(AdapterFile2())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for src, rev := range map[string]string{"commands": "commands_rev", "agents": "agents_rev"} {
+		if got := a.Sources[src].CacheRev; got != rev {
+			t.Errorf("source %s is renewed by %q, want %q", src, got, rev)
+		}
+	}
+	m := NewEvents2(harness.Env{Cwd: "/w"})
+	for _, rec := range recorded2(t) {
+		m.Map(rec)
+	}
+	before := m.State()
+	for _, rec := range recordedSSE(t, "testdata/v2/reload.sse") {
+		m.Map(rec)
+	}
+	after := m.State()
+	for _, rev := range []string{"commands_rev", "agents_rev"} {
+		if after[rev] == "" || after[rev] == before[rev] {
+			t.Errorf("%s was %q and is %q after the reload", rev, before[rev], after[rev])
+		}
+	}
+	// Events sent while the stream was down are lost, a reload among them:
+	// after a reconnect both lists are read again.
+	m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(`{"type":"` + httpsrc.Reconnected + `"}`)})
+	for _, rev := range []string{"commands_rev", "agents_rev"} {
+		if got := m.State()[rev]; got == "" || got == after[rev] {
+			t.Errorf("%s is still %q after a reconnect", rev, got)
+		}
 	}
 }

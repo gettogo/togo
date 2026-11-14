@@ -54,7 +54,8 @@ func NewEvents2(env harness.Env) *Events2 {
 func (e *Events2) Name() string { return MapperEvents2 }
 
 // State reports harness_session, model, model_ref, provider, model_id,
-// mode (the agent), turn, working and idle.
+// mode (the agent), turn, working and idle, and commands_rev and agents_rev,
+// which change when the server says its commands or agents did.
 func (e *Events2) State() map[string]string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -168,7 +169,15 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	switch ev.Type {
 	case httpsrc.Reconnected:
 		e.lostTrack()
+		// A reload while the stream was down sent its events to nobody.
+		e.state["commands_rev"], e.state["agents_rev"] = lostRev(at), lostRev(at)
 		return e.dropOpen()
+	case "command.updated":
+		// The server read its commands again (a config reload, a new file):
+		// the cached commands source is renewed by this value (cache_rev).
+		e.state["commands_rev"] = ev.ID
+	case "agent.updated":
+		e.state["agents_rev"] = ev.ID
 	case "session.created":
 		return e.created(d, at)
 	case "session.inbox.enqueued":
@@ -429,6 +438,10 @@ func (e *Events2) dropOpen() ([]harness.Item, []harness.Op) {
 	}
 	return items, ops
 }
+
+// lostRev is a commands_rev or agents_rev for a stream that came back: no
+// event names it, so the time does. It differs from every event id.
+func lostRev(at time.Time) string { return "reconnected-" + at.Format(time.RFC3339Nano) }
 
 // lostTrack forgets whether the main session's turn runs: the stream that
 // came back may have missed its end (session.idle, an execution's end),

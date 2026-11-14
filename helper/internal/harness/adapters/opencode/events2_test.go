@@ -26,7 +26,13 @@ const (
 // switches, an interrupt, then prompts in a second session).
 func recorded2(t *testing.T) []harness.Record {
 	t.Helper()
-	b, err := os.ReadFile("testdata/v2/events.sse")
+	return recordedSSE(t, "testdata/v2/events.sse")
+}
+
+// recordedSSE reads a recorded /api/event stream as the sse runner would.
+func recordedSSE(t *testing.T, path string) []harness.Record {
+	t.Helper()
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

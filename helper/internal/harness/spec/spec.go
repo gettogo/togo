@@ -144,8 +144,12 @@ type Feed struct {
 type Source struct {
 	Kinds `yaml:",inline"`
 	// Select is a jq expression applied to the raw result.
-	Select    string        `yaml:"select"`
-	Cache     time.Duration `yaml:"cache"`
+	Select string        `yaml:"select"`
+	Cache  time.Duration `yaml:"cache"`
+	// CacheRev names a state value the mapper changes when the harness
+	// says this data changed (a config reload). A copy cached under
+	// another value is read again instead of served until Cache runs out.
+	CacheRev  string        `yaml:"cache_rev"`
 	Timeout   time.Duration `yaml:"timeout"`
 	Stability string        `yaml:"stability"`
 	// Redact lists jq paths removed before anything else reads the data,

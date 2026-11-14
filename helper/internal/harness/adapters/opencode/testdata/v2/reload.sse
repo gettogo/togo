@@ -1,0 +1,20 @@
+data: {"id": "evt_1db71838f001gCtvVeHqY4ccjz", "created": 1794683011983, "type": "location.shutdown", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db718459001JFRe2LouJQzX7a", "created": 1794683012185, "type": "integration.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db71845b001E9pl5N9AUaZt38", "created": 1794683012187, "type": "provider.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db71845f001ZQGcfhFEzkC3NG", "created": 1794683012191, "type": "model.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db71845f0020V2nS97rzrxsDi", "created": 1794683012191, "type": "agent.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db71845f003L3EK5RvLNdMSnc", "created": 1794683012191, "type": "command.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db718461001tf9NVH7Xp3slQf", "created": 1794683012193, "type": "skill.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db718461002Vc8Cfawj8gJW01", "created": 1794683012193, "type": "websearch.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db718466002sQp7pwbKN4JHzx", "created": 1794683012198, "type": "reference.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+
+data: {"id": "evt_1db718467001EP18BuLqW3x35Q", "created": 1794683012199, "type": "plugin.updated", "location": {"directory": "/tmp/work"}, "data": {}}
+

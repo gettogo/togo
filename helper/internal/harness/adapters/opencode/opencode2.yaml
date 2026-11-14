@@ -67,15 +67,20 @@ sources:
     select: '[.data[] | select(((.connections // []) | length) == 0 and any(.methods[]; .type == "key")) | {id: .id, name: .name}] | sort_by(.name | ascii_downcase)'
     cache: 5m
     stability: documented
+  # Agents and commands change when OpenCode reloads its config. The server says so
+  # (agent.updated, command.updated) and the mapper answers with a new agents_rev or
+  # commands_rev, which ends the cached copy at once instead of after five minutes.
   agents:
     http: { path: '/api/agent?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     select: '[.data[] | select(.mode != "subagent" and (.hidden | not)) | {id: .id, name: .name, description: .description}]'
     cache: 5m
+    cache_rev: agents_rev
     stability: documented
   commands:
     http: { path: '/api/command?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     select: '.data'
     cache: 5m
+    cache_rev: commands_rev
     stability: documented
   children:
     http: { path: '/api/session?parentID={{.state.harness_session | urlquery}}' }
