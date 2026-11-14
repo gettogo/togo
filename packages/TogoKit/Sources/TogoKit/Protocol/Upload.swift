@@ -33,6 +33,8 @@ public enum Capability {
     public static let recent = "recent.v1"
     /// The harness.* methods, the `harness` notification and `Session.mission`.
     public static let harness = "harness.v1"
+    /// Connection-owned native TSP documents and semantic input.
+    public static let surface = "surface.v1"
 }
 
 /// `fs.upload`: writes `data` as a file named `name` for the session.
