@@ -1,0 +1,79 @@
+{
+  "id": "o",
+  "k": "picker",
+  "p": {
+    "icon": "history",
+    "noun": "sessions",
+    "size": "lg",
+    "layout": "cards",
+    "preview": "side",
+    "query": "",
+    "cursor": 0,
+    "placeholder": "Search all sessions…",
+    "columns": [
+      {
+        "id": "when",
+        "format": "time"
+      },
+      {
+        "id": "size",
+        "format": "dim"
+      }
+    ],
+    "items": [],
+    "order": [],
+    "current": [
+      "/workspace/project/session.jsonl"
+    ],
+    "total": 0,
+    "actions": [
+      {
+        "id": "resume",
+        "label": "Resume",
+        "keys": [
+          "enter"
+        ],
+        "primary": true
+      },
+      {
+        "id": "delete",
+        "label": "Delete",
+        "keys": [
+          "backspace"
+        ]
+      },
+      {
+        "id": "rename",
+        "label": "Rename",
+        "keys": [
+          "f2"
+        ]
+      },
+      {
+        "id": "pin",
+        "label": "Pin",
+        "keys": [
+          "alt",
+          "k"
+        ]
+      },
+      {
+        "id": "scope",
+        "label": "This folder",
+        "keys": [
+          "tab"
+        ]
+      },
+      {
+        "id": "close",
+        "label": "Close",
+        "keys": [
+          "esc"
+        ],
+        "end": true
+      }
+    ],
+    "state": "ready",
+    "empty": "No sessions yet"
+  }
+}

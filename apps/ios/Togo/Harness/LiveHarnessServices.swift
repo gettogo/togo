@@ -35,6 +35,18 @@ import TogoKit
         try await call(s) { try await $0.harnessDescribe(id: s.sessionID) }
     }
 
+    func surfaceConnection(_ s: HarnessSubject) async throws -> any SurfaceConnection {
+        guard let record = records(s.hostID) else { throw LiveServiceError.unknownMachine }
+        let client = HelperClient(channel: try await openFeed(record))
+        do {
+            _ = try await client.hello(client: Self.client)
+            return client
+        } catch {
+            await client.close()
+            throw error
+        }
+    }
+
     /// The feed pings its helper while it runs. A Mac that slept or a network that stopped
     /// passing traffic leaves the channel open but silent; unanswered pings end the feed, and
     /// drop the machine's connection under it, so the chat reopens over a fresh one instead

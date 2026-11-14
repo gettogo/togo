@@ -114,8 +114,13 @@ struct MissionSessionSection: View {
 
     var body: some View {
         let screens = MissionLayout.moreScreens(store.descriptor)
-        if !screens.isEmpty {
+        if !screens.isEmpty || store.surfaceAvailable {
             Section(MissionCopy.sessionSection) {
+                if store.surfaceAvailable {
+                    Button(SurfaceCopy.interface, systemImage: "rectangle.on.rectangle") {
+                        store.showsSurface = true
+                    }
+                }
                 ForEach(screens) { screen in
                     Button(MissionCopy.opensScreen(screen.title), systemImage: Self.symbol(screen.id)) {
                         model.screen = SessionScreen(store: store, tab: tab, id: screen.id)

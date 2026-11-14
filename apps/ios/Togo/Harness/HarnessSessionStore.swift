@@ -92,6 +92,9 @@ import UIKit
     var pendingJump: TerminalJump?
     /// The pill asked for mission control.
     var showsMission = false
+    /// The original harness interface, owned by this tab's visible sheet.
+    var showsSurface = false
+    @ObservationIgnored let surfaceDrafts = SurfaceDrafts()
     /// Why the native layers are not showing, when they fell back to the terminal.
     private(set) var fallback: String?
     /// When this phone last sent a prompt the helper has not reported work for yet.
