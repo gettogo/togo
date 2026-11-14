@@ -1,0 +1,2 @@
+data: {"id":"evt_1db90c395001tmBymHGGIwxmxG","created":1794685059989,"type":"session.model.selected","data":{"sessionID":"ses_e247999d2ffeZ2nELz4ZP0NX2C","model":{"id":"inkling-2-small-free","providerID":"opencode","variant":"high"},"previous":{"id":"iceman-free","providerID":"opencode","variant":"default"}},"durable":{"aggregateID":"ses_e247999d2ffeZ2nELz4ZP0NX2C","seq":37,"version":1}}
+

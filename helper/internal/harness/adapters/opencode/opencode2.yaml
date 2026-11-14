@@ -59,6 +59,15 @@ sources:
     select: '[.data[] | select(.enabled and ((.type // "chat") == "chat")) | {id: ({id: .id, providerID: .providerID} | tojson), name: .name, provider: .providerID, providerName: .providerID}]'
     cache: 5m
     stability: documented
+  # The variants of the session's model (its reasoning levels), each as the
+  # Model.Ref that selects it. Default, the model without a variant, comes
+  # first, as in the terminal's list. A model with none lists nothing.
+  variants:
+    http: { path: '/api/model?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    redact: ['.data[].settings', '.data[].headers', '.data[].body']
+    select: '[.data[] | select(.providerID == $state.provider and .id == $state.model_id and ((.variants // []) | length) > 0) | . as $m | {id: ({id: $m.id, providerID: $m.providerID} | tojson), name: "Default"}, ($m.variants[] | {id: ({id: $m.id, providerID: $m.providerID, variant: .id} | tojson), name: .id})]'
+    cache: 5m
+    stability: documented
   providers:
     http: { path: '/api/provider?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     redact: ['.data[].settings.apiKey', '.data[].headers', '.data[].body']
@@ -117,6 +126,20 @@ screens:
     filters: [{ id: provider, label: Provider, kind: choice, field: provider }]
     on_select: set_model
     setup: { source: unconnected, map: { item.id: .id, item.title: .name }, action: add_provider_key, input: secret }
+  # A variant is part of the session's model, so a pick goes through the
+  # model switch. The mapper does not report the variant yet: until it sets
+  # model_variant, no row is marked as the current one.
+  variant:
+    primitive: picker
+    title: Variant
+    section: composer
+    capability: model
+    source: variants
+    map:
+      item.id: .id
+      item.title: .name
+      selected: '($state.model_variant // "") as $v | if $v == "" then "" elif $v == "default" then $state.model_ref else ({id: $state.model_id, providerID: $state.provider, variant: $v} | tojson) end'
+    on_select: set_model
   providers:
     primitive: settings
     title: Providers
@@ -224,6 +247,7 @@ commands:
     - { name: models, detail: Choose the model, screen: model }
     - { name: sessions, detail: Resume a session, screen: resume }
     - { name: compact, detail: Summarise the session, action: compact }
+    - { name: variants, detail: Choose the model variant, screen: variant }
     - { name: mcps, detail: MCP servers, screen: mcp }
     - { name: diff, detail: Review changes, opens: changes }
     # The terminal's own commands: the server does not list or run them, so
@@ -239,7 +263,6 @@ commands:
     - { name: clear, detail: Close this session and start a new one, kind: terminal }
     - { name: open, detail: Open a session or project, kind: terminal }
     - { name: agents, detail: Switch agent, kind: terminal }
-    - { name: variants, detail: Switch model variant, kind: terminal }
     - { name: connect, detail: Sign in to a provider, kind: terminal }
     - { name: usage, detail: Provider usage and limits, kind: terminal }
     - { name: stats, detail: Usage statistics, kind: terminal }

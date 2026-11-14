@@ -68,12 +68,12 @@ func TestPaletteListsTheTerminalsOwnCommands(t *testing.T) {
 		}
 	}
 	slices.Sort(typed)
-	want := "agents clear connect debug editor exit help new open pair plugins reload settings skills stats status themes usage variants worktrees"
+	want := "agents clear connect debug editor exit help new open pair plugins reload settings skills stats status themes usage worktrees"
 	if got := strings.Join(typed, " "); got != want {
 		t.Errorf("typed commands\n%s\nwant\n%s", got, want)
 	}
 	// The ones with a native home open it instead.
-	for _, name := range []string{"models", "sessions", "compact", "mcps", "diff"} {
+	for _, name := range []string{"models", "sessions", "compact", "variants", "mcps", "diff"} {
 		if !slices.Contains(native, name) {
 			t.Errorf("/%s has no native home", name)
 		}
