@@ -293,6 +293,11 @@ type Screen struct {
 	Map     map[string]string `yaml:"map"`
 	Filters []Filter          `yaml:"filters"`
 	Search  bool              `yaml:"search"`
+	// SearchMode "remote" has the app send what is typed in the search
+	// field as the screen's query value "search", for a source that can
+	// search more than it lists (a harness's own session search). Without
+	// it the app filters the listed items itself.
+	SearchMode string `yaml:"search_mode"`
 	// OnSelect, Submit and Actions name entries in Actions.
 	OnSelect string   `yaml:"on_select"`
 	Submit   string   `yaml:"submit"`

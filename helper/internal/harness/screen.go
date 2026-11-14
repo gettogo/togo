@@ -42,11 +42,18 @@ type Screen struct {
 }
 
 // Picker is a searchable, grouped list with one selection.
+// SearchRemote is the Picker.SearchMode of a list searched by its source.
+const SearchRemote = "remote"
+
 type Picker struct {
 	Items    []PickerItem `json:"items"`
 	Selected string       `json:"selected,omitempty"`
 	// Searchable lets the app filter Items by title, subtitle and group.
-	Searchable bool     `json:"searchable"`
+	Searchable bool `json:"searchable"`
+	// SearchMode is "remote" when the search text is to be sent as the
+	// screen's query value "search" and the list read again; absent, the
+	// app filters Items itself.
+	SearchMode string   `json:"searchMode,omitempty"`
 	Filters    []Filter `json:"filters,omitempty"`
 	// OnSelect is the action run with args {"id": item id}.
 	OnSelect string `json:"onSelect"`

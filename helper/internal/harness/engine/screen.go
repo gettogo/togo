@@ -110,6 +110,9 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 func buildPicker(sc spec.Screen, data any, state map[string]string) (*harness.Picker, error) {
 	list, _ := data.([]any)
 	p := &harness.Picker{Items: []harness.PickerItem{}, Searchable: sc.Search, OnSelect: sc.OnSelect}
+	if sc.Search && sc.SearchMode == harness.SearchRemote {
+		p.SearchMode = harness.SearchRemote
+	}
 	facetVals := map[string]map[string]bool{}
 	for _, elem := range list {
 		get := func(key, def string) string {

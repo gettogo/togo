@@ -3267,6 +3267,7 @@
         "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessPickerItem" } },
         "selected": { "type": "string" },
         "searchable": { "type": "boolean" },
+        "searchMode": { "description": "\"remote\": the app sends the search text as the harness.screen query value \"search\" and shows the list it gets back; absent: the app filters items itself.", "enum": ["remote"] },
         "filters": { "type": "array", "items": { "$ref": "#/$defs/HarnessFilter" } },
         "onSelect": { "type": "string" },
         "onSelectConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
