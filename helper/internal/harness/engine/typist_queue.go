@@ -80,6 +80,7 @@ func (e *Engine) typeNext(s *sess) bool {
 	next := s.queue[0]
 	s.queue = s.queue[1:]
 	s.markSentLocked(next.item.ID)
+	gen := s.convGen
 	s.mu.Unlock()
 	u := next.item.User
 	var err error
@@ -88,23 +89,27 @@ func (e *Engine) typeNext(s *sess) bool {
 	} else {
 		err = e.typePrompt(s.ctx, s, u.Text, harness.ImagePaths(u.Images))
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.convGen != gen {
+		// The chat started over while the prompt travelled. It is not
+		// put back, shown as sent, or sent again; the new chat says so.
+		s.uncertainNoticeLocked(u.Text)
+		return false
+	}
 	if err != nil {
 		e.cfg.Logf("harness: sending a queued prompt failed: %v", err)
 		if viaAPI {
 			// A request that failed may still have reached the harness, so
 			// it is not sent again: the prompt leaves the queue and the
 			// chat says so.
-			e.dropUnsent(s, next.item)
+			s.dropUnsentLocked(next.item)
 			return false
 		}
-		s.mu.Lock()
 		delete(s.sent, next.item.ID)
 		s.queue = append([]queued{next}, s.queue...)
-		s.mu.Unlock()
 		return false
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	it := next.item
 	body := *u
 	body.Queued = false
@@ -116,11 +121,10 @@ func (e *Engine) typeNext(s *sess) bool {
 	return true
 }
 
-// dropUnsent withdraws a queued prompt whose API request failed and leaves
+// dropUnsentLocked withdraws a queued prompt whose API request failed and leaves
 // a notice with its text, so the user can send it again.
-func (e *Engine) dropUnsent(s *sess, it harness.Item) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *sess) dropUnsentLocked(it harness.Item) {
+	e := s.e
 	u := *it.User
 	u.Queued, u.Withdrawn = false, true
 	it.User = &u

@@ -39,7 +39,9 @@ func (s *sess) movedLocked() bool {
 // the agent, not the conversation, and stay.
 //
 // Prompts held for the old conversation are not sent to the new one: a
-// notice in the new chat carries their text.
+// notice in the new chat carries their text. A prompt already on its way
+// is bound to the conversation it was admitted in by convGen: its sender
+// checks the count again before it publishes or records anything.
 func (s *sess) startOverLocked(mapper string) harness.Mapper {
 	var held []string
 	for _, q := range s.queue {
@@ -47,8 +49,8 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 			held = append(held, q.item.User.Text)
 		}
 	}
+	s.convGen++
 	s.e.log.Forget(s.id)
-	draining.Delete(s.id)
 	fresh := s.e.mapperFor(mapper, s.env)
 	s.mappers[mapper] = fresh
 	s.conv = ""
@@ -68,6 +70,19 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 	s.unsentNoticeLocked(held)
 	s.restoring = was
 	return fresh
+}
+
+// errMoved is the answer to a prompt that was on its way when the agent
+// moved to another conversation: the prompt is not shown as delivered in a
+// chat it may not belong to, and it is never sent again.
+var errMoved = &harness.FallbackError{Reason: "source", Detail: "The agent moved to another conversation while this was being sent. It may not have arrived; check the terminal before sending it again."}
+
+// uncertainNoticeLocked tells the new conversation's chat about a queued
+// prompt that was on its way during the move.
+func (s *sess) uncertainNoticeLocked(prompt string) {
+	text := "A waiting prompt was being sent when " + s.ad.Name + " moved to another conversation. It may not have arrived and was not sent again: " + clipNotice(prompt)
+	s.publishLocked([]harness.Item{{ID: "unsent-" + s.e.newID(), Kind: harness.KindNotice, At: s.e.cfg.Now(),
+		Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError, Reason: "refused", Text: text}}}, nil)
 }
 
 // unsentNoticeLocked tells the new conversation's chat which held prompts

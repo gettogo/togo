@@ -35,9 +35,11 @@ type sess struct {
 	mu sync.Mutex
 	// restoring suppresses intermediate history notifications under mu.
 	restoring bool
-	// conv is the conversation the chat shows, as the mappers named it
+	// conv is the conversation the chat shows, as the mappers named it,
+	// and convGen counts the times the chat started over for another one
 	// (see conversation.go).
-	conv string
+	conv    string
+	convGen uint64
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
 	starting   sync.Mutex

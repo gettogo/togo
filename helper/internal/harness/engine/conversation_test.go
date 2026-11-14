@@ -3,12 +3,17 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/session"
 )
 
 // Seen live on omp 18.20, OpenCode 2.3 and others: the agent moved to a new
@@ -123,5 +128,111 @@ func TestSnapshotOfAnotherConversationStartsTheChatOver(t *testing.T) {
 	}
 	if res.Epoch == before || strings.Join(texts, ",") != "three,four" {
 		t.Errorf("epoch %q -> %q, chat = %q; want a new epoch holding three,four", before, res.Epoch, texts)
+	}
+}
+
+func init() {
+	harness.RegisterAdapterFile("fakegate", []byte(`
+adapter: fakegate
+name: Gated
+revision: 1
+match: { agents: [fakegate] }
+capabilities: [chat, send.api, send.queue, interrupt]
+feeds:
+  events:
+    hook: { events: [Event] }
+    mapper: fake.events
+    stability: documented
+actions:
+  send: { cli: { argv: [gate, '{{.text}}'] }, stability: documented }
+`))
+}
+
+// A prompt is on its way through the harness API when the agent moves to
+// another conversation. Its request returns into a chat that has started
+// over: the prompt is not shown as sent there and is not sent again, for a
+// direct send and for a queued one.
+func TestSendInFlightAcrossAConversationMove(t *testing.T) {
+	const id = "s_convgate01"
+	bin, home := t.TempDir(), t.TempDir()
+	// The request waits until its release file exists.
+	script := "#!/bin/sh\necho \"$1\" >> sent.log\nwhile [ ! -e release ]; do sleep 0.05; done\n"
+	if err := os.WriteFile(filepath.Join(bin, "gate"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var status atomic.Value
+	status.Store("idle")
+	var epochs atomic.Int64
+	e := New(Config{
+		Sessions: fakeSessions{id: session.Session{ID: id, Agent: "fakegate", Managed: true, Cwd: home, Command: []string{"fakegate"}}},
+		Typist:   &seqPane{}, Marker: &fakeMarker{}, Home: home,
+		Status:    func(string) string { v, _ := status.Load().(string); return v },
+		LoginPath: func(context.Context) string { return bin + ":/bin:/usr/bin" },
+		Log:       &Log{NewEpoch: func() string { return "e" + strconv.FormatInt(epochs.Add(1), 10) }},
+		Scale:     0.1,
+	})
+	t.Cleanup(func() { e.Forget(id) })
+	ctx := context.Background()
+	if _, err := e.Describe(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	sentLog := func() string { b, _ := os.ReadFile(filepath.Join(home, "sent.log")); return string(b) }
+	chat := func() (users []string, notices string) {
+		res, err := e.Open(ctx, &fakeSub{done: make(chan struct{})}, id, 0, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, it := range res.Items {
+			if it.User != nil {
+				users = append(users, it.User.Text)
+			}
+			if it.Notice != nil {
+				notices += it.Notice.Text + "\n"
+			}
+		}
+		return users, notices
+	}
+	deliver(id, map[string]any{"state": map[string]string{"conversation": "A"}})
+	waitFor(t, func() bool { s, _ := e.served(ctx, id); s.mu.Lock(); defer s.mu.Unlock(); return s.conv == "A" })
+
+	// A direct send.
+	done := make(chan error, 1)
+	go func() {
+		_, err := e.Send(ctx, harness.SendRequest{Session: id, Text: "direct", Mode: harness.SendNow})
+		done <- err
+	}()
+	waitFor(t, func() bool { return strings.Contains(sentLog(), "direct") })
+	deliver(id, map[string]any{"state": map[string]string{"conversation": "B"}})
+	waitFor(t, func() bool { return e.log.Epoch(id) == "e2" })
+	if err := os.WriteFile(filepath.Join(home, "release"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var moved *harness.FallbackError
+	if err := <-done; !errors.As(err, &moved) || !strings.Contains(moved.Detail, "moved to another conversation") {
+		t.Fatalf("direct send across the move = %v, want the moved error", err)
+	}
+	if users, _ := chat(); len(users) != 0 {
+		t.Errorf("new chat shows %q as sent", users)
+	}
+
+	// A queued send that is on its way.
+	os.Remove(filepath.Join(home, "release"))
+	status.Store("working")
+	queue(t, e, id, "queued")
+	status.Store("idle")
+	waitFor(t, func() bool { return strings.Contains(sentLog(), "queued") })
+	deliver(id, map[string]any{"state": map[string]string{"conversation": "C"}})
+	waitFor(t, func() bool { return e.log.Epoch(id) == "e3" })
+	if err := os.WriteFile(filepath.Join(home, "release"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { _, notices := chat(); return strings.Contains(notices, "queued") })
+	users, notices := chat()
+	if len(users) != 0 || !strings.Contains(notices, "may not have arrived") {
+		t.Errorf("after the queued send: users %q, notices %q", users, notices)
+	}
+	time.Sleep(400 * time.Millisecond)
+	if n := strings.Count(sentLog(), "queued"); n != 1 {
+		t.Errorf("queued prompt sent %d times, want 1", n)
 	}
 }

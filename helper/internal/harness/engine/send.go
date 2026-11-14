@@ -68,15 +68,24 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		s.mu.Unlock()
 		return harness.SendResult{Item: stored}, nil
 	}
+	gen := s.convGen
 	s.mu.Unlock()
 	if viaAPI {
-		if err := e.sendAPI(ctx, s, api, req.Text, req.Images); err != nil {
-			return harness.SendResult{}, err
-		}
-	} else if err := e.typePrompt(ctx, s, req.Text, req.Images); err != nil {
+		err = e.sendAPI(ctx, s, api, req.Text, req.Images)
+	} else {
+		err = e.typePrompt(ctx, s, req.Text, req.Images)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.convGen != gen {
+		// The chat started over while the prompt travelled: it is not
+		// shown as sent in a conversation it may not be part of.
+		return harness.SendResult{}, errMoved
+	}
+	if err != nil {
 		return harness.SendResult{}, err
 	}
-	return e.userItem(s, req.Text, images, false), nil
+	return s.userItemLocked(req.Text, images, false), nil
 }
 
 // sendAction is the adapter's API send action, when prompts go that way
@@ -209,6 +218,11 @@ var insertGap = 150 * time.Millisecond
 func (e *Engine) userItem(s *sess, text string, images []harness.ImageRef, queuedNow bool) harness.SendResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.userItemLocked(text, images, queuedNow)
+}
+
+func (s *sess) userItemLocked(text string, images []harness.ImageRef, queuedNow bool) harness.SendResult {
+	e := s.e
 	it := s.newUserItemLocked(text, images, queuedNow)
 	s.notePhoneLocked(it.ID, text, images)
 	if !queuedNow {
