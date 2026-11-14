@@ -8,9 +8,7 @@
 # `.motion`/`.animation` instead of `withAnimation` at the state change, `withAnimation` around
 # `await` or a Task, a moving `.transition` with no Reduce Motion path, and, in the Watch and
 # widget targets that cannot reach Motion, a curve named outside a role.
-# scripts/motion-choreography-baseline-*.txt list the offenders known when the pass was added,
-# one file per fix area so parallel fixes never touch the same file; a new offender fails, and
-# so does a baseline line that no longer matches (delete it). The baselines must end empty.
+# Every offender fails: there is no list of known ones.
 # The pass checks its own rules first against scripts/motion-lint/choreography-*.txt.
 #
 # Every animation goes through Motion.animation(_:reduce:), .motion(_:value:) or, in UIKit,
@@ -191,17 +189,9 @@ choreo_found="$(
 	# shellcheck disable=SC2086
 	find $dirs -name '*.swift' ! -path '*/Design/Motion*.swift' -print0 | sort -z | xargs -0 awk "$choreo" | sort -u
 )"
-known="$(cat "$here"/motion-choreography-baseline-*.txt 2>/dev/null | grep -v -e '^#' -e '^[[:space:]]*$' | sort -u || true)"
-new="$(comm -23 <(echo "$choreo_found" | sed '/^$/d') <(echo "$known" | sed '/^$/d'))"
-stale="$(comm -13 <(echo "$choreo_found" | sed '/^$/d') <(echo "$known" | sed '/^$/d'))"
-if [ -n "$new" ]; then
-	echo "Motion choreography (see the motion spec): new offences; fix them, do not add them to a baseline:"
-	echo "$new" | awk -F '\t' '{ printf "%s: %s: %s\n", $1, $2, $3 }'
-	status=1
-fi
-if [ -n "$stale" ]; then
-	echo "check-motion: these baseline lines (scripts/motion-choreography-baseline-*.txt) no longer match anything; delete them:"
-	echo "$stale" | awk -F '\t' '{ printf "%s: %s: %s\n", $1, $2, $3 }'
+if [ -n "$(echo "$choreo_found" | sed '/^$/d')" ]; then
+	echo "Motion choreography (see the motion spec): offences; fix them:"
+	echo "$choreo_found" | sed '/^$/d' | awk -F '\t' '{ printf "%s: %s: %s\n", $1, $2, $3 }'
 	status=1
 fi
 
@@ -216,7 +206,7 @@ fi
 #                          chatAvailable, hasMission, awaitsChat, hasLoaded, isLoading, describing,
 #                          .pending, or any comparison of a layer with a case (`layer == .pending`).
 #                          The user's own toggle (`value: harness.layer`) is not availability.
-# scripts/motion-v2-baseline.txt is empty: every offence fails, and so does any entry in it.
+# Every offence fails.
 # The rules check themselves first against scripts/motion-lint/v2-*.txt; TogoTests/MotionLint.swift
 # implements the same rules for the test target. Change both together.
 v2rules='
@@ -294,12 +284,6 @@ v2found="$(
 	# shellcheck disable=SC2086
 	find $dirs -name '*.swift' ! -path '*/Design/Motion*.swift' -print0 | sort -z | xargs -0 awk "$v2rules" | sort -u
 )"
-v2known="$(grep -v -e '^#' -e '^[[:space:]]*$' "$here/motion-v2-baseline.txt" 2>/dev/null || true)"
-if [ -n "$v2known" ]; then
-	echo "check-motion: scripts/motion-v2-baseline.txt must stay empty; fix these instead of listing them:"
-	echo "$v2known"
-	status=1
-fi
 if [ -n "$v2found" ]; then
 	echo "Motion principles v2: offences; fix them (a // motion: <purpose> comment, or no animation):"
 	echo "$v2found" | awk -F '\t' '{ printf "%s: %s: %s\n", $1, $2, $3 }'
