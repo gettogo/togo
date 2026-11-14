@@ -10,18 +10,11 @@ import (
 	"github.com/gettogo/togo/helper/internal/rpc"
 )
 
-func (s *Service) active(ctx context.Context, r *renderer) error {
+func (s *Service) active(r *renderer) error {
 	r.mu.Lock()
 	closed := r.closed
 	r.mu.Unlock()
 	if closed {
-		return errLease
-	}
-	st, err := s.backend.validate(ctx, r.lease.ID, r.runtime)
-	if err != nil {
-		return err
-	}
-	if !st.Native || st.Owner != r.lease.Token {
 		return errLease
 	}
 	return nil
@@ -35,7 +28,7 @@ func (s *Service) Ack(ctx context.Context, owner *rpc.Conn, p AckParams) error {
 	}
 	r.action.Lock()
 	defer r.action.Unlock()
-	if err := s.active(ctx, r); err != nil {
+	if err := s.active(r); err != nil {
 		return err
 	}
 	err = r.cache.Inspect(func(scene *Scene) error {
@@ -62,7 +55,7 @@ func (s *Service) Ack(ctx context.Context, owner *rpc.Conn, p AckParams) error {
 	}
 	wire, err := Encode('e', map[string]any{"ev": "ack", "sf": p.Surface, "s": p.Sequence})
 	if err == nil {
-		err = s.backend.send(ctx, p.ID, r.runtime, wire)
+		err = s.backend.dispatch(ctx, p.ID, r.runtime, r.lease.Token, wire)
 	}
 	if err == nil {
 		r.acks[p.Instance] = p.Sequence
@@ -91,7 +84,7 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 	}
 	r.action.Lock()
 	defer r.action.Unlock()
-	if err := s.active(ctx, r); err != nil {
+	if err := s.active(r); err != nil {
 		return DispatchResult{}, err
 	}
 	err = r.cache.Inspect(func(scene *Scene) error {
@@ -137,7 +130,7 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 	}
 	wire, err := Encode('e', p.Event)
 	if err == nil {
-		err = s.backend.send(ctx, p.ID, r.runtime, wire)
+		err = s.backend.dispatch(ctx, p.ID, r.runtime, r.lease.Token, wire)
 	}
 	return DispatchResult{Dispatched: err == nil}, err
 }

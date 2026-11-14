@@ -60,3 +60,22 @@ func (c *Client) ReleaseStaleSurfaces(ctx context.Context) error {
 	}
 	return errors.Join(failures...)
 }
+
+// SurfaceReplyReady permits only a small handshake reply into the original
+// pane. Copy mode must not consume it as navigation or search keystrokes.
+func (c *Client) SurfaceReplyReady(ctx context.Context, pane, owner string) (bool, error) {
+	if !validPane(pane) || !surfaceOwner.MatchString(owner) {
+		return false, errors.New("tmux: invalid surface reply")
+	}
+	out, err := c.run(ctx, "list-panes", "-t", pane, "-F", "#{pane_id}|#{pane_in_mode}|#{@togo-surface-owner}")
+	if err != nil {
+		return false, noSession(err)
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		parts := strings.Split(line, "|")
+		if len(parts) == 3 && parts[0] == pane {
+			return parts[1] == "0" && parts[2] == owner, nil
+		}
+	}
+	return false, ErrNoSession
+}

@@ -3,6 +3,9 @@ import * as path from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 const MAX_FILE = 32 * 1024
+const MAX_EVENT = 64 * 1024
+// Go's JSON encoder may escape one ASCII byte as six bytes (for example '<').
+const MAX_COMMAND = MAX_FILE + 6 * MAX_EVENT
 const MAX_LEASE = 8000
 
 // OMP consumes these capability reports after extension input listeners. They
@@ -14,8 +17,8 @@ function terminalReport(data) {
     /^\x1b\[\?[0-9]+;[0-9]+\$y$/.test(data)
 }
 
-// Controls affect renderer ownership only. Conversation text never enters this
-// channel, and a missing helper restores ANSI inside the original OMP process.
+// Authenticated commands own the renderer and dispatch semantic events inside
+// the original TUI. Event payloads are removed before confirming acceptance.
 export default function (pi) {
   const configPath = process.env.TOGO_SURFACE_CONFIG
   if (!configPath) return
@@ -69,7 +72,7 @@ export default function (pi) {
     processing = true
     try {
       const file = path.join(root, 'command.json')
-      if (fs.statSync(file).size > MAX_FILE) return
+      if (fs.statSync(file).size > MAX_COMMAND) return
       const request = JSON.parse(fs.readFileSync(file, 'utf8'))
       if (request.version !== 1 || request.generation !== config.generation || request.token !== config.token ||
         !Number.isSafeInteger(request.seq) || request.seq <= seq || typeof request.owner !== 'string' || request.owner.length > 128 ||
@@ -84,6 +87,13 @@ export default function (pi) {
         if (request.mode === 'native' && !tui.nativeRendering) switchRenderer(true)
       } else if (request.mode === 'ansi') {
         release()
+      } else if (request.mode === 'event') {
+        if (!owner || deadline <= performance.now() || !tui.nativeRendering ||
+          !request.event || typeof request.event !== 'object' || Array.isArray(request.event)) return
+        const body = JSON.stringify(request.event)
+        if (Buffer.byteLength(body) > MAX_EVENT) return
+        fs.unlinkSync(file)
+        tui.injectDebugInput('\x1b_tsp;e;' + body + '\x1b\\')
       } else return
       seq = request.seq
       publish()
@@ -130,11 +140,14 @@ export default function (pi) {
         done(undefined)
         return { render: () => [], invalidate() {} }
       })
-      if (typeof tui?.start !== 'function' || typeof tui?.stop !== 'function' || typeof tui?.requestRender !== 'function') throw new Error('unsupported')
+      if (typeof tui?.start !== 'function' || typeof tui?.stop !== 'function' || typeof tui?.requestRender !== 'function' ||
+        typeof tui?.injectDebugInput !== 'function') throw new Error('unsupported')
       available = true
       bindInput()
-      watcher = fs.watch(root, (_event, file) => { if (!file || String(file) === 'command.json') processCommand() })
-      watcher.on('error', () => { try { release() } catch {}; available = false; reason = 'control_unavailable'; publish() })
+      try {
+        watcher = fs.watch(root, (_event, file) => { if (!file || String(file) === 'command.json') processCommand() })
+        watcher.on('error', () => { watcher?.close(); watcher = undefined })
+      } catch { /* The bounded periodic poll below also delivers commands. */ }
       timer = setInterval(() => {
         if (deadline && performance.now() >= deadline) {
           try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() }
@@ -142,6 +155,7 @@ export default function (pi) {
         // start() probes asynchronously. Publish the confirmed renderer state,
         // including a protocol fallback, rather than only the requested mode.
         if (Boolean(tui?.nativeRendering) !== publishedNative) publish()
+        processCommand()
       }, 250)
       timer.unref?.()
       publish()

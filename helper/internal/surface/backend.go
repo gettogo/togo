@@ -45,7 +45,8 @@ type runtimeBackend interface {
 	resolve(context.Context, string) (runtimeInfo, error)
 	observe(context.Context, string, runtimeInfo, func(), func([]byte) error) error
 	control(context.Context, string, runtimeInfo, string, string) error
-	send(context.Context, string, runtimeInfo, []byte) error
+	send(context.Context, string, runtimeInfo, string, []byte) error
+	dispatch(context.Context, string, runtimeInfo, string, []byte) error
 	validate(context.Context, string, runtimeInfo) (CompanionState, error)
 }
 
@@ -155,12 +156,58 @@ func (b *paneBackend) control(ctx context.Context, id string, run runtimeInfo, o
 	return err
 }
 
-func (b *paneBackend) send(ctx context.Context, id string, run runtimeInfo, data []byte) error {
+func (b *paneBackend) send(ctx context.Context, id string, run runtimeInfo, owner string, data []byte) error {
 	if len(data) > MaxAPCBytes+16 {
+		return ErrLimit
+	}
+	m, err := wireMessage(data)
+	if err != nil {
+		return err
+	}
+	if m.Verb == 'e' {
+		return b.dispatch(ctx, id, run, owner, data)
+	}
+	if m.Verb != 'r' || len(data) > 4096 {
 		return ErrLimit
 	}
 	if _, err := b.validate(ctx, id, run); err != nil {
 		return err
 	}
+	ready, err := b.sessions.Tmux.SurfaceReplyReady(ctx, run.state.Pane, owner)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return errLease
+	}
 	return b.sessions.Tmux.SendKeys(ctx, run.state.Pane, true, string(data))
+}
+
+func (b *paneBackend) dispatch(ctx context.Context, id string, run runtimeInfo, owner string, data []byte) error {
+	m, err := wireMessage(data)
+	if err != nil || m.Verb != 'e' {
+		return ErrMalformed
+	}
+	run.control.Lock()
+	defer run.control.Unlock()
+	state, err := b.validate(ctx, id, run)
+	if err != nil {
+		return err
+	}
+	if state.Owner != owner || !state.Native {
+		return errLease
+	}
+	return b.companions.Dispatch(ctx, run.config, state, owner, m.Body)
+}
+
+func wireMessage(data []byte) (Message, error) {
+	if len(data) > MaxAPCBytes+16 {
+		return Message{}, ErrLimit
+	}
+	var parser Parser
+	msgs, errs := parser.Feed(data, time.Now())
+	if len(errs) != 0 || len(msgs) != 1 {
+		return Message{}, ErrMalformed
+	}
+	return msgs[0], nil
 }

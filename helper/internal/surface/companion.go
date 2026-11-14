@@ -158,16 +158,39 @@ func (c *Companions) State(config CompanionConfig) (CompanionState, error) {
 // Command changes or renews a renderer lease. Callers serialize commands for
 // this run, and validate process/pane ownership before issuing one.
 func (c *Companions) Command(ctx context.Context, config CompanionConfig, previous CompanionState, mode, owner string) (CompanionState, error) {
+	return c.command(ctx, config, previous, mode, owner, nil)
+}
+
+// Dispatch passes a bounded semantic event to the existing TUI, not tmux's
+// keyboard consumer. The companion removes the payload before confirming it.
+func (c *Companions) Dispatch(ctx context.Context, config CompanionConfig, previous CompanionState, owner string, event json.RawMessage) error {
+	if len(event) > MaxAPCBytes || !json.Valid(event) {
+		return ErrLimit
+	}
+	_, err := c.command(ctx, config, previous, "event", owner, event)
+	return err
+}
+
+func (c *Companions) command(ctx context.Context, config CompanionConfig, previous CompanionState, mode, owner string, event json.RawMessage) (CompanionState, error) {
 	request := struct {
 		CompanionConfig
-		Seq          uint64 `json:"seq"`
-		Mode         string `json:"mode"`
-		Owner        string `json:"owner"`
-		Conversation string `json:"conversation"`
-		Epoch        uint64 `json:"epoch"`
-		LeaseMS      int64  `json:"leaseMs"`
-	}{config, previous.Seq + 1, mode, owner, previous.Conversation, previous.Epoch, RendererLease.Milliseconds()}
-	if err := writeJSON(filepath.Join(filepath.Dir(config.Path), "command.json"), request); err != nil {
+		Seq          uint64          `json:"seq"`
+		Mode         string          `json:"mode"`
+		Owner        string          `json:"owner"`
+		Conversation string          `json:"conversation"`
+		Epoch        uint64          `json:"epoch"`
+		LeaseMS      int64           `json:"leaseMs"`
+		Event        json.RawMessage `json:"event,omitempty"`
+	}{config, previous.Seq + 1, mode, owner, previous.Conversation, previous.Epoch, RendererLease.Milliseconds(), event}
+	raw, err := json.Marshal(request)
+	if err != nil {
+		return CompanionState{}, err
+	}
+	// Match the companion's bound, including Go's optional HTML escapes.
+	if len(raw) > MaxCompanionBytes+6*MaxAPCBytes {
+		return CompanionState{}, ErrLimit
+	}
+	if err := state.WriteFile(filepath.Join(filepath.Dir(config.Path), "command.json"), raw); err != nil {
 		return CompanionState{}, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, CompanionWait)

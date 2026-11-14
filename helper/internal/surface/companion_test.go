@@ -7,7 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/session"
 )
@@ -85,5 +87,59 @@ func TestOMPCompanionControlAndLease(t *testing.T) {
 	cmd := exec.Command(node, "--test", "testdata/omp-companion.test.mjs")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("companion control: %v\n%s", err, out)
+	}
+}
+
+func TestCompanionDispatchBoundsEncodedTextAndWaitsForAcceptance(t *testing.T) {
+	c := &Companions{Home: t.TempDir()}
+	_, err := c.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, _ := c.Current("s_abcdefghij")
+	before := CompanionState{Version: 1, Generation: run.Generation, PID: os.Getpid(), Pane: "%0",
+		Conversation: "one", Available: true, Native: true, Owner: "renderer", Seq: 1}
+	file := filepath.Join(filepath.Dir(run.Path), "command.json")
+	result := make(chan error, 1)
+	body := json.RawMessage(`{"ev":"edit","sf":"one","id":"input","text":"` + strings.Repeat("<", 60<<10) + `"}`)
+	go func() { result <- c.Dispatch(context.Background(), run, before, before.Owner, body) }()
+	deadline := time.Now().Add(CompanionWait)
+	var command []byte
+	for {
+		command, err = os.ReadFile(file)
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("command was not written")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if len(command) < 6*(60<<10) || len(command) > MaxCompanionBytes+6*MaxAPCBytes {
+		t.Fatal("escaped text exceeded the companion bound", len(command))
+	}
+	var received struct {
+		Event json.RawMessage `json:"event"`
+	}
+	if json.Unmarshal(command, &received) != nil {
+		t.Fatal("invalid command")
+	}
+	var event struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(received.Event, &event) != nil || event.Text != strings.Repeat("<", 60<<10) {
+		t.Fatal("command changed literal text")
+	}
+	select {
+	case err := <-result:
+		t.Fatal("dispatch completed before acceptance", err)
+	default:
+	}
+	before.Seq++
+	if err := writeJSON(filepath.Join(filepath.Dir(run.Path), "state.json"), before); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
 	}
 }

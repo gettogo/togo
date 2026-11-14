@@ -61,7 +61,7 @@ func (f *fakeRuntime) control(_ context.Context, _ string, _ runtimeInfo, owner,
 	}
 	return nil
 }
-func (f *fakeRuntime) send(_ context.Context, _ string, _ runtimeInfo, data []byte) error {
+func (f *fakeRuntime) send(_ context.Context, _ string, _ runtimeInfo, _ string, data []byte) error {
 	var p Parser
 	msgs, errs := p.Feed(data, time.Time{})
 	if len(errs) != 0 || len(msgs) != 1 {
@@ -71,6 +71,17 @@ func (f *fakeRuntime) send(_ context.Context, _ string, _ runtimeInfo, data []by
 	f.sent = append(f.sent, msgs...)
 	f.mu.Unlock()
 	return nil
+}
+
+func (f *fakeRuntime) dispatch(ctx context.Context, id string, run runtimeInfo, owner string, data []byte) error {
+	state, err := f.validate(ctx, id, run)
+	if err != nil {
+		return err
+	}
+	if !state.Native || state.Owner != owner {
+		return errLease
+	}
+	return f.send(ctx, id, run, owner, data)
 }
 
 func nativeFixture(t testing.TB) (*Service, *fakeRuntime, *rpc.Conn, Lease) {

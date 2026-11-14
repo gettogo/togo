@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
@@ -67,7 +70,14 @@ func TestOriginalOMPTransport(t *testing.T) {
 		}
 	}
 	svc := surface.NewService(home, sessions, t.Logf)
+	t.Logf("original OMP pid=%d", before.PID)
 	defer svc.Stop()
+	defer func() {
+		if t.Failed() {
+			st, stateErr := companions.State(config)
+			t.Logf("final companion native=%v available=%v reason=%q epoch=%d seq=%d read=%v", st.Native, st.Available, st.Reason, st.Epoch, st.Seq, stateErr)
+		}
+	}()
 	owner := &rpc.Conn{}
 	options := surface.RenderOptions{Cols: 100, Dark: true, Kinds: []string{"col", "row", "text", "md", "ansi", "rows", "editor", "input", "button", "card", "overlay", "list", "item", "picker", "tabs", "spinner", "badge", "kbd", "rule", "spacer", "field", "buttons", "select", "icon", "image", "meter", "status", "toast"}}
 	lease, err := svc.Open(ctx, owner, created.ID, options)
@@ -122,6 +132,59 @@ func TestOriginalOMPTransport(t *testing.T) {
 	if editor == nil || editor.Props["text"] != "" {
 		t.Fatal("fresh original editor is not ready")
 	}
+	copyMode := func(args ...string) {
+		t.Helper()
+		argv := append(append([]string{}, tmux.Socket...), args...)
+		if out, err := exec.CommandContext(ctx, tmux.Bin, argv...).CombinedOutput(); err != nil {
+			t.Fatalf("owned pane mode change: %v: %.200s", err, out)
+		}
+	}
+	copyMode("copy-mode", "-t", before.Pane)
+	if ready, err := tmux.SurfaceReplyReady(ctx, before.Pane, lease.Token); err != nil || ready {
+		t.Fatalf("copy mode must refuse raw handshake input: %v", err)
+	}
+	previous := ""
+	for _, size := range []int{20 << 10, 60 << 10, 0} {
+		started := time.Now()
+		text := ""
+		if size > 0 {
+			text = strings.Repeat("x", size) + "🍍"
+			if size > 20<<10 {
+				text = strings.Repeat("an example line\n", size/16) + "🍍"
+			}
+		}
+		body, _ := json.Marshal(map[string]any{"ev": "edit", "sf": editorView.ID, "id": editor.ID, "from": 0,
+			"to": len(utf16.Encode([]rune(previous))), "len": len(utf16.Encode([]rune(previous))),
+			"text": text, "cursor": len(utf16.Encode([]rune(text)))})
+		if _, err := svc.Input(ctx, owner, surface.InputParams{ID: created.ID, Lease: lease.Token, Surface: editorView.ID, Instance: editorView.Instance, Event: body}); err != nil {
+			t.Fatalf("native edit of %d bytes failed: %v", len(text), err)
+		}
+		t.Logf("edit %d bytes dispatched in %v", len(text), time.Since(started))
+		for {
+			current := readLiveScene(t, ctx, svc, owner, lease)
+			var actual *surface.Node
+			for _, v := range current.Views {
+				if v.Closed {
+					continue
+				}
+				actual = findNativeNode(v.Document.Root, func(n *surface.Node) bool { return n.ID == editor.ID })
+				if err := svc.Ack(ctx, owner, surface.AckParams{ID: created.ID, Lease: lease.Token, Surface: v.ID, Instance: v.Instance, Sequence: v.Document.Sequence}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if actual != nil && actual.Props["text"] == text {
+				t.Logf("edit %d bytes observed in %v", len(text), time.Since(started))
+				break
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal("native edit did not reach the original editor")
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
+		previous = text
+	}
+	copyMode("send-keys", "-t", before.Pane, "-X", "cancel")
 	command, _ := json.Marshal(map[string]any{"ev": "send", "sf": editorView.ID, "id": editor.ID, "text": "/resume"})
 	empty := ""
 	if _, err := svc.Input(ctx, owner, surface.InputParams{ID: created.ID, Lease: lease.Token, Surface: editorView.ID, Instance: editorView.Instance, Event: command, ExpectedText: &empty}); err != nil {
@@ -204,4 +267,35 @@ func findNativeNode(n *surface.Node, match func(*surface.Node) bool) *surface.No
 		}
 	}
 	return nil
+}
+
+func readLiveScene(t *testing.T, ctx context.Context, svc *surface.Service, owner *rpc.Conn, lease surface.Lease) surface.Scene {
+	t.Helper()
+	for {
+		chunk, err := svc.Read(owner, surface.ReadParams{ID: lease.ID, Lease: lease.Token})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if chunk.Pending {
+			select {
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			case <-time.After(5 * time.Millisecond):
+			}
+			continue
+		}
+		data := append([]byte(nil), chunk.Data...)
+		for chunk.NextOffset < chunk.Total {
+			chunk, err = svc.Read(owner, surface.ReadParams{ID: lease.ID, Lease: lease.Token, Snapshot: chunk.Snapshot, Offset: chunk.NextOffset})
+			if err != nil {
+				t.Fatal(err)
+			}
+			data = append(data, chunk.Data...)
+		}
+		var scene surface.Scene
+		if err := json.Unmarshal(data, &scene); err != nil {
+			t.Fatal(err)
+		}
+		return scene
+	}
 }

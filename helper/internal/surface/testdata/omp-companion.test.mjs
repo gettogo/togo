@@ -1,11 +1,13 @@
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
+import fsDefault from 'node:fs'
+import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-test('companion authenticates control, preserves context and expires its renderer lease', async () => {
+for (const watched of [true, false]) test(`companion preserves authenticated control with ${watched ? 'watch' : 'poll'} delivery`, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'togo-surface-'))
   const saved = { config: process.env.TOGO_SURFACE_CONFIG, pane: process.env.TMUX_PANE, native: process.env.PI_TUI_NATIVE }
   const config = { version: 1, id: 's_abcdefghij', generation: 'a'.repeat(32), token: 'b'.repeat(64) }
@@ -15,6 +17,7 @@ test('companion authenticates control, preserves context and expires its rendere
   fs.writeFileSync(process.env.TOGO_SURFACE_CONFIG, JSON.stringify(config), { mode: 0o600 })
   const events = new Map()
   let terminalInput
+  const injected = []
   const tui = {
     nativeRendering: false,
     stop() { this.nativeRendering = false },
@@ -24,6 +27,7 @@ test('companion authenticates control, preserves context and expires its rendere
       else this.nativeRendering = false
     },
     requestRender() {},
+    injectDebugInput(data) { injected.push(data) },
   }
   const ctx = {
     hasUI: true,
@@ -47,6 +51,10 @@ test('companion authenticates control, preserves context and expires its rendere
     fs.renameSync(path.join(root, 'command.tmp'), path.join(root, 'command.json'))
   }
   try {
+    if (!watched) {
+      mock.method(fsDefault, 'watch', () => { throw new Error('watch unavailable') })
+      syncBuiltinESMExports()
+    }
     const module = await import(pathToFileURL(path.resolve('omp.mjs')))
     module.default({ on(name, fn) { events.set(name, fn) } })
     await events.get('session_start')({}, ctx)
@@ -70,9 +78,19 @@ test('companion authenticates control, preserves context and expires its rendere
     assert.equal(state().native, true)
     terminalInput('desktop keystroke')
     await waitFor(() => !state().native && state().reason === 'terminal_input')
-    command({ ...config, seq: 5, mode: 'native', owner: 'renderer', conversation: 'stale-conversation', leaseMs: 1000 })
+    command({ ...config, seq: 5, mode: 'native', owner: 'renderer', conversation: 'conversation-one', leaseMs: 2000 })
+    await waitFor(() => state().seq === 5 && state().native)
+    command({ ...config, seq: 6, mode: 'event', owner: 'renderer', conversation: 'conversation-one',
+      event: { ev: 'edit', sf: 'one', id: 'input', from: 0, to: 0, len: 0, cursor: 60 * 1024, text: 'x'.repeat(60 * 1024) } })
+    await waitFor(() => state().seq === 6)
+    assert.equal(injected.length, 1)
+    assert.equal(JSON.parse(injected[0].slice(8, -2)).text.length, 60 * 1024)
+    assert.equal(fs.existsSync(path.join(root, 'command.json')), false)
+    await new Promise(resolve => setTimeout(resolve, 300))
+    assert.equal(injected.length, 1)
+    command({ ...config, seq: 7, mode: 'native', owner: 'renderer', conversation: 'stale-conversation', leaseMs: 1000 })
     await new Promise(resolve => setTimeout(resolve, 100))
-    assert.equal(state().seq, 4)
+    assert.equal(state().seq, 6)
     // OMP clears extension input listeners when it switches conversations.
     terminalInput = undefined
     ctx.sessionManager.getSessionId = () => 'conversation-two'
@@ -84,5 +102,7 @@ test('companion authenticates control, preserves context and expires its rendere
       if (value === undefined) delete process.env[name]; else process.env[name] = value
     }
     fs.rmSync(root, { recursive: true, force: true })
+    mock.restoreAll()
+    syncBuiltinESMExports()
   }
 })

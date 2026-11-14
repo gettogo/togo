@@ -127,7 +127,7 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 			if err != nil {
 				return err
 			}
-			return s.backend.send(runctx, id, run, wire)
+			return s.backend.send(runctx, id, run, r.lease.Token, wire)
 		}}
 		observed <- s.backend.observe(runctx, id, run, func() { once.Do(func() { close(ready) }) }, stream.feed)
 	}()
