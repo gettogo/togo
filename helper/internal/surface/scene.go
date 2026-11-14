@@ -151,8 +151,8 @@ func (s *Scene) hello(raw []byte) ([]Message, error) {
 	body, _ := json.Marshal(map[string]any{
 		"r": "hello", "v": 1, "term": "togo", "ver": version.Current(), "kinds": s.Options.Kinds,
 		"features": []string{"adopt", "reduce-motion"}, "apc": MaxAPCBytes, "credits": 2,
-		"cols": s.Options.Cols, "cell": map[string]int{"w": 8, "h": 17}, "dark": s.Options.Dark,
-		"reduceMotion": s.Options.ReduceMotion, "hour12": false,
+		"cols": s.Options.Cols, "dark": s.Options.Dark,
+		"reduceMotion": s.Options.ReduceMotion,
 	})
 	return []Message{{Verb: 'r', Body: body}}, nil
 }
