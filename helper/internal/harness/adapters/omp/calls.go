@@ -1,6 +1,7 @@
 package omp
 
 import (
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +23,9 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 		State: harness.StateRunning, Started: at}}
 	if info.file != "" {
 		it.Tool.Files = []harness.FileChange{{Path: info.file}}
+	}
+	if r, ok := pathImage(args, s.cwd); ok {
+		it.Tool.Images = []harness.ImageRef{r}
 	}
 	s.tools[callID] = it
 	items := []harness.Item{*it}
@@ -104,6 +108,9 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 		b.State = harness.StateFailed
 	}
 	b.Output = tail(text(m["content"]), harness.MaxToolOutput)
+	if len(b.Images) == 0 {
+		b.Images = resultImages(m["content"])
+	}
 	details := obj(m["details"])
 	if c, ok := num(details["exitCode"]); ok {
 		b.ExitCode = ptr(int(c))
@@ -188,4 +195,38 @@ func (s *session) bash(id, parent string, m map[string]any, at time.Time) ([]har
 		b.State = harness.StateCancelled
 	}
 	return []harness.Item{{ID: id, Parent: parent, Kind: harness.KindTool, At: at, Tool: b}}, nil
+}
+
+// pathImage is the picture a tool call names by path (a read of a
+// screenshot, a written image), made absolute against the session folder.
+func pathImage(args map[string]any, cwd string) (harness.ImageRef, bool) {
+	p := firstNonEmpty(str(args, "path"), str(args, "file_path"))
+	if p == "" {
+		return harness.ImageRef{}, false
+	}
+	if !filepath.IsAbs(p) {
+		if cwd == "" {
+			return harness.ImageRef{}, false
+		}
+		p = filepath.Join(cwd, p)
+	}
+	return harness.ImageAtPath(p)
+}
+
+// resultImages are the image parts of a tool result ({type: "image", data,
+// mimeType}), which the text of the result leaves out: a screenshot a tool
+// took, a picture a read returned. A large one travels as its type and
+// size only.
+func resultImages(content any) []harness.ImageRef {
+	var out []harness.ImageRef
+	for _, part := range asList(content) {
+		m := obj(part)
+		if str(m, "type") != "image" || len(out) >= harness.MaxImagesPerItem {
+			continue
+		}
+		if r, ok := harness.InlineImage(str(m, "mimeType"), str(m, "data")); ok {
+			out = append(out, r)
+		}
+	}
+	return out
 }
