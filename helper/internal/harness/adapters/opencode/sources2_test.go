@@ -209,3 +209,26 @@ func TestMovedConversationReportsItsFolder(t *testing.T) {
 		t.Fatalf("after the terminal moved to another conversation: %v", st)
 	}
 }
+
+// Seen live on 2.3.0: 56 sessions existed, the picker listed 50, and typing
+// the oldest one's name found nothing though OpenCode's own search did. The
+// picker's search text now goes to the server.
+func TestResumePickerSearchGoesToTheServer(t *testing.T) {
+	a, err := spec.Parse(AdapterFile2())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := a.Screens["resume"]
+	if !sc.Search || sc.SearchMode != "remote" {
+		t.Fatalf("resume screen search = %v %q, want remote", sc.Search, sc.SearchMode)
+	}
+	path := a.Sources["sessions"].HTTP.Path
+	with, err := engine.Render(path, map[string]any{"cwd": "/w", "search": "oldest target"})
+	if err != nil || !strings.HasSuffix(with, "&search=oldest+target") {
+		t.Errorf("with a search: %q %v", with, err)
+	}
+	without, err := engine.Render(path, map[string]any{"cwd": "/w"})
+	if err != nil || strings.Contains(without, "search") {
+		t.Errorf("without a search: %q %v", without, err)
+	}
+}

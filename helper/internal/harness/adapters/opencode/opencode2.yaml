@@ -44,7 +44,9 @@ sources:
   # The terminal's session list asks for archived=false; an archived session is
   # not one to resume. The select drops one too, should a server ignore the filter.
   sessions:
-    http: { path: '/api/session?directory={{.cwd | urlquery}}&limit=50&archived=false' }
+    # The list holds the 50 newest; `search` is the picker's search text (search_mode on
+    # the resume screen), which the server matches over every session of the folder.
+    http: { path: '/api/session?directory={{.cwd | urlquery}}&limit=50&archived=false{{with .search}}&search={{. | urlquery}}{{end}}' }
     select: '[.data[] | select(.parentID == null and .time.archived == null)] | sort_by(-.time.updated)'
     cache: 30s
     stability: documented
@@ -137,8 +139,8 @@ screens:
     on_select: set_model
     setup: { source: unconnected, map: { item.id: .id, item.title: .name, item.subtitle: .more }, action: add_provider_key, input: secret }
   # A variant is part of the session's model, so a pick goes through the
-  # model switch. The mapper does not report the variant yet: until it sets
-  # model_variant, no row is marked as the current one.
+  # model switch. The mapper reports the variant in use as model_variant
+  # ("default" for the model without one), which marks the current row.
   variant:
     primitive: picker
     title: Variant
@@ -166,6 +168,7 @@ screens:
     capability: resume
     source: sessions
     search: true
+    search_mode: remote
     map: { item.id: .id, item.title: .title, item.subtitle: '{{.time.updated | ago}}' }
     on_select: resume
   mcp:

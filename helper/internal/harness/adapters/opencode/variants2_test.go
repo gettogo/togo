@@ -6,8 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
+	"os"
+	"time"
 )
 
 // Seen live on 2.3.0: the app had no way to choose a model variant (the
@@ -102,5 +105,23 @@ func TestVariantPickerListsTheCurrentModelsVariants(t *testing.T) {
 		if c.Name == "variants" && c.Screen != "variant" {
 			t.Errorf("/variants: %+v", c)
 		}
+	}
+}
+
+// The mapper reports the variant in use, so the picker marks its row. The
+// event is the one recorded from 2.2.5 when a variant was picked.
+func TestVariantInUseIsReported(t *testing.T) {
+	raw, err := os.ReadFile("testdata/v2/variant-selected.sse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewEvents2(harness.Env{Cwd: "/w"})
+	for _, line := range strings.Split(string(raw), "\n") {
+		if data, ok := strings.CutPrefix(line, "data: "); ok {
+			m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(data)})
+		}
+	}
+	if v := m.State()["model_variant"]; v == "" || v == "default" {
+		t.Errorf("model_variant = %q, want the picked variant", v)
 	}
 }

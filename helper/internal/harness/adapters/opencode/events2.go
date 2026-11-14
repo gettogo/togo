@@ -137,6 +137,7 @@ type location2 struct {
 type modelRef2 struct {
 	ID         string `json:"id"`
 	ProviderID string `json:"providerID"`
+	Variant    string `json:"variant"`
 }
 
 type content2 struct {
@@ -304,6 +305,9 @@ func (e *Events2) setAgentModel(agent string, m *modelRef2) {
 		e.state["model"] = m.ProviderID + "/" + m.ID
 		e.state["provider"], e.state["model_id"] = m.ProviderID, m.ID
 		e.state["model_ref"] = modelRef(m.ProviderID, m.ID)
+		// The variant picker marks its current row by this: the variant's
+		// id, or "default" for the model without one.
+		e.state["model_variant"] = firstNonEmptyString(m.Variant, "default")
 	}
 }
 
@@ -487,4 +491,13 @@ func (e *Events2) lostTrack() {
 	if e.state["working"] == "true" {
 		e.state["working"], e.state["idle"] = "false", "true"
 	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
