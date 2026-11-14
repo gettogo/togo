@@ -54,3 +54,37 @@ func TestResumePickerLeavesOutArchivedSessions(t *testing.T) {
 		t.Fatalf("picker lists %s", got)
 	}
 }
+
+// Seen live on 2.3.0: /api/agent listed a custom primary agent
+// (audit-observer) and set_mode took its id, but the mode chip offered only
+// Build and Plan. The chip reads the agents source, which lists what the
+// terminal's agent switch does: primary agents that are not hidden.
+// testdata/v2/agents-custom.json is what the server listed (id, name, mode
+// and hidden of each agent).
+func TestModesListCustomPrimaryAgents(t *testing.T) {
+	a, err := spec.Parse(AdapterFile2())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Modes == nil || a.Modes.Source != "agents" {
+		t.Fatalf("modes do not read the agents source: %+v", a.Modes)
+	}
+	var written []string
+	for _, c := range a.Modes.Choices {
+		written = append(written, c.ID)
+	}
+	if got := strings.Join(written, " "); got != "build plan" {
+		t.Fatalf("choices served when the source is down: %s", got)
+	}
+	v, err := engine.JQFirst(a.Sources["agents"].Select, fixture2(t, "agents-custom.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, m := range v.([]any) {
+		ids = append(ids, m.(map[string]any)["id"].(string))
+	}
+	if got := strings.Join(ids, " "); got != "build plan audit-observer" {
+		t.Fatalf("agents source lists %s", got)
+	}
+}

@@ -185,8 +185,11 @@ actions:
     role: destructive
     http: { method: POST, path: '/api/session/{{.target}}/interrupt' }
     stability: documented
+# The modes are OpenCode's primary agents, which a user can add to: the agents
+# source lists them. Build and Plan are what is offered while it cannot be read.
 modes:
   choices: [{ id: build, label: Build }, { id: plan, label: Plan }]
+  source: agents
   current: agents
   select: $state.mode
   set: set_mode

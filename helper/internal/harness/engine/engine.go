@@ -263,6 +263,7 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 		return harness.Nop{}.Describe(ctx, id)
 	}
 	s.waitReady(ctx)
+	modes := e.modeList(ctx, s)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a := s.ad
@@ -298,9 +299,7 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 		d.Screens = append(d.Screens, harness.ScreenRef{ID: name, Primitive: sc.Primitive, Title: sc.Title, Section: sc.Section})
 	}
 	if m := a.Modes; m != nil && !s.degraded[harness.CapMode] {
-		for _, c := range m.Choices {
-			d.Modes = append(d.Modes, harness.Choice{ID: c.ID, Label: c.Label, Detail: c.Detail})
-		}
+		d.Modes = modes
 		d.Mode = s.currentModeLocked()
 	}
 	return d, nil

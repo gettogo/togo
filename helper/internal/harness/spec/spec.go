@@ -456,9 +456,13 @@ type Verify struct {
 // Modes declares the mode chip.
 type Modes struct {
 	Choices []ModeChoice `yaml:"choices"`
-	Current string       `yaml:"current"` // a source name
-	Select  string       `yaml:"select"`
-	Set     string       `yaml:"set"` // an action name
+	// Source lists the modes live, as {id, name, description}, for a
+	// harness whose modes the user can add to. Choices are then what is
+	// offered while the source cannot be read.
+	Source  string `yaml:"source"`
+	Current string `yaml:"current"` // a source name
+	Select  string `yaml:"select"`
+	Set     string `yaml:"set"` // an action name
 	// Screen reads the mode off the pane for harnesses that report it
 	// nowhere else: the last line that matches a rule names the mode;
 	// with none, ScreenDefault (when set).

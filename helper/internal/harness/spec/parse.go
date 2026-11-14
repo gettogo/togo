@@ -172,6 +172,9 @@ func (a *Adapter) Validate() error {
 		if m.Current != "" && !a.hasSource(m.Current) {
 			bad("modes.current: unknown source %q", m.Current)
 		}
+		if m.Source != "" && !a.hasSource(m.Source) {
+			bad("modes.source: unknown source %q", m.Source)
+		}
 	}
 	if c := a.Commands; c != nil && c.Source != "" && !a.hasSource(c.Source) {
 		bad("commands.source: unknown source %q", c.Source)
