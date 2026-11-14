@@ -1,10 +1,13 @@
 package engine
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
 // StateConversation is the mapper state key naming the conversation the
@@ -15,6 +18,34 @@ import (
 // conversation stays in the chat and nothing of the old turn's state
 // (tools, plan, usage, working, held prompts) carries into the new one.
 const StateConversation = "conversation"
+
+// StateCwd is the mapper state key naming the folder the conversation
+// works in now. A mapper sets it when its harness can move a running
+// conversation to another folder (OpenCode's session.moved). It is not
+// "cwd", which mappers set for other ends (a shell's folder after cd).
+const StateCwd = "conversation_cwd"
+
+// filesDir is the folder the @ menu lists: the one the conversation was
+// moved to when a mapper names it, else the session's. The mapper's word
+// is a path the harness sent, so it is confined as a source's path is (the
+// home, the session folder, the agent's own roots) and must be a folder.
+// One that is not is not listed; the menu keeps to the session folder.
+func (s *sess) filesDir() string {
+	s.mu.Lock()
+	dir := s.stateLocked()[StateCwd]
+	s.mu.Unlock()
+	if !filepath.IsAbs(dir) {
+		return s.env.Cwd
+	}
+	real, err := source.Confine(dir, s.env)
+	if err != nil {
+		return s.env.Cwd
+	}
+	if fi, err := os.Stat(real); err != nil || !fi.IsDir() {
+		return s.env.Cwd
+	}
+	return real
+}
 
 // movedLocked reports whether the mappers now name a conversation other
 // than the one the chat shows. The first one named is the one the session

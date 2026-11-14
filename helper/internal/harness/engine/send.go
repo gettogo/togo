@@ -305,7 +305,7 @@ func (e *Engine) Complete(ctx context.Context, req harness.CompleteRequest) (har
 	}
 	var items []harness.Completion
 	if req.Kind == harness.CompleteFile {
-		items = completeFiles(ctx, s.env.Cwd, req.Query, limit)
+		items = completeFiles(ctx, s.filesDir(), req.Query, limit)
 	} else {
 		items = e.completeCommands(ctx, s, req.Query, limit)
 	}

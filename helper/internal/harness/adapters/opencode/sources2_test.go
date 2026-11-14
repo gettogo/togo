@@ -173,3 +173,39 @@ func TestChildIsNamedAlikeByTheMapperAndTheChildrenSource(t *testing.T) {
 		t.Fatalf("the mapper names the child %q, the source %q", ops[0].Row.ID, listed["id"])
 	}
 }
+
+// Seen live on 2.3.0: a conversation moved to another folder and the @ menu
+// kept listing the first one. The mapper reports the folder a session.moved
+// names as conversation_cwd, which the engine lists files from, and forgets
+// it when the terminal goes to another conversation, whose folder no event
+// names.
+// testdata/v2/moved.sse is what a 2.2.5 server sent for a session made in
+// /tmp/work and moved with POST /api/session/{id}/move (folders renamed).
+func TestMovedConversationReportsItsFolder(t *testing.T) {
+	m := NewEvents2(harness.Env{Cwd: "/tmp/work"})
+	recs := recordedSSE(t, "testdata/v2/moved.sse")
+	for _, rec := range recs[:1] {
+		m.Map(rec)
+	}
+	if st := m.State(); st["harness_session"] != "ses_e248793fbffe1C9pGgD1Q9qW5k" || st["conversation_cwd"] != "" {
+		t.Fatalf("before the move: %v", st)
+	}
+	for _, rec := range recs[1:] {
+		m.Map(rec)
+	}
+	if got := m.State()["conversation_cwd"]; got != "/tmp/alternate" {
+		t.Fatalf("folder after the move = %q", got)
+	}
+	// Another session's move is not this conversation's.
+	other := `{"type":"session.moved","data":{"sessionID":"ses_other","location":{"directory":"/tmp/elsewhere"},"projectID":"p","subpath":""}}`
+	m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(other)})
+	if got := m.State()["conversation_cwd"]; got != "/tmp/alternate" {
+		t.Fatalf("folder after another session moved = %q", got)
+	}
+	// A prompt in another top-level session: the terminal went there.
+	enq := `{"type":"session.inbox.enqueued","data":{"sessionID":"ses_next","inboxID":"msg_1","item":{"type":"user","payload":{"text":"hi"}}}}`
+	m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(enq)})
+	if st := m.State(); st["harness_session"] != "ses_next" || st["conversation_cwd"] != "" {
+		t.Fatalf("after the terminal moved to another conversation: %v", st)
+	}
+}

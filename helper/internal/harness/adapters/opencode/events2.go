@@ -54,8 +54,9 @@ func NewEvents2(env harness.Env) *Events2 {
 func (e *Events2) Name() string { return MapperEvents2 }
 
 // State reports harness_session, model, model_ref, provider, model_id,
-// mode (the agent), turn, working and idle, and commands_rev and agents_rev,
-// which change when the server says its commands or agents did.
+// mode (the agent), turn, working and idle, commands_rev and agents_rev,
+// which change when the server says its commands or agents did, and
+// conversation_cwd, the folder the conversation was moved to, if it was.
 func (e *Events2) State() map[string]string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -116,6 +117,11 @@ type ev2 struct {
 	Form        *form2          `json:"form"`
 	Answer      map[string]any  `json:"answer"`
 	ContextUsed *int            `json:"contextUsed"`
+	Location    *location2      `json:"location"`
+}
+
+type location2 struct {
+	Directory string `json:"directory"`
 }
 
 type modelRef2 struct {
@@ -209,6 +215,12 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if d.SessionID == e.main || e.main == "" {
 			e.setAgentModel(d.Agent, d.Model)
 		}
+	case "session.moved":
+		// The conversation works in another folder from here on: the @
+		// menu lists that one (the engine confines it first).
+		if d.SessionID == e.main && d.Location != nil {
+			e.state["conversation_cwd"] = d.Location.Directory
+		}
 	case "session.text.started", "session.reasoning.started":
 		e.textStarted(ev.Type, d, at)
 	case "session.text.delta", "session.reasoning.delta":
@@ -255,6 +267,10 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 }
 
 func (e *Events2) setMain(id string) {
+	if id != e.main {
+		// The folder a move named was the last conversation's.
+		delete(e.state, "conversation_cwd")
+	}
 	e.main = id
 	e.state["harness_session"] = id
 	e.state["conversation"] = id
