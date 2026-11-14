@@ -193,11 +193,18 @@ actions:
     # say it was set.
     verify: { source: session, select: .effort, equals: '{{.value}}', within: 5s, required: true }
     stability: documented-command
+  # `omp config set` writes the user's config. A project's .omp settings win over it,
+  # so the value in effect is read back: a change a project overrides is not "applied"
+  # (seen on 18.20: enable returned applied and the setting stayed off).
   set_compaction_enabled:
     cli: { argv: [omp, config, set, compaction.enabled, '{{.value}}'] }
+    verify: { source: settings, select: '.["compaction.enabled"].value', equals: '{{.value}}', within: 3s, required: true,
+      otherwise: 'Saved to your omp settings, but a setting in this project overrides it, so nothing changed here.' }
     stability: documented
   set_compaction_threshold:
     cli: { argv: [omp, config, set, compaction.thresholdPercent, '{{.value}}'] }
+    verify: { source: settings, select: '.["compaction.thresholdPercent"].value', equals: '{{.value}}', within: 3s, required: true,
+      otherwise: 'Saved to your omp settings, but a setting in this project overrides it, so nothing changed here.' }
     stability: documented
   snapcompact:
     label: Snapcompact

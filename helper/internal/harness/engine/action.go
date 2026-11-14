@@ -496,7 +496,11 @@ func (e *Engine) runCLI(ctx context.Context, s *sess, act spec.Action, c *spec.C
 		e.cfg.Logf("harness: %s action %s (%s): %v", s.ad.Adapter.Adapter, argv[0], act.Stability, err)
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "The command failed"}, nil
 	}
-	e.verify(ctx, s, act.Verify, data)
+	if !e.verify(ctx, s, act.Verify, data) && act.Verify != nil && act.Verify.Required {
+		// The command ran and what it was for did not happen (a setting
+		// another layer overrides): not "applied".
+		return harness.ActionResult{Result: harness.ResultFailed, Message: e.notConfirmed(ctx, s, act.Verify)}, nil
+	}
 	return harness.ActionResult{Result: harness.ResultApplied}, nil
 }
 

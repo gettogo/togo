@@ -447,6 +447,10 @@ type Verify struct {
 	// a failure that says what the harness shows instead, never "sent":
 	// for changes the user relies on at once (the model of the next turn).
 	Required bool `yaml:"required"`
+	// Otherwise is what a required verify that failed tells the user, in
+	// place of the general "did not take the change" line, when the adapter
+	// knows the usual reason.
+	Otherwise string `yaml:"otherwise"`
 }
 
 // Modes declares the mode chip.
