@@ -109,10 +109,15 @@ sources:
     http: { path: '/api/shell?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     select: '[.data[] | select(.metadata.sessionID == $state.harness_session) | {id: .id, title: (.command | gsub("\\s+"; " ") | .[:200]), state: .status}]'
     stability: documented
+  # Each server with the actions its row offers: Disconnect when connected,
+  # Connect when it is off, failed or wants a sign-in, nothing while it
+  # starts. A server that is an OAuth integration signs in through OpenCode's
+  # own flow (its terminal's MCP list), which no route here starts. The copy
+  # is kept two seconds, so the list read after an action shows its result.
   mcp:
     http: { path: '/api/mcp?location%5Bdirectory%5D={{.cwd | urlquery}}' }
-    select: '[.data[] | {id: .name, title: (.title // .name), state: .status.status}]'
-    cache: 30s
+    select: '[.data[] | {id: .name, title: (.title // .name), state: .status.status, actions: (if .status.status == "connected" then ["mcp_disconnect"] elif .status.status == "pending" or (.status.status == "needs_auth" and .integrationID != null) then [] else ["mcp_connect"] end)}]'
+    cache: 2s
     stability: documented
 screens:
   model:
@@ -164,6 +169,7 @@ screens:
     section: more
     capability: mcp
     source: mcp
+    map: { item.actions: .actions }
 actions:
   # These switch the session on the server (no config file is written), and the
   # TUI's footer follows (seen live).
@@ -182,6 +188,17 @@ actions:
   set_provider_key:
     http: { method: POST, path: '/api/integration/{{.target}}/connect/key?location%5Bdirectory%5D={{.cwd | urlquery}}', body: '{"key": {{.value | json}}}' }
     stability: unverified
+  # The MCP list's row actions; the target is the server's name. Upstream
+  # describes both as lasting until OpenCode restarts. Seen on 2.2.5: 204,
+  # and the list follows.
+  mcp_connect:
+    label: Connect
+    http: { method: POST, path: '/api/experimental/mcp/{{.target | urlquery}}/connect?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    stability: experimental
+  mcp_disconnect:
+    label: Disconnect
+    http: { method: POST, path: '/api/experimental/mcp/{{.target | urlquery}}/disconnect?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    stability: experimental
   # A / line from the composer or the palette runs as the server's command,
   # unless it names one of the terminal's own (commands.static, kind terminal).
   command:

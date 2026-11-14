@@ -77,6 +77,7 @@ func (e *Engine) buildScreen(ctx context.Context, s *sess, name string, sc spec.
 		out.Actions = s.actionRefsLocked(sc.Actions)
 	case harness.PrimLiveList:
 		out.LiveList = &harness.LiveList{Rows: buildRows(sc, data, state)}
+		s.rowActionsLocked(sc, data, state, out.LiveList.Rows)
 		if m, ok := s.ad.Mission[sc.Section]; ok && m.Refresh > 0 {
 			out.LiveList.RefreshSeconds = int(m.Refresh.Seconds())
 		}

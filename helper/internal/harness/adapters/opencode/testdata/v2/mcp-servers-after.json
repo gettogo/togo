@@ -1,0 +1,27 @@
+{
+ "location": {
+  "directory": "/tmp/work"
+ },
+ "data": [
+  {
+   "name": "broken_tools",
+   "status": {
+    "status": "failed",
+    "error": "NotFound: ChildProcess.spawn (/tmp/no-such-binary )"
+   }
+  },
+  {
+   "name": "fixture_tools",
+   "status": {
+    "status": "disabled"
+   }
+  },
+  {
+   "name": "off_tools",
+   "status": {
+    "status": "connected"
+   },
+   "title": "Fixture tools"
+  }
+ ]
+}
