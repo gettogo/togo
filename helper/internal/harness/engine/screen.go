@@ -198,7 +198,16 @@ func buildSettings(sc spec.Screen, data any, state map[string]string) *harness.S
 				fld.Value = b
 			}
 		}
-		for _, o := range f.Options {
+		options := f.Options
+		if f.OptionsFrom != "" {
+			if list, ok := stringList(JQFirst(f.OptionsFrom, data, state)); ok {
+				options = list
+				if len(list) == 0 && f.None != "" {
+					fld.Help = f.None
+				}
+			}
+		}
+		for _, o := range options {
 			fld.Options = append(fld.Options, harness.Choice{ID: o, Label: titleCase(o)})
 		}
 		sec.Fields = append(sec.Fields, fld)
@@ -331,4 +340,20 @@ func titleCase(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// stringList reads a jq result as a list of strings, at most MaxChoices.
+// ok is false when the result is not a list (no answer, an error).
+func stringList(v any, err error) ([]string, bool) {
+	list, isList := v.([]any)
+	if err != nil || !isList {
+		return nil, false
+	}
+	out := make([]string, 0, len(list))
+	for _, el := range list {
+		if s, isString := el.(string); isString && s != "" && len(out) < harness.MaxChoices {
+			out = append(out, s)
+		}
+	}
+	return out, true
 }

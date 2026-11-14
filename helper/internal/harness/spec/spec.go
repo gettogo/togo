@@ -318,8 +318,15 @@ type SettingField struct {
 	Kind    string   `yaml:"kind"`
 	Value   string   `yaml:"value"` // jq over the screen's source
 	Options []string `yaml:"options"`
-	Help    string   `yaml:"help"`
-	Action  string   `yaml:"action"`
+	// OptionsFrom is jq over the screen's source that lists the choices
+	// that apply now (the effort levels the active model takes). A list
+	// replaces Options; an empty list means there is nothing to choose and
+	// None says why; no answer (the source failed, the model is not
+	// listed) keeps Options.
+	OptionsFrom string `yaml:"options_from"`
+	None        string `yaml:"none"`
+	Help        string `yaml:"help"`
+	Action      string `yaml:"action"`
 }
 
 // Action declares how a change is applied. Exactly one route block is set,

@@ -107,8 +107,20 @@ screens:
     title: Effort
     section: composer
     capability: effort
+    # The levels the active model takes, from `omp models ls` (its thinking list); a
+    # model without one has no adjustable thinking, and /effort refuses any level
+    # (seen on 18.20 with apple/on-device). The fixed list is for when the models
+    # cannot be read.
+    source: models
     fields:
-      - { id: effort, label: Effort, kind: choice, value: $state.effort, options: [off, minimal, low, medium, high, xhigh, max, auto], action: set_effort }
+      - id: effort
+        label: Effort
+        kind: choice
+        value: $state.effort
+        options: [off, minimal, low, medium, high, xhigh, max, auto]
+        options_from: 'first(.[] | select(.selector == $state.model)) | if .thinking == null then [] else ["off"] + .thinking + ["auto"] end'
+        none: This model has no adjustable thinking level.
+        action: set_effort
   compaction:
     primitive: settings
     title: Compaction
@@ -177,7 +189,9 @@ actions:
     stability: documented
   set_effort:
     type: { text: '/effort {{.value}}', submit: true, when_idle: true }
-    verify: { source: session, select: .effort, equals: '{{.value}}', within: 5s }
+    # Required: omp refuses a level the model does not take, and the app must not
+    # say it was set.
+    verify: { source: session, select: .effort, equals: '{{.value}}', within: 5s, required: true }
     stability: documented-command
   set_compaction_enabled:
     cli: { argv: [omp, config, set, compaction.enabled, '{{.value}}'] }
