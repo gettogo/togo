@@ -237,8 +237,10 @@ func TestPromptsAreTypedNotPostedToASessionID(t *testing.T) {
 	if _, ok := a.Actions["send"]; ok {
 		t.Error("the adapter posts prompts to a session id it cannot confirm is on screen")
 	}
-	if harness.Has(a.Capabilities, harness.CapSendAPI) {
-		t.Error("the adapter still claims send.api")
+	// Released apps mirror a typed / line into the terminal when send.api is
+	// absent, past the helper's send checks: the capability stays.
+	if !harness.Has(a.Capabilities, harness.CapSendAPI) {
+		t.Error("send.api is gone: released apps would mirror / lines into the terminal")
 	}
 }
 
