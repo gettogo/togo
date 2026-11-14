@@ -31,7 +31,6 @@ export default function (pi) {
   const root = path.dirname(configPath)
   const originalNative = process.env.PI_TUI_NATIVE
   const allowed = originalNative !== '0'
-  process.env.PI_TUI_NATIVE = '0'
   let ctx, tui, watcher, timer, stopInput
   let owner = '', deadline = 0, seq = 0, epoch = 0, available = false, reason = ''
   let stopped = false, processing = false, rerun = false
@@ -55,9 +54,18 @@ export default function (pi) {
     } catch { /* Helper removal cannot prevent the in-process lease expiry. */ }
   }
   function switchRenderer(native) {
+    // OMP reads the override synchronously during start(). Keep the renderer
+    // choice local to that transition; tool subprocesses inherit the user's
+    // environment, not whichever renderer happens to own the pane.
+    const previous = process.env.PI_TUI_NATIVE
     process.env.PI_TUI_NATIVE = native ? '1' : '0'
-    tui.stop()
-    tui.start()
+    try {
+      tui.stop()
+      tui.start()
+    } finally {
+      if (previous === undefined) delete process.env.PI_TUI_NATIVE
+      else process.env.PI_TUI_NATIVE = previous
+    }
     tui.requestRender(true)
   }
   function release() {
