@@ -17,6 +17,49 @@ function terminalReport(data) {
     /^\x1b\[\?[0-9]+;[0-9]+\$y$/.test(data)
 }
 
+// Picker query is keyboard-owned upstream. Use the original public query
+// APIs, never terminal key sequences or a locally filtered copy of its rows.
+export function applyPickerQuery(tui, event) {
+  if (typeof event.query !== 'string' || Buffer.byteLength(event.query) > 4096 || typeof event.before !== 'string') return false
+  const focused = tui.getFocused?.()
+  if (!focused || typeof focused.describe !== 'function') return false
+  const tag = Object.getOwnPropertySymbols(focused).find(key => key.description === 'native.id')
+  if (!tag || focused[tag] !== event.id) return false
+  const context = { cols: 80, dark: true, reduceMotion: true, supports: () => true, feature: () => false }
+  const node = focused.describe(context)
+  if (node?.k !== 'picker' || node.p?.query !== event.before) return false
+
+  const sessions = focused.getSessionList?.()
+  if (sessions?.searchInput && typeof sessions.searchInput.getValue === 'function' &&
+      typeof sessions.searchInput.setValue === 'function' && typeof sessions.handleInput === 'function') {
+    if (sessions.searchInput.getValue() !== event.before) return false
+    sessions.searchInput.setValue(event.query)
+    // SessionList always filters after passing an ordinary edit to Input.
+    sessions.handleInput('')
+  } else {
+    const found = [], seen = new Set()
+    function visit(child, depth = 0) {
+      if (!child || typeof child !== 'object' || seen.has(child) || depth > 24 || seen.size >= 512) return
+      seen.add(child)
+      if (typeof child.setQuery === 'function' && typeof child.query === 'string') {
+        found.push(child)
+        return
+      }
+      if (typeof child.render === 'function' && typeof child.describe === 'function') {
+        visit(child.describe({ ...context, supports: kind => kind !== 'picker' }), depth + 1)
+      } else if (Array.isArray(child.c)) {
+        for (const nested of child.c) visit(nested, depth + 1)
+      }
+    }
+    visit(focused.describe({ ...context, supports: kind => kind !== 'picker' }))
+    if (found.length !== 1 || found[0].query !== event.before) return false
+    found[0].setQuery(event.query)
+    found[0].onQueryChange?.(event.query)
+  }
+  tui.requestRender(true)
+  return true
+}
+
 // Authenticated commands own the renderer and dispatch semantic events inside
 // the original TUI. Event payloads are removed before confirming acceptance.
 export default function (pi) {
@@ -101,7 +144,11 @@ export default function (pi) {
         const body = JSON.stringify(request.event)
         if (Buffer.byteLength(body) > MAX_EVENT) return
         fs.unlinkSync(file)
-        tui.injectDebugInput('\x1b_tsp;e;' + body + '\x1b\\')
+        if (request.event.ev === 'action' && request.event.act === 'togo.query') {
+          if (!applyPickerQuery(tui, request.event)) throw new Error('unsupported picker query')
+        } else {
+          tui.injectDebugInput('\x1b_tsp;e;' + body + '\x1b\\')
+        }
       } else return
       seq = request.seq
       publish()

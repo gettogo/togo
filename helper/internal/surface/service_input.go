@@ -123,6 +123,9 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 		if ev == "edit" {
 			return validateEdit(fields, e.node)
 		}
+		if ev == "action" && str("act") == "togo.query" {
+			return validatePickerQuery(fields, e.node)
+		}
 		return nil
 	})
 	if err != nil {
@@ -133,6 +136,19 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 		err = s.backend.dispatch(ctx, p.ID, r.runtime, r.lease.Token, wire)
 	}
 	return DispatchResult{Dispatched: err == nil}, err
+}
+
+func validatePickerQuery(fields map[string]json.RawMessage, node *Node) error {
+	var before, query *string
+	if json.Unmarshal(fields["before"], &before) != nil || before == nil ||
+		json.Unmarshal(fields["query"], &query) != nil || query == nil || len(*query) > 4096 {
+		return ErrMalformed
+	}
+	current, ok := node.Props["query"].(string)
+	if node.Kind != "picker" || !ok || current != *before {
+		return errLease
+	}
+	return nil
 }
 
 func validateEdit(fields map[string]json.RawMessage, n *Node) error {

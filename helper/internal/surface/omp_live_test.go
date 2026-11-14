@@ -217,6 +217,7 @@ func TestOriginalOMPTransport(t *testing.T) {
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
+	checkLivePickerQuery(t, ctx, svc, owner, lease)
 	if err := svc.Close(ctx, owner, surface.LeaseRef{ID: created.ID, Lease: lease.Token}); err != nil {
 		t.Fatal(err)
 	}
@@ -255,6 +256,56 @@ func TestOriginalOMPTransport(t *testing.T) {
 		t.Fatalf("original runtime not restored: %v", err)
 	}
 	t.Logf("original process retained; native resume picker opened and renderer released")
+}
+
+func checkLivePickerQuery(t *testing.T, ctx context.Context, svc *surface.Service, owner *rpc.Conn, lease surface.Lease) {
+	t.Helper()
+	for _, text := range []string{"100%! <div> /resume 🧑🏽‍💻", ""} {
+		current := readLiveScene(t, ctx, svc, owner, lease)
+		var picker *surface.Node
+		var view *surface.View
+		for _, v := range current.Views {
+			if !v.Closed {
+				if n := findNativeNode(v.Document.Root, func(n *surface.Node) bool { return n.Kind == "picker" }); n != nil {
+					picker, view = n, v
+				}
+			}
+		}
+		if picker == nil {
+			t.Fatal("original picker absent before query")
+		}
+		event, _ := json.Marshal(map[string]any{"ev": "action", "act": "togo.query", "sf": view.ID,
+			"id": picker.ID, "before": picker.Props["query"], "query": text})
+		if _, err := svc.Input(ctx, owner, surface.InputParams{ID: lease.ID, Lease: lease.Token, Surface: view.ID,
+			Instance: view.Instance, Event: event}); err != nil {
+			t.Fatal("original picker query refused", err)
+		}
+		for {
+			next := readLiveScene(t, ctx, svc, owner, lease)
+			var shown *surface.Node
+			for _, v := range next.Views {
+				if v.Closed {
+					continue
+				}
+				if n := findNativeNode(v.Document.Root, func(n *surface.Node) bool { return n.ID == picker.ID }); n != nil {
+					shown = n
+				}
+				if err := svc.Ack(ctx, owner, surface.AckParams{ID: lease.ID, Lease: lease.Token, Surface: v.ID,
+					Instance: v.Instance, Sequence: v.Document.Sequence}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if shown != nil && shown.Props["query"] == text {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal("original picker query did not change")
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
+	}
+	t.Log("original picker query updated and cleared as literal text")
 }
 
 func findNativeNode(n *surface.Node, match func(*surface.Node) bool) *surface.Node {

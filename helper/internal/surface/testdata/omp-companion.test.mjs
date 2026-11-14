@@ -6,6 +6,43 @@ import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { applyPickerQuery } from '../omp.mjs'
+
+test('picker query uses original session filter and never keyboard syntax', () => {
+  const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
+  const filters = []
+  const list = { searchInput: input, handleInput(key) { assert.equal(key, ''); filters.push(input.value) } }
+  const picker = { [Symbol('native.id')]: 'picker', describe: () => ({ k: 'picker', p: { query: input.value } }), getSessionList: () => list }
+  let renders = 0
+  const tui = { getFocused: () => picker, requestRender() { renders++ }, injectDebugInput() { assert.fail('query became keyboard input') } }
+  const query = '<div> 100%! /resume 🧑🏽‍💻'
+  assert.equal(applyPickerQuery(tui, { id: 'picker', before: '', query }), true)
+  assert.deepEqual(filters, [query])
+  assert.equal(renders, 1)
+  assert.equal(applyPickerQuery(tui, { id: 'picker', before: '', query: 'stale' }), false)
+  assert.equal(applyPickerQuery(tui, { id: 'another', before: query, query: 'foreign' }), false)
+  assert.deepEqual(filters, [query])
+})
+
+test('model query follows original browser filtering and role callback', () => {
+  const changes = []
+  const browser = { query: '', setQuery(value) { this.query = value; changes.push(['filter', value]) },
+    onQueryChange(value) { changes.push(['roles', value]) } }
+  const picker = { [Symbol('native.id')]: 'model', describe: cx => cx.supports('picker')
+    ? { k: 'picker', p: { query: browser.query } } : { k: 'card', c: [browser] } }
+  const tui = { getFocused: () => picker, requestRender() {} }
+  assert.equal(applyPickerQuery(tui, { id: 'model', before: '', query: '@fast' }), true)
+  assert.deepEqual(changes, [['filter', '@fast'], ['roles', '@fast']])
+  assert.equal(applyPickerQuery(tui, { id: 'model', before: '@fast', query: 'x'.repeat(4097) }), false)
+  assert.equal(browser.query, '@fast')
+})
+
+test('ambiguous query owners are refused without editing either', () => {
+  const browser = () => ({ query: '', setQuery() { assert.fail('ambiguous owner edited') } })
+  const picker = { [Symbol('native.id')]: 'model', describe: cx => cx.supports('picker')
+    ? { k: 'picker', p: { query: '' } } : { k: 'card', c: [browser(), browser()] } }
+  assert.equal(applyPickerQuery({ getFocused: () => picker }, { id: 'model', before: '', query: 'text' }), false)
+})
 
 for (const watched of [true, false]) test(`companion preserves authenticated control with ${watched ? 'watch' : 'poll'} delivery`, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'togo-surface-'))
