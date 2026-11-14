@@ -180,3 +180,67 @@ func TestStringTextShapes(t *testing.T) {
 		}
 	}
 }
+
+// A form's fields are named by "key", and a condition names the field it
+// depends on the same way. Those names survive; every other "key" is
+// still taken for a provider key.
+func TestFormFieldNamesKept(t *testing.T) {
+	in := `{"type":"form.created","data":{"key":"sk-plain","form":{"id":"frm_1","sessionID":"ses_1","title":"t","key":"top",
+	"metadata":{"key":"meta"},"fields":[
+	{"key":"notify","type":"boolean"},
+	{"key":"channel","type":"string","when":[{"key":"notify","op":"eq","value":true},{"key":"loose"}],"options":[{"value":"a","label":"A","key":"opt"}]},
+	{"key":"sk-abcdefghijklmnop1234","type":"string"},
+	{"key":"has space","type":"string"},
+	{"key":"untyped"},
+	{"key":7,"type":"string"}]}}}`
+	got := string(JSON(json.RawMessage(in)))
+	for _, want := range []string{`{"key":"notify","type":"boolean"}`, `"key":"channel"`, `{"key":"notify","op":"eq","value":true}`,
+		`{"key":"[redacted]","type":"string"}`, `{"key":7,"type":"string"}`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in %s", want, got)
+		}
+	}
+	for _, gone := range []string{"sk-plain", "top", "meta", "loose", "opt", "sk-abcdefghijklmnop1234", "has space", "untyped"} {
+		if strings.Contains(got, `"`+gone+`"`) {
+			t.Errorf("%q kept in %s", gone, got)
+		}
+	}
+}
+
+// Only a form keeps them: the same fields under anything else do not.
+func TestFieldNamesOutsideAFormStillStripped(t *testing.T) {
+	for _, in := range []string{
+		`{"id":"prv_1","fields":[{"key":"plainkey","type":"string"}]}`,
+		`{"fields":[{"key":"plainkey","type":"string"}]}`,
+		`{"id":"frm_1","fields":{"key":"plainkey","type":"string"}}`,
+		`{"id":"frm_1","providers":[{"key":"plainkey","type":"string"}]}`,
+		`{"id":7,"fields":[{"key":"plainkey","type":"string"}]}`,
+		`[{"key":"plainkey","type":"string"}]`,
+	} {
+		if got := string(JSON(json.RawMessage(in))); strings.Contains(got, "plainkey") {
+			t.Errorf("JSON(%s) = %s", in, got)
+		}
+	}
+}
+
+// Text is untouched by the form rule: prose, code and file names inside
+// a form read as they do anywhere else.
+func TestFormTextRedactedAsBefore(t *testing.T) {
+	texts := []string{"task-management-service", "primary_key=True", "<div>", "100%!", "PROJ-1234", "key: value",
+		"the key sk-abcdefghijklmnop1234 leaked", "API_TOKEN=abc123", "src/keys/store.go", "see q0 and q1"}
+	for _, s := range texts {
+		b, _ := json.Marshal(s)
+		in := `{"id":"frm_1","title":` + string(b) + `,"fields":[{"key":"q0","type":"string","title":` + string(b) + `,"default":` + string(b) + `}]}`
+		var out struct {
+			Title  string
+			Fields []struct{ Key, Title, Default string }
+		}
+		if err := json.Unmarshal(JSON(json.RawMessage(in)), &out); err != nil {
+			t.Fatal(err)
+		}
+		want := String(s)
+		if out.Title != want || out.Fields[0].Title != want || out.Fields[0].Default != want || out.Fields[0].Key != "q0" {
+			t.Errorf("%q in a form became %+v, want %q", s, out, want)
+		}
+	}
+}

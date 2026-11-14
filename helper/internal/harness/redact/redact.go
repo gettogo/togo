@@ -163,6 +163,8 @@ func JSON(raw json.RawMessage) json.RawMessage {
 func Value(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
+		// A form's field names are not keys (form.go).
+		names := FormFieldNames(x)
 		for k, val := range x {
 			if SecretKey(k) && !(usageKey.MatchString(k) && Counts(val)) && !figure(val) {
 				x[k] = nil
@@ -179,6 +181,9 @@ func Value(v any) any {
 				continue
 			}
 			x[k] = Value(val)
+		}
+		for _, f := range names {
+			f.Restore()
 		}
 		return x
 	case []any:

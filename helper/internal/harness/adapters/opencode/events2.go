@@ -43,6 +43,7 @@ type Events2 struct {
 	redone      string          // id of the last revert.cleared event
 	shells      map[string]bool // background shells shown as rows (shells2.go)
 	shellsEnded []string        // shells that ended with no row, newest last
+	loc         located         // the followed conversation's folder (needs2.go)
 }
 
 // NewEvents2 returns a 2.x mapper for one session.
@@ -91,6 +92,8 @@ type event2 struct {
 	Created int64           `json:"created"`
 	Type    string          `json:"type"`
 	Data    json.RawMessage `json:"data"`
+	// Location is the folder the event happened in (needs2.go reads it).
+	Location *location2 `json:"location"`
 }
 
 // ev2 is the union of the data fields the mapper reads.
@@ -179,6 +182,7 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	defer e.locate(d.SessionID, ev.Location)
 	switch ev.Type {
 	case httpsrc.Reconnected:
 		e.lostTrack()
@@ -273,7 +277,7 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "permission.replied":
 		return e.permissionReplied(d)
 	case "form.created":
-		return e.form(d, at)
+		return e.form(d, ev.Location, at)
 	case "form.replied", "form.cancelled":
 		return e.formDone(ev.Type, d)
 	}

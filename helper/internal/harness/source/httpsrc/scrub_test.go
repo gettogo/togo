@@ -117,3 +117,28 @@ func TestScrubKeepsTokenCountsOnly(t *testing.T) {
 		t.Errorf("secret survived: %s", got)
 	}
 }
+
+// A form names its fields by "key"; the reply must repeat those names, so
+// they survive here as they do in the engine's pass. Any other "key" is
+// still a provider key.
+func TestScrubKeepsFormFieldNames(t *testing.T) {
+	in := `{"type":"form.created","data":{"form":{"id":"frm_1","sessionID":"global","key":"top","fields":[
+	{"key":"project_name","type":"string"},
+	{"key":"region","type":"string","when":[{"key":"project_name","op":"neq","value":"x"}]},
+	{"key":"sk-abcdefghijklmnop1234","type":"string"},
+	{"key":"untyped"}]}}}`
+	got := string(Scrub(json.RawMessage(in)))
+	for _, want := range []string{`"key":"project_name","type":"string"`, `"key":"region"`, `{"key":"project_name","op":"neq","value":"x"}`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in %s", want, got)
+		}
+	}
+	for _, gone := range []string{`"top"`, "sk-abcdefghijklmnop1234", "untyped"} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s kept in %s", gone, got)
+		}
+	}
+	if got := string(Scrub(json.RawMessage(`{"id":"prv_1","fields":[{"key":"plainkey","type":"string"}]}`))); strings.Contains(got, "plainkey") {
+		t.Errorf("a key outside a form was kept: %s", got)
+	}
+}

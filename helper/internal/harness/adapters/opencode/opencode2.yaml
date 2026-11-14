@@ -196,7 +196,8 @@ actions:
     branch:
       - when: '{{if eq (slice .target 0 4) "per_"}}true{{end}}'
         http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/permission/{{part "~" 0 .target}}/reply', body: '{"decision": {{index (index .answers "0") 0 | json}}}' }
-      - http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/form/{{part "~" 0 .target}}/reply', body: '{"answer": {{form .answers}}}' }
+      # A form owned by "global" is found only in the folder it was asked in.
+      - http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/form/{{part "~" 0 .target}}/reply{{if eq (part "~" 1 .target) "global"}}?location%5Bdirectory%5D={{or .state.location .cwd | urlquery}}{{end}}', body: '{"answer": {{form .answers}}}' }
     stability: documented
   stop:
     role: destructive
