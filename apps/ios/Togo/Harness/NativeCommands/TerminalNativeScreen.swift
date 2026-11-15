@@ -40,6 +40,8 @@ struct TerminalNativeScreen: View {
     }
 
     private var context: PrimitiveContext {
+        let panel = model.screen?.interaction
+        let sourceQuery = model.screen?.picker?.query
         var context = PrimitiveContext(run: { action, target, args in
             let verb = action.hasPrefix("terminal.key.") ? "terminal.key" : action
             return await model.run(verb, target: target, args: args)
@@ -50,8 +52,11 @@ struct TerminalNativeScreen: View {
             }
         })
         context.showsTerminal = false
-        context.searchScreen = { try await model.read(query: $0) }
-        context.readScreen = { try? await model.read() }
+        context.searchScreen = { query in
+            let changed = sourceQuery != query && !(sourceQuery == nil && query.isEmpty)
+            return try await model.read(query: changed ? query : nil, expected: panel, before: changed ? sourceQuery : nil)
+        }
+        context.readScreen = { try? await model.read(expected: panel) }
         context.agent = store.agentName
         context.subject = store.subject
         // The interaction ends only when the helper observes completion.

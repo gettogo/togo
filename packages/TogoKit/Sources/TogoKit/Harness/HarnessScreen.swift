@@ -108,6 +108,8 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var filters: [Filter]?
         public var onSelect: String
         public var onSelectArgs: [String: JSONValue]?
+        /// The text currently held by a source-driven search field.
+        public var query: String?
         /// Asked (or applied with Undo) before `onSelect` runs, when set.
         public var onSelectConfirm: HarnessSelectConfirm?
         /// `onSelect`'s own words for an item's button ("Use for this session"), when it has them.
@@ -173,7 +175,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
                     setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil,
                     onSelectLabel: String? = nil, searchMode: String? = nil,
                     contextActions: [HarnessActionRef]? = nil, selectionBehavior: String? = nil, presentation: HarnessPickerPresentation? = nil,
-                    onSelectArgs: [String: JSONValue]? = nil) {
+                    onSelectArgs: [String: JSONValue]? = nil, query: String? = nil) {
             self.items = items
             self.onSelectLabel = onSelectLabel
             self.setup = setup
@@ -185,6 +187,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             self.filters = filters
             self.onSelect = onSelect
             self.onSelectArgs = onSelectArgs
+            self.query = query
             self.onSelectConfirm = onSelectConfirm
             self.itemActions = itemActions
             self.contextActions = contextActions

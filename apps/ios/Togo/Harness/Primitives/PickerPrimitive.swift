@@ -13,7 +13,7 @@ struct PickerPrimitive: View {
     @Environment(\.browseLayout) var layout
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     let initialPicker: HarnessScreen.Picker
-    var picker: HarnessScreen.Picker { initialPicker.searchMode == "remote" ? remote.result ?? initialPicker : initialPicker }
+    var picker: HarnessScreen.Picker { initialPicker.searchMode == "remote" && !searchConflict ? remote.result ?? initialPicker : initialPicker }
     /// The screen's title, for the chat's line: "Model Sonnet".
     var title = ""
     let context: PrimitiveContext
@@ -30,6 +30,8 @@ struct PickerPrimitive: View {
     @State var failedItem: PickerModel.Item?
     @State private var remote = RemotePickerSearch()
     @State private var searchRetry = 0
+    @State private var searchConflict = false
+    @State private var observedSourceQuery: String?
 
     private struct Search: Equatable {
         var query: String
@@ -47,6 +49,7 @@ struct PickerPrimitive: View {
         self.context = context
         self.chrome = chrome
         _model = State(initialValue: PickerModel(picker))
+        _observedSourceQuery = State(initialValue: picker.query)
     }
 
     var itemActions: [HarnessActionRef] { picker.itemActions ?? [] }
@@ -66,8 +69,20 @@ struct PickerPrimitive: View {
         }
         .primitiveActions(actions, context: context)
         .task(id: Search(query: model.query, source: initialPicker, retry: searchRetry)) {
-            guard initialPicker.searchMode == "remote" else { return }
+            // Reconcile before any remote write. View change callbacks have no
+            // ordering guarantee relative to this task when the desk searches.
+            if observedSourceQuery != initialPicker.query {
+                searchConflict = model.synchronizeQuery(initialPicker.query, previous: observedSourceQuery)
+                observedSourceQuery = initialPicker.query
+            }
+            guard initialPicker.searchMode == "remote", !searchConflict else { return }
             await remote.load(query: model.query, source: initialPicker, read: context.searchScreen)
+        }
+        .onChange(of: model.query) { _, query in
+            if query == initialPicker.query { searchConflict = false }
+        }
+        .onChange(of: picker.items.map(\.id)) { _, ids in
+            if let focused, !ids.contains(focused.id) { self.focused = nil }
         }
     }
 
@@ -110,6 +125,21 @@ struct PickerPrimitive: View {
         let groups = model.groups(picker)
         let setup = model.setupItems(picker)
         return List(selection: split ? listSelection : nil) {
+            if searchConflict {
+                Section {
+                    Text(String(localized: "picker.searchChanged", defaultValue: "Search changed in Terminal. Your text is kept here."))
+                        .foregroundStyle(PrimitiveTint.warn)
+                    Button(String(localized: "picker.useSourceSearch", defaultValue: "Use search from Terminal")) {
+                        model.query = initialPicker.query ?? ""
+                        searchConflict = false
+                        searchRetry += 1
+                    }
+                    Button(String(localized: "picker.applySearch", defaultValue: "Apply my search")) {
+                        searchConflict = false
+                        searchRetry += 1
+                    }
+                }
+            }
             if let presentation = picker.presentation {
                 Section {
                     if let subtitle = presentation.subtitle { Text(verbatim: subtitle).foregroundStyle(Color.togoMute) }
@@ -125,7 +155,7 @@ struct PickerPrimitive: View {
                     }
                 }
             }
-            if initialPicker.searchMode == "remote", searchBlocked {
+            if initialPicker.searchMode == "remote", searchBlocked, !searchConflict {
                 if remote.failed {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(PrimitiveCopy.noAnswer).foregroundStyle(PrimitiveTint.fail)

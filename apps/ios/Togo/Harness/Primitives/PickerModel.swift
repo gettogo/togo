@@ -41,10 +41,20 @@ struct PickerModel: Equatable {
     init() {}
 
     init(_ picker: HarnessScreen.Picker) {
+        query = picker.query ?? ""
         for filter in picker.filters ?? [] {
             if let value = filter.default, !value.isEmpty { filterValues[filter.id] = value }
         }
         expanded = Self.initiallyExpanded(picker)
+    }
+
+    /// Adopt a source edit only when the phone has no different pending text.
+    /// A conflict keeps that text for an explicit apply or discard.
+    mutating func synchronizeQuery(_ next: String?, previous: String?) -> Bool {
+        guard let next else { return false }
+        guard query == (previous ?? "") || query == next else { return true }
+        query = next
+        return false
     }
 
     /// The id of the "Not set up" section, apart from every group name.
