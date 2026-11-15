@@ -36,7 +36,7 @@ enum PrimitiveCopy {
     static let newValue = String(localized: "primitive.newValue", defaultValue: "New value")
     static let secretFooter = String(
         localized: "primitive.secretFooter",
-        defaultValue: "Stored on the machine. Togo never shows it and keeps no copy."
+        defaultValue: "Sent to the machine. Togo never shows it and keeps no copy."
     )
     static let running = String(localized: "primitive.running", defaultValue: "Running")
     static let notSetUp = String(localized: "primitive.notSetUp", defaultValue: "Not set up")
