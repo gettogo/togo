@@ -330,20 +330,20 @@ func (e *Engine) Complete(ctx context.Context, req harness.CompleteRequest) (har
 			if incomplete {
 				return harness.CompleteResult{}, &harness.FallbackError{Reason: "roots", Detail: rootsIncompleteText}
 			}
+			lists := [][]harness.Completion{items}
 			for _, root := range roots {
-				if len(items) >= limit {
-					break
-				}
 				if rel, err := filepath.Rel(dir, root); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 					continue // inside the session's folder: already listed
 				}
-				for _, it := range completeFiles(ctx, root, req.Query, limit-len(items)) {
+				found := completeFiles(ctx, root, req.Query, limit)
+				for i, it := range found {
 					rel := strings.TrimSuffix(strings.TrimPrefix(it.Insert, "@"), " ")
 					abs := filepath.Join(root, rel)
-					it.Insert, it.Detail = "@"+abs+" ", filepath.Dir(abs)
-					items = append(items, it)
+					found[i].Insert, found[i].Detail = "@"+abs+" ", filepath.Dir(abs)
 				}
+				lists = append(lists, found)
 			}
+			items = shareLimit(lists, limit)
 		}
 	} else {
 		items = e.completeCommands(ctx, s, req.Query, limit)

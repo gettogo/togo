@@ -74,6 +74,36 @@ func completeFiles(ctx context.Context, cwd, query string, limit int) []harness.
 	return out
 }
 
+// shareLimit joins the lists in order, at most limit items in all. When
+// they do not all fit, each list keeps an equal share of its best items and
+// room a short list leaves goes to the others, so a folder with many
+// matches cannot push another folder's files out of the result.
+func shareLimit(lists [][]harness.Completion, limit int) []harness.Completion {
+	take := make([]int, len(lists))
+	for left := limit; left > 0; {
+		open := 0
+		for i, l := range lists {
+			if take[i] < len(l) {
+				open++
+			}
+		}
+		if open == 0 {
+			break
+		}
+		share := max(left/open, 1)
+		for i, l := range lists {
+			n := min(share, len(l)-take[i], left)
+			take[i] += n
+			left -= n
+		}
+	}
+	var out []harness.Completion
+	for i, l := range lists {
+		out = append(out, l[:take[i]]...)
+	}
+	return out
+}
+
 // mentionForm writes each file mention the way the harness reads it: bare
 // where the harness would read the path back exactly, else inside the first
 // of its quotes that can hold the path. A path no form can hold is left out:

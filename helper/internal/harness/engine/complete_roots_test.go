@@ -129,3 +129,55 @@ func TestAMentionIsWrittenSoTheHarnessReadsThatPath(t *testing.T) {
 		t.Errorf("a harness with no rule had its mentions changed: %+v", plain)
 	}
 }
+
+// Seen in review: a broad query filled the whole result from the session's
+// own folder and an added folder's files never appeared. Each folder keeps
+// a share, and room a small folder leaves goes to the others.
+func TestALargeFolderDoesNotPushAnotherFoldersFilesOut(t *testing.T) {
+	list := func(prefix string, n int) []harness.Completion {
+		out := make([]harness.Completion, n)
+		for i := range out {
+			out[i].Title = prefix
+		}
+		return out
+	}
+	count := func(items []harness.Completion) map[string]int {
+		m := map[string]int{}
+		for _, it := range items {
+			m[it.Title]++
+		}
+		return m
+	}
+	for name, c := range map[string]struct {
+		sizes map[string]int
+		want  map[string]int
+	}{
+		"all fit":         {map[string]int{"a": 3, "b": 4}, map[string]int{"a": 3, "b": 4}},
+		"two large":       {map[string]int{"a": 80, "b": 80}, map[string]int{"a": 25, "b": 25}},
+		"small and large": {map[string]int{"a": 80, "b": 5}, map[string]int{"a": 45, "b": 5}},
+		"three":           {map[string]int{"a": 80, "b": 80, "c": 80}, map[string]int{"a": 17, "b": 17, "c": 16}},
+		"one empty":       {map[string]int{"a": 80, "b": 0}, map[string]int{"a": 50}},
+	} {
+		var lists [][]harness.Completion
+		for _, k := range []string{"a", "b", "c"} {
+			if n, ok := c.sizes[k]; ok {
+				lists = append(lists, list(k, n))
+			}
+		}
+		got := shareLimit(lists, 50)
+		if g := count(got); len(got) > 50 || len(g) != len(c.want) {
+			t.Errorf("%s: %v, want %v", name, g, c.want)
+		} else {
+			for k, n := range c.want {
+				if g[k] != n {
+					t.Errorf("%s: %v, want %v", name, g, c.want)
+				}
+			}
+		}
+		for i := 1; i < len(got); i++ {
+			if got[i].Title < got[i-1].Title {
+				t.Errorf("%s: folders are not in order", name)
+			}
+		}
+	}
+}
