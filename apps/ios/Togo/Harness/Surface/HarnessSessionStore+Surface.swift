@@ -102,11 +102,15 @@ extension HarnessSessionStore {
         nativeInteractions.dismissing = current.id
         Task { [weak self] in
             defer { if self?.nativeInteractions.dismissing == current.id { self?.nativeInteractions.dismissing = nil } }
-            if let self, let block = current.blocks.last, current.session.canInteract {
-                // Dismiss the original chooser too; otherwise another command
-                // would find a hidden chooser still owning the desktop editor.
-                do { try await NativeCommandContext(model: current, block: block, store: self).cancel() }
-                catch { if self.interaction === current { self.note(SurfaceCopy.unconfirmed, code: "command") } }
+            do {
+                try await current.waitForPendingInput()
+                guard let self, self.interaction === current else { return }
+                if let block = current.blocks.last {
+                    guard current.session.canInteract else { throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.unconfirmed) }
+                    try await NativeCommandContext(model: current, block: block, store: self).cancel()
+                }
+            } catch {
+                if let self, self.interaction === current { self.note(SurfaceCopy.unconfirmed, code: "command") }
             }
             if self?.interaction === current { self?.retireInteraction() }
         }

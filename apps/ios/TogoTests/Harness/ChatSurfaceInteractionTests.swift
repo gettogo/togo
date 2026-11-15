@@ -7,6 +7,9 @@ import TogoKit
     @MainActor final class Connection: SurfaceConnection {
         var next: SurfaceScene?
         var inputs = 0
+        var queryGate: AsyncStream<Void>?
+        var onInput: ((JSONValue) -> Void)?
+        var actions: [String] = []
         var closed = false
         var closing = false
         var failInput = false
@@ -28,6 +31,11 @@ import TogoKit
         }
         func surfaceInput(_ lease: SurfaceLease, surface: String, instance: UInt64, event: JSONValue, expectedText: String?) async throws -> SurfaceDispatchResult {
             inputs += 1
+            var action = "send"
+            if case .object(let fields) = event, case .string(let act)? = fields["act"] { action = act }
+            actions.append(action)
+            if action == "togo.query", let queryGate { for await _ in queryGate { break } }
+            onInput?(event)
             if failInput { throw HelperError.closed }
             return SurfaceDispatchResult(dispatched: true, consumed: refuseInput ? nil : true, refused: refuseInput ? true : nil)
         }
@@ -250,6 +258,48 @@ import TogoKit
         #expect(model.retired)
         #expect(connection.closed)
         #expect(connection.inputs == 0)
+    }
+
+    @Test func closeWaitsForPendingSearchBeforeEndingTheOriginalPicker() async throws {
+        let connection = try Connection()
+        let (store, _) = try await makeStore(connection)
+        defer { store.stop() }
+        let session = makeSession(connection)
+        let model = ChatSurfaceInteraction(command: "/resume", session: session) {}
+        store.interaction = model
+        let run = Task { await model.run(options: options) }
+        try await wait { session.canInteract }
+        try await model.submit()
+        connection.next = try Self.scene(revision: 2, overlay: "omp-native-picker")
+        try await wait { !model.blocks.isEmpty }
+        let (gate, continuation) = AsyncStream<Void>.makeStream()
+        defer { continuation.finish() }
+        connection.queryGate = gate
+        var afterQuery = try Self.scene(revision: 3, overlay: "omp-native-picker")
+        afterQuery.views[0].document.root.children[1].children[0].properties["query"] = .string("phone search")
+        let afterClose = try Self.scene(revision: 4)
+        connection.onInput = { [weak connection] event in
+            guard case .object(let fields) = event, case .string(let action)? = fields["act"] else { return }
+            if action == "togo.query" { connection?.next = afterQuery }
+            else if action == "close" { connection?.next = afterClose }
+        }
+        let block = try #require(model.blocks.last)
+        let search = try #require(NativeCommandContext(model: model, block: block, store: store).primitive().searchScreen)
+        let query = Task { try await search("phone search") }
+        try await wait { connection.inputs == 2 }
+        store.dismissNativeCommand()
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(!model.retired)
+        #expect(!connection.closed)
+        #expect(connection.actions == ["send", "togo.query"])
+        continuation.yield(())
+        continuation.finish()
+        _ = try? await query.value
+        try await wait { model.retired }
+        await store.nativeInteractions.stopTask?.value
+        await run.value
+        #expect(connection.actions == ["send", "togo.query", "close"])
+        #expect(connection.closed)
     }
 
     @Test func stoppingStoreRetiresTheNativeLeaseWithoutPumping() async throws {

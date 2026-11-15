@@ -11,12 +11,11 @@ struct NativeCommandScreen: View {
     var body: some View {
         NativeCommandNavigation(title: model.title, close: {
             store.dismissNativeCommand()
-            dismiss()
         }, terminal: {
             store.retireInteraction()
             store.layer = .terminal
             dismiss()
-        }) { page }
+        }) { page.disabled(store.nativeInteractions.dismissing == model.id) }
         .modifier(NativeRuntimeConfirmation(store: store, model: model))
         .background {
             if !model.retired, let scene = model.session.scene, let generation = model.session.generation {

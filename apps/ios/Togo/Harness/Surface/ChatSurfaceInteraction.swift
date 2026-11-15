@@ -118,6 +118,12 @@ import TogoKit
         if submitted || attachedExisting, presented, blocks.isEmpty, session.pending == nil, session.phase == .active { finish() }
     }
 
+    /// An explicit Close waits for the admitted event before sending the
+    /// original control's end action. It never sends a second event blindly.
+    func waitForPendingInput() async throws {
+        try await wait(until: .now + .seconds(5)) { self.session.pending == nil }
+    }
+
     func retire() { retired = true }
     func stop() async { await session.stop() }
 
