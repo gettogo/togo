@@ -63,4 +63,41 @@ import TogoKit
         #expect(result.result == .failed && connection.calls.count == 1)
         await model.close(cancel: false)
     }
+
+    @Test func panelPollCanHandOverToTheNextObservedPicker() async throws {
+        let first = panel()
+        let (model, connection) = try await start(first)
+        let next = HarnessScreen(id: "terminal.menu/next", primitive: .picker, title: "Choose a model",
+            fetchedAt: WireDate(.now), picker: .init(items: [.init(id: "next/one", title: "A model")], searchable: false,
+                onSelect: "terminal.select"), interaction: "next")
+        connection.readResult = .success(next)
+        _ = try await model.read(expected: "panel-a")
+        #expect(model.screen?.interaction == "next" && model.phase == .active)
+        let stale = model.openPanelLink("terminal.openLink.0", args: first.detail?.actions.first?.args) { _ in Issue.record("Old link opened") }
+        #expect(stale.result == .failed)
+        await #expect(throws: (any Error).self) { _ = try await model.read(expected: "panel-a") }
+        #expect(connection.calls.map(\.action) == ["terminal.command"])
+        #expect(connection.reads.count == 1)
+        await model.close(cancel: false)
+    }
+
+    @Test func panelPollCanHandOverToAnObservedPromptWithoutTyping() async throws {
+        let (model, connection) = try await start(panel())
+        let next = HarnessScreen(id: "terminal.prompt/next", primitive: .settings, title: "Enter code",
+            fetchedAt: WireDate(.now), settings: .init(sections: []), interaction: "next")
+        connection.readResult = .success(next)
+        _ = try await model.read()
+        #expect(model.screen?.primitive == .settings && model.screen?.interaction == "next")
+        #expect(connection.calls.map(\.action) == ["terminal.command"])
+        await model.close(cancel: false)
+    }
+
+    @Test func sourceClosingPanelEndsWithoutClaimingAuthentication() async throws {
+        let (model, connection) = try await start(panel())
+        connection.readResult = .failure(.rpc(.init(code: RPCErrorCode.refused, message: "This panel has closed.",
+            data: .object(["reason": .string("fallback"), "detail": .string("closed")]))))
+        await #expect(throws: (any Error).self) { _ = try await model.read() }
+        #expect(model.phase == .ended && !model.confirmedEnd && model.failure == nil)
+        #expect(connection.calls.map(\.action) == ["terminal.command"] && connection.closes == 1)
+    }
 }

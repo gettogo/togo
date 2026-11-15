@@ -212,7 +212,10 @@ import TogoKit
             }
             try Task.checkCancellation()
             if query != nil, searchRequest != request { throw CancellationError() }
-            try accept(next)
+            // A read-only panel can finish without a phone keystroke, for
+            // example after browser sign-in. The helper validates its old
+            // token before returning the next observed screen and owner.
+            try accept(next, transition: screen?.primitive == .detail)
             ownQueryBase = nil
             ownQuery = nil
             return screen ?? next
