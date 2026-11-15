@@ -98,6 +98,7 @@ enum SurfaceValues {
 }
 
 enum SurfaceCopy {
+    static let currentScreen = String(localized: "surface.currentScreen", defaultValue: "Current screen")
     static let open = String(localized: "surface.open", defaultValue: "Open")
     static let openForm = String(localized: "surface.openForm", defaultValue: "Open this form in chat.")
     static let deskDraft = String(localized: "surface.deskDraft", defaultValue: "Text is waiting in Terminal. Send or clear it there before running another command.")

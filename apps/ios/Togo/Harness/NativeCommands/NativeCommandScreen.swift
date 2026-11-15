@@ -19,7 +19,7 @@ struct NativeCommandScreen: View {
         }) { page }
         .modifier(NativeRuntimeConfirmation(store: store, model: model))
         .background {
-            if let scene = model.session.scene, let generation = model.session.generation {
+            if !model.retired, let scene = model.session.scene, let generation = model.session.generation {
                 SurfaceDisplayProbe(stamp: .init(generation: generation, revision: scene.revision)) { stamp in
                     Task { await model.session.displayed(revision: stamp.revision, generation: stamp.generation) }
                 }
@@ -28,10 +28,13 @@ struct NativeCommandScreen: View {
     }
 
     @ViewBuilder private var page: some View {
-        if model.session.notice != nil || model.session.phase == .unavailable {
+        if model.retired {
+            // The host is dismissing. A stale control is not a new failure.
+            Color.clear
+        } else if model.session.notice != nil || model.session.phase == .unavailable {
             StateView(kind: .error, title: PrimitiveCopy.couldNotLoad,
                 message: model.session.notice == .unconfirmed ? SurfaceCopy.unconfirmed : SurfaceCopy.unavailable)
-        } else if let block = model.blocks.last {
+        } else if model.controlsReady, let block = model.blocks.last {
             let context = NativeCommandContext(model: model, block: block, store: store)
             if block.node.kind == "prefs" {
                 NativePreferencesPages(context: context)

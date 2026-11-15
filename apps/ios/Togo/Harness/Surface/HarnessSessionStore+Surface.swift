@@ -43,7 +43,7 @@ extension HarnessSessionStore {
         interaction = pending
         do { try await pending.submit() }
         catch {
-            if interaction === pending {
+            if interaction === pending, !pending.attachedExisting {
                 retireInteraction()
                 await nativeInteractions.stopTask?.value
             }

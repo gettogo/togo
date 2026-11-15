@@ -56,7 +56,7 @@ import TogoKit
     }
 
     func current() throws -> SurfaceNode {
-        guard !model.retired, let scene = model.session.scene,
+        guard !model.retired, model.controlsReady, let scene = model.session.scene,
               let view = scene.views.first(where: { $0.id == block.view.id && $0.instance == block.view.instance }),
               !view.closed, let node = view.document.root.node(id: block.node.id) else {
             throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.inputChanged)

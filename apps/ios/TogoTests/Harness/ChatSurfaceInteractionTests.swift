@@ -176,15 +176,17 @@ import TogoKit
 
     @Test func refusedPickerSearchKeepsItsScreenAndReadsTheOriginalQuery() async throws {
         let connection = try Connection()
-        connection.refuseInput = true
-        connection.next = try Self.scene(overlay: "omp-native-picker")
         let (store, _) = try await makeStore(connection)
         defer { store.stop() }
         let session = makeSession(connection)
         let model = ChatSurfaceInteraction(command: "/resume", session: session) {}
         store.interaction = model
         let run = Task { await model.run(options: options) }
-        try await wait { session.canInteract && !model.blocks.isEmpty }
+        try await wait { session.canInteract }
+        try await model.submit()
+        connection.refuseInput = true
+        connection.next = try Self.scene(revision: 2, overlay: "omp-native-picker")
+        try await wait { session.scene?.revision == 2 && !model.blocks.isEmpty }
         let block = try #require(model.blocks.last)
         let context = NativeCommandContext(model: model, block: block, store: store)
         let search = try #require(context.primitive().searchScreen)
@@ -193,14 +195,61 @@ import TogoKit
         #expect(store.interaction === model)
         #expect(session.canInteract)
         #expect(session.notice == nil)
-        var next = try Self.scene(revision: 2, overlay: "omp-native-picker")
+        var next = try Self.scene(revision: 3, overlay: "omp-native-picker")
         next.views[0].document.root.children[1].children[0].properties["query"] = .string("desk search")
         connection.next = next
-        try await wait { session.scene?.revision == 2 }
+        try await wait { session.scene?.revision == 3 }
         #expect(try context.screen().picker?.query == "desk search")
-        #expect(connection.inputs == 1)
+        #expect(connection.inputs == 2)
         run.cancel()
         await run.value
+    }
+
+    @Test func controlsCannotMapBeforeTheSubmissionIsClassified() async throws {
+        let connection = try Connection()
+        connection.next = try Self.scene(overlay: "omp-native-picker")
+        let (store, _) = try await makeStore(connection)
+        defer { store.stop() }
+        let session = makeSession(connection)
+        let model = ChatSurfaceInteraction(command: "/resume", session: session) {}
+        let run = Task { await model.run(options: options) }
+        try await wait { session.canInteract && !model.blocks.isEmpty }
+        #expect(!model.controlsReady)
+        let block = try #require(model.blocks.last)
+        let context = NativeCommandContext(model: model, block: block, store: store)
+        #expect(throws: ChatSurfaceInteraction.Failure.self) { try context.screen() }
+        #expect(connection.inputs == 0)
+        run.cancel()
+        await run.value
+    }
+
+    @Test func existingControlsAreKeptWithoutSendingOrBorrowingTheNewWorkflow() async throws {
+        let connection = try Connection()
+        connection.next = try Self.scene(overlay: "omp-native-picker")
+        let (store, _) = try await makeStore(connection)
+        defer { store.stop() }
+        let send = Task { try await store.runNativeCommand("/resume") }
+        try await wait { store.interaction != nil }
+        let model = try #require(store.interaction)
+        let run = Task { await model.run(options: options) }
+        await #expect(throws: ChatSurfaceInteraction.Failure.self) { try await send.value }
+        #expect(store.interaction === model)
+        #expect(model.attachedExisting)
+        #expect(!model.submitted)
+        #expect(!model.retired)
+        #expect(model.workflow == "existing")
+        #expect(model.title == SurfaceCopy.currentScreen)
+        #expect(connection.inputs == 0)
+        #expect(!connection.closed)
+        connection.next = try Self.scene(revision: 2)
+        try await wait { model.session.scene?.revision == 2 }
+        model.changed()
+        await store.nativeInteractions.stopTask?.value
+        await run.value
+        #expect(store.interaction == nil)
+        #expect(model.retired)
+        #expect(connection.closed)
+        #expect(connection.inputs == 0)
     }
 
     @Test func stoppingStoreRetiresTheNativeLeaseWithoutPumping() async throws {

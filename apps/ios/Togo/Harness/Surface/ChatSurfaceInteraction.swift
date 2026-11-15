@@ -24,6 +24,7 @@ import TogoKit
     let earlierRequests: Set<String>
     private(set) var submitted: Bool
     private(set) var presented = false
+    private(set) var attachedExisting = false
     private(set) var retired = false
     private var completed = false
     let finished: @MainActor () -> Void
@@ -46,11 +47,15 @@ import TogoKit
         }
     }
 
+    var controlsReady: Bool { submitted || attachedExisting }
+
     var workflow: String {
-        commandInfo?.native?.screenId ?? command.flatMap(CommandLineLogic.commandWord)?.dropFirst().description ?? "form"
+        if attachedExisting { return "existing" }
+        return commandInfo?.native?.screenId ?? command.flatMap(CommandLineLogic.commandWord)?.dropFirst().description ?? "form"
     }
 
     var title: String {
+        if attachedExisting { return SurfaceCopy.currentScreen }
         let name = commandInfo?.title ?? workflow
         return name.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")).capitalized
     }
@@ -84,6 +89,13 @@ import TogoKit
         try await wait(until: .now + .seconds(8)) {
             self.session.phase == .active && (self.session.scene.flatMap(Self.composer) != nil || !self.blocks.isEmpty)
         }
+        // Reclaiming the renderer may reveal controls left open at the desk
+        // or by a disconnected phone. They are not the newly typed command.
+        if !blocks.isEmpty {
+            attachedExisting = true
+            presented = true
+            throw Failure(message: SurfaceCopy.finishCurrent)
+        }
         guard session.canInteract, let scene = session.scene, scene.features.contains("send"),
               blocks.isEmpty,
               let target = Self.composer(in: scene),
@@ -103,7 +115,7 @@ import TogoKit
     func changed() {
         guard !retired else { return }
         if !blocks.isEmpty { presented = true }
-        if submitted, presented, blocks.isEmpty, session.pending == nil, session.phase == .active { finish() }
+        if submitted || attachedExisting, presented, blocks.isEmpty, session.pending == nil, session.phase == .active { finish() }
     }
 
     func retire() { retired = true }

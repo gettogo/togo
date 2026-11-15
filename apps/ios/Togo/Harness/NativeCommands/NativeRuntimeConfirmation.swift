@@ -13,13 +13,16 @@ struct NativeRuntimeConfirmation: ViewModifier {
         content
             .actionConfirmation($request)
             .onChange(of: model.session.scene?.revision, initial: true) { update() }
+            .onChange(of: model.controlsReady) { update() }
+            .onChange(of: model.retired) { update() }
     }
 
     private func update() {
-        guard let block = model.blocks.last,
+        guard !model.retired, model.controlsReady, let block = model.blocks.last,
               case .object(let confirm)? = block.node.properties["confirm"],
               let action = SurfaceValues.string(confirm["act"]), let text = NativeStructuredScreen.text(confirm["text"]) else {
             handled = nil
+            request = nil
             return
         }
         let payload = JSONValue.object(confirm)
