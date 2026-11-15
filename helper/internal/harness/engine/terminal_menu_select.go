@@ -413,9 +413,16 @@ func (m *terminalMenu) wholeOn(now termmenu.Menu) bool {
 // echoed reports a reading that is the command itself, printed back by
 // the program above its input line once it was run ("❯ /model"), not a
 // list: no title, and the row under the cursor is a command.
+//
+// One row with no title and no keys under it is not a list either: it is
+// the program's own input line with its placeholder ("› Ask Codex to do
+// anything").
 func echoed(m termmenu.Menu) bool {
 	if m.Title != "" {
 		return false
+	}
+	if len(m.Items) == 1 && m.Hint == "" && !m.Search {
+		return true
 	}
 	for _, it := range m.Items {
 		if it.Cursor {

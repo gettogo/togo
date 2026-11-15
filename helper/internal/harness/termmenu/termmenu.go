@@ -55,6 +55,9 @@ type cell struct {
 // ordinal is the number a list puts before a choice.
 var ordinal = regexp.MustCompile(`^\d{1,3}[.)]$`)
 
+// numbered is a choice written after its number: "3. Name".
+var numbered = regexp.MustCompile(`^\d{1,3}[.)] (\S.*)$`)
+
 var sgr = regexp.MustCompile(`\x1b\[([0-9;:]*)m`)
 var otherEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)`)
 
@@ -491,6 +494,10 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			if len(parts) > 1 {
 				detail = strings.TrimSpace(parts[1])
 			}
+		}
+		// "1. Name" with one space: the number is still not the name.
+		if g := numbered.FindStringSubmatch(label); g != nil {
+			label = g[1]
 		}
 		isCurrent := current.MatchString(t) || strings.HasPrefix(label, "●")
 		label = strings.TrimSpace(strings.TrimPrefix(current.ReplaceAllString(label, ""), "●"))
