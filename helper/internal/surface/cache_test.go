@@ -23,17 +23,16 @@ func cacheApply(t *testing.T, c *Cache, verb byte, body string) {
 	}
 }
 
+// cacheText is the text the cache holds, whether or not it may be read as
+// the program's current picture yet.
 func cacheText(t *testing.T, c *Cache) string {
 	t.Helper()
-	b, _, err := c.Snapshot()
-	if err != nil {
-		t.Fatal(err)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.fatal != nil || c.pending {
+		t.Fatal("cache not settled", c.fatal)
 	}
-	s, err := RestoreScene(b, testScene().Options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return s.Views[0].Document.nodes["text"].node.Props["text"].(string)
+	return c.scene.Views[0].Document.nodes["text"].node.Props["text"].(string)
 }
 
 func TestCacheReplaysSyncedFramesAndDropsOnlyAnIncompleteTail(t *testing.T) {

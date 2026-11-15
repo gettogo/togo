@@ -16,7 +16,8 @@ import (
 const maxJournalBytes = 16 << 20
 const maxSnapshotBytes = MaxDocumentBytes + 64*1024
 
-// ErrCachePending means a received document update is not durable yet.
+// ErrCachePending means the scene cannot be read yet: a received update is
+// not durable, or the program has not yet drawn it for this renderer.
 var ErrCachePending = errors.New("surface: document update is being committed")
 
 type cacheFailure struct{ cause error }
@@ -37,13 +38,17 @@ type CacheIdentity struct {
 // separate operation lock serializes writes without blocking snapshot readers
 // on disk I/O. Scene access is protected by mu.
 type Cache struct {
-	applyMu    sync.Mutex
-	mu         sync.Mutex
-	scene      *Scene
-	identity   CacheIdentity
-	dir        string
-	file       *os.File
-	pending    bool
+	applyMu  sync.Mutex
+	mu       sync.Mutex
+	scene    *Scene
+	identity CacheIdentity
+	dir      string
+	file     *os.File
+	pending  bool
+	// stale: the scene was restored from disk and the program has not yet
+	// greeted this renderer. What it holds is from an earlier renderer:
+	// kept for the program to adopt, never shown or acted on as current.
+	stale      bool
 	fatal      error
 	journalLen int64
 	maxJournal int64
@@ -103,7 +108,25 @@ func OpenCache(dir string, identity CacheIdentity, options RenderOptions) (*Cach
 		f.Close()
 		return nil, err
 	}
+	c.stale = len(c.scene.Views) > 0
 	return c, nil
+}
+
+// current reports whether the scene is the program's own picture for this
+// renderer: it has greeted the renderer since the scene was restored, and
+// every view it took up again has had its first frame. Until then a view
+// may still hold what an earlier renderer left (a list since closed), and
+// reads and inputs wait. Callers hold mu.
+func (c *Cache) current() bool {
+	if c.stale {
+		return false
+	}
+	for _, v := range c.scene.Views {
+		if !v.Closed && v.Adopting {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Cache) replay() error {
@@ -162,6 +185,9 @@ func (c *Cache) Apply(m Message) ([]Message, error) {
 	}
 	before := c.scene.Revision
 	replies, err := c.scene.Handle(m)
+	if m.Verb == 'q' && err == nil && len(replies) == 1 && replies[0].Verb == 'r' {
+		c.stale = false // the program greeted this renderer
+	}
 	if err != nil || c.scene.Revision == before {
 		c.mu.Unlock()
 		return replies, err
@@ -238,7 +264,7 @@ func (c *Cache) snapshot(after uint64) ([]byte, uint64, bool, error) {
 	if c.fatal != nil {
 		return nil, 0, false, c.fatal
 	}
-	if c.pending {
+	if c.pending || !c.current() {
 		return nil, 0, false, ErrCachePending
 	}
 	if after != 0 && after == c.scene.Revision {
@@ -255,7 +281,7 @@ func (c *Cache) Inspect(fn func(*Scene) error) error {
 	if c.fatal != nil {
 		return c.fatal
 	}
-	if c.pending {
+	if c.pending || !c.current() {
 		return ErrCachePending
 	}
 	return fn(c.scene)
