@@ -231,6 +231,41 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 		if !seen {
 			return s.ad.Name + " did not show the command's arguments in its input line. Nothing was run; check its input line.", nil
 		}
+		// The harness may offer to complete the last argument (a path).
+		// Enter would then go to that offer and could change what was
+		// asked for. The offer is closed with Escape, and the command is
+		// submitted only if the line then reads exactly as typed.
+		whole := strings.TrimRight(typedLine+args, " ")
+		lineIs := func() (exact bool, others string) {
+			screen, err := e.cfg.Screen(ctx, s.id)
+			if err != nil {
+				return false, ""
+			}
+			var rest []string
+			for _, l := range strings.Split(screen, "\n") {
+				if !exact && trimEdge(l) == whole {
+					exact = true
+					continue
+				}
+				rest = append(rest, l)
+			}
+			return exact, strings.Join(rest, "\n")
+		}
+		exact, others := lineIs()
+		if exact && !nothingNew(others, before) {
+			if err := e.menuKeys(ctx, s, "Escape"); err != nil {
+				return "", err
+			}
+			for deadline := time.Now().Add(e.scaled(1200 * time.Millisecond)); time.Now().Before(deadline); {
+				if exact, others = lineIs(); exact && nothingNew(others, before) {
+					break
+				}
+				time.Sleep(e.scaled(60 * time.Millisecond))
+			}
+		}
+		if !exact || !nothingNew(others, before) {
+			return s.ad.Name + " is offering something for the command's arguments that could not be closed. Nothing was run; check its input line.", nil
+		}
 	}
 	atEnter, _ := e.cfg.Screen(ctx, s.id)
 	if err := e.menuKeys(ctx, s, "Enter"); err != nil {
@@ -249,20 +284,6 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 			held := strings.TrimRight(beforeCursor(line3, x3), " ")
 			now, _ := e.cfg.Screen(ctx, s.id)
 			same := trimEdge(line3) == typedLine && nothingNew(now, before, atEnter)
-			// With arguments, the first Enter may have gone to the
-			// harness's own completion of the last argument (a path): the
-			// line then still holds the whole command, with at most the
-			// rest of that argument added, and nothing else is new.
-			if args != "" {
-				whole := strings.TrimRight(typedLine+args, " ")
-				rest, kept := strings.CutPrefix(trimEdge(line3), whole)
-				others := strings.Replace(now, line3, "", 1)
-				if kept && !strings.ContainsAny(rest, " \t") && nothingNew(others, before, atEnter) {
-					if err := e.menuKeys(ctx, s, "Enter"); err != nil {
-						return "", err
-					}
-				}
-			}
 			if same && args == "" && (strings.HasSuffix(held, "/"+word) || strings.HasSuffix(held, text)) {
 				if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 					return "", err
