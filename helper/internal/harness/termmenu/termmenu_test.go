@@ -428,3 +428,41 @@ func TestBlocksAreRows(t *testing.T) {
 		}
 	}
 }
+
+// A heading over rows is their group, never a row: underlined in OMP's
+// settings, a lone coloured line over one session in OpenCode's list.
+func TestHeadingsAreGroups(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "omp-settings-headings.ansi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := Read(string(raw))
+	if !ok || len(m.Items) < 6 {
+		t.Fatalf("settings = %+v %v", m, ok)
+	}
+	for _, it := range m.Items {
+		if it.Label == "Theme" || it.Label == "Composer" {
+			t.Errorf("heading %q read as a row", it.Label)
+		}
+	}
+	if m.Items[0].Label != "Dark Theme" || m.Items[0].Group != "Theme" || !m.Items[0].Cursor {
+		t.Errorf("first row = %+v", m.Items[0])
+	}
+	var composer string
+	for _, it := range m.Items {
+		if it.Label == "Composer Shape" {
+			composer = it.Group
+		}
+	}
+	if composer != "Composer" {
+		t.Errorf("Composer Shape is under %q", composer)
+	}
+	raw, err = os.ReadFile(filepath.Join("testdata", "oc-sessions-today.ansi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok = Read(string(raw))
+	if !ok || len(m.Items) != 2 || m.Items[0].Label != "Native history check" || m.Items[0].Group != "Today" || m.Items[1].Group != "Today" {
+		t.Fatalf("sessions = %+v %v", m, ok)
+	}
+}

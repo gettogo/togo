@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/detect"
 	"maps"
 	"net/http"
 	"os"
@@ -135,7 +136,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	c.Approvals = approval.New(approval.Config{Tmux: svc.Tmux, Pub: c.Hub})
 	w, err := watch.New(watch.Config{
 		Tmux: svc.Tmux, Sessions: svc, TogoPath: o.TogoPath, Home: o.Home,
-		Status: c.Hub, Activity: c.Hub, Prompts: c.Approvals, Pub: pub,
+		Status: c.Hub, Activity: c.Hub, Prompts: ownScreens{Store: c.Approvals, c: c}, Pub: pub,
 		Shell: deliverShell,
 	})
 	if err != nil {
@@ -445,4 +446,20 @@ func (c *Components) approvalPending(requestID string) bool {
 		}
 	}
 	return false
+}
+
+// ownScreens keeps the watcher from reporting, as the program asking for
+// someone, a list or prompt the phone itself opened in the terminal and is
+// showing natively (a command's chooser, its text prompt). The engine is
+// built after the watcher and read when called.
+type ownScreens struct {
+	*approval.Store
+	c *Components
+}
+
+func (o ownScreens) PromptSeen(ctx context.Context, sessionID string, p detect.Prompt) {
+	if o.c.Harness != nil && o.c.Harness.PhoneDriving(sessionID) {
+		return
+	}
+	o.Store.PromptSeen(ctx, sessionID, p)
 }

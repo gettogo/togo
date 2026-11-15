@@ -43,6 +43,10 @@ type Menu struct {
 	// Position and Total are the list's own counter ("3/96"), when shown:
 	// the list has Total rows and only some are on screen.
 	Position, Total int
+	// Ended reports that the rows visibly stop with room to spare inside
+	// the list's own frame: a window with empty lines left shows the
+	// whole list, so nothing is hidden above or below.
+	Ended bool
 }
 
 // cell is one character of the screen with what the reader needs of its style.
@@ -50,6 +54,8 @@ type cell struct {
 	r      rune
 	bg, fg string
 	rev    bool
+	// ul: underlined, which lists use for a heading over their rows.
+	ul bool
 }
 
 // ordinal is the number a list puts before a choice.
@@ -67,7 +73,7 @@ func parse(screen string) [][]cell {
 	for _, line := range strings.Split(screen, "\n") {
 		var cells []cell
 		var bg, fg string
-		rev := false
+		rev, ul := false, false
 		rest := line
 		for len(rest) > 0 {
 			loc := sgr.FindStringSubmatchIndex(rest)
@@ -76,12 +82,12 @@ func parse(screen string) [][]cell {
 				text = rest[:loc[0]]
 			}
 			for _, r := range otherEscape.ReplaceAllString(text, "") {
-				cells = append(cells, cell{r, bg, fg, rev})
+				cells = append(cells, cell{r, bg, fg, rev, ul})
 			}
 			if loc == nil {
 				break
 			}
-			applySGR(rest[loc[2]:loc[3]], &bg, &fg, &rev)
+			applySGR(rest[loc[2]:loc[3]], &bg, &fg, &rev, &ul)
 			rest = rest[loc[1]:]
 		}
 		out = append(out, cells)
@@ -89,7 +95,7 @@ func parse(screen string) [][]cell {
 	return out
 }
 
-func applySGR(params string, bg, fg *string, rev *bool) {
+func applySGR(params string, bg, fg *string, rev, ul *bool) {
 	ps := strings.FieldsFunc(params, func(r rune) bool { return r == ';' || r == ':' })
 	if len(ps) == 0 {
 		ps = []string{"0"}
@@ -98,7 +104,11 @@ func applySGR(params string, bg, fg *string, rev *bool) {
 		p, _ := strconv.Atoi(ps[i])
 		switch {
 		case p == 0:
-			*bg, *fg, *rev = "", "", false
+			*bg, *fg, *rev, *ul = "", "", false, false
+		case p == 4:
+			*ul = true
+		case p == 24:
+			*ul = false
 		case p == 7:
 			*rev = true
 		case p == 27:
@@ -343,6 +353,17 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		}
 	}
 	var m Menu
+	// Two empty lines inside the frame right under the last row (one is
+	// only the gap between blocks).
+	framed := func(i int) bool {
+		if i < 0 || i >= len(lines) {
+			return false
+		}
+		t := strings.TrimSpace(string(lines[i]))
+		return len([]rune(t)) > 2 && strings.ContainsRune(rules, []rune(t)[0]) && strings.ContainsRune(rules, []rune(t)[len([]rune(t))-1]) &&
+			strings.TrimSpace(strings.Trim(t, rules)) == ""
+	}
+	m.Ended = framed(bot+1) && framed(bot+2)
 	// The colour a list writes its key hints in is the colour it writes
 	// descriptions in: dimmer than the choices.
 	hintColour := ""
@@ -426,6 +447,12 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			t = strings.TrimSpace(string([]rune(t)[1:]))
 		}
 		t = scrollbar.ReplaceAllString(t, "")
+		// An underlined line over the rows is their heading, wherever it
+		// is indented: the cursor never stops on it.
+		if !cur && t != "" && underlined(cellLines[i]) {
+			group = strings.Join(strings.Fields(t), " ")
+			continue
+		}
 		if blocks {
 			if t == "" {
 				blockStart = true
@@ -565,4 +592,19 @@ func DrawnCursor(screen string) (x, y int, ok bool) {
 		}
 	}
 	return x, y, found == 1
+}
+
+// underlined reports a line whose words are all underlined.
+func underlined(cells []cell) bool {
+	n := 0
+	for _, c := range cells {
+		if c.r == ' ' || strings.ContainsRune(rules+borders+cursors+"█▐▌▓▒░", c.r) {
+			continue
+		}
+		if !c.ul {
+			return false
+		}
+		n++
+	}
+	return n > 0
 }

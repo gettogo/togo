@@ -64,6 +64,9 @@ type Engine struct {
 	// closing it. It is still on the harness's screen and has no owner:
 	// nothing is typed until the screen no longer shows it.
 	leftOpen map[string]string
+	// commanding counts, per session, the phone's terminal actions under
+	// way: what such an action opens is the phone's own screen.
+	commanding map[string]int
 	// leftRows are that list's row names, for a list with no title.
 	leftRows map[string][]string
 	// entered holds, per session, how to recognise what was entered into

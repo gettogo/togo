@@ -268,15 +268,29 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 		return Menu{}, false
 	}
 	// A heading is a detail-less row in a text colour the choices do not use.
+	// The row under the cursor is drawn in its own colours and is left out
+	// of the count; with no majority, the last row decides, for a heading
+	// is never last.
 	count := map[string]int{}
+	last := ""
 	for _, r := range rows {
-		count[r.fg]++
+		if !r.Cursor {
+			count[r.fg]++
+			last = r.fg
+		}
 	}
-	common, n := "", 0
+	common, n := last, count[last]
 	for k, v := range count {
 		if v > n {
 			common, n = k, v
 		}
+	}
+	// Two rows give nothing to count. A list opens with its cursor on its
+	// first choice: a first row the cursor is not on, with nothing beside
+	// it and in another colour than the row the cursor is on, is that
+	// row's heading ("Today").
+	if len(rows) == 2 && rows[1].Cursor && rows[0].Detail == "" && rows[0].fg != rows[1].fg {
+		common = rows[1].fg
 	}
 	group := ""
 	for _, r := range rows {

@@ -229,8 +229,32 @@ func newToken() string {
 	return hex.EncodeToString(b)
 }
 
+// PhoneDriving reports whether what the session's terminal shows now is a
+// screen the phone asked for: a command, choice or entry of its own is
+// under way, or it holds the list or prompt that came of one. Such a
+// screen is not the program asking for someone: nobody is told it waits.
+func (e *Engine) PhoneDriving(session string) bool {
+	e.menuMu.Lock()
+	busy := e.commanding[session] > 0
+	e.menuMu.Unlock()
+	return busy || e.drivingMenu(session)
+}
+
 func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionRequest) (harness.ActionResult, error) {
 	ctx = withMenuConv(ctx, s)
+	e.menuMu.Lock()
+	if e.commanding == nil {
+		e.commanding = map[string]int{}
+	}
+	e.commanding[s.id]++
+	e.menuMu.Unlock()
+	defer func() {
+		e.menuMu.Lock()
+		if e.commanding[s.id]--; e.commanding[s.id] <= 0 {
+			delete(e.commanding, s.id)
+		}
+		e.menuMu.Unlock()
+	}()
 	// A new command, choice or key replaces any watch for a late list. A
 	// look for an open list (attach) or a release does not: another phone
 	// looking must not end the watch of the one that ran the command.

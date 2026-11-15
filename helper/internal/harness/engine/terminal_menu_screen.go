@@ -60,6 +60,12 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 	// Whole only on evidence: the end was seen while moving through the
 	// list, or the list says how many rows it has and all were read. A
 	// list that merely fits what was read so far is not known to end there.
+	// The list's own frame showing room under its last row is the end
+	// seen, as much as a cursor that stopped: the rows on the screen are
+	// all of them.
+	if menu.Ended && len(m.rows) == len(menu.Items) {
+		m.ended = true
+	}
 	complete = m.ended || (menu.Total > 0 && len(m.rows) >= menu.Total)
 	if !complete {
 		p.Presentation = &harness.PickerPresentation{State: "partial", Total: menu.Total}
