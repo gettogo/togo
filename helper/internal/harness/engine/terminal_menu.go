@@ -209,7 +209,13 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 		title = m.title
 	}
 	sc := &harness.Screen{ID: menuScreenPrefix + m.token, Interaction: m.token, Primitive: harness.PrimPicker, Title: title, FetchedAt: time.Now(), Picker: p}
-	sc.Stale = !complete
+	// A list read only in part is fresh, not stale: its rows are what the
+	// harness shows now.
+	if !complete || menu.Total > len(m.rows) {
+		p.Presentation = &harness.PickerPresentation{State: "partial", Total: menu.Total}
+	} else if menu.Total > 0 {
+		p.Presentation = &harness.PickerPresentation{Total: menu.Total}
+	}
 	sc.Actions = []harness.ActionRef{}
 	for _, k := range m.keys {
 		key, _ := json.Marshal(k.key)

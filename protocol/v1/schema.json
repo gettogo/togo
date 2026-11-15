@@ -3282,6 +3282,20 @@
         "onSelect": { "type": "string" },
         "onSelectConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
         "onSelectLabel": { "description": "onSelect's own words for an item's button (omp: Use for this session).", "type": "string" },
+        "onSelectArgs": { "description": "Sent with onSelect besides the chosen row (a terminal list's interaction).", "type": "object" },
+        "presentation": {
+          "description": "What the list says about itself. state partial: only part of the list was read (it scrolls in the harness's terminal); the rows are current, not stale.",
+          "type": "object",
+          "properties": {
+            "state": { "type": "string", "maxLength": 32 },
+            "total": { "type": "integer", "minimum": 0 },
+            "emptyText": { "type": "string" },
+            "searchPrompt": { "type": "string" },
+            "subtitle": { "type": "string" },
+            "noun": { "type": "string" },
+            "message": { "type": "string" }
+          }
+        },
         "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } },
         "setup": { "description": "What is not set up yet (a provider not signed in), shown after the items.", "type": "array", "items": { "$ref": "#/$defs/HarnessPickerItem" } },
         "setupAction": { "description": "Sets up one setup entry, run with args {id} (and {value} when setupInput is set).", "$ref": "#/$defs/HarnessActionRef" },
@@ -3393,6 +3407,7 @@
         "title": { "type": "string" },
         "fetchedAt": { "$ref": "#/$defs/Timestamp" },
         "stale": { "type": "boolean" },
+        "interaction": { "description": "Names the list in the harness's own terminal this screen was read from; passed back to terminal.select, terminal.key, terminal.cancel, terminal.release and the terminal.menu screen. A new list has a new one.", "type": "string", "maxLength": 64 },
         "picker": { "$ref": "#/$defs/HarnessPicker" },
         "settings": { "$ref": "#/$defs/HarnessSettings" },
         "checklist": { "$ref": "#/$defs/HarnessChecklist" },

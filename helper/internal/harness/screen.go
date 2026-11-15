@@ -64,6 +64,8 @@ type Picker struct {
 	OnSelect string `json:"onSelect"`
 	// OnSelectArgs are sent with OnSelect besides the chosen row.
 	OnSelectArgs map[string]json.RawMessage `json:"onSelectArgs,omitempty"`
+	// Presentation is what the list says about itself.
+	Presentation *PickerPresentation `json:"presentation,omitempty"`
 	// OnSelectConfirm is OnSelect's confirm line and effect, when it has
 	// one.
 	OnSelectConfirm *SelectConfirm `json:"onSelectConfirm,omitempty"`
@@ -83,6 +85,16 @@ type Picker struct {
 }
 
 // PickerItem is one choice in a Picker.
+// PickerPresentation is what a list says about itself beyond its rows.
+type PickerPresentation struct {
+	// State is "partial" when only part of the list was read: it scrolls
+	// in the harness's terminal and does not say how long it is. The rows
+	// given are current.
+	State string `json:"state,omitempty"`
+	// Total is the list's own row count, when it shows one.
+	Total int `json:"total,omitempty"`
+}
+
 type PickerItem struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
