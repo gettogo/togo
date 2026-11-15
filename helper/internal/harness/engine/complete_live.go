@@ -33,6 +33,19 @@ func mergeLive(c *spec.Commands, all []harness.Completion, rows []map[string]any
 		}
 	}
 	placed := map[string]bool{}
+	// The program lists an alias as a command of its own (/quit beside
+	// /exit). It is the same command: it is listed once, under its name,
+	// and the alias finds it.
+	for _, m := range rows {
+		list, _ := m["aliases"].([]any)
+		for _, a := range list {
+			if alias := toString(a); alias != "" && alias != toString(m["name"]) {
+				if _, isCommand := meta[alias]; !isCommand {
+					placed[alias] = true
+				}
+			}
+		}
+	}
 	var out []harness.Completion
 	static := len(c.Static)
 	if static > len(all) {

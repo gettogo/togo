@@ -40,6 +40,7 @@ func TestTheProgramsOwnListIsTheCommandCatalog(t *testing.T) {
 		{Name: "fast", Detail: "Toggle fast service", State: "off"},
 		{Name: "model", Detail: "Choose", State: "provider/model"},
 		{Name: "exit", Detail: "Exit the application"},
+		{Name: "quit", Detail: "Exit the application"},
 		{Name: "agents", Detail: "Agents"},
 		{Name: "need", Detail: "Needs a path"},
 		{Name: "ext", Detail: "An extension command"},
