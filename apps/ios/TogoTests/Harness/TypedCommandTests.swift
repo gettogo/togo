@@ -101,6 +101,23 @@ import TogoKit
         #expect(session.nativeCommands == ["/model", "/model"])
     }
 
+    @Test(arguments: [false, true])
+    func terminalReaderKeepsTheAdapterModelScreen(hasExplicitKind: Bool) async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.terminalNative)
+        let command = HarnessCompletion(insert: "/model", title: "/model", screen: "model",
+            kind: hasExplicitKind ? .picker : nil,
+            native: .init(opens: "screen", args: "none", screenId: "model"))
+        session.commands = [command]
+        let composer = make(session)
+        composer.draft = "/model"
+        await composer.submit()
+        #expect(composer.presentedScreen == "model")
+        #expect(session.nativeCommands.isEmpty && session.sends.isEmpty && session.runs.isEmpty)
+        #expect(await composer.perform(command) == .push("model"))
+        #expect(session.nativeCommands.isEmpty && session.sends.isEmpty)
+    }
+
     @Test func anUnknownCatalogCommandWaitsForSendAfterAPaletteTap() async {
         let session = Session()
         session.caps.insert(HarnessCapability.terminalNative)

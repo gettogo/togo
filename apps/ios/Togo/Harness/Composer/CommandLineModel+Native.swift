@@ -7,6 +7,7 @@ extension CommandLineModel {
     }
 
     func opensOriginalScreen(_ command: HarnessCompletion, arguments: String = "") -> Bool {
+        guard routes.has(HarnessCapability.surface) || command.screen?.isEmpty != false else { return false }
         guard nativeCommandsAvailable, command.action == nil, command.opens == nil, let metadata = command.native else { return false }
         let intent = metadata.intent(hasArguments: !arguments.isEmpty)
         return ["picker", "settings", "signin", "screen", "input", "text"].contains(intent)
