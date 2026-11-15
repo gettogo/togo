@@ -68,7 +68,13 @@ extension PickerModel {
         }
         let catalog = groupNames(picker).count > 1
         if catalog { add(item.subtitle) }
-        add(item.badge)
+        // Some sources retain the single badge alongside richer annotations.
+        // The annotation already renders it, including in the spoken label.
+        let annotatedBadge = (item.appearance?.badges ?? []).contains { badge in
+            badge.text.trimmingCharacters(in: .whitespaces)
+                .caseInsensitiveCompare(item.badge?.trimmingCharacters(in: .whitespaces) ?? "") == .orderedSame
+        }
+        if !annotatedBadge { add(item.badge) }
         let roles = Set((picker.itemActions ?? []).map(\.id))
         for filter in picker.filters ?? [] where filter.kind == "toggle" && !roles.contains(filter.id) {
             if isTrue(item.facets?[filter.id]) { add(filter.label) }

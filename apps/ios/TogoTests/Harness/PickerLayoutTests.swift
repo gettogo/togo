@@ -78,4 +78,19 @@ struct PickerLayoutTests {
         #expect(PickerModel.chips(of: row, in: resume).isEmpty)
         #expect(PickerModel.subtitleLine(of: row, in: resume) == "2 h ago · main")
     }
+
+    @Test func aSourceBadgeIsShownOnceAlongsideItsLegacyCopy() {
+        // Live OMP resume rows carry both representations of "current".
+        var row = Item(id: "current", title: "Native check A", badge: "current",
+            appearance: .init(badges: [.init(text: "current", tone: "success")]))
+        let picker = HarnessScreen.Picker(items: [row], searchable: true, onSelect: "resume")
+        #expect(PickerModel.chips(of: row, in: picker).isEmpty)
+        #expect(row.appearance?.badges?.map(\.text) == ["current"])
+        row.badge = " Current "
+        #expect(PickerModel.chips(of: row, in: picker).isEmpty)
+        row.badge = "pinned"
+        #expect(PickerModel.chips(of: row, in: picker) == ["pinned"])
+        row.appearance = nil
+        #expect(PickerModel.chips(of: row, in: picker) == ["pinned"])
+    }
 }
