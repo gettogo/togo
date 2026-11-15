@@ -232,16 +232,24 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 			return s.ad.Name + " did not show the command's arguments in its input line. Nothing was run; check its input line.", nil
 		}
 	}
+	atEnter, _ := e.cfg.Screen(ctx, s.id)
 	if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 		return "", err
 	}
 	// Some harnesses take the first Enter to accept the offered command
 	// into the line and the second to run it: if the line still ends with
 	// the command and no list or dialog took its place, Enter once more.
-	if _, ok := e.readMenu(ctx, s); !ok {
+	// That second Enter goes only to the same input line, with nothing new
+	// on the screen: a dialog the command opened can itself hold the
+	// command's text (an editor filled in with it), and Enter there would
+	// answer the dialog before anyone saw it.
+	_, prompt := e.readPrompt(ctx, s)
+	if _, ok := e.readMenu(ctx, s); !ok && !prompt {
 		if x3, line3, _, ok := e.cursorAt(ctx, s); ok {
 			held := strings.TrimRight(beforeCursor(line3, x3), " ")
-			if args == "" && (strings.HasSuffix(held, "/"+word) || strings.HasSuffix(held, text)) {
+			now, _ := e.cfg.Screen(ctx, s.id)
+			same := trimEdge(line3) == typedLine && nothingNew(now, before, atEnter)
+			if same && args == "" && (strings.HasSuffix(held, "/"+word) || strings.HasSuffix(held, text)) {
 				if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 					return "", err
 				}
@@ -351,4 +359,25 @@ func shownBack(before, after, text, typed string) bool {
 		return fields[0] == text
 	}
 	return false
+}
+
+// nothingNew reports whether every line on the screen now was already on
+// one of the earlier screens: the harness closed something, and drew
+// nothing.
+func nothingNew(now string, earlier ...string) bool {
+	if now == "" {
+		return false
+	}
+	had := map[string]bool{}
+	for _, screen := range earlier {
+		for _, l := range strings.Split(screen, "\n") {
+			had[trimEdge(l)] = true
+		}
+	}
+	for _, l := range strings.Split(now, "\n") {
+		if t := trimEdge(l); t != "" && !had[t] {
+			return false
+		}
+	}
+	return true
 }

@@ -101,3 +101,21 @@ func TestTheInputLineIsNotTheHarnessShowingACommandBack(t *testing.T) {
 		t.Error("a list with another command first was accepted")
 	}
 }
+
+// The second Enter is for an input line that kept the command after the
+// list closed. A dialog the command opened draws lines that were not there:
+// then nothing more is pressed, whatever text the dialog holds.
+func TestNothingMoreIsPressedOnceTheScreenShowsSomethingNew(t *testing.T) {
+	before := "status\n> \nfooter"
+	typed := "status\n> /edit\n  /edit   Open the editor\nfooter"
+	if !nothingNew("status\n> /edit\nfooter", before, typed) {
+		t.Error("a list closing over the same input line reads as something new")
+	}
+	dialog := "status\n╭─ Edit ─╮\n│ > /edit │\n╰────────╯\nfooter"
+	if nothingNew(dialog, before, typed) {
+		t.Error("a dialog holding the command's text reads as the same screen")
+	}
+	if nothingNew("", before, typed) {
+		t.Error("a screen that could not be read counts as unchanged")
+	}
+}
