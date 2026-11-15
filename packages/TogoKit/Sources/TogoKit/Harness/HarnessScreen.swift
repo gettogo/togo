@@ -231,6 +231,8 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public var help: String?
             public var warning: String?
             public var actionLabel: String?
+            /// "prompt" presents an input immediately rather than a stored-setting editor.
+            public var presentation: String?
             public var kind: FieldKind
             public var value: JSONValue
             public var isSet: Bool?
@@ -246,12 +248,14 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public init(id: String, label: String, help: String? = nil, kind: FieldKind, value: JSONValue,
                         isSet: Bool? = nil, options: [HarnessChoice]? = nil, min: Double? = nil, max: Double? = nil,
                         placeholder: String? = nil, readOnly: Bool? = nil, action: String? = nil,
-                        actionConfirm: HarnessSelectConfirm? = nil, warning: String? = nil, actionLabel: String? = nil) {
+                        actionConfirm: HarnessSelectConfirm? = nil, warning: String? = nil, actionLabel: String? = nil,
+                        presentation: String? = nil) {
                 self.id = id
                 self.label = label
                 self.help = help
                 self.warning = warning
                 self.actionLabel = actionLabel
+                self.presentation = presentation
                 self.kind = kind
                 self.value = value
                 self.isSet = isSet

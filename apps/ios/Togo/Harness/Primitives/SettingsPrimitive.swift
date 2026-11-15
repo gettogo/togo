@@ -309,58 +309,76 @@ private struct SecretField: View {
     @State private var entry = ""
     @FocusState private var focused: Bool
 
+    private var isPrompt: Bool { field.presentation == "prompt" }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: field.isSet == true ? "key.fill" : "key")
-                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
-                    .foregroundStyle(Color.togoMute)
-                    .accessibilityHidden(true)
+            if isPrompt {
                 Text(field.label).foregroundStyle(Color.togoSnow)
-                Spacer(minLength: 8)
-                RunningMark(running: running)
-                Text(SettingsLogic.secretStatus(field))
-                    .foregroundStyle(Color.togoMute)
-                if editable, !editing {
-                    Button(field.isSet == true ? PrimitiveCopy.replace : PrimitiveCopy.set) {
-                        // motion: cause → effect — Set opens the editor under it, uncovered by its growing edge.
-                        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { editing = true }
-                    }
-                    // motion: state change — Set gives way at once to the editor it opened.
-                    .transition(.identity)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.togoSnow)
-                    .frame(minWidth: 44, minHeight: 44)
+                entryField
+                Button(action: save) {
+                    OutcomeLabel(title: field.actionLabel ?? String(localized: "primitive.continue", defaultValue: "Continue"),
+                        outcome: nil, busy: running)
                 }
-            }
-            .accessibilityElement(children: .combine)
-            if editing {
-                VStack(alignment: .leading, spacing: 8) {
+                    .buttonStyle(PrimitiveCapsuleStyle(role: .primary))
+                    .disabled(entry.isEmpty || !editable)
+            } else {
                 HStack(spacing: 8) {
-                    SecureField(PrimitiveCopy.newValue, text: $entry, prompt: Text(field.placeholder ?? PrimitiveCopy.newValue))
-                        .font(.mono(.body))
-                        .textContentType(.password)
-                        // Set opened the editor: its field takes the keyboard as it appears.
-                        .focusOnReveal($focused, revealed: editing)
-                        .submitLabel(.done)
-                        .onSubmit(save)
-                    Button(PrimitiveCopy.cancel) { close() }
-                        .buttonStyle(PrimitiveCapsuleStyle(role: .normal))
-                    Button(PrimitiveCopy.save, action: save)
-                        .buttonStyle(PrimitiveCapsuleStyle(role: .primary))
-                        .disabled(entry.isEmpty)
+                    Image(systemName: field.isSet == true ? "key.fill" : "key")
+                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                        .foregroundStyle(Color.togoMute)
+                        .accessibilityHidden(true)
+                    Text(field.label).foregroundStyle(Color.togoSnow)
+                    Spacer(minLength: 8)
+                    RunningMark(running: running)
+                    Text(SettingsLogic.secretStatus(field))
+                        .foregroundStyle(Color.togoMute)
+                    if editable, !editing {
+                        Button(field.isSet == true ? PrimitiveCopy.replace : PrimitiveCopy.set) {
+                            // motion: cause → effect — Set opens the editor under it, uncovered by its growing edge.
+                            withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { editing = true }
+                        }
+                        // motion: state change — Set gives way at once to the editor it opened.
+                        .transition(.identity)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.togoSnow)
+                        .frame(minWidth: 44, minHeight: 44)
+                    }
                 }
-                Text(PrimitiveCopy.secretFooter).font(.footnote).foregroundStyle(Color.togoMute)
+                .accessibilityElement(children: .combine)
+                if editing {
+                    VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        entryField
+                        Button(PrimitiveCopy.cancel) { close() }
+                            .buttonStyle(PrimitiveCapsuleStyle(role: .normal))
+                        Button(PrimitiveCopy.save, action: save)
+                            .buttonStyle(PrimitiveCapsuleStyle(role: .primary))
+                            .disabled(entry.isEmpty)
+                    }
+                    Text(PrimitiveCopy.secretFooter).font(.footnote).foregroundStyle(Color.togoMute)
+                    }
+                    // motion: cause → effect — the editor unfolds in place under Set.
+                    .transition(Motion.unfold(reduce: reduceMotion))
                 }
-                // motion: cause → effect — the editor unfolds in place under Set.
-                .transition(Motion.unfold(reduce: reduceMotion))
             }
         }
         .onDisappear { entry = "" }
     }
 
+    private var entryField: some View {
+        SecureField(PrimitiveCopy.newValue, text: $entry, prompt: Text(field.placeholder ?? PrimitiveCopy.newValue))
+            .font(.mono(.body))
+            .accessibilityLabel(field.label)
+            .textContentType(.password)
+            .focusOnReveal($focused, revealed: isPrompt || editing)
+            .submitLabel(isPrompt ? .continue : .done)
+            .onSubmit(save)
+            .disabled(!editable)
+    }
+
     private func save() {
-        guard !entry.isEmpty else { return }
+        guard !entry.isEmpty, editable, !running else { return }
         commit(entry)
         close()
     }

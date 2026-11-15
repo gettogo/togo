@@ -3,6 +3,14 @@ import Testing
 @testable import TogoKit
 
 struct TerminalNativeWireTests {
+    @Test func aTerminalPromptUsesTheExistingWriteOnlyField() throws {
+        let raw = #"{"id":"terminal.input","label":"Enter a value","kind":"secret","value":null,"isSet":false,"action":"terminal.input","actionLabel":"Continue","presentation":"prompt"}"#
+        let field = try JSONDecoder().decode(HarnessScreen.Settings.Field.self, from: Data(raw.utf8))
+        #expect(field.kind == .secret && field.value == .null)
+        #expect(field.presentation == "prompt" && field.actionLabel == "Continue")
+        #expect(try JSONDecoder().decode(HarnessScreen.Settings.Field.self, from: JSONEncoder().encode(field)) == field)
+    }
+
     @Test func commandCatalogNoticeUsesTheExistingEnvelope() throws {
         let raw = #"{"sessionId":"s_menu","kind":"commands","ts":"2026-11-14T12:00:00Z","epoch":"conversation"}"#
         let note = try JSONDecoder().decode(HarnessNotification.self, from: Data(raw.utf8))

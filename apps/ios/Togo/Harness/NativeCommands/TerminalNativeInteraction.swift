@@ -86,9 +86,13 @@ import TogoKit
         do {
             try await waitForRead()
             guard !busy, phase == .active, let client, let token = screen?.interaction,
-                  ["terminal.select", "terminal.key", "terminal.more"].contains(action) else { throw Failure(message: SurfaceCopy.finishCurrent) }
+                  ["terminal.select", "terminal.key", "terminal.more", "terminal.input"].contains(action) else { throw Failure(message: SurfaceCopy.finishCurrent) }
             if action == "terminal.more", screen?.picker?.presentation?.moreAction?.id != action {
                 throw Failure(message: SurfaceCopy.inputChanged)
+            }
+            if action == "terminal.input" {
+                guard let screen, Self.isInput(screen, target: target),
+                      let value = args?["value"], case .string = value else { throw Failure(message: SurfaceCopy.inputChanged) }
             }
             if let given = args?["interaction"], given != .string(token) { throw Failure(message: SurfaceCopy.inputChanged) }
             let binding = lifetime
@@ -103,8 +107,19 @@ import TogoKit
                 throw Failure(message: SurfaceCopy.unconfirmed)
             }
             if result.result == .failed {
-                failure = result.message ?? SurfaceCopy.unconfirmed
-                await finish()
+                if action == "terminal.input", let next = result.screen, next.interaction == token,
+                   Self.isInput(next, target: target) {
+                    // Only an observed, still-pending empty field can be retried.
+                    // Never show program error text that might echo the entry.
+                    try accept(next)
+                    result.screen = screen
+                    result.message = String(localized: "terminal.entryRejected", defaultValue: "The program did not accept this entry. Try again or open Terminal.")
+                    failure = nil
+                } else {
+                    failure = action == "terminal.input" ? SurfaceCopy.unconfirmed : result.message ?? SurfaceCopy.unconfirmed
+                    result.message = failure
+                    await finish()
+                }
             } else if let next = result.screen {
                 try accept(next, transition: action != "terminal.more")
                 result.screen = screen
@@ -119,6 +134,14 @@ import TogoKit
             if dispatched || !(error is Failure) { await finish() }
             return .init(result: .failed, message: message)
         }
+    }
+
+    private static func isInput(_ screen: HarnessScreen, target: String?) -> Bool {
+        guard screen.primitive == .settings else { return false }
+        let fields = screen.settings?.sections.flatMap(\.fields) ?? []
+        guard fields.count == 1, let field = fields.first else { return false }
+        return field.id == target && field.action == "terminal.input" && field.kind == .secret && field.value == .null
+            && field.isSet != true && field.readOnly != true
     }
 
     func read(query: String? = nil, expected: String? = nil, before: String? = nil) async throws -> HarnessScreen {
