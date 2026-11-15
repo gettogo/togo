@@ -281,13 +281,13 @@ func hasRow(n *Node, item string) bool {
 	switch n.Kind {
 	case "list":
 		at := slices.IndexFunc(n.Children, func(child *Node) bool { return child.ID == item })
-		return at >= 0 && n.Children[at].Props["disabled"] != true && n.Children[at].Props["hidden"] != true
+		return at >= 0 && !blocked(n.Children[at].Props)
 	case "picker":
 		found := false
 		if items, ok := n.Props["items"].([]any); ok {
 			for _, it := range items {
 				if m, ok := it.(map[string]any); ok && m["id"] == item {
-					found = m["disabled"] != true
+					found = !blocked(m)
 				}
 			}
 		}
@@ -297,4 +297,15 @@ func hasRow(n *Node, item string) bool {
 		return found
 	}
 	return true
+}
+
+// blocked reports whether a row cannot be chosen: it is hidden, or
+// disabled. The program marks a disabled row with true or with the reason
+// as text ("Sign in with /login").
+func blocked(props map[string]any) bool {
+	if props["hidden"] == true || props["disabled"] == true {
+		return true
+	}
+	reason, ok := props["disabled"].(string)
+	return ok && reason != ""
 }

@@ -184,6 +184,22 @@ func TestAPickersRowsAreItsItemsAsItsOrderShowsThem(t *testing.T) {
 	if hasRow(opened, "not-a-row") {
 		t.Error("a row the picker does not have was passed on")
 	}
+	// A row disabled with a reason, as the program marks its sign-in
+	// rows, or hidden, is not passed on; an empty reason disables nothing.
+	marked := &Node{ID: "p", Kind: "picker", Props: map[string]any{"items": []any{
+		map[string]any{"id": "ok"}, map[string]any{"id": "reason", "disabled": "Sign in with /login"},
+		map[string]any{"id": "flag", "disabled": true}, map[string]any{"id": "hid", "hidden": true},
+		map[string]any{"id": "blank", "disabled": ""}, map[string]any{"id": "no", "disabled": false},
+	}}}
+	for id, want := range map[string]bool{"ok": true, "reason": false, "flag": false, "hid": false, "blank": true, "no": true} {
+		if hasRow(marked, id) != want {
+			t.Errorf("picker row %q: passed on = %v, want %v", id, !want, want)
+		}
+	}
+	rows := &Node{ID: "l", Kind: "list", Children: []*Node{{ID: "l/r", Kind: "item", Props: map[string]any{"disabled": "Not available"}}}}
+	if hasRow(rows, "l/r") {
+		t.Error("a list row disabled with a reason was passed on")
+	}
 	// Other kinds are not judged by this rule.
 	if !hasRow(&Node{ID: "t", Kind: "tabs"}, "anything") {
 		t.Error("a node that is neither a list nor a picker was judged as one")
