@@ -67,9 +67,8 @@ type CompanionState struct {
 	// Consumed is the sequence of the last send whose text the program's own
 	// editor submitted. Absent from companions that do not report it.
 	Consumed uint64 `json:"consumed,omitempty"`
-	// Masked reports that the field holding the focus hides what is typed
-	// (a password). The program's description of an input does not say so.
-	Masked bool `json:"masked,omitempty"`
+	// Features are the companion's additions to the protocol's own events.
+	Features []string `json:"features,omitempty"`
 }
 
 // PrepareLaunch preserves the user's argv and profile. Only supported

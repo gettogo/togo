@@ -137,6 +137,27 @@ export function focusedField(tui) {
   return fields.size === 1 ? [...fields][0] : undefined
 }
 
+// describeSecret makes every field of this field's class report `secret`
+// (true or false, from its own `mask`) in the input node it describes.
+// Returns the function that puts the original description back, or
+// undefined when the class does not describe an input this way.
+export function describeSecret(field) {
+  const proto = field && Object.getPrototypeOf(field)
+  if (!proto || typeof proto.describe !== 'function' || typeof field.mask !== 'boolean') return undefined
+  const original = proto.describe
+  const sample = (() => { try { return original.call(field, { cols: 80, dark: true, reduceMotion: true, supports: () => true, feature: () => false }) } catch { return undefined } })()
+  if (!sample || typeof sample !== 'object' || sample.k !== 'input') return undefined
+  function describe(...args) {
+    const node = original.apply(this, args)
+    if (node && typeof node === 'object' && node.k === 'input' && typeof this.mask === 'boolean') {
+      return { ...node, p: { ...(node.p ?? {}), secret: this.mask } }
+    }
+    return node
+  }
+  proto.describe = describe
+  return () => { if (proto.describe === describe) proto.describe = original }
+}
+
 // Some of the program's fields (rename a session) offer no event to submit
 // them: on its own screen only Return does. submitFocusedField gives the
 // focused field that Return directly, in the process, so it never passes
@@ -151,6 +172,9 @@ export function submitFocusedField(tui, event) {
   tui.requestRender?.(true)
   return true
 }
+
+// What this companion adds to the protocol's own events.
+const FEATURES = ['submit', 'secret', 'commands']
 
 // How long a send may wait for the original editor to submit it.
 export const SUBMIT_WATCH_MS = 2000
@@ -219,7 +243,7 @@ export default function (pi) {
   let ctx, tui, watcher, timer, stopInput
   let owner = '', deadline = 0, seq = 0, epoch = 0, available = false, reason = ''
   let stopped = false, processing = false, rerun = false
-  let publishedNative, publishedMasked = false
+  let publishedNative
   // The sequence of the last native send whose text the original editor's
   // own submit callback received. Proof the program took it, not that it is done.
   let consumed = 0, unwatchSubmit
@@ -233,8 +257,7 @@ export default function (pi) {
     if (stopped) return
     const value = { version: 1, generation: config.generation, pid: process.pid,
       pane: process.env.TMUX_PANE ?? '', cwd: process.cwd(), ...location(),
-      epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed,
-      masked: maskedFocus() }
+      epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed, features: FEATURES }
     const json = JSON.stringify(value)
     if (Buffer.byteLength(json) > MAX_FILE) return
     const temporary = path.join(root, `.state-${process.pid}.tmp`)
@@ -249,7 +272,6 @@ export default function (pi) {
         publishedGeneration = true
       }
       publishedNative = value.native
-      publishedMasked = value.masked
     } catch { /* Helper removal cannot prevent the in-process lease expiry. */ }
   }
   // Publishes the program's command list beside the state, when it changed.
@@ -270,11 +292,17 @@ export default function (pi) {
       listing = false
     }
   }
-  // Whether the field that has the focus hides what is typed (a password).
-  // The program's description of an input does not carry this.
-  function maskedFocus() {
-    if (!owner) return false
-    try { return focusedField(tui)?.mask === true } catch { return false }
+  // The program's description of an input leaves out whether it hides what
+  // is typed. Once a field is seen, its class is taught to say so in its
+  // own description, so the flag arrives in the same frame as the field and
+  // never from a separately polled value that could belong to another field.
+  let restoreSecret
+  function annotateFields() {
+    if (restoreSecret || !owner) return
+    let field
+    try { field = focusedField(tui) } catch { return }
+    restoreSecret = describeSecret(field)
+    if (restoreSecret) tui.requestRender?.(true)
   }
   function switchRenderer(native) {
     // OMP reads the override synchronously during start(). Keep the renderer
@@ -404,7 +432,8 @@ export default function (pi) {
         }
         // start() probes asynchronously. Publish the confirmed renderer state,
         // including a protocol fallback, rather than only the requested mode.
-        if (Boolean(tui?.nativeRendering) !== publishedNative || maskedFocus() !== publishedMasked) publish()
+        if (Boolean(tui?.nativeRendering) !== publishedNative) publish()
+        annotateFields()
         processCommand()
         // Current values (model, effort, toggles) are part of the list.
         if (performance.now() - listedAt >= COMMANDS_EVERY_MS) void publishCommands()
@@ -430,6 +459,7 @@ export default function (pi) {
     publish()
     stopped = true
     unwatchSubmit?.()
+    restoreSecret?.()
     watcher?.close()
     stopInput?.()
     clearInterval(timer)

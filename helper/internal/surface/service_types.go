@@ -10,6 +10,11 @@ type Lease struct {
 	ID         string `json:"id"`
 	Token      string `json:"token"`
 	Generation string `json:"generation"`
+	// Features names what the program's companion adds to the protocol's
+	// own events: "submit" (the togo.submit action on a field that only
+	// Return submits) and "secret" (input nodes carry secret true or false).
+	// An app must not use, or rely on, one that is not listed.
+	Features []string `json:"features,omitempty"`
 }
 
 // LeaseRef identifies an already opened renderer.

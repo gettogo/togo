@@ -5,7 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField } from '../omp.mjs'
+import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField, describeSecret } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -347,4 +347,41 @@ test('a field is submitted only while it holds the text the phone saw', () => {
   assert.deepEqual(name.keys, ['\r'])
   assert.equal(renders, 1)
   assert.equal(submitFocusedField({ getFocused: () => dialogWith(field('a'), field('a')) }, { before: 'a' }), false)
+})
+
+// The program's input description leaves out whether a field hides what is
+// typed. Its class is taught to say so itself, in the same description.
+test('a field class reports secret in its own input node, true and false', () => {
+  class Field {
+    constructor(mask) { this.mask = mask }
+    describe() { return { k: 'input', p: { text: 'value', prompt: '> ' } } }
+  }
+  const plain = new Field(false), hidden = new Field(true)
+  assert.deepEqual(plain.describe().p, { text: 'value', prompt: '> ' })
+  const restore = describeSecret(plain)
+  assert.equal(typeof restore, 'function')
+  assert.deepEqual(plain.describe(), { k: 'input', p: { text: 'value', prompt: '> ', secret: false } })
+  // Every field of the class, including one that was never looked at.
+  assert.deepEqual(hidden.describe().p, { text: 'value', prompt: '> ', secret: true })
+  restore()
+  assert.deepEqual(hidden.describe().p, { text: 'value', prompt: '> ' })
+})
+
+test('only a class that describes an input and knows its mask is changed', () => {
+  class Other { constructor() { this.mask = false } describe() { return { k: 'card' } } }
+  const other = new Other()
+  assert.equal(describeSecret(other), undefined)
+  assert.deepEqual(other.describe(), { k: 'card' })
+  class NoMask { describe() { return { k: 'input', p: {} } } }
+  assert.equal(describeSecret(new NoMask()), undefined)
+  class Throws { constructor() { this.mask = true } describe() { throw new Error('boom') } }
+  assert.equal(describeSecret(new Throws()), undefined)
+  assert.equal(describeSecret(undefined), undefined)
+  // A description put in place by someone else afterwards is left alone.
+  class Field { constructor() { this.mask = true } describe() { return { k: 'input', p: {} } } }
+  const restore = describeSecret(new Field())
+  const theirs = () => ({ k: 'input', p: { theirs: true } })
+  Field.prototype.describe = theirs
+  restore()
+  assert.equal(Field.prototype.describe, theirs)
 })

@@ -1,6 +1,7 @@
 package surface
 
 import (
+	"slices"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -119,6 +120,8 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 		return fail(err)
 	}
 	r.runtime, r.lease.Generation = run, run.wireGeneration()
+	// What this program's companion can do beyond the protocol's own events.
+	r.lease.Features = slices.Clone(run.state.Features)
 	r.cache, err = OpenCache(run.cacheDir(), run.identity(), options)
 	if err != nil {
 		return fail(err)

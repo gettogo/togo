@@ -2489,7 +2489,13 @@
         },
         "generation": {
           "type": "string",
-          "pattern": "^[0-9a-f]{32}$"
+          "pattern": "^[0-9a-f]{32},
+        "features": {
+          "description": "What the program's companion adds to the protocol's own events: submit, secret, commands. Unknown names must be ignored.",
+          "type": "array",
+          "maxItems": 32,
+          "items": { "type": "string", "maxLength": 32 }
+        }$"
         }
       },
       "required": [
