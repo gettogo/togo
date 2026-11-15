@@ -21,6 +21,15 @@ func (e *Engine) heldNatively(s *sess) *harness.FallbackError {
 	if e.drivingMenu(s.id) {
 		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " has a menu open that the phone is using. Nothing was typed: finish or close it first."}
 	}
+	if panel, open := e.menuLeftOpen(s); open {
+		name := panel
+		if name == "" {
+			name = "a menu"
+		} else {
+			name = "“" + name + "”"
+		}
+		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " still has " + name + " open in its terminal. Nothing was typed: close it there first."}
+	}
 	if e.cfg.SurfaceHeld == nil || !e.cfg.SurfaceHeld(s.id) {
 		return nil
 	}

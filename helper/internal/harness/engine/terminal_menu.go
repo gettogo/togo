@@ -26,6 +26,7 @@ import (
 //	terminal.select   target = row id   move the cursor to the row, check it, press Enter
 //	terminal.cancel   args {interaction} or target: Esc, checked
 //	terminal.release  the same: let go without pressing anything
+//	terminal.attach   take up a list that is already on the screen
 //
 // A row id is "<interaction>/<n>"; the screen's id is "terminal.menu/<interaction>".
 
@@ -75,10 +76,39 @@ func (e *Engine) drivingMenu(session string) bool {
 		return false
 	}
 	if time.Now().After(m.expires) {
+		if e.leftOpen == nil {
+			e.leftOpen = map[string]string{}
+		}
+		e.leftOpen[session] = m.panel
 		delete(e.menus, session)
 		return false
 	}
 	return true
+}
+
+// menuLeftOpen reports a list the phone let go of that the harness still
+// shows: released, expired, or a choice that stopped half way. It has no
+// owner, and keys typed now would go into it. Once the screen no longer
+// shows that list the session is free again.
+func (e *Engine) menuLeftOpen(s *sess) (string, bool) {
+	e.menuMu.Lock()
+	panel, ok := e.leftOpen[s.id]
+	e.menuMu.Unlock()
+	if !ok || e.cfg.StyledScreen == nil {
+		return "", false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	screen, err := e.cfg.StyledScreen(ctx, s.id)
+	if err == nil {
+		if menu, is := termmenu.Read(screen); is && menu.Title == panel {
+			return panel, true
+		}
+	}
+	e.menuMu.Lock()
+	delete(e.leftOpen, s.id)
+	e.menuMu.Unlock()
+	return "", false
 }
 
 func (e *Engine) menuOf(session, token string) *terminalMenu {
@@ -99,6 +129,14 @@ func (e *Engine) setMenu(session string, m *terminalMenu) {
 		e.menus = map[string]*terminalMenu{}
 	}
 	if m == nil {
+		// Whether the list is still on screen is not known here: it is
+		// remembered, and checked before anything is typed.
+		if old := e.menus[session]; old != nil {
+			if e.leftOpen == nil {
+				e.leftOpen = map[string]string{}
+			}
+			e.leftOpen[session] = old.panel
+		}
 		delete(e.menus, session)
 		return
 	}
@@ -270,6 +308,20 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			return failed(msg)
 		}
 		return e.afterKey(ctx, s, text, nil)
+	case "attach":
+		// Take up a list that is already on the harness's screen: one the
+		// phone let go of, or one opened at the desk.
+		if e.drivingMenu(s.id) {
+			return failed("A menu is already open on the phone. Finish or close it first.")
+		}
+		menu, ok := e.readMenu(ctx, s)
+		if !ok {
+			return harness.ActionResult{Result: harness.ResultFallback, Message: "No menu is open in the terminal."}, nil
+		}
+		rows, complete := e.wholeList(ctx, s, menu)
+		m := &terminalMenu{token: newToken(), title: menu.Title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
+		e.setMenu(s.id, m)
+		return harness.ActionResult{Result: harness.ResultApplied, Screen: e.menuScreen(m, menu, complete && (menu.Total > 0 || rowsEndOnScreen(menu)))}, nil
 	case "select":
 		m := e.menuOf(s.id, token)
 		n, err := strconv.Atoi(rowText)

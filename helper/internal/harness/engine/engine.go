@@ -131,6 +131,10 @@ type Engine struct {
 	// menus holds, per session, the terminal list a phone is driving.
 	menuMu sync.Mutex
 	menus  map[string]*terminalMenu
+	// leftOpen names, per session, a list the phone let go of without
+	// closing it. It is still on the harness's screen and has no owner:
+	// nothing is typed until the screen no longer shows it.
+	leftOpen map[string]string
 }
 
 var _ harness.Engine = (*Engine)(nil)
