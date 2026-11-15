@@ -82,3 +82,22 @@ func TestTheLineACommandWasTypedOnIsFound(t *testing.T) {
 		t.Error("two candidates were resolved by guessing")
 	}
 }
+
+// A command the harness shows back counts only when the harness drew it:
+// the input line, where a draft starting with the same command stands in
+// front of the typed text, is not that.
+func TestTheInputLineIsNotTheHarnessShowingACommandBack(t *testing.T) {
+	before := "status\n/model neutral\nfooter"
+	echo := "status\n/model neutral/model\nfooter"
+	if shownBack(before, echo, "/model", "/model neutral/model") {
+		t.Error("a draft in the input line passed as the command shown back")
+	}
+	droid := "│ > /model │\n  /model    Open model selector\n  /fast   Enable fast mode"
+	if !shownBack("│ > Try something │", droid, "/model", "> /model") {
+		t.Error("a plain list with the command first was not accepted")
+	}
+	other := "│ > /mod │\n  /mode    Switch mode\n  /model   Open model selector"
+	if shownBack("│ > Try something │", other, "/model", "> /model") {
+		t.Error("a list with another command first was accepted")
+	}
+}

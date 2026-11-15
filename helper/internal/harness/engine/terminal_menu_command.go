@@ -184,7 +184,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 	// command's own arguments (Copilot). The first line it newly drew that
 	// starts with a command must start with this one.
 	if !offered || cur < 0 {
-		if after, err := e.cfg.Screen(ctx, s.id); err == nil && shownBack(before, after, text) {
+		if after, err := e.cfg.Screen(ctx, s.id); err == nil && shownBack(before, after, text, typedLine) {
 			offered, cur = true, 0
 			menu = termmenu.Menu{Items: []termmenu.Item{{Label: text}}}
 		}
@@ -329,8 +329,9 @@ func ownTextLine(before, after, text string) (line, without string, ok bool) {
 
 // shownBack reports whether the first line the harness newly drew that
 // starts with a slash command, and says something after it, starts with
-// this command. A line that is only the command is an echo of the input.
-func shownBack(before, after, text string) bool {
+// this command. A line that is only the command, or the input line itself,
+// is an echo of the input and proves nothing.
+func shownBack(before, after, text, typed string) bool {
 	had := map[string]bool{}
 	for _, l := range strings.Split(before, "\n") {
 		had[trimEdge(l)] = true
@@ -339,6 +340,12 @@ func shownBack(before, after, text string) bool {
 		is := trimEdge(l)
 		fields := strings.Fields(is)
 		if had[is] || len(fields) < 2 || !strings.HasPrefix(fields[0], "/") {
+			continue
+		}
+		// The input line is not the harness showing the command back: a
+		// draft that itself starts with the command ("/model x", with
+		// "/model" typed after it) would pass as its own proof.
+		if is == typed || strings.HasSuffix(is, text) {
 			continue
 		}
 		return fields[0] == text

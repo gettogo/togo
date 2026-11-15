@@ -268,3 +268,31 @@ func TestACursorTheHarnessDrawsIsFound(t *testing.T) {
 		t.Error("two reversed cells were taken for one cursor")
 	}
 }
+
+// Claude Code numbers its choices. The number is not the choice's name, and
+// the tick marks the one in use.
+func TestNumberedChoicesAreNamedByTheirText(t *testing.T) {
+	screen := strings.Join([]string{
+		"   Select model",
+		"   Switch between models. Your pick becomes the default for new",
+		"   sessions.",
+		"     1.  Default (recommended)  Largest",
+		"     2.  Middle                 For complex work and everyday tasks",
+		"   ❯ 3.  Largest ✔              For your toughest challenges",
+		"   Enter to set as default · s to use this session only · Esc to cancel",
+	}, "\n")
+	m, ok := Read(screen)
+	if !ok || len(m.Items) != 3 {
+		t.Fatalf("list = %v %q", ok, labels(m))
+	}
+	want := []Item{
+		{Label: "Default (recommended)", Detail: "Largest"},
+		{Label: "Middle", Detail: "For complex work and everyday tasks"},
+		{Label: "Largest", Detail: "For your toughest challenges", Cursor: true, Current: true},
+	}
+	for i := range want {
+		if m.Items[i] != want[i] {
+			t.Errorf("row %d = %+v, want %+v", i, m.Items[i], want[i])
+		}
+	}
+}

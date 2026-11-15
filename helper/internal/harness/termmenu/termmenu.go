@@ -52,6 +52,9 @@ type cell struct {
 	rev    bool
 }
 
+// ordinal is the number a list puts before a choice.
+var ordinal = regexp.MustCompile(`^\d{1,3}[.)]$`)
+
 var sgr = regexp.MustCompile(`\x1b\[([0-9;:]*)m`)
 var otherEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)`)
 
@@ -140,7 +143,7 @@ var (
 	hintWords = regexp.MustCompile(`(?i)(navigate|↑↓|↑/↓|to change|to close|to select|to cancel|enter select|esc cancel|esc exit|⏎|⎋)`)
 	counter   = regexp.MustCompile(`^\(?(\d+)\s*/\s*(\d+)\)?$`)
 	gap       = regexp.MustCompile(`\s{2,}`)
-	current   = regexp.MustCompile(`\s*←\s*current|\s*\(current\)|\s*✓`)
+	current   = regexp.MustCompile(`\s*←\s*current|\s*\(current\)|\s*[✓✔]`)
 	scrollbar = regexp.MustCompile(`\s*[█▐▌▓▒░]+$`)
 	// A search field with its text: "Search: open", "🔍 open", "🔍 > open".
 	searchField = regexp.MustCompile(`^(?:Search:|🔍)\s*(?:>\s?)?(.*)$`)
@@ -404,6 +407,15 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		if len(parts) > 1 {
 			detail = strings.TrimSpace(parts[1])
 		}
+		// A numbered row ("3.  Name   what it is"): the number is not the
+		// choice's name.
+		if ordinal.MatchString(label) && detail != "" {
+			parts = gap.Split(detail, 2)
+			label, detail = parts[0], ""
+			if len(parts) > 1 {
+				detail = strings.TrimSpace(parts[1])
+			}
+		}
 		isCurrent := current.MatchString(t) || strings.HasPrefix(label, "●")
 		label = strings.TrimSpace(strings.TrimPrefix(current.ReplaceAllString(label, ""), "●"))
 		detail = strings.TrimSpace(current.ReplaceAllString(detail, ""))
@@ -413,7 +425,11 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			last := &m.Items[len(m.Items)-1]
 			last.Detail = strings.TrimSpace(last.Detail + " " + t)
 		case here < labelCol && !cur:
-			group = label
+			// A heading is a word or a few; a sentence there is the
+			// list's own description.
+			if len(strings.Fields(t)) <= 4 && !strings.HasSuffix(t, ".") {
+				group = label
+			}
 		default:
 			m.Items = append(m.Items, Item{Label: label, Detail: detail, Group: group, Cursor: cur, Current: isCurrent})
 			lastColour = lineColour(cellLines[i])
@@ -431,6 +447,21 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		merged = append(merged, it)
 	}
 	m.Items = merged
+	// The list's own title, met again above its rows, is not a heading.
+	if m.Title == "" && len(m.Items) > 0 && m.Items[0].Group != "" {
+		same := true
+		for _, it := range m.Items {
+			same = same && it.Group == m.Items[0].Group
+		}
+		if same {
+			m.Title = m.Items[0].Group
+		}
+	}
+	for k := range m.Items {
+		if m.Items[k].Group == m.Title {
+			m.Items[k].Group = ""
+		}
+	}
 	return m, len(m.Items) > 0
 }
 

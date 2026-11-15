@@ -67,9 +67,10 @@ func (e *Engine) watchLateList(ctx context.Context, s *sess) {
 				return
 			case <-time.After(e.scaled(lateWatchEvery)):
 			}
-			// A restart, another conversation or a turn that began ends
-			// the watch: what the screen shows is no longer this command's.
-			if !e.stillServed(s, conv) || !e.idleNow(s) {
+			// A restart or another conversation ends the watch: what the
+			// screen shows is no longer this command's. So does a list
+			// someone holds now: it was taken up already.
+			if !e.stillServed(s, conv) || e.drivingMenu(s.id) {
 				return
 			}
 			screen, err := e.cfg.StyledScreen(watch, s.id)
@@ -78,6 +79,12 @@ func (e *Engine) watchLateList(ctx context.Context, s *sess) {
 			}
 			menu, open := termmenu.Read(screen)
 			if !open || menu.Title == "" {
+				// A turn that began ends the watch. This is asked after
+				// the screen was read: a list opening moves the screen,
+				// and that motion alone can look like work for a moment.
+				if !e.idleNow(s) {
+					return
+				}
 				continue
 			}
 			e.menuMu.Lock()

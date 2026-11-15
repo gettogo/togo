@@ -186,8 +186,12 @@ func newToken() string {
 
 func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionRequest) (harness.ActionResult, error) {
 	ctx = withMenuConv(ctx, s)
-	// A new command, choice or key replaces any watch for a late list.
-	e.stopLateWatch(s.id)
+	// A new command, choice or key replaces any watch for a late list. A
+	// look for an open list (attach) or a release does not: another phone
+	// looking must not end the watch of the one that ran the command.
+	if verb := req.Action; verb == "terminal.command" || verb == "terminal.select" || strings.HasPrefix(verb, "terminal.key") {
+		e.stopLateWatch(s.id)
+	}
 	if raw, ok := req.Args["requestId"]; ok {
 		var id string
 		if json.Unmarshal(raw, &id) == nil && id != "" && len(id) <= 128 {
