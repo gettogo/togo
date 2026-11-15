@@ -20,6 +20,7 @@ public struct SurfaceLease: Codable, Hashable, Sendable {
     public var id: String
     public var token: String
     public var generation: String
+    public var features: [String]? = nil
 }
 
 /// One immutable snapshot chunk. Receiving a chunk never acknowledges display.

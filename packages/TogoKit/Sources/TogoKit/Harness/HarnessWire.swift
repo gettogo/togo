@@ -66,11 +66,13 @@ public struct HarnessChoice: Codable, Hashable, Sendable, Identifiable {
     public var id: String
     public var label: String
     public var detail: String?
+    public var disabled: Bool?
 
-    public init(id: String, label: String, detail: String? = nil) {
+    public init(id: String, label: String, detail: String? = nil, disabled: Bool? = nil) {
         self.id = id
         self.label = label
         self.detail = detail
+        self.disabled = disabled
     }
 }
 

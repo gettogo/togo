@@ -24,7 +24,9 @@ import Observation
     public private(set) var generation: String?
     public private(set) var pending: Pending?
     public private(set) var notice: Notice?
+    public private(set) var inputFailure: HelperError?
     public var canInteract: Bool { phase == .active && pending == nil && notice == nil }
+    public var companionFeatures: Set<String> { Set(lease?.features ?? []) }
 
     @ObservationIgnored private let id: String
     @ObservationIgnored private let makeConnection: @MainActor () async throws -> any SurfaceConnection
@@ -83,6 +85,7 @@ import Observation
         phase = .loading
         scene = nil
         notice = nil
+        inputFailure = nil
         pending = nil
         receipts = [:]
         acknowledging = nil
@@ -176,6 +179,7 @@ import Observation
               !view.closed, view.listen, !view.document.suspended,
               let target = view.document.root.node(id: node), target.properties["disabled"] != .bool(true),
               target.properties["hidden"] != .bool(true), case .string(let kind)? = event["ev"] else { return .notDispatched }
+        inputFailure = nil
         var event = event
         event["id"] = .string(node)
         event["sf"] = .string(surface)
@@ -201,6 +205,7 @@ import Observation
         } catch {
             guard self.lease == lease, pending?.token == token else { return .unconfirmed }
             pending = nil
+            inputFailure = error as? HelperError
             notice = .unconfirmed
             return .unconfirmed
         }

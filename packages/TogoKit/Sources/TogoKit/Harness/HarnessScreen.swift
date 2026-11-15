@@ -113,6 +113,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var contextActions: [HarnessActionRef]?
         /// "preview" opens an item before committing; absent preserves direct selection.
         public var selectionBehavior: String?
+        public var presentation: HarnessPickerPresentation?
         /// What is not set up yet, such as providers not signed in, listed after the items.
         public var setup: [Item]?
         /// Sets up one `setup` entry, run with args `{"id": entry id}`.
@@ -130,9 +131,10 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             /// Values the filters match, by filter id.
             public var facets: [String: String]?
             public var preview: Detail?
+            public var appearance: HarnessPickerItemAppearance?
 
             public init(id: String, title: String, subtitle: String? = nil, badge: String? = nil, group: String? = nil,
-                        disabled: Bool? = nil, facets: [String: String]? = nil, preview: Detail? = nil) {
+                        disabled: Bool? = nil, facets: [String: String]? = nil, preview: Detail? = nil, appearance: HarnessPickerItemAppearance? = nil) {
                 self.id = id
                 self.title = title
                 self.subtitle = subtitle
@@ -141,6 +143,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
                 self.disabled = disabled
                 self.facets = facets
                 self.preview = preview
+                self.appearance = appearance
             }
         }
 
@@ -165,7 +168,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
                     onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil,
                     setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil,
                     onSelectLabel: String? = nil, searchMode: String? = nil,
-                    contextActions: [HarnessActionRef]? = nil, selectionBehavior: String? = nil) {
+                    contextActions: [HarnessActionRef]? = nil, selectionBehavior: String? = nil, presentation: HarnessPickerPresentation? = nil) {
             self.items = items
             self.onSelectLabel = onSelectLabel
             self.setup = setup
@@ -180,6 +183,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             self.itemActions = itemActions
             self.contextActions = contextActions
             self.selectionBehavior = selectionBehavior
+            self.presentation = presentation
         }
     }
 
@@ -208,12 +212,16 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public static let number: Self = "number"
             /// Never carries its value: `value` is null and `isSet` says whether one exists.
             public static let secret: Self = "secret"
+            public static let multi: Self = "multi"
+            public static let action: Self = "action"
         }
 
         public struct Field: Codable, Hashable, Sendable, Identifiable {
             public var id: String
             public var label: String
             public var help: String?
+            public var warning: String?
+            public var actionLabel: String?
             public var kind: FieldKind
             public var value: JSONValue
             public var isSet: Bool?
@@ -229,10 +237,12 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public init(id: String, label: String, help: String? = nil, kind: FieldKind, value: JSONValue,
                         isSet: Bool? = nil, options: [HarnessChoice]? = nil, min: Double? = nil, max: Double? = nil,
                         placeholder: String? = nil, readOnly: Bool? = nil, action: String? = nil,
-                        actionConfirm: HarnessSelectConfirm? = nil) {
+                        actionConfirm: HarnessSelectConfirm? = nil, warning: String? = nil, actionLabel: String? = nil) {
                 self.id = id
                 self.label = label
                 self.help = help
+                self.warning = warning
+                self.actionLabel = actionLabel
                 self.kind = kind
                 self.value = value
                 self.isSet = isSet
