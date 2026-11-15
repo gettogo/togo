@@ -12,11 +12,9 @@ struct TerminalNativeScreen: View {
         NativeCommandNavigation(title: model.screen?.title ?? "", close: {
             store.dismissTerminalCommand()
         }, terminal: {
-            Task {
-                await model.close(cancel: false)
-                store.layer = .terminal
-                dismiss()
-            }
+            store.retireTerminalInteraction()
+            store.layer = .terminal
+            dismiss()
         }) {
             VStack(spacing: 0) {
                 if model.phase == .ended, let failure = model.failure {
@@ -46,10 +44,8 @@ struct TerminalNativeScreen: View {
             let verb = action.hasPrefix("terminal.key.") ? "terminal.key" : action
             return await model.run(verb, target: target, args: args)
         }, openScreen: { _ in }, open: { _ in }, showTerminal: {
-            Task {
-                await model.close(cancel: false)
-                store.layer = .terminal
-            }
+            store.retireTerminalInteraction()
+            store.layer = .terminal
         })
         context.showsTerminal = false
         context.searchScreen = { query in

@@ -126,6 +126,11 @@ struct NativeCommandPresentation: ViewModifier {
         }
         .onChange(of: showing) { _, shown in if !shown { store.retireTerminalInteraction() } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { store.retireTerminalInteraction() } }
+        .task(id: LateMenu(active: showing && scenePhase == .active, request: store.readyTerminalMenu,
+                          available: store.canAttachTerminalMenu, conversation: store.conversation)) {
+            guard showing, scenePhase == .active, let request = store.readyTerminalMenu else { return }
+            await store.attachReadyTerminalMenu(request)
+        }
         .task(id: Attachment(active: showing && scenePhase == .active,
             available: store.has(HarnessCapability.terminalNative) && store.phase == .live,
             conversation: store.conversation)) {
@@ -136,6 +141,13 @@ struct NativeCommandPresentation: ViewModifier {
 
     private struct Attachment: Hashable {
         let active: Bool
+        let available: Bool
+        let conversation: UUID
+    }
+
+    private struct LateMenu: Hashable {
+        let active: Bool
+        let request: UUID?
         let available: Bool
         let conversation: UUID
     }

@@ -31,7 +31,11 @@ import UIKit
         #expect(result?.result == .applied && model.confirmedEnd)
         #expect(connection.calls.count == 2)
         #expect(connection.calls[1].target == "terminal.input")
-        #expect(connection.calls[1].args == ["value": .string(value), "interaction": .string("a")])
+        let args = try #require(connection.calls[1].args)
+        #expect(args["value"] == .string(value) && args["interaction"] == .string("a"))
+        #expect(args.count == 3)
+        if case .string(let id) = args["requestId"] { #expect(UUID(uuidString: id) != nil) }
+        else { Issue.record("Missing request identity") }
         #expect(change.value == PrimitiveCopy.set && change.previous == nil)
     }
 

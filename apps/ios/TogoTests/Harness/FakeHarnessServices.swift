@@ -3,6 +3,12 @@ import TogoKit
 @testable import Togo
 
 @MainActor final class FakeHarnessServices: HarnessServices {
+    var terminalFactory: (@MainActor () async throws -> any TerminalNativeConnection)?
+    func terminalConnection(_ s: HarnessSubject) async throws -> any TerminalNativeConnection {
+        guard let terminalFactory else { throw HarnessUnavailable() }
+        return try await terminalFactory()
+    }
+
     var nativeConnection: (any SurfaceConnection)?
     func surfaceConnection(_ s: HarnessSubject) async throws -> any SurfaceConnection {
         guard let nativeConnection else { throw HarnessUnavailable() }

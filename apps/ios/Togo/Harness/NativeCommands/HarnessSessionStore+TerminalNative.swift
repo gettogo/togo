@@ -13,6 +13,7 @@ extension HarnessSessionStore {
     }
 
     func runTerminalCommand(_ text: String) async throws {
+        nativeInteractions.terminalWatch.cancel()
         let binding = conversation
         await retireWaitingInteraction()
         await nativeInteractions.stopTask?.value
@@ -37,11 +38,17 @@ extension HarnessSessionStore {
 
     /// Re-entering chat may find a chooser left open at the desk. This is a
     /// read and claim only; no command or key is sent when no menu is present.
-    func attachTerminalMenu() async {
+    func attachTerminalMenu(request: UUID? = nil) async {
         let binding = conversation
         await nativeInteractions.stopTask?.value
         guard has(HarnessCapability.terminalNative), phase == .live, !working,
               conversation == binding, interaction == nil, terminalInteraction == nil else { return }
+        if let request {
+            guard shownLayer == .chat, nativeInteractions.terminalWatch.claim(requestId: request,
+                conversation: binding, epoch: feed.timeline.epoch) else { return }
+        } else if nativeInteractions.terminalWatch.observing(conversation: binding, epoch: feed.timeline.epoch) {
+            return
+        }
         let model = makeTerminalInteraction(binding: binding)
         terminalInteraction = model
         do { _ = try await model.attach() }
@@ -51,6 +58,17 @@ extension HarnessSessionStore {
     private func makeTerminalInteraction(binding: UUID) -> TerminalNativeInteraction {
         let model = TerminalNativeInteraction(sessionID: subject.sessionID) { [services, subject] in
             try await services.terminalConnection(subject)
+        }
+        model.onDispatch = { [weak self, weak model] request in
+            guard let self, self.terminalInteraction === model, self.conversation == binding,
+                  let epoch = self.feed.timeline.epoch else { return }
+            self.nativeInteractions.terminalWatch.begin(requestId: request, conversation: binding, epoch: epoch)
+        }
+        model.onReceipt = { [weak self, weak model] request, result in
+            guard let self, self.terminalInteraction === model, self.conversation == binding else { return }
+            let submitted = result?.result == .typed && result?.screen == nil
+            self.nativeInteractions.terminalWatch.finish(requestId: request, submitted: submitted)
+            if submitted { self.note(PrimitiveCopy.sent, code: "command") }
         }
         model.onEnd = { [weak self, weak model] in
             guard let self, let model, self.terminalInteraction === model else { return }
@@ -68,6 +86,7 @@ extension HarnessSessionStore {
     }
 
     func dismissTerminalCommand(handbackOnFailure: Bool = false) {
+        nativeInteractions.terminalWatch.cancel()
         guard let model = terminalInteraction else { return }
         if model.phase == .ended {
             retireTerminalInteraction()
@@ -93,6 +112,7 @@ extension HarnessSessionStore {
     /// Handback never sends Esc. A later prompt waits until this connection
     /// has actually closed, even after the presentation has gone away.
     func retireTerminalInteraction(pumpQueue: Bool = false) {
+        nativeInteractions.terminalWatch.cancel()
         guard let previous = terminalInteraction else { return }
         terminalInteraction = nil
         nativeInteractions.stopping = true

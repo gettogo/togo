@@ -55,6 +55,7 @@ import UIKit
     var layer: SessionLayer {
         get { chosenLayer }
         set {
+            if newValue != .chat { nativeInteractions.terminalWatch.cancel() }
             chosenLayer = newValue
             layerChosen = true
         }
@@ -345,6 +346,7 @@ import UIKit
             return await pause(&reopenDelay)
         case .dropped(let opened):
             if opened { delay = retryFloor }
+            nativeInteractions.terminalWatch.cancel()
             phase = .reconnecting
             return await pause(&delay)
         case .refused:
@@ -363,7 +365,6 @@ import UIKit
         waitTask?.cancel()
         waitTask = nil
     }
-
     private enum FollowEnd {
         case reopen
         case dropped(opened: Bool)
@@ -441,7 +442,7 @@ import UIKit
     /// arrival transaction, so new rows, a subagent's thread and the live line move together;
     /// updates to items already shown (streamed text) land without animation.
     private func apply(_ note: HarnessNotification) -> HarnessApply {
-        if note.kind == .commands { return refreshCommands(note) }
+        if let outcome = applyNativeNotification(note) { return outcome }
         let replacement = note.kind == .reset && !["history", "overflow"].contains(note.reason ?? "")
         if feed.isLoaded, replacement || note.epoch != feed.timeline.epoch { invalidateConversation() }
         let arrives = feed.isLoaded && (note.items ?? []).contains { feed.timeline.item($0.id) == nil }

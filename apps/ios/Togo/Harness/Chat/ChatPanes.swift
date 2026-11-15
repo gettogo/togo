@@ -173,10 +173,16 @@ struct HarnessSync: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(of: key, initial: true) { store.syncHarness() }
+            .onChange(of: Visibility(open: store.workspaceOpen, primary: store.workspace.selected,
+                secondary: store.panesVisible ? store.workspace.secondary : nil), initial: true) {
+                store.cancelHiddenTerminalWatches()
+            }
             .onChange(of: store.focusedTab.flatMap { store.harness(for: $0.id) }?.fallback) { _, line in
                 if let line { status = line }
             }
     }
+
+    private struct Visibility: Equatable { let open: Bool; let primary: TabID?; let secondary: TabID? }
 
     /// What decides which stores run: each tab, and whether its machine is listed and serves
     /// harness.v1.

@@ -5,6 +5,7 @@ import TogoKit
 @MainActor @Observable final class NativeChatState {
     var current: ChatSurfaceInteraction?
     var terminal: TerminalNativeInteraction?
+    var terminalWatch = TerminalCommandWatch()
     var stopping = false
     var requests = HarnessNativeRequests()
     @ObservationIgnored var stopTask: Task<Void, Never>?
@@ -15,7 +16,10 @@ import TogoKit
 extension HarnessSessionStore {
     var interaction: ChatSurfaceInteraction? {
         get { nativeInteractions.current }
-        set { nativeInteractions.current = newValue }
+        set {
+            if newValue != nil { nativeInteractions.terminalWatch.cancel() }
+            nativeInteractions.current = newValue
+        }
     }
 
     var surfaceAvailable: Bool {
@@ -23,6 +27,7 @@ extension HarnessSessionStore {
     }
 
     func runNativeCommand(_ text: String, command: HarnessCompletion? = nil) async throws {
+        nativeInteractions.terminalWatch.cancel()
         if !surfaceAvailable, has(HarnessCapability.terminalNative) {
             try await runTerminalCommand(text)
             return
@@ -58,6 +63,7 @@ extension HarnessSessionStore {
     /// Explicit chat intent hands a completed submission back before either
     /// a prompt or an action can type. Actual original controls stay protected.
     func prepareHarnessInput() async throws {
+        nativeInteractions.terminalWatch.cancel()
         let binding = conversation
         await retireWaitingInteraction()
         guard conversation == binding else { throw ConversationChanged() }

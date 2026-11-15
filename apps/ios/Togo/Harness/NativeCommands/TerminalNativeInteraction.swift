@@ -19,6 +19,8 @@ import TogoKit
     private(set) var closing = false
     private(set) var confirmedEnd = false
     @ObservationIgnored var onEnd: @MainActor () -> Void = {}
+    @ObservationIgnored var onDispatch: @MainActor (UUID) -> Void = { _ in }
+    @ObservationIgnored var onReceipt: @MainActor (UUID, HarnessActionResult?) -> Void = { _, _ in }
     @ObservationIgnored private let sessionID: String
     @ObservationIgnored private let makeConnection: @MainActor () async throws -> any TerminalNativeConnection
     @ObservationIgnored private let pollInterval: Duration
@@ -61,7 +63,7 @@ import TogoKit
             }
             client = opened
             dispatched = true
-            let result = try await opened.harnessAction(.init(id: sessionID, action: action, args: args))
+            let result = try await perform(action, args: args, on: opened)
             guard lifetime == binding, phase != .ended else { throw Failure(message: SurfaceCopy.unconfirmed) }
             if result.result == .failed { throw Failure(message: result.message ?? SurfaceCopy.unconfirmed) }
             if let next = result.screen {
@@ -101,7 +103,7 @@ import TogoKit
             var values = args ?? [:]
             values["interaction"] = .string(token)
             dispatched = true
-            var result = try await client.harnessAction(.init(id: sessionID, action: action, target: target, args: values))
+            var result = try await perform(action, target: target, args: values, on: client)
             guard lifetime == binding, phase == .active else { return nil }
             if action == "terminal.more", result.result == .applied, result.screen == nil {
                 throw Failure(message: SurfaceCopy.unconfirmed)
@@ -142,6 +144,29 @@ import TogoKit
         guard fields.count == 1, let field = fields.first else { return false }
         return field.id == target && field.action == "terminal.input" && field.kind == .secret && field.value == .null
             && field.isSet != true && field.readOnly != true
+    }
+
+    /// Each attempt has its own receipt identity, including later choices
+    /// in a command's workflow. An old menu event cannot name a new attempt.
+    private func perform(_ action: String, target: String? = nil, args: [String: JSONValue]?,
+                         on client: any TerminalNativeConnection) async throws -> HarnessActionResult {
+        let binding = lifetime
+        let request = ["terminal.command", "terminal.select", "terminal.key", "terminal.input"].contains(action) ? UUID() : nil
+        var values = args
+        if let request {
+            values = values ?? [:]
+            values?["requestId"] = .string(request.uuidString)
+            onDispatch(request)
+        }
+        do {
+            let result = try await client.harnessAction(.init(id: sessionID, action: action, target: target, args: values))
+            guard binding == lifetime, phase != .ended else { throw Failure(message: SurfaceCopy.unconfirmed) }
+            if let request { onReceipt(request, result) }
+            return result
+        } catch {
+            if let request { onReceipt(request, nil) }
+            throw error
+        }
     }
 
     func read(query: String? = nil, expected: String? = nil, before: String? = nil) async throws -> HarnessScreen {
