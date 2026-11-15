@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"reflect"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -275,6 +276,17 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 		if onIt && rightOccurrence(m.rows, whole, cur, target) {
 			if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 				return harness.ActionResult{}, err
+			}
+			// A program may take a moment to act on Enter (loading the
+			// session it was asked to resume). The list exactly as it was
+			// is not yet its answer: wait for the screen to change before
+			// reading what came of the choice.
+			for deadline := time.Now().Add(e.scaled(menuSettle)); time.Now().Before(deadline) && ctx.Err() == nil; {
+				after, still := e.readMenu(ctx, s)
+				if !still || after.Title != now.Title || !reflect.DeepEqual(after.Items, now.Items) {
+					break
+				}
+				time.Sleep(e.scaled(menuQuiet))
 			}
 			return e.afterKey(ctx, s, "", m)
 		}

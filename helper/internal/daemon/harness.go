@@ -62,7 +62,7 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		},
 		// The native surface service is built after the engine; both are
 		// read when called, never at construction.
-		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },
+		SurfaceHeld: func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },
 		// Screens come from the terminal reader, the same way for every
 		// program. The program's own rendering protocol is offered to the
 		// app only when asked for (TOGO_OMP_SURFACE=1); its companion still

@@ -388,3 +388,43 @@ func TestAnEmptyListIsItsMessage(t *testing.T) {
 		}
 	}
 }
+
+// A session in the resume list is one row: its title, with the preview
+// and the age line under it as its description, in a box of any height.
+func TestARowWithLinesUnderItIsOneRow(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "omp-resume-one.ansi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := Read(string(raw))
+	if !ok || len(m.Items) != 1 {
+		t.Fatalf("menu = %+v %v", m, ok)
+	}
+	it := m.Items[0]
+	if it.Label != "CHECK: Native check A" || !it.Cursor || !strings.HasPrefix(it.Detail, "Reply with exactly:") || !strings.Contains(it.Detail, "5 hours ago · 13.6KB") {
+		t.Errorf("row = %+v", it)
+	}
+	if m.Hint == "" {
+		t.Errorf("hint %q", m.Hint)
+	}
+}
+
+// Blocks separated by empty lines are one row each, wherever the cursor is.
+func TestBlocksAreRows(t *testing.T) {
+	for name, cursor := range map[string]int{"omp-resume-three.ansi": 0, "omp-resume-three-down.ansi": 1} {
+		raw, err := os.ReadFile(filepath.Join("testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, ok := Read(string(raw))
+		if !ok || len(m.Items) != 3 {
+			t.Fatalf("%s: menu = %+v %v", name, m, ok)
+		}
+		want := []string{"Reply with THREE", "Reply with TWO", "Reply with the single word ONE."}
+		for i, it := range m.Items {
+			if it.Label != want[i] || it.Cursor != (i == cursor) || !strings.Contains(it.Detail, "KB") {
+				t.Errorf("%s: row %d = %+v", name, i, it)
+			}
+		}
+	}
+}

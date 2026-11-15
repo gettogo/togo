@@ -292,6 +292,56 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 	for shaped(bot + 1) {
 		bot++
 	}
+	// A list may draw each choice as a block: its name, then lines about it
+	// in another colour, with an empty line between choices. The cursor's
+	// block shows it: the cursor is on its first line and every other line
+	// is in a colour the first is not. Each block is then one choice.
+	part := func(i int) bool {
+		if !shaped(i) {
+			return false
+		}
+		t := strings.TrimSpace(pane(i))
+		return !hintWords.MatchString(t) && !promptInput.MatchString(t) && !searchField.MatchString(t) && !counter.MatchString(t)
+	}
+	// Without a second block to compare, only a short block whose other
+	// lines are sentences in one colour is taken for one: a short menu
+	// that dims the choices the cursor is not on must stay a menu.
+	blocks := false
+	if row == top && bot > top && bot-top <= 3 {
+		blocks = true
+		wordy := false
+		for i := top + 1; blocks && i <= bot; i++ {
+			f := strings.Fields(pane(i))
+			wordy = wordy || len(f) >= 4
+			blocks = lineColour(cellLines[i]) != lineColour(cellLines[row]) && lineColour(cellLines[i]) == lineColour(cellLines[top+1]) &&
+				len(f) > 0 && !ordinal.MatchString(f[0])
+		}
+		// Another block next to it, named in the cursor row's colour,
+		// settles it either way.
+		for _, at := range []int{bot + 2, top - 2} {
+			if at == bot+2 && (shaped(bot+1) || !part(at)) || at == top-2 && (shaped(top-1) || !part(at)) {
+				continue
+			}
+			first := at
+			for at < top && part(first-1) {
+				first--
+			}
+			wordy = true
+			blocks = blocks && lineColour(cellLines[first]) == lineColour(cellLines[row]) && shaped(first+1) &&
+				lineColour(cellLines[first+1]) == lineColour(cellLines[top+1])
+		}
+		blocks = blocks && wordy
+	}
+	if blocks {
+		for part(top-2) && !shaped(top-1) {
+			for top -= 2; part(top - 1); top-- {
+			}
+		}
+		for part(bot+2) && !shaped(bot+1) {
+			for bot += 2; part(bot + 1); bot++ {
+			}
+		}
+	}
 	var m Menu
 	// The colour a list writes its key hints in is the colour it writes
 	// descriptions in: dimmer than the choices.
@@ -331,8 +381,14 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			hintColour = lineColour(cellLines[i])
 		}
 	}
-	for i := bot + 1; i < bot+14; i++ {
+	// To the bottom of the list's own box, however tall it is drawn.
+	for i := bot + 1; i < len(lines) && i < bot+80; i++ {
 		scan(i)
+		if i >= bot+14 || promptBottom.MatchString(strings.TrimSpace(string(lines[i]))) {
+			if m.Hint != "" || promptBottom.MatchString(strings.TrimSpace(string(lines[i]))) {
+				break
+			}
+		}
 	}
 	for i := top - 3; i < top; i++ {
 		scan(i)
@@ -357,6 +413,10 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 	// lastColour is the colour of the last choice's own line: a list that
 	// writes its choices in the hints' colour has no such descriptions.
 	lastColour := ""
+	// described is the count of choices when a description line was last
+	// attached: the choice that has one may have more.
+	described := 0
+	blockStart := true
 	for i := top; i <= bot; i++ {
 		p := pane(i)
 		indent := lead(p)
@@ -366,6 +426,18 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			t = strings.TrimSpace(string([]rune(t)[1:]))
 		}
 		t = scrollbar.ReplaceAllString(t, "")
+		if blocks {
+			if t == "" {
+				blockStart = true
+				continue
+			}
+			if !blockStart && !cur && len(m.Items) > 0 {
+				last := &m.Items[len(m.Items)-1]
+				last.Detail = strings.TrimSpace(last.Detail + " " + strings.Join(strings.Fields(t), " "))
+				continue
+			}
+			blockStart = false
+		}
 		if g := counter.FindStringSubmatch(t); g != nil {
 			m.Position, _ = strconv.Atoi(g[1])
 			m.Total, _ = strconv.Atoi(g[2])
@@ -393,10 +465,12 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		// description, however many lines it wraps to.
 		// (Prose only: a line in two columns, or a word or two, is a row
 		// with its value or a heading, whatever its colour.)
+		// (A second such line may be in columns: "5 hours ago  ·  13KB".)
 		if !cur && hintColour != "" && len(m.Items) > 0 && lineColour(cellLines[i]) == hintColour && lastColour != hintColour &&
-			len(strings.Fields(t)) >= 3 && len(gap.Split(t, 2)) == 1 {
+			len(strings.Fields(t)) >= 3 && (len(gap.Split(t, 2)) == 1 || described == len(m.Items)) {
 			last := &m.Items[len(m.Items)-1]
-			last.Detail = strings.TrimSpace(last.Detail + " " + t)
+			last.Detail = strings.TrimSpace(last.Detail + " " + strings.Join(strings.Fields(t), " "))
+			described = len(m.Items)
 			continue
 		}
 		here := indent
