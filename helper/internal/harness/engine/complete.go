@@ -25,10 +25,17 @@ func (e *Engine) completeCommands(ctx context.Context, s *sess, query string, li
 		rows = e.sourceRows(ctx, s, c)
 		all = append(all, sourceCompletions(rows)...)
 	}
+	fromProgram := false
 	if e.cfg.LiveCommands != nil {
 		if live := e.cfg.LiveCommands(s.id); len(live) > 0 {
 			all = mergeLive(c, all, rows, live)
+			fromProgram = true
 		}
+	}
+	// Without a list from the program itself, the one the harness draws
+	// when "/" is typed adds the commands no other source knows.
+	if !fromProgram {
+		all = append(all, e.terminalCommands(s)...)
 	}
 	q := strings.ToLower(strings.TrimPrefix(query, "/"))
 	var out []harness.Completion
