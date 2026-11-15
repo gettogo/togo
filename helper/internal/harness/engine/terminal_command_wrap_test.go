@@ -27,6 +27,15 @@ func TestACommandWiderThanTheTerminalIsFoundOnlyWhereItsBreaksAreCertain(t *test
 		{"v3 as typed", "╰─ /add-dir\n   /tmp/togo-fixture-00000000/shareddocs", "╰─ /add-dir /tmp/togo-fixture-00000000/shareddocs", true},
 		{"v6 as typed", "╰─ /add-dir  /tmp/togo-fixture-00000000/shared\n   docs", "╰─ /add-dir  /tmp/togo-fixture-00000000/shared docs", false},
 		{"one line", "╰─ /add-dir /tmp/a", "╰─ /add-dir /tmp/a", true},
+		// Found in review: wide characters. The first line is 27
+		// characters but 46 cells: it reaches the edge, and the space at
+		// its break cannot be known. Counting characters took it for the
+		// shorter line.
+		{"wide characters", "╰─ /add-dir /tmp/資料夾資料夾資料夾資料夾資料夾資料夾資\n   shared docs and more words here ok", "╰─ /add-dir /tmp/資料夾資料夾資料夾資料夾資料夾資料夾資 shared docs and more words here ok", false},
+		{"wide in a later line", "╰─ /add-dir\n   /tmp/資料夾/shared docs", "╰─ /add-dir /tmp/資料夾/shared docs", false},
+		{"an emoji", "╰─ /add-dir\n   /tmp/🙂/shared docs here", "╰─ /add-dir /tmp/🙂/shared docs here", false},
+		{"a combining mark", "╰─ /add-dir\n   /tmp/cafe\u0301/shared docs", "╰─ /add-dir /tmp/cafe\u0301/shared docs", false},
+		{"wide on one line", "╰─ /add-dir /tmp/資料夾", "╰─ /add-dir /tmp/資料夾", true},
 		{"only in a reply", "  /add-dir /tmp/a b\n╰─", "╰─ /add-dir /tmp/a b", false},
 		{"a blank line apart", "╰─ /add-dir\n\n   /tmp/a b c d e f g h", "╰─ /add-dir /tmp/a b c d e f g h", false},
 	} {
