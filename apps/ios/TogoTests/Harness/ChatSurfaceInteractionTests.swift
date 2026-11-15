@@ -18,9 +18,9 @@ import TogoKit
         var closeContinuation: CheckedContinuation<Void, Never>?
         let lease: SurfaceLease
 
-        init() throws {
+        init(features: [String] = []) throws {
             lease = try JSONDecoder().decode(SurfaceLease.self, from: Data("""
-                {"id":"s_abcdefghij","token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+                {"id":"s_abcdefghij","token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","generation":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","features":\(String(decoding: try JSONEncoder().encode(features), as: UTF8.self))}
                 """.utf8))
             next = try ChatSurfaceInteractionTests.scene()
         }
@@ -371,11 +371,11 @@ import TogoKit
         #expect(services.sent.isEmpty)
     }
 
-    private func makeSession(_ connection: Connection) -> SurfaceSession {
+    func makeSession(_ connection: Connection) -> SurfaceSession {
         SurfaceSession(id: connection.lease.id, makeConnection: { connection }, pollInterval: .milliseconds(5))
     }
 
-    private func makeStore(_ connection: Connection) async throws -> (HarnessSessionStore, FakeHarnessServices) {
+    func makeStore(_ connection: Connection) async throws -> (HarnessSessionStore, FakeHarnessServices) {
         var descriptor = ChatTests.claude
         descriptor.capabilities.append(HarnessCapability.surface)
         let services = FakeHarnessServices(descriptor: descriptor)
@@ -390,7 +390,7 @@ import TogoKit
         return (store, services)
     }
 
-    private var options: SurfaceOptions {
+    var options: SurfaceOptions {
         SurfaceOptions(kinds: SurfaceNodeView.kinds.sorted(), cols: 80, dark: true, reduceMotion: false)
     }
 
@@ -404,27 +404,28 @@ import TogoKit
         properties["text"] = text
         editor["p"] = properties
         let editorID = try #require(editor["id"] as? String)
-        var children: [[String: Any]] = [editor]
+        var children: [[String: Any]] = overlay == "omp-native-select-overlay" ? [] : [editor]
         if let overlay {
             let original = try fixture(overlay)
             if overlay == "omp-native-picker" {
                 children.append(["id": "layer", "k": "col", "c": [original]])
-            } else if overlay == "omp-native-hook-input" {
+            } else if ["omp-native-hook-input", "omp-native-select-overlay"].contains(overlay) {
                 children.append(["id": "dock", "k": "col", "c": [original]])
             } else { children.append(original) }
         }
+        let focus: Any = overlay == "omp-native-select-overlay" ? NSNull() : editorID
         let value: [String: Any] = [
             "program": "omp", "features": ["send", "edit"], "revision": revision,
             "options": ["kinds": SurfaceNodeView.kinds.sorted(), "cols": 80, "dark": true, "reduceMotion": false],
             "views": [["id": "s:1", "mode": "inline", "listen": true, "closed": false, "instance": 1,
-                       "document": ["root": ["id": "s:1", "k": "col", "c": children], "focus": editorID,
+                       "document": ["root": ["id": "s:1", "k": "col", "c": children], "focus": focus,
                                     "sequence": revision, "revision": revision, "suspended": false]]]
         ]
         return try SurfaceScene.decode(JSONSerialization.data(withJSONObject: value), kinds: SurfaceNodeView.kinds)
     }
 
-    private func wait(_ condition: @MainActor () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(3)
+    func wait(timeout: Duration = .seconds(3), _ condition: @MainActor () -> Bool) async throws {
+        let deadline = ContinuousClock.now + timeout
         while !condition() {
             guard ContinuousClock.now < deadline else { throw SurfaceProtocolError.invalidSnapshot }
             try await Task.sleep(for: .milliseconds(5))

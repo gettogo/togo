@@ -107,6 +107,7 @@ import TogoKit
         let root = try JSONDecoder().decode(SurfaceNode.self, from: fixture("omp-native-rename-view"))
         let node = NativeStructuredScreen.primary(root)
         #expect(node.properties["head"] == .string("Rename Session"))
+        #expect(SurfaceValues.chatInteraction(root, mode: .inline)?.properties["head"] == .string("Rename Session"))
         #expect(node.node(id: "n.scope") == nil)
         let screen = try NativeFormScreen.map(node, title: "Resume", workflow: "resume", features: ["submit"])
         #expect(screen.settings?.sections.flatMap(\.fields).map(\.id) == ["r"])

@@ -9,8 +9,12 @@ enum NativeStructuredScreen {
     static func primary(_ root: SurfaceNode) -> SurfaceNode {
         func dialog(_ node: SurfaceNode) -> SurfaceNode? {
             guard node.properties["hidden"] != .bool(true) else { return nil }
-            if node.kind == "card", node.properties["role"] == .string("omp.overlay"), NativeFormScreen.containsControls(node) { return node }
-            return node.children.lazy.compactMap(dialog).first
+            // Later/deeper dialogs cover the underlying selector. Keep the
+            // real modal instead of rediscovering its list underneath it.
+            if let child = node.children.reversed().lazy.compactMap(dialog).first { return child }
+            if node.kind == "card", node.properties["role"] == .string("omp.overlay"),
+               NativeFormScreen.containsControls(node) || NativeListScreen.list(in: node) != nil { return node }
+            return nil
         }
         if let dialog = dialog(root) { return dialog }
         func find(_ node: SurfaceNode) -> SurfaceNode? {

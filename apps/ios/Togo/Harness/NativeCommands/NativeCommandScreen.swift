@@ -33,6 +33,10 @@ struct NativeCommandScreen: View {
         } else if model.session.notice != nil || model.session.phase == .unavailable {
             StateView(kind: .error, title: PrimitiveCopy.couldNotLoad,
                 message: model.session.notice == .unconfirmed ? SurfaceCopy.unconfirmed : SurfaceCopy.unavailable)
+        } else if let failure = model.closeFailure {
+            StateView(kind: .error,
+                title: String(localized: "native.close.failed", defaultValue: "Couldn't close this screen"),
+                message: failure.message)
         } else if model.controlsReady, let block = model.blocks.last {
             let context = NativeCommandContext(model: model, block: block, store: store)
             if block.node.kind == "prefs" {

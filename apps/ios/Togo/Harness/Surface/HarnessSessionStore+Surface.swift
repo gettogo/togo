@@ -100,6 +100,7 @@ extension HarnessSessionStore {
         }
         guard let current = interaction, nativeInteractions.dismissing != current.id else { return }
         nativeInteractions.dismissing = current.id
+        current.beginClose()
         Task { [weak self] in
             defer { if self?.nativeInteractions.dismissing == current.id { self?.nativeInteractions.dismissing = nil } }
             do {
@@ -110,9 +111,10 @@ extension HarnessSessionStore {
                     try await NativeCommandContext(model: current, block: block, store: self).cancel()
                 }
             } catch {
-                if let self, self.interaction === current { self.note(SurfaceCopy.unconfirmed, code: "command") }
+                if self?.interaction === current { current.closeFailed() }
+                return
             }
-            if self?.interaction === current { self?.retireInteraction() }
+            if self?.interaction === current, current.blocks.isEmpty { self?.retireInteraction() }
         }
     }
 

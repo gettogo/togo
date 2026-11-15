@@ -12,6 +12,11 @@ import TogoKit
         var id: String { "\(view.id)/\(view.instance)/\(node.id)" }
     }
 
+    struct CloseFailure {
+        let block: String?
+        let message: String
+    }
+
     struct Failure: LocalizedError {
         let message: String
         var errorDescription: String? { message }
@@ -27,6 +32,7 @@ import TogoKit
     private(set) var presented = false
     private(set) var attachedExisting = false
     private(set) var retired = false
+    private(set) var closeFailure: CloseFailure?
     private var completed = false
     let finished: @MainActor () -> Void
 
@@ -116,6 +122,7 @@ import TogoKit
 
     func changed() {
         guard !retired else { return }
+        if closeFailure?.block != blocks.last?.id { closeFailure = nil }
         if !blocks.isEmpty { presented = true }
         if submitted || attachedExisting, presented, blocks.isEmpty, session.pending == nil, session.phase == .active { finish() }
     }
@@ -126,7 +133,13 @@ import TogoKit
         try await wait(until: .now + .seconds(5)) { self.session.pending == nil }
     }
 
-    func retire() { retired = true }
+    func beginClose() { closeFailure = nil }
+    func closeFailed() {
+        closeFailure = CloseFailure(block: blocks.last?.id,
+            message: String(localized: "native.close.terminal", defaultValue: "Continue in Terminal to close it."))
+    }
+
+    func retire() { retired = true; closeFailure = nil }
     func stop() async { await session.stop() }
 
     private func finish() {

@@ -21,12 +21,19 @@ enum SurfaceValues {
 
     private static func form(_ node: SurfaceNode) -> SurfaceNode? {
         guard node.properties["hidden"] != .bool(true) else { return nil }
-        let role = string(node.properties["role"]) ?? ""
-        if role == "omp.editor.ask" || (role.hasPrefix("omp.overlay.") && NativeFormScreen.containsControls(node)) { return node }
-        for child in node.children {
+        for child in node.children.reversed() {
             if let found = form(child) { return found }
         }
-        return nil
+        return node.properties["role"] == .string("omp.editor.ask") || isDialog(node) ? node : nil
+    }
+
+    static func isDialog(_ node: SurfaceNode) -> Bool {
+        guard node.properties["hidden"] != .bool(true) else { return false }
+        if node.kind == "overlay" { return true }
+        let role = string(node.properties["role"]) ?? ""
+        if role == "omp.overlay", ["card", "col"].contains(node.kind) { return true }
+        return role.hasPrefix("omp.overlay.") && !role.hasSuffix(".hints") &&
+            (NativeFormScreen.containsControls(node) || NativeListScreen.list(in: node) != nil || heading(node) != nil)
     }
 
     /// A declared dialog header supplies its title; preview/field titles do not.

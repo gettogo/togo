@@ -27,10 +27,12 @@ import TogoKit
             }
             return try screen()
         }
-        context.preview = { id in
-            let node = try current()
-            if node.properties["selected"] != .string(id) {
-                try await event(node: node.id, kind: "select", fields: ["item": .string(id)])
+        if NativeListScreen.list(in: block.node) == nil {
+            context.preview = { id in
+                let node = try current()
+                if node.properties["selected"] != .string(id) {
+                    try await event(node: node.id, kind: "select", fields: ["item": .string(id)])
+                }
             }
         }
         context.readScreen = { try? screen() }
@@ -44,6 +46,7 @@ import TogoKit
 
     func screen() throws -> HarnessScreen {
         let node = try current()
+        if NativeListScreen.list(in: node) != nil { return try NativeListScreen.map(node, title: model.title) }
         if NativeFormScreen.containsControls(node), node.kind != "prefs" {
             return try NativeFormScreen.map(node, title: model.title, workflow: model.workflow, features: model.session.companionFeatures)
         }
@@ -74,6 +77,15 @@ import TogoKit
             }
         }
         switch action {
+        case NativeListScreen.choose:
+            guard let target, let list = NativeListScreen.list(in: node),
+                  let item = list.children.first(where: { $0.id == target && $0.kind == "item" }),
+                  item.properties["hidden"] != .bool(true), !SurfaceValues.disabled(item.properties["disabled"]) else {
+                throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.inputChanged)
+            }
+            // This selects and confirms in the original selector. Never send
+            // a preview, preselection, or a second activation.
+            try await event(node: list.id, kind: "select", fields: ["item": .string(target)])
         case "native.strip":
             let strip = SurfaceValues.object(node.properties["strip"])
             guard let value = target ?? SurfaceValues.string(args["value"]),
@@ -125,30 +137,6 @@ import TogoKit
             } else { throw NativeStructuredScreen.Unsupported.invalid }
         }
         return .init(result: .applied, screen: try? screen())
-    }
-
-    func cancel() async throws {
-        let node = try current()
-        if node.kind == "picker", let end = SurfaceValues.array(node.properties["actions"]).map(SurfaceValues.object)
-            .first(where: { $0["end"] == .bool(true) }), let id = SurfaceValues.string(end["id"]) {
-            try await event(node: node.id, kind: "action", fields: ["act": .string(id)])
-        } else if node.kind == "prefs" {
-            try await event(node: node.id, kind: "action", fields: ["act": .string("close")])
-        } else if model.workflow == "resume", let picker = model.blocks.first(where: { $0.node.kind == "picker" }) {
-            // OMP's rename field lives in another view; its owner remains the
-            // original session picker, whose cancel dismisses the field.
-            let owner = NativeCommandContext(model: model, block: picker, store: store)
-            try await owner.event(node: picker.node.id, kind: "action", fields: ["act": .string("cancel")])
-        } else {
-            func closeButton(_ node: SurfaceNode) -> SurfaceNode? {
-                if node.kind == "button", let action = SurfaceValues.string(SurfaceValues.object(node.properties["actions"])["click"]),
-                   ["close", "cancel"].contains(action) { return node }
-                return node.children.lazy.compactMap(closeButton).first
-            }
-            if let button = closeButton(node), let action = SurfaceValues.object(button.properties["actions"])["click"] {
-                try await event(node: button.id, kind: "action", fields: ["act": action])
-            }
-        }
     }
 
     func page(_ id: String) async throws {
