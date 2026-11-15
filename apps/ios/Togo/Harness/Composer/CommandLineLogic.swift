@@ -59,8 +59,9 @@ enum CommandLineLogic {
         }
         let ranked: [(Int, HarnessCompletion)] = items.compactMap { item in
             let title = bare(item.title), insert = bare(item.insert)
-            if title.hasPrefix(q) || insert.hasPrefix(q) { return (0, item) }
-            if title.contains(q) || insert.contains(q) { return (1, item) }
+            let aliases = (item.native?.aliases ?? []).map(bare)
+            if title.hasPrefix(q) || insert.hasPrefix(q) || aliases.contains(where: { $0.hasPrefix(q) }) { return (0, item) }
+            if title.contains(q) || insert.contains(q) || aliases.contains(where: { $0.contains(q) }) { return (1, item) }
             if item.detail?.lowercased().contains(q) == true { return (2, item) }
             return nil
         }
@@ -102,7 +103,11 @@ enum CommandLineLogic {
     static func typed(_ text: String, commands: [HarnessCompletion]) -> Typed {
         guard let word = commandWord(text) else { return .text }
         let match = commands.first { command in
-            CommandKind.line(command).lowercased() == word.lowercased() || command.title.lowercased() == word.lowercased()
+            let names = [CommandKind.line(command), command.title] + (command.native?.aliases ?? [])
+            return names.contains { name in
+                let normalized = name.hasPrefix("/") ? name : "/" + name
+                return normalized.lowercased() == word.lowercased()
+            }
         }
         guard let match else { return .unknown(word) }
         let rest = text.trimmingCharacters(in: .whitespacesAndNewlines).dropFirst(word.count)

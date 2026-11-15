@@ -77,7 +77,7 @@ struct CommandPaletteView: View {
         let all = CommandLineLogic.filter(model.palette, query: bare).filter { !folded.contains(CommandKind.line($0)) }
         let session = rows.filter { row in
             bare.isEmpty || row.title.localizedCaseInsensitiveContains(bare)
-                || (row.command.map { CommandKind.line($0).localizedCaseInsensitiveContains(bare) } ?? false)
+                || (row.command.map { !CommandLineLogic.filter([$0], query: bare).isEmpty } ?? false)
         }
         let favourites = model.memory.favourites(model.scope)
         let recents = model.memory.recentCommands(model.scope)

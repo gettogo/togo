@@ -33,6 +33,10 @@ struct DetailCardPrimitive: View {
                     .textSelection(.enabled)
             }
             DetailBody(content: detail.body)
+            ForEach(Array((detail.sections ?? []).enumerated()), id: \.offset) { _, section in
+                if let title = section.title { Text(verbatim: title).font(.headline) }
+                DetailBody(content: section.body)
+            }
             if !detail.actions.isEmpty {
                 PrimitiveActionRow(refs: DetailCardLogic.ordered(detail.actions), large: true, actions: actions, context: context)
                     // motion: state change — actions a refresh brings arrive by opacity in place.
@@ -66,7 +70,7 @@ enum DetailCardLogic {
     }
 }
 
-private struct DetailBody: View {
+struct DetailBody: View {
     let content: HarnessScreen.Detail.Body
 
     var body: some View {

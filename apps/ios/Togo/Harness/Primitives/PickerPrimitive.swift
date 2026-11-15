@@ -50,6 +50,7 @@ struct PickerPrimitive: View {
     }
 
     var itemActions: [HarnessActionRef] { picker.itemActions ?? [] }
+    var contextActions: [HarnessActionRef] { picker.contextActions ?? [] }
     var splits: Bool { layout == .split && chrome != nil && PickerModel.groupNames(picker).count > 1 }
 
     var body: some View {
@@ -202,15 +203,18 @@ struct PickerPrimitive: View {
         .contextMenu { menu(for: item) }
         .swipeActions(edge: .trailing) {
             // The item's roles: the tap selects, so these sit one swipe away.
-            ForEach(itemActions.prefix(3)) { ref in
-                Button(ref.label) { assign(ref, item) }
-                    .tint(Color.togoMute)
+            ForEach(Array((contextActions + itemActions).prefix(3))) { ref in
+                Button(role: ref.role == .destructive ? .destructive : nil) { assign(ref, item) } label: { Text(verbatim: ref.label) }
+                    .tint(ref.role == .destructive ? PrimitiveTint.fail : Color.togoMute)
             }
         }
         .accessibilityActions {
             if item.id != picker.selected { Button(PrimitiveCopy.select) { select(item) } }
             ForEach(itemActions) { ref in
                 Button("\(PrimitiveCopy.useAs) \(ref.label)") { assign(ref, item) }
+            }
+            ForEach(contextActions) { ref in
+                Button(ref.label) { assign(ref, item) }
             }
             Button(PrimitiveCopy.details) { focused = item }
         }
@@ -226,6 +230,15 @@ struct PickerPrimitive: View {
                     Button(ref.label, systemImage: PickerModel.isTrue(item.facets?[ref.id]) ? "checkmark" : "circle") {
                         assign(ref, item)
                     }
+                }
+            }
+        }
+        if !contextActions.isEmpty {
+            Section {
+                ForEach(contextActions) { ref in
+                    Button(role: ref.role == .destructive ? .destructive : nil) {
+                        assign(ref, item)
+                    } label: { Text(verbatim: ref.label) }
                 }
             }
         }

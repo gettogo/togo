@@ -64,6 +64,22 @@ import TogoKit
         }
     }
 
+    @Test func aliasesResolveThroughTheSameNativeScreenAndSearchList() async {
+        let session = Session()
+        var command = resume
+        command.native = NativeCommandMetadata(opens: "picker", args: "optional", aliases: ["continue", "/sessions"])
+        session.commands = [command]
+        let composer = make(session)
+        composer.draft = "/continue"
+        await composer.submit()
+        #expect(composer.presentedScreen == "resume")
+        #expect(session.sends.isEmpty)
+        #expect(CommandLineLogic.filter([command], query: "cont") == [command])
+        #expect(CommandLineLogic.filter([command], query: "sessions") == [command])
+        #expect(CommandLineLogic.typed("/sessions more words", commands: [command]) == .command(command, args: "more words"))
+        #expect(CommandLineLogic.typed("/continue/path", commands: [command]) == .text)
+    }
+
     private func make(_ session: Session) -> CommandLineModel {
         session.commands = session.commands.isEmpty ? all : session.commands
         let defaults = UserDefaults(suiteName: "typed-tests-\(UUID().uuidString)")!

@@ -221,6 +221,7 @@ struct PickerModel: Equatable {
     enum Tap: Equatable {
         case assign(action: String)
         case select
+        case details
         case none
     }
 
@@ -229,6 +230,7 @@ struct PickerModel: Equatable {
     func tap(_ item: Item, in picker: HarnessScreen.Picker) -> Tap {
         if item.disabled == true { return .none }
         if let picking { return .assign(action: picking) }
+        if picker.selectionBehavior == "preview" { return .details }
         return item.id == picker.selected ? .none : .select
     }
 

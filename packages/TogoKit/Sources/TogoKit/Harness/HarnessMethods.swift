@@ -368,10 +368,11 @@ public struct HarnessCompletion: Codable, Hashable, Sendable {
     /// A native home opened instead of typing: `status`, `changes` or a screen id.
     public var opens: String?
     public var choices: [Choice]?
+    public var native: NativeCommandMetadata?
 
     public init(insert: String, title: String, detail: String? = nil, hint: String? = nil, screen: String? = nil,
                 kind: Kind? = nil, role: HarnessActionRef.Role? = nil, action: String? = nil, opens: String? = nil,
-                choices: [Choice]? = nil) {
+                choices: [Choice]? = nil, native: NativeCommandMetadata? = nil) {
         self.insert = insert
         self.title = title
         self.detail = detail
@@ -382,6 +383,7 @@ public struct HarnessCompletion: Codable, Hashable, Sendable {
         self.action = action
         self.opens = opens
         self.choices = choices
+        self.native = native
     }
 }
 

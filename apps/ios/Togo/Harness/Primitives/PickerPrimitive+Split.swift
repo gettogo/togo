@@ -19,6 +19,8 @@ extension PickerPrimitive {
             if let ref = itemActions.first(where: { $0.id == id }) { assign(ref, item) }
         case .select:
             select(item)
+        case .details:
+            focused = item
         case .none:
             break
         }
