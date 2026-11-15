@@ -58,7 +58,7 @@ func (e *Engine) openPrompt(ctx context.Context, s *sess, title string, p termme
 func (e *Engine) promptScreen(m *terminalMenu, p termmenu.Prompt) *harness.Screen {
 	return &harness.Screen{
 		ID: "terminal.prompt/" + m.token, Primitive: harness.PrimSettings, Title: p.Title, FetchedAt: e.cfg.Now(),
-		Interaction: m.token,
+		Interaction: m.token, Actions: []harness.ActionRef{},
 		Settings: &harness.Settings{Sections: []harness.SettingsSection{{Fields: []harness.Field{{
 			ID: promptField, Label: p.Title, Kind: harness.FieldSecret, Value: json.RawMessage("null"),
 			Action: promptAction, ActionLabel: "Continue", Presentation: "prompt",

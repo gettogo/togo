@@ -37,6 +37,10 @@ func TestAPromptTakesOneLineThroughItsOwnField(t *testing.T) {
 		field.Presentation != "prompt" || !strings.HasPrefix(res.Screen.ID, "terminal.prompt/") || res.Screen.Interaction == "" {
 		t.Fatalf("prompt screen = %+v", res.Screen)
 	}
+	// The app requires the screen's actions to be a list, never null.
+	if wire, _ := json.Marshal(res.Screen); !strings.Contains(string(wire), `"actions":[]`) {
+		t.Errorf("prompt screen on the wire: %s", wire)
+	}
 	token, _ := json.Marshal(res.Screen.Interaction)
 	typed := func() (texts, keys int) {
 		pane.mu.Lock()
