@@ -147,6 +147,18 @@ func TestOmpSettingsRowsCarryTheirValues(t *testing.T) {
 	}
 }
 
+// A short label under the cursor is still the cursor row: the highlight is
+// the bar, not the letters. (OpenCode's variant list with the cursor on "low".)
+func TestAShortHighlightedRowIsTheCursor(t *testing.T) {
+	m, ok := read(t, "oc-variant-low")
+	if !ok || m.Title != "Select variant" || len(m.Items) != 4 {
+		t.Fatalf("variant list = %v %q %+v", ok, m.Title, m.Items)
+	}
+	if !m.Items[0].Current || m.Items[0].Cursor || !m.Items[1].Cursor || m.Items[1].Label != "low" || m.Items[2].Label != "high" {
+		t.Errorf("rows = %+v", m.Items)
+	}
+}
+
 // A screen that is not a list is not read as one.
 func TestOtherScreensAreNotLists(t *testing.T) {
 	if m, ok := read(t, "omp-tree"); ok {
