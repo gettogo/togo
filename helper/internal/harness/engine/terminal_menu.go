@@ -47,6 +47,8 @@ type terminalMenu struct {
 	token   string
 	title   string
 	panel   string // the list's own title, to tell it is still this list
+	query   string // the text last seen or typed in the list's search field
+	search  bool
 	rows    []termmenu.Item
 	keys    []menuKey
 	expires time.Time
@@ -234,7 +236,7 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 
 func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) *harness.Screen {
 	interaction, _ := json.Marshal(m.token)
-	p := &harness.Picker{OnSelect: terminalPrefix + "select", Searchable: menu.Search, Query: menu.Query,
+	p := &harness.Picker{Items: []harness.PickerItem{}, OnSelect: terminalPrefix + "select", Searchable: menu.Search, Query: menu.Query,
 		OnSelectArgs: map[string]json.RawMessage{"interaction": interaction}}
 	for i, it := range m.rows {
 		id := m.token + "/" + strconv.Itoa(i)
@@ -403,7 +405,7 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 	if menu.Total == 0 && !rowsEndOnScreen(menu) {
 		complete = false
 	}
-	m := &terminalMenu{token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
+	m := &terminalMenu{token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint), search: menu.Search, query: menu.Query}
 	if previous != nil && previous.title != "" {
 		m.title = previous.title
 	}
@@ -517,6 +519,7 @@ func rowsEndOnScreen(m termmenu.Menu) bool {
 // that has closed, or a screen that is no longer this list, is reported
 // with the reason, and the hold ends without a key.
 func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName string, query map[string]string) (harness.Screen, error) {
+	queryArg := query
 	token := query["interaction"]
 	if token == "" {
 		token = fromName
@@ -526,6 +529,16 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}
 	}
 	menu, ok := e.readMenu(ctx, s)
+	if !ok && m.search && m.panel != "" {
+		// A search with no matching rows leaves a list with no cursor to
+		// find. If its title is still on the screen it is this list, empty,
+		// with the text last typed into its field.
+		if plain, err := e.cfg.Screen(ctx, s.id); err == nil {
+			if text, found := fieldUnderTitle(plain, m.panel); found {
+				menu, ok = termmenu.Menu{Title: m.panel, Search: true, Query: text}, true
+			}
+		}
+	}
 	if !ok {
 		e.setMenu(s.id, nil)
 		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}
@@ -541,6 +554,13 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	if query, asked := query["query"]; asked && menu.Search && query != menu.Query {
 		if len(query) > 200 || strings.ContainsAny(query, "\n\r\x1b") {
 			return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: "That search cannot be typed."}
+		}
+		// "before" is the text the phone last saw in the field. If the
+		// field holds something else now, someone searched at the desk in
+		// between: nothing is typed over it, and the hold is kept so the
+		// phone can read the list as it is.
+		if before, given := queryArg["before"]; given && before != menu.Query {
+			return harness.Screen{}, &harness.FallbackError{Reason: "query", Detail: "The search changed at the desk. Nothing was typed."}
 		}
 		for range []rune(menu.Query) {
 			if err := e.menuKeys(ctx, s, "BSpace"); err != nil {
@@ -566,11 +586,17 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 			after = termmenu.Menu{Title: m.panel, Search: true, Query: query}
 		}
 		e.menuMu.Lock()
-		m.rows = after.Items
+		m.rows, m.query, m.search = after.Items, query, true
 		e.menuMu.Unlock()
 		sc := e.menuScreen(m, after, after.Total > 0 || rowsEndOnScreen(after))
 		return *sc, nil
 	}
+	e.menuMu.Lock()
+	m.query, m.search = menu.Query, m.search || menu.Search
+	if len(menu.Items) == 0 {
+		m.rows = nil
+	}
+	e.menuMu.Unlock()
 	// Rows on screen refresh what is known of them (the row in use may
 	// have changed); rows scrolled out of view keep what was read.
 	for _, it := range menu.Items {
@@ -596,4 +622,41 @@ func (e *Engine) menuKeys(ctx context.Context, s *sess, keys ...string) error {
 		return errMenuAbandoned
 	}
 	return e.cfg.Typist.Keys(ctx, s.id, keys...)
+}
+
+// fieldUnderTitle reads the search field of a list that has no rows: the
+// first line with text under the list's title, within the title line's
+// columns. Empty, such a field reads "Search".
+func fieldUnderTitle(screen, title string) (string, bool) {
+	lines := strings.Split(screen, "\n")
+	for i, line := range lines {
+		rs := []rune(line)
+		at := strings.Index(line, title)
+		if at < 0 {
+			continue
+		}
+		left := len([]rune(line[:at]))
+		right := len([]rune(strings.TrimRight(line, " ")))
+		for _, next := range lines[i+1:] {
+			nr := []rune(next)
+			if left >= len(nr) {
+				continue
+			}
+			end := right
+			if end > len(nr) {
+				end = len(nr)
+			}
+			text := strings.TrimSpace(strings.TrimRight(string(nr[left:end]), "█▌▏│ "))
+			if text == "" {
+				continue
+			}
+			if strings.EqualFold(text, "search") {
+				return "", true
+			}
+			return text, true
+		}
+		_ = rs
+		return "", true
+	}
+	return "", false
 }
