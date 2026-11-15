@@ -88,6 +88,7 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 	if err := s.active(r); err != nil {
 		return DispatchResult{}, err
 	}
+	var rewritten json.RawMessage
 	err = r.cache.Inspect(func(scene *Scene) error {
 		v := scene.View(p.Surface)
 		if v == nil || v.Closed || !v.Listen || v.Instance != p.Instance || v.Document.Suspended {
@@ -127,10 +128,26 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 		if ev == "action" && str("act") == "togo.query" {
 			return validatePickerQuery(fields, e.node)
 		}
+		if ev == "action" && str("act") == "togo.escape" {
+			if !slices.Contains(r.lease.Features, "escape") {
+				return ErrMalformed
+			}
+			within, err := escapeTarget(e.node)
+			if err != nil {
+				return err
+			}
+			// The program is told which nodes make up the screen to close,
+			// from this helper's own picture of it, never from the app.
+			fields["within"], _ = json.Marshal(within)
+			rewritten, _ = json.Marshal(fields)
+		}
 		return nil
 	})
 	if err != nil {
 		return DispatchResult{}, err
+	}
+	if rewritten != nil {
+		p.Event = rewritten
 	}
 	wire, err := Encode('e', p.Event)
 	if err != nil {
@@ -198,4 +215,47 @@ func validateEdit(fields map[string]json.RawMessage, n *Node) error {
 		return ErrMalformed
 	}
 	return nil
+}
+
+// maxEscapeNodes bounds the nodes named to the program for one Escape.
+const maxEscapeNodes = 512
+
+// escapeTarget checks that a node is a screen the program gave no way to
+// close, and lists its nodes. Such a screen holds no composer (a field the
+// program sends from), no action marked as its end, and no Cancel button:
+// one that has any of those is closed by that, and Escape is not for it.
+func escapeTarget(n *Node) ([]string, error) {
+	var ids []string
+	var walk func(*Node) error
+	walk = func(n *Node) error {
+		if len(ids) >= maxEscapeNodes {
+			return ErrLimit
+		}
+		ids = append(ids, n.ID)
+		if n.Props["sendable"] == true {
+			return ErrMalformed
+		}
+		switch actions := n.Props["actions"].(type) {
+		case []any:
+			for _, a := range actions {
+				if m, ok := a.(map[string]any); ok && m["end"] == true {
+					return ErrMalformed
+				}
+			}
+		case map[string]any:
+			if actions["click"] == "cancel" {
+				return ErrMalformed
+			}
+		}
+		for _, child := range n.Children {
+			if err := walk(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(n); err != nil {
+		return nil, err
+	}
+	return ids, nil
 }

@@ -185,8 +185,26 @@ export function submitFocusedField(tui, event) {
   return true
 }
 
+// Some of the program's screens (its debug tools, its plain selectors) say
+// no way to close them: on its own screen only Escape does. escapeOverlay
+// gives that Escape to the component that has the focus, in the process, so
+// it never passes through the terminal's input and is never taken for
+// someone at the desk. It acts only if that component is part of the screen
+// the phone asked to close: `within` names that screen's nodes.
+export function escapeOverlay(tui, event) {
+  if (!Array.isArray(event?.within) || event.within.length === 0 || event.within.length > 512 ||
+      !event.within.every(id => typeof id === 'string')) return false
+  const focused = tui?.getFocused?.()
+  if (!focused || typeof focused !== 'object' || typeof focused.handleInput !== 'function') return false
+  const tag = Object.getOwnPropertySymbols(focused).find(key => key.description === 'native.id')
+  if (!tag || !event.within.includes(focused[tag])) return false
+  focused.handleInput('\x1b')
+  tui.requestRender?.(true)
+  return true
+}
+
 // What this companion adds to the protocol's own events.
-const FEATURES = ['submit', 'secret', 'commands']
+const FEATURES = ['submit', 'secret', 'commands', 'escape']
 const MAX_ROOTS = 32
 const MAX_ROOT_BYTES = 1024
 const MAX_ROOTS_BYTES = 8 * 1024
@@ -425,6 +443,10 @@ export default function (pi) {
           // is no longer what the phone saw) changes nothing. It is said
           // so, and the screen stays as it is.
           if (!applyPickerQuery(tui, request.event)) refused = request.seq
+        } else if (request.event.ev === 'action' && request.event.act === 'togo.escape') {
+          // Not that screen any more, or nothing of it has the focus:
+          // nothing is pressed, and it is said so.
+          if (!escapeOverlay(tui, request.event)) refused = request.seq
         } else if (request.event.ev === 'action' && request.event.act === 'togo.submit') {
           // A refusal changes nothing; the phone sees no result and says so.
           submitFocusedField(tui, request.event)

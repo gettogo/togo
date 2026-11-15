@@ -5,7 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField, describeSecret, workspaceRoots, inputShape } from '../omp.mjs'
+import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField, describeSecret, workspaceRoots, inputShape, escapeOverlay } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -415,4 +415,22 @@ test('terminal input is named by its kind, never by what it held', () => {
     ['\x1bx', 'escape_other'], [undefined, 'other'],
   ]) assert.equal(inputShape(data), shape)
   assert.ok(!inputShape('secret words').includes('secret'))
+})
+
+test('an Escape goes only to the focused part of the screen that was asked to close', () => {
+  const tag = Symbol('native.id')
+  const keys = []
+  const overlay = { [tag]: 'o', handleInput(data) { keys.push(data) } }
+  let rendered = 0
+  const tui = { getFocused: () => overlay, requestRender() { rendered++ } }
+  assert.equal(escapeOverlay(tui, { within: ['o', 'p', 'q'] }), true)
+  assert.deepEqual(keys, ['\x1b'])
+  assert.equal(rendered, 1)
+  // Another screen has the focus now, the list is missing or malformed, or
+  // nothing takes keys: nothing is pressed.
+  for (const [focused, event] of [
+    [overlay, { within: ['x', 'y'] }], [overlay, {}], [overlay, { within: [] }], [overlay, { within: ['o', 7] }],
+    [{ [tag]: 'o' }, { within: ['o'] }], [{ handleInput() { keys.push('untagged') } }, { within: ['o'] }], [undefined, { within: ['o'] }],
+  ]) assert.equal(escapeOverlay({ getFocused: () => focused, requestRender() {} }, event), false)
+  assert.deepEqual(keys, ['\x1b'])
 })
