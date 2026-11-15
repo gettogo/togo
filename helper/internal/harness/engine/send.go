@@ -320,7 +320,13 @@ func (e *Engine) Complete(ctx context.Context, req harness.CompleteRequest) (har
 	if items == nil {
 		items = []harness.Completion{}
 	}
-	return harness.CompleteResult{Items: items}, nil
+	res := harness.CompleteResult{Items: items}
+	if req.Kind != harness.CompleteFile {
+		s.mu.Lock()
+		res.Pending = s.catalogPending
+		s.mu.Unlock()
+	}
+	return res, nil
 }
 
 // maxWalk bounds how many entries a file completion visits.

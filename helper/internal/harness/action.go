@@ -210,6 +210,9 @@ type CommandChoice struct {
 // CompleteResult is harness.complete's result.
 type CompleteResult struct {
 	Items []Completion `json:"items"`
+	// Pending is true while more commands are being read from the harness
+	// itself: ask again shortly for the rest.
+	Pending bool `json:"pending,omitempty"`
 }
 
 // OpenResult is harness.open's result: the items after the cursor and the
@@ -256,6 +259,9 @@ const (
 	NoteItems   = "items"
 	NoteMission = "mission"
 	NoteReset   = "reset"
+	// NoteCommands: the session's command list has more in it now (the
+	// harness's own list was read). It carries no payload: ask again.
+	NoteCommands = "commands"
 )
 
 // NotificationMethod is the JSON-RPC method of harness notifications.

@@ -35,7 +35,11 @@ func (e *Engine) completeCommands(ctx context.Context, s *sess, query string, li
 	// Without a list from the program itself, the one the harness draws
 	// when "/" is typed adds the commands no other source knows.
 	if !fromProgram {
-		all = append(all, e.terminalCommands(s)...)
+		more, pending := e.terminalCommands(s)
+		all = append(all, more...)
+		s.mu.Lock()
+		s.catalogPending = pending
+		s.mu.Unlock()
 	}
 	q := strings.ToLower(strings.TrimPrefix(query, "/"))
 	var out []harness.Completion

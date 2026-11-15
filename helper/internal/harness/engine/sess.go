@@ -40,6 +40,9 @@ type sess struct {
 	// (see conversation.go).
 	conv    string
 	convGen uint64
+	// catalogPending: the harness's own command list is still being read;
+	// the last command completion said so.
+	catalogPending bool
 	// hydrated is the conversation whose earlier messages were asked for,
 	// and held are a feed's live records kept back while they load (see
 	// history.go).

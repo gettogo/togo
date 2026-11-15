@@ -143,6 +143,9 @@ type Engine struct {
 	// closing it. It is still on the harness's screen and has no owner:
 	// nothing is typed until the screen no longer shows it.
 	leftOpen map[string]string
+	// catalogs holds, per running session, the commands read from the
+	// harness's own "/" list.
+	catalogs map[*sess]*terminalCatalog
 }
 
 var _ harness.Engine = (*Engine)(nil)

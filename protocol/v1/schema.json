@@ -3592,6 +3592,7 @@
     "HarnessCompleteResult": {
       "type": "object",
       "properties": {
+        "pending": { "description": "True while more commands are being read from the harness itself: ask again shortly for the rest.", "type": "boolean" },
         "items": {
           "type": "array",
           "items": {
@@ -3663,7 +3664,7 @@
       "type": "object",
       "properties": {
         "sessionId": { "$ref": "#/$defs/ManagedSessionId" },
-        "kind": { "enum": ["items", "mission", "reset"] },
+        "kind": { "enum": ["items", "mission", "reset", "commands"] },
         "ts": { "$ref": "#/$defs/Timestamp" },
         "epoch": { "type": "string" },
         "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } },
