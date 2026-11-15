@@ -296,3 +296,32 @@ func TestNumberedChoicesAreNamedByTheirText(t *testing.T) {
 		}
 	}
 }
+
+// A panel that asks for one line of text is read as a prompt: its title,
+// its key hints and whether its field is empty. A list is not a prompt.
+func TestATextPromptIsRead(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "omp-prompt.ansi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, ok := ReadPrompt(string(raw))
+	if !ok || p.Title != "Neutral entry check" || !p.Empty || !strings.Contains(p.Hint, "submit") {
+		t.Fatalf("prompt = %+v %v", p, ok)
+	}
+	if _, isList := Read(string(raw)); isList {
+		t.Error("the prompt was also read as a list")
+	}
+	typed := strings.Replace(string(raw), "> \x1b[7m \x1b[0m ", "> x\x1b[7m \x1b[0m", 1)
+	if p, ok := ReadPrompt(typed); !ok || p.Empty {
+		t.Errorf("a field someone typed into reads as empty: %+v %v", p, ok)
+	}
+	for _, name := range []string{"oc-models", "omp-login", "omp-settings", "kimi-permission", "omp-switch"} {
+		list, err := os.ReadFile(filepath.Join("testdata", name+".ansi"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p, ok := ReadPrompt(string(list)); ok {
+			t.Errorf("%s was read as a prompt: %+v", name, p)
+		}
+	}
+}

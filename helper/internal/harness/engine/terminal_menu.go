@@ -59,9 +59,11 @@ type terminalMenu struct {
 	// ended: the end of the list has been seen (the cursor stopped, or
 	// came round to where it began); first is the row the cursor was on
 	// when the list was first read.
-	ended   bool
-	first   string
-	search  bool
+	ended  bool
+	first  string
+	search bool
+	// prompt: this is a text prompt, not a list; panel is its title.
+	prompt  bool
 	rows    []termmenu.Item
 	keys    []menuKey
 	expires time.Time
@@ -189,7 +191,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 	// A new command, choice or key replaces any watch for a late list. A
 	// look for an open list (attach) or a release does not: another phone
 	// looking must not end the watch of the one that ran the command.
-	if verb := req.Action; verb == "terminal.command" || verb == "terminal.select" || strings.HasPrefix(verb, "terminal.key") {
+	if verb := req.Action; verb == "terminal.command" || verb == "terminal.select" || verb == "terminal.input" || strings.HasPrefix(verb, "terminal.key") {
 		e.stopLateWatch(s.id)
 	}
 	if raw, ok := req.Args["requestId"]; ok {
@@ -206,7 +208,13 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 	}
 	// A row id is "<interaction>/<n>"; cancel and release name the
 	// interaction in their arguments or as the target.
-	token, rowText, _ := strings.Cut(strings.TrimPrefix(req.Target, menuScreenPrefix), "/")
+	// (A prompt's target is its field; its interaction comes in the
+	// arguments only.)
+	named := req.Target
+	if req.Action == terminalPrefix+"input" {
+		named = ""
+	}
+	token, rowText, _ := strings.Cut(strings.TrimPrefix(named, menuScreenPrefix), "/")
 	if raw, ok := req.Args["interaction"]; ok {
 		var named string
 		if json.Unmarshal(raw, &named) == nil && named != "" {
@@ -258,6 +266,12 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		e.menuMu.Unlock()
 		chooser := ok && menu.Title != "" && ((wasLeft && menu.Title == left) || menu.Hint != "" || menu.Search)
 		if !chooser {
+			// A text prompt left open is taken up the same way.
+			if p, is := e.readPrompt(ctx, s); is {
+				return e.openPrompt(ctx, s, p.Title, p), nil
+			}
+		}
+		if !chooser {
 			return harness.ActionResult{Result: harness.ResultFallback, Message: "No menu is open in the terminal."}, nil
 		}
 		rows, complete := e.wholeList(ctx, s, menu)
@@ -278,9 +292,45 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			}
 		}
 		return failed("That row is no longer in the list. Nothing was chosen.")
+	case "input":
+		m := e.menuOf(ctx, s.id, token)
+		if m == nil || !m.prompt {
+			return failed("This prompt has closed.")
+		}
+		if req.Target != promptField {
+			return failed("That is not this prompt's field.")
+		}
+		var value string
+		if err := json.Unmarshal(req.Args["value"], &value); err != nil {
+			return failed("No entry was given.")
+		}
+		return e.answerPrompt(ctx, s, m, value)
 	case "cancel":
 		m := e.menuOf(ctx, s.id, token)
 		if m == nil {
+			return harness.ActionResult{Result: harness.ResultApplied}, nil
+		}
+		if m.prompt {
+			// Escape goes only to the prompt this was: one still on the
+			// screen under the same title.
+			if p, is := e.readPrompt(ctx, s); is && p.Title == m.panel {
+				if err := e.menuKeys(ctx, s, "Escape"); err != nil {
+					return harness.ActionResult{}, err
+				}
+				closed := false
+				for deadline := time.Now().Add(e.scaled(2 * time.Second)); time.Now().Before(deadline); {
+					if after, still := e.readPrompt(ctx, s); !still || after.Title != m.panel {
+						closed = true
+						break
+					}
+					time.Sleep(e.scaled(80 * time.Millisecond))
+				}
+				if !closed {
+					e.setMenu(s.id, nil)
+					return failed("The prompt did not close. Open the terminal to close it.")
+				}
+			}
+			e.setMenu(s.id, nil)
 			return harness.ActionResult{Result: harness.ResultApplied}, nil
 		}
 		before, ok := e.readMenu(ctx, s)

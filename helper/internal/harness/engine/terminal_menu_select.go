@@ -125,6 +125,10 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 				menu, ok = late, true
 				break
 			}
+			// A prompt for one line of text is shown as its own screen.
+			if p, is := e.readPrompt(ctx, s); is {
+				return e.openPrompt(ctx, s, title, p), nil
+			}
 			if e.composerBack(ctx, s, mark) {
 				if backSince.IsZero() {
 					backSince = time.Now()

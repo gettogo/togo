@@ -106,6 +106,18 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	if m == nil || e.cfg.StyledScreen == nil {
 		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}
 	}
+	if m.prompt {
+		p, is := e.readPrompt(ctx, s)
+		if !is {
+			e.setMenu(s.id, nil)
+			return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This prompt has closed."}
+		}
+		if p.Title != m.panel {
+			e.setMenu(s.id, nil)
+			return harness.Screen{}, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+		}
+		return *e.promptScreen(m, p), nil
+	}
 	menu, ok := e.readMenu(ctx, s)
 	if !ok && m.search && m.panel != "" {
 		// A search with no matching rows leaves a list with no cursor to

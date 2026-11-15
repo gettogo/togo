@@ -3321,7 +3321,9 @@
         "placeholder": { "type": "string" },
         "readOnly": { "type": "boolean" },
         "action": { "type": "string" },
-        "actionConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" }
+        "actionConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
+        "actionLabel": { "description": "Names the button that commits the field.", "type": "string" },
+        "presentation": { "description": "prompt: the field is a question to answer now, not a stored setting.", "enum": ["prompt"] }
       },
       "required": ["id", "label", "kind", "value"],
       "additionalProperties": false,

@@ -172,6 +172,11 @@ type Field struct {
 	Action string `json:"action,omitempty"`
 	// ActionConfirm is Action's confirm line and effect, when it has one.
 	ActionConfirm *SelectConfirm `json:"actionConfirm,omitempty"`
+	// ActionLabel names the button that commits the field ("Continue").
+	ActionLabel string `json:"actionLabel,omitempty"`
+	// Presentation "prompt": the field is the whole screen's question, to
+	// be answered now, and not a stored setting.
+	Presentation string `json:"presentation,omitempty"`
 }
 
 // EffectRelaunch is a selection that restarts the agent.
