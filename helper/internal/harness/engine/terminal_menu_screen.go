@@ -94,6 +94,15 @@ func rowsEndOnScreen(m termmenu.Menu) bool {
 	return len(m.Items) < 6
 }
 
+// wholeOnScreen reports whether the rows on the screen are the whole list:
+// its counter says so, or it visibly ends there.
+func wholeOnScreen(m termmenu.Menu) bool {
+	if m.Total > 0 {
+		return len(m.Items) >= m.Total
+	}
+	return rowsEndOnScreen(m)
+}
+
 // terminalMenuScreen is the terminal.menu screen: the list as the harness
 // shows it now. Reading it keeps the phone's hold on the session. A list
 // that has closed, or a screen that is no longer this list, is reported
@@ -237,6 +246,7 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		// Another search is another list: what was known of the old one's
 		// end says nothing about this one.
 		m.ended, m.first = false, ""
+		m.whole = wholeOnScreen(after)
 		e.menuMu.Unlock()
 		sc := e.menuScreen(m, after, after.Total > 0 || rowsEndOnScreen(after))
 		return *sc, nil
@@ -256,6 +266,7 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 			m.ended, m.first = false, ""
 		}
 		m.scrolled, m.readQuery = false, menu.Query
+		m.whole = wholeOnScreen(menu)
 	}
 	e.menuMu.Unlock()
 	// Rows on screen refresh what is known of them (the row in use may
@@ -379,7 +390,7 @@ func (e *Engine) pageMenu(ctx context.Context, s *sess, m *terminalMenu) (*harne
 				m.rows = append(m.rows, it)
 			}
 		}
-		m.scrolled = true
+		m.scrolled, m.whole = true, false
 	}
 	add(menu)
 	window := len(menu.Items)

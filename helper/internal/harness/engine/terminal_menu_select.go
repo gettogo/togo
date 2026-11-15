@@ -216,6 +216,7 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 	if previous != nil && previous.title != "" {
 		m.title = previous.title
 	}
+	m.whole = complete && len(rows) == len(menu.Items)
 	e.setMenu(s.id, m)
 	return harness.ActionResult{Result: harness.ResultApplied, Screen: e.menuScreen(m, menu, complete)}, nil
 }
@@ -262,13 +263,16 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 			}
 			continue
 		}
-		// With the whole list on the screen every heading is on it too,
-		// and a row is what it reads as.
+		// With the whole list on the screen every heading is on it too:
+		// a row is what it reads as, and its place tells it from a twin.
+		// The same number of rows is not that: a list that scrolled shows
+		// as many, without the heading that left.
+		whole := m.wholeOn(now)
 		onIt := sameRow(now.Items[cur], want)
-		if len(now.Items) != len(m.rows) {
+		if !whole {
 			onIt = knownRow(m.rows, now.Items[cur]) == firstSame(m.rows, want)
 		}
-		if onIt && rightOccurrence(m.rows, now.Items, cur, target) {
+		if onIt && rightOccurrence(m.rows, whole, cur, target) {
 			if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 				return harness.ActionResult{}, err
 			}
@@ -276,7 +280,7 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 		}
 		// Where the cursor is in the whole list tells which way to go.
 		at := -1
-		if len(now.Items) == len(m.rows) {
+		if whole {
 			at = cur
 		} else {
 			if twins > 1 {
@@ -363,7 +367,7 @@ var errMenuMoved = &harness.FallbackError{Reason: "moved", Detail: "The session 
 // rightOccurrence reports whether the cursor is on the row that was meant
 // and not on another that says the same. With the whole list on screen the
 // place decides; a row that says something no other row says is its own.
-func rightOccurrence(all, visible []termmenu.Item, cursor, target int) bool {
+func rightOccurrence(all []termmenu.Item, whole bool, cursor, target int) bool {
 	twins := 0
 	for _, it := range all {
 		if sameRow(it, all[target]) {
@@ -373,5 +377,20 @@ func rightOccurrence(all, visible []termmenu.Item, cursor, target int) bool {
 	if twins <= 1 {
 		return true
 	}
-	return len(visible) == len(all) && cursor == target
+	return whole && cursor == target
+}
+
+// wholeOn reports whether the screen shows the whole list as it was read:
+// the list was known to be complete, and every row now on the screen is
+// the row known at that place.
+func (m *terminalMenu) wholeOn(now termmenu.Menu) bool {
+	if !m.whole || len(now.Items) != len(m.rows) {
+		return false
+	}
+	for i, it := range now.Items {
+		if !sameRow(it, m.rows[i]) {
+			return false
+		}
+	}
+	return true
 }
