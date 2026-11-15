@@ -196,6 +196,23 @@ func icon(tok string) bool {
 	return true
 }
 
+// lineColour is the text colour most of a line is written in.
+func lineColour(cells []cell) string {
+	count := map[string]int{}
+	for _, c := range cells {
+		if c.r != ' ' && !strings.ContainsRune(rules+borders+cursors, c.r) {
+			count[c.fg]++
+		}
+	}
+	best, n := "", 0
+	for fg, v := range count {
+		if v > n {
+			best, n = fg, v
+		}
+	}
+	return best
+}
+
 // readGlyph reads a list whose cursor row starts with a cursor glyph.
 func readGlyph(cellLines [][]cell) (Menu, bool) {
 	lines := make([][]rune, len(cellLines))
@@ -268,6 +285,9 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		bot++
 	}
 	var m Menu
+	// The colour a list writes its key hints in is the colour it writes
+	// descriptions in: dimmer than the choices.
+	hintColour := ""
 	for i := top - 1; i >= 0 && i >= top-8; i-- {
 		whole := strings.TrimSpace(string(lines[i]))
 		if g := boxTop.FindStringSubmatch(whole); g != nil && strings.Trim(g[1], borders+" ") != "" {
@@ -300,6 +320,7 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		}
 		if m.Hint == "" && hintWords.MatchString(t) && len([]rune(t)) < 160 {
 			m.Hint = t
+			hintColour = lineColour(cellLines[i])
 		}
 	}
 	for i := bot + 1; i < bot+14; i++ {
@@ -325,6 +346,9 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		break
 	}
 	group := ""
+	// lastColour is the colour of the last choice's own line: a list that
+	// writes its choices in the hints' colour has no such descriptions.
+	lastColour := ""
 	for i := top; i <= bot; i++ {
 		p := pane(i)
 		indent := lead(p)
@@ -353,7 +377,18 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		if !cur && hintWords.MatchString(t) {
 			if m.Hint == "" {
 				m.Hint = t
+				hintColour = lineColour(cellLines[i])
 			}
+			continue
+		}
+		// A line in the hints' colour under a choice is that choice's
+		// description, however many lines it wraps to.
+		// (Prose only: a line in two columns, or a word or two, is a row
+		// with its value or a heading, whatever its colour.)
+		if !cur && hintColour != "" && len(m.Items) > 0 && lineColour(cellLines[i]) == hintColour && lastColour != hintColour &&
+			len(strings.Fields(t)) >= 3 && len(gap.Split(t, 2)) == 1 {
+			last := &m.Items[len(m.Items)-1]
+			last.Detail = strings.TrimSpace(last.Detail + " " + t)
 			continue
 		}
 		here := indent
@@ -381,6 +416,7 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			group = label
 		default:
 			m.Items = append(m.Items, Item{Label: label, Detail: detail, Group: group, Cursor: cur, Current: isCurrent})
+			lastColour = lineColour(cellLines[i])
 		}
 	}
 	// A label followed by a sentence on its own line at the same column

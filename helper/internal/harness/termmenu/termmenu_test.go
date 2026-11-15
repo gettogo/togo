@@ -219,6 +219,29 @@ func TestATitledPanelWithNoCursorIsRead(t *testing.T) {
 	}
 }
 
+// In a narrow terminal the description under a choice wraps to more lines.
+// They are written in the colour of the key hints and belong to the choice
+// above them; they are not choices.
+func TestWrappedDescriptionsBelongToTheirChoice(t *testing.T) {
+	m, ok := read(t, "kimi-permission-wrapped")
+	if !ok || m.Title != "Select permission mode" {
+		t.Fatalf("permission list = %v %q", ok, m.Title)
+	}
+	want := []Item{
+		{Label: "Always Ask", Detail: "Auto-read only; everything else needs your approval first.", Cursor: true, Current: true},
+		{Label: "Ask When Needed", Detail: "Routine edits and commands run automatically; risky actions, questions, and plans still ask."},
+		{Label: "Never Ask", Detail: "Everything runs and is decided automatically; only plans in Plan mode wait for your review."},
+	}
+	if len(m.Items) != len(want) {
+		t.Fatalf("rows = %q", labels(m))
+	}
+	for i := range want {
+		if m.Items[i] != want[i] {
+			t.Errorf("row %d = %+v, want %+v", i, m.Items[i], want[i])
+		}
+	}
+}
+
 // A screen that is not a list is not read as one.
 func TestOtherScreensAreNotLists(t *testing.T) {
 	if m, ok := read(t, "omp-tree"); ok {

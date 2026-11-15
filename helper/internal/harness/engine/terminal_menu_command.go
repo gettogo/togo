@@ -195,12 +195,24 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 		if err := e.menuType(ctx, s, args); err != nil {
 			return "", err
 		}
-		// Seen in the line before it is submitted.
+		// Submitted only once the whole command is seen in the line: the
+		// name alone would run without its arguments.
+		seen := false
 		for deadline := time.Now().Add(e.scaled(1500 * time.Millisecond)); time.Now().Before(deadline); {
-			if screen, err := e.cfg.Screen(ctx, s.id); err == nil && strings.Contains(screen, strings.TrimRight(full, " ")) {
+			if screen, err := e.cfg.Screen(ctx, s.id); err == nil {
+				for _, l := range strings.Split(screen, "\n") {
+					if strings.HasSuffix(trimEdge(l), strings.TrimRight(full, " ")) {
+						seen = true
+					}
+				}
+			}
+			if seen {
 				break
 			}
 			time.Sleep(e.scaled(60 * time.Millisecond))
+		}
+		if !seen {
+			return s.ad.Name + " did not show the command's arguments in its input line. Nothing was run; check its input line.", nil
 		}
 	}
 	if err := e.menuKeys(ctx, s, "Enter"); err != nil {

@@ -1,6 +1,12 @@
 package engine
 
-import "github.com/gettogo/togo/helper/internal/harness"
+import (
+	"context"
+	"time"
+
+	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/termmenu"
+)
 
 // While a phone holds a session's terminal natively, the agent draws its
 // screens for the phone and takes its input from there. Keys put into the
@@ -20,6 +26,28 @@ import "github.com/gettogo/togo/helper/internal/harness"
 func (e *Engine) heldNatively(s *sess) *harness.FallbackError {
 	if e.drivingMenu(s.id) {
 		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " has a menu open that the phone is using. Nothing was typed: finish or close it first."}
+	}
+	// A command that showed nothing may still open its list late. If one
+	// is on the screen now, it is treated as a list left open: nothing is
+	// typed into it, and the phone can take it up.
+	if v, ok := e.quietDone.Load(s.id); ok && e.cfg.StyledScreen != nil {
+		if at, _ := v.(time.Time); e.cfg.Now().Sub(at) < lateWatch {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			screen, err := e.cfg.StyledScreen(ctx, s.id)
+			cancel()
+			if err == nil {
+				if menu, open := termmenu.Read(screen); open && menu.Title != "" {
+					e.menuMu.Lock()
+					if e.leftOpen == nil {
+						e.leftOpen = map[string]string{}
+					}
+					e.leftOpen[s.id] = menu.Title
+					e.menuMu.Unlock()
+				}
+			}
+		} else {
+			e.quietDone.Delete(s.id)
+		}
 	}
 	if e.awaitingComposer(s) {
 		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " is showing something in its terminal. Nothing was typed: finish or close it there first."}

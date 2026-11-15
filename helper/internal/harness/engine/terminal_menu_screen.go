@@ -140,7 +140,9 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: "This list's search can only be used in the terminal."}
 	}
 	if query, asked := query["query"]; asked && query != menu.Query {
-		if len(query) > 200 || strings.ContainsAny(query, "\n\r\x1b") {
+		// Checked before a single key: a search that cannot be typed must
+		// not cost the field the text it has.
+		if len(query) > 200 || strings.ContainsFunc(query, func(r rune) bool { return r < 0x20 || r == 0x7f || r == 0x85 || r == 0x2028 || r == 0x2029 }) {
 			return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: "That search cannot be typed."}
 		}
 		// "before" is the text the phone last saw in the field. If the

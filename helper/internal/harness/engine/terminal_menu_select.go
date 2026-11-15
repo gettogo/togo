@@ -129,6 +129,10 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 				if backSince.IsZero() {
 					backSince = time.Now()
 				} else if time.Since(backSince) >= e.scaled(lateList) {
+					// Nothing was shown in the time waited. That is not
+					// proof nothing will be: the screen is watched for a
+					// while longer before anything is typed (lateWatch).
+					e.quietDone.Store(s.id, e.cfg.Now())
 					return harness.ActionResult{Result: harness.ResultApplied}, nil
 				}
 			} else {
@@ -234,6 +238,10 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 	}
 	return fail("The row could not be reached. Nothing was chosen.")
 }
+
+// lateWatch is how long after a command that showed nothing the screen is
+// still checked for a list before anything is typed.
+const lateWatch = 60 * time.Second
 
 // lateList is how long the input line must stay, with no list, before a
 // command that showed none counts as done.

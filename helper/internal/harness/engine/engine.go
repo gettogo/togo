@@ -150,6 +150,11 @@ type Engine struct {
 	// closing it. It is still on the harness's screen and has no owner:
 	// nothing is typed until the screen no longer shows it.
 	leftOpen map[string]string
+	// quietDone records, per session, when a command for the phone last
+	// ended with nothing to show (session id -> time.Time). A harness can
+	// still open a list after that (a slow fetch); until some time has
+	// passed, the screen is looked at before anything is typed.
+	quietDone sync.Map
 	// menuKeyAt records, per session, when a key was last pressed in a
 	// list for the phone (session id -> time.Time). The pane changes under
 	// those keys, and that is not the agent working.
