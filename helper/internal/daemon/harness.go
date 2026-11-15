@@ -48,6 +48,13 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		// Lists a harness draws in its terminal are read from this.
 		StyledScreen: pane.StyledScreen,
 		ClientGone:   rpc.ClientGone,
+		// A list driven for the phone belongs to the connection that opened it.
+		Client: func(ctx context.Context) any {
+			if conn := rpc.ConnFrom(ctx); conn != nil {
+				return conn
+			}
+			return nil
+		},
 		// The native surface service is built after the engine; both are
 		// read when called, never at construction.
 		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },

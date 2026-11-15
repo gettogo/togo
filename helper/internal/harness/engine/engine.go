@@ -48,6 +48,10 @@ type Config struct {
 	Approvals Approvals
 	// Screen returns the pane's visible text.
 	Screen func(ctx context.Context, id string) (string, error)
+	// Client identifies the connection a call arrived on, so a list one
+	// device is driving cannot be driven by another. Nil means lists are
+	// not tied to a connection.
+	Client func(ctx context.Context) any
 	// ClientGone reports that the client a call is running for has gone
 	// away. A list is never driven further for a client that cannot see
 	// it. Nil means never.

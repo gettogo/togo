@@ -49,6 +49,7 @@ type terminalMenu struct {
 	token   string
 	title   string
 	panel   string // the list's own title, to tell it is still this list
+	client  any    // the connection that is driving the list
 	query   string // the text last seen or typed in the list's search field
 	search  bool
 	rows    []termmenu.Item
@@ -116,11 +117,24 @@ func (e *Engine) menuLeftOpen(s *sess) (string, bool) {
 	return "", false
 }
 
-func (e *Engine) menuOf(session, token string) *terminalMenu {
+// client is the connection a call arrived on.
+func (e *Engine) client(ctx context.Context) any {
+	if e.cfg.Client == nil {
+		return nil
+	}
+	return e.cfg.Client(ctx)
+}
+
+// menuOf is the list with that token, for the connection that is driving
+// it. Another connection, even with the token, gets nothing.
+func (e *Engine) menuOf(ctx context.Context, session, token string) *terminalMenu {
 	e.menuMu.Lock()
 	defer e.menuMu.Unlock()
 	m := e.menus[session]
 	if m == nil || m.token != token || time.Now().After(m.expires) {
+		return nil
+	}
+	if m.client != nil && m.client != e.client(ctx) {
 		return nil
 	}
 	m.expires = time.Now().Add(menuLife)
@@ -336,11 +350,11 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			return harness.ActionResult{Result: harness.ResultFallback, Message: "No menu is open in the terminal."}, nil
 		}
 		rows, complete := e.wholeList(ctx, s, menu)
-		m := &terminalMenu{token: newToken(), title: menu.Title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
+		m := &terminalMenu{client: e.client(ctx), token: newToken(), title: menu.Title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
 		e.setMenu(s.id, m)
 		return harness.ActionResult{Result: harness.ResultApplied, Screen: e.menuScreen(m, menu, complete && (menu.Total > 0 || rowsEndOnScreen(menu)))}, nil
 	case "select":
-		m := e.menuOf(s.id, token)
+		m := e.menuOf(ctx, s.id, token)
 		if m == nil {
 			return failed("This menu has closed.")
 		}
@@ -354,7 +368,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		}
 		return failed("That row is no longer in the list. Nothing was chosen.")
 	case "cancel":
-		m := e.menuOf(s.id, token)
+		m := e.menuOf(ctx, s.id, token)
 		if m == nil {
 			return harness.ActionResult{Result: harness.ResultApplied}, nil
 		}
@@ -371,7 +385,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		e.setMenu(s.id, nil)
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
 	case "key":
-		m := e.menuOf(s.id, token)
+		m := e.menuOf(ctx, s.id, token)
 		if m == nil {
 			return failed("This menu has closed.")
 		}
@@ -393,7 +407,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		}
 		return e.afterKey(ctx, s, "", m)
 	case "release":
-		if e.menuOf(s.id, token) != nil {
+		if e.menuOf(ctx, s.id, token) != nil {
 			e.setMenu(s.id, nil)
 		}
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
@@ -415,7 +429,7 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 	if menu.Total == 0 && !rowsEndOnScreen(menu) {
 		complete = false
 	}
-	m := &terminalMenu{token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint), search: menu.Search, query: menu.Query}
+	m := &terminalMenu{client: e.client(ctx), token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint), search: menu.Search, query: menu.Query}
 	if previous != nil && previous.title != "" {
 		m.title = previous.title
 	}
@@ -534,7 +548,7 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	if token == "" {
 		token = fromName
 	}
-	m := e.menuOf(s.id, token)
+	m := e.menuOf(ctx, s.id, token)
 	if m == nil || e.cfg.StyledScreen == nil {
 		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}
 	}

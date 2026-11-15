@@ -139,6 +139,8 @@ var (
 	gap       = regexp.MustCompile(`\s{2,}`)
 	current   = regexp.MustCompile(`\s*←\s*current|\s*\(current\)|\s*✓`)
 	scrollbar = regexp.MustCompile(`\s*[█▐▌▓▒░]+$`)
+	// A search field with its text: "Search: open", "🔍 open", "🔍 > open".
+	searchField = regexp.MustCompile(`^(?:Search:|🔍)\s*(?:>\s?)?(.*)$`)
 )
 
 // Read finds a list on the screen.
@@ -271,6 +273,10 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		if strings.Contains(strings.ToLower(t), "type to search") {
 			m.Search = true
 		}
+		if g := searchField.FindStringSubmatch(t); g != nil {
+			m.Search, m.Query = true, strings.TrimSpace(gap.Split(g[1], 2)[0])
+			return
+		}
 		if m.Hint == "" && hintWords.MatchString(t) && len([]rune(t)) < 160 {
 			m.Hint = t
 		}
@@ -314,6 +320,10 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		}
 		if strings.HasPrefix(strings.ToLower(t), "type to search") {
 			m.Search = true
+			continue
+		}
+		if g := searchField.FindStringSubmatch(t); g != nil && !cur {
+			m.Search, m.Query = true, strings.TrimSpace(gap.Split(g[1], 2)[0])
 			continue
 		}
 		if !cur && hintWords.MatchString(t) {

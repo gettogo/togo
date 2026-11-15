@@ -64,3 +64,42 @@ func TestAnIDWhoseRowIsGoneChoosesNothing(t *testing.T) {
 		t.Error("the list was dropped; it is still the phone's")
 	}
 }
+
+// A list one connection is driving cannot be driven by another, even with
+// its token.
+func TestAListBelongsToTheConnectionThatOpenedIt(t *testing.T) {
+	const id = "s_fakefake05"
+	e, pane := newFake(t, id, "1.2.3")
+	e.cfg.StyledScreen = func(context.Context, string) (string, error) { return "", nil }
+	type key struct{}
+	e.cfg.Client = func(ctx context.Context) any { return ctx.Value(key{}) }
+	phone := context.WithValue(context.Background(), key{}, "phone")
+	other := context.WithValue(context.Background(), key{}, "tablet")
+	e.setMenu(id, &terminalMenu{client: "phone", token: "tok", panel: "Select model", rows: []termmenu.Item{{Label: "DeepSeek"}}})
+	if e.menuOf(other, id, "tok") != nil {
+		t.Error("another connection got the list")
+	}
+	if e.menuOf(phone, id, "tok") == nil {
+		t.Error("the connection that opened the list lost it")
+	}
+	token, _ := json.Marshal("tok")
+	pane.mu.Lock()
+	n := len(pane.keys)
+	pane.mu.Unlock()
+	res, err := e.Act(other, harness.ActionRequest{Session: id, Action: "terminal.cancel", Args: map[string]json.RawMessage{"interaction": token}})
+	pane.mu.Lock()
+	after := len(pane.keys)
+	pane.mu.Unlock()
+	if err != nil || after != n {
+		t.Errorf("another connection's cancel: %+v %v, keys pressed %d", res, err, after-n)
+	}
+	if !e.drivingMenu(id) {
+		t.Error("another connection's cancel ended the list")
+	}
+	// A second device cannot start a command while the list is open either.
+	text, _ := json.Marshal("/models")
+	res, err = e.Act(other, harness.ActionRequest{Session: id, Action: "terminal.command", Args: map[string]json.RawMessage{"text": text}})
+	if err != nil || res.Result != harness.ResultFailed {
+		t.Errorf("second device's command: %+v %v", res, err)
+	}
+}

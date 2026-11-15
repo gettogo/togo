@@ -3,6 +3,7 @@ package termmenu
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -123,6 +124,27 @@ func TestOmpTerminalLists(t *testing.T) {
 	m, ok = read(t, "omp-switch")
 	if !ok || m.Title != "Switch Model" || !m.Search || len(m.Items) != 1 || m.Items[0].Label != "apple/on-device" {
 		t.Errorf("model switch = %v %q %+v", ok, m.Title, m.Items)
+	}
+}
+
+// omp shows the text typed into a list's search field in the list itself.
+func TestOmpSearchTextIsRead(t *testing.T) {
+	m, ok := read(t, "omp-login-query")
+	if !ok || !m.Search || m.Query != "open" || len(m.Items) != 9 || m.Items[0].Label != "OpenRouter" || !m.Items[0].Cursor {
+		t.Errorf("sign-in list searched = %v search %v query %q %d rows %q", ok, m.Search, m.Query, len(m.Items), labels(m))
+	}
+	for _, it := range m.Items {
+		if strings.HasPrefix(it.Label, "Search") {
+			t.Errorf("the search field was read as a row: %+v", it)
+		}
+	}
+	m, ok = read(t, "omp-settings-query")
+	if !ok || !m.Search || m.Query != "open" {
+		t.Errorf("settings searched = %v search %v query %q", ok, m.Search, m.Query)
+	}
+	// With nothing typed the field only says so.
+	if m, _ := read(t, "omp-login"); !m.Search || m.Query != "" {
+		t.Errorf("unsearched list: search %v query %q", m.Search, m.Query)
 	}
 }
 
