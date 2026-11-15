@@ -302,6 +302,37 @@ import TogoKit
         #expect(connection.closed)
     }
 
+    @Test func closingRecordedDockInputSendsItsOriginalCancelButtonOnce() async throws {
+        let connection = try Connection()
+        connection.next = try Self.scene(overlay: "omp-native-hook-input")
+        let (store, _) = try await makeStore(connection)
+        defer { store.stop() }
+        let session = makeSession(connection)
+        let model = ChatSurfaceInteraction(command: nil, session: session) {}
+        store.interaction = model
+        let run = Task { await model.run(options: options) }
+        try await wait { session.canInteract && !model.blocks.isEmpty }
+        #expect(model.title == "Neutral entry check")
+        let block = try #require(model.blocks.last)
+        let screen = try NativeCommandContext(model: model, block: block, store: store).screen()
+        #expect(screen.settings?.sections.flatMap(\.fields).first?.kind == .secret)
+        var seen: [String: JSONValue] = [:]
+        let afterClose = try Self.scene(revision: 2)
+        connection.onInput = { [weak connection] event in
+            if case .object(let fields) = event { seen = fields }
+            connection?.next = afterClose
+        }
+        store.dismissNativeCommand()
+        try await wait { model.retired }
+        await store.nativeInteractions.stopTask?.value
+        await run.value
+        #expect(connection.actions == ["cancel"])
+        #expect(seen["id"] == .string("s.actions/cancel"))
+        #expect(seen["ev"] == .string("action"))
+        #expect(seen["act"] == .string("cancel"))
+        #expect(connection.closed)
+    }
+
     @Test func stoppingStoreRetiresTheNativeLeaseWithoutPumping() async throws {
         let connection = try Connection()
         let (store, services) = try await makeStore(connection)
@@ -376,7 +407,11 @@ import TogoKit
         var children: [[String: Any]] = [editor]
         if let overlay {
             let original = try fixture(overlay)
-            children.append(overlay == "omp-native-picker" ? ["id": "layer", "k": "col", "c": [original]] : original)
+            if overlay == "omp-native-picker" {
+                children.append(["id": "layer", "k": "col", "c": [original]])
+            } else if overlay == "omp-native-hook-input" {
+                children.append(["id": "dock", "k": "col", "c": [original]])
+            } else { children.append(original) }
         }
         let value: [String: Any] = [
             "program": "omp", "features": ["send", "edit"], "revision": revision,

@@ -8,6 +8,7 @@ import TogoKit
     struct Block: Identifiable {
         let view: SurfaceView
         let node: SurfaceNode
+        var heading: String? = nil
         var id: String { "\(view.id)/\(view.instance)/\(node.id)" }
     }
 
@@ -43,7 +44,7 @@ import TogoKit
         guard let scene = session.scene else { return [] }
         return scene.views.compactMap { view in
             guard !view.closed, let node = SurfaceValues.chatInteraction(view.document.root, mode: view.mode) else { return nil }
-            return Block(view: view, node: NativeStructuredScreen.primary(node))
+            return Block(view: view, node: NativeStructuredScreen.primary(node), heading: SurfaceValues.heading(node))
         }
     }
 
@@ -56,6 +57,7 @@ import TogoKit
 
     var title: String {
         if attachedExisting { return SurfaceCopy.currentScreen }
+        if controlsReady, let heading = blocks.last?.heading { return heading }
         let name = commandInfo?.title ?? workflow
         return name.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")).capitalized
     }

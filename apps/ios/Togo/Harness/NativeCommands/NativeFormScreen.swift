@@ -5,7 +5,8 @@ import TogoKit
 /// in the original form until its own Submit validates and accepts them.
 enum NativeFormScreen {
     static func containsControls(_ node: SurfaceNode) -> Bool {
-        ["input", "editor"].contains(node.kind) || node.properties["strip"] != nil
+        guard node.properties["hidden"] != .bool(true) else { return false }
+        return ["input", "editor"].contains(node.kind) || node.properties["strip"] != nil
             || node.properties["role"] == .string("omp.ask.field") || node.children.contains(where: containsControls)
     }
 
@@ -24,10 +25,12 @@ enum NativeFormScreen {
         if workflow == "resume", containsControls(root), !features.contains("submit") {
             throw NativeStructuredScreen.Unsupported.feature("submit")
         }
+        let header = SurfaceValues.headingNode(root)
+        let title = SurfaceValues.heading(root) ?? title
         var sections: [HarnessScreen.Settings.Section] = []
         var actions: [HarnessActionRef] = []
         func visit(_ node: SurfaceNode, heading: String? = nil) throws {
-            guard node.properties["hidden"] != .bool(true) else { return }
+            guard node.properties["hidden"] != .bool(true), node.id != header?.id else { return }
             let role = SurfaceValues.string(node.properties["role"])
             guard role?.hasSuffix(".hints") != true,
                   !(node.kind == "row" && node.children.contains { $0.kind == "kbd" }) else { return }

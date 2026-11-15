@@ -132,6 +132,22 @@ import TogoKit
         #expect(screen.actions.isEmpty)
     }
 
+    @Test func recordedDockInputUsesOriginalHeadingAndSubmitWithoutReadingItsValue() throws {
+        let node = try JSONDecoder().decode(SurfaceNode.self, from: fixture("omp-native-hook-input"))
+        let screen = try NativeFormScreen.map(NativeStructuredScreen.primary(node), title: "Native-entry")
+        #expect(screen.title == "Neutral entry check")
+        let sections = try #require(screen.settings).sections
+        let field = try #require(sections.flatMap(\.fields).first)
+        #expect(sections.flatMap(\.fields).count == 1)
+        #expect(field.label == "Neutral entry check")
+        #expect(field.kind == .secret && field.value == .null)
+        #expect(field.placeholder == "Enter neutral text")
+        #expect(sections.compactMap(\.footer).isEmpty)
+        #expect(screen.actions.count == 1)
+        #expect(screen.actions[0].label == "Submit")
+        #expect(screen.actions[0].args?["act"] == .string("submit"))
+    }
+
     private func fixture(_ name: String) throws -> Data {
         let url = try #require(Bundle(for: NativeStructuredFixtureBundle.self).url(forResource: name, withExtension: "json"))
         return try Data(contentsOf: url)

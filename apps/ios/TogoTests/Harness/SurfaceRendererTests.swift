@@ -28,6 +28,28 @@ import UIKit
         #expect(SurfaceValues.chatInteraction(ordinary, mode: .screen)?.id == ordinary.id)
     }
 
+    @Test func declaredDockOverlayIsPresentedButHiddenOrOrdinaryComposerIsNot() throws {
+        let url = try #require(Bundle(for: SurfaceFixtureBundle.self).url(forResource: "omp-native-hook-input", withExtension: "json"))
+        let input = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+        let wrapper: [String: Any] = ["id": "session", "k": "col", "c": [
+            ["id": "past", "k": "text", "p": ["text": "omp.overlay.hook-input"]],
+            ["id": "dock", "k": "col", "c": [input]]
+        ]]
+        var root = try JSONDecoder().decode(SurfaceNode.self, from: JSONSerialization.data(withJSONObject: wrapper))
+        let shown = try #require(SurfaceValues.chatInteraction(root, mode: .inline))
+        #expect(shown.properties["role"] == .string("omp.overlay.hook-input"))
+        #expect(SurfaceValues.presentedNode(root).id == shown.id)
+        #expect(SurfaceValues.heading(shown) == "Neutral entry check")
+        root.children[1].children[0].properties["hidden"] = .bool(true)
+        #expect(SurfaceValues.chatInteraction(root, mode: .inline) == nil)
+        root.children[1].children[0].properties.removeValue(forKey: "hidden")
+        root.children[1].children[0].properties["role"] = .string("omp.editor")
+        #expect(SurfaceValues.chatInteraction(root, mode: .inline) == nil)
+        root.children[1].children[0].properties["role"] = .string("omp.overlay.hook-input")
+        root.children[1].children[0].children = []
+        #expect(SurfaceValues.chatInteraction(root, mode: .inline) == nil)
+    }
+
     @Test func wholeFieldEditUsesUTF16OffsetsAndPreservesLiteralText() {
         let event = SurfaceValues.edit(from: "🧑🏽‍💻 draft", to: "<div>\n100%! /resume")
         #expect(event["len"] == .number(Double("🧑🏽‍💻 draft".utf16.count)))

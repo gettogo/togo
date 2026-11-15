@@ -21,11 +21,36 @@ enum SurfaceValues {
 
     private static func form(_ node: SurfaceNode) -> SurfaceNode? {
         guard node.properties["hidden"] != .bool(true) else { return nil }
-        if node.properties["role"] == .string("omp.editor.ask") { return node }
+        let role = string(node.properties["role"]) ?? ""
+        if role == "omp.editor.ask" || (role.hasPrefix("omp.overlay.") && NativeFormScreen.containsControls(node)) { return node }
         for child in node.children {
             if let found = form(child) { return found }
         }
         return nil
+    }
+
+    /// A declared dialog header supplies its title; preview/field titles do not.
+    static func headingNode(_ root: SurfaceNode) -> SurfaceNode? {
+        func title(_ node: SurfaceNode) -> SurfaceNode? {
+            guard node.properties["hidden"] != .bool(true) else { return nil }
+            if string(node.properties["role"])?.hasSuffix(".title") == true,
+               node.kind == "text" { return node }
+            return node.children.lazy.compactMap(title).first
+        }
+        guard let header = root.children.first(where: {
+            $0.properties["hidden"] != .bool(true) && string($0.properties["role"])?.hasSuffix(".head") == true
+        }) else { return nil }
+        return title(header)
+    }
+
+    static func heading(_ root: SurfaceNode) -> String? {
+        for key in ["head", "title"] {
+            let value = text(root.properties[key])
+            if !value.isEmpty { return value }
+        }
+        guard let node = headingNode(root) else { return nil }
+        let value = text(node.properties["spans"] ?? node.properties["text"])
+        return value.isEmpty ? nil : value
     }
 
     static func draftAnchor(for id: String, in root: SurfaceNode) -> String {
