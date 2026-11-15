@@ -24,6 +24,7 @@ import (
 //	terminal.cancel   args {interaction} or target: Esc, checked
 //	terminal.release  the same: let go without pressing anything
 //	terminal.attach   take up a list that is already on the screen
+//	terminal.more     read further rows of a list that scrolls (same screen, more rows)
 //
 // A row id is "<interaction>/<row>", where <row> names the row by what it
 // says, not by its place; the screen's id is "terminal.menu/<interaction>".
@@ -55,10 +56,15 @@ type terminalMenu struct {
 	// than the screen; readQuery is the search they were read under.
 	scrolled  bool
 	readQuery string
-	search    bool
-	rows      []termmenu.Item
-	keys      []menuKey
-	expires   time.Time
+	// ended: the end of the list has been seen (the cursor stopped, or
+	// came round to where it began); first is the row the cursor was on
+	// when the list was first read.
+	ended   bool
+	first   string
+	search  bool
+	rows    []termmenu.Item
+	keys    []menuKey
+	expires time.Time
 }
 
 func (e *Engine) drivingMenu(session string) bool {
@@ -294,6 +300,16 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			return harness.ActionResult{}, err
 		}
 		return e.afterKey(ctx, s, "", m)
+	case "more":
+		m := e.menuOf(ctx, s.id, token)
+		if m == nil {
+			return failed("This menu has closed.")
+		}
+		sc, err := e.pageMenu(ctx, s, m)
+		if err != nil {
+			return harness.ActionResult{}, err
+		}
+		return harness.ActionResult{Result: harness.ResultApplied, Screen: sc}, nil
 	case "release":
 		if e.menuOf(ctx, s.id, token) != nil {
 			e.setMenu(s.id, nil)

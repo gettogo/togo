@@ -181,6 +181,26 @@ func TestAShortHighlightedRowIsTheCursor(t *testing.T) {
 	}
 }
 
+// A list that previews as the cursor moves redraws in the previewed colours,
+// and a stray patch of another colour can sit on one row too. The cursor is
+// the bar that runs the width of the list. (OpenCode's themes, on a theme
+// whose colours left such a patch.)
+func TestTheWideBarIsTheCursorNotAStrayPatch(t *testing.T) {
+	m, ok := read(t, "oc-themes-preview")
+	if !ok || m.Title != "Themes" {
+		t.Fatalf("theme list = %v %q", ok, m.Title)
+	}
+	cursor := ""
+	for _, it := range m.Items {
+		if it.Cursor {
+			cursor = it.Label
+		}
+	}
+	if cursor != "lucent-orng" || len(m.Items) < 6 {
+		t.Errorf("cursor %q, %d rows", cursor, len(m.Items))
+	}
+}
+
 // A screen that is not a list is not read as one.
 func TestOtherScreensAreNotLists(t *testing.T) {
 	if m, ok := read(t, "omp-tree"); ok {

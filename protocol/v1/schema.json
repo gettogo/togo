@@ -3294,7 +3294,8 @@
             "searchPrompt": { "type": "string" },
             "subtitle": { "type": "string" },
             "noun": { "type": "string" },
-            "message": { "type": "string" }
+            "message": { "type": "string" },
+            "moreAction": { "description": "Reads further rows of a partial list; present only while more can be read. Returns the same screen with the rows read so far.", "$ref": "#/$defs/HarnessActionRef" }
           }
         },
         "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } },

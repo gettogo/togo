@@ -98,6 +98,13 @@ type PickerPresentation struct {
 	State string `json:"state,omitempty"`
 	// Total is the list's own row count, when it shows one.
 	Total int `json:"total,omitempty"`
+	// Message says something about the list as a whole ("More in the
+	// terminal.").
+	Message string `json:"message,omitempty"`
+	// MoreAction reads further rows of a partial list. It is present only
+	// while more can be read; running it returns the same screen with the
+	// rows read so far.
+	MoreAction *ActionRef `json:"moreAction,omitempty"`
 }
 
 type PickerItem struct {

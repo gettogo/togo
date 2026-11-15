@@ -27,28 +27,52 @@ func readHighlight(lines [][]cell) (Menu, bool) {
 	// or a status line can be one too, so each is tried and the one that
 	// sits in a list is taken: it must be the only one, or the only one in
 	// a titled panel.
-	var found []Menu
+	type candidate struct {
+		menu   Menu
+		weight int
+	}
+	var found []candidate
 	for bg, rows := range rowsOf {
 		if len(rows) != 1 || weight[bg] < 6 {
 			continue
 		}
 		for r := range rows {
 			if m, ok := readHighlightAt(lines, bg, r); ok && (len(m.Items) >= 2 || m.Title != "") {
-				found = append(found, m)
+				found = append(found, candidate{m, weight[bg]})
 			}
 		}
 	}
 	if len(found) == 1 {
-		return found[0], true
+		return found[0].menu, true
 	}
-	var titled []Menu
-	for _, m := range found {
-		if m.Title != "" {
-			titled = append(titled, m)
+	var titled []candidate
+	for _, c := range found {
+		if c.menu.Title != "" {
+			titled = append(titled, c)
 		}
 	}
 	if len(titled) == 1 {
-		return titled[0], true
+		return titled[0].menu, true
+	}
+	// Still more than one: the cursor's bar runs the width of the list,
+	// a stray patch of colour does not. The clearly widest is the cursor.
+	pool := titled
+	if len(pool) == 0 {
+		pool = found
+	}
+	best, second := -1, 0
+	for i, c := range pool {
+		if best < 0 || c.weight > pool[best].weight {
+			if best >= 0 {
+				second = pool[best].weight
+			}
+			best = i
+		} else if c.weight > second {
+			second = c.weight
+		}
+	}
+	if best >= 0 && pool[best].weight >= 3*second {
+		return pool[best].menu, true
 	}
 	return Menu{}, false
 }

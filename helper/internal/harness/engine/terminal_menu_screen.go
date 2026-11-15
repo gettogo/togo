@@ -57,8 +57,20 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 	sc := &harness.Screen{ID: menuScreenPrefix + m.token, Interaction: m.token, Primitive: harness.PrimPicker, Title: title, FetchedAt: time.Now(), Picker: p}
 	// A list read only in part is fresh, not stale: its rows are what the
 	// harness shows now.
-	if !complete || menu.Total > len(m.rows) {
+	if m.ended {
+		complete = true
+	}
+	if !complete || (!m.ended && menu.Total > len(m.rows)) {
 		p.Presentation = &harness.PickerPresentation{State: "partial", Total: menu.Total}
+		// More rows can be read by moving the harness's cursor, which the
+		// phone asks for explicitly: in some lists it is not free (a theme
+		// list previews each theme the cursor passes).
+		if len(m.rows) < menuMaxRows {
+			p.Presentation.MoreAction = &harness.ActionRef{ID: terminalPrefix + "more", Label: "Show more", Role: "normal",
+				Args: map[string]json.RawMessage{"interaction": interaction}}
+		} else {
+			p.Presentation.Message = "More in the terminal."
+		}
 	} else if menu.Total > 0 {
 		p.Presentation = &harness.PickerPresentation{Total: menu.Total}
 	}
@@ -116,6 +128,13 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	// what is there is removed one character at a time, the new text is
 	// typed, and the list is read again. Nothing is typed when the field
 	// already holds that text.
+	if query["more"] == "down" {
+		sc, err := e.pageMenu(ctx, s, m)
+		if err != nil {
+			return harness.Screen{}, err
+		}
+		return *sc, nil
+	}
 	if _, asked := query["query"]; asked && (!menu.Search || !menu.QueryKnown) {
 		return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: "This list's search can only be used in the terminal."}
 	}
@@ -235,4 +254,90 @@ func rowIDs(rows []termmenu.Item) []string {
 		seen[key]++
 	}
 	return out
+}
+
+// morePerRequest bounds the rows one request for more may walk.
+const morePerRequest = 20
+
+// pageMenu reads further rows of a list that scrolls, by moving the
+// harness's cursor down one window. It is asked for explicitly. The rows
+// read so far come back on the same screen; the list stops being partial
+// only when its end was seen: the cursor did not move, or came round to
+// the row it started on. The cursor is left where the walk ended.
+func (e *Engine) pageMenu(ctx context.Context, s *sess, m *terminalMenu) (*harness.Screen, error) {
+	menu, ok := e.readMenu(ctx, s)
+	if !ok {
+		menu, ok = e.readMenu(ctx, s)
+	}
+	if ok && menu.Title != m.panel {
+		e.setMenu(s.id, nil)
+		return nil, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+	}
+	if !ok || cursorOf(menu) < 0 {
+		// The list cannot be made out just now: what was read stands, and
+		// more can be asked for again. Only a different list ends it.
+		return e.menuScreen(m, termmenu.Menu{Title: m.panel, Search: m.search, Query: m.query}, false), nil
+	}
+	cur := cursorOf(menu)
+	e.menuMu.Lock()
+	if m.first == "" {
+		m.first = menu.Items[cur].Group + "\x00" + menu.Items[cur].Label
+	}
+	known := map[string]bool{}
+	for _, it := range m.rows {
+		known[it.Group+"\x00"+it.Label] = true
+	}
+	e.menuMu.Unlock()
+	add := func(now termmenu.Menu) {
+		e.menuMu.Lock()
+		defer e.menuMu.Unlock()
+		for _, it := range now.Items {
+			if key := it.Group + "\x00" + it.Label; !known[key] && len(m.rows) < menuMaxRows {
+				known[key] = true
+				it.Cursor = false
+				m.rows = append(m.rows, it)
+			}
+		}
+		m.scrolled = true
+	}
+	add(menu)
+	window := len(menu.Items)
+	if window > morePerRequest {
+		window = morePerRequest
+	}
+	ended := false
+	for step := 0; step < window && !ended; step++ {
+		before := menu.Items[cursorOf(menu)]
+		if err := e.menuKeys(ctx, s, "Down"); err != nil {
+			return nil, err
+		}
+		next, ok := e.readMenu(ctx, s)
+		if !ok || cursorOf(next) < 0 {
+			// The row under the cursor could not be made out (a list that
+			// previews as the cursor moves redraws in other colours). One
+			// more look; then the walk stops with what it has, and the
+			// list stays the phone's.
+			next, ok = e.readMenu(ctx, s)
+		}
+		if ok && next.Title != m.panel {
+			e.setMenu(s.id, nil)
+			return nil, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+		}
+		if !ok || cursorOf(next) < 0 {
+			return e.menuScreen(m, menu, false), nil
+		}
+		at := next.Items[cursorOf(next)]
+		add(next)
+		menu = next
+		switch {
+		case sameRow(at, before):
+			ended = true // the cursor did not move: the last row
+		case at.Group+"\x00"+at.Label == m.first:
+			ended = true // back where it began: the list has come round
+		}
+	}
+	e.menuMu.Lock()
+	m.ended = m.ended || ended
+	e.menuMu.Unlock()
+	return e.menuScreen(m, menu, ended), nil
 }

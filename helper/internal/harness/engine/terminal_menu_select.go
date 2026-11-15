@@ -75,8 +75,11 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 		}
 	}
 	add(first)
+	// A long list is walked for a bounded time only; the rest can be asked
+	// for (Show more), so a request never outlives its caller's patience.
+	deadline := time.Now().Add(e.scaled(wholeListBudget))
 	m, steps := first, 0
-	for steps < menuMaxSteps && len(all) < menuMaxRows && len(all) < first.Total {
+	for steps < menuMaxSteps && len(all) < menuMaxRows && len(all) < first.Total && time.Now().Before(deadline) {
 		if err := e.menuKeys(ctx, s, "Down"); err != nil {
 			return all, false
 		}
@@ -222,6 +225,9 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 	}
 	return "", nil
 }
+
+// wholeListBudget bounds the walk of a list that says how long it is.
+const wholeListBudget = 4 * time.Second
 
 // errMenuAbandoned ends a list whose phone has gone: no further key.
 var errMenuAbandoned = errors.New("harness: the phone is no longer there; nothing more was pressed")
