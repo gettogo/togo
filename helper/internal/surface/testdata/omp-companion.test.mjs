@@ -5,7 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS } from '../omp.mjs'
+import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -312,4 +312,39 @@ test('command list is bounded and absent without a provider', async () => {
   assert.equal(rows.length, MAX_COMMANDS)
   assert.ok(Buffer.byteLength(rows[0].detail) <= 400 && Buffer.byteLength(rows[0].state) <= 200)
   assert.deepEqual(await listCommands({ getSuggestions: async () => ({ items: 'nope' }) }), [])
+})
+
+// A field that only Return submits (rename a session): found through the
+// focused component's own description, submitted in the process.
+function dialogWith(...fields) {
+  return { describe: () => ({ k: 'card', c: [{ k: 'tabs', p: {} }, { children: fields.map(field => ({ control: field, input: field })) }] }) }
+}
+function field(value, { mask = false, focused = true } = {}) {
+  const keys = []
+  return { focused, mask, onSubmit() {}, getValue: () => value, handleInput(key) { keys.push(key) }, keys }
+}
+
+test('the focused field is found once and says whether it is masked', () => {
+  const name = field('Native check A')
+  assert.equal(focusedField({ getFocused: () => dialogWith(name) }), name)
+  assert.equal(focusedField({ getFocused: () => dialogWith(field('secret', { mask: true })) }).mask, true)
+  // The same field object reached twice is one field; two fields are ambiguous.
+  assert.equal(focusedField({ getFocused: () => dialogWith(field('a'), field('b')) }), undefined)
+  assert.equal(focusedField({ getFocused: () => dialogWith(field('a', { focused: false })) }), undefined)
+  assert.equal(focusedField({ getFocused: () => ({ describe() { throw new Error('boom') } }) }), undefined)
+  assert.equal(focusedField({ getFocused: () => undefined }), undefined)
+  assert.equal(focusedField({}), undefined)
+})
+
+test('a field is submitted only while it holds the text the phone saw', () => {
+  const name = field('Renamed A')
+  let renders = 0
+  const tui = { getFocused: () => dialogWith(name), requestRender() { renders++ } }
+  assert.equal(submitFocusedField(tui, { id: 'r', before: 'Native check A' }), false)
+  assert.equal(submitFocusedField(tui, { id: 'r' }), false)
+  assert.deepEqual(name.keys, [])
+  assert.equal(submitFocusedField(tui, { id: 'r', before: 'Renamed A' }), true)
+  assert.deepEqual(name.keys, ['\r'])
+  assert.equal(renders, 1)
+  assert.equal(submitFocusedField({ getFocused: () => dialogWith(field('a'), field('a')) }, { before: 'a' }), false)
 })

@@ -116,6 +116,42 @@ export async function listCommands(provider) {
   return rows
 }
 
+// focusedField finds the text field that has the focus inside the focused
+// component: the component's own description holds its field objects, each
+// with `focused`, `mask` (true for a password) and `onSubmit`. Undefined
+// unless exactly one focused field is found.
+export function focusedField(tui) {
+  const focused = tui?.getFocused?.()
+  if (!focused || typeof focused !== 'object' || typeof focused.describe !== 'function') return undefined
+  let described
+  try { described = focused.describe({ cols: 80, dark: true, reduceMotion: true, supports: () => true, feature: () => false }) } catch { return undefined }
+  const fields = new Set(), seen = new Set()
+  const visit = (value, depth) => {
+    if (!value || typeof value !== 'object' || seen.has(value) || depth > 24 || seen.size > 2048) return
+    seen.add(value)
+    if (value.focused === true && typeof value.onSubmit === 'function' && typeof value.mask === 'boolean') { fields.add(value); return }
+    if (Array.isArray(value)) { for (const item of value) visit(item, depth + 1); return }
+    for (const key of ['c', 'children', 'control', 'input', 'field']) visit(value[key], depth + 1)
+  }
+  visit(described, 0)
+  return fields.size === 1 ? [...fields][0] : undefined
+}
+
+// Some of the program's fields (rename a session) offer no event to submit
+// them: on its own screen only Return does. submitFocusedField gives the
+// focused field that Return directly, in the process, so it never passes
+// through the terminal's input and is never taken for someone at the desk.
+// It acts only if the field still holds the text the phone saw.
+export function submitFocusedField(tui, event) {
+  if (typeof event?.before !== 'string') return false
+  const field = focusedField(tui)
+  if (!field || typeof field.handleInput !== 'function' || typeof field.getValue !== 'function') return false
+  if (field.getValue() !== event.before) return false
+  field.handleInput('\r')
+  tui.requestRender?.(true)
+  return true
+}
+
 // How long a send may wait for the original editor to submit it.
 export const SUBMIT_WATCH_MS = 2000
 
@@ -183,7 +219,7 @@ export default function (pi) {
   let ctx, tui, watcher, timer, stopInput
   let owner = '', deadline = 0, seq = 0, epoch = 0, available = false, reason = ''
   let stopped = false, processing = false, rerun = false
-  let publishedNative
+  let publishedNative, publishedMasked = false
   // The sequence of the last native send whose text the original editor's
   // own submit callback received. Proof the program took it, not that it is done.
   let consumed = 0, unwatchSubmit
@@ -197,7 +233,8 @@ export default function (pi) {
     if (stopped) return
     const value = { version: 1, generation: config.generation, pid: process.pid,
       pane: process.env.TMUX_PANE ?? '', cwd: process.cwd(), ...location(),
-      epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed }
+      epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed,
+      masked: maskedFocus() }
     const json = JSON.stringify(value)
     if (Buffer.byteLength(json) > MAX_FILE) return
     const temporary = path.join(root, `.state-${process.pid}.tmp`)
@@ -212,6 +249,7 @@ export default function (pi) {
         publishedGeneration = true
       }
       publishedNative = value.native
+      publishedMasked = value.masked
     } catch { /* Helper removal cannot prevent the in-process lease expiry. */ }
   }
   // Publishes the program's command list beside the state, when it changed.
@@ -231,6 +269,12 @@ export default function (pi) {
     } catch { /* The helper falls back to the program's RPC list. */ } finally {
       listing = false
     }
+  }
+  // Whether the field that has the focus hides what is typed (a password).
+  // The program's description of an input does not carry this.
+  function maskedFocus() {
+    if (!owner) return false
+    try { return focusedField(tui)?.mask === true } catch { return false }
   }
   function switchRenderer(native) {
     // OMP reads the override synchronously during start(). Keep the renderer
@@ -283,6 +327,9 @@ export default function (pi) {
         fs.unlinkSync(file)
         if (request.event.ev === 'action' && request.event.act === 'togo.query') {
           if (!applyPickerQuery(tui, request.event)) throw new Error('unsupported picker query')
+        } else if (request.event.ev === 'action' && request.event.act === 'togo.submit') {
+          // A refusal changes nothing; the phone sees no result and says so.
+          submitFocusedField(tui, request.event)
         } else {
           if (request.event.ev === 'send') {
             unwatchSubmit?.()
@@ -357,7 +404,7 @@ export default function (pi) {
         }
         // start() probes asynchronously. Publish the confirmed renderer state,
         // including a protocol fallback, rather than only the requested mode.
-        if (Boolean(tui?.nativeRendering) !== publishedNative) publish()
+        if (Boolean(tui?.nativeRendering) !== publishedNative || maskedFocus() !== publishedMasked) publish()
         processCommand()
         // Current values (model, effort, toggles) are part of the list.
         if (performance.now() - listedAt >= COMMANDS_EVERY_MS) void publishCommands()
