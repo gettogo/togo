@@ -209,6 +209,9 @@ func slashCommand(text string) (name, args string, ok bool) {
 // typePrompt pastes a prompt and its image paths in the order the
 // adapter's images.insert asks for, pressing Enter once at the end.
 func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []string) error {
+	// A prompt is real input: from here the pane changing is the agent
+	// working, whatever keys a list had a moment ago.
+	e.menuKeyAt.Delete(s.id)
 	insert := harness.InsertTogether
 	if im := s.ad.Images; im != nil {
 		insert = im.Insert

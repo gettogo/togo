@@ -409,3 +409,34 @@ func blankIn(row []cell, lo, hi int) bool {
 	}
 	return strings.TrimSpace(text(row[lo:hi])) == ""
 }
+
+// readHighlightLoose is readHighlight for a list that may have one row:
+// the widest one-row bar of colour, whatever it holds.
+func readHighlightLoose(lines [][]cell) (Menu, bool) {
+	rowsOf := map[string]map[int]bool{}
+	weight := map[string]int{}
+	for i, l := range lines {
+		for _, c := range l {
+			if c.bg != "" {
+				if rowsOf[c.bg] == nil {
+					rowsOf[c.bg] = map[int]bool{}
+				}
+				rowsOf[c.bg][i] = true
+				weight[c.bg]++
+			}
+		}
+	}
+	var best Menu
+	bestWeight, found := 0, false
+	for bg, rows := range rowsOf {
+		if len(rows) != 1 || weight[bg] < 6 {
+			continue
+		}
+		for r := range rows {
+			if m, ok := readHighlightAt(lines, bg, r); ok && weight[bg] > bestWeight {
+				best, bestWeight, found = m, weight[bg], true
+			}
+		}
+	}
+	return best, found
+}

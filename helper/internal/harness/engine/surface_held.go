@@ -24,6 +24,13 @@ func (e *Engine) heldNatively(s *sess) *harness.FallbackError {
 	if e.awaitingComposer(s) {
 		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " is showing something in its terminal. Nothing was typed: finish or close it there first."}
 	}
+	return e.heldForMenu(s)
+}
+
+// heldForMenu is heldNatively for a command run for the phone. It does not
+// wait for the input line to have been seen again: running the command
+// finds that out itself, and types nothing it cannot take back.
+func (e *Engine) heldForMenu(s *sess) *harness.FallbackError {
 	if panel, open := e.menuLeftOpen(s); open {
 		name := panel
 		if name == "" {

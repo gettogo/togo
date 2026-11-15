@@ -119,7 +119,7 @@ func ownLine(before, after string) (index int, text string, ok bool) {
 		if i >= len(a) {
 			break
 		}
-		was, is := strings.TrimRight(a[i], " "), strings.TrimRight(b[i], " ")
+		was, is := trimEdge(a[i]), trimEdge(b[i])
 		if was == is || !strings.HasSuffix(is, "/") {
 			continue
 		}
@@ -186,7 +186,7 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 			return now == after
 		}
 		lines := strings.Split(now, "\n")
-		return row < len(lines) && strings.TrimRight(lines[row], " ") == line
+		return row < len(lines) && trimEdge(lines[row]) == line
 	}
 	// The "/" is taken back only from a line that is still as we left it.
 	defer func() {
@@ -255,4 +255,15 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 		}
 	}
 	return out, ctx.Err() == nil
+}
+
+// trimEdge drops trailing spaces and, from a line drawn in a box (an edge
+// at both ends), the closing edge.
+func trimEdge(line string) string {
+	t := strings.TrimRight(line, " ")
+	rs := []rune(strings.TrimLeft(t, " "))
+	if len(rs) > 1 && strings.ContainsRune("│┃|", rs[0]) && strings.ContainsRune("│┃|", rs[len(rs)-1]) {
+		t = strings.TrimRight(strings.TrimSuffix(t, string(rs[len(rs)-1])), " ")
+	}
+	return t
 }

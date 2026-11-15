@@ -221,7 +221,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
-	if err := e.heldNatively(s); err != nil {
+	if err := e.heldForMenu(s); err != nil {
 		return "", err
 	}
 	if err := e.screenClear(ctx, s); err != nil {
@@ -233,12 +233,92 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 		return s.ad.Name + " has “" + open.Title + "” open in its terminal. Close it there first.", nil
 	}
 	e.waitInputLine(ctx, s)
-	if err := e.clearInput(ctx, s); err != nil {
+	// The input line is not cleared: what is in it is not ours. Whether
+	// it is empty is found out by typing the command: a harness offers its
+	// commands only at the start of an empty line.
+	mark := e.markComposer(ctx, s)
+	if err := e.menuType(ctx, s, text); err != nil {
 		return "", err
 	}
-	// How the empty input line looks with the cursor in it: the proof,
+	// The harness redraws a moment after the keys arrive: wait until the
+	// line under the cursor ends with what was typed.
+	var x int
+	var line string
+	var located, typed bool
+	for deadline := time.Now().Add(e.scaled(1500 * time.Millisecond)); ; {
+		x, line, _, located = e.cursorAt(ctx, s)
+		typed = located && strings.HasSuffix(strings.TrimRight(beforeCursor(line, x), " "), text)
+		if typed || !time.Now().Before(deadline) || ctx.Err() != nil {
+			break
+		}
+		time.Sleep(e.scaled(60 * time.Millisecond))
+	}
+	if mark.ok && located && x == mark.x+len([]rune(text)) {
+		mark.tracks = true // the cursor followed what was typed
+	}
+	// takeBack removes exactly what was typed, and only from a line that
+	// ends with it under the cursor.
+	takeBack := func() {
+		x2, line2, _, ok := e.cursorAt(ctx, s)
+		if !ok || !strings.HasSuffix(strings.TrimRight(beforeCursor(line2, x2), " "), text) {
+			return
+		}
+		// One character at a time, each seen to go before the next: a
+		// harness that redraws its list on every key can drop a key.
+		for left := len([]rune(text)); left > 0; left-- {
+			if e.menuKeys(ctx, s, "BSpace") != nil {
+				return
+			}
+			want := x2 - 1
+			for deadline := time.Now().Add(e.scaled(600 * time.Millisecond)); ; {
+				if now, _, _, ok := e.cursorAt(ctx, s); ok && now == want {
+					x2 = now
+					break
+				}
+				if !time.Now().Before(deadline) {
+					return // not seen to go: nothing more is removed
+				}
+				time.Sleep(e.scaled(40 * time.Millisecond))
+			}
+		}
+	}
+	// The row may hold other parts of the screen further right; a draft is
+	// what starts right at the cursor.
+	if !typed {
+		// What was typed cannot be found under the cursor, so it cannot be
+		// proven ours to remove, or to run.
+		return s.ad.Name + " did not take the command where expected. Nothing was run; check its input line.", nil
+	}
+	if rest := []rune(line); x < len(rest) && rest[x] != ' ' && !strings.ContainsRune("│┃|", rest[x]) {
+		takeBack()
+		return s.ad.Name + "'s input line holds a draft. Nothing was run.", nil
+	}
+	word := strings.TrimPrefix(strings.Fields(text)[0], "/")
+	var menu termmenu.Menu
+	offered := false
+	if screen, ok := e.settled(ctx, s); ok {
+		menu, offered = termmenu.ReadOffered(screen)
+	}
+	cur := -1
+	if offered {
+		cur = cursorOf(menu)
+	}
+	if !offered || cur < 0 {
+		// No list of commands opened: the line was not empty (a draft at
+		// the desk), or this harness offers none. Nothing is run.
+		if typed {
+			takeBack()
+		}
+		return s.ad.Name + " did not offer its commands: its input line may hold a draft. Nothing was run.", nil
+	}
+	if on := strings.TrimPrefix(strings.Fields(menu.Items[cur].Label + " x")[0], "/"); on != word {
+		if typed {
+			takeBack()
+		}
+		return s.ad.Name + " would run “/" + on + "” for “" + text + "”. Nothing was run.", nil
+	}
+	// The input line was empty and is this one: its look is the proof,
 	// later, that the harness is back at it.
-	mark := e.markComposer(ctx, s)
 	e.menuMu.Lock()
 	if e.composers == nil {
 		e.composers = map[string]composerMark{}
@@ -246,20 +326,21 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 	e.composers[s.id] = mark
 	delete(e.awaiting, s.id)
 	e.menuMu.Unlock()
-	if err := e.menuType(ctx, s, text); err != nil {
-		return "", err
-	}
-	word := strings.TrimPrefix(strings.Fields(text)[0], "/")
-	if menu, ok := e.readMenu(ctx, s); ok {
-		if cur := cursorOf(menu); cur >= 0 {
-			if on := strings.TrimPrefix(strings.Fields(menu.Items[cur].Label + " x")[0], "/"); on != word {
-				_ = e.clearInput(ctx, s)
-				return s.ad.Name + " would run “/" + on + "” for “" + text + "”. Nothing was run.", nil
-			}
-		}
-	}
 	if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 		return "", err
+	}
+	// Some harnesses take the first Enter to accept the offered command
+	// into the line and the second to run it: if the line still ends with
+	// the command and no list or dialog took its place, Enter once more.
+	if _, ok := e.readMenu(ctx, s); !ok {
+		if x3, line3, _, ok := e.cursorAt(ctx, s); ok {
+			held := strings.TrimRight(beforeCursor(line3, x3), " ")
+			if strings.HasSuffix(held, "/"+word) || strings.HasSuffix(held, text) {
+				if err := e.menuKeys(ctx, s, "Enter"); err != nil {
+					return "", err
+				}
+			}
+		}
 	}
 	return "", nil
 }
@@ -341,4 +422,16 @@ func rightOccurrence(all, visible []termmenu.Item, cursor, target int) bool {
 		return true
 	}
 	return len(visible) == len(all) && cursor == target
+}
+
+// beforeCursor is the text of a line up to the cursor's column.
+func beforeCursor(line string, x int) string {
+	rs := []rune(line)
+	for len(rs) < x {
+		rs = append(rs, ' ')
+	}
+	if x < 0 {
+		x = 0
+	}
+	return string(rs[:x])
 }

@@ -28,6 +28,10 @@ func TestTheLineTheSlashWentOnIsFound(t *testing.T) {
 	if i, line, ok := ownLine("> Ask anything", "> /"); !ok || i != 0 || line != "> /" {
 		t.Errorf("placeholder replaced: %d %q %v", i, line, ok)
 	}
+	// An input line inside a box keeps the box's edge after the "/".
+	if i, line, ok := ownLine("│ >                    │", "│ > /                  │"); !ok || i != 0 || line != "│ > /" {
+		t.Errorf("boxed input line: %d %q %v", i, line, ok)
+	}
 	// After a draft the "/" lands at its end.
 	if i, line, ok := ownLine("> half written", "> half written/"); !ok || i != 0 || line != "> half written/" {
 		t.Errorf("after a draft: %d %q %v", i, line, ok)

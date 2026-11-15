@@ -146,6 +146,17 @@ var (
 	searchField = regexp.MustCompile(`^(?:Search:|🔍)\s*(?:>\s?)?(.*)$`)
 )
 
+// ReadOffered finds the short list a program offers under its input line
+// while a command is typed. Unlike Read it accepts a single highlighted
+// row with no title: the caller knows a list is due there and checks the
+// row against what it typed.
+func ReadOffered(screen string) (Menu, bool) {
+	if m, ok := Read(screen); ok {
+		return m, true
+	}
+	return readHighlightLoose(parse(screen))
+}
+
 // Read finds a list on the screen.
 func Read(screen string) (Menu, bool) {
 	lines := parse(screen)
