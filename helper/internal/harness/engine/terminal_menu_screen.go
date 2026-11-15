@@ -105,6 +105,9 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	if token == "" {
 		token = fromName
 	}
+	if e.terminalBarred(s.id) {
+		return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: terminalBarredText}
+	}
 	m := e.menuOf(ctx, s.id, token)
 	if m == nil || e.cfg.StyledScreen == nil {
 		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}

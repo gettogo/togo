@@ -210,6 +210,9 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 	if e.cfg.StyledScreen == nil || e.cfg.Typist == nil {
 		return harness.ActionResult{Result: harness.ResultFallback, Message: menuNotRecognised}, nil
 	}
+	if e.terminalBarred(s.id) {
+		return harness.ActionResult{Result: harness.ResultFallback, Message: terminalBarredText}, nil
+	}
 	// A row id is "<interaction>/<n>"; cancel and release name the
 	// interaction in their arguments or as the target.
 	// (A prompt's target is its field; its interaction comes in the

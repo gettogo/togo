@@ -3,6 +3,9 @@ package engine
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -51,6 +54,12 @@ func (e *Engine) noteEntry(session, value string) bool {
 	}
 	t := e.entered[session]
 	if t == nil {
+		// The marker goes to disk before the first entry is typed: after
+		// a restart it is all that says this session's terminal may show
+		// an entry this helper can no longer recognise.
+		if !e.markEntered(session) {
+			return false
+		}
 		t = &enteredText{sums: map[int]map[[32]byte]bool{}}
 		if _, err := rand.Read(t.salt[:]); err != nil {
 			return false
@@ -84,6 +93,9 @@ func (e *Engine) redact(session, text string) string {
 	defer e.menuMu.Unlock()
 	t := e.entered[session]
 	if t == nil {
+		if e.enteredMarked(session) {
+			return redacted // entries were made that cannot be recognised now
+		}
 		return text
 	}
 	for n, sums := range t.sums {
@@ -136,4 +148,65 @@ func (e *Engine) redactScreen(session string, sc *harness.Screen) *harness.Scree
 		}
 	}
 	return sc
+}
+
+// The marker is an empty file named for the session. It holds nothing about
+// any entry. With it and without the digests (the helper restarted), what
+// the session's terminal shows cannot be cleared of entries, so none of it
+// is passed on: terminalBarred.
+
+var sessionFileName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+func (e *Engine) enteredMarker(session string) string {
+	if e.cfg.TogoHome == "" || !sessionFileName.MatchString(session) {
+		return ""
+	}
+	return filepath.Join(e.cfg.TogoHome, "terminal-entries", session)
+}
+
+func (e *Engine) markEntered(session string) bool {
+	path := e.enteredMarker(session)
+	if path == "" {
+		// Nowhere to keep the marker: only a helper with no home of its
+		// own, which also has nothing to restart into.
+		return e.cfg.TogoHome == ""
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return false
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return false
+	}
+	return f.Close() == nil
+}
+
+func (e *Engine) enteredMarked(session string) bool {
+	path := e.enteredMarker(session)
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// terminalBarred reports a session whose terminal took entries this helper
+// can no longer recognise.
+func (e *Engine) terminalBarred(session string) bool {
+	e.menuMu.Lock()
+	defer e.menuMu.Unlock()
+	return e.entered[session] == nil && e.enteredMarked(session)
+}
+
+const terminalBarredText = "Text was entered in this session's terminal earlier and cannot be kept out of what is shown now. Open the terminal."
+
+// forgetEntered drops what is kept about a session's entries, once the
+// session itself is gone.
+func (e *Engine) forgetEntered(session string) {
+	e.menuMu.Lock()
+	delete(e.entered, session)
+	e.menuMu.Unlock()
+	if path := e.enteredMarker(session); path != "" {
+		_ = os.Remove(path)
+	}
 }

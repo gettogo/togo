@@ -265,6 +265,7 @@ func (e *Engine) track(info session.Session) *sess {
 
 // Forget stops serving a session and drops its state.
 func (e *Engine) Forget(id string) {
+	e.forgetEntered(id)
 	e.mu.Lock()
 	s, ok := e.sessions[id]
 	delete(e.sessions, id)

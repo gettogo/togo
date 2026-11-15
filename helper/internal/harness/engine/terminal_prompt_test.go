@@ -207,3 +207,46 @@ func TestAnEntryIsNeverForgottenToMakeRoom(t *testing.T) {
 		t.Errorf("the last entry taken is not recognised: %q", got)
 	}
 }
+
+// The digests live in memory. After the helper restarts, a prompt the
+// harness still shows may repeat an entry this helper cannot recognise. A
+// marker on disk, which holds nothing about any entry, says so: nothing
+// read from that session's terminal is passed on, until the session is gone.
+func TestAfterARestartNothingIsShownFromATerminalThatTookEntries(t *testing.T) {
+	const id = "s_fakefake36"
+	e, _ := newFake(t, id, "1.2.3")
+	e.cfg.TogoHome = t.TempDir()
+	e.cfg.StyledScreen = func(context.Context, string) (string, error) { return "", nil }
+	const entry = "neutral-entry 43"
+	if !e.noteEntry(id, entry) {
+		t.Fatal("the entry was refused")
+	}
+	marker := e.enteredMarker(id)
+	if info, err := os.Stat(marker); err != nil || info.Size() != 0 || info.Mode().Perm() != 0o600 {
+		t.Fatalf("marker = %v %v", info, err)
+	}
+	if e.terminalBarred(id) {
+		t.Fatal("barred while the entries are still recognised")
+	}
+	// The restart: what was in memory is gone, the marker is not.
+	e.menuMu.Lock()
+	e.entered = nil
+	e.menuMu.Unlock()
+	if !e.terminalBarred(id) {
+		t.Fatal("not barred after the digests were lost")
+	}
+	if got := e.redact(id, "Invalid "+entry); strings.Contains(got, "neutral") {
+		t.Errorf("text read after the restart still shows the entry: %q", got)
+	}
+	res, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: "terminal.attach"})
+	if err != nil || res.Result != harness.ResultFallback || res.Screen != nil {
+		t.Errorf("attach after the restart = %+v %v", res, err)
+	}
+	if e.noteEntry("../escape", "x") && e.enteredMarker("../escape") != "" {
+		t.Error("a session name was used as a path")
+	}
+	e.Forget(id)
+	if _, err := os.Stat(marker); err == nil || e.terminalBarred(id) {
+		t.Error("the marker outlived its session")
+	}
+}
