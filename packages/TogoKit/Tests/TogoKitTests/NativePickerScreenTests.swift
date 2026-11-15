@@ -103,9 +103,16 @@ struct NativePickerScreenTests {
     /// Nothing is guessed: a picker whose extra actions are not classified
     /// for the workflow is refused, naming them.
     @Test func unclassifiedActionsAreRefused() throws {
-        #expect(throws: NativePickerScreen.Unsupported.unknownActions(workflow: "tree", actions: ["summarize", "label", "filter"])) {
-            try NativePickerScreen.map(try Self.node(Self.recorded("tree")), workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at)
-        }
+        let tree = try NativePickerScreen.map(try Self.node(Self.recorded("tree")), workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at)
+        #expect(tree.picker?.contextActions?.map(\.id) == ["native.action.summarize", "native.action.label"])
+        #expect(tree.picker?.contextActions?.allSatisfy({ $0.role == .normal }) == true)
+        #expect(tree.actions.contains(where: { $0.id == "native.action.filter" }))
+        #expect(tree.picker?.onSelectLabel == "Switch")
+        // A label given as styled spans reads as its text.
+        #expect(tree.picker?.items.first?.title == "[thinking: high]")
+        #expect(tree.picker?.items.first?.facets?["native.depth"] == "0")
+        #expect(tree.picker?.items.first?.facets?["native.node"] == "marker")
+        #expect(tree.picker?.selected == tree.picker?.items.first?.id)
         #expect(throws: NativePickerScreen.Unsupported.unknownActions(workflow: "other", actions: ["delete", "rename", "pin", "scope"])) {
             try NativePickerScreen.map(try Self.node(Self.recorded("resume")), workflow: "other", fallbackTitle: "", fetchedAt: Self.at)
         }

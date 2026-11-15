@@ -34,7 +34,8 @@ public enum NativePickerScreen {
 
     /// Which of a workflow's actions act on the highlighted row, which on the
     /// whole list, and which row actions lose data. From the program's source
-    /// and recorded screens; a workflow with other actions is unsupported.
+    /// (omp 18.20) and recorded screens; a workflow with other actions is
+    /// unsupported. Deleting a conversation is the only one that loses data.
     struct Scope: Sendable {
         var row: Set<String> = []
         var list: Set<String> = []
@@ -47,6 +48,20 @@ public enum NativePickerScreen {
         "resume": Scope(row: ["delete", "rename", "pin"], list: ["scope"], destructive: ["delete"]),
         "model": Scope(),
         "login": Scope(),
+        // The session model switch: task flips the whole picker to choosing
+        // the model subagents use.
+        "switch": Scope(list: ["task"]),
+        // The conversation tree: summarize and label act on the highlighted
+        // entry; filter cycles the list's filter.
+        "tree": Scope(row: ["summarize", "label"], list: ["filter"]),
+        // Agents: toggle and model act on the highlighted agent; new and
+        // reload on the list.
+        "agents": Scope(row: ["toggle", "model"], list: ["new", "reload"]),
+        // Extensions: expand only changes how the inspector is shown.
+        "extensions": Scope(list: ["expand"]),
+        // The agent hub: follow, the agents scope and the search field all
+        // belong to the list.
+        "hub": Scope(list: ["follow", "agents", "filter"]),
     ]
 
     public static func map(_ node: SurfaceNode, workflow: String, fallbackTitle: String, fetchedAt: WireDate) throws -> HarnessScreen {
@@ -100,7 +115,7 @@ public enum NativePickerScreen {
         var listed: [String] = []
         for entry in array(p["items"]) {
             guard let fields = object(entry), let id = string(fields["id"]), !id.isEmpty,
-                  let label = string(fields["label"]), !label.isEmpty else { throw Unsupported.malformedItem }
+                  let label = plain(fields["label"]), !label.isEmpty else { throw Unsupported.malformedItem }
             var facets: [String: String] = [:]
             if let facts = object(fields["facts"]) {
                 for (name, value) in facts { if let text = plain(value), !text.isEmpty { facets[name] = text } }
@@ -112,7 +127,9 @@ public enum NativePickerScreen {
             let badge = array(fields["badges"]).compactMap { object($0).flatMap { string($0["text"]) } }.first
             var disabled: Bool?
             if let value = fields["disabled"], value != .bool(false), value != .null { disabled = true }
-            byID[id] = .init(id: id, title: label, subtitle: string(fields["detail"]), badge: badge,
+            if let depth = fields["depth"], case .number(let level) = depth { facets["native.depth"] = String(Int(level)) }
+            if let kind = string(fields["node"]), !kind.isEmpty { facets["native.node"] = kind }
+            byID[id] = .init(id: id, title: label, subtitle: plain(fields["detail"]), badge: badge,
                              disabled: disabled, facets: facets.isEmpty ? nil : facets)
             listed.append(id)
         }
