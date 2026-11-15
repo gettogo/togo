@@ -295,6 +295,9 @@ func (s *sess) start() {
 		}
 		return
 	}
+	if r.newer {
+		s.e.cfg.Logf("harness: %s: version %s is newer than the adapter was checked against (%s)", s.ad.Adapter.Adapter, r.version, s.ad.Harness.Range)
+	}
 	for _, name := range s.ad.feedOrder {
 		mname := s.ad.Feeds[name].Mapper
 		if _, ok := s.mappers[mname]; !ok {

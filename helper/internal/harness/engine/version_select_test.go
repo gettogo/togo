@@ -31,9 +31,9 @@ capabilities: [chat]
 }
 
 func TestAdapterPickedByVersion(t *testing.T) {
-	for version, want := range map[string]string{"1.18.20": "vsel1", "2.2.5": "vsel2", "3.0.0": "vsel1"} {
+	for version, want := range map[string]string{"1.18.20": "vsel1", "2.2.5": "vsel2", "3.0.0": "vsel1", "0.9.0": "vsel1"} {
 		bin := fakeBin(t, version)
-		id := "s_vsel" + map[string]string{"vsel1": "aaaa", "vsel2": "bbbb"}[want] + version[:1]
+		id := "s_vsel" + map[string]string{"vsel1": "aaaa", "vsel2": "bbbb"}[want] + version[:1] + version[2:3]
 		e := New(Config{
 			Sessions:  fakeSessions{id: session.Session{ID: id, Agent: "vsel", Managed: true, Cwd: t.TempDir(), Command: []string{"vsel"}}},
 			Home:      t.TempDir(),

@@ -232,6 +232,11 @@ func TestVersionGate(t *testing.T) {
 		{"2.1.319 (Claude Code)\n", `^(\d+\.\d+\.\d+)`, ">=2.1.250 <3", true, "2.1.319"},
 		{"2.1.200 (Claude Code)", `^(\d+\.\d+\.\d+)`, ">=2.1.250 <3", false, "2.1.200"},
 		{"3.0.0", `^(\d+\.\d+\.\d+)`, ">=2.1.250 <3", false, "3.0.0"},
+		{"0.81.2", `^(\d+\.\d+\.\d+)`, ">=0.73 <0.80", true, "0.81.2"},
+		{"1.0.0", `^(\d+\.\d+\.\d+)`, ">=0.73 <0.80", false, "1.0.0"},
+		{"2.0.0", `^(\d+\.\d+\.\d+)`, "<2", false, "2.0.0"},
+		{"codex-cli 0.169.0", `(\d+\.\d+\.\d+)`, ">=0.144 <0.168", true, "0.169.0"},
+		{"codex-cli 0.143.9", `(\d+\.\d+\.\d+)`, ">=0.144 <0.168", false, "0.143.9"},
 		{"codex-cli 0.144.1", `(\d+\.\d+\.\d+)`, ">=0.140 <0.150", true, "0.144.1"},
 		{"omp/18.16.0-beta", `omp/(\S+)`, ">=18.10 <19", true, "18.16.0-beta"},
 		{"garbage", `^(\d+\.\d+)`, ">=1", false, ""},
@@ -241,6 +246,12 @@ func TestVersionGate(t *testing.T) {
 		if r.ok != c.ok || r.version != c.version {
 			t.Errorf("judge(%q, %q) = %+v", c.out, c.rng, r)
 		}
+	}
+	if r := judgeVersion("0.169.0", "", ">=0.144 <0.168"); !r.newer {
+		t.Error("a version past the upper bound is not marked newer")
+	}
+	if r := judgeVersion("0.150.0", "", ">=0.144 <0.168"); r.newer {
+		t.Error("a version inside the range is marked newer")
 	}
 	if _, err := parseRange("~2"); err == nil {
 		t.Error("bad range parsed")

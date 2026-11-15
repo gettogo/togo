@@ -307,9 +307,9 @@ func (e *Engine) gateEnv() harness.Env {
 }
 
 // adapterFor picks the adapter serving a session. When several match (one
-// per major version of a harness, as OpenCode 1.x and 2.x), the first whose
-// version range holds the installed harness wins; with none, or no version
-// read, the first by id.
+// per major version of a harness, as OpenCode 1.x and 2.x), the one whose
+// version range holds the installed harness wins, then one that serves it
+// as a newer release. With none, or no version read, the first by id.
 func (e *Engine) adapterFor(agent string, argv []string, env harness.Env) *adapter {
 	var found []*adapter
 	for _, id := range sortedIDs(e.adapters) {
@@ -321,9 +321,11 @@ func (e *Engine) adapterFor(agent string, argv []string, env harness.Env) *adapt
 		return nil
 	}
 	if len(found) > 1 {
-		for _, a := range found {
-			if r := e.gate.check(context.Background(), a, env); r.ok {
-				return a
+		for _, exact := range []bool{true, false} {
+			for _, a := range found {
+				if r := e.gate.check(context.Background(), a, env); r.ok && r.newer != exact {
+					return a
+				}
 			}
 		}
 	}
