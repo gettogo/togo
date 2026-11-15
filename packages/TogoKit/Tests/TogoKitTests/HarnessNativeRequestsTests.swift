@@ -27,6 +27,15 @@ struct HarnessNativeRequestsTests {
         #expect(requests.next(in: items + [Self.text("b", seq: 3)], available: true) == nil)
     }
 
+    @Test func attachesOnlyApprovalsExplicitlyMarkedUnanswerable() {
+        let item = HarnessItem(id: "hook", seq: 2, at: WireDate(Self.t0), body: .approval(.init(requestId: "r_test")))
+        var requests = HarnessNativeRequests()
+        #expect(requests.next(in: [item], available: true) == nil)
+        #expect(requests.next(in: [item], available: true, unanswerableApprovals: ["hook"]) == "hook")
+        #expect(requests.next(in: [item], available: false, unanswerableApprovals: ["hook"]) == nil)
+        #expect(requests.next(in: [item], available: true, unanswerableApprovals: ["hook"]) == nil)
+    }
+
     @Test func leavesQuestionsThePhoneCanAnswerToTheChat() {
         var requests = HarnessNativeRequests()
         let items = [Self.question("old", seq: 1, answerable: nil), Self.question("card", seq: 2, answerable: true)]

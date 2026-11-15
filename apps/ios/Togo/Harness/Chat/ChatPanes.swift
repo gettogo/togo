@@ -60,7 +60,7 @@ struct ChatPanes: View {
                         answersKeys: shown && (!geometry.showsTwoPanes || store.workspace.focused == pane)
                     )
                         .id(id)
-                        .modifier(NativeCommandPresentation(store: harness, showing: shown))
+                        .modifier(NativeCommandPresentation(store: harness, showing: shown, actions: store.chatActions(for: id)))
                         // motion: state change — a tab switch is a cut: two half-faded chats
                         // would let the next tab's terminal show through.
                         .transition(.identity)

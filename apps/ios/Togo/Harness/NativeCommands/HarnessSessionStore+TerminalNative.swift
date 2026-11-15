@@ -55,6 +55,24 @@ extension HarnessSessionStore {
         catch { if terminalInteraction === model { retireTerminalInteraction() } }
     }
 
+    /// A question is independent of any command watch. Reserve its interaction
+    /// before starting the read, so changing view-task availability cannot cancel
+    /// the connection. Existing handback and stop paths retire that same model.
+    func attachTerminalQuestion(approvals: Set<String> = []) {
+        guard canAttachTerminalQuestion, shownLayer == .chat,
+              nativeInteractions.requests.next(in: feed.timeline.conversation(), available: true,
+                  unanswerableApprovals: approvals) != nil else { return }
+        nativeInteractions.terminalWatch.cancel()
+        let binding = conversation
+        let model = makeTerminalInteraction(binding: binding)
+        terminalInteraction = model
+        Task {
+            guard terminalInteraction === model, conversation == binding, phase == .live, shownLayer == .chat else { return }
+            do { _ = try await model.attach() }
+            catch { if terminalInteraction === model { retireTerminalInteraction() } }
+        }
+    }
+
     private func makeTerminalInteraction(binding: UUID) -> TerminalNativeInteraction {
         let model = TerminalNativeInteraction(sessionID: subject.sessionID) { [services, subject] in
             try await services.terminalConnection(subject)

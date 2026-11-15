@@ -19,6 +19,20 @@ extension HarnessSessionStore {
             && terminalInteraction == nil && !nativeInteractions.stopping
     }
 
+    var terminalQuestionIDs: [String] {
+        guard !surfaceAvailable else { return [] }
+        return timeline.conversation().compactMap { item in
+            guard case .question(let question) = item.body, !question.isAnswerable,
+                  question.answered?.isEmpty ?? true else { return nil }
+            return item.id
+        }
+    }
+
+    var canAttachTerminalQuestion: Bool {
+        !surfaceAvailable && phase == .live && has(HarnessCapability.terminalNative)
+            && interaction == nil && terminalInteraction == nil && !nativeInteractions.stopping
+    }
+
     /// The visible chat consumes this signal once. A hidden pane, another
     /// command or another conversation cannot claim a late menu.
     func attachReadyTerminalMenu(_ request: UUID) async {

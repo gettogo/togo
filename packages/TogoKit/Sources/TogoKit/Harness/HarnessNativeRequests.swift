@@ -1,6 +1,6 @@
 import Foundation
 
-/// Picks the question the chat should attach the agent's own screen to.
+/// Picks a request the chat should attach the agent's own screen to.
 ///
 /// A question the phone cannot answer through the chat (`answerable` false) is
 /// one the agent is showing in its terminal. Where the session can show that
@@ -23,11 +23,19 @@ public struct HarnessNativeRequests: Sendable {
     /// the questions that were already waiting when a command was sent. They
     /// are neither returned nor marked, and still count as waiting, so one
     /// that was attached before stays attached.
-    public mutating func next(in items: [HarnessItem], available: Bool, skipping: Set<String> = []) -> String? {
+    /// `unanswerableApprovals` names approval items whose live request cards
+    /// offer neither options nor text; answerable approvals stay in the chat.
+    public mutating func next(in items: [HarnessItem], available: Bool, skipping: Set<String> = [],
+                              unanswerableApprovals: Set<String> = []) -> String? {
         var waiting: [(id: String, seq: Int)] = []
         for item in items {
-            guard case .question(let question) = item.body, !question.isAnswerable,
-                  question.answered?.isEmpty ?? true else { continue }
+            switch item.body {
+            case .question(let question):
+                guard !question.isAnswerable, question.answered?.isEmpty ?? true else { continue }
+            case .approval(let approval):
+                guard approval.resolved == nil, approval.owner == nil, unanswerableApprovals.contains(item.id) else { continue }
+            default: continue
+            }
             waiting.append((item.id, item.seq))
         }
         attached.formIntersection(waiting.map(\.id))

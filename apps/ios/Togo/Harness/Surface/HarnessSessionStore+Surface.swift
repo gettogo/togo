@@ -139,12 +139,22 @@ extension HarnessSessionStore {
 
     func updateNativeQuestion() {
         if working { interaction?.turnStarted() }
+        let items = feed.timeline.conversation()
+        let approvals = Set(items.compactMap { item -> String? in
+            guard !surfaceAvailable, case .approval(let approval) = item.body,
+                  approval.resolved == nil, approval.owner == nil else { return nil }
+            return item.id
+        })
+        if !surfaceAvailable, terminalInteraction?.screen != nil {
+            _ = nativeInteractions.requests.next(in: items, available: true, unanswerableApprovals: approvals)
+        }
         if let current = interaction, current.command != nil, current.requestID == nil, current.showingForm,
            let id = nativeInteractions.requests.next(in: feed.timeline.conversation(), available: true, skipping: current.earlierRequests) {
             current.attachRequest(id)
         }
-        guard let id = nativeInteractions.requests.next(in: feed.timeline.conversation(),
-            available: surfaceAvailable && interaction == nil && terminalInteraction == nil && !nativeInteractions.stopping) else { return }
+        guard let id = nativeInteractions.requests.next(in: items,
+            available: surfaceAvailable && interaction == nil && terminalInteraction == nil && !nativeInteractions.stopping,
+            unanswerableApprovals: approvals) else { return }
         interaction = makeInteraction(command: nil, requestID: id)
     }
 }

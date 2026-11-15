@@ -94,6 +94,24 @@ struct NativeCommandPresentation: ViewModifier {
     @Environment(\.scenePhase) private var scenePhase
     let store: HarnessSessionStore
     let showing: Bool
+    var actions: ChatActions = .inert
+
+    private var unanswerableApprovals: Set<String> {
+        guard !store.surfaceAvailable else { return [] }
+        return Self.terminalApprovals(in: store.timeline.conversation(), card: actions.card)
+    }
+
+    static func terminalApprovals(in items: [HarnessItem], card: (String) -> RequestCard?) -> Set<String> {
+        Set(items.compactMap { item in
+            guard case .approval(let approval) = item.body, approval.resolved == nil, approval.owner == nil else { return nil }
+            if let card = card(approval.requestId) {
+                guard card.phase == .open, !ApprovalRow.answerable(card) else { return nil }
+            }
+            return item.id
+        })
+    }
+
+    private var terminalRequests: [String] { store.terminalQuestionIDs + unanswerableApprovals.sorted() }
 
     private enum Request: Identifiable {
         case surface(ChatSurfaceInteraction)
@@ -133,9 +151,14 @@ struct NativeCommandPresentation: ViewModifier {
         .onChange(of: showing) { _, shown in if !shown { store.retireTerminalInteraction() } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { store.retireTerminalInteraction() } }
         .task(id: LateMenu(active: showing && scenePhase == .active, request: store.readyTerminalMenu,
-                          available: store.canAttachTerminalMenu, conversation: store.conversation)) {
-            guard showing, scenePhase == .active, let request = store.readyTerminalMenu else { return }
-            await store.attachReadyTerminalMenu(request)
+                          available: store.canAttachTerminalMenu || (!terminalRequests.isEmpty && store.canAttachTerminalQuestion),
+                          questions: terminalRequests, conversation: store.conversation)) {
+            guard showing, scenePhase == .active else { return }
+            if store.canAttachTerminalQuestion, !terminalRequests.isEmpty {
+                store.attachTerminalQuestion(approvals: unanswerableApprovals)
+            } else if let request = store.readyTerminalMenu {
+                await store.attachReadyTerminalMenu(request)
+            }
         }
         .task(id: Attachment(active: showing && scenePhase == .active,
             available: store.has(HarnessCapability.terminalNative) && store.phase == .live,
@@ -155,6 +178,7 @@ struct NativeCommandPresentation: ViewModifier {
         let active: Bool
         let request: UUID?
         let available: Bool
+        let questions: [String]
         let conversation: UUID
     }
 }
