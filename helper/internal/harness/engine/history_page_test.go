@@ -295,3 +295,187 @@ func TestAChatWithOlderUnreadMessagesSaysSoAboveThem(t *testing.T) {
 		t.Error("the notice repeats the cursor")
 	}
 }
+
+// A route's answer that cannot be read as a page is not taken for the start
+// of the conversation: a cursor that is a number or an object, or data that
+// is not a list, leaves the read partial or failed, never complete.
+func TestAnAnswerThatIsNotAPageIsNotTheStart(t *testing.T) {
+	for name, body := range map[string]string{
+		"a numeric cursor": `{"data":[{"n":2}],"cursor":{"next":17}}`,
+		"an object cursor": `{"data":[{"n":2}],"cursor":{"next":{"unexpected":"shape"}}}`,
+		"data not a list":  `{"data":{"n":2},"cursor":{}}`,
+	} {
+		e, s := pagedEngine(t, &pagedRoute{})
+		called := false
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			called = true
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, body)
+		}))
+		u, _ := url.Parse(srv.URL)
+		port, _ := strconv.Atoi(u.Port())
+		e.eps.mu.Lock()
+		e.eps.byID[s.id] = endpoint{kind: spec.EndpointHTTP, port: port, adapter: "fakehist"}
+		e.eps.mu.Unlock()
+		s.env.Endpoint = srv.URL
+		h := pagedHistory(0)
+		h.Items = ".data"
+		events, partial, err := e.readHistory(context.Background(), s, h, "A")
+		srv.Close()
+		if !called {
+			t.Fatalf("%s: the route was not read", name)
+		}
+		if err == nil && !partial {
+			t.Errorf("%s: taken for a complete past (%d records)", name, len(events))
+		}
+	}
+	// An absent, null or empty cursor does say the start was reached.
+	for name, body := range map[string]string{
+		"no cursor":    `{"data":[{"n":1}]}`,
+		"null cursor":  `{"data":[{"n":1}],"cursor":{"next":null}}`,
+		"empty cursor": `{"data":[{"n":1}],"cursor":{"next":""}}`,
+	} {
+		e, s := pagedEngine(t, &pagedRoute{})
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, body)
+		}))
+		u, _ := url.Parse(srv.URL)
+		port, _ := strconv.Atoi(u.Port())
+		e.eps.mu.Lock()
+		e.eps.byID[s.id] = endpoint{kind: spec.EndpointHTTP, port: port, adapter: "fakehist"}
+		e.eps.mu.Unlock()
+		s.env.Endpoint = srv.URL
+		h := pagedHistory(0)
+		h.Items = ".data"
+		events, partial, err := e.readHistory(context.Background(), s, h, "A")
+		srv.Close()
+		if err != nil || partial || len(events) != 1 {
+			t.Errorf("%s: %d records partial %v err %v, want the whole past", name, len(events), partial, err)
+		}
+	}
+}
+
+// The line saying older messages are not shown holds the first place of the
+// chat however much is replayed after it is known: when the replay fills
+// what a session keeps, the line takes the place of the oldest item rather
+// than being pushed out with it. A replay that alone overflows what is kept
+// gets the line too, though the route was read to its start.
+func TestTheOlderMessagesLineKeepsFirstPlaceWhenTheChatIsFull(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pages int
+		keep  int
+	}{
+		"a partial read into a full chat": {2, 3},
+		"a whole read that overflows":     {0, 3},
+	} {
+		const id = "s_fakehistpf"
+		home, togo := t.TempDir(), t.TempDir()
+		var records []string
+		for i := 1; i <= 5; i++ {
+			records = append(records, histEvent(fmt.Sprintf("e%d", i), "A", fmt.Sprintf("a%d", i), fmt.Sprintf("said %d", i)))
+		}
+		route := &pagedRoute{records: records, size: 2, cursor: func(o int) string { return fmt.Sprintf("c%d", o) }}
+		srv := httptest.NewServer(route)
+		agent := "fakehistp"
+		if tc.pages == 0 {
+			agent = "fakehistw"
+		}
+		e := New(Config{
+			Sessions: fakeSessions{id: session.Session{ID: id, Agent: agent, Managed: true, Cwd: home, Command: []string{agent}}},
+			Typist:   &seqPane{}, Marker: &fakeMarker{}, Home: home, TogoHome: togo,
+			LoginPath: func(context.Context) string { return "/bin:/usr/bin" },
+			Log:       &Log{Max: tc.keep, NewEpoch: func() string { return "e1" }}, Scale: 0.1,
+		})
+		u, _ := url.Parse(srv.URL)
+		port, _ := strconv.Atoi(u.Port())
+		e.eps.mu.Lock()
+		e.eps.byID = map[string]endpoint{id: {kind: spec.EndpointHTTP, port: port, adapter: agent}}
+		e.eps.mu.Unlock()
+		ctx := context.Background()
+		if _, err := e.Describe(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		chat := func() []string {
+			res, err := e.Open(ctx, &fakeSub{done: make(chan struct{})}, id, 0, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out []string
+			for _, it := range res.Items {
+				switch {
+				case it.User != nil:
+					out = append(out, it.User.Text)
+				case it.Notice != nil:
+					out = append(out, "NOTICE:"+it.Notice.Text)
+				}
+			}
+			return out
+		}
+		deliver(id, json.RawMessage(histEvent("e5", "A", "a5", "said 5")))
+		waitFor(t, func() bool { c := chat(); return len(c) == tc.keep && strings.HasPrefix(c[0], "NOTICE:") })
+		got := chat()
+		want := []string{"NOTICE:" + olderInTerminal, "said 4", "said 5"}
+		if strings.Join(got, "|") != strings.Join(want, "|") {
+			t.Errorf("%s: chat = %q, want %q", name, got, want)
+		}
+		e.Forget(id)
+		srv.Close()
+	}
+}
+
+func init() {
+	harness.RegisterAdapterFile("fakehistw", []byte(`
+adapter: fakehistw
+name: HistW
+revision: 1
+match: { agents: [fakehistw] }
+capabilities: [chat, chat.history]
+feeds:
+  events:
+    hook: { events: [Event] }
+    history:
+      path: '/log/{{.conversation}}?limit=2&order=desc'
+      items: '.data | reverse'
+      page: { cursor: '.cursor.next', param: cursor, omit: [order] }
+    mapper: fake.events
+    stability: documented
+`))
+}
+
+// Lead puts an item first: before the others while there is room, else in
+// the place and number of the oldest. Numbers stay ascending and none below
+// the dropped ones is given out again.
+func TestLeadPutsAnItemFirst(t *testing.T) {
+	l := &Log{Max: 3, NewEpoch: func() string { return "e" }}
+	item := func(id string) harness.Item { return harness.Item{ID: id, Kind: harness.KindNotice} }
+	ids := func() string {
+		items, _, _ := l.Since("s", 0, 10)
+		var out []string
+		last := int64(0)
+		for _, it := range items {
+			if it.Seq <= last {
+				t.Fatalf("numbers are not ascending: %+v", items)
+			}
+			last = it.Seq
+			out = append(out, it.ID)
+		}
+		return strings.Join(out, ",")
+	}
+	l.Append("s", []harness.Item{item("lead"), item("a"), item("b")})
+	if l.Lead("s", item("lead")) || ids() != "lead,a,b" {
+		t.Fatalf("an item already first was moved: %s", ids())
+	}
+	l.Append("s", []harness.Item{item("c"), item("d")}) // lead and a are dropped
+	if ids() != "b,c,d" {
+		t.Fatalf("ring = %s", ids())
+	}
+	floor := l.RetentionFloor("s")
+	if !l.Lead("s", item("lead")) || ids() != "lead,c,d" {
+		t.Fatalf("lead in a full ring = %s", ids())
+	}
+	items, _, _ := l.Since("s", 0, 10)
+	if items[0].Seq <= floor {
+		t.Errorf("the lead item took a number at or below the dropped ones: %d <= %d", items[0].Seq, floor)
+	}
+}

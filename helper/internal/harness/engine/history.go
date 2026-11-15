@@ -114,14 +114,18 @@ func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 		}
 	}
 	if err == nil && !moved && len(events) > 0 {
-		if partial {
-			// Older messages exist that were not read (a bound, or a page
-			// that failed). Said above what is shown, in fixed words.
-			s.publishLocked([]harness.Item{{ID: "history-partial-" + conv, Kind: harness.KindNotice, At: e.cfg.Now(),
-				Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeFallback, Text: olderInTerminal}}}, nil)
-		}
+		floor := e.log.RetentionFloor(s.id)
 		s.mappers[mapper] = e.mapperFor(mapper, s.env)
 		s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: events})
+		// Older messages exist that are not shown: not all were read (a
+		// bound, a page that failed), or the replay itself was more than
+		// a session keeps and the oldest were dropped. Said in fixed words
+		// in the first place of the chat, after the replay, so that the
+		// replay cannot push it out.
+		if partial || e.log.RetentionFloor(s.id) > floor {
+			e.log.Lead(s.id, harness.Item{ID: "history-partial-" + conv, Kind: harness.KindNotice, At: e.cfg.Now(),
+				Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeFallback, Text: olderInTerminal}})
+		}
 	}
 	// Held records are mapped as they would have been, after the past.
 	for _, rec := range heldOf(held) {
@@ -174,6 +178,7 @@ func (e *Engine) readHistory(ctx context.Context, s *sess, h *spec.History, conv
 		}
 		return v, len(out), nil
 	}
+	paged := h.Page != nil && h.Page.Cursor != "" && h.Page.Param != ""
 	listOf := func(v any) ([]any, error) {
 		if h.Items != "" {
 			var err error
@@ -181,7 +186,12 @@ func (e *Engine) readHistory(ctx context.Context, s *sess, h *spec.History, conv
 				return nil, err
 			}
 		}
-		list, _ := v.([]any)
+		list, ok := v.([]any)
+		// A paged route's answer must be a list: anything else is not a
+		// page with nothing in it, and is not taken for one.
+		if !ok && paged {
+			return nil, errors.New("history page is not a list")
+		}
 		return list, nil
 	}
 	answer, size, err := fetch(first)
@@ -192,7 +202,7 @@ func (e *Engine) readHistory(ctx context.Context, s *sess, h *spec.History, conv
 	if err != nil {
 		return nil, false, err
 	}
-	if p := h.Page; p != nil && p.Cursor != "" && p.Param != "" {
+	if p := h.Page; paged {
 		pages := p.MaxPages
 		if pages <= 0 {
 			pages = historyPages
@@ -200,9 +210,14 @@ func (e *Engine) readHistory(ctx context.Context, s *sess, h *spec.History, conv
 		pages = min(pages, historyPagesMax)
 		seen := map[string]bool{}
 		for page := 1; ; page++ {
-			cursor := ""
-			if c, err := JQFirst(p.Cursor, answer, nil); err == nil {
-				cursor, _ = c.(string)
+			// The start is reached only when the answer says so: a cursor
+			// that is absent, null or empty. A cursor that cannot be read,
+			// or is not text, says nothing about the start.
+			c, cerr := JQFirst(p.Cursor, answer, nil)
+			cursor, isText := c.(string)
+			if cerr != nil || (c != nil && !isText) {
+				partial = true
+				break
 			}
 			if cursor == "" {
 				break // the start of the conversation was reached

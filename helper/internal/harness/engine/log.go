@@ -163,3 +163,42 @@ func (l *Log) RetentionFloor(session string) int64 {
 	defer l.mu.Unlock()
 	return l.get(session).discarded
 }
+
+// Lead makes an item the first of a session's items, the one above all the
+// others. If it is already held it is moved there. When there is no room
+// before the first item (the ring is full, or the numbers before it were
+// given to items since dropped), it takes the place and number of the
+// oldest item: what it says stands for that item and everything before it.
+// It reports whether anything changed.
+func (l *Log) Lead(session string, it harness.Item) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	r := l.get(session)
+	if len(r.items) > 0 && r.items[0].ID == it.ID {
+		return false
+	}
+	for i := range r.items {
+		if r.items[i].ID == it.ID {
+			r.items = append(r.items[:i], r.items[i+1:]...)
+			break
+		}
+	}
+	limit := l.Max
+	if limit <= 0 {
+		limit = MaxItems
+	}
+	if len(r.items) == 0 {
+		r.seq++
+		it.Seq = r.seq
+		r.items = []harness.Item{it}
+		return true
+	}
+	if first := r.items[0].Seq; len(r.items) < limit && first-1 > r.discarded {
+		it.Seq = first - 1
+		r.items = append([]harness.Item{it}, r.items...)
+		return true
+	}
+	it.Seq = r.items[0].Seq
+	r.items[0] = it
+	return true
+}
