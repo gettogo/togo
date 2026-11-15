@@ -127,20 +127,24 @@ func TestARowIsChosenOnlyFromItsOwnListAsItIsNow(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	kind := "select"
 	choose := func(list, item string) error {
-		event, _ := json.Marshal(map[string]any{"ev": "select", "sf": "one", "id": list, "item": item})
+		event, _ := json.Marshal(map[string]any{"ev": kind, "sf": "one", "id": list, "item": item})
 		_, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: event})
 		return err
 	}
-	if err := choose("pick", "pick/a"); err != nil {
-		t.Fatalf("a row of the list was refused: %v", err)
-	}
-	for name, c := range map[string][2]string{
-		"another list's row": {"pick", "other/x"}, "a row that is gone": {"pick", "pick/zz"},
-		"a disabled row": {"pick", "pick/off"}, "a hidden row": {"pick", "pick/gone"},
-	} {
-		if err := choose(c[0], c[1]); !errors.Is(err, errLease) {
-			t.Errorf("%s was passed on: %v", name, err)
+	// Choosing a row and opening one are held to the same rule.
+	for _, kind = range []string{"select", "activate"} {
+		if err := choose("pick", "pick/a"); err != nil {
+			t.Fatalf("%s: a row of the list was refused: %v", kind, err)
+		}
+		for name, c := range map[string][2]string{
+			"another list's row": {"pick", "other/x"}, "a row that is gone": {"pick", "pick/zz"},
+			"a disabled row": {"pick", "pick/off"}, "a hidden row": {"pick", "pick/gone"},
+		} {
+			if err := choose(c[0], c[1]); !errors.Is(err, errLease) {
+				t.Errorf("%s: %s was passed on: %v", kind, name, err)
+			}
 		}
 	}
 	event := json.RawMessage(`{"ev":"select","sf":"one","id":"pick","item":7}`)

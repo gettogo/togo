@@ -125,8 +125,8 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 		if ev == "edit" {
 			return validateEdit(fields, e.node)
 		}
-		if ev == "select" && fields["item"] != nil {
-			// A row is chosen by its list: it must be one of that list's
+		if (ev == "select" || ev == "activate") && fields["item"] != nil {
+			// A row is chosen, or opened, by its list: it must be one of that list's
 			// rows as the program shows them now, and one that can be
 			// chosen. A stale row never reaches the program.
 			var item string
