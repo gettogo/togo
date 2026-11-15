@@ -361,6 +361,75 @@ import TogoKit
         #expect(ignored == .ignored && store.commandRevision == current)
     }
 
+    private func pagingMenu(_ token: String) -> HarnessScreen {
+        var screen = menu(token)
+        var picker = screen.picker!
+        picker.presentation = .init(state: "partial", moreAction: .init(id: "terminal.more", label: "Show more",
+            args: ["interaction": .string(token)]))
+        screen.picker = picker
+        return screen
+    }
+
+    @Test func pagingRunsOnlyWhenAskedAndKeepsThePanelAndExistingRows() async throws {
+        let connection = Connection()
+        let first = pagingMenu("a")
+        var next = first
+        next.picker?.items.append(.init(id: "a/next", title: "Another model"))
+        connection.results = [.init(result: .applied, screen: first), .init(result: .applied, screen: next), .init(result: .applied)]
+        let model = model(connection)
+        _ = try await model.start("/models")
+        #expect(connection.calls.count == 1)
+        let result = await model.run("terminal.more", target: nil, args: ["interaction": .string("a")])
+        #expect(model.phase == .active && model.screen?.id == first.id)
+        #expect(model.screen?.picker?.items.map(\.id) == ["a/0", "a/1", "a/next"])
+        #expect(result?.screen?.picker?.selectionBehavior == "reselect")
+        #expect(connection.calls.map(\.action) == ["terminal.command", "terminal.more"])
+        await model.close(cancel: false)
+    }
+
+    @Test func pagingCannotClaimANewPanel() async throws {
+        let connection = Connection()
+        connection.results = [.init(result: .applied, screen: pagingMenu("a")), .init(result: .applied, screen: menu("b"))]
+        let model = model(connection)
+        _ = try await model.start("/models")
+        let result = await model.run("terminal.more", target: nil, args: nil)
+        #expect(result?.result == .failed && model.phase == .ended)
+        #expect(model.screen?.interaction == "a" && connection.closes == 1)
+    }
+
+    @Test func aListWithoutPagingCannotBePagedByAnOldButton() async throws {
+        let connection = Connection()
+        connection.results = [.init(result: .applied, screen: menu("a")), .init(result: .applied)]
+        let model = model(connection)
+        _ = try await model.start("/models")
+        let result = await model.run("terminal.more", target: nil, args: nil)
+        #expect(result?.result == .failed && model.phase == .active)
+        #expect(connection.calls.count == 1)
+        await model.close(cancel: false)
+    }
+
+    @Test func handbackDuringPagingClosesTheConnectionAndIgnoresTheReply() async throws {
+        let connection = Connection()
+        connection.results = [.init(result: .applied, screen: pagingMenu("a"))]
+        let model = model(connection)
+        _ = try await model.start("/models")
+        let gate = AsyncStream<Void>.makeStream()
+        let next = pagingMenu("a")
+        connection.handle = { _ in
+            var iterator = gate.stream.makeAsyncIterator()
+            _ = await iterator.next()
+            return .init(result: .applied, screen: next)
+        }
+        let page = Task { await model.run("terminal.more", target: nil, args: nil) }
+        try await until { connection.calls.count == 2 }
+        await model.close(cancel: false)
+        gate.continuation.yield(())
+        let late = await page.value
+        gate.continuation.finish()
+        #expect(late == nil && model.phase == .ended && !model.confirmedEnd)
+        #expect(connection.closes == 1 && connection.calls.count == 2)
+    }
+
     private func until(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(2)
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }

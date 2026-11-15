@@ -79,6 +79,21 @@ import TogoKit
         #expect(!search.failed)
     }
 
+    @Test func aMatchingSourceQueryShowsItsNewRowsWithoutAnotherRequest() async {
+        var source = source
+        source.query = "deep"
+        source.items.append(.init(id: "next-page", title: "Another source row"))
+        let search = RemotePickerSearch()
+        var calls = 0
+        #expect(search.isCurrent(query: "deep", source: source))
+        await search.load(query: "deep", source: source, delay: .zero) { _ in
+            calls += 1
+            return screen("unexpected")
+        }
+        #expect(calls == 0 && search.result == source)
+        #expect(!search.isCurrent(query: "different", source: source))
+    }
+
     @Test func cachedScreenCannotPretendToMatchANewServerQuery() async {
         let search = RemotePickerSearch()
         await search.load(query: "new", source: source, delay: .zero) { _ in

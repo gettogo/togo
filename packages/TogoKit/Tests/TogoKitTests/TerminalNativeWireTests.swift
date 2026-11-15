@@ -28,4 +28,12 @@ struct TerminalNativeWireTests {
         let roundTrip = try JSONDecoder().decode(HarnessScreen.self, from: JSONEncoder().encode(screen))
         #expect(roundTrip == screen)
     }
+
+    @Test func aPartialListCarriesItsOwnPagingAction() throws {
+        let presentation = HarnessPickerPresentation(state: "partial",
+            moreAction: .init(id: "terminal.more", label: "Show more", args: ["interaction": .string("panel")]))
+        let decoded = try JSONDecoder().decode(HarnessPickerPresentation.self, from: JSONEncoder().encode(presentation))
+        #expect(decoded == presentation)
+        #expect(decoded.moreAction?.args?["interaction"] == .string("panel"))
+    }
 }

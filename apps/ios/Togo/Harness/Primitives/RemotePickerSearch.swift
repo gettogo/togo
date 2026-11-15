@@ -13,7 +13,7 @@ import TogoKit
     @ObservationIgnored private var request = UUID()
 
     func isCurrent(query: String, source: HarnessScreen.Picker) -> Bool {
-        !loading && !failed && result != nil && acceptedQuery == query && acceptedSource == source
+        source.query == query || (!loading && !failed && result != nil && acceptedQuery == query && acceptedSource == source)
     }
 
     func load(
@@ -22,6 +22,16 @@ import TogoKit
     ) async {
         let token = UUID()
         request = token
+        // A source read already matching this query needs no second request.
+        // This also keeps a newly loaded page visible while the view updates.
+        if source.searchMode == "remote", source.query == query {
+            result = source
+            acceptedQuery = query
+            acceptedSource = source
+            loading = false
+            failed = false
+            return
+        }
         guard source.searchMode == "remote", let read else {
             result = nil
             acceptedQuery = ""

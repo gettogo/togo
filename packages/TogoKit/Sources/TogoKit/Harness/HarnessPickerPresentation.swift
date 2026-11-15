@@ -15,11 +15,14 @@ public struct HarnessPickerPresentation: Codable, Hashable, Sendable {
     public var message: String?
     public var total: Int?
     public var columns: [Column]?
+    public var moreAction: HarnessActionRef?
 
     public init(emptyText: String? = nil, searchPrompt: String? = nil, subtitle: String? = nil, noun: String? = nil,
-                state: String? = nil, message: String? = nil, total: Int? = nil, columns: [Column]? = nil) {
+                state: String? = nil, message: String? = nil, total: Int? = nil, columns: [Column]? = nil,
+                moreAction: HarnessActionRef? = nil) {
         self.emptyText = emptyText; self.searchPrompt = searchPrompt; self.subtitle = subtitle; self.noun = noun
         self.state = state; self.message = message; self.total = total; self.columns = columns
+        self.moreAction = moreAction
     }
 }
 

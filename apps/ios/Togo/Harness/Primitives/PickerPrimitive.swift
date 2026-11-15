@@ -13,7 +13,10 @@ struct PickerPrimitive: View {
     @Environment(\.browseLayout) var layout
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     let initialPicker: HarnessScreen.Picker
-    var picker: HarnessScreen.Picker { initialPicker.searchMode == "remote" && !searchConflict ? remote.result ?? initialPicker : initialPicker }
+    var picker: HarnessScreen.Picker {
+        if initialPicker.query == model.query { return initialPicker }
+        return initialPicker.searchMode == "remote" && !searchConflict ? remote.result ?? initialPicker : initialPicker
+    }
     /// The screen's title, for the chat's line: "Model Sonnet".
     var title = ""
     let context: PrimitiveContext
@@ -148,7 +151,16 @@ struct PickerPrimitive: View {
                     if presentation.state == "partial" {
                         Text(String(localized: "picker.partial", defaultValue: "Showing part of this list."))
                             .foregroundStyle(Color.togoMute)
-                        Button(PrimitiveCopy.openTerminal) { context.showTerminal() }
+                        if let more = presentation.moreAction {
+                            Button {
+                                Task { await actions.trigger(more, context: context) }
+                            } label: {
+                                OutcomeLabel(title: more.label, outcome: actions.outcome(more.id), busy: actions.isRunning(more.id))
+                            }
+                            .disabled(actions.isBusy || searchBlocked)
+                        } else if context.showsTerminal {
+                            Button(PrimitiveCopy.openTerminal) { context.showTerminal() }
+                        }
                     }
                     if picker.items.isEmpty, presentation.state != "loading", let empty = presentation.emptyText {
                         Text(verbatim: empty).foregroundStyle(Color.togoMute)

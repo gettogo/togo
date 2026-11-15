@@ -86,7 +86,10 @@ import TogoKit
         do {
             try await waitForRead()
             guard !busy, phase == .active, let client, let token = screen?.interaction,
-                  ["terminal.select", "terminal.key"].contains(action) else { throw Failure(message: SurfaceCopy.finishCurrent) }
+                  ["terminal.select", "terminal.key", "terminal.more"].contains(action) else { throw Failure(message: SurfaceCopy.finishCurrent) }
+            if action == "terminal.more", screen?.picker?.presentation?.moreAction?.id != action {
+                throw Failure(message: SurfaceCopy.inputChanged)
+            }
             if let given = args?["interaction"], given != .string(token) { throw Failure(message: SurfaceCopy.inputChanged) }
             let binding = lifetime
             busy = true
@@ -94,13 +97,17 @@ import TogoKit
             var values = args ?? [:]
             values["interaction"] = .string(token)
             dispatched = true
-            let result = try await client.harnessAction(.init(id: sessionID, action: action, target: target, args: values))
+            var result = try await client.harnessAction(.init(id: sessionID, action: action, target: target, args: values))
             guard lifetime == binding, phase == .active else { return nil }
+            if action == "terminal.more", result.result == .applied, result.screen == nil {
+                throw Failure(message: SurfaceCopy.unconfirmed)
+            }
             if result.result == .failed {
                 failure = result.message ?? SurfaceCopy.unconfirmed
                 await finish()
             } else if let next = result.screen {
-                try accept(next, transition: true)
+                try accept(next, transition: action != "terminal.more")
+                result.screen = screen
                 failure = nil
             } else { await finish(confirmed: result.result == .applied) }
             return result
