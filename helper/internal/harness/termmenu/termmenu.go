@@ -241,9 +241,6 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			}
 			break
 		}
-		if row >= 0 {
-			break
-		}
 	}
 	if row < 0 {
 		return Menu{}, false

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -89,18 +90,12 @@ func (e *Engine) drivingMenu(session string) bool {
 	// The connection that was driving it has ended: the list is let go
 	// now, as one left open, so the phone can take it up again at once.
 	if m.client != nil && e.cfg.ClientClosed != nil && e.cfg.ClientClosed(m.client) {
-		if e.leftOpen == nil {
-			e.leftOpen = map[string]string{}
-		}
-		e.leftOpen[session] = m.panel
+		e.markLeftLocked(session, m)
 		delete(e.menus, session)
 		return false
 	}
 	if time.Now().After(m.expires) {
-		if e.leftOpen == nil {
-			e.leftOpen = map[string]string{}
-		}
-		e.leftOpen[session] = m.panel
+		e.markLeftLocked(session, m)
 		delete(e.menus, session)
 		return false
 	}
@@ -122,7 +117,10 @@ func (e *Engine) menuLeftOpen(s *sess) (string, bool) {
 	defer cancel()
 	screen, err := e.cfg.StyledScreen(ctx, s.id)
 	if err == nil {
-		if menu, is := termmenu.Read(screen); is && menu.Title == panel {
+		// A list with no title of its own is known by its rows: other
+		// text on the screen (a command the program echoes above its
+		// input line) can read as an untitled list too.
+		if menu, is := termmenu.Read(screen); is && menu.Title == panel && (panel != "" || e.sharesLeftRow(s.id, menu)) {
 			return panel, true
 		}
 		// A text prompt left open takes typed keys just as a list does.
@@ -136,8 +134,43 @@ func (e *Engine) menuLeftOpen(s *sess) (string, bool) {
 	}
 	e.menuMu.Lock()
 	delete(e.leftOpen, s.id)
+	delete(e.leftRows, s.id)
 	e.menuMu.Unlock()
 	return "", false
+}
+
+// markLeftLocked remembers a list as left open: its title and its rows.
+func (e *Engine) markLeftLocked(session string, m *terminalMenu) {
+	if e.leftOpen == nil {
+		e.leftOpen = map[string]string{}
+	}
+	if e.leftRows == nil {
+		e.leftRows = map[string][]string{}
+	}
+	e.leftOpen[session] = m.panel
+	rows := make([]string, 0, len(m.rows))
+	for _, it := range m.rows {
+		rows = append(rows, it.Label)
+	}
+	e.leftRows[session] = rows
+}
+
+// sharesLeftRow reports whether the list on the screen has a row of the
+// one remembered as left open. With no rows remembered it cannot tell and
+// says yes.
+func (e *Engine) sharesLeftRow(session string, now termmenu.Menu) bool {
+	e.menuMu.Lock()
+	rows := e.leftRows[session]
+	e.menuMu.Unlock()
+	if len(rows) == 0 {
+		return true
+	}
+	for _, it := range now.Items {
+		if slices.Contains(rows, it.Label) {
+			return true
+		}
+	}
+	return false
 }
 
 // client is the connection a call arrived on.
@@ -181,10 +214,7 @@ func (e *Engine) setMenu(session string, m *terminalMenu) {
 		// Whether the list is still on screen is not known here: it is
 		// remembered, and checked before anything is typed.
 		if old := e.menus[session]; old != nil {
-			if e.leftOpen == nil {
-				e.leftOpen = map[string]string{}
-			}
-			e.leftOpen[session] = old.panel
+			e.markLeftLocked(session, old)
 		}
 		delete(e.menus, session)
 		return
@@ -374,9 +404,21 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			if err := e.menuKeys(ctx, s, "Escape"); err != nil {
 				return harness.ActionResult{}, err
 			}
-			if after, still := e.readMenu(ctx, s); still && after.Title == before.Title && len(after.Items) == len(before.Items) {
-				e.setMenu(s.id, nil)
-				return failed("The menu did not close. Open the terminal to close it.")
+			same := func() bool {
+				after, still := e.readMenu(ctx, s)
+				return still && after.Title == before.Title && len(after.Items) == len(before.Items)
+			}
+			// A list with a search field in it may give its first Escape
+			// to that field. One more, only while the same list is still
+			// there.
+			if same() {
+				if err := e.menuKeys(ctx, s, "Escape"); err != nil {
+					return harness.ActionResult{}, err
+				}
+				if same() {
+					e.setMenu(s.id, nil)
+					return failed("The menu did not close. Open the terminal to close it.")
+				}
 			}
 		}
 		e.setMenu(s.id, nil)

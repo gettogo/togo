@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -140,6 +141,7 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 // list (returned as a screen), or nothing more (the list is done).
 func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *terminalMenu) (harness.ActionResult, error) {
 	menu, ok := e.readMenu(ctx, s)
+	ok = ok && !echoed(menu)
 	if !ok {
 		// No list. Done only if the input line is seen again; otherwise
 		// the harness shows something the phone cannot.
@@ -158,7 +160,7 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 		// that time is the command's list.
 		var backSince time.Time
 		for deadline := time.Now().Add(e.scaled(menuSettle + lateList)); ; {
-			if late, opened := e.readMenu(ctx, s); opened {
+			if late, opened := e.readMenu(ctx, s); opened && !echoed(late) {
 				menu, ok = late, true
 				break
 			}
@@ -406,4 +408,19 @@ func (m *terminalMenu) wholeOn(now termmenu.Menu) bool {
 		}
 	}
 	return true
+}
+
+// echoed reports a reading that is the command itself, printed back by
+// the program above its input line once it was run ("❯ /model"), not a
+// list: no title, and the row under the cursor is a command.
+func echoed(m termmenu.Menu) bool {
+	if m.Title != "" {
+		return false
+	}
+	for _, it := range m.Items {
+		if it.Cursor {
+			return strings.HasPrefix(it.Label, "/")
+		}
+	}
+	return false
 }

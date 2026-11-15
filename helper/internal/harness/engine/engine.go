@@ -64,6 +64,8 @@ type Engine struct {
 	// closing it. It is still on the harness's screen and has no owner:
 	// nothing is typed until the screen no longer shows it.
 	leftOpen map[string]string
+	// leftRows are that list's row names, for a list with no title.
+	leftRows map[string][]string
 	// entered holds, per session, how to recognise what was entered into
 	// prompts (never the entries themselves), to keep them out of what is
 	// read from the terminal afterwards.

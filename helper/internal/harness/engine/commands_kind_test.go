@@ -35,6 +35,7 @@ var commandTable = map[string]map[string]cmdWant{
 	"cline": {"resume": {kind: spec.CommandPicker}},
 	"codex": {
 		"model":   {kind: spec.CommandPicker},
+		"resume":  {kind: spec.CommandPicker},
 		"compact": {kind: spec.CommandRun, action: "compact"},
 		"review":  {kind: spec.CommandRun},
 		"diff":    {kind: spec.CommandRun, opens: spec.OpensChanges},
