@@ -103,3 +103,86 @@ func TestAListBelongsToTheConnectionThatOpenedIt(t *testing.T) {
 		t.Errorf("second device's command: %+v %v", res, err)
 	}
 }
+
+// A command for the terminal is one slash command on one line, of bounded
+// length, under the same argument limits as every action.
+func TestOnlyASingleSlashCommandIsTyped(t *testing.T) {
+	const id = "s_fakefake06"
+	e, pane := newFake(t, id, "1.2.3")
+	e.cfg.StyledScreen = func(context.Context, string) (string, error) { return "", nil }
+	typed := func() int {
+		pane.mu.Lock()
+		defer pane.mu.Unlock()
+		return len(pane.typed) + len(pane.keys)
+	}
+	n := typed()
+	for _, text := range []string{"hello", "/", "/models\n/exit", "/models\rrm -rf x", "/a\x1b[2J", "/" + strings.Repeat("x", 500), "  ", "/m /exit"} {
+		raw, _ := json.Marshal(text)
+		res, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: "terminal.command", Args: map[string]json.RawMessage{"text": raw}})
+		// Refused either by the argument limits every action has (control
+		// characters) or as not being a single command.
+		if err == nil && res.Result != harness.ResultFailed {
+			t.Errorf("%q was accepted: %+v", text, res)
+		}
+	}
+	if typed() != n {
+		t.Errorf("something was typed for a refused command")
+	}
+	// Too many arguments are refused like any action's.
+	args := map[string]json.RawMessage{}
+	for i := 0; i < 100; i++ {
+		args[strings.Repeat("k", i+1)] = json.RawMessage(`1`)
+	}
+	if _, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: "terminal.command", Args: args}); err == nil {
+		t.Error("the argument limit does not apply to terminal actions")
+	}
+}
+
+// A list belongs to the running session and the conversation it was opened
+// in. After the chat starts over for another conversation the list is gone:
+// its token opens nothing and no key is pressed for it.
+func TestAListEndsWithItsConversation(t *testing.T) {
+	const id = "s_fakefake07"
+	e, pane := newFake(t, id, "1.2.3")
+	e.cfg.StyledScreen = func(context.Context, string) (string, error) { return "", nil }
+	ctx := context.Background()
+	s, err := e.served(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	conv := s.convGen
+	s.mu.Unlock()
+	e.setMenu(id, &terminalMenu{sess: s, conv: conv, token: "tok", panel: "Select model", rows: []termmenu.Item{{Label: "DeepSeek"}}})
+	if !e.drivingMenu(id) || e.menuOf(ctx, id, "tok") == nil {
+		t.Fatal("the list is not held in its own conversation")
+	}
+	call := withMenuConv(ctx, s)
+	s.mu.Lock()
+	s.convGen++
+	s.mu.Unlock()
+	pane.mu.Lock()
+	n := len(pane.keys)
+	pane.mu.Unlock()
+	if err := e.menuKeys(call, s, "Enter"); err == nil {
+		t.Error("a key was allowed after the conversation changed")
+	}
+	if err := e.menuType(call, s, "glm"); err == nil {
+		t.Error("text was allowed after the conversation changed")
+	}
+	pane.mu.Lock()
+	after := len(pane.keys) + 0
+	pane.mu.Unlock()
+	if after != n {
+		t.Error("a key was pressed after the conversation changed")
+	}
+	if e.drivingMenu(id) || e.menuOf(ctx, id, "tok") != nil {
+		t.Error("the list outlived its conversation")
+	}
+	e.menuMu.Lock()
+	_, left := e.leftOpen[id]
+	e.menuMu.Unlock()
+	if left {
+		t.Error("a list of the old conversation still blocks typing in the new one")
+	}
+}

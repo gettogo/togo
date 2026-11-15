@@ -111,7 +111,7 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 	if menu.Total == 0 && !rowsEndOnScreen(menu) {
 		complete = false
 	}
-	m := &terminalMenu{client: e.client(ctx), token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint),
+	m := &terminalMenu{client: e.client(ctx), sess: s, conv: menuConv(ctx, s), token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint),
 		search: menu.Search, query: menu.Query, readQuery: menu.Query, scrolled: len(rows) > len(menu.Items)}
 	if previous != nil && previous.title != "" {
 		m.title = previous.title
@@ -205,7 +205,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 	if err := e.clearInput(ctx, s); err != nil {
 		return "", err
 	}
-	if err := e.cfg.Typist.Type(ctx, s.id, text, false, false); err != nil {
+	if err := e.menuType(ctx, s, text); err != nil {
 		return "", err
 	}
 	word := strings.TrimPrefix(strings.Fields(text)[0], "/")
@@ -231,12 +231,40 @@ var errMenuAbandoned = errors.New("harness: the phone is no longer there; nothin
 // before the next key, Enter included. The list is then one the phone let
 // go of, and nothing is typed until it is gone from the screen.
 func (e *Engine) menuKeys(ctx context.Context, s *sess, keys ...string) error {
+	if err := e.menuStillOurs(ctx, s); err != nil {
+		return err
+	}
+	return e.cfg.Typist.Keys(ctx, s.id, keys...)
+}
+
+// menuStillOurs is checked before every key and every text typed for a
+// list: the phone is still there, and the session is still the running
+// session, in the conversation the call began in.
+func (e *Engine) menuStillOurs(ctx context.Context, s *sess) error {
 	if ctx.Err() != nil || (e.cfg.ClientGone != nil && e.cfg.ClientGone(ctx)) {
 		e.setMenu(s.id, nil)
 		return errMenuAbandoned
 	}
-	return e.cfg.Typist.Keys(ctx, s.id, keys...)
+	if conv, ok := ctx.Value(menuConvKey{}).(uint64); ok && !e.stillServed(s, conv) {
+		e.menuMu.Lock()
+		delete(e.menus, s.id)
+		delete(e.leftOpen, s.id)
+		e.menuMu.Unlock()
+		return errMenuMoved
+	}
+	return nil
 }
+
+// menuType types text for a list under the same check.
+func (e *Engine) menuType(ctx context.Context, s *sess, text string) error {
+	if err := e.menuStillOurs(ctx, s); err != nil {
+		return err
+	}
+	return e.cfg.Typist.Type(ctx, s.id, text, false, false)
+}
+
+// errMenuMoved ends a list whose session restarted or changed conversation.
+var errMenuMoved = &harness.FallbackError{Reason: "moved", Detail: "The session moved on. Nothing more was pressed."}
 
 // rightOccurrence reports whether the cursor is on the row that was meant
 // and not on another that says the same. With the whole list on screen the

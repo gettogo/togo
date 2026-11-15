@@ -36,6 +36,7 @@ const (
 	menuLife          = 20 * time.Second
 	menuMaxRows       = 400
 	menuMaxSteps      = 420
+	maxMenuCommand    = 400
 	menuNotRecognised = "This screen could not be read as a list. Open the terminal to use it."
 )
 
@@ -45,7 +46,12 @@ type terminalMenu struct {
 	title  string
 	panel  string // the list's own title, to tell it is still this list
 	client any    // the connection that is driving the list
-	query  string // the text last seen or typed in the list's search field
+	// sess and conv are the running session and the conversation the list
+	// was opened in: a restart or a new conversation can show a list with
+	// the same title and rows, and it is not this one.
+	sess  *sess
+	conv  uint64
+	query string // the text last seen or typed in the list's search field
 	// scrolled: the rows were collected by moving through a list longer
 	// than the screen; readQuery is the search they were read under.
 	scrolled  bool
@@ -61,6 +67,11 @@ func (e *Engine) drivingMenu(session string) bool {
 	defer e.menuMu.Unlock()
 	m := e.menus[session]
 	if m == nil {
+		return false
+	}
+	if m.sess != nil && !e.stillServedLocked(m.sess, m.conv) {
+		delete(e.menus, session)
+		delete(e.leftOpen, session)
 		return false
 	}
 	if time.Now().After(m.expires) {
@@ -119,6 +130,13 @@ func (e *Engine) menuOf(ctx context.Context, session, token string) *terminalMen
 	if m.client != nil && m.client != e.client(ctx) {
 		return nil
 	}
+	if m.sess != nil && !e.stillServedLocked(m.sess, m.conv) {
+		// The session restarted or moved to another conversation: the list
+		// went with it, and what the screen shows now is something else.
+		delete(e.menus, session)
+		delete(e.leftOpen, session)
+		return nil
+	}
 	m.expires = time.Now().Add(menuLife)
 	return m
 }
@@ -152,6 +170,7 @@ func newToken() string {
 }
 
 func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionRequest) (harness.ActionResult, error) {
+	ctx = withMenuConv(ctx, s)
 	failed := func(msg string) (harness.ActionResult, error) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: msg}, nil
 	}
@@ -179,6 +198,12 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		var text string
 		if err := json.Unmarshal(req.Args["text"], &text); err != nil || strings.TrimSpace(text) == "" {
 			return failed("No command was given")
+		}
+		// One command on one line: a slash, a name, its arguments. A line
+		// break would submit what follows it as something else.
+		if clean := strings.TrimSpace(text); len(clean) > maxMenuCommand || !strings.HasPrefix(clean, "/") || len(clean) < 2 ||
+			strings.ContainsFunc(clean, func(r rune) bool { return r < 0x20 || r == 0x7f || r == 0x85 || r == 0x2028 || r == 0x2029 }) {
+			return failed("That is not a single command.")
 		}
 		if e.drivingMenu(s.id) {
 			return failed("A menu is already open on the phone. Finish or close it first.")
@@ -209,7 +234,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			return harness.ActionResult{Result: harness.ResultFallback, Message: "No menu is open in the terminal."}, nil
 		}
 		rows, complete := e.wholeList(ctx, s, menu)
-		m := &terminalMenu{client: e.client(ctx), token: newToken(), title: menu.Title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
+		m := &terminalMenu{client: e.client(ctx), sess: s, conv: menuConv(ctx, s), token: newToken(), title: menu.Title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
 		e.setMenu(s.id, m)
 		return harness.ActionResult{Result: harness.ResultApplied, Screen: e.menuScreen(m, menu, complete && (menu.Total > 0 || rowsEndOnScreen(menu)))}, nil
 	case "select":
@@ -277,4 +302,30 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
 	}
 	return harness.ActionResult{}, harness.ErrUnknownAction
+}
+
+type menuConvKey struct{}
+
+// withMenuConv records the conversation a call began in, before it waits
+// for anything: every key it presses later is pressed only if the session
+// is still that running session in that conversation.
+func withMenuConv(ctx context.Context, s *sess) context.Context {
+	s.mu.Lock()
+	conv := s.convGen
+	s.mu.Unlock()
+	return context.WithValue(ctx, menuConvKey{}, conv)
+}
+
+func menuConv(ctx context.Context, s *sess) uint64 {
+	if conv, ok := ctx.Value(menuConvKey{}).(uint64); ok {
+		return conv
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.convGen
+}
+
+// stillServedLocked is stillServed for callers that hold menuMu.
+func (e *Engine) stillServedLocked(s *sess, conv uint64) bool {
+	return e.stillServed(s, conv)
 }

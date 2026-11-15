@@ -97,6 +97,10 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 		return harness.ActionResult{}, err
 	}
 	if strings.HasPrefix(req.Action, terminalPrefix) {
+		// The same limits on arguments as every other action.
+		if _, err := checkArgs(req.Args); err != nil {
+			return harness.ActionResult{}, err
+		}
 		return e.terminalAct(ctx, s, req)
 	}
 	if req.Action == harness.ActionStop && req.Target != "" {

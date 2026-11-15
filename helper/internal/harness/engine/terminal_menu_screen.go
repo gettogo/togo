@@ -83,6 +83,7 @@ func rowsEndOnScreen(m termmenu.Menu) bool {
 // that has closed, or a screen that is no longer this list, is reported
 // with the reason, and the hold ends without a key.
 func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName string, query map[string]string) (harness.Screen, error) {
+	ctx = withMenuConv(ctx, s)
 	queryArg := query
 	token := query["interaction"]
 	if token == "" {
@@ -134,12 +135,8 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 				return harness.Screen{}, err
 			}
 		}
-		if ctx.Err() != nil || (e.cfg.ClientGone != nil && e.cfg.ClientGone(ctx)) {
-			e.setMenu(s.id, nil)
-			return harness.Screen{}, errMenuAbandoned
-		}
 		if query != "" {
-			if err := e.cfg.Typist.Type(ctx, s.id, query, false, false); err != nil {
+			if err := e.menuType(ctx, s, query); err != nil {
 				return harness.Screen{}, err
 			}
 		}
