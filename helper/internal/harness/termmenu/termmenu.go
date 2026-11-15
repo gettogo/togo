@@ -33,8 +33,9 @@ type Menu struct {
 	Title string
 	// Hint is the program's own line of keys ("↑↓ navigate · Enter select").
 	Hint string
-	// Search reports a search field in the list.
+	// Search reports a search field in the list; Query is the text in it.
 	Search bool
+	Query  string
 	Items  []Item
 	// Position and Total are the list's own counter ("3/96"), when shown:
 	// the list has Total rows and only some are on screen.

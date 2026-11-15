@@ -234,7 +234,7 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 
 func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) *harness.Screen {
 	interaction, _ := json.Marshal(m.token)
-	p := &harness.Picker{OnSelect: terminalPrefix + "select", Searchable: false,
+	p := &harness.Picker{OnSelect: terminalPrefix + "select", Searchable: menu.Search, Query: menu.Query,
 		OnSelectArgs: map[string]json.RawMessage{"interaction": interaction}}
 	for i, it := range m.rows {
 		id := m.token + "/" + strconv.Itoa(i)
@@ -246,6 +246,9 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 	title := menu.Title
 	if title == "" {
 		title = m.title
+	}
+	if menu.Search {
+		p.SearchMode = "remote"
 	}
 	sc := &harness.Screen{ID: menuScreenPrefix + m.token, Interaction: m.token, Primitive: harness.PrimPicker, Title: title, FetchedAt: time.Now(), Picker: p}
 	// A list read only in part is fresh, not stale: its rows are what the
@@ -530,6 +533,43 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	if menu.Title != m.panel {
 		e.setMenu(s.id, nil)
 		return harness.Screen{}, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+	}
+	// A search typed for the phone goes into the list's own search field:
+	// what is there is removed one character at a time, the new text is
+	// typed, and the list is read again. Nothing is typed when the field
+	// already holds that text.
+	if query, asked := query["query"]; asked && menu.Search && query != menu.Query {
+		if len(query) > 200 || strings.ContainsAny(query, "\n\r\x1b") {
+			return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: "That search cannot be typed."}
+		}
+		for range []rune(menu.Query) {
+			if err := e.menuKeys(ctx, s, "BSpace"); err != nil {
+				return harness.Screen{}, err
+			}
+		}
+		if ctx.Err() != nil || (e.cfg.ClientGone != nil && e.cfg.ClientGone(ctx)) {
+			e.setMenu(s.id, nil)
+			return harness.Screen{}, errMenuAbandoned
+		}
+		if query != "" {
+			if err := e.cfg.Typist.Type(ctx, s.id, query, false, false); err != nil {
+				return harness.Screen{}, err
+			}
+		}
+		after, ok := e.readMenu(ctx, s)
+		if !ok || after.Title != m.panel {
+			// No rows match, or the list went away.
+			if ok {
+				e.setMenu(s.id, nil)
+				return harness.Screen{}, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+			}
+			after = termmenu.Menu{Title: m.panel, Search: true, Query: query}
+		}
+		e.menuMu.Lock()
+		m.rows = after.Items
+		e.menuMu.Unlock()
+		sc := e.menuScreen(m, after, after.Total > 0 || rowsEndOnScreen(after))
+		return *sc, nil
 	}
 	// Rows on screen refresh what is known of them (the row in use may
 	// have changed); rows scrolled out of view keep what was read.

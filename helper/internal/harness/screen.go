@@ -58,8 +58,11 @@ type Picker struct {
 	// SearchMode is "remote" when the search text is to be sent as the
 	// screen's query value "search" and the list read again; absent, the
 	// app filters Items itself.
-	SearchMode string   `json:"searchMode,omitempty"`
-	Filters    []Filter `json:"filters,omitempty"`
+	SearchMode string `json:"searchMode,omitempty"`
+	// Query is the search text the list already has (a list read from the
+	// harness's terminal may have been searched at the desk).
+	Query   string   `json:"query,omitempty"`
+	Filters []Filter `json:"filters,omitempty"`
 	// OnSelect is the action run with args {"id": item id}.
 	OnSelect string `json:"onSelect"`
 	// OnSelectArgs are sent with OnSelect besides the chosen row.
