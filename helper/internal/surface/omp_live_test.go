@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 	"unicode/utf16"
@@ -56,7 +57,19 @@ func TestOriginalOMPTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sessions.Kill(context.Background(), created.ID)
+	// The program writes its state file as it exits. The test's folder is
+	// removed only once the program has gone, or the removal races it.
+	var programPID int
+	defer func() {
+		_ = sessions.Kill(context.Background(), created.ID)
+		for deadline := time.Now().Add(5 * time.Second); programPID > 0 && time.Now().Before(deadline); {
+			if syscall.Kill(programPID, 0) != nil {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}()
 	var config surface.CompanionConfig
 	var before surface.CompanionState
 	for {
@@ -74,6 +87,7 @@ func TestOriginalOMPTransport(t *testing.T) {
 		}
 	}
 	checkUnstartedReplacement(t, ctx, companions, created.ID, binary, config.Generation)
+	programPID = before.PID
 	svc := surface.NewService(home, sessions, t.Logf)
 	t.Logf("original OMP pid=%d", before.PID)
 	defer svc.Stop()
