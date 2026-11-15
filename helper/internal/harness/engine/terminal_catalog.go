@@ -212,8 +212,8 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 	add := func(m termmenu.Menu) int {
 		n := 0
 		for _, it := range m.Items {
-			name := strings.TrimPrefix(strings.Fields(it.Label + " ")[0], "/")
-			if name == "" || seen[name] || strings.ContainsAny(name, "()[]<>") {
+			name, ok := commandName(it.Label)
+			if !ok || seen[name] {
 				continue
 			}
 			seen[name] = true
@@ -273,4 +273,26 @@ func trimEdge(line string) string {
 		t = strings.TrimRight(strings.TrimSuffix(t, string(rs[len(rs)-1])), " ")
 	}
 	return t
+}
+
+// commandName is the command a row of a harness's command list names: its
+// first word without the "/", made of letters, digits and - _ : . only and
+// starting with a letter or digit. A row that is part of the list's frame
+// (a border, a counter) names none.
+func commandName(label string) (string, bool) {
+	words := strings.Fields(label)
+	if len(words) == 0 {
+		return "", false
+	}
+	name := strings.TrimPrefix(words[0], "/")
+	if name == "" {
+		return "", false
+	}
+	for i, r := range name {
+		letter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if !letter && (i == 0 || !strings.ContainsRune("-_:.", r)) {
+			return "", false
+		}
+	}
+	return name, true
 }
