@@ -1,0 +1,200 @@
+{
+ "id": "n",
+ "k": "picker",
+ "p": {
+  "actions": [
+   {
+    "id": "resume",
+    "keys": [
+     "enter"
+    ],
+    "label": "Resume",
+    "primary": true
+   },
+   {
+    "id": "delete",
+    "keys": [
+     "backspace"
+    ],
+    "label": "Delete"
+   },
+   {
+    "id": "rename",
+    "keys": [
+     "f2"
+    ],
+    "label": "Rename"
+   },
+   {
+    "id": "pin",
+    "keys": [
+     "alt",
+     "k"
+    ],
+    "label": "Pin"
+   },
+   {
+    "id": "scope",
+    "keys": [
+     "tab"
+    ],
+    "label": "All projects"
+   },
+   {
+    "end": true,
+    "id": "close",
+    "keys": [
+     "esc"
+    ],
+    "label": "Close"
+   }
+  ],
+  "columns": [
+   {
+    "format": "time",
+    "id": "when"
+   },
+   {
+    "format": "dim",
+    "id": "size"
+   }
+  ],
+  "current": [
+   "/sessions/project/current.jsonl"
+  ],
+  "cursor": 0,
+  "empty": "No sessions in this folder yet",
+  "icon": "history",
+  "items": [
+   {
+    "detail": "Reply with only these four words: Native check A ready",
+    "dot": "success",
+    "facts": {
+     "size": "3.2KB",
+     "when": "now"
+    },
+    "id": "/sessions/project/a.jsonl",
+    "label": "Native check A",
+    "title": "14 Nov 2026, 19:14"
+   }
+  ],
+  "layout": "cards",
+  "noun": "sessions",
+  "order": [
+   {
+    "count": 1,
+    "group": "today-0",
+    "label": "Today"
+   },
+   "/sessions/project/a.jsonl"
+  ],
+  "placeholder": "Search sessions in 001…",
+  "preview": "side",
+  "query": "",
+  "selected": "/sessions/project/a.jsonl",
+  "size": "lg",
+  "state": "ready",
+  "total": 1
+ },
+ "c": [
+  {
+   "id": "n.0",
+   "k": "text",
+   "p": {
+    "role": "omp.picker.title",
+    "text": "Native check A"
+   }
+  },
+  {
+   "id": "n.1",
+   "k": "kv",
+   "p": {
+    "items": [
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Folder"
+       }
+      ],
+      "v": [
+       {
+        "s": "path dim",
+        "t": "/tmp/"
+       },
+       {
+        "s": "path",
+        "t": "001"
+       }
+      ]
+     },
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Created"
+       }
+      ],
+      "v": "14 Nov 2026, 16:54"
+     },
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Modified"
+       }
+      ],
+      "v": "14 Nov 2026, 19:14"
+     },
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Size"
+       }
+      ],
+      "v": "3.2KB"
+     },
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Status"
+       }
+      ],
+      "v": [
+       {
+        "s": "success",
+        "t": "done"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "n.2",
+   "k": "section",
+   "p": {
+    "head": "Conversation"
+   },
+   "c": [
+    {
+     "id": "n.2/0",
+     "k": "md",
+     "p": {
+      "text": "Reply with only these four words: Native check A ready",
+      "tone": "user"
+     }
+    },
+    {
+     "id": "n.2/1",
+     "k": "md",
+     "p": {
+      "text": "Native check A ready"
+     }
+    }
+   ]
+  }
+ ]
+}

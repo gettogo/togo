@@ -1,0 +1,122 @@
+{
+ "id": "n.^picker",
+ "k": "picker",
+ "p": {
+  "actions": [
+   {
+    "id": "switch",
+    "keys": [
+     "enter"
+    ],
+    "label": "Switch",
+    "primary": true
+   },
+   {
+    "id": "summarize",
+    "keys": [
+     "shift",
+     "enter"
+    ],
+    "label": "Summarize & switch"
+   },
+   {
+    "id": "label",
+    "keys": [
+     "shift",
+     "l"
+    ],
+    "label": "Label"
+   },
+   {
+    "id": "filter",
+    "keys": [
+     "ctrl",
+     "o"
+    ],
+    "label": "Filter"
+   },
+   {
+    "end": true,
+    "id": "close",
+    "keys": [
+     "esc"
+    ],
+    "label": "Close"
+   }
+  ],
+  "current": [
+   "5843eb7d"
+  ],
+  "cursor": 0,
+  "empty": [
+   {
+    "s": "muted",
+    "t": "1 entries hidden by the current filter [default]. Press "
+   },
+   {
+    "s": "key",
+    "t": "alt+a"
+   },
+   {
+    "s": "muted",
+    "t": " to show all, "
+   },
+   {
+    "s": "key",
+    "t": "alt+d"
+   },
+   {
+    "s": "muted",
+    "t": " for default"
+   }
+  ],
+  "focus": "list",
+  "icon": "git-branch",
+  "items": [
+   {
+    "depth": 0,
+    "dot": "accent",
+    "id": "5843eb7d",
+    "label": [
+     {
+      "s": "dim",
+      "t": "[thinking: high]"
+     }
+    ],
+    "node": "marker"
+   }
+  ],
+  "layout": "tree",
+  "noun": "entries",
+  "order": [],
+  "placeholder": "Search entries…",
+  "preview": "side",
+  "query": "",
+  "size": "lg",
+  "tab": "default",
+  "tabs": [
+   {
+    "id": "default",
+    "label": "Default"
+   },
+   {
+    "id": "no-tools",
+    "label": "No tools"
+   },
+   {
+    "id": "user-only",
+    "label": "User only"
+   },
+   {
+    "id": "labeled-only",
+    "label": "Labeled"
+   },
+   {
+    "id": "all",
+    "label": "All"
+   }
+  ],
+  "title": "Session tree",
+  "total": 1
+ }
+}
