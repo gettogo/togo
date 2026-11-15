@@ -1,0 +1,445 @@
+{
+  "id": "layer.ov-n",
+  "k": "overlay",
+  "p": {
+    "anchor": "center",
+    "head": "Session info",
+    "modal": true,
+    "role": "omp.overlay.sessionInfo",
+    "size": "md"
+  },
+  "c": [
+    {
+      "id": "n",
+      "k": "col",
+      "p": {
+        "gap": "md"
+      },
+      "c": [
+        {
+          "id": "n.identity",
+          "k": "col",
+          "p": {
+            "role": "omp.info.identity"
+          },
+          "c": [
+            {
+              "id": "n.identity/id",
+              "k": "row",
+              "p": {
+                "align": "center",
+                "gap": "md",
+                "role": "omp.info.field"
+              },
+              "c": [
+                {
+                  "id": "n.identity/id/0",
+                  "k": "text",
+                  "p": {
+                    "role": "omp.info.label",
+                    "shrink": 0,
+                    "spans": [
+                      {
+                        "t": "ID"
+                      }
+                    ],
+                    "wrap": "none"
+                  }
+                },
+                {
+                  "id": "n.identity/id/value",
+                  "k": "row",
+                  "p": {
+                    "actions": {
+                      "click": "copy"
+                    },
+                    "align": "center",
+                    "gap": "sm",
+                    "grow": 1,
+                    "role": "omp.info.copy",
+                    "shrink": 1,
+                    "title": "Copy session ID"
+                  },
+                  "c": [
+                    {
+                      "id": "n.identity/id/value/0",
+                      "k": "text",
+                      "p": {
+                        "grow": 1,
+                        "shrink": 1,
+                        "spans": [
+                          {
+                            "s": "mono",
+                            "t": "01a1dc89-0563-763d-ade5-c6a5ee3f85b1"
+                          }
+                        ],
+                        "truncate": "middle"
+                      }
+                    },
+                    {
+                      "id": "n.identity/id/value/1",
+                      "k": "icon",
+                      "p": {
+                        "aria": "Copy session ID",
+                        "name": "copy",
+                        "role": "omp.info.copy.ic"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "n.identity/file",
+              "k": "row",
+              "p": {
+                "align": "center",
+                "gap": "md",
+                "role": "omp.info.field"
+              },
+              "c": [
+                {
+                  "id": "n.identity/file/0",
+                  "k": "text",
+                  "p": {
+                    "role": "omp.info.label",
+                    "shrink": 0,
+                    "spans": [
+                      {
+                        "t": "File"
+                      }
+                    ],
+                    "wrap": "none"
+                  }
+                },
+                {
+                  "id": "n.identity/file/value",
+                  "k": "row",
+                  "p": {
+                    "actions": {
+                      "click": "copy"
+                    },
+                    "align": "center",
+                    "gap": "sm",
+                    "grow": 1,
+                    "role": "omp.info.copy",
+                    "shrink": 1,
+                    "title": "Copy /tmp/native-command-check"
+                  },
+                  "c": [
+                    {
+                      "id": "n.identity/file/value/0",
+                      "k": "text",
+                      "p": {
+                        "grow": 1,
+                        "shrink": 1,
+                        "spans": [
+                          {
+                            "s": "path",
+                            "t": "/tmp/native-command-check"
+                          }
+                        ],
+                        "truncate": "middle"
+                      }
+                    },
+                    {
+                      "id": "n.identity/file/value/1",
+                      "k": "icon",
+                      "p": {
+                        "aria": "Copy /tmp/native-command-check",
+                        "name": "copy",
+                        "role": "omp.info.copy.ic"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n.1",
+          "k": "kv",
+          "p": {
+            "items": [
+              {
+                "k": "Build",
+                "v": [
+                  {
+                    "t": "18.20.2"
+                  }
+                ]
+              }
+            ],
+            "role": "omp.info.kv"
+          }
+        },
+        {
+          "id": "n.s1",
+          "k": "section",
+          "p": {
+            "head": "Provider",
+            "role": "omp.info.group"
+          },
+          "c": [
+            {
+              "id": "n.s1/0",
+              "k": "text",
+              "p": {
+                "role": "omp.info.note",
+                "spans": [
+                  {
+                    "s": "dim",
+                    "t": "No model selected"
+                  }
+                ],
+                "wrap": "word"
+              }
+            },
+            {
+              "id": "n.s1/1",
+              "k": "kv",
+              "p": {
+                "items": [
+                  {
+                    "k": "Append-only",
+                    "v": [
+                      {
+                        "s": "dim mono",
+                        "t": "inactive"
+                      },
+                      {
+                        "s": "mono",
+                        "t": " (setting: auto (?))"
+                      }
+                    ]
+                  }
+                ],
+                "layout": "grid",
+                "role": "omp.info.kv"
+              }
+            }
+          ]
+        },
+        {
+          "id": "n.stats",
+          "k": "row",
+          "p": {
+            "align": "start",
+            "role": "omp.info.stats",
+            "wrap": true
+          },
+          "c": [
+            {
+              "id": "n.stats/c0",
+              "k": "col",
+              "p": {
+                "role": "omp.info.column"
+              },
+              "c": [
+                {
+                  "id": "n.stats/c0/s2",
+                  "k": "section",
+                  "p": {
+                    "head": "Messages",
+                    "role": "omp.info.group"
+                  },
+                  "c": [
+                    {
+                      "id": "n.stats/c0/s2/0",
+                      "k": "kv",
+                      "p": {
+                        "items": [
+                          {
+                            "k": "User",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          },
+                          {
+                            "k": "Assistant",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          },
+                          {
+                            "k": "Tool calls",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          },
+                          {
+                            "k": "Tool results",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          }
+                        ],
+                        "layout": "grid",
+                        "role": "omp.info.nums"
+                      }
+                    },
+                    {
+                      "id": "n.stats/c0/s2/1",
+                      "k": "kv",
+                      "p": {
+                        "items": [
+                          {
+                            "k": "Total",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          }
+                        ],
+                        "layout": "grid",
+                        "role": "omp.info.total"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "n.stats/c1",
+              "k": "col",
+              "p": {
+                "role": "omp.info.column"
+              },
+              "c": [
+                {
+                  "id": "n.stats/c1/s3",
+                  "k": "section",
+                  "p": {
+                    "head": "Tokens",
+                    "role": "omp.info.group"
+                  },
+                  "c": [
+                    {
+                      "id": "n.stats/c1/s3/0",
+                      "k": "kv",
+                      "p": {
+                        "items": [
+                          {
+                            "k": "Input",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          },
+                          {
+                            "k": "Output",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          }
+                        ],
+                        "layout": "grid",
+                        "role": "omp.info.nums"
+                      }
+                    },
+                    {
+                      "id": "n.stats/c1/s3/1",
+                      "k": "kv",
+                      "p": {
+                        "items": [
+                          {
+                            "k": "Total",
+                            "v": [
+                              {
+                                "s": "mono",
+                                "t": "0"
+                              }
+                            ]
+                          }
+                        ],
+                        "layout": "grid",
+                        "role": "omp.info.total"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n.s4",
+          "k": "section",
+          "p": {
+            "head": "MCP servers",
+            "role": "omp.info.group"
+          },
+          "c": [
+            {
+              "id": "n.s4/0",
+              "k": "text",
+              "p": {
+                "role": "omp.info.note",
+                "spans": [
+                  {
+                    "s": "dim",
+                    "t": "None connected"
+                  }
+                ],
+                "wrap": "word"
+              }
+            }
+          ]
+        },
+        {
+          "id": "n.actions",
+          "k": "row",
+          "p": {
+            "align": "center",
+            "gap": "sm",
+            "role": "omp.actions"
+          },
+          "c": [
+            {
+              "id": "n.actions/0",
+              "k": "spacer",
+              "p": {
+                "grow": 1
+              }
+            },
+            {
+              "id": "n.actions/close",
+              "k": "button",
+              "p": {
+                "actions": {
+                  "click": "close"
+                },
+                "keys": [
+                  "escape"
+                ],
+                "role": "omp.btn",
+                "text": "Close",
+                "title": "Close  esc"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -34,6 +34,18 @@ extension CommandLineModel {
     }
 
     private func runTyped(_ command: HarnessCompletion, args: String, text: String) async {
+        if !args.isEmpty, let native = command.native,
+           command.role == .destructive || native.destructive == true,
+           ["action", "toggle", "exit"].contains(native.intent(hasArguments: true)) {
+            taken(text)
+            _ = await runCommand(.init(line: text, action: nil, destructive: true, detail: command.detail))
+            return
+        }
+        if opensOriginalScreen(command, arguments: args) {
+            paletteOpen = false
+            await send(line: text)
+            return
+        }
         let dispatch = CommandKind.dispatch(command)
         switch dispatch {
         case let .choose(choices, _):

@@ -53,7 +53,7 @@ import TogoKit
                     return HarnessActionResult(result: .applied)
                 }
             )
-            routes.nativeCommand = { text in
+            routes.nativeCommand = { text, _ in
                 self.nativeCommands.append(text)
                 if self.nativeFailure { throw ChatSurfaceInteraction.Failure(message: "Command not confirmed") }
             }
@@ -75,9 +75,27 @@ import TogoKit
         #expect(composer.presentedScreen == "resume")
         #expect(session.sends.isEmpty)
         #expect(CommandLineLogic.filter([command], query: "cont") == [command])
+        #expect(CommandLineLogic.matchingAlias(command, query: "cont") == "/continue")
+        #expect(CommandLineLogic.matchingAlias(command, query: "resume") == nil)
+        #expect(CommandLineLogic.matchingAlias(command, query: "") == nil)
         #expect(CommandLineLogic.filter([command], query: "sessions") == [command])
         #expect(CommandLineLogic.typed("/sessions more words", commands: [command]) == .command(command, args: "more words"))
         #expect(CommandLineLogic.typed("/continue/path", commands: [command]) == .text)
+    }
+
+    @Test func liveScreenIntentUsesOriginalWorkflowInsteadOfTheLegacyScreen() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.surface)
+        session.commands = [.init(insert: "/model", title: "/model", screen: "model", kind: .picker,
+            native: .init(opens: "screen", args: "optional", screenId: "model"))]
+        let composer = make(session)
+        composer.draft = "/model"
+        await composer.submit()
+        #expect(session.nativeCommands == ["/model"])
+        #expect(composer.presentedScreen == nil)
+        #expect(session.sends.isEmpty)
+        _ = await composer.perform(session.commands[0])
+        #expect(session.nativeCommands == ["/model", "/model"])
     }
 
     private func make(_ session: Session) -> CommandLineModel {
@@ -174,6 +192,31 @@ import TogoKit
         _ = await send("/compact focus on tests", session)
         #expect(session.sends == ["/compact focus on tests"])
         #expect(session.terminal == 0)
+    }
+
+    @Test func destructiveNativeActionWithArgumentsStillAsks() async {
+        let session = Session()
+        let command = HarnessCompletion(insert: "/memory ", title: "/memory", kind: .args, role: .destructive,
+            native: .init(opens: "text", opensWithArgs: "action", args: "optional", destructive: true))
+        session.commands = [command]
+        let composer = make(session)
+        composer.draft = "/memory clear"
+        await composer.submit()
+        #expect(session.sends.isEmpty)
+        #expect(composer.gate.asking?.dialog.destructive == true)
+        await composer.gate.asking?.run()
+        #expect(session.sends == ["/memory clear"])
+    }
+
+    @Test func extraArgumentsThatBecomeAPromptDoNotAskToDelete() async {
+        let session = Session()
+        session.commands = [HarnessCompletion(insert: "/delete ", title: "/delete", kind: .run, role: .destructive,
+            native: .init(opens: "action", opensWithArgs: "turn", args: "none", destructive: true))]
+        let composer = make(session)
+        composer.draft = "/delete explain this command"
+        await composer.submit()
+        #expect(composer.gate.asking == nil)
+        #expect(session.sends == ["/delete explain this command"])
     }
 
     @Test func aTerminalCommandSwitchesToTheTerminal() async {

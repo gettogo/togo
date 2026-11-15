@@ -16,13 +16,6 @@ struct ChatSurfaceLifecycle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: store.interaction?.id) { _, id in
-                guard id != nil, !store.chatScroll.dragging else { return }
-                store.chatScroll.go(store.interaction?.requestID.map(ChatScroll.Target.row) ?? .bottom, reduce: reduceMotion)
-            }
-            .onChange(of: store.interaction?.requestID) { _, id in
-                if let id, !store.chatScroll.dragging { store.chatScroll.go(.row(id), reduce: reduceMotion) }
-            }
             .task(id: Run(id: store.interaction?.id, active: scenePhase == .active && !loopsPaused, options: options)) {
                 guard scenePhase == .active, !loopsPaused, let model = store.interaction else { return }
                 await model.run(options: options)

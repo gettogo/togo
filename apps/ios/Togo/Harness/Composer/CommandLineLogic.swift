@@ -70,6 +70,13 @@ enum CommandLineLogic {
         }.map(\.element.1)
     }
 
+    /// Explains why a canonical row matched an alias query without listing it twice.
+    static func matchingAlias(_ item: HarnessCompletion, query: String) -> String? {
+        let query = query.trimmingCharacters(in: .whitespaces).lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !query.isEmpty, !CommandKind.line(item).lowercased().contains(query) else { return nil }
+        return item.native?.aliases?.first { $0.lowercased().contains(query) }.map { $0.hasPrefix("/") ? $0 : "/" + $0 }
+    }
+
     /// Starred commands first, then recent ones, each in its own order; the rest as they came.
     static func ordered(_ items: [HarnessCompletion], favourites: [String], recents: [String]) -> [HarnessCompletion] {
         func word(_ item: HarnessCompletion) -> String { CommandMemory.commandWord(item.insert.isEmpty ? item.title : item.insert) }

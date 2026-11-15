@@ -10,6 +10,8 @@ struct PrimitiveContext {
     var openScreen: @MainActor (_ id: String) -> Void
     var open: @MainActor (_ target: HarnessOpen) -> Void
     var showTerminal: @MainActor () -> Void
+    /// A surrounding native command host already owns this toolbar item.
+    var showsTerminal = true
     /// Reads a screen again, for a Live list that refreshes while it shows. nil where the host
     /// cannot read screens, such as a preview of a mission control section.
     var reload: (@MainActor () async -> Void)? = nil
@@ -39,6 +41,8 @@ struct PrimitiveContext {
     var signIn: (@MainActor (SignInPageModel) -> Void)? = nil
     /// Server search for a picker that explicitly requests remote matching.
     var searchScreen: (@MainActor (String) async throws -> HarnessScreen)? = nil
+    /// Loads the source-backed preview for one item without committing its selection.
+    var preview: (@MainActor (String) async throws -> Void)? = nil
 
     @MainActor static let inert = PrimitiveContext(
         run: { _, _, _ in nil }, openScreen: { _ in }, open: { _ in }, showTerminal: {}

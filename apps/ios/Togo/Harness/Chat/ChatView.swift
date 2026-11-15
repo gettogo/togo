@@ -47,24 +47,13 @@ struct ChatView: View {
                 // Rows arriving while the chat is open land in the store's `resize`
                 // transaction; rows on first render, from Earlier or by scrolling land at once.
                 ForEach(rows) { row in
-                    Group {
-                        if let interaction = store.interaction, interaction.requestID == row.id {
-                            ChatSurfaceInteractionView(store: store, model: interaction)
-                        } else {
-                            gapped(row, gap: gaps[row.id])
-                        }
-                    }
+                    gapped(row, gap: gaps[row.id])
                         .chatColumn()
                         .id(row.id)
                         .modifier(NeedsVisibility(id: row.isNeeds ? row.id : nil, scroll: scroll))
                         .accessibilityRotorEntry(id: row.id, in: rotorSpace)
                         // motion: preventing a jump — the conversation glides up to make room while the new row only fades in place; a needs card instead grows in place as it is scrolled into view (attention).
                         .transition(row.isNeeds ? Motion.unfold(reduce: reduceMotion) : Motion.arrive(reduce: reduceMotion))
-                }
-                if let interaction = store.interaction, interaction.requestID == nil {
-                    ChatSurfaceInteractionView(store: store, model: interaction)
-                        .chatColumn()
-                        .id("chat.harnessInteraction")
                 }
                 // The chat's one live indicator stays at the foot for the whole turn: one view,
                 // so waiting and working morph in place. Stop lives in the composer.

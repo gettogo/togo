@@ -87,6 +87,10 @@ struct SettingsFieldRow: View {
             if let help = field.help, !help.isEmpty, field.kind != .toggle {
                 Text(help).font(.footnote).foregroundStyle(Color.togoMute)
             }
+            if let warning = field.warning, !warning.isEmpty {
+                Label(warning, systemImage: "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(PrimitiveTint.warn)
+            }
         }
         .accessibilityElement(children: .contain)
     }
@@ -105,7 +109,7 @@ struct SettingsFieldRow: View {
                 }
             } else {
                 let picker = Picker(selection: Binding(get: { SettingsLogic.string(value) ?? "" }, set: { commit(.string($0)) })) {
-                    ForEach(field.options ?? []) { Text($0.label).tag($0.id) }
+                    ForEach(field.options ?? []) { Text($0.label).tag($0.id).disabled($0.disabled == true) }
                 } label: {
                     labelStack
                 }
@@ -118,6 +122,11 @@ struct SettingsFieldRow: View {
                     picker.pickerStyle(.menu)
                 }
             }
+        case .multi:
+            MultiChoiceField(field: field, value: value, editable: editable, commit: commit)
+        case .action:
+            Button(field.actionLabel ?? field.label) { commit(.null) }
+                .disabled(!editable)
         case .number:
             NumberField(field: field, value: SettingsLogic.number(value), editable: editable, running: running, commit: commit)
         case .secret:
@@ -179,7 +188,7 @@ private struct ChoiceList: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .disabled(!editable)
+                .disabled(!editable || option.disabled == true)
                 .accessibilityAddTraits(option.id == value ? [.isButton, .isSelected] : .isButton)
             }
         }

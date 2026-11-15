@@ -127,6 +127,10 @@ enum SettingsLogic {
         case .toggle: return bool(value) ? PrimitiveCopy.on : PrimitiveCopy.off
         case .choice: return choiceLabel(field, value: value) ?? ""
         case .number: return number(value).map(numberText) ?? ""
+        case .multi:
+            guard case .array(let values) = value else { return "" }
+            return values.compactMap(string).map { id in field.options?.first { $0.id == id }?.label ?? id }.joined(separator: ", ")
+        case .action: return field.actionLabel ?? field.label
         default: return string(value) ?? ""
         }
     }

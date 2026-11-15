@@ -1,0 +1,1030 @@
+{
+  "id": "layer.ov-n",
+  "k": "overlay",
+  "p": {
+    "anchor": "center",
+    "head": "Keyboard shortcuts",
+    "modal": true,
+    "role": "omp.overlay.hotkeys",
+    "size": "lg"
+  },
+  "c": [
+    {
+      "id": "n",
+      "k": "col",
+      "p": {
+        "gap": "lg"
+      },
+      "c": [
+        {
+          "id": "n.g0",
+          "k": "section",
+          "p": {
+            "head": "Navigation",
+            "role": "omp.hotkeys.group"
+          },
+          "c": [
+            {
+              "id": "n.g0/0",
+              "k": "table",
+              "p": {
+                "cols": [
+                  {
+                    "head": "Key",
+                    "id": "keys"
+                  },
+                  {
+                    "grow": 1,
+                    "head": "Action",
+                    "id": "action"
+                  }
+                ],
+                "role": "omp.hotkeys.table",
+                "rows": [
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Move cursor / browse history (\u2191 when empty)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "up"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "down"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "left"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "right"
+                        }
+                      ]
+                    },
+                    "id": "0"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Move by word"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+left"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "alt+right"
+                        }
+                      ]
+                    },
+                    "id": "1"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Start of line"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+a"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "home"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "super+left"
+                        }
+                      ]
+                    },
+                    "id": "2"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "End of line"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+e"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "end"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "super+right"
+                        }
+                      ]
+                    },
+                    "id": "3"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "n.g1",
+          "k": "section",
+          "p": {
+            "head": "Editing",
+            "role": "omp.hotkeys.group"
+          },
+          "c": [
+            {
+              "id": "n.g1/0",
+              "k": "table",
+              "p": {
+                "cols": [
+                  {
+                    "head": "Key",
+                    "id": "keys"
+                  },
+                  {
+                    "grow": 1,
+                    "head": "Action",
+                    "id": "action"
+                  }
+                ],
+                "role": "omp.hotkeys.table",
+                "rows": [
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Send message"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "enter"
+                        }
+                      ]
+                    },
+                    "id": "0"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "New line"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "shift+enter"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "alt+enter"
+                        }
+                      ]
+                    },
+                    "id": "1"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Delete word backwards"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+w"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "alt+backspace"
+                        }
+                      ]
+                    },
+                    "id": "2"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Delete to start of line"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+u"
+                        }
+                      ]
+                    },
+                    "id": "3"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Delete to end of line"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+k"
+                        }
+                      ]
+                    },
+                    "id": "4"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Copy current line"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+shift+l"
+                        }
+                      ]
+                    },
+                    "id": "5"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Copy whole prompt"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+shift+c"
+                        }
+                      ]
+                    },
+                    "id": "6"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "n.g2",
+          "k": "section",
+          "p": {
+            "head": "Other",
+            "role": "omp.hotkeys.group"
+          },
+          "c": [
+            {
+              "id": "n.g2/0",
+              "k": "table",
+              "p": {
+                "cols": [
+                  {
+                    "head": "Key",
+                    "id": "keys"
+                  },
+                  {
+                    "grow": 1,
+                    "head": "Action",
+                    "id": "action"
+                  }
+                ],
+                "role": "omp.hotkeys.table",
+                "rows": [
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Path completion / accept autocomplete"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "tab"
+                        }
+                      ]
+                    },
+                    "id": "0"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Cancel autocomplete / interrupt active work"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "escape"
+                        }
+                      ]
+                    },
+                    "id": "1"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Clear editor (first) / exit (second)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+c"
+                        }
+                      ]
+                    },
+                    "id": "2"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Delete char forward (with draft) / exit (empty prompt)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+d"
+                        }
+                      ]
+                    },
+                    "id": "3"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Suspend to background"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+z"
+                        }
+                      ]
+                    },
+                    "id": "4"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Reset terminal display"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+l"
+                        }
+                      ]
+                    },
+                    "id": "5"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Cycle thinking level"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "shift+tab"
+                        }
+                      ]
+                    },
+                    "id": "6"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Cycle role models (slow/default/smol)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+p"
+                        }
+                      ]
+                    },
+                    "id": "7"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Cycle role models (backward)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "shift+ctrl+p"
+                        }
+                      ]
+                    },
+                    "id": "8"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Select model (temporary)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+p"
+                        }
+                      ]
+                    },
+                    "id": "9"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Select model (set roles)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+m"
+                        }
+                      ]
+                    },
+                    "id": "10"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Toggle plan mode"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+shift+p"
+                        }
+                      ]
+                    },
+                    "id": "11"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Search prompt history"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+r"
+                        }
+                      ]
+                    },
+                    "id": "12"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Toggle tool output expansion"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+o"
+                        }
+                      ]
+                    },
+                    "id": "13"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Toggle tool activity visibility"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+shift+o"
+                        }
+                      ]
+                    },
+                    "id": "14"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Pick an extension link on screen by its tag; press again to browse the whole transcript"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+o"
+                        }
+                      ]
+                    },
+                    "id": "15"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Hide/show a pending ask question"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+h"
+                        }
+                      ]
+                    },
+                    "id": "16"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Add or edit a note on an ask option"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "n"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "alt+n"
+                        }
+                      ]
+                    },
+                    "id": "17"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Approve a pending tool call"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+enter"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "ctrl+q"
+                        }
+                      ]
+                    },
+                    "id": "18"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Toggle thinking block visibility"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+t"
+                        }
+                      ]
+                    },
+                    "id": "19"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Edit message in external editor"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+g"
+                        }
+                      ]
+                    },
+                    "id": "20"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Open a local:// file in external editor"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+g"
+                        }
+                      ]
+                    },
+                    "id": "21"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Retry last failed assistant turn"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "f5"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "alt+r"
+                        }
+                      ]
+                    },
+                    "id": "22"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Paste image or text from clipboard"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+v"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " "
+                        },
+                        {
+                          "s": "key",
+                          "t": "super+v"
+                        }
+                      ]
+                    },
+                    "id": "23"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Speech-to-text (push-to-talk): hold to record, release to transcribe"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "dim",
+                          "t": "Hold "
+                        },
+                        {
+                          "s": "key",
+                          "t": "space"
+                        }
+                      ]
+                    },
+                    "id": "24"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Start/stop live voice mode (/live)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "ctrl+l"
+                        }
+                      ]
+                    },
+                    "id": "25"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Open the agent hub"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "key",
+                          "t": "alt+a"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " / "
+                        },
+                        {
+                          "s": "key",
+                          "t": "ctrl+s"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " / double-tap "
+                        },
+                        {
+                          "s": "key",
+                          "t": "left"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " (empty editor)"
+                        }
+                      ]
+                    },
+                    "id": "26"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "GitHub issue/PR reference (e.g. "
+                        },
+                        {
+                          "s": "code",
+                          "t": "#3164"
+                        },
+                        {
+                          "t": " \u2192 "
+                        },
+                        {
+                          "s": "code",
+                          "t": "pr://"
+                        },
+                        {
+                          "t": "/"
+                        },
+                        {
+                          "s": "code",
+                          "t": "issue://"
+                        },
+                        {
+                          "t": ")"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "code",
+                          "t": "#<number>"
+                        }
+                      ]
+                    },
+                    "id": "27"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Prompt actions (copy / undo / move cursor)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "code",
+                          "t": "#"
+                        },
+                        {
+                          "s": "dim",
+                          "t": " / "
+                        },
+                        {
+                          "s": "code",
+                          "t": "#<text>"
+                        }
+                      ]
+                    },
+                    "id": "28"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Slash commands"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "code",
+                          "t": "/"
+                        }
+                      ]
+                    },
+                    "id": "29"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Run bash command"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "code",
+                          "t": "!"
+                        }
+                      ]
+                    },
+                    "id": "30"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Run bash command (excluded from context)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "code",
+                          "t": "!!"
+                        }
+                      ]
+                    },
+                    "id": "31"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Run Python in shared kernel"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "code",
+                          "t": "$"
+                        }
+                      ]
+                    },
+                    "id": "32"
+                  },
+                  {
+                    "cells": {
+                      "action": [
+                        {
+                          "t": "Run Python (excluded from context)"
+                        }
+                      ],
+                      "keys": [
+                        {
+                          "s": "code",
+                          "t": "$$"
+                        }
+                      ]
+                    },
+                    "id": "33"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "n.actions",
+          "k": "row",
+          "p": {
+            "align": "center",
+            "gap": "sm",
+            "role": "omp.actions"
+          },
+          "c": [
+            {
+              "id": "n.actions/0",
+              "k": "spacer",
+              "p": {
+                "grow": 1
+              }
+            },
+            {
+              "id": "n.actions/close",
+              "k": "button",
+              "p": {
+                "actions": {
+                  "click": "close"
+                },
+                "keys": [
+                  "escape"
+                ],
+                "role": "omp.btn",
+                "text": "Close",
+                "title": "Close  esc"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

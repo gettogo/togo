@@ -135,7 +135,7 @@ struct CommandPaletteView: View {
     private func section(_ title: String, _ items: [HarnessCompletion]) -> some View {
         Section {
             ForEach(items, id: \.self) { item in
-                PaletteCommandRow(model: model, item: item, screenTitle: screenTitle) { open($0) }
+                PaletteCommandRow(model: model, item: item, screenTitle: screenTitle, query: bare) { open($0) }
                     .listRowInsets(EdgeInsets())
                     .groupedRows()
                     .swipeActions(edge: .leading) {
@@ -163,6 +163,7 @@ private struct PaletteCommandRow: View {
     let model: CommandLineModel
     let item: HarnessCompletion
     let screenTitle: (String) -> String
+    var query = ""
     let push: (String) -> Void
 
     var body: some View {
@@ -207,7 +208,7 @@ private struct PaletteCommandRow: View {
     }
 
     private func row(value: String?) -> some View {
-        CommandRow(item: item, file: false, highlighted: false, favourite: model.isFavourite(item), value: value)
+        CommandRow(item: item, file: false, highlighted: false, favourite: model.isFavourite(item), value: value ?? item.native?.state, alias: CommandLineLogic.matchingAlias(item, query: query))
     }
 }
 

@@ -82,6 +82,11 @@ extension CommandLineModel {
     @discardableResult
     func perform(_ command: HarnessCompletion, typed: Bool = false) async -> Outcome {
         memory.record(CommandMemory.commandWord(CommandKind.line(command)), scope: scope)
+        if opensOriginalScreen(command), command.native?.args != "required" {
+            paletteOpen = false
+            await send(line: CommandKind.line(command))
+            return .close
+        }
         switch typed ? CommandKind.dispatch(command) : CommandKind.picking(command) {
         case .choose:
             return .stay
@@ -109,7 +114,7 @@ extension CommandLineModel {
 
     /// Runs a run-kind command that was sent. A destructive one, or one whose action carries a
     /// confirm line, asks first in a system dialog; its words were already in the field.
-    private func runCommand(_ run: CommandKind.Run) async -> Outcome {
+    func runCommand(_ run: CommandKind.Run) async -> Outcome {
         let ref = run.action.flatMap(routes.actionRef)
         let label = ref?.label ?? Self.label(run.line)
         let decision = ActionGate.decide(

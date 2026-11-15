@@ -19,6 +19,7 @@ import TogoKit
     let id = UUID()
     let session: SurfaceSession
     let command: String?
+    let commandInfo: HarnessCompletion?
     private(set) var requestID: String?
     let earlierRequests: Set<String>
     private(set) var submitted: Bool
@@ -27,8 +28,9 @@ import TogoKit
     private var completed = false
     let finished: @MainActor () -> Void
 
-    init(command: String?, requestID: String? = nil, earlierRequests: Set<String> = [], session: SurfaceSession, finished: @escaping @MainActor () -> Void) {
+    init(command: String?, commandInfo: HarnessCompletion? = nil, requestID: String? = nil, earlierRequests: Set<String> = [], session: SurfaceSession, finished: @escaping @MainActor () -> Void) {
         self.command = command
+        self.commandInfo = commandInfo
         self.requestID = requestID
         self.earlierRequests = earlierRequests
         self.session = session
@@ -40,8 +42,25 @@ import TogoKit
         guard let scene = session.scene else { return [] }
         return scene.views.compactMap { view in
             guard !view.closed, let node = SurfaceValues.chatInteraction(view.document.root, mode: view.mode) else { return nil }
-            return Block(view: view, node: node)
+            return Block(view: view, node: NativeStructuredScreen.primary(node))
         }
+    }
+
+    var workflow: String {
+        commandInfo?.native?.screenId ?? command.flatMap(CommandLineLogic.commandWord)?.dropFirst().description ?? "form"
+    }
+
+    var title: String {
+        let name = commandInfo?.title ?? workflow
+        return name.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")).capitalized
+    }
+
+    var expectsScreen: Bool {
+        guard let metadata = commandInfo?.native else { return command == nil }
+        let hasArguments = command.flatMap(CommandLineLogic.commandWord).map { word in
+            !(command ?? "").dropFirst(word.count).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } ?? false
+        return ["picker", "settings", "signin"].contains(metadata.intent(hasArguments: hasArguments))
     }
 
     var showingForm: Bool {

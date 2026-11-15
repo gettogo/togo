@@ -8,6 +8,7 @@ import TogoKit
     var requests = HarnessNativeRequests()
     @ObservationIgnored var stopTask: Task<Void, Never>?
     @ObservationIgnored var stopID = UUID()
+    @ObservationIgnored var dismissing: UUID?
 }
 
 extension HarnessSessionStore {
@@ -20,7 +21,7 @@ extension HarnessSessionStore {
         subject.capabilities.contains(Capability.surface) && has(HarnessCapability.surface)
     }
 
-    func runNativeCommand(_ text: String) async throws {
+    func runNativeCommand(_ text: String, command: HarnessCompletion? = nil) async throws {
         let binding = conversation
         await retireWaitingInteraction()
         await nativeInteractions.stopTask?.value
@@ -28,7 +29,7 @@ extension HarnessSessionStore {
             throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.finishCurrent)
         }
         guard !working else { throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.agentWorking) }
-        let pending = makeInteraction(command: text)
+        let pending = makeInteraction(command: text, commandInfo: command)
         interaction = pending
         do { try await pending.submit() }
         catch {
@@ -69,15 +70,30 @@ extension HarnessSessionStore {
         interaction = makeInteraction(command: nil, requestID: id)
     }
 
-    private func makeInteraction(command: String?, requestID: String? = nil) -> ChatSurfaceInteraction {
+    private func makeInteraction(command: String?, commandInfo: HarnessCompletion? = nil, requestID: String? = nil) -> ChatSurfaceInteraction {
         let binding = conversation
         let session = SurfaceSession(id: subject.sessionID) { [services, subject] in
             try await services.surfaceConnection(subject)
         }
-        return ChatSurfaceInteraction(command: command, requestID: requestID,
+        return ChatSurfaceInteraction(command: command, commandInfo: commandInfo, requestID: requestID,
             earlierRequests: Set(feed.timeline.conversation().map(\.id)), session: session) { [weak self] in
             guard let self, self.conversation == binding else { return }
             self.retireInteraction()
+        }
+    }
+
+    func dismissNativeCommand() {
+        guard let current = interaction, nativeInteractions.dismissing != current.id else { return }
+        nativeInteractions.dismissing = current.id
+        Task { [weak self] in
+            defer { if self?.nativeInteractions.dismissing == current.id { self?.nativeInteractions.dismissing = nil } }
+            if let self, let block = current.blocks.last, current.session.canInteract {
+                // Dismiss the original chooser too; otherwise another command
+                // would find a hidden chooser still owning the desktop editor.
+                do { try await NativeCommandContext(model: current, block: block, store: self).cancel() }
+                catch { if self.interaction === current { self.note(SurfaceCopy.unconfirmed, code: "command") } }
+            }
+            if self?.interaction === current { self?.retireInteraction() }
         }
     }
 

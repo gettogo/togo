@@ -20,6 +20,9 @@ struct PickerRowLabel: View {
                 .frame(width: checkWidth)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
+                if let mark = item.appearance?.mark?.text, !mark.isEmpty {
+                    Text(verbatim: mark).font(.caption.weight(.semibold)).foregroundStyle(Color.togoMute)
+                }
                 Text(verbatim: item.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(item.disabled == true ? Color.togoMute : Color.togoSnow)
@@ -40,6 +43,7 @@ struct PickerRowLabel: View {
                     }
                     .padding(.top, 3)
                 }
+                if let appearance = item.appearance { PickerSourceMetadata(appearance: appearance) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // The trailing accessory crossfades in place (spinner ↔ what the item holds).
@@ -56,6 +60,7 @@ struct PickerRowLabel: View {
             // motion: cause → effect — the tapped item's accessory turns into a spinner in its fixed slot.
             .motion(.respond, value: running)
         }
+        .padding(.leading, CGFloat(min(max(item.appearance?.depth ?? 0, 0), 8)) * 12)
         .frame(minHeight: 44)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
@@ -66,7 +71,9 @@ struct PickerRowLabel: View {
 
     private var label: String {
         ([item.title, PickerModel.selector(of: item, in: picker), PickerModel.subtitleLine(of: item, in: picker)]
-            + PickerModel.chips(of: item, in: picker)).compactMap { $0 }.joined(separator: ", ")
+            + PickerModel.chips(of: item, in: picker)
+            + (item.appearance?.badges ?? []).map(\.text)
+            + (item.appearance?.chips ?? []).map(\.text)).compactMap { $0 }.joined(separator: ", ")
     }
 
     private var value: String {
@@ -74,6 +81,8 @@ struct PickerRowLabel: View {
         if selected { parts.append(PrimitiveCopy.selected) }
         parts.append(contentsOf: held)
         if running { parts.append(PrimitiveCopy.running) }
+        if let status = item.appearance?.status { parts.append(status) }
+        if let depth = item.appearance?.depth, depth > 0 { parts.append(String(localized: "picker.level", defaultValue: "Level \(depth + 1)")) }
         return parts.joined(separator: ", ")
     }
 }
