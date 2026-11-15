@@ -459,3 +459,136 @@ feeds:
     stability: documented
 `))
 }
+
+// A past that cannot be read at all leaves the chat with what happens from
+// now on, and says so: recent messages alone are not passed off as the
+// whole conversation. The read is tried again on later records a bounded
+// number of times; when one succeeds the past appears and the same line
+// says it has been loaded.
+func TestAPastThatCannotBeReadIsSaidAndTriedAgain(t *testing.T) {
+	const id = "s_fakehistpx"
+	home, togo := t.TempDir(), t.TempDir()
+	var records []string
+	for i := 1; i <= 3; i++ {
+		records = append(records, histEvent(fmt.Sprintf("e%d", i), "A", fmt.Sprintf("a%d", i), fmt.Sprintf("said %d", i)))
+	}
+	route := &pagedRoute{records: records, size: 5, cursor: func(o int) string { return fmt.Sprintf("c%d", o) }, fail: map[int]bool{0: true}}
+	srv := httptest.NewServer(route)
+	t.Cleanup(srv.Close)
+	e := New(Config{
+		Sessions: fakeSessions{id: session.Session{ID: id, Agent: "fakehistw", Managed: true, Cwd: home, Command: []string{"fakehistw"}}},
+		Typist:   &seqPane{}, Marker: &fakeMarker{}, Home: home, TogoHome: togo,
+		LoginPath: func(context.Context) string { return "/bin:/usr/bin" },
+		Log:       &Log{NewEpoch: func() string { return "e1" }}, Scale: 0.1,
+	})
+	t.Cleanup(func() { e.Forget(id) })
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+	e.eps.mu.Lock()
+	e.eps.byID = map[string]endpoint{id: {kind: spec.EndpointHTTP, port: port, adapter: "fakehistw"}}
+	e.eps.mu.Unlock()
+	ctx := context.Background()
+	if _, err := e.Describe(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	chat := func() string {
+		res, err := e.Open(ctx, &fakeSub{done: make(chan struct{})}, id, 0, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, it := range res.Items {
+			switch {
+			case it.User != nil:
+				out = append(out, it.User.Text)
+			case it.Notice != nil:
+				out = append(out, "NOTICE:"+it.Notice.Text)
+			}
+		}
+		return strings.Join(out, "|")
+	}
+	reads := func() int {
+		route.mu.Lock()
+		defer route.mu.Unlock()
+		return len(route.requests)
+	}
+	deliver(id, json.RawMessage(histEvent("e3", "A", "a3", "said 3")))
+	waitFor(t, func() bool {
+		return chat() == "NOTICE:"+olderInTerminal+"|said 3" || chat() == "said 3|NOTICE:"+olderInTerminal
+	})
+	// Each later record asks again, up to the bound, and no further.
+	for i := 4; i <= 8; i++ {
+		deliver(id, json.RawMessage(histEvent(fmt.Sprintf("e%d", i), "A", fmt.Sprintf("a%d", i), fmt.Sprintf("said %d", i))))
+		waitFor(t, func() bool { return strings.Contains(chat(), fmt.Sprintf("said %d", i)) })
+	}
+	if n := reads(); n != historyRetries {
+		t.Errorf("the past was asked for %d times, want %d", n, historyRetries)
+	}
+	if n := strings.Count(chat(), "NOTICE:"); n != 1 {
+		t.Errorf("the line shows %d times: %q", n, chat())
+	}
+}
+
+// When a read that failed is followed by one that succeeds, the past
+// appears and the line is replaced by one saying so.
+func TestAPastReadOnALaterTryReplacesTheLine(t *testing.T) {
+	const id = "s_fakehistpy"
+	home, togo := t.TempDir(), t.TempDir()
+	var records []string
+	for i := 1; i <= 3; i++ {
+		records = append(records, histEvent(fmt.Sprintf("e%d", i), "A", fmt.Sprintf("a%d", i), fmt.Sprintf("said %d", i)))
+	}
+	route := &pagedRoute{records: records, size: 5, cursor: func(o int) string { return fmt.Sprintf("c%d", o) }, fail: map[int]bool{0: true}}
+	srv := httptest.NewServer(route)
+	t.Cleanup(srv.Close)
+	e := New(Config{
+		Sessions: fakeSessions{id: session.Session{ID: id, Agent: "fakehistw", Managed: true, Cwd: home, Command: []string{"fakehistw"}}},
+		Typist:   &seqPane{}, Marker: &fakeMarker{}, Home: home, TogoHome: togo,
+		LoginPath: func(context.Context) string { return "/bin:/usr/bin" },
+		Log:       &Log{NewEpoch: func() string { return "e1" }}, Scale: 0.1,
+	})
+	t.Cleanup(func() { e.Forget(id) })
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+	e.eps.mu.Lock()
+	e.eps.byID = map[string]endpoint{id: {kind: spec.EndpointHTTP, port: port, adapter: "fakehistw"}}
+	e.eps.mu.Unlock()
+	ctx := context.Background()
+	if _, err := e.Describe(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	chat := func() string {
+		res, err := e.Open(ctx, &fakeSub{done: make(chan struct{})}, id, 0, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, it := range res.Items {
+			switch {
+			case it.User != nil:
+				out = append(out, it.User.Text)
+			case it.Notice != nil:
+				out = append(out, "NOTICE:"+it.Notice.Text)
+			}
+		}
+		return strings.Join(out, "|")
+	}
+	deliver(id, json.RawMessage(histEvent("e3", "A", "a3", "said 3")))
+	waitFor(t, func() bool { return strings.Contains(chat(), "NOTICE:"+olderInTerminal) })
+	route.mu.Lock()
+	route.fail = nil
+	route.mu.Unlock()
+	deliver(id, json.RawMessage(histEvent("e4", "A", "a4", "said 4")))
+	waitFor(t, func() bool {
+		return strings.Contains(chat(), "said 1") && strings.Contains(chat(), "NOTICE:"+olderLoaded)
+	})
+	got := chat()
+	if strings.Contains(got, olderInTerminal) || strings.Count(got, "NOTICE:") != 1 {
+		t.Errorf("after the past was read: %q", got)
+	}
+	for _, said := range []string{"said 1", "said 2", "said 3", "said 4"} {
+		if strings.Count(got, said) != 1 {
+			t.Errorf("%q shows %d times in %q", said, strings.Count(got, said), got)
+		}
+	}
+}

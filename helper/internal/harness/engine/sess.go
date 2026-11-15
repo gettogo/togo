@@ -48,6 +48,12 @@ type sess struct {
 	// history.go).
 	hydrated string
 	held     *heldRecords
+	// histFailed and histFails count the outright failures of reading one
+	// conversation's past; histNoticed is the conversation whose chat was
+	// told its earlier messages are not shown.
+	histFailed  string
+	histFails   int
+	histNoticed string
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
 	starting   sync.Mutex

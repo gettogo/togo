@@ -107,25 +107,50 @@ func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 		return
 	}
 	moved := s.convGen != gen || (s.conv != "" && s.conv != conv)
+	// say: older messages exist that the chat does not show.
+	say := false
 	if err != nil && !moved {
 		e.cfg.Logf("harness: %s: the conversation's earlier messages could not be read: %v", s.ad.Adapter.Adapter, err)
-		if s.hydrated == conv {
-			s.hydrated = "" // asked again on the next record
+		// Nothing of the past could be read. The chat goes on with what
+		// happens from now, and says so: recent messages alone must not
+		// pass for the whole conversation. The read is tried again on the
+		// next record, a bounded number of times for one conversation.
+		say = true
+		if s.histFailed != conv {
+			s.histFailed, s.histFails = conv, 0
+		}
+		s.histFails++
+		if s.hydrated == conv && s.histFails < historyRetries {
+			s.hydrated = ""
 		}
 	}
-	if err == nil && !moved && len(events) > 0 {
-		floor := e.log.RetentionFloor(s.id)
-		s.mappers[mapper] = e.mapperFor(mapper, s.env)
-		s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: events})
-		// Older messages exist that are not shown: not all were read (a
-		// bound, a page that failed), or the replay itself was more than
-		// a session keeps and the oldest were dropped. Said in fixed
-		// words, as an ordinary item after the replay: it gets the next
-		// number like any other, so a chat that reconnects by number
-		// receives it, and the replay cannot push it out.
-		if partial || e.log.RetentionFloor(s.id) > floor {
+	if err == nil && !moved {
+		if len(events) > 0 {
+			floor := e.log.RetentionFloor(s.id)
+			s.mappers[mapper] = e.mapperFor(mapper, s.env)
+			s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: events})
+			// Not all was read (a bound, a later page that failed), or the
+			// replay itself was more than a session keeps and the oldest
+			// were dropped.
+			say = partial || e.log.RetentionFloor(s.id) > floor
+		} else {
+			say = partial // a first page with nothing in it that still names an older one
+		}
+	}
+	// Said in fixed words, as an ordinary item after the replay: it gets
+	// the next number like any other, so a chat that reconnects by number
+	// receives it, and the replay cannot push it out. When a later read
+	// does bring the whole past, the same item says that instead.
+	if !moved {
+		switch {
+		case say:
+			s.histNoticed = conv
 			s.publishLocked([]harness.Item{{ID: "history-partial-" + conv, Kind: harness.KindNotice, At: e.cfg.Now(),
 				Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeFallback, Text: olderInTerminal}}}, nil)
+		case err == nil && s.histNoticed == conv:
+			s.histNoticed = ""
+			s.publishLocked([]harness.Item{{ID: "history-partial-" + conv, Kind: harness.KindNotice, At: e.cfg.Now(),
+				Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeFallback, Text: olderLoaded}}}, nil)
 		}
 	}
 	// Held records are mapped as they would have been, after the past.
@@ -147,6 +172,13 @@ const (
 	historyCursorMax = 2048
 	historyBytesMax  = 8 << 20
 )
+
+// historyRetries is how many times one conversation's past is read again
+// after a read that failed outright.
+const historyRetries = 3
+
+// olderLoaded replaces the line below once a later read brought the past.
+const olderLoaded = "Earlier messages of this conversation have been loaded."
 
 // olderInTerminal is what the chat says when a conversation has messages
 // older than the ones it shows.
