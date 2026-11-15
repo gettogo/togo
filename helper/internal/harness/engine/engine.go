@@ -302,6 +302,9 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 	if surface && s.gateOK {
 		d.Capabilities = append(d.Capabilities, harness.CapSurface)
 	}
+	if e.cfg.StyledScreen != nil && e.cfg.Typist != nil && s.gateOK && harness.Has(d.Capabilities, harness.CapCommands) {
+		d.Capabilities = append(d.Capabilities, harness.CapTerminalNative)
+	}
 	if e.cfg.Approvals != nil && s.gateOK && !harness.Has(d.Capabilities, harness.CapNeedsApprovals) {
 		// The screen detector serves every agent: the chat shows its
 		// approvals whatever the adapter declares.

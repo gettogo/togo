@@ -17,6 +17,9 @@ func (e *Engine) Screen(ctx context.Context, id, name string, query map[string]s
 	if err != nil {
 		return harness.Screen{}, err
 	}
+	if name == strings.TrimSuffix(menuScreenPrefix, "/") || strings.HasPrefix(name, menuScreenPrefix) {
+		return e.terminalMenuScreen(ctx, s, strings.TrimPrefix(name, menuScreenPrefix), query)
+	}
 	sc, ok := s.ad.Screens[name]
 	if !ok {
 		return harness.Screen{}, harness.ErrUnknownScreen

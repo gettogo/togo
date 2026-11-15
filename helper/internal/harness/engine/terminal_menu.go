@@ -5,11 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/spec"
 	"github.com/gettogo/togo/helper/internal/harness/termmenu"
 )
 
@@ -42,8 +44,27 @@ const (
 type terminalMenu struct {
 	token   string
 	title   string
+	panel   string // the list's own title, to tell it is still this list
 	rows    []termmenu.Item
+	keys    []menuKey
 	expires time.Time
+}
+
+// menuKey is an extra key the list's own hint line offers.
+type menuKey struct{ key, label string }
+
+var hintChord = regexp.MustCompile(`(?i)([A-Za-z][A-Za-z ]*?)\s+ctrl\+([a-z])\b`)
+
+// hintKeys reads "Connect an integration ctrl+a  Favorite ctrl+f".
+func hintKeys(hint string) []menuKey {
+	var out []menuKey
+	for _, m := range hintChord.FindAllStringSubmatch(hint, 8) {
+		key := "C-" + strings.ToLower(m[2])
+		if label := strings.TrimSpace(m[1]); label != "" && spec.MenuChord(key) {
+			out = append(out, menuKey{key, label})
+		}
+	}
+	return out
 }
 
 func (e *Engine) drivingMenu(session string) bool {
@@ -189,6 +210,12 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 	}
 	sc := &harness.Screen{ID: menuScreenPrefix + m.token, Interaction: m.token, Primitive: harness.PrimPicker, Title: title, FetchedAt: time.Now(), Picker: p}
 	sc.Stale = !complete
+	sc.Actions = []harness.ActionRef{}
+	for _, k := range m.keys {
+		key, _ := json.Marshal(k.key)
+		sc.Actions = append(sc.Actions, harness.ActionRef{ID: terminalPrefix + "key." + k.key, Label: k.label, Role: "normal",
+			Args: map[string]json.RawMessage{"interaction": interaction, "key": key}})
+	}
 	return sc
 }
 
@@ -217,7 +244,11 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			token = named
 		}
 	}
-	switch strings.TrimPrefix(req.Action, terminalPrefix) {
+	verb := strings.TrimPrefix(req.Action, terminalPrefix)
+	if strings.HasPrefix(verb, "key.") {
+		verb = "key"
+	}
+	switch verb {
 	case "command":
 		var text string
 		if err := json.Unmarshal(req.Args["text"], &text); err != nil || strings.TrimSpace(text) == "" {
@@ -257,6 +288,28 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		}
 		e.setMenu(s.id, nil)
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
+	case "key":
+		m := e.menuOf(s.id, token)
+		if m == nil {
+			return failed("This menu has closed.")
+		}
+		var key string
+		_ = json.Unmarshal(req.Args["key"], &key)
+		offered := false
+		for _, k := range m.keys {
+			offered = offered || k.key == key
+		}
+		if !offered {
+			return failed("This menu does not offer that key.")
+		}
+		if now, ok := e.readMenu(ctx, s); !ok || now.Title != m.panel {
+			e.setMenu(s.id, nil)
+			return failed("The screen changed at the desk. Nothing was pressed.")
+		}
+		if err := e.cfg.Typist.Keys(ctx, s.id, key); err != nil {
+			return harness.ActionResult{}, err
+		}
+		return e.afterKey(ctx, s, "", m)
 	case "release":
 		if e.menuOf(s.id, token) != nil {
 			e.setMenu(s.id, nil)
@@ -275,7 +328,12 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 		return harness.ActionResult{Result: harness.ResultApplied}, nil
 	}
 	rows, complete := e.wholeList(ctx, s, menu)
-	m := &terminalMenu{token: newToken(), title: title, rows: rows}
+	// A list that scrolls without saying how long it is has been read only
+	// as far as the screen shows.
+	if menu.Total == 0 && !rowsEndOnScreen(menu) {
+		complete = false
+	}
+	m := &terminalMenu{token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
 	if previous != nil && previous.title != "" {
 		m.title = previous.title
 	}
@@ -375,4 +433,45 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 		return "", err
 	}
 	return "", nil
+}
+
+// rowsEndOnScreen reports whether the list visibly ends on the screen. A
+// list with no counter gives no way to know, so one whose window is full
+// (many rows, none of them the end of a short list) is taken as cut off.
+func rowsEndOnScreen(m termmenu.Menu) bool {
+	return len(m.Items) < 6
+}
+
+// terminalMenuScreen is the terminal.menu screen: the list as the harness
+// shows it now. Reading it keeps the phone's hold on the session. A list
+// that has closed, or a screen that is no longer this list, is reported
+// with the reason, and the hold ends without a key.
+func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName string, query map[string]string) (harness.Screen, error) {
+	token := query["interaction"]
+	if token == "" {
+		token = fromName
+	}
+	m := e.menuOf(s.id, token)
+	if m == nil || e.cfg.StyledScreen == nil {
+		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}
+	}
+	menu, ok := e.readMenu(ctx, s)
+	if !ok {
+		e.setMenu(s.id, nil)
+		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}
+	}
+	if menu.Title != m.panel {
+		e.setMenu(s.id, nil)
+		return harness.Screen{}, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+	}
+	// Rows on screen refresh what is known of them (the row in use may
+	// have changed); rows scrolled out of view keep what was read.
+	for _, it := range menu.Items {
+		for i := range m.rows {
+			if sameRow(m.rows[i], it) {
+				m.rows[i].Current, m.rows[i].Detail = it.Current, it.Detail
+			}
+		}
+	}
+	return *e.menuScreen(m, menu, true), nil
 }

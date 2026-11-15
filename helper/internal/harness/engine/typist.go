@@ -45,7 +45,7 @@ func (t SessionTypist) Keys(ctx context.Context, id string, keys ...string) erro
 		return err
 	}
 	for _, k := range keys {
-		if !spec.AllowedKeys[k] && !spec.StopKeys[k] && !spec.InputKeys[k] && !spec.MenuKeys[k] {
+		if !spec.AllowedKeys[k] && !spec.StopKeys[k] && !spec.InputKeys[k] && !spec.MenuKeys[k] && !spec.MenuChord(k) {
 			return errors.New("harness: key not allowed")
 		}
 	}

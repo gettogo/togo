@@ -69,6 +69,12 @@ var InputKeys = map[string]bool{"Escape": true, "C-u": true, "C-a": true, "C-k":
 // after each one.
 var MenuKeys = map[string]bool{"Up": true, "Down": true}
 
+// MenuChord reports a control chord a list's own hint line may offer
+// (ctrl+a as "C-a"). Ctrl-C and Ctrl-D are never among them.
+func MenuChord(key string) bool {
+	return len(key) == 3 && key[:2] == "C-" && key[2] >= 'a' && key[2] <= 'z' && key != "C-c" && key != "C-d"
+}
+
 // Status declares the Status block's inline actions, such as compact on
 // the context meter. They replace a confirm-only screen.
 type Status struct {
