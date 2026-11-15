@@ -117,3 +117,30 @@ func TestAPromptLeftOpenStillHoldsTyping(t *testing.T) {
 		t.Error("the hold outlived the prompt")
 	}
 }
+
+// The guard a command leaves behind ends with its conversation: it does not
+// hold back typing in the next one, even when the input line's look was
+// known and is not seen again.
+func TestAGuardLeftByACommandEndsWithItsConversation(t *testing.T) {
+	const id = "s_fakefake33"
+	e, _ := newFake(t, id, "1.2.3")
+	s, err := e.served(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	gen := s.convGen
+	s.mu.Unlock()
+	e.menuMu.Lock()
+	e.awaiting = map[string]composerMark{id: {ok: true, prefix: "> ", x: 2, sess: s, conv: gen}}
+	e.menuMu.Unlock()
+	if !e.awaitingComposer(s) {
+		t.Fatal("the guard does not hold in its own conversation")
+	}
+	s.mu.Lock()
+	s.convGen++
+	s.mu.Unlock()
+	if e.awaitingComposer(s) {
+		t.Error("an old command's guard still holds in the next conversation")
+	}
+}

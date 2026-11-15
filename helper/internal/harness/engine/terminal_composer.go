@@ -179,6 +179,16 @@ func (e *Engine) awaitingComposer(s *sess) bool {
 	if !waiting {
 		return false
 	}
+	// The guard belongs to the running session and conversation it was
+	// set in. After a restart or in another conversation, what that
+	// command left on the screen is gone, whether or not the input line's
+	// look was known.
+	if mark.sess != nil && (mark.sess != s || !e.stillServed(s, mark.conv)) {
+		e.menuMu.Lock()
+		delete(e.awaiting, s.id)
+		e.menuMu.Unlock()
+		return false
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if mark.ok && !e.composerBack(ctx, s, mark) {
@@ -187,14 +197,7 @@ func (e *Engine) awaitingComposer(s *sess) bool {
 	if !mark.ok {
 		// How the input line looks was never known, so it cannot be seen
 		// to be back: the session stays guarded. A command run for the
-		// phone proves the input line again and frees it; a restart or a
-		// new conversation does too.
-		if mark.sess != nil && (mark.sess != s || !e.stillServed(s, mark.conv)) {
-			e.menuMu.Lock()
-			delete(e.awaiting, s.id)
-			e.menuMu.Unlock()
-			return false
-		}
+		// phone proves the input line again and frees it.
 		return true
 	}
 	e.menuMu.Lock()
