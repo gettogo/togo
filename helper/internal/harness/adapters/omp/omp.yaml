@@ -278,6 +278,29 @@ commands:
   # command that only works on its interactive screen (/resume, /new, ...).
   intents:
     'source:skill': { opens: turn, args: optional }
+    # Run on omp 18.20 in an isolated session (their source is not in the
+    # research copy): each sends the command to the model as a prompt.
+    call-graph: { opens: turn }
+    definition: { opens: turn }
+    find: { opens: turn }
+    green: { opens: turn }
+    index: { opens: turn }
+    init: { opens: turn }
+    peek: { opens: turn }
+    pr-impact: { opens: turn }
+    reindex: { opens: turn }
+    search: { opens: turn }
+    visualize: { opens: turn }
+    # Needs a git repository; outside one it only says so.
+    commit: { opens: turn }
+    # Each opens a chooser of what to review or annotate.
+    review: { opens: picker }
+    annotate: { opens: picker }
+    autoresearch: { opens: toggle, args: optional }
+    # A list of debug tools; several act on the Mac (open a folder, a flamegraph).
+    debug: { opens: picker }
+    # Opens the Mac's $VISUAL or $EDITOR: nothing a phone can show.
+    local: { opens: action }
     switch: { opens: picker, with_args: action, args: optional }
     effort: { opens: picker, with_args: toggle, args: optional }
     context: { opens: screen, args: none, screen: context }
@@ -346,7 +369,6 @@ commands:
     omfg: { opens: text, with_args: turn, args: required }
     cleanse: { opens: picker, with_args: turn, args: optional, destructive: true }
     retry: { opens: action, args: none }
-    debug: { opens: picker, args: none }
     memory: { opens: text, with_args: action, args: optional, destructive: true }
     rename: { opens: action, args: optional }
     move: { opens: input, with_args: action, args: optional }
