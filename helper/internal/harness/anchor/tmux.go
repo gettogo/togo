@@ -110,3 +110,13 @@ func (p TmuxPane) Screen(ctx context.Context, id string) (string, error) {
 	}
 	return p.run(ctx, "capture-pane", "-p", "-t", t)
 }
+
+// StyledScreen captures the visible screen as text with its colour
+// sequences, for reading which row of a list is highlighted.
+func (p TmuxPane) StyledScreen(ctx context.Context, id string) (string, error) {
+	t, err := target(id)
+	if err != nil {
+		return "", err
+	}
+	return p.run(ctx, "capture-pane", "-e", "-p", "-t", t)
+}

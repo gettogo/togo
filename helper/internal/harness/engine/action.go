@@ -96,6 +96,9 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 	if err != nil {
 		return harness.ActionResult{}, err
 	}
+	if strings.HasPrefix(req.Action, terminalPrefix) {
+		return e.terminalAct(ctx, s, req)
+	}
 	if req.Action == harness.ActionStop && req.Target != "" {
 		// Stop on a queued prompt cancels it before it is typed.
 		if queued, sent := e.dropQueued(s, req.Target); queued {

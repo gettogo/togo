@@ -37,6 +37,11 @@ type Screen struct {
 	Confirm   *Confirm     `json:"confirm,omitempty"`
 	Status    *StatusBlock `json:"status,omitempty"`
 
+	// Interaction names the terminal list this screen was read from, for a
+	// screen the helper is driving in the harness's own terminal. The app
+	// passes it back to select, cancel and release.
+	Interaction string `json:"interaction,omitempty"`
+
 	// Actions are screen-level actions (toolbar or footer).
 	Actions []ActionRef `json:"actions"`
 }
@@ -57,6 +62,8 @@ type Picker struct {
 	Filters    []Filter `json:"filters,omitempty"`
 	// OnSelect is the action run with args {"id": item id}.
 	OnSelect string `json:"onSelect"`
+	// OnSelectArgs are sent with OnSelect besides the chosen row.
+	OnSelectArgs map[string]json.RawMessage `json:"onSelectArgs,omitempty"`
 	// OnSelectConfirm is OnSelect's confirm line and effect, when it has
 	// one.
 	OnSelectConfirm *SelectConfirm `json:"onSelectConfirm,omitempty"`

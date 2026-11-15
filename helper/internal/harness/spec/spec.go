@@ -64,6 +64,11 @@ type Input struct {
 // InputKeys are the keys an Input block may name.
 var InputKeys = map[string]bool{"Escape": true, "C-u": true, "C-a": true, "C-k": true, "End": true, "BSpace": true, "Tab": true}
 
+// MenuKeys move the cursor in a list the harness has drawn in its terminal.
+// They are sent only by the reader of such lists, which checks the screen
+// after each one.
+var MenuKeys = map[string]bool{"Up": true, "Down": true}
+
 // Status declares the Status block's inline actions, such as compact on
 // the context meter. They replace a confirm-only screen.
 type Status struct {

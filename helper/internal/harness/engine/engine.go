@@ -48,6 +48,10 @@ type Config struct {
 	Approvals Approvals
 	// Screen returns the pane's visible text.
 	Screen func(ctx context.Context, id string) (string, error)
+	// StyledScreen returns the pane's visible text with its colour
+	// sequences. Lists drawn in the terminal are read from it; nil means
+	// they are not read.
+	StyledScreen func(ctx context.Context, id string) (string, error)
 	// NeedsYou tells the phone a session needs the user at the terminal:
 	// the typing guard found a dialog it will not type into.
 	NeedsYou func(id, title, body string)
@@ -123,6 +127,10 @@ type Engine struct {
 	// act runs an action for a permission answered from a notification;
 	// nil means Act. Tests replace it.
 	act func(context.Context, harness.ActionRequest) (harness.ActionResult, error)
+
+	// menus holds, per session, the terminal list a phone is driving.
+	menuMu sync.Mutex
+	menus  map[string]*terminalMenu
 }
 
 var _ harness.Engine = (*Engine)(nil)

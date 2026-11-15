@@ -44,6 +44,8 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		Marker:    &anchor.Marker{Home: o.Home, Pane: pane},
 		Approvals: c.Approvals,
 		Screen:    pane.Screen,
+		// Lists a harness draws in its terminal are read from this.
+		StyledScreen: pane.StyledScreen,
 		// The native surface service is built after the engine; both are
 		// read when called, never at construction.
 		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },

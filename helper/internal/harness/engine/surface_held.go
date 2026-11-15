@@ -18,6 +18,9 @@ import "github.com/gettogo/togo/helper/internal/harness"
 
 // heldNatively is the error for a session a phone holds natively, or nil.
 func (e *Engine) heldNatively(s *sess) *harness.FallbackError {
+	if e.drivingMenu(s.id) {
+		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " has a menu open that the phone is using. Nothing was typed: finish or close it first."}
+	}
 	if e.cfg.SurfaceHeld == nil || !e.cfg.SurfaceHeld(s.id) {
 		return nil
 	}
