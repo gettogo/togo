@@ -178,12 +178,12 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 			m.Title = strings.TrimSpace(escTitle.ReplaceAllString(body, ""))
 			continue
 		case i < row && strings.EqualFold(body, "search"):
-			m.Search = true
+			m.Search, m.Query, m.QueryKnown = true, "", true
 			continue
 		case i < listTop && m.Title != "" && !m.Search:
 			// The one line between the title and the rows is the search
 			// field with text in it (empty, it reads "Search").
-			m.Search = true
+			m.Search, m.QueryKnown = true, true
 			m.Query = strings.TrimRight(body, "█▌▏│ ")
 			continue
 		case i > row && keyHint.MatchString(body):

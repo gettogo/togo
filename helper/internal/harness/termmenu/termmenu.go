@@ -36,7 +36,10 @@ type Menu struct {
 	// Search reports a search field in the list; Query is the text in it.
 	Search bool
 	Query  string
-	Items  []Item
+	// QueryKnown reports that the field's text was read (it may be empty).
+	// A search field whose text could not be read leaves it false.
+	QueryKnown bool
+	Items      []Item
 	// Position and Total are the list's own counter ("3/96"), when shown:
 	// the list has Total rows and only some are on screen.
 	Position, Total int
@@ -271,10 +274,14 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		}
 		t := strings.Trim(strings.TrimSpace(string(lines[i])), rules+" ")
 		if strings.Contains(strings.ToLower(t), "type to search") {
+			// The field says this only while it is empty.
 			m.Search = true
+			if !m.QueryKnown {
+				m.Query, m.QueryKnown = "", true
+			}
 		}
 		if g := searchField.FindStringSubmatch(t); g != nil {
-			m.Search, m.Query = true, strings.TrimSpace(gap.Split(g[1], 2)[0])
+			m.Search, m.Query, m.QueryKnown = true, strings.TrimSpace(gap.Split(g[1], 2)[0]), true
 			return
 		}
 		if m.Hint == "" && hintWords.MatchString(t) && len([]rune(t)) < 160 {
@@ -320,10 +327,13 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		}
 		if strings.HasPrefix(strings.ToLower(t), "type to search") {
 			m.Search = true
+			if !m.QueryKnown {
+				m.Query, m.QueryKnown = "", true
+			}
 			continue
 		}
 		if g := searchField.FindStringSubmatch(t); g != nil && !cur {
-			m.Search, m.Query = true, strings.TrimSpace(gap.Split(g[1], 2)[0])
+			m.Search, m.Query, m.QueryKnown = true, strings.TrimSpace(gap.Split(g[1], 2)[0]), true
 			continue
 		}
 		if !cur && hintWords.MatchString(t) {

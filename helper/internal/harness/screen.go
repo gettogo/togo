@@ -61,7 +61,9 @@ type Picker struct {
 	SearchMode string `json:"searchMode,omitempty"`
 	// Query is the search text the list already has (a list read from the
 	// harness's terminal may have been searched at the desk).
-	Query   string   `json:"query,omitempty"`
+	// It is present, possibly empty, when that text is known; absent means
+	// the list's search text could not be read and must not be edited.
+	Query   *string  `json:"query,omitempty"`
 	Filters []Filter `json:"filters,omitempty"`
 	// OnSelect is the action run with args {"id": item id}.
 	OnSelect string `json:"onSelect"`

@@ -3283,7 +3283,7 @@
         "onSelectConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
         "onSelectLabel": { "description": "onSelect's own words for an item's button (omp: Use for this session).", "type": "string" },
         "onSelectArgs": { "description": "Sent with onSelect besides the chosen row (a terminal list's interaction).", "type": "object" },
-        "query": { "description": "The search text the list already has.", "type": "string", "maxLength": 200 },
+        "query": { "description": "The search text the list has now. Present, possibly empty, when it is known; absent means it could not be read and must not be edited.", "type": "string", "maxLength": 200 },
         "presentation": {
           "description": "What the list says about itself. state partial: only part of the list was read (it scrolls in the harness's terminal); the rows are current, not stale.",
           "type": "object",

@@ -46,15 +46,19 @@ const (
 
 // terminalMenu is the list a phone is driving in one session.
 type terminalMenu struct {
-	token   string
-	title   string
-	panel   string // the list's own title, to tell it is still this list
-	client  any    // the connection that is driving the list
-	query   string // the text last seen or typed in the list's search field
-	search  bool
-	rows    []termmenu.Item
-	keys    []menuKey
-	expires time.Time
+	token  string
+	title  string
+	panel  string // the list's own title, to tell it is still this list
+	client any    // the connection that is driving the list
+	query  string // the text last seen or typed in the list's search field
+	// scrolled: the rows were collected by moving through a list longer
+	// than the screen; readQuery is the search they were read under.
+	scrolled  bool
+	readQuery string
+	search    bool
+	rows      []termmenu.Item
+	keys      []menuKey
+	expires   time.Time
 }
 
 // menuKey is an extra key the list's own hint line offers.
@@ -252,7 +256,7 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 
 func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) *harness.Screen {
 	interaction, _ := json.Marshal(m.token)
-	p := &harness.Picker{Items: []harness.PickerItem{}, OnSelect: terminalPrefix + "select", Searchable: menu.Search, Query: menu.Query,
+	p := &harness.Picker{Items: []harness.PickerItem{}, OnSelect: terminalPrefix + "select", Searchable: menu.Search,
 		OnSelectArgs: map[string]json.RawMessage{"interaction": interaction}}
 	ids := rowIDs(m.rows)
 	for i, it := range m.rows {
@@ -268,6 +272,10 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 	}
 	if menu.Search {
 		p.SearchMode = "remote"
+		if menu.QueryKnown {
+			text := menu.Query
+			p.Query = &text
+		}
 	}
 	sc := &harness.Screen{ID: menuScreenPrefix + m.token, Interaction: m.token, Primitive: harness.PrimPicker, Title: title, FetchedAt: time.Now(), Picker: p}
 	// A list read only in part is fresh, not stale: its rows are what the
@@ -363,7 +371,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		// must not choose that one.
 		for i, id := range rowIDs(m.rows) {
 			if id == rowText {
-				return e.selectRow(ctx, s, m, m.rows[i])
+				return e.selectRow(ctx, s, m, i)
 			}
 		}
 		return failed("That row is no longer in the list. Nothing was chosen.")
@@ -373,6 +381,11 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			return harness.ActionResult{Result: harness.ResultApplied}, nil
 		}
 		before, ok := e.readMenu(ctx, s)
+		if ok && before.Title != m.panel {
+			// Another list is on the screen now: it is not this one to close.
+			e.setMenu(s.id, nil)
+			return failed("The screen changed at the desk. Nothing was pressed.")
+		}
 		if ok {
 			if err := e.menuKeys(ctx, s, "Escape"); err != nil {
 				return harness.ActionResult{}, err
@@ -429,7 +442,8 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 	if menu.Total == 0 && !rowsEndOnScreen(menu) {
 		complete = false
 	}
-	m := &terminalMenu{client: e.client(ctx), token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint), search: menu.Search, query: menu.Query}
+	m := &terminalMenu{client: e.client(ctx), token: newToken(), title: title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint),
+		search: menu.Search, query: menu.Query, readQuery: menu.Query, scrolled: len(rows) > len(menu.Items)}
 	if previous != nil && previous.title != "" {
 		m.title = previous.title
 	}
@@ -440,16 +454,18 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 // selectRow moves the harness's cursor to the row, one key at a time,
 // checks the cursor is on it, and presses Enter. A screen that is no longer
 // this list ends it without another key.
-func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, want termmenu.Item) (harness.ActionResult, error) {
+func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target int) (harness.ActionResult, error) {
+	want := m.rows[target]
 	fail := func(msg string) (harness.ActionResult, error) {
 		e.setMenu(s.id, nil)
 		return harness.ActionResult{Result: harness.ResultFailed, Message: msg}, nil
 	}
-	target := -1
-	for i, it := range m.rows {
+	// Two rows that say the same can be told apart only by their place,
+	// and that is known only while the whole list is on the screen.
+	twins := 0
+	for _, it := range m.rows {
 		if sameRow(it, want) {
-			target = i
-			break
+			twins++
 		}
 	}
 	for step := 0; step <= len(m.rows)+2; step++ {
@@ -458,10 +474,10 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, want t
 			return fail("The screen changed at the desk. Nothing was chosen.")
 		}
 		cur := cursorOf(now)
-		if cur < 0 {
+		if cur < 0 || now.Title != m.panel {
 			return fail("The screen changed at the desk. Nothing was chosen.")
 		}
-		if sameRow(now.Items[cur], want) {
+		if sameRow(now.Items[cur], want) && rightOccurrence(m.rows, now.Items, cur, target) {
 			if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 				return harness.ActionResult{}, err
 			}
@@ -469,10 +485,17 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, want t
 		}
 		// Where the cursor is in the whole list tells which way to go.
 		at := -1
-		for i, it := range m.rows {
-			if sameRow(it, now.Items[cur]) {
-				at = i
-				break
+		if len(now.Items) == len(m.rows) {
+			at = cur
+		} else {
+			if twins > 1 {
+				return fail("Two rows in this list say the same and it does not fit the screen. Choose it in the terminal.")
+			}
+			for i, it := range m.rows {
+				if sameRow(it, now.Items[cur]) {
+					at = i
+					break
+				}
 			}
 		}
 		if at < 0 || target < 0 {
@@ -559,7 +582,7 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		// with the text last typed into its field.
 		if plain, err := e.cfg.Screen(ctx, s.id); err == nil {
 			if text, found := fieldUnderTitle(plain, m.panel); found {
-				menu, ok = termmenu.Menu{Title: m.panel, Search: true, Query: text}, true
+				menu, ok = termmenu.Menu{Title: m.panel, Search: true, Query: text, QueryKnown: true}, true
 			}
 		}
 	}
@@ -575,7 +598,10 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	// what is there is removed one character at a time, the new text is
 	// typed, and the list is read again. Nothing is typed when the field
 	// already holds that text.
-	if query, asked := query["query"]; asked && menu.Search && query != menu.Query {
+	if _, asked := query["query"]; asked && (!menu.Search || !menu.QueryKnown) {
+		return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: "This list's search can only be used in the terminal."}
+	}
+	if query, asked := query["query"]; asked && query != menu.Query {
 		if len(query) > 200 || strings.ContainsAny(query, "\n\r\x1b") {
 			return harness.Screen{}, &harness.FallbackError{Reason: "source", Detail: "That search cannot be typed."}
 		}
@@ -607,18 +633,26 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 				e.setMenu(s.id, nil)
 				return harness.Screen{}, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
 			}
-			after = termmenu.Menu{Title: m.panel, Search: true, Query: query}
+			after = termmenu.Menu{Title: m.panel, Search: true, Query: query, QueryKnown: true}
 		}
 		e.menuMu.Lock()
-		m.rows, m.query, m.search = after.Items, query, true
+		m.rows, m.query, m.search, m.scrolled, m.readQuery = after.Items, query, true, false, query
 		e.menuMu.Unlock()
 		sc := e.menuScreen(m, after, after.Total > 0 || rowsEndOnScreen(after))
 		return *sc, nil
 	}
+	// What the list holds now replaces what was read before: a search or a
+	// change made at the desk must not leave rows that are no longer there.
+	// Only a list that was collected by scrolling keeps its other rows,
+	// refreshed by those on screen.
 	e.menuMu.Lock()
 	m.query, m.search = menu.Query, m.search || menu.Search
-	if len(menu.Items) == 0 {
-		m.rows = nil
+	if !m.scrolled || len(menu.Items) == 0 || menu.Query != m.readQuery {
+		m.rows = append([]termmenu.Item(nil), menu.Items...)
+		for i := range m.rows {
+			m.rows[i].Cursor = false
+		}
+		m.scrolled, m.readQuery = false, menu.Query
 	}
 	e.menuMu.Unlock()
 	// Rows on screen refresh what is known of them (the row in use may
@@ -700,4 +734,20 @@ func rowIDs(rows []termmenu.Item) []string {
 		seen[key]++
 	}
 	return out
+}
+
+// rightOccurrence reports whether the cursor is on the row that was meant
+// and not on another that says the same. With the whole list on screen the
+// place decides; a row that says something no other row says is its own.
+func rightOccurrence(all, visible []termmenu.Item, cursor, target int) bool {
+	twins := 0
+	for _, it := range all {
+		if sameRow(it, all[target]) {
+			twins++
+		}
+	}
+	if twins <= 1 {
+		return true
+	}
+	return len(visible) == len(all) && cursor == target
 }
