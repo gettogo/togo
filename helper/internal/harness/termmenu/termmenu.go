@@ -433,3 +433,22 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 	m.Items = merged
 	return m, len(m.Items) > 0
 }
+
+// DrawnCursor finds a cursor the harness draws itself: the one cell on the
+// screen shown in reverse video with no reversed cell beside it. Harnesses
+// that hide the terminal's cursor and park it in a corner (Pi, Droid) show
+// where typing goes this way. More than one such cell, or none, says
+// nothing.
+func DrawnCursor(screen string) (x, y int, ok bool) {
+	found := 0
+	for row, line := range parse(screen) {
+		for col, c := range line {
+			if !c.rev || (col > 0 && line[col-1].rev) || (col+1 < len(line) && line[col+1].rev) {
+				continue
+			}
+			found++
+			x, y = col, row
+		}
+	}
+	return x, y, found == 1
+}

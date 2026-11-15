@@ -253,3 +253,18 @@ func TestOtherScreensAreNotLists(t *testing.T) {
 		}
 	}
 }
+
+// A harness that hides the terminal's cursor draws its own as one cell in
+// reverse video. A row highlighted in reverse video is not a cursor.
+func TestACursorTheHarnessDrawsIsFound(t *testing.T) {
+	droid := "status\n\x1b[39m \x1b[38;2;215;95;0m> \x1b[39m/model\x1b[7m \x1b[0m      \n"
+	if x, y, ok := DrawnCursor(droid); !ok || x != 9 || y != 1 {
+		t.Errorf("drawn cursor = %d,%d %v, want 9,1", x, y, ok)
+	}
+	if _, _, ok := DrawnCursor("\x1b[7m one row \x1b[0m\nplain\n"); ok {
+		t.Error("a reversed row was taken for a cursor")
+	}
+	if _, _, ok := DrawnCursor("a\x1b[7m \x1b[0m\nb\x1b[7m \x1b[0m\n"); ok {
+		t.Error("two reversed cells were taken for one cursor")
+	}
+}

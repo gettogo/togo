@@ -61,6 +61,36 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 		}
 		time.Sleep(e.scaled(60 * time.Millisecond))
 	}
+	// ghost: the harness wrote a hint after the typed text (Copilot shows a
+	// command's arguments there). It is told from a draft by having
+	// appeared with the typing: a draft was there before.
+	ghost := false
+	if !located && mark.ok {
+		if x, line, visible, ok := e.cursorAt(ctx, s); ok && visible && strings.HasSuffix(beforeCursor(line, x), text) {
+			if hint := afterCursor(line, x); hint != "" && hint != mark.suffix && !strings.Contains(before, hint) {
+				typedLine = strings.TrimRight(trimEdge(beforeCursor(line, x)), " ")
+				was = strings.TrimRight(strings.TrimSuffix(typedLine, text), " ")
+				located, ghost = true, true
+			}
+		}
+	}
+	// reads reports whether the input line reads want now.
+	reads := func(want string) bool {
+		if ghost {
+			x, line, _, ok := e.cursorAt(ctx, s)
+			return ok && strings.TrimRight(trimEdge(beforeCursor(line, x)), " ") == want
+		}
+		screen, err := e.cfg.Screen(ctx, s.id)
+		if err != nil {
+			return false
+		}
+		for _, l := range strings.Split(screen, "\n") {
+			if trimEdge(l) == want {
+				return true
+			}
+		}
+		return false
+	}
 	if !located {
 		// What was typed cannot be found, so it cannot be proven ours to
 		// remove, or to run.
@@ -81,16 +111,12 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 		// no way to know: someone at the desk may have moved into a draft
 		// without changing a character, and a Backspace would take theirs.
 		// Then nothing is removed, and the refusal says what was left.
-		if !(mark.visible || mark.tracks) {
+		if _, _, shown, ok := e.cursorAt(ctx, s); !(mark.visible || mark.tracks || (ok && shown)) {
 			return
 		}
 		defer func() {
-			if screen, err := e.cfg.Screen(ctx, s.id); err == nil {
-				for _, l := range strings.Split(screen, "\n") {
-					if trimEdge(l) == was {
-						left = ""
-					}
-				}
+			if reads(was) {
+				left = ""
 			}
 		}()
 		at := strings.LastIndex(typedLine, text)
@@ -99,18 +125,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 		}
 		head, tail := typedLine[:at], typedLine[at+len(text):]
 		rest := []rune(text)
-		onScreen := func(want string) bool {
-			screen, err := e.cfg.Screen(ctx, s.id)
-			if err != nil {
-				return false
-			}
-			for _, l := range strings.Split(screen, "\n") {
-				if trimEdge(l) == want {
-					return true
-				}
-			}
-			return false
-		}
+		onScreen := reads
 		for len(rest) > 0 {
 			// Before each Backspace the line must still read as this
 			// removal left it: a character typed at the desk meanwhile is
@@ -138,15 +153,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 				// The list a harness offers grows and shrinks as the text
 				// changes and can move the input line to another row: the
 				// line is looked for by what it must read now.
-				if screen, err := e.cfg.Screen(ctx, s.id); err == nil {
-					for _, l := range strings.Split(screen, "\n") {
-						if now := trimEdge(l); now == want || (len(rest) == 0 && now == was) {
-							seen = true
-							break
-						}
-					}
-				}
-				if seen {
+				if seen = reads(want) || (len(rest) == 0 && reads(was)); seen {
 					break
 				}
 				time.Sleep(e.scaled(40 * time.Millisecond))
@@ -171,6 +178,16 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 	cur := -1
 	if offered {
 		cur = cursorOf(menu)
+	}
+	// A harness may show the command back without a list this reader can
+	// make out: a plain list with the command first (Droid), or the
+	// command's own arguments (Copilot). The first line it newly drew that
+	// starts with a command must start with this one.
+	if !offered || cur < 0 {
+		if after, err := e.cfg.Screen(ctx, s.id); err == nil && shownBack(before, after, text) {
+			offered, cur = true, 0
+			menu = termmenu.Menu{Items: []termmenu.Item{{Label: text}}}
+		}
 	}
 	if !offered || cur < 0 {
 		// No list of commands opened: the line was not empty (a draft at
@@ -308,4 +325,23 @@ func ownTextLine(before, after, text string) (line, without string, ok bool) {
 		line, without = is, rest
 	}
 	return line, without, found == 1
+}
+
+// shownBack reports whether the first line the harness newly drew that
+// starts with a slash command, and says something after it, starts with
+// this command. A line that is only the command is an echo of the input.
+func shownBack(before, after, text string) bool {
+	had := map[string]bool{}
+	for _, l := range strings.Split(before, "\n") {
+		had[trimEdge(l)] = true
+	}
+	for _, l := range strings.Split(after, "\n") {
+		is := trimEdge(l)
+		fields := strings.Fields(is)
+		if had[is] || len(fields) < 2 || !strings.HasPrefix(fields[0], "/") {
+			continue
+		}
+		return fields[0] == text
+	}
+	return false
 }

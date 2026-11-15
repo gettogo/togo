@@ -45,7 +45,7 @@ func (e *Engine) markComposer(ctx context.Context, s *sess) composerMark {
 	if e.cfg.Cursor == nil || e.cfg.Screen == nil {
 		return composerMark{}
 	}
-	x, y, visible, err := e.cfg.Cursor(ctx, s.id)
+	x, y, visible, err := e.cursor(ctx, s)
 	if err != nil {
 		return composerMark{}
 	}
@@ -75,7 +75,7 @@ func (e *Engine) cursorAt(ctx context.Context, s *sess) (x int, line string, vis
 	if e.cfg.Cursor == nil || e.cfg.Screen == nil {
 		return 0, "", false, false
 	}
-	x, y, visible, err := e.cfg.Cursor(ctx, s.id)
+	x, y, visible, err := e.cursor(ctx, s)
 	if err != nil {
 		return 0, "", false, false
 	}
@@ -99,7 +99,7 @@ func (e *Engine) composerBack(ctx context.Context, s *sess, mark composerMark) b
 	if mark.sess != nil && (mark.sess != s || !e.stillServed(s, mark.conv)) {
 		return false // taken in another run or conversation: proves nothing here
 	}
-	x, y, visible, err := e.cfg.Cursor(ctx, s.id)
+	x, y, visible, err := e.cursor(ctx, s)
 	if err != nil || x != mark.x {
 		return false
 	}
@@ -211,4 +211,19 @@ func afterCursor(line string, x int) string {
 		return ""
 	}
 	return strings.TrimRight(string(rs[x:]), " ")
+}
+
+// cursor is where typing goes: the terminal's cursor when the harness shows
+// it, else the one the harness draws itself, if it draws one.
+func (e *Engine) cursor(ctx context.Context, s *sess) (x, y int, visible bool, err error) {
+	x, y, visible, err = e.cfg.Cursor(ctx, s.id)
+	if err != nil || visible || e.cfg.StyledScreen == nil {
+		return x, y, visible, err
+	}
+	if styled, serr := e.cfg.StyledScreen(ctx, s.id); serr == nil {
+		if dx, dy, ok := termmenu.DrawnCursor(styled); ok {
+			return dx, dy, true, nil
+		}
+	}
+	return x, y, false, nil
 }
