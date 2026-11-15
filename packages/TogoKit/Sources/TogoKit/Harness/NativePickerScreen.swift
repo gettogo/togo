@@ -144,7 +144,11 @@ public enum NativePickerScreen {
                 order.append(id)
             }
         }
-        for id in listed where seen.insert(id).inserted { order.append(id) }
+        // An explicitly empty order is the program's empty search result,
+        // even when items still holds its unfiltered catalog.
+        if p["order"] == nil {
+            for id in listed where seen.insert(id).inserted { order.append(id) }
+        }
 
         // The preview the program has drawn belongs to its highlighted item.
         if let highlighted = string(p["selected"]), byID[highlighted] != nil, let preview = preview(node.children) {
@@ -152,7 +156,7 @@ public enum NativePickerScreen {
         }
 
         // What is in use now is `current`; the highlight is only a cursor.
-        let current = array(p["current"]).compactMap(string).first { byID[$0] != nil }
+        let current = array(p["current"]).compactMap(string).first { order.contains($0) }
         let searchable = p["query"] != nil
         let picker = HarnessScreen.Picker(
             items: order.compactMap { byID[$0] }, selected: current, searchable: searchable,

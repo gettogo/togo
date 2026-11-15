@@ -162,9 +162,6 @@ struct PickerPrimitive: View {
                             Button(PrimitiveCopy.openTerminal) { context.showTerminal() }
                         }
                     }
-                    if picker.items.isEmpty, presentation.state != "loading", let empty = presentation.emptyText {
-                        Text(verbatim: empty).foregroundStyle(Color.togoMute)
-                    }
                 }
             }
             if initialPicker.searchMode == "remote", searchBlocked, !searchConflict {
@@ -223,7 +220,7 @@ struct PickerPrimitive: View {
         .groupedList()
         .overlay {
             // Search results never animate (motion v2 §2): "No matches" is simply there.
-            if groups.isEmpty, setup.isEmpty, !searchBlocked { empty }
+            if groups.isEmpty, setup.isEmpty, !searchBlocked, picker.presentation?.state != "loading" { empty }
         }
     }
 
@@ -346,7 +343,7 @@ struct PickerPrimitive: View {
 
     private var empty: some View {
         StateView(
-            kind: .empty, title: model.hasNarrowing ? PrimitiveCopy.noMatches : PrimitiveCopy.nothingHere,
+            kind: .empty, title: model.emptyTitle(picker),
             message: model.hasNarrowing ? PrimitiveCopy.tryShorter : "",
             action: model.hasNarrowing ? StateView.Action(PrimitiveCopy.showAll) { model.reset() } : nil
         )

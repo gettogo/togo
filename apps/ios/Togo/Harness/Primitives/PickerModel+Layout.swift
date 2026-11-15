@@ -53,7 +53,22 @@ extension PickerModel {
     /// in an ungrouped Resume list are noise and stay on the detail.
     static func selector(of item: Item, in picker: HarnessScreen.Picker) -> String? {
         guard groupNames(picker).count > 1, item.id != item.title else { return nil }
+        // Structured references identify an action target, not a readable
+        // model name. Keep the exact id for selection without printing JSON.
+        if let value = try? JSONDecoder().decode(JSONValue.self, from: Data(item.id.utf8)) {
+            switch value {
+            case .object, .array: return nil
+            default: break
+            }
+        }
         return item.id
+    }
+
+    /// A filtered list is not an empty workspace. The program's empty-folder
+    /// sentence is useful only before a search or filter narrows the list.
+    func emptyTitle(_ picker: HarnessScreen.Picker) -> String {
+        if hasNarrowing { return PrimitiveCopy.noMatches }
+        return picker.items.isEmpty ? picker.presentation?.emptyText ?? PrimitiveCopy.nothingHere : PrimitiveCopy.nothingHere
     }
 
     /// The short facts a row shows as chips: in a catalog the subtitle ("64K context"), the

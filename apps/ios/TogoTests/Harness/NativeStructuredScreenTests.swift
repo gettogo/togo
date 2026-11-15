@@ -148,6 +148,24 @@ import TogoKit
         #expect(screen.actions[0].args?["act"] == .string("submit"))
     }
 
+    @Test func recordedPickerOrderOwnsVisibleRowsAcrossSearchAndClear() throws {
+        let nodes = try JSONDecoder().decode([SurfaceNode].self, from: fixture("omp-native-resume-search"))
+        #expect(nodes.count == 3)
+        var counts: [Int] = []
+        for node in nodes {
+            #expect(!SurfaceValues.array(node.properties["items"]).isEmpty)
+            let screen = try NativePickerScreen.map(node, workflow: "resume", fallbackTitle: "Resume", fetchedAt: WireDate(.now))
+            counts.append(try #require(screen.picker).items.count)
+        }
+        #expect(counts == [1, 0, 1])
+        var noMatch = nodes[1]
+        noMatch.properties["current"] = .array(SurfaceValues.entries(noMatch.properties["items"]).map { .string($0.id) })
+        #expect(try NativePickerScreen.map(noMatch, workflow: "resume", fallbackTitle: "Resume", fetchedAt: WireDate(.now)).picker?.selected == nil)
+        noMatch.properties.removeValue(forKey: "order")
+        // Legacy nodes without an order still expose their supplied items.
+        #expect(try NativePickerScreen.map(noMatch, workflow: "resume", fallbackTitle: "Resume", fetchedAt: WireDate(.now)).picker?.items.count == 1)
+    }
+
     private func fixture(_ name: String) throws -> Data {
         let url = try #require(Bundle(for: NativeStructuredFixtureBundle.self).url(forResource: name, withExtension: "json"))
         return try Data(contentsOf: url)

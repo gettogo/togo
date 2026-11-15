@@ -79,6 +79,19 @@ struct PickerLayoutTests {
         #expect(PickerModel.subtitleLine(of: row, in: resume) == "2 h ago · main")
     }
 
+    @Test func structuredActionTargetsAreNotPrintedAsSelectors() {
+        // Real OpenCode model rows use a compact Model.Ref as their id.
+        let target = #"{"id":"deepseek/deepseek-v4.1-flash","providerID":"openrouter"}"#
+        let row = Item(id: target, title: "DeepSeek V4.1 Flash", group: "openrouter")
+        var picker = models
+        picker.items.append(row)
+        #expect(PickerModel.selector(of: row, in: picker) == nil)
+        #expect(picker.items.last?.id == target)
+        #expect(PickerModel.selector(of: picker.items[1], in: picker) == "anthropic/opus")
+        let literal = Item(id: "[local] model", title: "Local model", group: "local")
+        #expect(PickerModel.selector(of: literal, in: picker) == "[local] model")
+    }
+
     @Test func aSourceBadgeIsShownOnceAlongsideItsLegacyCopy() {
         // Live OMP resume rows carry both representations of "current".
         var row = Item(id: "current", title: "Native check A", badge: "current",
@@ -92,5 +105,17 @@ struct PickerLayoutTests {
         #expect(PickerModel.chips(of: row, in: picker) == ["pinned"])
         row.appearance = nil
         #expect(PickerModel.chips(of: row, in: picker) == ["pinned"])
+    }
+
+    @Test func sourceFolderEmptySentenceDoesNotDescribeAnEmptySearchResult() {
+        let picker = HarnessScreen.Picker(items: [], searchable: true, onSelect: "choose",
+            presentation: .init(emptyText: "No sessions in this folder yet"))
+        var model = PickerModel(picker)
+        #expect(model.emptyTitle(picker) == "No sessions in this folder yet")
+        var deskSearch = picker
+        deskSearch.query = "desk search"
+        #expect(PickerModel(deskSearch).emptyTitle(deskSearch) == PrimitiveCopy.noMatches)
+        model.query = "unmatched"
+        #expect(model.emptyTitle(picker) == PrimitiveCopy.noMatches)
     }
 }
