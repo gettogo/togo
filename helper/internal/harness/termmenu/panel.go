@@ -30,7 +30,58 @@ var (
 // whose first line is its title with "esc" at the right, holding at least
 // one line that is a whole address. The same frame with rows to pick from
 // is a list; Read takes those and refuses this.
-func ReadPanel(screen string) (Panel, bool) { return readPanel(parse(screen)) }
+//
+// A list's own box with no rows in it, only its message ("No sessions in
+// current folder."), is read the same way: there is nothing to pick, and
+// the message is what the program says.
+func ReadPanel(screen string) (Panel, bool) {
+	lines := parse(screen)
+	if p, ok := readPanel(lines); ok {
+		return p, true
+	}
+	if _, list := Read(screen); list {
+		return Panel{}, false
+	}
+	return readEmptyList(lines)
+}
+
+var listKeys = regexp.MustCompile(`(?i)sele|navigate|↑|↓`)
+
+// readEmptyList reads the lowest titled box that closes, shows a list's
+// keys, and holds one to three lines of text and no more than one empty
+// search line.
+func readEmptyList(lines [][]cell) (Panel, bool) {
+	for top := len(lines) - 1; top >= 0; top-- {
+		g := promptTop.FindStringSubmatch(strings.TrimSpace(text(lines[top])))
+		if g == nil {
+			continue
+		}
+		p := Panel{Title: strings.TrimSpace(g[1])}
+		hint, inputs, closed := "", 0, false
+		for i := top + 1; i < len(lines) && i <= top+40; i++ {
+			t := strings.TrimSpace(text(lines[i]))
+			if promptBottom.MatchString(t) {
+				closed = true
+				break
+			}
+			t = strings.TrimSpace(strings.Trim(t, borders+rules))
+			switch {
+			case t == "":
+			case hintWords.MatchString(t):
+				hint = t
+			case promptInput.MatchString(t) || searchField.MatchString(t) || promptLabel.MatchString(t):
+				inputs++
+			default:
+				p.Lines = append(p.Lines, t)
+			}
+		}
+		if !closed || p.Title == "" || inputs > 1 || len(p.Lines) == 0 || len(p.Lines) > 3 || !listKeys.MatchString(hint) {
+			return Panel{}, false
+		}
+		return p, true
+	}
+	return Panel{}, false
+}
 
 func readPanel(lines [][]cell) (Panel, bool) {
 	for top, l := range lines {

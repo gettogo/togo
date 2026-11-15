@@ -42,7 +42,9 @@ func TestOnlyAPanelWithAnAddressIsInformation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, f := range files {
-		if strings.HasPrefix(f.Name(), "oc-device-login") || !strings.HasSuffix(f.Name(), ".ansi") {
+		// The two lists with no rows are read as their message.
+		if strings.HasPrefix(f.Name(), "oc-device-login") || !strings.HasSuffix(f.Name(), ".ansi") ||
+			f.Name() == "omp-resume-empty.ansi" || f.Name() == "omp-tree.ansi" {
 			continue
 		}
 		b, _ := os.ReadFile("testdata/" + f.Name())

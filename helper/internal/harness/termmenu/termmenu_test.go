@@ -363,3 +363,28 @@ func TestALabelledPromptIsRead(t *testing.T) {
 		t.Errorf("prose read as a prompt: %+v", p)
 	}
 }
+
+// A list's box with no rows is read as its message, not as a list and not
+// as a text prompt, though it has a search line.
+func TestAnEmptyListIsItsMessage(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "omp-resume-empty.ansi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, ok := ReadPanel(string(raw))
+	if !ok || p.Title != "Resume Session (current folder)" || len(p.Lines) != 1 || !strings.HasPrefix(p.Lines[0], "No sessions in current folder.") {
+		t.Fatalf("panel = %+v %v", p, ok)
+	}
+	if _, is := ReadPrompt(string(raw)); is {
+		t.Error("the empty list was read as a prompt")
+	}
+	if _, is := Read(string(raw)); is {
+		t.Error("the empty list was read as a list")
+	}
+	for _, name := range []string{"omp-prompt.ansi", "omp-move-prompt.ansi", "omp-settings.ansi", "omp-login.ansi"} {
+		other, _ := os.ReadFile(filepath.Join("testdata", name))
+		if p, is := ReadPanel(string(other)); is {
+			t.Errorf("%s read as an empty list: %+v", name, p)
+		}
+	}
+}

@@ -36,6 +36,10 @@ var (
 // kept: it may repeat what was entered.
 func ReadPrompt(screen string) (Prompt, bool) {
 	lines := parse(screen)
+	// A list's box with no rows has a search line too; it is not a prompt.
+	if _, empty := readEmptyList(lines); empty {
+		return Prompt{}, false
+	}
 	for top := len(lines) - 1; top >= 0; top-- {
 		g := promptTop.FindStringSubmatch(strings.TrimSpace(text(lines[top])))
 		if g == nil {
