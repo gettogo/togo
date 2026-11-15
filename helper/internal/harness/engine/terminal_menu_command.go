@@ -249,6 +249,20 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 			held := strings.TrimRight(beforeCursor(line3, x3), " ")
 			now, _ := e.cfg.Screen(ctx, s.id)
 			same := trimEdge(line3) == typedLine && nothingNew(now, before, atEnter)
+			// With arguments, the first Enter may have gone to the
+			// harness's own completion of the last argument (a path): the
+			// line then still holds the whole command, with at most the
+			// rest of that argument added, and nothing else is new.
+			if args != "" {
+				whole := strings.TrimRight(typedLine+args, " ")
+				rest, kept := strings.CutPrefix(trimEdge(line3), whole)
+				others := strings.Replace(now, line3, "", 1)
+				if kept && !strings.ContainsAny(rest, " \t") && nothingNew(others, before, atEnter) {
+					if err := e.menuKeys(ctx, s, "Enter"); err != nil {
+						return "", err
+					}
+				}
+			}
 			if same && args == "" && (strings.HasSuffix(held, "/"+word) || strings.HasSuffix(held, text)) {
 				if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 					return "", err
