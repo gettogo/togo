@@ -29,7 +29,22 @@ func (e *Engine) readPrompt(ctx context.Context, s *sess) (termmenu.Prompt, bool
 	if err != nil {
 		return termmenu.Prompt{}, false
 	}
-	return termmenu.ReadPrompt(screen)
+	p, ok := termmenu.ReadPrompt(screen)
+	if !ok {
+		return termmenu.Prompt{}, false
+	}
+	// A box that only looks like a prompt (an example printed in a reply)
+	// takes no typing. This one must hold the cursor: the one the harness
+	// draws, or the terminal's own, shown, on the input line.
+	if !p.Focused {
+		if e.cfg.Cursor == nil {
+			return termmenu.Prompt{}, false
+		}
+		if _, y, visible, err := e.cfg.Cursor(ctx, s.id); err != nil || !visible || y != p.Row {
+			return termmenu.Prompt{}, false
+		}
+	}
+	return p, true
 }
 
 // openPrompt holds the prompt for the caller and returns its screen.
@@ -45,7 +60,7 @@ func (e *Engine) promptScreen(m *terminalMenu, p termmenu.Prompt) *harness.Scree
 		ID: "terminal.prompt/" + m.token, Primitive: harness.PrimSettings, Title: p.Title, FetchedAt: e.cfg.Now(),
 		Interaction: m.token,
 		Settings: &harness.Settings{Sections: []harness.SettingsSection{{Fields: []harness.Field{{
-			ID: promptField, Label: p.Title, Help: p.Help, Kind: harness.FieldSecret, Value: json.RawMessage("null"),
+			ID: promptField, Label: p.Title, Kind: harness.FieldSecret, Value: json.RawMessage("null"),
 			Action: promptAction, ActionLabel: "Continue", Presentation: "prompt",
 		}}}}},
 	}

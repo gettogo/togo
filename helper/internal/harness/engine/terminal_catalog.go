@@ -169,7 +169,10 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 	if err != nil {
 		return nil, false
 	}
-	row, line, located := ownLine(before, after)
+	// Found by what the line says, wherever it now is: a harness that
+	// draws in the scrolling terminal moves its input line when the list
+	// of commands opens.
+	line, _, located := ownTextLine(before, after, "/")
 	// ours reports that the line the "/" went on still reads as we left it.
 	ours := func() bool {
 		if !e.stillServed(s, conv) {
@@ -185,8 +188,12 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 			// exactly as it was right after it was typed.
 			return now == after
 		}
-		lines := strings.Split(now, "\n")
-		return row < len(lines) && trimEdge(lines[row]) == line
+		for _, l := range strings.Split(now, "\n") {
+			if trimEdge(l) == line {
+				return true
+			}
+		}
+		return false
 	}
 	// The "/" is taken back only from a line that is still as we left it.
 	defer func() {

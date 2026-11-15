@@ -315,6 +315,20 @@ func TestATextPromptIsRead(t *testing.T) {
 	if p, ok := ReadPrompt(typed); !ok || p.Empty {
 		t.Errorf("a field someone typed into reads as empty: %+v %v", p, ok)
 	}
+	if !p.Focused {
+		t.Error("the drawn cursor in the field was not seen")
+	}
+	// Spaces typed at the desk are text: the field is not empty.
+	spaced := strings.Replace(string(raw), "> \x1b[7m \x1b[0m   ", ">    \x1b[7m \x1b[0m", 1)
+	if p, ok := ReadPrompt(spaced); !ok || p.Empty {
+		t.Errorf("a field holding spaces reads as empty: %+v %v", p, ok)
+	}
+	// The same box without a cursor in it (an example printed in a reply)
+	// has no focus.
+	printed := strings.Replace(string(raw), "\x1b[7m \x1b[0m", " ", 1)
+	if p, ok := ReadPrompt(printed); ok && p.Focused {
+		t.Errorf("a printed box reads as focused: %+v", p)
+	}
 	for _, name := range []string{"oc-models", "omp-login", "omp-settings", "kimi-permission", "omp-switch"} {
 		list, err := os.ReadFile(filepath.Join("testdata", name+".ansi"))
 		if err != nil {
