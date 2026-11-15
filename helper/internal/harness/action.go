@@ -262,6 +262,11 @@ const (
 	// NoteCommands: the session's command list has more in it now (the
 	// harness's own list was read). It carries no payload: ask again.
 	NoteCommands = "commands"
+	// NoteMenu: a list opened in the harness's terminal after a command
+	// that had shown nothing when it was answered. RequestID names that
+	// command; the note carries no screen: take the list up with
+	// terminal.attach. Sent only for a command that gave a request id.
+	NoteMenu = "menu"
 )
 
 // NotificationMethod is the JSON-RPC method of harness notifications.
@@ -278,4 +283,6 @@ type Notification struct {
 	Mission   *Delta    `json:"mission,omitempty"`
 	// Reason says why a reset was sent: adapter, epoch or overflow.
 	Reason string `json:"reason,omitempty"`
+	// RequestID is the caller's id of the command a menu note is about.
+	RequestID string `json:"requestId,omitempty"`
 }

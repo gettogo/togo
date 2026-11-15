@@ -3665,7 +3665,8 @@
       "type": "object",
       "properties": {
         "sessionId": { "$ref": "#/$defs/ManagedSessionId" },
-        "kind": { "enum": ["items", "mission", "reset", "commands"] },
+        "kind": { "enum": ["items", "mission", "reset", "commands", "menu"] },
+        "requestId": { "description": "For kind menu: the requestId the command was run with.", "type": "string", "maxLength": 128 },
         "ts": { "$ref": "#/$defs/Timestamp" },
         "epoch": { "type": "string" },
         "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } },

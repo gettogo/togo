@@ -133,7 +133,16 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 					// proof nothing will be: the screen is watched for a
 					// while longer before anything is typed (lateWatch).
 					e.quietDone.Store(s.id, e.cfg.Now())
-					return harness.ActionResult{Result: harness.ResultApplied}, nil
+					if previous != nil {
+						// A list was open and closed into the input line:
+						// that is an effect seen.
+						return harness.ActionResult{Result: harness.ResultApplied}, nil
+					}
+					// Typed and submitted; nothing was seen to come of it.
+					// Not "done": the harness may yet open its list, and
+					// the screen is watched for it.
+					e.watchLateList(ctx, s)
+					return harness.ActionResult{Result: harness.ResultTyped}, nil
 				}
 			} else {
 				backSince = time.Time{}

@@ -186,6 +186,14 @@ func newToken() string {
 
 func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionRequest) (harness.ActionResult, error) {
 	ctx = withMenuConv(ctx, s)
+	// A new command, choice or key replaces any watch for a late list.
+	e.stopLateWatch(s.id)
+	if raw, ok := req.Args["requestId"]; ok {
+		var id string
+		if json.Unmarshal(raw, &id) == nil && id != "" && len(id) <= 128 {
+			ctx = context.WithValue(ctx, requestIDKey{}, id)
+		}
+	}
 	failed := func(msg string) (harness.ActionResult, error) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: msg}, nil
 	}

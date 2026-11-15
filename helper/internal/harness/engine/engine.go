@@ -150,6 +150,9 @@ type Engine struct {
 	// closing it. It is still on the harness's screen and has no owner:
 	// nothing is typed until the screen no longer shows it.
 	leftOpen map[string]string
+	// lateWatches holds, per session, the watch for a list that opens
+	// after a command was answered with nothing to show.
+	lateWatches map[string]*lateListWatch
 	// quietDone records, per session, when a command for the phone last
 	// ended with nothing to show (session id -> time.Time). A harness can
 	// still open a list after that (a slow fetch); until some time has
