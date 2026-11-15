@@ -178,11 +178,11 @@ const (
 const historyRetries = 3
 
 // olderLoaded replaces the line below once a later read brought the past.
-const olderLoaded = "Earlier messages of this conversation have been loaded."
+const olderLoaded = "Earlier messages loaded."
 
 // olderInTerminal is what the chat says when a conversation has messages
 // older than the ones it shows.
-const olderInTerminal = "Earlier messages of this conversation are not shown here. They are in the terminal."
+const olderInTerminal = "Earlier messages are not shown here. Open the terminal to see them."
 
 // readHistory asks the harness for the conversation's past and returns it
 // as the feed mapper's records, oldest first. Where the route pages, the
