@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
-	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -137,13 +136,6 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 				return ErrMalformed
 			}
 			if !hasRow(e.node, item) {
-				return errLease
-			}
-		}
-		if ev == "action" && !strings.HasPrefix(str("act"), "togo.") {
-			// A node that lists its actions takes only one of those, and
-			// only while it is not disabled: no action is made up for it.
-			if declared, ok := e.node.Props["actions"].([]any); ok && !declaredAction(declared, str("act")) {
 				return errLease
 			}
 		}
@@ -324,15 +316,4 @@ func blocked(props map[string]any) bool {
 	}
 	reason, ok := props["disabled"].(string)
 	return ok && reason != ""
-}
-
-// declaredAction reports whether a node's list of actions holds one with
-// that id that can be used now.
-func declaredAction(actions []any, id string) bool {
-	for _, a := range actions {
-		if m, ok := a.(map[string]any); ok && m["id"] == id {
-			return !blocked(m)
-		}
-	}
-	return false
 }
