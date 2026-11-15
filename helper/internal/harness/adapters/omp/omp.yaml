@@ -10,6 +10,7 @@ harness: { version: [omp, --version], pattern: 'omp/(\S+)', range: ">=18.10 <19"
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
   agents, background, plan, changes, ports, status, compact, settings, needs.questions]
 images: { insert: together }   # how image paths are pasted into the input
+mentions: { quote: double }    # a path with a space is written @"path"; bare, omp reads it up to the space
 # The input line is the row under the status bar: "╰─ text", with the
 # effort hint at its right end when it is empty. C-u empties it; a slash
 # command's completion popup closes with Escape and keeps the text (seen on

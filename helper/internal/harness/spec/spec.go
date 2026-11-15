@@ -34,6 +34,9 @@ type Adapter struct {
 	Mission      map[string]Mission `yaml:"mission"`
 	// Images says how the harness takes pictures in a prompt.
 	Images *Images `yaml:"images"`
+	// Mentions is how the harness reads a file named after "@" in its
+	// input, where that differs from the bare path.
+	Mentions *Mentions `yaml:"mentions"`
 	// Status declares what the mission Status block offers.
 	Status *Status `yaml:"status"`
 	// Input says how to read the harness's input line off the screen, so
@@ -85,6 +88,13 @@ type Status struct {
 // per_path pastes each path on its own, together pastes them at once.
 type Images struct {
 	Insert string `yaml:"insert"`
+}
+
+// Mentions is how a harness takes a file mention. Quote "double" means a
+// path with a space in it must be written @"path": bare, the harness reads
+// it only up to the first space.
+type Mentions struct {
+	Quote string `yaml:"quote"`
 }
 
 // Match picks the sessions an adapter serves.

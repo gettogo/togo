@@ -103,6 +103,11 @@ type Config struct {
 	// has it, or nil when the program does not publish one. It is the
 	// complete list, where a harness's command API may leave commands out.
 	LiveCommands func(session string) []harness.LiveCommand
+	// ExtraRoots are the session's additional workspace folders (omp's
+	// /add-dir), where the running program reports them. Files in them
+	// are offered for completion by their absolute path.
+	// incomplete says they are not all of them, or could not be confirmed.
+	ExtraRoots func(ctx context.Context, session string) (roots []string, incomplete bool)
 	// SurfaceAvailable reports, without taking anything, whether the
 	// session's running agent can show its screens natively. Nil means no.
 	SurfaceAvailable func(ctx context.Context, session string) bool

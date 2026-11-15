@@ -69,6 +69,11 @@ type CompanionState struct {
 	Consumed uint64 `json:"consumed,omitempty"`
 	// Features are the companion's additions to the protocol's own events.
 	Features []string `json:"features,omitempty"`
+	// Roots are the session's additional workspace folders, where the
+	// program reports them (feature "roots"); RootsIncomplete says the
+	// list is not all of them.
+	Roots           []string `json:"roots,omitempty"`
+	RootsIncomplete bool     `json:"rootsIncomplete,omitempty"`
 }
 
 // PrepareLaunch preserves the user's argv and profile. Only supported

@@ -5,7 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField, describeSecret } from '../omp.mjs'
+import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField, describeSecret, workspaceRoots } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -384,4 +384,25 @@ test('only a class that describes an input and knows its mask is changed', () =>
   Field.prototype.describe = theirs
   restore()
   assert.equal(Field.prototype.describe, theirs)
+})
+
+test('additional workspace folders come from the public getter, bounded, and say when they are not all there', () => {
+  assert.equal(workspaceRoots({}, '/work'), undefined, 'a program without the getter reports nothing about roots')
+  assert.equal(workspaceRoots(undefined, '/work'), undefined)
+  assert.deepEqual(workspaceRoots({ getAdditionalDirectories: () => ['/other one/with space', '/work', '/other one/with space', '/second/'] }, '/work'),
+    { roots: ['/other one/with space', '/second'], incomplete: false })
+  for (const bad of ['relative/dir', 7, '/x'.repeat(600)]) {
+    assert.deepEqual(workspaceRoots({ getAdditionalDirectories: () => ['/kept', bad] }, '/work'), { roots: ['/kept'], incomplete: true },
+      'an entry left out is said, not hidden')
+  }
+  const many = Array.from({ length: 40 }, (_, i) => `/root-${i}`)
+  const clipped = workspaceRoots({ getAdditionalDirectories: () => many }, '/work')
+  assert.equal(clipped.roots.length, 32)
+  assert.equal(clipped.incomplete, true)
+  const long = Array.from({ length: 20 }, (_, i) => `/${String(i).padStart(2, '0')}${'d'.repeat(1000)}`)
+  const budget = workspaceRoots({ getAdditionalDirectories: () => long }, '/work')
+  assert.ok(budget.roots.length < 20 && budget.incomplete, 'the byte budget is kept and said')
+  assert.ok(Buffer.byteLength(JSON.stringify(budget.roots)) <= 8 * 1024 + 64)
+  assert.deepEqual(workspaceRoots({ getAdditionalDirectories: () => { throw new Error('gone') } }, '/work'), { roots: [], incomplete: true })
+  assert.deepEqual(workspaceRoots({ getAdditionalDirectories: () => 'not a list' }, '/work'), { roots: [], incomplete: true })
 })

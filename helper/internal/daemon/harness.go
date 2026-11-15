@@ -64,6 +64,15 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		// read when called, never at construction.
 		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },
 		SurfaceAvailable: func(ctx context.Context, id string) bool { return c.Surface != nil && c.Surface.Available(ctx, id) },
+		// The running program's additional workspace folders, where its
+		// companion reports them and the program is this session's.
+		ExtraRoots: func(ctx context.Context, id string) ([]string, bool) {
+			if c.Surface == nil {
+				return nil, false
+			}
+			w := c.Surface.Roots(ctx, id)
+			return w.Roots, w.Incomplete != ""
+		},
 		// The running program's own command list, where its companion publishes one.
 		LiveCommands: func(id string) []harness.LiveCommand {
 			list, ok := (&surface.Companions{Home: o.Home}).Commands(id)

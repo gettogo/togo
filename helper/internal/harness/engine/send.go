@@ -319,12 +319,43 @@ func (e *Engine) Complete(ctx context.Context, req harness.CompleteRequest) (har
 	}
 	var items []harness.Completion
 	if req.Kind == harness.CompleteFile {
-		items = completeFiles(ctx, s.filesDir(ctx), req.Query, limit)
+		dir := s.filesDir(ctx)
+		items = completeFiles(ctx, dir, req.Query, limit)
+		// Additional workspace folders follow the session's own, each
+		// file named by its absolute path so it cannot be mistaken for
+		// one of the same name elsewhere.
+		if e.cfg.ExtraRoots != nil {
+			roots, incomplete := e.cfg.ExtraRoots(ctx, s.id)
+			// Folders that could not all be listed are not passed over in
+			// silence: a file missing from the list would look like a
+			// file that does not exist. The completion is refused, with a
+			// fixed message that names no path.
+			if incomplete {
+				return harness.CompleteResult{}, &harness.FallbackError{Reason: "roots", Detail: rootsIncompleteText}
+			}
+			for _, root := range roots {
+				if len(items) >= limit {
+					break
+				}
+				if rel, err := filepath.Rel(dir, root); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+					continue // inside the session's folder: already listed
+				}
+				for _, it := range completeFiles(ctx, root, req.Query, limit-len(items)) {
+					rel := strings.TrimSuffix(strings.TrimPrefix(it.Insert, "@"), " ")
+					abs := filepath.Join(root, rel)
+					it.Insert, it.Detail = "@"+abs+" ", filepath.Dir(abs)
+					items = append(items, it)
+				}
+			}
+		}
 	} else {
 		items = e.completeCommands(ctx, s, req.Query, limit)
 	}
 	if items == nil {
 		items = []harness.Completion{}
+	}
+	if req.Kind == harness.CompleteFile {
+		items = mentionForm(items, s.ad.Mentions)
 	}
 	res := harness.CompleteResult{Items: items}
 	if req.Kind != harness.CompleteFile {
@@ -420,3 +451,28 @@ func (e *Engine) sendNotYet(s *sess, act spec.Action) bool {
 	defer s.mu.Unlock()
 	return notYet(raw, s.stateLocked())
 }
+
+// mentionForm writes each file mention the way the harness reads it. Where
+// the harness takes a quoted path, a path with a space in it is quoted; one
+// that also holds a quote cannot be written at all and is left out.
+func mentionForm(items []harness.Completion, m *spec.Mentions) []harness.Completion {
+	if m == nil || m.Quote != "double" {
+		return items
+	}
+	out := items[:0]
+	for _, it := range items {
+		path := strings.TrimSuffix(strings.TrimPrefix(it.Insert, "@"), " ")
+		if strings.ContainsAny(path, " \t") {
+			if strings.Contains(path, `"`) {
+				continue
+			}
+			it.Insert = `@"` + path + `" `
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+// rootsIncompleteText is the refusal when a session's additional workspace
+// folders could not all be listed.
+const rootsIncompleteText = "This session has workspace folders that could not all be listed. Type the file's path, or open the terminal."

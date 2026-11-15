@@ -175,6 +175,34 @@ export function submitFocusedField(tui, event) {
 
 // What this companion adds to the protocol's own events.
 const FEATURES = ['submit', 'secret', 'commands']
+const MAX_ROOTS = 32
+const MAX_ROOT_BYTES = 1024
+const MAX_ROOTS_BYTES = 8 * 1024
+
+// workspaceRoots reads the session's additional workspace folders from the
+// program's own public getter. Undefined when this program has none (an
+// older one): then nothing about roots is published. incomplete says the
+// list is not all of them: an entry was left out (not a string, not
+// absolute, too long) or there were more than fit.
+export function workspaceRoots(sessionManager, cwd) {
+  if (typeof sessionManager?.getAdditionalDirectories !== 'function') return undefined
+  let listed
+  try { listed = sessionManager.getAdditionalDirectories() } catch { return { roots: [], incomplete: true } }
+  if (!Array.isArray(listed)) return { roots: [], incomplete: true }
+  const roots = [], seen = new Set()
+  let incomplete = false, bytes = 0
+  for (const entry of listed) {
+    if (typeof entry !== 'string' || !path.isAbsolute(entry) || Buffer.byteLength(entry) > MAX_ROOT_BYTES) { incomplete = true; continue }
+    const folder = path.resolve(entry) // absolute already: this drops "." parts and a trailing slash
+    if (folder === path.resolve(cwd) || seen.has(folder)) continue
+    seen.add(folder)
+    const size = Buffer.byteLength(JSON.stringify(folder)) + 1
+    if (roots.length >= MAX_ROOTS || bytes + size > MAX_ROOTS_BYTES) { incomplete = true; continue }
+    bytes += size
+    roots.push(folder)
+  }
+  return { roots, incomplete }
+}
 
 // How long a send may wait for the original editor to submit it.
 export const SUBMIT_WATCH_MS = 2000
@@ -249,6 +277,8 @@ export default function (pi) {
   let consumed = 0, unwatchSubmit
   let provider, publishedCommands = '', listing = false, listedAt = -Infinity
   let publishedGeneration = false
+  let publishedRoots = ''
+  const rootsNow = () => workspaceRoots(ctx?.sessionManager, process.cwd())
   const location = () => ({
     conversation: String(ctx?.sessionManager?.getSessionId?.() ?? ''),
     sessionFile: String(ctx?.sessionManager?.getSessionFile?.() ?? ''),
@@ -258,7 +288,22 @@ export default function (pi) {
     const value = { version: 1, generation: config.generation, pid: process.pid,
       pane: process.env.TMUX_PANE ?? '', cwd: process.cwd(), ...location(),
       epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed, features: FEATURES }
-    const json = JSON.stringify(value)
+    // Additional workspace folders, where the program reports them.
+    const workspace = rootsNow()
+    if (workspace) {
+      value.features = [...FEATURES, 'roots']
+      value.roots = workspace.roots
+      if (workspace.incomplete) value.rootsIncomplete = true
+    }
+    publishedRoots = JSON.stringify(workspace ?? null)
+    let json = JSON.stringify(value)
+    if (Buffer.byteLength(json) > MAX_FILE && value.roots) {
+      // The folders must never cost the rest of the state: say they are
+      // not all here, and publish without them.
+      value.roots = []
+      value.rootsIncomplete = true
+      json = JSON.stringify(value)
+    }
     if (Buffer.byteLength(json) > MAX_FILE) return
     const temporary = path.join(root, `.state-${process.pid}.tmp`)
     try {
@@ -433,6 +478,8 @@ export default function (pi) {
         // start() probes asynchronously. Publish the confirmed renderer state,
         // including a protocol fallback, rather than only the requested mode.
         if (Boolean(tui?.nativeRendering) !== publishedNative) publish()
+        // /add-dir and /remove-dir change the folders with no event.
+        if (JSON.stringify(rootsNow() ?? null) !== publishedRoots) publish()
         annotateFields()
         processCommand()
         // Current values (model, effort, toggles) are part of the list.
