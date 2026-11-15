@@ -2715,6 +2715,10 @@
         "consumed": {
           "const": true,
           "description": "Present only for a send whose text the program's own editor submitted. Absent means not proven; it is not a failure and never a reason to send again."
+        },
+        "refused": {
+          "const": true,
+          "description": "Present only when the program received the event and did not take it because its screen had moved on. Nothing changed and the native screen stays; read the scene again."
         }
       },
       "required": [

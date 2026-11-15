@@ -20,6 +20,8 @@ type fakeRuntime struct {
 	sent  []Message
 	owner string
 	valid bool
+	// refuse: the program receives events and does not take them.
+	refuse bool
 }
 
 func (f *fakeRuntime) resolve(context.Context, string) (runtimeInfo, error) { return f.info, nil }
@@ -80,6 +82,9 @@ func (f *fakeRuntime) dispatch(ctx context.Context, id string, run runtimeInfo, 
 	}
 	if !state.Native || state.Owner != owner {
 		return errLease
+	}
+	if f.refuse {
+		return ErrRefused
 	}
 	return f.send(ctx, id, run, owner, data)
 }
@@ -303,5 +308,26 @@ func TestPendingSurfaceReadCountsAsVisibleHeartbeat(t *testing.T) {
 	r.cache.mu.Unlock()
 	if !after.After(before) {
 		t.Fatal("visible renderer heartbeat was discarded while a frame was committing")
+	}
+}
+
+// An event the program did not take reaches the app as a result, not an
+// error: the native screen is still there, and the app reads it again.
+func TestSurfaceInputReportsARefusedEventWithoutAnError(t *testing.T) {
+	s, f, owner, lease := nativeFixture(t)
+	f.refuse = true
+	p := InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1,
+		Event: json.RawMessage(`{"ev":"action","sf":"one","id":"input","act":"activate"}`)}
+	res, err := s.Input(context.Background(), owner, p)
+	if err != nil || !res.Dispatched || res.Refused == nil || !*res.Refused {
+		t.Fatalf("input = %+v, %v", res, err)
+	}
+	if !s.Held(lease.ID) {
+		t.Fatal("a refused event ended the native screen")
+	}
+	f.refuse = false
+	res, err = s.Input(context.Background(), owner, p)
+	if err != nil || !res.Dispatched || res.Refused != nil {
+		t.Fatalf("input taken = %+v, %v", res, err)
 	}
 }

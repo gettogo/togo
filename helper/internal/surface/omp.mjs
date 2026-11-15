@@ -286,6 +286,8 @@ export default function (pi) {
   // Why the program last left native rendering, kept until native is next
   // granted. `reason` cannot hold it: every later command clears that.
   let released = ''
+  // The sequence of the last event the program refused: nothing changed.
+  let refused = 0
   let publishedNative
   // The sequence of the last native send whose text the original editor's
   // own submit callback received. Proof the program took it, not that it is done.
@@ -304,6 +306,7 @@ export default function (pi) {
       pane: process.env.TMUX_PANE ?? '', cwd: process.cwd(), ...location(),
       epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed, features: FEATURES }
     if (released) value.released = released
+    if (refused) value.refused = refused
     // Additional workspace folders, where the program reports them.
     const workspace = rootsNow()
     if (workspace) {
@@ -418,7 +421,10 @@ export default function (pi) {
         if (Buffer.byteLength(body) > MAX_EVENT) return
         fs.unlinkSync(file)
         if (request.event.ev === 'action' && request.event.act === 'togo.query') {
-          if (!applyPickerQuery(tui, request.event)) throw new Error('unsupported picker query')
+          // A query the program does not take (the list moved on, its text
+          // is no longer what the phone saw) changes nothing. It is said
+          // so, and the screen stays as it is.
+          if (!applyPickerQuery(tui, request.event)) refused = request.seq
         } else if (request.event.ev === 'action' && request.event.act === 'togo.submit') {
           // A refusal changes nothing; the phone sees no result and says so.
           submitFocusedField(tui, request.event)

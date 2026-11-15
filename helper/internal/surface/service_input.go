@@ -3,6 +3,7 @@ package surface
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -144,6 +145,10 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 		return result, err
 	}
 	err = s.backend.dispatch(ctx, p.ID, r.runtime, r.lease.Token, wire)
+	if errors.Is(err, ErrRefused) {
+		refused := true
+		return DispatchResult{Dispatched: true, Refused: &refused}, nil
+	}
 	return DispatchResult{Dispatched: err == nil}, err
 }
 

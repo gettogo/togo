@@ -80,4 +80,8 @@ type DispatchResult struct {
 	// own editor submitted. Absent means not proven: it does not mean the
 	// send failed, and it is never a reason to send again.
 	Consumed *bool `json:"consumed,omitempty"`
+	// Refused is set, and true, when the program received the event and
+	// did not take it because its screen had moved on. Nothing changed;
+	// the scene read next is what the program shows.
+	Refused *bool `json:"refused,omitempty"`
 }

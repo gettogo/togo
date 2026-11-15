@@ -3,6 +3,7 @@ package surface
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -197,4 +198,48 @@ func preparedCompanion(t *testing.T, launch session.Launch) CompanionConfig {
 	}
 	config.Path = path
 	return config
+}
+
+// An event the program received and did not take is reported as refused,
+// not as a failure: nothing changed and the native screen stays. A refusal
+// recorded for an earlier event says nothing about this one.
+func TestCompanionDispatchReportsAnEventTheProgramRefused(t *testing.T) {
+	for name, c := range map[string]struct {
+		refused func(seq uint64) uint64
+		want    error
+	}{
+		"this event":       {func(seq uint64) uint64 { return seq }, ErrRefused},
+		"an earlier event": {func(seq uint64) uint64 { return seq - 1 }, nil},
+		"none":             {func(uint64) uint64 { return 0 }, nil},
+	} {
+		companions := testCompanions(t)
+		launch, err := companions.PrepareLaunch(context.Background(), "s_abcdefghij", "omp", session.Launch{Program: "omp"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		run := preparedCompanion(t, launch)
+		before := CompanionState{Version: 1, Generation: run.Generation, PID: os.Getpid(), Pane: "%0",
+			Conversation: "one", Available: true, Native: true, Owner: "renderer", Seq: 4}
+		result := make(chan error, 1)
+		body := json.RawMessage(`{"ev":"action","act":"togo.query","sf":"one","id":"list","before":"","query":"a"}`)
+		go func() { result <- companions.Dispatch(context.Background(), run, before, before.Owner, body) }()
+		file := filepath.Join(filepath.Dir(run.Path), "command.json")
+		for deadline := time.Now().Add(CompanionWait); ; time.Sleep(time.Millisecond) {
+			if _, err := os.Stat(file); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("command was not written")
+			}
+		}
+		after := before
+		after.Seq++
+		after.Refused = c.refused(after.Seq)
+		if err := writeJSON(filepath.Join(filepath.Dir(run.Path), "state.json"), after); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-result; !errors.Is(err, c.want) || (c.want == nil && err != nil) {
+			t.Errorf("%s: dispatch = %v, want %v", name, err, c.want)
+		}
+	}
 }

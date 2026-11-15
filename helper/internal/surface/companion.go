@@ -70,6 +70,9 @@ type CompanionState struct {
 	// Released is why the program last left native rendering, in the
 	// companion's fixed words; empty while native or when never left.
 	Released string `json:"released,omitempty"`
+	// Refused is the sequence of the last event the program refused,
+	// leaving everything as it was.
+	Refused uint64 `json:"refused,omitempty"`
 	// Features are the companion's additions to the protocol's own events.
 	Features []string `json:"features,omitempty"`
 	// Roots are the session's additional workspace folders, where the
@@ -196,9 +199,17 @@ func (c *Companions) Dispatch(ctx context.Context, config CompanionConfig, previ
 	if len(event) > MaxAPCBytes || !json.Valid(event) {
 		return ErrLimit
 	}
-	_, err := c.command(ctx, config, previous, "event", owner, event)
+	sent, err := c.command(ctx, config, previous, "event", owner, event)
+	if err == nil && sent.Refused != 0 && sent.Refused == sent.Seq {
+		return ErrRefused
+	}
 	return err
 }
+
+// ErrRefused is an event the program received and did not take: the screen
+// it was meant for had moved on. Nothing changed, and the native screen
+// stays.
+var ErrRefused = errors.New("surface: the program did not take the event; nothing changed")
 
 // ReceiptWait bounds the wait for the program to submit a dispatched send.
 // It is shorter than the companion's own watch, so a late receipt is simply
