@@ -61,6 +61,14 @@ struct NativePickerScreenTests {
         #expect(sections.map(\.body.text) == ["Reply with only these four words: Native check A ready", "Native check A ready"])
     }
 
+    @Test(arguments: ["", "Native check A"])
+    func sourceSearchIsPreserved(query: String) throws {
+        var node = try Self.node(Self.recorded("resume"))
+        node.properties["query"] = .string(query)
+        let screen = try NativePickerScreen.map(node, workflow: "resume", fallbackTitle: "Resume", fetchedAt: Self.at)
+        #expect(screen.picker?.query == query)
+    }
+
     @Test func aMarkedCurrentRowIsSelected() throws {
         var json = try Self.recorded("resume")
         json = json.replacingOccurrences(of: "/sessions/project/current.jsonl", with: "/sessions/project/a.jsonl")

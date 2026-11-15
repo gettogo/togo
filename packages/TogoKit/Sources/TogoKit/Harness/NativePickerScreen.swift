@@ -159,7 +159,7 @@ public enum NativePickerScreen {
             onSelect: activate, onSelectLabel: primaryLabel, searchMode: searchable ? "remote" : nil,
             contextActions: rowActions.isEmpty ? nil : rowActions,
             selectionBehavior: p["preview"] != nil ? "preview" : nil,
-            presentation: presentation(p)
+            presentation: presentation(p), query: string(p["query"])
         )
         let title = string(p["title"]).flatMap { $0.isEmpty ? nil : $0 } ?? fallbackTitle
         return HarnessScreen(id: node.id, primitive: .picker, title: title, fetchedAt: fetchedAt, picker: picker, actions: listActions)

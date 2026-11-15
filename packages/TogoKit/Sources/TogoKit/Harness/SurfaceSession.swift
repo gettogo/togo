@@ -6,7 +6,7 @@ import Observation
 @MainActor @Observable public final class SurfaceSession {
     public enum Phase: Sendable { case loading, active, unavailable, suspended }
     public enum Notice: Sendable { case unconfirmed, unavailable }
-    public enum InputOutcome: Sendable { case notDispatched, dispatched, unconfirmed }
+    public enum InputOutcome: Sendable { case notDispatched, dispatched, refused, unconfirmed }
     public struct Pending: Sendable {
         public let surface: String
         public let node: String
@@ -192,6 +192,12 @@ import Observation
             let result = try await connection.surfaceInput(lease, surface: surface, instance: view.instance,
                                                           event: .object(event), expectedText: expectedText)
             guard self.lease == lease, pending?.token == token else { return .unconfirmed }
+            if result.refused == true {
+                // A rejected precondition changes nothing. Keep reading the
+                // original scene; never replay the input or revoke its lease.
+                pending = nil
+                return .refused
+            }
             if result.dispatched {
                 pending?.dispatched = true
                 if kind == "send", result.consumed == true { pending = nil }

@@ -165,6 +165,7 @@ import TogoKit
         let outcome = await model.session.input(surface: block.view.id, node: node,
             event: SurfaceValues.event(kind, fields), expectedText: expectedText)
         guard outcome == .dispatched else {
+            if outcome == .refused { throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.inputChanged) }
             let message = model.session.inputFailure.map { ServiceErrors.message($0) } ?? SurfaceCopy.unconfirmed
             throw ChatSurfaceInteraction.Failure(message: message)
         }

@@ -78,10 +78,13 @@ public struct SurfaceReadResult: Codable, Sendable {
 public struct SurfaceDispatchResult: Codable, Sendable {
     public var dispatched: Bool
     public var consumed: Bool?
+    /// The program received the event but refused its stale precondition.
+    public var refused: Bool?
 
-    public init(dispatched: Bool, consumed: Bool? = nil) {
+    public init(dispatched: Bool, consumed: Bool? = nil, refused: Bool? = nil) {
         self.dispatched = dispatched
         self.consumed = consumed
+        self.refused = refused
     }
 }
 

@@ -10,6 +10,7 @@ import TogoKit
         var closed = false
         var closing = false
         var failInput = false
+        var refuseInput = false
         var holdClose = false
         var closeContinuation: CheckedContinuation<Void, Never>?
         let lease: SurfaceLease
@@ -28,7 +29,7 @@ import TogoKit
         func surfaceInput(_ lease: SurfaceLease, surface: String, instance: UInt64, event: JSONValue, expectedText: String?) async throws -> SurfaceDispatchResult {
             inputs += 1
             if failInput { throw HelperError.closed }
-            return SurfaceDispatchResult(dispatched: true, consumed: true)
+            return SurfaceDispatchResult(dispatched: true, consumed: refuseInput ? nil : true, refused: refuseInput ? true : nil)
         }
         func surfaceAck(_ lease: SurfaceLease, view: SurfaceView) async throws {}
         func surfaceClose(_ lease: SurfaceLease) async throws {}
@@ -170,6 +171,35 @@ import TogoKit
         _ = try await action.value
         #expect(services.actions == ["mode"])
         #expect(store.interaction == nil)
+        await run.value
+    }
+
+    @Test func refusedPickerSearchKeepsItsScreenAndReadsTheOriginalQuery() async throws {
+        let connection = try Connection()
+        connection.refuseInput = true
+        connection.next = try Self.scene(overlay: "omp-native-picker")
+        let (store, _) = try await makeStore(connection)
+        defer { store.stop() }
+        let session = makeSession(connection)
+        let model = ChatSurfaceInteraction(command: "/resume", session: session) {}
+        store.interaction = model
+        let run = Task { await model.run(options: options) }
+        try await wait { session.canInteract && !model.blocks.isEmpty }
+        let block = try #require(model.blocks.last)
+        let context = NativeCommandContext(model: model, block: block, store: store)
+        let search = try #require(context.primitive().searchScreen)
+        await #expect(throws: ChatSurfaceInteraction.Failure.self) { try await search("phone search") }
+        #expect(!model.retired)
+        #expect(store.interaction === model)
+        #expect(session.canInteract)
+        #expect(session.notice == nil)
+        var next = try Self.scene(revision: 2, overlay: "omp-native-picker")
+        next.views[0].document.root.children[1].children[0].properties["query"] = .string("desk search")
+        connection.next = next
+        try await wait { session.scene?.revision == 2 }
+        #expect(try context.screen().picker?.query == "desk search")
+        #expect(connection.inputs == 1)
+        run.cancel()
         await run.value
     }
 

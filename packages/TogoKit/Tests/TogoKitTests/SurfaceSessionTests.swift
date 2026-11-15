@@ -11,6 +11,7 @@ import Testing
         var closeGate: AsyncStream<Void>?
         var inputs = 0
         var consumed: Bool?
+        var refused: Bool?
         var ackError: HelperError?
         var inputGate: AsyncStream<Void>?
         var ackGate: AsyncStream<Void>?
@@ -36,7 +37,7 @@ import Testing
         func surfaceInput(_ lease: SurfaceLease, surface: String, instance: UInt64, event: JSONValue, expectedText: String?) async throws -> SurfaceDispatchResult {
             inputs += 1
             if let inputGate { for await _ in inputGate { break } }
-            return SurfaceDispatchResult(dispatched: true, consumed: consumed)
+            return SurfaceDispatchResult(dispatched: true, consumed: consumed, refused: refused)
         }
         func surfaceAck(_ lease: SurfaceLease, view: SurfaceView) async throws {
             if let ackGate { for await _ in ackGate { break } }
@@ -97,6 +98,32 @@ import Testing
         #expect(connection.inputs == 1)
         task.cancel()
         await task.value
+    }
+
+    @Test func refusedInputKeepsTheRendererAvailableWithoutReplay() async throws {
+        let connection = try Connection()
+        connection.refused = true
+        let session = SurfaceSession(id: connection.lease.id, makeConnection: { connection }, pollInterval: .milliseconds(10))
+        let task = Task { await session.run(options: options) }
+        try await wait { session.scene != nil }
+        let outcome = await session.input(surface: "s:1", node: "input", event: ["ev": .string("action"),
+            "act": .string("togo.query"), "before": .string(""), "query": .string("zz")])
+        #expect(outcome == .refused)
+        #expect(session.pending == nil)
+        #expect(session.notice == nil)
+        #expect(session.canInteract)
+        #expect(!connection.closed)
+        #expect(connection.inputs == 1)
+        task.cancel()
+        await task.value
+    }
+
+    @Test func refusalReceiptIsAdditiveToOlderDispatchReceipts() throws {
+        let decoder = JSONDecoder()
+        let older = try decoder.decode(SurfaceDispatchResult.self, from: Data(#"{"dispatched":true}"#.utf8))
+        #expect(older.refused == nil)
+        let refusal = try decoder.decode(SurfaceDispatchResult.self, from: Data(#"{"dispatched":true,"refused":true}"#.utf8))
+        #expect(refusal.refused == true)
     }
 
     @Test func changedProducerTextSettlesAnEdit() async throws {
