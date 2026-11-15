@@ -63,7 +63,13 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		// The native surface service is built after the engine; both are
 		// read when called, never at construction.
 		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },
-		SurfaceAvailable: func(ctx context.Context, id string) bool { return c.Surface != nil && c.Surface.Available(ctx, id) },
+		// Screens come from the terminal reader, the same way for every
+		// program. The program's own rendering protocol is offered to the
+		// app only when asked for (TOGO_OMP_SURFACE=1); its companion still
+		// loads, so added folders and the rest keep working.
+		SurfaceAvailable: func(ctx context.Context, id string) bool {
+			return os.Getenv("TOGO_OMP_SURFACE") == "1" && c.Surface != nil && c.Surface.Available(ctx, id)
+		},
 		// The running program's additional workspace folders, where its
 		// companion reports them and the program is this session's.
 		ExtraRoots: func(ctx context.Context, id string) ([]string, bool) {

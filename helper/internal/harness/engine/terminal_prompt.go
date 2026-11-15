@@ -50,9 +50,12 @@ func (e *Engine) readPrompt(ctx context.Context, s *sess) (termmenu.Prompt, bool
 			p.Empty = false
 			if plain, err := e.cfg.Screen(ctx, s.id); err == nil {
 				if lines := strings.Split(plain, "\n"); y < len(lines) {
-					switch strings.TrimLeft(beforeCursor(lines[y], x), " │┃") {
+					before := strings.TrimLeft(beforeCursor(lines[y], x), " │┃")
+					switch before {
 					case "> ", "❯ ", ">", "❯":
 						p.Empty = true
+					default:
+						p.Empty = p.Label != "" && (before == p.Label+": " || before == p.Label+":")
 					}
 				}
 			}
@@ -74,7 +77,7 @@ func (e *Engine) promptScreen(m *terminalMenu, p termmenu.Prompt) *harness.Scree
 		ID: "terminal.prompt/" + m.token, Primitive: harness.PrimSettings, Title: p.Title, FetchedAt: e.cfg.Now(),
 		Interaction: m.token, Actions: []harness.ActionRef{},
 		Settings: &harness.Settings{Sections: []harness.SettingsSection{{Fields: []harness.Field{{
-			ID: promptField, Label: p.Title, Kind: harness.FieldSecret, Value: json.RawMessage("null"),
+			ID: promptField, Label: promptLabel(p), Kind: harness.FieldSecret, Value: json.RawMessage("null"),
 			Action: promptAction, ActionLabel: "Continue", Presentation: "prompt",
 		}}}}},
 	}
@@ -153,4 +156,13 @@ func (e *Engine) answerPrompt(ctx context.Context, s *sess, m *terminalMenu, val
 	// Still showing the entry: not known to be taken or refused.
 	e.setMenu(s.id, nil)
 	return e.notShown(s, composerMark{}), nil
+}
+
+// promptLabel names the field: the input line's own label where the
+// program draws one, else the box's title.
+func promptLabel(p termmenu.Prompt) string {
+	if p.Label != "" {
+		return p.Label
+	}
+	return p.Title
 }

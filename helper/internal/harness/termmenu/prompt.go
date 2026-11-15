@@ -11,6 +11,8 @@ import (
 // into, and is never shown.
 type Prompt struct {
 	Title string
+	// Label is the input line's own name where it has one ("Path:").
+	Label string
 	Hint  string
 	Empty bool
 	// Focused: the harness draws its cursor in the input line. Row is the
@@ -24,6 +26,8 @@ var (
 	promptTop    = regexp.MustCompile(`^[╭┌]─+\s*([^─].*?)\s*─+[╮┐]$`)
 	promptBottom = regexp.MustCompile(`^[╰└]─+[╯┘]$`)
 	promptInput  = regexp.MustCompile(`^[>❯]\s?(.*)$`)
+	// An input line named by a short label in place of a mark: "Path: ".
+	promptLabel = regexp.MustCompile(`^([A-Z][A-Za-z ]{0,18}):(?:\s(.*))?$`)
 )
 
 // ReadPrompt reads a text prompt from a screen: a titled box holding exactly
@@ -64,6 +68,11 @@ func ReadPrompt(screen string) (Prompt, bool) {
 				}
 			case hintWords.MatchString(t):
 				p.Hint = t
+			case promptLabel.MatchString(t):
+				g := promptLabel.FindStringSubmatch(t)
+				inputs++
+				p.Row, p.Label = i, g[1]
+				p.Empty = strings.TrimSpace(g[2]) == ""
 			default:
 				help++
 			}

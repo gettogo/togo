@@ -339,3 +339,27 @@ func TestATextPromptIsRead(t *testing.T) {
 		}
 	}
 }
+
+// An input line named by a label ("Path:") in place of a mark is a prompt
+// too. Ordinary text with a colon in a box of prose is not.
+func TestALabelledPromptIsRead(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "omp-move-prompt.ansi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, ok := ReadPrompt(string(raw))
+	if !ok || p.Title != "Move to directory" || p.Label != "Path" || !p.Empty {
+		t.Fatalf("prompt = %+v %v", p, ok)
+	}
+	if _, isList := Read(string(raw)); isList {
+		t.Error("the prompt was also read as a list")
+	}
+	typed := strings.Replace(string(raw), "Path: ", "Path: ~/x", 1)
+	if p, ok := ReadPrompt(typed); !ok || p.Empty {
+		t.Errorf("a field someone typed into reads as empty: %+v %v", p, ok)
+	}
+	prose := "╭─ Notes ─────────────╮\n│ Note: one            │\n│ Warning: two         │\n│ ⏎ submit  ⎋ cancel   │\n╰─────────────────────╯\n"
+	if p, ok := ReadPrompt(prose); ok {
+		t.Errorf("prose read as a prompt: %+v", p)
+	}
+}
