@@ -119,12 +119,13 @@ func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 		s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: events})
 		// Older messages exist that are not shown: not all were read (a
 		// bound, a page that failed), or the replay itself was more than
-		// a session keeps and the oldest were dropped. Said in fixed words
-		// in the first place of the chat, after the replay, so that the
-		// replay cannot push it out.
+		// a session keeps and the oldest were dropped. Said in fixed
+		// words, as an ordinary item after the replay: it gets the next
+		// number like any other, so a chat that reconnects by number
+		// receives it, and the replay cannot push it out.
 		if partial || e.log.RetentionFloor(s.id) > floor {
-			e.log.Lead(s.id, harness.Item{ID: "history-partial-" + conv, Kind: harness.KindNotice, At: e.cfg.Now(),
-				Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeFallback, Text: olderInTerminal}})
+			s.publishLocked([]harness.Item{{ID: "history-partial-" + conv, Kind: harness.KindNotice, At: e.cfg.Now(),
+				Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeFallback, Text: olderInTerminal}}}, nil)
 		}
 	}
 	// Held records are mapped as they would have been, after the past.

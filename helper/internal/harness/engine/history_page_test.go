@@ -240,8 +240,8 @@ feeds:
 }
 
 // A chat whose past could not all be read shows what was read, oldest
-// first, under one fixed line saying earlier messages are in the terminal.
-// The line names no error and no cursor.
+// first, and then one fixed line saying earlier messages are in the
+// terminal. The line names no error and no cursor.
 func TestAChatWithOlderUnreadMessagesSaysSoAboveThem(t *testing.T) {
 	const id = "s_fakehistpn"
 	home, togo := t.TempDir(), t.TempDir()
@@ -287,7 +287,7 @@ func TestAChatWithOlderUnreadMessagesSaysSoAboveThem(t *testing.T) {
 	deliver(id, json.RawMessage(histEvent("e5", "A", "a5", "said 5")))
 	waitFor(t, func() bool { return len(chat()) == 5 })
 	got := chat()
-	want := []string{"NOTICE:" + olderInTerminal, "said 2", "said 3", "said 4", "said 5"}
+	want := []string{"said 2", "said 3", "said 4", "said 5", "NOTICE:" + olderInTerminal}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("chat = %q, want %q", got, want)
 	}
@@ -356,12 +356,12 @@ func TestAnAnswerThatIsNotAPageIsNotTheStart(t *testing.T) {
 	}
 }
 
-// The line saying older messages are not shown holds the first place of the
-// chat however much is replayed after it is known: when the replay fills
-// what a session keeps, the line takes the place of the oldest item rather
-// than being pushed out with it. A replay that alone overflows what is kept
-// gets the line too, though the route was read to its start.
-func TestTheOlderMessagesLineKeepsFirstPlaceWhenTheChatIsFull(t *testing.T) {
+// The line saying older messages are not shown is an ordinary item after
+// the replay: a replay that fills what a session keeps cannot push it out,
+// and a chat that reconnects asking for what came after a number it had
+// receives it. A replay that alone overflows what is kept gets the line
+// too, though the route was read to its start.
+func TestTheOlderMessagesLineSurvivesAFullChatAndAReconnect(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pages int
 		keep  int
@@ -413,11 +413,28 @@ func TestTheOlderMessagesLineKeepsFirstPlaceWhenTheChatIsFull(t *testing.T) {
 			return out
 		}
 		deliver(id, json.RawMessage(histEvent("e5", "A", "a5", "said 5")))
-		waitFor(t, func() bool { c := chat(); return len(c) == tc.keep && strings.HasPrefix(c[0], "NOTICE:") })
+		waitFor(t, func() bool { c := chat(); return len(c) == tc.keep && strings.HasPrefix(c[len(c)-1], "NOTICE:") })
 		got := chat()
-		want := []string{"NOTICE:" + olderInTerminal, "said 4", "said 5"}
+		want := []string{"said 4", "said 5", "NOTICE:" + olderInTerminal}
 		if strings.Join(got, "|") != strings.Join(want, "|") {
 			t.Errorf("%s: chat = %q, want %q", name, got, want)
+		}
+		// Every number is above the dropped ones and ascending, and a
+		// client that held any earlier number is sent the line.
+		floor := e.log.RetentionFloor(id)
+		items, _, _ := e.log.Since(id, 0, 50)
+		last := floor
+		for _, it := range items {
+			if it.Seq <= last {
+				t.Errorf("%s: numbers not ascending above the floor: %d after %d", name, it.Seq, last)
+			}
+			last = it.Seq
+		}
+		for after := int64(0); after < items[len(items)-1].Seq; after++ {
+			since, _, _ := e.log.Since(id, after, 50)
+			if len(since) == 0 || since[len(since)-1].Notice == nil {
+				t.Errorf("%s: a chat that had up to %d is not sent the line", name, after)
+			}
 		}
 		e.Forget(id)
 		srv.Close()
@@ -441,41 +458,4 @@ feeds:
     mapper: fake.events
     stability: documented
 `))
-}
-
-// Lead puts an item first: before the others while there is room, else in
-// the place and number of the oldest. Numbers stay ascending and none below
-// the dropped ones is given out again.
-func TestLeadPutsAnItemFirst(t *testing.T) {
-	l := &Log{Max: 3, NewEpoch: func() string { return "e" }}
-	item := func(id string) harness.Item { return harness.Item{ID: id, Kind: harness.KindNotice} }
-	ids := func() string {
-		items, _, _ := l.Since("s", 0, 10)
-		var out []string
-		last := int64(0)
-		for _, it := range items {
-			if it.Seq <= last {
-				t.Fatalf("numbers are not ascending: %+v", items)
-			}
-			last = it.Seq
-			out = append(out, it.ID)
-		}
-		return strings.Join(out, ",")
-	}
-	l.Append("s", []harness.Item{item("lead"), item("a"), item("b")})
-	if l.Lead("s", item("lead")) || ids() != "lead,a,b" {
-		t.Fatalf("an item already first was moved: %s", ids())
-	}
-	l.Append("s", []harness.Item{item("c"), item("d")}) // lead and a are dropped
-	if ids() != "b,c,d" {
-		t.Fatalf("ring = %s", ids())
-	}
-	floor := l.RetentionFloor("s")
-	if !l.Lead("s", item("lead")) || ids() != "lead,c,d" {
-		t.Fatalf("lead in a full ring = %s", ids())
-	}
-	items, _, _ := l.Since("s", 0, 10)
-	if items[0].Seq <= floor {
-		t.Errorf("the lead item took a number at or below the dropped ones: %d <= %d", items[0].Seq, floor)
-	}
 }
