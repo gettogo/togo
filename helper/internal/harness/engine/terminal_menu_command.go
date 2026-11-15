@@ -33,6 +33,9 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 	if open, ok := e.readMenu(ctx, s); ok && open.Title != "" {
 		return s.ad.Name + " has “" + e.redact(s.id, open.Title) + "” open in its terminal. Close it there first.", nil
 	}
+	if open, ok := e.readPanel(ctx, s); ok {
+		return s.ad.Name + " has “" + e.redact(s.id, open.Title) + "” open in its terminal. Close it there first.", nil
+	}
 	e.waitInputLine(ctx, s)
 	// The input line is not cleared: what is in it is not ours. Whether
 	// it is empty is found out by typing the command: a harness offers its
@@ -279,6 +282,9 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 	// command's text (an editor filled in with it), and Enter there would
 	// answer the dialog before anyone saw it.
 	_, prompt := e.readPrompt(ctx, s)
+	if _, panel := e.readPanel(ctx, s); panel {
+		prompt = true
+	}
 	if _, ok := e.readMenu(ctx, s); !ok && !prompt {
 		if x3, line3, _, ok := e.cursorAt(ctx, s); ok {
 			held := strings.TrimRight(beforeCursor(line3, x3), " ")

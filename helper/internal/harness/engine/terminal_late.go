@@ -83,6 +83,8 @@ func (e *Engine) watchLateList(ctx context.Context, s *sess) {
 				// the same way.
 				if p, is := e.readPrompt(watch, s); is {
 					menu, open = termmenu.Menu{Title: p.Title}, true
+				} else if p, is := termmenu.ReadPanel(screen); is {
+					menu, open = termmenu.Menu{Title: p.Title}, true
 				}
 			}
 			if !open || menu.Title == "" {

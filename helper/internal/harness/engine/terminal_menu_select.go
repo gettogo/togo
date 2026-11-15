@@ -134,6 +134,10 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 				}
 				return e.openPrompt(ctx, s, title, p), nil
 			}
+			// A panel that only tells something is its own screen too.
+			if p, is := e.readPanel(ctx, s); is {
+				return e.openPanel(ctx, s, title, p), nil
+			}
 			if e.composerBack(ctx, s, mark) {
 				if backSince.IsZero() {
 					backSince = time.Now()

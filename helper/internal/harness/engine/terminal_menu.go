@@ -63,7 +63,9 @@ type terminalMenu struct {
 	first  string
 	search bool
 	// prompt: this is a text prompt, not a list; panel is its title.
-	prompt  bool
+	prompt bool
+	// info: this is a panel that only tells something; panel is its title.
+	info    bool
 	rows    []termmenu.Item
 	keys    []menuKey
 	expires time.Time
@@ -122,6 +124,10 @@ func (e *Engine) menuLeftOpen(s *sess) (string, bool) {
 		}
 		// A text prompt left open takes typed keys just as a list does.
 		if p, is := termmenu.ReadPrompt(screen); is && p.Title == panel {
+			return panel, true
+		}
+		// So does a panel that only tells something: its keys act at once.
+		if p, is := termmenu.ReadPanel(screen); is && p.Title == panel {
 			return panel, true
 		}
 	}
@@ -277,6 +283,9 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			if p, is := e.readPrompt(ctx, s); is && p.Empty {
 				return e.openPrompt(ctx, s, p.Title, p), nil
 			}
+			if p, is := e.readPanel(ctx, s); is {
+				return e.openPanel(ctx, s, p.Title, p), nil
+			}
 		}
 		if !chooser {
 			return harness.ActionResult{Result: harness.ResultFallback, Message: "No menu is open in the terminal."}, nil
@@ -315,6 +324,17 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 	case "cancel":
 		m := e.menuOf(ctx, s.id, token)
 		if m == nil {
+			return harness.ActionResult{Result: harness.ResultApplied}, nil
+		}
+		if m.info {
+			closed, err := e.closePanel(ctx, s, m)
+			e.setMenu(s.id, nil)
+			if err != nil {
+				return harness.ActionResult{}, err
+			}
+			if !closed {
+				return failed("The panel did not close. Open the terminal to close it.")
+			}
 			return harness.ActionResult{Result: harness.ResultApplied}, nil
 		}
 		if m.prompt {

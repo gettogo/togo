@@ -112,6 +112,19 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 	if m == nil || e.cfg.StyledScreen == nil {
 		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This menu has closed."}
 	}
+	if m.info {
+		if p, is := e.readPanel(ctx, s); is && p.Title == m.panel {
+			return *e.panelScreen(m, p), nil
+		}
+		// The panel has gone: the sign-in finished, or it was closed at
+		// the desk. What took its place is handed over under a new
+		// interaction; with nothing to show, this one has closed.
+		if res, err := e.afterKey(ctx, s, m.title, m); err == nil && res.Screen != nil {
+			return *res.Screen, nil
+		}
+		e.setMenu(s.id, nil)
+		return harness.Screen{}, &harness.FallbackError{Reason: "closed", Detail: "This panel has closed."}
+	}
 	if m.prompt {
 		p, is := e.readPrompt(ctx, s)
 		if !is {
