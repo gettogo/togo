@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -96,7 +97,7 @@ func (s *sess) resumeHistory() {
 
 func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 	ctx, cancel := context.WithTimeout(s.ctx, historyTimeout)
-	events, err := e.readHistory(ctx, s, s.ad.Feeds[feed].History, conv)
+	events, partial, err := e.readHistory(ctx, s, s.ad.Feeds[feed].History, conv)
 	cancel()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -113,6 +114,12 @@ func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 		}
 	}
 	if err == nil && !moved && len(events) > 0 {
+		if partial {
+			// Older messages exist that were not read (a bound, or a page
+			// that failed). Said above what is shown, in fixed words.
+			s.publishLocked([]harness.Item{{ID: "history-partial-" + conv, Kind: harness.KindNotice, At: e.cfg.Now(),
+				Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeFallback, Text: olderInTerminal}}}, nil)
+		}
 		s.mappers[mapper] = e.mapperFor(mapper, s.env)
 		s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: events})
 	}
@@ -122,48 +129,150 @@ func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 	}
 }
 
-// maxHistory bounds the records one history read replays.
+// maxHistory bounds the source records one history read replays. A record
+// may map to no item or to several: this is not the item bound (MaxItems).
 const maxHistory = 2000
 
+// Bounds on reading history in pages: the pages (a route's own default, and
+// the most an adapter may ask for), the cursor's length, and the bytes of
+// all answers kept together.
+const (
+	historyPages     = 20
+	historyPagesMax  = 50
+	historyCursorMax = 2048
+	historyBytesMax  = 8 << 20
+)
+
+// olderInTerminal is what the chat says when a conversation has messages
+// older than the ones it shows.
+const olderInTerminal = "Earlier messages of this conversation are not shown here. They are in the terminal."
+
 // readHistory asks the harness for the conversation's past and returns it
-// as the feed mapper's records, oldest first.
-func (e *Engine) readHistory(ctx context.Context, s *sess, h *spec.History, conv string) ([]json.RawMessage, error) {
+// as the feed mapper's records, oldest first. Where the route pages, the
+// newest page is read first and older ones are put in front of it, until
+// there is no older page or a bound is met. partial reports that older
+// records exist that were not read; what was read is still returned. Only
+// a first page that cannot be read is an error.
+func (e *Engine) readHistory(ctx context.Context, s *sess, h *spec.History, conv string) (events []json.RawMessage, partial bool, err error) {
 	r, ok := harness.LookupRunner(spec.KindHTTP)
 	if !ok {
-		return nil, errors.New("no http runner")
+		return nil, false, errors.New("no http runner")
 	}
-	raw, err := json.Marshal(spec.HTTP{Method: "GET", Path: strings.ReplaceAll(h.Path, "{{.conversation}}", conv)})
+	first := strings.ReplaceAll(h.Path, "{{.conversation}}", conv)
+	fetch := func(path string) (any, int, error) {
+		raw, err := json.Marshal(spec.HTTP{Method: "GET", Path: path})
+		if err != nil {
+			return nil, 0, err
+		}
+		out, err := r.Fetch(ctx, harness.SourceSpec{Name: "history", Kind: spec.KindHTTP, Raw: raw}, s.env)
+		if err != nil {
+			return nil, 0, err
+		}
+		v, err := decode(out)
+		if err != nil {
+			return nil, 0, errors.New("history is not JSON")
+		}
+		return v, len(out), nil
+	}
+	listOf := func(v any) ([]any, error) {
+		if h.Items != "" {
+			var err error
+			if v, err = JQFirst(h.Items, v, nil); err != nil {
+				return nil, err
+			}
+		}
+		list, _ := v.([]any)
+		return list, nil
+	}
+	answer, size, err := fetch(first)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	out, err := r.Fetch(ctx, harness.SourceSpec{Name: "history", Kind: spec.KindHTTP, Raw: raw}, s.env)
+	list, err := listOf(answer)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	v, err := decode(out)
-	if err != nil {
-		return nil, errors.New("history is not JSON")
-	}
-	if h.Items != "" {
-		if v, err = JQFirst(h.Items, v, nil); err != nil {
-			return nil, err
+	if p := h.Page; p != nil && p.Cursor != "" && p.Param != "" {
+		pages := p.MaxPages
+		if pages <= 0 {
+			pages = historyPages
+		}
+		pages = min(pages, historyPagesMax)
+		seen := map[string]bool{}
+		for page := 1; ; page++ {
+			cursor := ""
+			if c, err := JQFirst(p.Cursor, answer, nil); err == nil {
+				cursor, _ = c.(string)
+			}
+			if cursor == "" {
+				break // the start of the conversation was reached
+			}
+			// From here on something older exists. Any stop is partial.
+			partial = true
+			if page >= pages || len(list) >= maxHistory || size >= historyBytesMax ||
+				len(cursor) > historyCursorMax || seen[cursor] || ctx.Err() != nil {
+				break
+			}
+			seen[cursor] = true
+			next, ok := cursorPath(first, p, cursor)
+			if !ok {
+				break
+			}
+			older, n, err := fetch(next)
+			if err != nil || size+n > historyBytesMax {
+				break
+			}
+			olderList, err := listOf(older)
+			if err != nil {
+				break
+			}
+			// An older page goes in front: each page is already oldest
+			// first within itself.
+			list = append(olderList, list...)
+			answer, size, partial = older, size+n, false
 		}
 	}
-	list, _ := v.([]any)
+	// The newest records are the ones kept.
 	if len(list) > maxHistory {
-		list = list[len(list)-maxHistory:]
+		list, partial = list[len(list)-maxHistory:], true
 	}
-	events := make([]json.RawMessage, 0, len(list))
+	events = make([]json.RawMessage, 0, len(list))
+	seenRecord := map[string]bool{}
 	for _, el := range list {
 		var rec any = el
 		if h.As != "" {
 			rec = map[string]any{"type": h.As, "conversation": conv, "data": el}
 		}
-		if b, err := json.Marshal(rec); err == nil {
-			events = append(events, b)
+		b, err := json.Marshal(rec)
+		if err != nil {
+			continue
 		}
+		// Pages that overlap list a record twice: it is replayed once.
+		if key := string(b); seenRecord[key] {
+			continue
+		} else {
+			seenRecord[key] = true
+		}
+		events = append(events, b)
 	}
-	return events, nil
+	return events, partial, nil
+}
+
+// cursorPath is the first request's path with the cursor added and the
+// parameters that may not accompany one removed. The cursor is passed as it
+// came, encoded as a query value.
+func cursorPath(first string, p *spec.HistoryPage, cursor string) (string, bool) {
+	u, err := url.Parse(first)
+	if err != nil {
+		return "", false
+	}
+	q := u.Query()
+	for _, name := range p.Omit {
+		q.Del(name)
+	}
+	q.Set(p.Param, cursor)
+	u.RawQuery = q.Encode()
+	return u.String(), true
 }
 
 func heldOf(h *heldRecords) []harness.Record {

@@ -187,6 +187,24 @@ type History struct {
 	// for the feed's mapper: {"type": As, "conversation": id, "data": element}.
 	// Without it the elements are the mapper's records as they are.
 	As string `yaml:"as"`
+	// Page, when set, reads older pages after the first, until the past is
+	// all read or a bound is met.
+	Page *HistoryPage `yaml:"page"`
+}
+
+// HistoryPage is how a history route is asked for the page before the one
+// just read. The cursor is the harness's own, passed back as it came.
+type HistoryPage struct {
+	// Cursor is jq over an answer giving the cursor of the next older
+	// page; null or empty means there is none.
+	Cursor string `yaml:"cursor"`
+	// Param is the query parameter that carries the cursor.
+	Param string `yaml:"param"`
+	// Omit lists query parameters of Path that are left out of a request
+	// with a cursor (a route may refuse them together).
+	Omit []string `yaml:"omit"`
+	// MaxPages bounds the pages read, the first included; zero means 20.
+	MaxPages int `yaml:"max_pages"`
 }
 
 // Source is a fetch-on-demand input for screens. One kind block is set.

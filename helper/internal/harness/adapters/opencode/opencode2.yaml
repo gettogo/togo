@@ -39,7 +39,7 @@ feeds:
   events:
     sse: { path: /api/event }
     # The stream tells what happens from now on. The conversation's messages are read
-    # from the messages route (the 200 newest, oldest first), so a chat opened after a
+    # from the messages route (newest page first, then older pages), so a chat opened after a
     # helper restart, or moved to another conversation, shows what was said before. The
     # session log route would give the events themselves, but on 2.2.5 it answers with
     # its sync marker and no past events.
@@ -47,6 +47,9 @@ feeds:
       path: '/api/session/{{.conversation}}/message?limit=200&order=desc'
       items: '.data | reverse'
       as: session.message
+      # 200 is the route's largest page. Older pages follow by its cursor, which
+      # must not be sent together with order (protocol/src/groups/message.ts).
+      page: { cursor: '.cursor.next', param: cursor, omit: [order] }
     mapper: opencode2.events
     stability: documented
 sources:
