@@ -41,6 +41,12 @@ struct TerminalNativeScreen: View {
         let panel = model.screen?.interaction
         let sourceQuery = model.screen?.picker?.query
         var context = PrimitiveContext(run: { action, target, args in
+            if action.hasPrefix("terminal.openLink.") {
+                return model.openPanelLink(action, args: args) { url in
+                    LinkCenter.shared.open(url, from: .init(hostID: store.subject.hostID,
+                        sessionID: store.subject.sessionID))
+                }
+            }
             let verb = action.hasPrefix("terminal.key.") ? "terminal.key" : action
             return await model.run(verb, target: target, args: args)
         }, openScreen: { _ in }, open: { _ in }, showTerminal: {
