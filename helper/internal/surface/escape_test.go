@@ -35,6 +35,7 @@ func TestEscapeIsOnlyForAScreenThatSaysNoWayToClose(t *testing.T) {
 		"a prompt with a Cancel button": nodes["hook_input"],
 		"a list with its own end":       nodes["hook_select"],
 		"a composer":                    {ID: "dock", Kind: "col", Children: []*Node{{ID: "e", Kind: "editor", Props: map[string]any{"sendable": true}}}},
+		"a screen with a Close button":  {ID: "dlg", Kind: "col", Children: []*Node{{ID: "b", Kind: "button", Props: map[string]any{"actions": map[string]any{"click": "close"}}}}},
 	} {
 		if _, err := escapeTarget(n); !errors.Is(err, ErrMalformed) {
 			t.Errorf("%s was taken for a screen to escape: %v", name, err)

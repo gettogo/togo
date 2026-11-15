@@ -235,7 +235,8 @@ const maxEscapeNodes = 512
 
 // escapeTarget checks that a node is a screen the program gave no way to
 // close, and lists its nodes. Such a screen holds no composer (a field the
-// program sends from), no action marked as its end, and no Cancel button:
+// program sends from), no action marked as its end, and no Cancel or Close
+// button:
 // one that has any of those is closed by that, and Escape is not for it.
 func escapeTarget(n *Node) ([]string, error) {
 	var ids []string
@@ -256,7 +257,7 @@ func escapeTarget(n *Node) ([]string, error) {
 				}
 			}
 		case map[string]any:
-			if actions["click"] == "cancel" {
+			if actions["click"] == "cancel" || actions["click"] == "close" {
 				return ErrMalformed
 			}
 		}
