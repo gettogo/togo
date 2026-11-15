@@ -56,7 +56,7 @@ func (e *Engine) openPrompt(ctx context.Context, s *sess, title string, p termme
 }
 
 func (e *Engine) promptScreen(m *terminalMenu, p termmenu.Prompt) *harness.Screen {
-	return &harness.Screen{
+	sc := &harness.Screen{
 		ID: "terminal.prompt/" + m.token, Primitive: harness.PrimSettings, Title: p.Title, FetchedAt: e.cfg.Now(),
 		Interaction: m.token, Actions: []harness.ActionRef{},
 		Settings: &harness.Settings{Sections: []harness.SettingsSection{{Fields: []harness.Field{{
@@ -64,6 +64,11 @@ func (e *Engine) promptScreen(m *terminalMenu, p termmenu.Prompt) *harness.Scree
 			Action: promptAction, ActionLabel: "Continue", Presentation: "prompt",
 		}}}}},
 	}
+	// The title of a prompt that follows an entry may repeat the entry.
+	if m.sess != nil {
+		e.redactScreen(m.sess.id, sc)
+	}
+	return sc
 }
 
 // answerPrompt types the entry into the prompt and submits it. It types
@@ -92,6 +97,7 @@ func (e *Engine) answerPrompt(ctx context.Context, s *sess, m *terminalMenu, val
 		return harness.ActionResult{}, err
 	}
 	e.menuKeyAt.Store(s.id, e.cfg.Now())
+	e.noteEntry(s.id, value)
 	if err := e.cfg.Typist.Type(ctx, s.id, value, false, false); err != nil {
 		return harness.ActionResult{}, err
 	}

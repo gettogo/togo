@@ -81,6 +81,9 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 		sc.Actions = append(sc.Actions, harness.ActionRef{ID: terminalPrefix + "key." + k.key, Label: k.label, Role: "normal",
 			Args: map[string]json.RawMessage{"interaction": interaction, "key": key}})
 	}
+	if m.sess != nil {
+		e.redactScreen(m.sess.id, sc)
+	}
 	return sc
 }
 

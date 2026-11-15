@@ -31,7 +31,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 	// A list already open in the terminal (left by the desk, or by a
 	// choice that could not be completed) would take the keys.
 	if open, ok := e.readMenu(ctx, s); ok && open.Title != "" {
-		return s.ad.Name + " has “" + open.Title + "” open in its terminal. Close it there first.", nil
+		return s.ad.Name + " has “" + e.redact(s.id, open.Title) + "” open in its terminal. Close it there first.", nil
 	}
 	e.waitInputLine(ctx, s)
 	// The input line is not cleared: what is in it is not ours. Whether

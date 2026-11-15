@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/termmenu"
 )
 
 // A prompt is answered only through its own field and interaction, only
@@ -142,5 +143,41 @@ func TestAGuardLeftByACommandEndsWithItsConversation(t *testing.T) {
 	s.mu.Unlock()
 	if e.awaitingComposer(s) {
 		t.Error("an old command's guard still holds in the next conversation")
+	}
+}
+
+// What was entered into a prompt is kept out of everything read from the
+// terminal afterwards: the next prompt's title, a list's rows and hints.
+// The helper keeps no copy of the entry to do it.
+func TestAnEntryIsKeptOutOfWhatTheTerminalShowsNext(t *testing.T) {
+	const id = "s_fakefake34"
+	e, _ := newFake(t, id, "1.2.3")
+	s, err := e.served(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const entry = "neutral-entry 42"
+	e.noteEntry(id, "  "+entry+" ")
+	for _, kept := range e.entered[id] {
+		if wire, _ := json.Marshal(kept); strings.Contains(string(wire), "neutral") {
+			t.Fatal("the entry itself is kept")
+		}
+	}
+	m := &terminalMenu{sess: s, token: "tok", panel: "x", prompt: true}
+	sc := e.promptScreen(m, termmenu.Prompt{Title: "Invalid: " + entry + ". Try again"})
+	list := &terminalMenu{sess: s, token: "tok2", rows: []termmenu.Item{
+		{Label: "Use " + entry, Detail: "saved as " + entry, Group: entry}, {Label: "Other"}}}
+	lsc := e.menuScreen(list, termmenu.Menu{Title: "Keys (" + entry + ")"}, true)
+	for name, screen := range map[string]*harness.Screen{"prompt": sc, "list": lsc} {
+		wire, _ := json.Marshal(screen)
+		if strings.Contains(string(wire), entry) || strings.Contains(string(wire), "neutral-entry") {
+			t.Errorf("%s screen repeats the entry: %s", name, wire)
+		}
+	}
+	if sc.Title != "Invalid: "+redacted+". Try again" || lsc.Picker.Items[1].Title != "Other" {
+		t.Errorf("redaction changed more than the entry: %q / %q", sc.Title, lsc.Picker.Items[1].Title)
+	}
+	if got := e.redact("s_other", entry); got != entry {
+		t.Error("another session's text was redacted")
 	}
 }
