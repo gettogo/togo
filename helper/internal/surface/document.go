@@ -48,6 +48,9 @@ type Document struct {
 	kinds    map[string]bool
 	bytes    int
 	maxBytes int
+	// replace: an add names a node the document already has under the
+	// same parent, and takes its place (the first frame after an adopt).
+	replace bool
 }
 
 // OperationError identifies a rejected operation without including remote text.

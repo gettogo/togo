@@ -111,6 +111,42 @@ func (d *Document) add(id string, a []json.RawMessage) error {
 	if p == nil || !childBefore(p.node, before) {
 		return errOperation
 	}
+	// A program that adopts a view sends again the parts it redraws. What
+	// the view kept under that name goes, with everything inside it: a
+	// list that was closed while the program drew in the terminal must
+	// not stay on the phone.
+	if old := d.nodes[id]; d.replace && old != nil {
+		if old.parent != parent || (before != nil && *before == id) {
+			return errOperation
+		}
+		kept, focus, was := slices.Clone(p.node.Children), d.Focus, d.bytes
+		held := map[string]*entry{}
+		var hold func(*Node)
+		hold = func(n *Node) {
+			held[n.ID] = d.nodes[n.ID]
+			for _, child := range n.Children {
+				hold(child)
+			}
+		}
+		hold(old.node)
+		removeChild(p.node, id)
+		d.forget(old.node)
+		fresh, bytes, err := d.prepareTree(&node, parent, p.depth+1)
+		if err != nil {
+			// Refused whole: the view keeps what it had.
+			p.node.Children, d.Focus, d.bytes = kept, focus, was
+			for id, e := range held {
+				d.nodes[id] = e
+			}
+			return err
+		}
+		insertChild(p.node, &node, before)
+		for id, e := range fresh {
+			d.nodes[id] = e
+		}
+		d.bytes += bytes
+		return nil
+	}
 	fresh, bytes, err := d.prepareTree(&node, parent, p.depth+1)
 	if err != nil {
 		return err
