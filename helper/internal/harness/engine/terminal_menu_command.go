@@ -217,6 +217,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 		}
 		// Submitted only once the whole command is seen in the line: the
 		// name alone would run without its arguments.
+		whole := strings.TrimRight(typedLine+args, " ")
 		seen := false
 		for deadline := time.Now().Add(e.scaled(1500 * time.Millisecond)); time.Now().Before(deadline); {
 			if screen, err := e.cfg.Screen(ctx, s.id); err == nil {
@@ -224,6 +225,11 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 					if strings.HasSuffix(trimEdge(l), strings.TrimRight(full, " ")) {
 						seen = true
 					}
+				}
+				// A command wider than the terminal (a phone's is narrow)
+				// runs on to the next lines.
+				if found, _ := commandBlock(screen, typedLine, whole); found {
+					seen = true
 				}
 			}
 			if seen {
@@ -238,21 +244,12 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 		// Enter would then go to that offer and could change what was
 		// asked for. The offer is closed with Escape, and the command is
 		// submitted only if the line then reads exactly as typed.
-		whole := strings.TrimRight(typedLine+args, " ")
 		lineIs := func() (exact bool, others string) {
 			screen, err := e.cfg.Screen(ctx, s.id)
 			if err != nil {
 				return false, ""
 			}
-			var rest []string
-			for _, l := range strings.Split(screen, "\n") {
-				if !exact && trimEdge(l) == whole {
-					exact = true
-					continue
-				}
-				rest = append(rest, l)
-			}
-			return exact, strings.Join(rest, "\n")
+			return commandBlock(screen, typedLine, whole)
 		}
 		exact, others := lineIs()
 		if exact && !nothingNew(others, before) {
@@ -421,4 +418,44 @@ func nothingNew(now string, earlier ...string) bool {
 		}
 	}
 	return true
+}
+
+// commandBlock finds the input line holding exactly the command, and
+// returns the rest of the screen without it. A command wider than the
+// terminal runs on to the lines below: the first must begin as the input
+// line did when the command's name was typed, and the lines after it must
+// carry on the command exactly, each joined to the one before with one
+// space (a break between words) or none (a break inside one).
+func commandBlock(screen, typedLine, whole string) (found bool, rest string) {
+	lines := strings.Split(screen, "\n")
+	for i, l := range lines {
+		first := trimEdge(l)
+		end := -1
+		switch {
+		case first == whole:
+			end = i
+		case typedLine != "" && strings.HasPrefix(first, typedLine) && strings.HasPrefix(whole, first):
+			left := whole[len(first):]
+			for j := i + 1; j < len(lines) && j <= i+8 && left != ""; j++ {
+				part := strings.TrimSpace(trimEdge(lines[j]))
+				if part == "" {
+					break
+				}
+				if strings.HasPrefix(left, " "+part) {
+					left = left[len(part)+1:]
+				} else if strings.HasPrefix(left, part) {
+					left = left[len(part):]
+				} else {
+					break
+				}
+				if left == "" {
+					end = j
+				}
+			}
+		}
+		if end >= 0 {
+			return true, strings.Join(append(append([]string{}, lines[:i]...), lines[end+1:]...), "\n")
+		}
+	}
+	return false, screen
 }
