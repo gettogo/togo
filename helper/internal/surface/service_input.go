@@ -125,6 +125,19 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 		if ev == "edit" {
 			return validateEdit(fields, e.node)
 		}
+		if ev == "select" && fields["item"] != nil {
+			// A row is chosen by its list: it must be one of that list's
+			// rows as the program shows them now, and one that can be
+			// chosen. A stale row never reaches the program.
+			var item string
+			if json.Unmarshal(fields["item"], &item) != nil || !validID(item) {
+				return ErrMalformed
+			}
+			at := slices.IndexFunc(e.node.Children, func(child *Node) bool { return child.ID == item })
+			if at < 0 || e.node.Children[at].Props["disabled"] == true || e.node.Children[at].Props["hidden"] == true {
+				return errLease
+			}
+		}
 		if ev == "action" && str("act") == "togo.query" {
 			return validatePickerQuery(fields, e.node)
 		}

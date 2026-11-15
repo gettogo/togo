@@ -103,3 +103,47 @@ func TestEscapeNeedsTheFeatureAndNamesTheScreenItself(t *testing.T) {
 		t.Fatalf("the composer was taken for a screen to escape: %v", err)
 	}
 }
+
+// A row is chosen through its list. The helper passes the choice on only
+// for a row that list has now and that can be chosen.
+func TestARowIsChosenOnlyFromItsOwnListAsItIsNow(t *testing.T) {
+	s, f, owner, lease := nativeFixture(t)
+	f.data <- apc(`f;{"sf":"one","s":2,"ops":[["add","pick","one",null,{"id":"pick","k":"col","c":[` +
+		`{"id":"pick/a","k":"text","p":{"text":"A"}},{"id":"pick/off","k":"text","p":{"text":"B","disabled":true}},{"id":"pick/gone","k":"text","p":{"text":"C","hidden":true}}]}],` +
+		`["add","other","one",null,{"id":"other","k":"col","c":[{"id":"other/x","k":"text","p":{"text":"X"}}]}]]}`)
+	r := s.runs[lease.ID]
+	for i := 0; ; i++ {
+		found := false
+		_ = r.cache.Inspect(func(scene *Scene) error {
+			found = scene.View("one") != nil && scene.View("one").Document.nodes["other/x"] != nil
+			return nil
+		})
+		if found {
+			break
+		}
+		if i > 2000 {
+			t.Fatal("the frame was not applied")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	choose := func(list, item string) error {
+		event, _ := json.Marshal(map[string]any{"ev": "select", "sf": "one", "id": list, "item": item})
+		_, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: event})
+		return err
+	}
+	if err := choose("pick", "pick/a"); err != nil {
+		t.Fatalf("a row of the list was refused: %v", err)
+	}
+	for name, c := range map[string][2]string{
+		"another list's row": {"pick", "other/x"}, "a row that is gone": {"pick", "pick/zz"},
+		"a disabled row": {"pick", "pick/off"}, "a hidden row": {"pick", "pick/gone"},
+	} {
+		if err := choose(c[0], c[1]); !errors.Is(err, errLease) {
+			t.Errorf("%s was passed on: %v", name, err)
+		}
+	}
+	event := json.RawMessage(`{"ev":"select","sf":"one","id":"pick","item":7}`)
+	if _, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: event}); !errors.Is(err, ErrMalformed) {
+		t.Errorf("a row that is not a name: %v", err)
+	}
+}
