@@ -126,15 +126,14 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 			return validateEdit(fields, e.node)
 		}
 		if (ev == "select" || ev == "activate") && fields["item"] != nil {
-			// A row is chosen, or opened, by its list: it must be one of that list's
-			// rows as the program shows them now, and one that can be
-			// chosen. A stale row never reaches the program.
+			// A row is chosen, or opened, through the node that holds it,
+			// and must be one of its rows as the program shows them now.
+			// A stale row never reaches the program.
 			var item string
-			if json.Unmarshal(fields["item"], &item) != nil || !validID(item) {
+			if json.Unmarshal(fields["item"], &item) != nil || item == "" || len(item) > MaxIDBytes*8 {
 				return ErrMalformed
 			}
-			at := slices.IndexFunc(e.node.Children, func(child *Node) bool { return child.ID == item })
-			if at < 0 || e.node.Children[at].Props["disabled"] == true || e.node.Children[at].Props["hidden"] == true {
+			if !hasRow(e.node, item) {
 				return errLease
 			}
 		}
@@ -272,4 +271,30 @@ func escapeTarget(n *Node) ([]string, error) {
 		return nil, err
 	}
 	return ids, nil
+}
+
+// hasRow reports whether a node holds a row that can be chosen now. A list
+// holds its rows as child nodes; a picker holds them in its items, and
+// shows those its order names when it gives one. Other kinds of node are
+// not judged here: what they take is theirs to say.
+func hasRow(n *Node, item string) bool {
+	switch n.Kind {
+	case "list":
+		at := slices.IndexFunc(n.Children, func(child *Node) bool { return child.ID == item })
+		return at >= 0 && n.Children[at].Props["disabled"] != true && n.Children[at].Props["hidden"] != true
+	case "picker":
+		found := false
+		if items, ok := n.Props["items"].([]any); ok {
+			for _, it := range items {
+				if m, ok := it.(map[string]any); ok && m["id"] == item {
+					found = m["disabled"] != true
+				}
+			}
+		}
+		if order, ok := n.Props["order"].([]any); ok && found {
+			found = slices.ContainsFunc(order, func(entry any) bool { return entry == item })
+		}
+		return found
+	}
+	return true
 }

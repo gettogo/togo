@@ -105,18 +105,34 @@ func TestEscapeNeedsTheFeatureAndNamesTheScreenItself(t *testing.T) {
 	}
 }
 
-// A row is chosen through its list. The helper passes the choice on only
-// for a row that list has now and that can be chosen.
+// A row is chosen, or opened, through its list. The helper passes it on
+// only for a row that list has now and that can be chosen.
 func TestARowIsChosenOnlyFromItsOwnListAsItIsNow(t *testing.T) {
+	list := &Node{ID: "pick", Kind: "list", Children: []*Node{
+		{ID: "pick/a", Kind: "item"},
+		{ID: "pick/off", Kind: "item", Props: map[string]any{"disabled": true}},
+		{ID: "pick/gone", Kind: "item", Props: map[string]any{"hidden": true}},
+	}}
+	if !hasRow(list, "pick/a") {
+		t.Error("a row of the list was refused")
+	}
+	for name, item := range map[string]string{
+		"another list's row": "other/x", "a row that is gone": "pick/zz", "a disabled row": "pick/off", "a hidden row": "pick/gone",
+	} {
+		if hasRow(list, item) {
+			t.Errorf("%s was passed on", name)
+		}
+	}
+	// Through the service: the same event forms, on a node the rule does
+	// not judge, still reach the program; an item that is not a name does
+	// not.
 	s, f, owner, lease := nativeFixture(t)
-	f.data <- apc(`f;{"sf":"one","s":2,"ops":[["add","pick","one",null,{"id":"pick","k":"col","c":[` +
-		`{"id":"pick/a","k":"text","p":{"text":"A"}},{"id":"pick/off","k":"text","p":{"text":"B","disabled":true}},{"id":"pick/gone","k":"text","p":{"text":"C","hidden":true}}]}],` +
-		`["add","other","one",null,{"id":"other","k":"col","c":[{"id":"other/x","k":"text","p":{"text":"X"}}]}]]}`)
+	f.data <- apc(`f;{"sf":"one","s":2,"ops":[["add","pick","one",null,{"id":"pick","k":"col","c":[{"id":"pick/a","k":"text","p":{"text":"A"}}]}]]}`)
 	r := s.runs[lease.ID]
 	for i := 0; ; i++ {
 		found := false
 		_ = r.cache.Inspect(func(scene *Scene) error {
-			found = scene.View("one") != nil && scene.View("one").Document.nodes["other/x"] != nil
+			found = scene.View("one") != nil && scene.View("one").Document.nodes["pick/a"] != nil
 			return nil
 		})
 		if found {
@@ -127,28 +143,49 @@ func TestARowIsChosenOnlyFromItsOwnListAsItIsNow(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	kind := "select"
-	choose := func(list, item string) error {
-		event, _ := json.Marshal(map[string]any{"ev": kind, "sf": "one", "id": list, "item": item})
-		_, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: event})
-		return err
-	}
-	// Choosing a row and opening one are held to the same rule.
-	for _, kind = range []string{"select", "activate"} {
-		if err := choose("pick", "pick/a"); err != nil {
-			t.Fatalf("%s: a row of the list was refused: %v", kind, err)
-		}
-		for name, c := range map[string][2]string{
-			"another list's row": {"pick", "other/x"}, "a row that is gone": {"pick", "pick/zz"},
-			"a disabled row": {"pick", "pick/off"}, "a hidden row": {"pick", "pick/gone"},
-		} {
-			if err := choose(c[0], c[1]); !errors.Is(err, errLease) {
-				t.Errorf("%s: %s was passed on: %v", kind, name, err)
-			}
+	for _, kind := range []string{"select", "activate"} {
+		event, _ := json.Marshal(map[string]any{"ev": kind, "sf": "one", "id": "pick", "item": "pick/a"})
+		if _, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: event}); err != nil {
+			t.Errorf("%s was refused: %v", kind, err)
 		}
 	}
 	event := json.RawMessage(`{"ev":"select","sf":"one","id":"pick","item":7}`)
 	if _, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: event}); !errors.Is(err, ErrMalformed) {
 		t.Errorf("a row that is not a name: %v", err)
+	}
+}
+
+// Found in review: a picker keeps its rows in its items, not as child
+// nodes, so the rule for a list's rows refused every highlight and open
+// in omp's own pickers. Recorded resume picker: a row its order shows is
+// passed on; one filtered out by a search, or not among its items, is not.
+func TestAPickersRowsAreItsItemsAsItsOrderShowsThem(t *testing.T) {
+	raw, err := os.ReadFile("testdata/omp-resume-nomatch.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recorded struct {
+		Nodes map[string]*Node `json:"nodes"`
+	}
+	if err := json.Unmarshal(raw, &recorded); err != nil {
+		t.Fatal(err)
+	}
+	opened, filtered := recorded.Nodes["1 opened"], recorded.Nodes["query 'zzzz-no-match-qqq'"]
+	if opened == nil || filtered == nil {
+		t.Fatal("recorded picker states missing")
+	}
+	row := opened.Props["items"].([]any)[0].(map[string]any)["id"].(string)
+	if !hasRow(opened, row) {
+		t.Error("a row the picker shows was refused")
+	}
+	if hasRow(filtered, row) {
+		t.Error("a row the search filtered out was passed on")
+	}
+	if hasRow(opened, "not-a-row") {
+		t.Error("a row the picker does not have was passed on")
+	}
+	// Other kinds are not judged by this rule.
+	if !hasRow(&Node{ID: "t", Kind: "tabs"}, "anything") {
+		t.Error("a node that is neither a list nor a picker was judged as one")
 	}
 }
