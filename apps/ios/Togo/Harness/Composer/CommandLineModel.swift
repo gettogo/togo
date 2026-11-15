@@ -6,20 +6,6 @@ import TogoKit
 /// The smart command line's state: the draft, the / and @ menus, history and favourites, the
 /// mode chip and the prompts queued while the agent works.
 @MainActor @Observable final class CommandLineModel {
-    /// What the menu above the field lists.
-    enum Menu: Equatable {
-        case none
-        case commands([HarnessCompletion])
-        case files([HarnessCompletion])
-
-        var items: [HarnessCompletion] {
-            switch self {
-            case .none: []
-            case .commands(let items), .files(let items): items
-            }
-        }
-    }
-
     static let debounce: Duration = .milliseconds(150)
 
     var draft = "" {
@@ -165,6 +151,7 @@ import TogoKit
         }
         guard let trigger = CommandLineLogic.trigger(in: draft), allows(trigger) else {
             menu = .none
+            clearFileCompletionFailure()
             return
         }
         if let cache, cache.kind == trigger.kind, trigger.query.lowercased().hasPrefix(cache.query.lowercased()) {
@@ -176,9 +163,15 @@ import TogoKit
         do {
             items = try await routes.complete(trigger.kind, trigger.query)
         } catch {
+            guard !Task.isCancelled, CommandLineLogic.trigger(in: draft) == trigger else { return }
+            if showFileCompletionFailure(error, for: trigger) {
+                cache = nil
+                menu = .none
+            }
             return
         }
         guard !Task.isCancelled, CommandLineLogic.trigger(in: draft) == trigger else { return }
+        if case .file = trigger { clearFileCompletionFailure() }
         cache = (trigger.kind, trigger.query, items)
         show(items, for: trigger)
     }
@@ -204,6 +197,7 @@ import TogoKit
     func closeMenu() {
         menu = .none
         highlight = 0
+        clearFileCompletionFailure()
     }
 
     /// The menu's close control (and a tap outside it): the menu goes, and a bare "@" that

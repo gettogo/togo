@@ -24,6 +24,7 @@ enum ComposerCopy {
     static let session = String(localized: "composer.session", defaultValue: "Session")
     static let sessionState = String(localized: "composer.sessionState", defaultValue: "Model, effort and mode")
     static let commandsFailed = String(localized: "composer.commandsFailed", defaultValue: "Couldn't read the commands")
+    static let filesUnavailable = String(localized: "composer.filesUnavailable", defaultValue: "Couldn't search all workspace folders.")
     static let tryAgain = String(localized: "composer.tryAgain", defaultValue: "Try again")
     static let notCancelled = String(localized: "composer.notCancelled", defaultValue: "Couldn't take it back")
     static let modeNotChanged = String(localized: "composer.modeNotChanged", defaultValue: "The mode didn't change")

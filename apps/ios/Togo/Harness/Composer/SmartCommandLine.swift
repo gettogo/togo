@@ -167,8 +167,7 @@ struct SmartCommandLine: View {
                 // How long the notice stays is the model's hold; its leaving is choreographed.
                 .task(id: notice) {
                     guard !loopsPaused else { return }
-                    try? await Task.sleep(for: .seconds(model.noticeAction == nil ? 5 : 8))
-                    model.clearNotice()
+                    await model.expireNotice(notice)
                 }
             }
             if let undo = shown.undo {
