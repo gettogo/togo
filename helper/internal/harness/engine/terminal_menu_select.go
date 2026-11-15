@@ -216,7 +216,7 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 	if previous != nil && previous.title != "" {
 		m.title = previous.title
 	}
-	m.whole = complete && len(rows) == len(menu.Items)
+	m.whole = wholeOnScreen(menu) && len(rows) == len(menu.Items)
 	e.setMenu(s.id, m)
 	return harness.ActionResult{Result: harness.ResultApplied, Screen: e.menuScreen(m, menu, complete)}, nil
 }
@@ -284,7 +284,7 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 			at = cur
 		} else {
 			if twins > 1 {
-				return fail("Two rows in this list say the same and it does not fit the screen. Choose it in the terminal.")
+				return fail("Two rows in this list say the same and the whole list is not known to be on the screen. Choose it in the terminal.")
 			}
 			at = knownRow(m.rows, now.Items[cur])
 		}
@@ -381,10 +381,11 @@ func rightOccurrence(all []termmenu.Item, whole bool, cursor, target int) bool {
 }
 
 // wholeOn reports whether the screen shows the whole list as it was read:
-// the list was known to be complete, and every row now on the screen is
-// the row known at that place.
+// the list is known to be complete (its counter said so, or its end was
+// reached by moving through it), and every row now on the screen is the
+// row known at that place.
 func (m *terminalMenu) wholeOn(now termmenu.Menu) bool {
-	if !m.whole || len(now.Items) != len(m.rows) {
+	if !(m.whole || m.ended) || len(now.Items) != len(m.rows) {
 		return false
 	}
 	for i, it := range now.Items {

@@ -85,7 +85,24 @@ func TestTwinsInAWholeUnchangedListAreToldApartByPlace(t *testing.T) {
 		}
 		return listScreen("Pick one", lines), nil
 	}
+	// A short list with no counter may be a window on a longer one whose
+	// rows repeat: until its end is known, a twin is not chosen by place.
 	sc := attachList(t, e, id, "Pick one")
+	if res := chooseRow(t, e, id, sc, 2); res.Result != harness.ResultFailed {
+		t.Fatalf("a twin was chosen in a list not known to be whole: %+v", res)
+	}
+	pane.mu.Lock()
+	pressed := len(pane.keys)
+	pane.mu.Unlock()
+	if pressed != 0 {
+		t.Fatalf("%d keys pressed for a twin in a list not known to be whole", pressed)
+	}
+	// Its end seen (the walk the phone asks for with "Show more"), the
+	// list is whole and the twin is reached.
+	sc = attachList(t, e, id, "Pick one")
+	e.menuMu.Lock()
+	e.menus[id].ended = true
+	e.menuMu.Unlock()
 	chooseRow(t, e, id, sc, 2)
 	pane.mu.Lock()
 	defer pane.mu.Unlock()

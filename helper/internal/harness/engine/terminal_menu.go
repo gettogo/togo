@@ -61,7 +61,7 @@ type terminalMenu struct {
 	// when the list was first read.
 	ended bool
 	// whole: when read, the rows were the whole list, all of it on the
-	// screen (a short list, or one whose counter said so).
+	// screen, by the list's own counter.
 	whole  bool
 	first  string
 	search bool
@@ -295,7 +295,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		}
 		rows, complete := e.wholeList(ctx, s, menu)
 		m := &terminalMenu{client: e.client(ctx), sess: s, conv: menuConv(ctx, s), token: newToken(), title: menu.Title, panel: menu.Title, rows: rows, keys: hintKeys(menu.Hint)}
-		m.whole = complete && (menu.Total > 0 || rowsEndOnScreen(menu)) && len(rows) == len(menu.Items)
+		m.whole = wholeOnScreen(menu) && len(rows) == len(menu.Items)
 		e.setMenu(s.id, m)
 		return harness.ActionResult{Result: harness.ResultApplied, Screen: e.menuScreen(m, menu, complete && (menu.Total > 0 || rowsEndOnScreen(menu)))}, nil
 	case "select":

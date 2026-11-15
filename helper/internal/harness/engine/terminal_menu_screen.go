@@ -94,13 +94,11 @@ func rowsEndOnScreen(m termmenu.Menu) bool {
 	return len(m.Items) < 6
 }
 
-// wholeOnScreen reports whether the rows on the screen are the whole list:
-// its counter says so, or it visibly ends there.
+// wholeOnScreen reports whether the rows on the screen are known to be the
+// whole list: its counter says so. A short list with no counter may be a
+// window on a longer one; that it looks ended is not taken as known.
 func wholeOnScreen(m termmenu.Menu) bool {
-	if m.Total > 0 {
-		return len(m.Items) >= m.Total
-	}
-	return rowsEndOnScreen(m)
+	return m.Total > 0 && len(m.Items) >= m.Total
 }
 
 // terminalMenuScreen is the terminal.menu screen: the list as the harness
