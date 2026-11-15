@@ -55,6 +55,36 @@ func sameRow(a, b termmenu.Item) bool {
 	return a.Label == b.Label && a.Group == b.Group
 }
 
+// firstSame is the first of rows that says what it says, or -1.
+func firstSame(rows []termmenu.Item, it termmenu.Item) int {
+	for i, r := range rows {
+		if sameRow(r, it) {
+			return i
+		}
+	}
+	return -1
+}
+
+// knownRow finds a row read from the screen among the rows known, or -1.
+// A list that scrolls takes its group headings off the screen, and a row
+// then reads with no group: it is the known row of that name when exactly
+// one has it.
+func knownRow(rows []termmenu.Item, it termmenu.Item) int {
+	if i := firstSame(rows, it); i >= 0 || it.Group != "" {
+		return i
+	}
+	at := -1
+	for i, r := range rows {
+		if r.Label == it.Label {
+			if at >= 0 {
+				return -1
+			}
+			at = i
+		}
+	}
+	return at
+}
+
 // wholeList collects every row of a list that shows only a window of them,
 // by moving the cursor down until the rows repeat or the counter ends, and
 // then back to where it was.
@@ -226,7 +256,7 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 			}
 			continue
 		}
-		if sameRow(now.Items[cur], want) && rightOccurrence(m.rows, now.Items, cur, target) {
+		if knownRow(m.rows, now.Items[cur]) == firstSame(m.rows, want) && rightOccurrence(m.rows, now.Items, cur, target) {
 			if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 				return harness.ActionResult{}, err
 			}
@@ -240,12 +270,7 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 			if twins > 1 {
 				return fail("Two rows in this list say the same and it does not fit the screen. Choose it in the terminal.")
 			}
-			for i, it := range m.rows {
-				if sameRow(it, now.Items[cur]) {
-					at = i
-					break
-				}
-			}
+			at = knownRow(m.rows, now.Items[cur])
 		}
 		if at < 0 || target < 0 {
 			return fail("The screen changed at the desk. Nothing was chosen.")

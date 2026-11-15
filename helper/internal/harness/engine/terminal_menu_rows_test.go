@@ -219,3 +219,28 @@ func TestAListIsLetGoWhenItsConnectionEnds(t *testing.T) {
 		t.Errorf("not remembered as left open: %q", left)
 	}
 }
+
+// Seen live: OpenCode's list of integrations in a short terminal scrolls
+// its "Popular" heading off as the cursor moves down, and the rows under
+// it then read with no group. They are still the rows that were offered;
+// a name two groups share is not guessed at.
+func TestARowWhoseHeadingScrolledOffIsStillKnown(t *testing.T) {
+	rows := []termmenu.Item{
+		{Label: "OpenCode Go", Group: "Popular"}, {Label: "GitHub Copilot", Group: "Popular"},
+		{Label: "Sonnet", Group: "Anthropic"}, {Label: "Sonnet", Group: "Bedrock"},
+	}
+	for name, c := range map[string]struct {
+		seen termmenu.Item
+		want int
+	}{
+		"same group":            {termmenu.Item{Label: "GitHub Copilot", Group: "Popular"}, 1},
+		"heading scrolled off":  {termmenu.Item{Label: "GitHub Copilot"}, 1},
+		"another group":         {termmenu.Item{Label: "GitHub Copilot", Group: "Services"}, -1},
+		"a name two groups use": {termmenu.Item{Label: "Sonnet"}, -1},
+		"unknown":               {termmenu.Item{Label: "Other"}, -1},
+	} {
+		if got := knownRow(rows, c.seen); got != c.want {
+			t.Errorf("%s: row %d, want %d", name, got, c.want)
+		}
+	}
+}
