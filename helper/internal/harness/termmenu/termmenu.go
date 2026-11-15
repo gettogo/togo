@@ -163,6 +163,11 @@ func ReadOffered(screen string) (Menu, bool) {
 // Read finds a list on the screen.
 func Read(screen string) (Menu, bool) {
 	lines := parse(screen)
+	// A panel that only shows a link and a code has the frame of a list
+	// but no rows to pick.
+	if _, is := readPanel(lines); is {
+		return Menu{}, false
+	}
 	if m, ok := readGlyph(lines); ok {
 		return m, true
 	}
