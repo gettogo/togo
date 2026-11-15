@@ -17,6 +17,17 @@ func TestTheLineTheSlashWentOnIsFound(t *testing.T) {
 	if i, line, ok := ownLine(padded, menu); !ok || i != 3 || line != "┃  /" {
 		t.Errorf("with the list drawn: %d %q %v", i, line, ok)
 	}
+	// A row of the list drawn over a line that held only the frame is not
+	// the input line: it does not end with the "/".
+	framed := "┃\n┃\n┃  \n┃  Build"
+	listed := "┃ /cd      Change working directory\n┃ /clear   Clear session\n┃  /\n┃  Build"
+	if i, line, ok := ownLine(framed, listed); !ok || i != 2 || line != "┃  /" {
+		t.Errorf("list rows over frame lines: %d %q %v", i, line, ok)
+	}
+	// An empty field that showed a placeholder.
+	if i, line, ok := ownLine("> Ask anything", "> /"); !ok || i != 0 || line != "> /" {
+		t.Errorf("placeholder replaced: %d %q %v", i, line, ok)
+	}
 	// After a draft the "/" lands at its end.
 	if i, line, ok := ownLine("> half written", "> half written/"); !ok || i != 0 || line != "> half written/" {
 		t.Errorf("after a draft: %d %q %v", i, line, ok)

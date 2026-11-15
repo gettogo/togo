@@ -108,7 +108,10 @@ func (e *Engine) stillServed(s *sess, conv uint64) bool {
 }
 
 // ownLine finds the line a "/" was typed on: the one line of the screen
-// that changed by exactly that character.
+// that now ends with "/" and, without it, is the line as it was (or as far
+// as it goes, where an empty field showed a placeholder that the "/"
+// replaced). A row of the list that opened holds a "/" too, but does not
+// end with one.
 func ownLine(before, after string) (index int, text string, ok bool) {
 	a, b := strings.Split(before, "\n"), strings.Split(after, "\n")
 	index = -1
@@ -117,19 +120,17 @@ func ownLine(before, after string) (index int, text string, ok bool) {
 			break
 		}
 		was, is := strings.TrimRight(a[i], " "), strings.TrimRight(b[i], " ")
-		if was == is || !strings.Contains(is, "/") {
+		if was == is || !strings.HasSuffix(is, "/") {
 			continue
 		}
-		// The line as it is, with one "/" taken out, is the line as it was
-		// (a cursor block or placeholder text may have gone with it).
-		at := strings.LastIndex(is, "/")
-		without := strings.TrimRight(is[:at]+is[at+1:], " ")
-		if without == was || strings.HasPrefix(was, strings.TrimRight(is[:at], " ")) {
-			if index >= 0 {
-				return -1, "", false // two candidates: not sure which is ours
-			}
-			index, text = i, is
+		stem := strings.TrimRight(strings.TrimSuffix(is, "/"), " ")
+		if stem != was && !(stem != "" && strings.HasPrefix(was, stem)) {
+			continue
 		}
+		if index >= 0 {
+			return -1, "", false // two candidates: not sure which is ours
+		}
+		index, text = i, is
 	}
 	return index, text, index >= 0
 }
@@ -170,12 +171,18 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 	row, line, located := ownLine(before, after)
 	// ours reports that the line the "/" went on still reads as we left it.
 	ours := func() bool {
-		if !located || !e.stillServed(s, conv) {
+		if !e.stillServed(s, conv) {
 			return false
 		}
 		now, err := e.cfg.Screen(ctx, s.id)
 		if err != nil {
 			return false
+		}
+		if !located {
+			// The line could not be picked out, so nothing is walked; the
+			// "/" is still ours to take back only if the whole screen is
+			// exactly as it was right after it was typed.
+			return now == after
 		}
 		lines := strings.Split(now, "\n")
 		return row < len(lines) && strings.TrimRight(lines[row], " ") == line
