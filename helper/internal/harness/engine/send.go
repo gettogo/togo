@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
@@ -452,25 +454,47 @@ func (e *Engine) sendNotYet(s *sess, act spec.Action) bool {
 	return notYet(raw, s.stateLocked())
 }
 
-// mentionForm writes each file mention the way the harness reads it. Where
-// the harness takes a quoted path, a path with a space in it is quoted; one
-// that also holds a quote cannot be written at all and is left out.
+// mentionForm writes each file mention the way the harness reads it: bare
+// where the harness would read the path back exactly, else inside the first
+// of its quotes that can hold the path. A path no form can hold is left out:
+// offered, it would name another file or none.
 func mentionForm(items []harness.Completion, m *spec.Mentions) []harness.Completion {
-	if m == nil || m.Quote != "double" {
+	if m == nil {
 		return items
 	}
 	out := items[:0]
 	for _, it := range items {
 		path := strings.TrimSuffix(strings.TrimPrefix(it.Insert, "@"), " ")
-		if strings.ContainsAny(path, " \t") {
-			if strings.Contains(path, `"`) {
-				continue
-			}
-			it.Insert = `@"` + path + `" `
+		form, ok := mentionOf(path, m)
+		if !ok {
+			continue
 		}
+		it.Insert = "@" + form + " "
 		out = append(out, it)
 	}
 	return out
+}
+
+func mentionOf(path string, m *spec.Mentions) (string, bool) {
+	if path == "" || strings.ContainsAny(path, "\n\r") {
+		return "", false
+	}
+	first, _ := utf8.DecodeRuneInString(path)
+	last, _ := utf8.DecodeLastRuneInString(path)
+	bare := !strings.ContainsFunc(path, unicode.IsSpace) && !strings.ContainsAny(path, m.BareStops) &&
+		!strings.ContainsRune(m.BareLeading, first) && !strings.ContainsRune(m.BareTrailing, last)
+	if bare {
+		return path, true
+	}
+	if path != strings.TrimSpace(path) {
+		return "", false // quotes drop spaces at either end
+	}
+	for _, q := range m.Quotes {
+		if q != "" && !strings.Contains(path, q) {
+			return q + path + q, true
+		}
+	}
+	return "", false
 }
 
 // rootsIncompleteText is the refusal when a session's additional workspace

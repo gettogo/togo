@@ -91,30 +91,41 @@ func TestFilesInAdditionalWorkspaceFoldersCompleteByAbsolutePath(t *testing.T) {
 	}
 }
 
-// omp reads a bare mention only up to its first space, and a quoted one
-// whole. Where a harness says so, a path with a space is written quoted, in
-// the session's own folder and in an additional one alike; other paths stay
-// bare, and a harness that says nothing gets bare paths as before.
-func TestAMentionWithASpaceIsWrittenTheWayTheHarnessReadsIt(t *testing.T) {
-	items := func() []harness.Completion {
-		return []harness.Completion{
-			{Insert: "@docs/plain.txt "}, {Insert: "@my docs/a file.txt "}, {Insert: "@/extra folder/far.txt "},
-			{Insert: "@odd \"name\".txt "},
+// A mention is written so that the harness reads back exactly that path.
+// The cases are omp's own parser's: a bare mention ends at a space or an
+// "@" and loses some punctuation at its ends; quotes take a whole path with
+// no escapes. A path no form can hold is not offered. A harness that
+// declares nothing gets bare paths as before.
+func TestAMentionIsWrittenSoTheHarnessReadsThatPath(t *testing.T) {
+	omp := &spec.Mentions{Quotes: []string{`"`, "'"}, BareStops: "@", BareLeading: "`\"'([{<", BareTrailing: ")]}>.,;:!?\"'`"}
+	for path, want := range map[string]string{
+		"docs/plain.txt":        "docs/plain.txt",
+		`a"b'c.txt`:             `a"b'c.txt`, // both quotes, but bare reads back whole
+		"my docs/a file.txt":    `"my docs/a file.txt"`,
+		"/extra folder/far.txt": `"/extra folder/far.txt"`,
+		"/proj/a@b.txt":         `"/proj/a@b.txt"`,
+		"notes/done.":           `"notes/done."`,
+		"(draft)/x.txt":         `"(draft)/x.txt"`,
+		`say "hi".txt`:          `'say "hi".txt'`,
+		`ends"`:                 `'ends"'`,
+		"it's here.txt":         `"it's here.txt"`,
+		"tab\there.txt":         "\"tab\there.txt\"",
+	} {
+		if got, ok := mentionOf(path, omp); !ok || got != want {
+			t.Errorf("%q is written %q %v, want %q", path, got, ok, want)
 		}
 	}
-	got := mentionForm(items(), &spec.Mentions{Quote: "double"})
-	want := []string{"@docs/plain.txt ", "@\"my docs/a file.txt\" ", "@\"/extra folder/far.txt\" "}
-	if len(got) != len(want) {
-		t.Fatalf("mentions = %+v", got)
-	}
-	for i := range want {
-		if got[i].Insert != want[i] {
-			t.Errorf("mention %d = %q, want %q", i, got[i].Insert, want[i])
+	for _, path := range []string{`both " and ' here`, " leading space", "trailing space ", "two\nlines", ""} {
+		if got, ok := mentionOf(path, omp); ok {
+			t.Errorf("%q cannot be written but was: %q", path, got)
 		}
 	}
-	for _, m := range []*spec.Mentions{nil, {}} {
-		if plain := mentionForm(items(), m); len(plain) != 4 || plain[1].Insert != "@my docs/a file.txt " {
-			t.Errorf("a harness with no quoting rule had its mentions changed: %+v", plain)
-		}
+	items := []harness.Completion{{Insert: "@docs/plain.txt "}, {Insert: "@my docs/a.txt "}, {Insert: "@both \" and ' here "}}
+	got := mentionForm(append([]harness.Completion(nil), items...), omp)
+	if len(got) != 2 || got[0].Insert != "@docs/plain.txt " || got[1].Insert != "@\"my docs/a.txt\" " {
+		t.Errorf("mentions = %+v", got)
+	}
+	if plain := mentionForm(append([]harness.Completion(nil), items...), nil); len(plain) != 3 || plain[1].Insert != "@my docs/a.txt " {
+		t.Errorf("a harness with no rule had its mentions changed: %+v", plain)
 	}
 }

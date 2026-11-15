@@ -90,11 +90,18 @@ type Images struct {
 	Insert string `yaml:"insert"`
 }
 
-// Mentions is how a harness takes a file mention. Quote "double" means a
-// path with a space in it must be written @"path": bare, the harness reads
-// it only up to the first space.
+// Mentions is how a harness reads a file named after "@" in its input,
+// taken from the harness's own parser. A bare mention ends at whitespace or
+// at any of BareStops, and the harness strips BareLeading from its start and
+// BareTrailing from its end. Quotes are the delimiters it accepts around a
+// whole path, in order of preference; inside them there is no escape, and
+// spaces at either end are dropped. A path is written bare when the harness
+// would read it back exactly, else in the first quotes that can hold it.
 type Mentions struct {
-	Quote string `yaml:"quote"`
+	Quotes       []string `yaml:"quotes"`
+	BareStops    string   `yaml:"bare_stops"`
+	BareLeading  string   `yaml:"bare_leading"`
+	BareTrailing string   `yaml:"bare_trailing"`
 }
 
 // Match picks the sessions an adapter serves.
