@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"hash/fnv"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,7 +30,8 @@ import (
 //	terminal.release  the same: let go without pressing anything
 //	terminal.attach   take up a list that is already on the screen
 //
-// A row id is "<interaction>/<n>"; the screen's id is "terminal.menu/<interaction>".
+// A row id is "<interaction>/<row>", where <row> names the row by what it
+// says, not by its place; the screen's id is "terminal.menu/<interaction>".
 
 const (
 	terminalPrefix    = "terminal."
@@ -238,8 +240,9 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 	interaction, _ := json.Marshal(m.token)
 	p := &harness.Picker{Items: []harness.PickerItem{}, OnSelect: terminalPrefix + "select", Searchable: menu.Search, Query: menu.Query,
 		OnSelectArgs: map[string]json.RawMessage{"interaction": interaction}}
+	ids := rowIDs(m.rows)
 	for i, it := range m.rows {
-		id := m.token + "/" + strconv.Itoa(i)
+		id := m.token + "/" + ids[i]
 		p.Items = append(p.Items, harness.PickerItem{ID: id, Title: it.Label, Subtitle: it.Detail, Group: it.Group})
 		if it.Current {
 			p.Selected = id
@@ -338,11 +341,18 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		return harness.ActionResult{Result: harness.ResultApplied, Screen: e.menuScreen(m, menu, complete && (menu.Total > 0 || rowsEndOnScreen(menu)))}, nil
 	case "select":
 		m := e.menuOf(s.id, token)
-		n, err := strconv.Atoi(rowText)
-		if m == nil || err != nil || n < 0 || n >= len(m.rows) {
+		if m == nil {
 			return failed("This menu has closed.")
 		}
-		return e.selectRow(ctx, s, m, m.rows[n])
+		// The id names the row itself, not its place: after a search the
+		// same place holds another row, and a tap made before the search
+		// must not choose that one.
+		for i, id := range rowIDs(m.rows) {
+			if id == rowText {
+				return e.selectRow(ctx, s, m, m.rows[i])
+			}
+		}
+		return failed("That row is no longer in the list. Nothing was chosen.")
 	case "cancel":
 		m := e.menuOf(s.id, token)
 		if m == nil {
@@ -659,4 +669,21 @@ func fieldUnderTitle(screen, title string) (string, bool) {
 		return "", true
 	}
 	return "", false
+}
+
+// rowIDs names each row by its group and label, with a count for rows that
+// say the same thing, so an id means the same row whatever else the list
+// holds: a search that changes the rows cannot make an old id point at
+// another row.
+func rowIDs(rows []termmenu.Item) []string {
+	seen := map[string]int{}
+	out := make([]string, len(rows))
+	for i, it := range rows {
+		h := fnv.New64a()
+		_, _ = h.Write([]byte(it.Group + "\x00" + it.Label))
+		key := strconv.FormatUint(h.Sum64(), 36)
+		out[i] = key + "." + strconv.Itoa(seen[key])
+		seen[key]++
+	}
+	return out
 }
