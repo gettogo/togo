@@ -130,7 +130,7 @@ func (d *Document) add(id string, a []json.RawMessage) error {
 			}
 		}
 		hold(old.node)
-		d.keepResult(old)
+		gone, isResult := d.resultOf(old)
 		removeChild(p.node, id)
 		d.forget(old.node)
 		fresh, bytes, err := d.prepareTree(&node, parent, p.depth+1)
@@ -147,6 +147,11 @@ func (d *Document) add(id string, a []json.RawMessage) error {
 			d.nodes[id] = e
 		}
 		d.bytes += bytes
+		// Only now is the old node gone: a replacement that was refused
+		// left it in place, and it must not be told as removed.
+		if isResult {
+			d.recent.add(gone)
+		}
 		return nil
 	}
 	fresh, bytes, err := d.prepareTree(&node, parent, p.depth+1)

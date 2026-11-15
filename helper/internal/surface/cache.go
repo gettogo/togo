@@ -109,6 +109,11 @@ func OpenCache(dir string, identity CacheIdentity, options RenderOptions) (*Cach
 		return nil, err
 	}
 	c.stale = len(c.scene.Views) > 0
+	// Replaying the journal removed results again as it went. They were
+	// removed under an earlier renderer: this one starts with none kept.
+	for _, v := range c.scene.Views {
+		v.Document.recent = recentLog{}
+	}
 	return c, nil
 }
 
@@ -272,9 +277,7 @@ func (c *Cache) snapshot(after uint64) ([]byte, uint64, bool, error) {
 	}
 	// Served, not stored: when each node was born, and the results lately
 	// removed from the transcript.
-	c.scene.stamp(true)
-	raw, err := json.Marshal(c.scene)
-	c.scene.stamp(false)
+	raw, err := c.scene.served(maxSnapshotBytes)
 	return raw, c.scene.Revision, false, err
 }
 

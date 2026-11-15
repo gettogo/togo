@@ -214,3 +214,90 @@ func TestBirthsAndResultsBelongToTheirViewAndRenderer(t *testing.T) {
 		t.Errorf("a part drawn again on adopt was born in %d, want 4", born(v.Document.Root, "layer"))
 	}
 }
+
+// Found in review. A replacement on adopt that is refused leaves the old
+// node in place: it is not told as removed. A journal replayed for a new
+// renderer does not bring back what an earlier one removed. A node that
+// gives its words as text and as spans says them once.
+func TestOnlyWhatReallyLeftIsKeptAndOnlyForItsRenderer(t *testing.T) {
+	c, root := birthCache(t)
+	frame(t, c, 2, `["add","t","main",null,{"id":"t","k":"toast","p":{"text":"Saved","spans":[{"t":"Saved"}]},"c":[{"id":"t/more","k":"text","p":{"text":"twice"}}]}]`)
+	// The program adopts its view and adds the toast again with a part
+	// this renderer does not take: the add is refused, the toast stays.
+	cacheApply(t, c, 'q', `{"q":"hello","v":[1],"app":"example","features":["send"]}`)
+	cacheApply(t, c, 'o', `{"id":"s:1","mode":"inline","adopt":true}`)
+	frame(t, c, 3, `["add","t","main",null,{"id":"t","k":"toast","p":{"text":"Other"},"c":[{"id":"t/bad","k":"not-a-kind"}]}]`)
+	v := served(t, c)["s:1"]
+	if len(v.Recent) != 0 || born(v.Document.Root, "t") != 2 {
+		t.Fatalf("after a refused replacement: recent %+v, toast born in %d", v.Recent, born(v.Document.Root, "t"))
+	}
+	// Really removed, it is kept, with its words once and its parts on
+	// their own lines.
+	frame(t, c, 4, `["del","t"]`)
+	v = served(t, c)["s:1"]
+	if len(v.Recent) != 1 || v.Recent[0].Text != "Saved\ntwice" || v.Recent[0].Born != 2 || v.Recent[0].Gone != 4 {
+		t.Fatalf("recent = %+v", v.Recent)
+	}
+	// The journal now holds the toast's add and del, not checkpointed.
+	c.Close()
+	again, err := OpenCache(root, CacheIdentity{Generation: "run", Birth: "process", Conversation: "chat"}, birthKinds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	again.mu.Lock()
+	kept := 0
+	for _, view := range again.scene.Views {
+		kept += len(view.Document.recent.entries)
+		if view.Document.recent.dropped {
+			kept++
+		}
+	}
+	again.mu.Unlock()
+	if kept != 0 {
+		t.Errorf("a new renderer was given %d removed results from the journal", kept)
+	}
+}
+
+// Births and removed results are extra. A scene that fits is never refused
+// because of them: the list of removed results is left out first, and that
+// is said by the floor; then the births.
+func TestWhatIsAddedToAServedSceneGivesWayToItsSize(t *testing.T) {
+	c, _ := birthCache(t)
+	frame(t, c, 2, `["add","t","main",null,{"id":"t","k":"toast","p":{"text":"`+strings.Repeat("r", 600)+`"}}]`)
+	frame(t, c, 3, `["del","t"],["add","m1","main",null,{"id":"m1","k":"text","p":{"text":"x"}}]`)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	size := func(level int) int {
+		c.scene.stamp(level)
+		raw, _ := json.Marshal(c.scene)
+		c.scene.stamp(serveNothing)
+		return len(raw)
+	}
+	plain, floors, births, all := size(serveNothing), size(serveFloors), size(serveBirths), size(serveAll)
+	if !(plain < floors && floors < births && births < all) {
+		t.Fatalf("sizes: plain %d, floors %d, births %d, all %d", plain, floors, births, all)
+	}
+	for limit, want := range map[int]struct{ recent, floor, born bool }{
+		all:        {true, false, true},
+		all - 1:    {false, true, true},
+		births - 1: {false, true, false},
+		floors - 1: {false, false, false},
+		plain - 1:  {false, false, false}, // the scene itself is too big: served as it is, for the caller to refuse
+	} {
+		raw, err := c.scene.served(limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := string(raw)
+		if strings.Contains(got, `"recent":[`) != want.recent || strings.Contains(got, `"recentFloor":2`) != want.floor || strings.Contains(got, `"b":3`) != want.born {
+			t.Errorf("limit %d: recent %v floor %v births %v, want %+v", limit, strings.Contains(got, `"recent":[`), strings.Contains(got, `"recentFloor":2`), strings.Contains(got, `"b":3`), want)
+		}
+		if limit >= plain && len(raw) > limit {
+			t.Errorf("limit %d: served %d bytes", limit, len(raw))
+		}
+	}
+	if c.scene.Views[0].Document.nodes["m1"].node.Born != 0 || c.scene.Views[0].Recent != nil {
+		t.Error("the held scene was left stamped")
+	}
+}

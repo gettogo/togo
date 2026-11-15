@@ -1,6 +1,7 @@
 package surface
 
 import (
+	"encoding/json"
 	"strings"
 	"unicode/utf8"
 )
@@ -69,28 +70,36 @@ func (l *recentLog) age(sequence int64) {
 	}
 }
 
-// keepResult records a node that is about to be removed, if it is a result
-// in the transcript: a toast, or a node the program gives a notice role,
-// standing in the transcript outside any dialog and holding no field.
+// keepResult records a node that is being removed, if it is a result in
+// the transcript.
 func (d *Document) keepResult(e *entry) {
+	if r, ok := d.resultOf(e); ok {
+		d.recent.add(r)
+	}
+}
+
+// resultOf is what is kept of a node if it is a result in the transcript:
+// a toast, or a node the program gives a notice role, standing in the
+// transcript outside any dialog and holding no field.
+func (d *Document) resultOf(e *entry) (RecentResult, bool) {
 	if !d.retain || e == nil || !d.inTranscript(e) || holdsField(e.node) {
-		return
+		return RecentResult{}, false
 	}
 	role, _ := e.node.Props["role"].(string)
 	if e.node.Kind != "toast" && !strings.Contains(role, ".notice.") {
-		return
+		return RecentResult{}, false
 	}
 	tone, _ := e.node.Props["tone"].(string)
-	var b strings.Builder
-	nodeText(e.node, &b)
-	text, cut := b.String(), false
+	var parts []string
+	nodeText(e.node, &parts)
+	text, cut := strings.Join(parts, "\n"), false
 	if len(text) > maxResultText {
 		text, cut = text[:maxResultText], true
 		for !utf8.ValidString(text) {
 			text = text[:len(text)-1]
 		}
 	}
-	d.recent.add(RecentResult{ID: e.node.ID, Born: e.born, Gone: d.applying, Kind: e.node.Kind, Role: role, Tone: tone, Text: text, Cut: cut})
+	return RecentResult{ID: e.node.ID, Born: e.born, Gone: d.applying, Kind: e.node.Kind, Role: role, Tone: tone, Text: text, Cut: cut}, true
 }
 
 // inTranscript reports whether a node stands directly in the transcript:
@@ -112,59 +121,92 @@ func holdsField(n *Node) bool {
 	return false
 }
 
-// nodeText joins what a node and the nodes inside it say, in order.
-func nodeText(n *Node, b *strings.Builder) {
-	if b.Len() > maxResultText {
+// nodeText collects what a node and the nodes inside it say, in order, one
+// part per node. A node says one thing: its text if it has any, else its
+// spans, else its markdown. A node that gives both text and spans gives
+// the same words twice.
+func nodeText(n *Node, parts *[]string) {
+	size := 0
+	for _, p := range *parts {
+		size += len(p) + 1
+	}
+	if size > maxResultText {
 		return
 	}
-	for _, key := range []string{"text", "spans", "md"} {
-		switch v := n.Props[key].(type) {
-		case string:
-			writePart(b, v)
-		case []any:
-			for _, span := range v {
-				if m, ok := span.(map[string]any); ok {
-					if t, ok := m["t"].(string); ok {
-						b.WriteString(t)
-					}
+	said := ""
+	if t, ok := n.Props["text"].(string); ok && t != "" {
+		said = t
+	} else if spans, ok := n.Props["spans"].([]any); ok && len(spans) > 0 {
+		var b strings.Builder
+		for _, span := range spans {
+			if m, ok := span.(map[string]any); ok {
+				if t, ok := m["t"].(string); ok {
+					b.WriteString(t)
 				}
 			}
-			if len(v) > 0 {
-				writePart(b, "")
-			}
 		}
+		said = b.String()
+	} else if md, ok := n.Props["md"].(string); ok {
+		said = md
+	}
+	if said != "" {
+		*parts = append(*parts, said)
 	}
 	for _, child := range n.Children {
-		nodeText(child, b)
+		nodeText(child, parts)
 	}
 }
 
-func writePart(b *strings.Builder, s string) {
-	if s != "" {
-		if b.Len() > 0 && !strings.HasSuffix(b.String(), " ") && !strings.HasSuffix(b.String(), "\n") {
-			b.WriteByte(' ')
-		}
-		b.WriteString(s)
-	}
-}
+// What a served scene may carry beyond the scene itself.
+const (
+	serveNothing = iota // the scene as it is held and stored
+	serveFloors         // only that results were dropped
+	serveBirths         // births too, and no list of removed results
+	serveAll            // births and the removed results
+)
 
 // stamp sets, or clears, what a scene carries only while it is served.
-func (s *Scene) stamp(on bool) {
+func (s *Scene) stamp(level int) {
 	for _, v := range s.Views {
 		d := v.Document
 		v.Recent, v.RecentFloor = nil, nil
-		if on {
+		if level == serveAll {
 			v.Recent = append([]RecentResult(nil), d.recent.entries...)
-			if d.recent.dropped {
-				floor := d.recent.floor
+		}
+		if level != serveNothing {
+			floor, dropped := d.recent.floor, d.recent.dropped
+			if level != serveAll {
+				// The list is left out: every result in it counts as dropped.
+				for _, e := range d.recent.entries {
+					floor, dropped = max(floor, e.Born), true
+				}
+			}
+			if dropped {
 				v.RecentFloor = &floor
 			}
 		}
 		for _, e := range d.nodes {
 			e.node.Born = 0
-			if on {
+			if level >= serveBirths {
 				e.node.Born = e.born
 			}
 		}
 	}
+}
+
+// served is the scene as the phone reads it. Births and removed results
+// are added while they fit in limit bytes; a scene that is itself within
+// the limit is never refused because of them: first the list of removed
+// results is left out (and said to be, by the floor), then the births.
+func (s *Scene) served(limit int) ([]byte, error) {
+	defer s.stamp(serveNothing)
+	var raw []byte
+	var err error
+	for level := serveAll; level >= serveNothing; level-- {
+		s.stamp(level)
+		if raw, err = json.Marshal(s); err != nil || len(raw) <= limit {
+			break
+		}
+	}
+	return raw, err
 }
