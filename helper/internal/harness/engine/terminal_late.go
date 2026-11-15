@@ -79,6 +79,13 @@ func (e *Engine) watchLateList(ctx context.Context, s *sess) {
 			}
 			menu, open := termmenu.Read(screen)
 			if !open || menu.Title == "" {
+				// A text prompt that opens late is held and announced
+				// the same way.
+				if p, is := e.readPrompt(watch, s); is {
+					menu, open = termmenu.Menu{Title: p.Title}, true
+				}
+			}
+			if !open || menu.Title == "" {
 				// A turn that began ends the watch. This is asked after
 				// the screen was read: a list opening moves the screen,
 				// and that motion alone can look like work for a moment.

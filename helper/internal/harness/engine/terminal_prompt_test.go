@@ -86,3 +86,34 @@ func TestAPromptTakesOneLineThroughItsOwnField(t *testing.T) {
 		t.Errorf("an entry never seen in the field was reported done, or repeated: %+v", r)
 	}
 }
+
+// A prompt the phone let go of is still on the harness's screen: until it
+// is gone, nothing is typed into the session.
+func TestAPromptLeftOpenStillHoldsTyping(t *testing.T) {
+	raw, err := os.ReadFile("../termmenu/testdata/omp-prompt.ansi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "s_fakefake32"
+	e, _ := newFake(t, id, "1.2.3")
+	shown := string(raw)
+	e.cfg.StyledScreen = func(context.Context, string) (string, error) { return shown, nil }
+	ctx := context.Background()
+	s, err := e.served(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := e.readPrompt(ctx, s)
+	e.openPrompt(withMenuConv(ctx, s), s, "/connect", p)
+	e.setMenu(id, nil) // released
+	if _, held := e.menuLeftOpen(s); !held {
+		t.Fatal("a released prompt still on the screen does not hold typing")
+	}
+	if e.heldNatively(s) == nil {
+		t.Error("typing is allowed into a prompt left open")
+	}
+	shown = ""
+	if _, held := e.menuLeftOpen(s); held {
+		t.Error("the hold outlived the prompt")
+	}
+}

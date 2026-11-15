@@ -120,6 +120,10 @@ func (e *Engine) menuLeftOpen(s *sess) (string, bool) {
 		if menu, is := termmenu.Read(screen); is && menu.Title == panel {
 			return panel, true
 		}
+		// A text prompt left open takes typed keys just as a list does.
+		if p, is := termmenu.ReadPrompt(screen); is && p.Title == panel {
+			return panel, true
+		}
 	}
 	e.menuMu.Lock()
 	delete(e.leftOpen, s.id)
