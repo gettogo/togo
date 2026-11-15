@@ -315,7 +315,15 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			return failed("A menu is already open on the phone. Finish or close it first.")
 		}
 		menu, ok := e.readMenu(ctx, s)
-		if !ok {
+		// Attach is asked for without anyone having seen the screen, so it
+		// must not mistake output for a list (a "❯ ls" line in a reply). It
+		// takes the list this helper left open, or a titled chooser that
+		// shows its own key hints or a search field.
+		e.menuMu.Lock()
+		left, wasLeft := e.leftOpen[s.id]
+		e.menuMu.Unlock()
+		chooser := ok && menu.Title != "" && ((wasLeft && menu.Title == left) || menu.Hint != "" || menu.Search)
+		if !chooser {
 			return harness.ActionResult{Result: harness.ResultFallback, Message: "No menu is open in the terminal."}, nil
 		}
 		rows, complete := e.wholeList(ctx, s, menu)
