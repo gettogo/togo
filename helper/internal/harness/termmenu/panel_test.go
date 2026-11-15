@@ -70,3 +70,22 @@ func TestAnAddressFillingItsLineIsNotALink(t *testing.T) {
 		t.Fatalf("panel %+v (%v)", short, ok)
 	}
 }
+
+// Captured from OpenCode 2.2.5 at 46 columns with "/connect" typed. The
+// list of commands is as wide as the terminal and stands right under the
+// conversation: its border was read as the command's name ("┃"), a line
+// of the conversation as a row, and the row under the cursor was lost.
+func TestACommandListAsWideAsTheTerminalIsReadWithoutItsBorder(t *testing.T) {
+	b, err := os.ReadFile("testdata/oc-slash-narrow.ansi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := ReadOffered(string(b))
+	if !ok || len(m.Items) != 2 {
+		t.Fatalf("list %+v (%v)", m, ok)
+	}
+	if m.Items[0].Label != "/connect" || !m.Items[0].Cursor || m.Items[0].Detail != "Connect an integration" ||
+		m.Items[1].Label != "/btw" || m.Items[1].Cursor || !strings.HasPrefix(m.Items[1].Detail, "One-shot answer") {
+		t.Errorf("rows %+v", m.Items)
+	}
+}

@@ -98,6 +98,23 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 			panel, best = bg, n
 		}
 	}
+	// A neighbouring line whose colour runs exactly as far as the cursor's
+	// row does is another row of the same list: its colour is the
+	// panel's. Without a gap above the list, the lines of whatever stands
+	// there (a conversation) would otherwise be counted in.
+	if lo, hi, ok := run(lines[row], hl); ok {
+		for _, i := range []int{row + 1, row - 1, row + 2, row - 2} {
+			if i < 0 || i >= len(lines) || lo >= len(lines[i]) {
+				continue
+			}
+			if bg := lines[i][lo].bg; bg != "" && bg != hl {
+				if a, b, ok := run(lines[i], bg); ok && a == lo && b == hi {
+					panel = bg
+					break
+				}
+			}
+		}
+	}
 	if panel == "" {
 		return Menu{}, false
 	}
@@ -139,7 +156,8 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 		if b > len(l) {
 			b = len(l)
 		}
-		return strings.TrimSpace(text(l[a:b])) == ""
+		// A line that is only the panel's own border holds nothing.
+		return strings.Trim(text(l[a:b]), rules+" ") == ""
 	}
 	listTop, listBot := row, row
 	for listTop-1 >= top && !blank(listTop-1) {
@@ -193,7 +211,9 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 		if b > len(l) {
 			b = len(l)
 		}
-		body := strings.TrimSpace(text(l[a:b]))
+		// A panel as wide as the terminal draws its border inside the
+		// stretch read as the panel: it is not part of a row.
+		body := strings.TrimSpace(strings.Trim(strings.TrimSpace(text(l[a:b])), rules))
 		if body == "" {
 			continue
 		}
@@ -439,4 +459,22 @@ func readHighlightLoose(lines [][]cell) (Menu, bool) {
 		}
 	}
 	return best, found
+}
+
+// run is the single stretch of a line drawn on one background, if that
+// background is on the line in one piece.
+func run(l []cell, bg string) (lo, hi int, ok bool) {
+	lo, hi = -1, -1
+	for k, c := range l {
+		if c.bg != bg {
+			continue
+		}
+		if lo < 0 {
+			lo = k
+		} else if k != hi {
+			return 0, 0, false
+		}
+		hi = k + 1
+	}
+	return lo, hi, lo >= 0
 }
