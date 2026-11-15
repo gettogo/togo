@@ -40,8 +40,22 @@ func (e *Engine) readPrompt(ctx context.Context, s *sess) (termmenu.Prompt, bool
 		if e.cfg.Cursor == nil {
 			return termmenu.Prompt{}, false
 		}
-		if _, y, visible, err := e.cfg.Cursor(ctx, s.id); err != nil || !visible || y != p.Row {
+		x, y, visible, err := e.cfg.Cursor(ctx, s.id)
+		if err != nil || !visible || y != p.Row {
 			return termmenu.Prompt{}, false
+		}
+		// Empty means the cursor stands right after the mark: spaces typed
+		// at the desk are text too.
+		if p.Empty && e.cfg.Screen != nil {
+			p.Empty = false
+			if plain, err := e.cfg.Screen(ctx, s.id); err == nil {
+				if lines := strings.Split(plain, "\n"); y < len(lines) {
+					switch strings.TrimLeft(beforeCursor(lines[y], x), " │┃") {
+					case "> ", "❯ ", ">", "❯":
+						p.Empty = true
+					}
+				}
+			}
 		}
 	}
 	return p, true
@@ -97,7 +111,9 @@ func (e *Engine) answerPrompt(ctx context.Context, s *sess, m *terminalMenu, val
 		return harness.ActionResult{}, err
 	}
 	e.menuKeyAt.Store(s.id, e.cfg.Now())
-	e.noteEntry(s.id, value)
+	if !e.noteEntry(s.id, value) {
+		return failed("This session has taken too many entries to keep them out of what is shown. Use the terminal.")
+	}
 	if err := e.cfg.Typist.Type(ctx, s.id, value, false, false); err != nil {
 		return harness.ActionResult{}, err
 	}

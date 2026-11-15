@@ -271,7 +271,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		chooser := ok && menu.Title != "" && ((wasLeft && menu.Title == left) || menu.Hint != "" || menu.Search)
 		if !chooser {
 			// A text prompt left open is taken up the same way.
-			if p, is := e.readPrompt(ctx, s); is {
+			if p, is := e.readPrompt(ctx, s); is && p.Empty {
 				return e.openPrompt(ctx, s, p.Title, p), nil
 			}
 		}

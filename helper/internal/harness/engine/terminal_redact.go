@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"strings"
-	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
@@ -15,16 +14,20 @@ import (
 // it. The entry itself is not kept: only its length and a salted digest,
 // enough to find it again in a piece of text.
 
+// enteredText is what a session keeps of its entries: one salt, and the
+// digests of the entries by their length in runes.
 type enteredText struct {
-	n    int // length in runes
-	salt [16]byte
-	sum  [32]byte
-	at   time.Time
+	salt  [16]byte
+	sums  map[int]map[[32]byte]bool
+	count int
 }
 
+// enteredKept bounds how many entries a session's terminal prompts take.
+// Digests are never dropped while the session is known: an entry forgotten
+// would show again the next time the harness repeats it. At the bound, a
+// further entry is refused instead.
 const (
-	enteredLife = 30 * time.Minute
-	enteredKept = 6
+	enteredKept = 128
 	redacted    = "•••"
 )
 
@@ -38,30 +41,38 @@ func (t *enteredText) digest(runes []rune) [32]byte {
 }
 
 // noteEntry remembers how to recognise an entry, and the entry without the
-// spaces around it, in text read later.
-func (e *Engine) noteEntry(session, value string) {
+// spaces around it, in text read later. It reports false when no more can
+// be remembered: then the entry must not be typed.
+func (e *Engine) noteEntry(session, value string) bool {
 	e.menuMu.Lock()
 	defer e.menuMu.Unlock()
 	if e.entered == nil {
-		e.entered = map[string][]enteredText{}
+		e.entered = map[string]*enteredText{}
 	}
-	for _, v := range []string{value, strings.TrimSpace(value)} {
+	t := e.entered[session]
+	if t == nil {
+		t = &enteredText{sums: map[int]map[[32]byte]bool{}}
+		if _, err := rand.Read(t.salt[:]); err != nil {
+			return false
+		}
+		e.entered[session] = t
+	}
+	forms := []string{value}
+	if trimmed := strings.TrimSpace(value); trimmed != value && trimmed != "" {
+		forms = append(forms, trimmed)
+	}
+	if t.count+len(forms) > enteredKept {
+		return false
+	}
+	for _, v := range forms {
 		runes := []rune(v)
-		if len(runes) == 0 {
-			continue
+		if t.sums[len(runes)] == nil {
+			t.sums[len(runes)] = map[[32]byte]bool{}
 		}
-		t := enteredText{n: len(runes), at: time.Now()}
-		_, _ = rand.Read(t.salt[:])
-		t.sum = t.digest(runes)
-		list := append(e.entered[session], t)
-		if len(list) > enteredKept {
-			list = list[len(list)-enteredKept:]
-		}
-		e.entered[session] = list
-		if v == value && strings.TrimSpace(value) == value {
-			break
-		}
+		t.sums[len(runes)][t.digest(runes)] = true
+		t.count++
 	}
+	return true
 }
 
 // redact returns text with every entry made in this session replaced.
@@ -70,22 +81,21 @@ func (e *Engine) redact(session, text string) string {
 		return text
 	}
 	e.menuMu.Lock()
-	list := append([]enteredText(nil), e.entered[session]...)
-	e.menuMu.Unlock()
-	for i := range list {
-		t := &list[i]
-		if time.Since(t.at) > enteredLife {
-			continue
-		}
+	defer e.menuMu.Unlock()
+	t := e.entered[session]
+	if t == nil {
+		return text
+	}
+	for n, sums := range t.sums {
 		runes := []rune(text)
-		if len(runes) < t.n {
+		if len(runes) < n {
 			continue
 		}
 		var out []rune
 		for at := 0; at < len(runes); {
-			if at+t.n <= len(runes) && t.digest(runes[at:at+t.n]) == t.sum {
+			if at+n <= len(runes) && sums[t.digest(runes[at:at+n])] {
 				out = append(out, []rune(redacted)...)
-				at += t.n
+				at += n
 				continue
 			}
 			out = append(out, runes[at])

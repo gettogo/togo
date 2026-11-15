@@ -153,7 +153,7 @@ type Engine struct {
 	// entered holds, per session, how to recognise what was entered into
 	// prompts (never the entries themselves), to keep them out of what is
 	// read from the terminal afterwards.
-	entered map[string][]enteredText
+	entered map[string]*enteredText
 	// lateWatches holds, per session, the watch for a list that opens
 	// after a command was answered with nothing to show.
 	lateWatches map[string]*lateListWatch

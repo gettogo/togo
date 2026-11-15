@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -158,10 +159,8 @@ func TestAnEntryIsKeptOutOfWhatTheTerminalShowsNext(t *testing.T) {
 	}
 	const entry = "neutral-entry 42"
 	e.noteEntry(id, "  "+entry+" ")
-	for _, kept := range e.entered[id] {
-		if wire, _ := json.Marshal(kept); strings.Contains(string(wire), "neutral") {
-			t.Fatal("the entry itself is kept")
-		}
+	if kept := fmt.Sprintf("%+v", *e.entered[id]); strings.Contains(kept, "neutral") {
+		t.Fatal("the entry itself is kept")
 	}
 	m := &terminalMenu{sess: s, token: "tok", panel: "x", prompt: true}
 	sc := e.promptScreen(m, termmenu.Prompt{Title: "Invalid: " + entry + ". Try again"})
@@ -179,5 +178,32 @@ func TestAnEntryIsKeptOutOfWhatTheTerminalShowsNext(t *testing.T) {
 	}
 	if got := e.redact("s_other", entry); got != entry {
 		t.Error("another session's text was redacted")
+	}
+}
+
+// An entry stays recognised for as long as the session is known: there is no
+// time after which, and no number of later entries after which, the harness
+// repeating it would show it. When no more can be remembered, a further
+// entry is refused rather than an older one forgotten.
+func TestAnEntryIsNeverForgottenToMakeRoom(t *testing.T) {
+	const id = "s_fakefake35"
+	e, _ := newFake(t, id, "1.2.3")
+	if !e.noteEntry(id, "first-entry") {
+		t.Fatal("the first entry was refused")
+	}
+	n := 1
+	for ; n < enteredKept+10; n++ {
+		if !e.noteEntry(id, "later-"+strings.Repeat("x", n)) {
+			break
+		}
+	}
+	if n != enteredKept {
+		t.Fatalf("%d entries were taken, want %d and then refusal", n, enteredKept)
+	}
+	if got := e.redact(id, "Invalid first-entry"); strings.Contains(got, "first-entry") {
+		t.Errorf("the first entry shows again after %d more: %q", n-1, got)
+	}
+	if got := e.redact(id, "later-"+strings.Repeat("x", n-1)); !strings.Contains(got, redacted) {
+		t.Errorf("the last entry taken is not recognised: %q", got)
 	}
 }

@@ -126,7 +126,12 @@ func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *
 				break
 			}
 			// A prompt for one line of text is shown as its own screen.
+			// One already filled in (an editor opened with text) cannot be
+			// answered from an empty field: it is left to the terminal.
 			if p, is := e.readPrompt(ctx, s); is {
+				if !p.Empty {
+					return e.notShown(s, mark), nil
+				}
 				return e.openPrompt(ctx, s, title, p), nil
 			}
 			if e.composerBack(ctx, s, mark) {
