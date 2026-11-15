@@ -67,20 +67,26 @@ func firstSame(rows []termmenu.Item, it termmenu.Item) int {
 
 // knownRow finds a row read from the screen among the rows known, or -1.
 // A list that scrolls takes its group headings off the screen, and a row
-// then reads with no group: it is the known row of that name when exactly
-// one has it.
+// then reads with no group. Such a row is the known row of that name when
+// exactly one has it. When a grouped row and any other share the name, the
+// row on the screen could be either, and it is not guessed at.
 func knownRow(rows []termmenu.Item, it termmenu.Item) int {
-	if i := firstSame(rows, it); i >= 0 || it.Group != "" {
-		return i
+	if it.Group != "" {
+		return firstSame(rows, it)
 	}
-	at := -1
+	at, n, grouped := -1, 0, false
 	for i, r := range rows {
-		if r.Label == it.Label {
-			if at >= 0 {
-				return -1
-			}
+		if r.Label != it.Label {
+			continue
+		}
+		if at < 0 {
 			at = i
 		}
+		n++
+		grouped = grouped || r.Group != ""
+	}
+	if grouped && n > 1 {
+		return -1
 	}
 	return at
 }
@@ -256,7 +262,13 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 			}
 			continue
 		}
-		if knownRow(m.rows, now.Items[cur]) == firstSame(m.rows, want) && rightOccurrence(m.rows, now.Items, cur, target) {
+		// With the whole list on the screen every heading is on it too,
+		// and a row is what it reads as.
+		onIt := sameRow(now.Items[cur], want)
+		if len(now.Items) != len(m.rows) {
+			onIt = knownRow(m.rows, now.Items[cur]) == firstSame(m.rows, want)
+		}
+		if onIt && rightOccurrence(m.rows, now.Items, cur, target) {
 			if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 				return harness.ActionResult{}, err
 			}

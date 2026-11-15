@@ -228,6 +228,8 @@ func TestARowWhoseHeadingScrolledOffIsStillKnown(t *testing.T) {
 	rows := []termmenu.Item{
 		{Label: "OpenCode Go", Group: "Popular"}, {Label: "GitHub Copilot", Group: "Popular"},
 		{Label: "Sonnet", Group: "Anthropic"}, {Label: "Sonnet", Group: "Bedrock"},
+		{Label: "Recent"}, {Label: "Recent", Group: "Popular"},
+		{Label: "Twin"}, {Label: "Twin"},
 	}
 	for name, c := range map[string]struct {
 		seen termmenu.Item
@@ -238,6 +240,13 @@ func TestARowWhoseHeadingScrolledOffIsStillKnown(t *testing.T) {
 		"another group":         {termmenu.Item{Label: "GitHub Copilot", Group: "Services"}, -1},
 		"a name two groups use": {termmenu.Item{Label: "Sonnet"}, -1},
 		"unknown":               {termmenu.Item{Label: "Other"}, -1},
+		// An ungrouped row and a grouped one share a name: a row read
+		// with no group may be the grouped one with its heading gone.
+		"ungrouped or scrolled": {termmenu.Item{Label: "Recent"}, -1},
+		"grouped, heading seen": {termmenu.Item{Label: "Recent", Group: "Popular"}, 5},
+		// Rows of one name in a list with no groups are told apart by
+		// place, as before: the first is named here.
+		"twins without groups": {termmenu.Item{Label: "Twin"}, 6},
 	} {
 		if got := knownRow(rows, c.seen); got != c.want {
 			t.Errorf("%s: row %d, want %d", name, got, c.want)
