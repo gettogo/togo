@@ -32,6 +32,7 @@ import TogoKit
         private(set) var completes = 0
         var nativeCommands: [String] = []
         var nativeFailure = false
+        var beforeComplete: (@MainActor () async -> Void)?
         var terminal = 0
         var mission = 0
 
@@ -41,7 +42,9 @@ import TogoKit
                 queued: { [] }, scope: { "typed-tests" },
                 complete: { _, query in
                     self.completes += 1
-                    return CommandLineLogic.filter(self.commands, query: query)
+                    let commands = CommandLineLogic.filter(self.commands, query: query)
+                    await self.beforeComplete?()
+                    return commands
                 },
                 send: { text, _ in
                     self.sends.append(text)
@@ -98,15 +101,65 @@ import TogoKit
         #expect(session.nativeCommands == ["/model", "/model"])
     }
 
-    @Test func genericMenuCommandOpensFromThePaletteWithoutATerminalSwitch() async {
+    @Test func anUnknownCatalogCommandWaitsForSendAfterAPaletteTap() async {
         let session = Session()
         session.caps.insert(HarnessCapability.terminalNative)
         session.commands = [.init(insert: "/permission", title: "/permission", kind: .terminal,
             native: .init(opens: "unknown"))]
         let composer = make(session)
         _ = await composer.perform(session.commands[0])
+        #expect(session.nativeCommands.isEmpty && session.sends.isEmpty)
+        #expect(composer.draft.trimmingCharacters(in: .whitespaces) == "/permission")
+        await composer.submit()
         #expect(session.nativeCommands == ["/permission"])
         #expect(session.terminal == 0 && session.sends.isEmpty)
+    }
+
+    @Test func anUnknownExitCommandIsNeverExecutedByAPaletteTap() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.terminalNative)
+        session.commands = [.init(insert: "/exit", title: "/exit", kind: .run, native: .init(opens: "unknown"))]
+        let composer = make(session)
+        _ = await composer.perform(session.commands[0])
+        #expect(session.nativeCommands.isEmpty && session.sends.isEmpty && session.runs.isEmpty)
+        #expect(composer.draft.trimmingCharacters(in: .whitespaces) == "/exit")
+    }
+
+    @Test func aRicherSourceKeepsDestructiveConfirmationWhenTerminalReadingIsAvailable() async {
+        let session = Session()
+        session.caps.formUnion([HarnessCapability.surface, HarnessCapability.terminalNative])
+        session.commands = [.init(insert: "/delete", title: "/delete", kind: .run, role: .destructive,
+            native: .init(opens: "action", args: "none", destructive: true))]
+        let composer = make(session)
+        _ = await composer.perform(session.commands[0], typed: true)
+        #expect(composer.gate.asking != nil)
+        #expect(session.nativeCommands.isEmpty && session.sends.isEmpty)
+    }
+
+    @Test func lateCatalogReadCannotReplaceAChangedCatalog() async throws {
+        let session = Session()
+        session.commands = [tools]
+        let composer = make(session)
+        let gate = AsyncStream<Void>.makeStream()
+        var reading = false
+        session.beforeComplete = {
+            reading = true
+            var iterator = gate.stream.makeAsyncIterator()
+            _ = await iterator.next()
+        }
+        let old = Task { await composer.loadPalette() }
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !reading, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        try #require(reading)
+        composer.store.commandRevision = UUID()
+        session.commands = [resume]
+        session.beforeComplete = nil
+        await composer.loadPalette()
+        gate.continuation.yield(())
+        await old.value
+        gate.continuation.finish()
+        #expect(composer.palette == [resume])
+        #expect(composer.store.commandList == [resume])
     }
 
     private func make(_ session: Session) -> CommandLineModel {

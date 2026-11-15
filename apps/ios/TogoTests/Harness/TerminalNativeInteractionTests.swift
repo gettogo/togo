@@ -316,6 +316,51 @@ import TogoKit
         await model.close(cancel: false)
     }
 
+    @Test func richerSemanticSourceWinsWithoutACommandSpecificRoute() async throws {
+        var descriptor = ChatTests.claude
+        descriptor.capabilities += [HarnessCapability.surface, HarnessCapability.terminalNative]
+        let services = FakeHarnessServices(descriptor: descriptor)
+        services.feeds = [.init(elements: [.opened(try HarnessFixtures.open())], end: .hold)]
+        let subject = HarnessSubject(hostID: UUID(), sessionID: "s_source", capabilities: [Capability.harness, Capability.surface])
+        let store = HarnessSessionStore(subject: subject, services: services)
+        store.launch()
+        defer { store.stop() }
+        try await until { store.phase == .live }
+        let command = Task { try? await store.runNativeCommand("/resume") }
+        try await until { store.interaction != nil || store.terminalInteraction != nil }
+        #expect(store.interaction != nil && store.terminalInteraction == nil)
+        command.cancel()
+        await command.value
+    }
+
+    @Test func catalogReadinessUpdatesCommandsWithoutReopeningTheConversation() async throws {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        let stream = AsyncThrowingStream<HarnessFeed, any Error>.makeStream()
+        services.feeds = [.init(stream: stream.stream)]
+        let subject = HarnessSubject(hostID: UUID(), sessionID: "s_catalog", capabilities: [Capability.harness])
+        let store = HarnessSessionStore(subject: subject, services: services)
+        store.launch()
+        defer { stream.continuation.finish(); store.stop() }
+        stream.continuation.yield(.opened(try HarnessFixtures.open()))
+        try await until { store.phase == .live }
+        let revision = store.commandRevision
+        let conversation = store.conversation
+        let epoch = try #require(store.timeline.epoch)
+        let cursor = store.timeline.cursor
+        let rows = store.rows.map(\.id)
+        store.commandList = [.init(insert: "/old", title: "/old")]
+        stream.continuation.yield(.note(.init(sessionId: subject.sessionID, kind: .commands,
+            ts: WireDate(.now), epoch: epoch)))
+        try await until { store.commandRevision != revision }
+        #expect(store.commandList.isEmpty)
+        #expect(store.conversation == conversation && store.timeline.cursor == cursor)
+        #expect(store.rows.map(\.id) == rows && services.opens.count == 1)
+        let current = store.commandRevision
+        let ignored = store.refreshCommands(.init(sessionId: "another", kind: .commands,
+            ts: WireDate(.now), epoch: epoch))
+        #expect(ignored == .ignored && store.commandRevision == current)
+    }
+
     private func until(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(2)
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }

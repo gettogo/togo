@@ -425,6 +425,8 @@ public struct HarnessNotification: Codable, Hashable, Sendable {
         public init(rawValue: String) { self.rawValue = rawValue }
         public static let items: Self = "items"
         public static let mission: Self = "mission"
+        /// The running program's command catalog changed; read completions again.
+        public static let commands: Self = "commands"
         /// Open the session again: the adapter or epoch changed, or the connection fell behind.
         public static let reset: Self = "reset"
     }

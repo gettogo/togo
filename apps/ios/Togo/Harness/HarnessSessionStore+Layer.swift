@@ -58,6 +58,20 @@ struct ChatScrollRequest: Equatable, Sendable {
 }
 
 extension HarnessSessionStore {
+    /// The session's current mode id for the mode chip; empty only while truly unknown.
+    var currentMode: String {
+        ModeMemory.current(status: ModeMemory.status(mission.mission), remembered: rememberedMode, described: descriptor?.mode)
+    }
+
+    /// A catalog notification invalidates commands, without reopening history.
+    @discardableResult func refreshCommands(_ note: HarnessNotification) -> HarnessApply {
+        guard note.sessionId == subject.sessionID, note.epoch == feed.timeline.epoch,
+              feed.isLoaded, phase == .live else { return .ignored }
+        commandList = []
+        commandRevision = UUID()
+        return .applied
+    }
+
     var hasAdapter: Bool { descriptor?.adapter != nil }
 
     /// The agent as the app names it everywhere ("OMP", "Claude Code"): the catalog's name for

@@ -51,6 +51,7 @@ import TogoKit
     private(set) var paletteFailed = false
     /// Every command, for the palette; loaded when it opens.
     private(set) var palette: [HarnessCompletion] = []
+    @ObservationIgnored var paletteRevision: UUID?
     /// What the palette's search starts with when it opens: a choice command typed in full.
     var paletteSeed: String?
     private(set) var sending = false
@@ -316,11 +317,16 @@ import TogoKit
     /// Loads every command for the palette.
     func loadPalette() async {
         guard routes.has(HarnessCapability.commands) else { return }
+        let revision = store.commandRevision
         paletteFailed = false
         do {
-            palette = try await routes.complete(.command, "")
+            let commands = try await routes.complete(.command, "")
+            guard revision == store.commandRevision else { return }
+            palette = commands
+            paletteRevision = revision
             store.commandList = palette
         } catch {
+            guard revision == store.commandRevision else { return }
             Self.log.error("command list failed: \(String(describing: error), privacy: .public)")
             // A spinner that never ends reads as a hang: say so and offer to try again.
             paletteFailed = palette.isEmpty

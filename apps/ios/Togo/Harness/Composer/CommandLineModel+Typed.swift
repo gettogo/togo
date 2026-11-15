@@ -27,6 +27,7 @@ extension CommandLineModel {
 
     /// The command list to match against: the palette's, the session's, or read now.
     func routingCommands() async -> [HarnessCompletion] {
+        if let paletteRevision, paletteRevision != store.commandRevision { await loadPalette() }
         if !palette.isEmpty { return palette }
         if !store.commandList.isEmpty { return store.commandList }
         await loadPalette()

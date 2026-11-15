@@ -54,7 +54,7 @@ struct CommandPaletteView: View {
                 model.paletteSeed = nil
             }
         }
-        .task { await model.loadPalette() }
+        .task(id: model.store.commandRevision) { await model.loadPalette() }
         // The dialog a command asks with shows here while the palette is up.
         .actionConfirmation(Binding(get: { model.gate.asking }, set: { model.gate.asking = $0 }))
     }

@@ -112,6 +112,7 @@ import UIKit
     /// The harness's commands as the palette last read them: the state chip and "With
     /// instructions…" find their choices and lines here.
     var commandList: [HarnessCompletion] = []
+    var commandRevision = UUID()
     /// Changes held for the end of the turn ("After this reply").
     @ObservationIgnored var deferred: [DeferredAction] = []
     @ObservationIgnored var deferredTask: Task<Void, Never>?
@@ -237,6 +238,8 @@ import UIKit
         changingConversation = true
         retireNativeInteractions(pumpQueue: false)
         nativeInteractions.requests.reset()
+        commandList = []
+        commandRevision = UUID()
         conversation = UUID()
         phase = .opening
         pumpTask?.cancel()
@@ -413,11 +416,6 @@ import UIKit
         return !Task.isCancelled
     }
 
-    /// The session's current mode id for the mode chip; empty only while truly unknown.
-    var currentMode: String {
-        ModeMemory.current(status: ModeMemory.status(mission.mission), remembered: rememberedMode, described: descriptor?.mode)
-    }
-
     private func rememberMode() {
         let mode = currentMode
         if !mode.isEmpty, mode != rememberedMode { rememberedMode = mode }
@@ -443,6 +441,7 @@ import UIKit
     /// arrival transaction, so new rows, a subagent's thread and the live line move together;
     /// updates to items already shown (streamed text) land without animation.
     private func apply(_ note: HarnessNotification) -> HarnessApply {
+        if note.kind == .commands { return refreshCommands(note) }
         let replacement = note.kind == .reset && !["history", "overflow"].contains(note.reason ?? "")
         if feed.isLoaded, replacement || note.epoch != feed.timeline.epoch { invalidateConversation() }
         let arrives = feed.isLoaded && (note.items ?? []).contains { feed.timeline.item($0.id) == nil }

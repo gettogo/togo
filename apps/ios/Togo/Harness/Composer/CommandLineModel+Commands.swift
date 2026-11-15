@@ -57,7 +57,8 @@ extension CommandLineModel {
     var chipRefresh: ChipRefresh? {
         if working { return nil }
         return ChipRefresh(
-            describing: routes.describing(), model: status?.model, effort: status?.effort, mode: mode
+            describing: routes.describing(), model: status?.model, effort: status?.effort, mode: mode,
+            commands: store.commandRevision
         )
     }
 
@@ -234,4 +235,5 @@ struct ChipRefresh: Hashable, Sendable {
     var model: String?
     var effort: String?
     var mode: String
+    var commands: UUID
 }

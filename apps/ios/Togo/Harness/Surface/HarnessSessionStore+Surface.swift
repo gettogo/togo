@@ -23,7 +23,7 @@ extension HarnessSessionStore {
     }
 
     func runNativeCommand(_ text: String, command: HarnessCompletion? = nil) async throws {
-        if has(HarnessCapability.terminalNative) {
+        if !surfaceAvailable, has(HarnessCapability.terminalNative) {
             try await runTerminalCommand(text)
             return
         }
