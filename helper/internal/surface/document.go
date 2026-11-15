@@ -26,6 +26,10 @@ type Node struct {
 	Kind     string         `json:"k"`
 	Props    map[string]any `json:"p,omitempty"`
 	Children []*Node        `json:"c,omitempty"`
+	// Born is the sequence of the frame the node was added in. It is set
+	// on a node only while a scene is being served, from the document's
+	// own record: never read from the program, never written to disk.
+	Born int64 `json:"b,omitempty"`
 }
 
 type entry struct {
@@ -33,6 +37,7 @@ type entry struct {
 	parent string
 	depth  int
 	cost   int
+	born   int64 // sequence of the frame that added the node
 }
 
 // Document is the state of one surface. Its owner serializes all access.
@@ -51,6 +56,12 @@ type Document struct {
 	// replace: an add names a node the document already has under the
 	// same parent, and takes its place (the first frame after an adopt).
 	replace bool
+	// applying is the sequence of the frame being applied.
+	applying int64
+	// retain: results removed from this document's transcript are kept
+	// for the phone to read (an inline view); recent holds them.
+	retain bool
+	recent recentLog
 }
 
 // OperationError identifies a rejected operation without including remote text.
@@ -92,6 +103,7 @@ func (d *Document) Apply(raw []byte) ([]OperationError, error) {
 		*frame.Sequence < 0 || frame.Ops == nil || len(frame.Ops) > MaxOperations {
 		return nil, errDocument
 	}
+	d.applying = *frame.Sequence
 	var rejected []OperationError
 	for i, rawOp := range frame.Ops {
 		if err := d.applyOperation(rawOp); err != nil {
@@ -100,6 +112,7 @@ func (d *Document) Apply(raw []byte) ([]OperationError, error) {
 	}
 	d.Sequence = *frame.Sequence
 	d.Revision++
+	d.recent.age(d.Sequence)
 	return rejected, nil
 }
 
@@ -138,7 +151,8 @@ func (d *Document) prepareTree(n *Node, parent string, depth int) (map[string]*e
 		if d.bytes+bytes > d.maxBytes {
 			return ErrLimit
 		}
-		fresh[n.ID] = &entry{node: n, parent: parent, depth: depth, cost: cost}
+		n.Born = 0 // the program does not say when a node was born
+		fresh[n.ID] = &entry{node: n, parent: parent, depth: depth, cost: cost, born: d.applying}
 		for _, child := range n.Children {
 			if err := walk(child, n.ID, depth+1); err != nil {
 				return err

@@ -71,6 +71,7 @@ func (d *Document) applyOperation(raw json.RawMessage) error {
 		if len(a) != 2 || e.parent == "" {
 			return errOperation
 		}
+		d.keepResult(e)
 		removeChild(d.nodes[e.parent].node, id)
 		d.forget(e.node)
 		return nil
@@ -129,6 +130,7 @@ func (d *Document) add(id string, a []json.RawMessage) error {
 			}
 		}
 		hold(old.node)
+		d.keepResult(old)
 		removeChild(p.node, id)
 		d.forget(old.node)
 		fresh, bytes, err := d.prepareTree(&node, parent, p.depth+1)

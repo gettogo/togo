@@ -2719,6 +2719,11 @@
         "refused": {
           "const": true,
           "description": "Present only when the program received the event and did not take it because its screen had moved on. Nothing changed and the native screen stays; read the scene again."
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sequence of the last frame applied to the event's view when the helper passed the event on, read before it was written to the program. Nodes and recent results with a greater b came after the event."
         }
       },
       "required": [
@@ -2749,12 +2754,33 @@
           "items": {
             "$ref": "#/$defs/SurfaceNode"
           }
+        },
+        "b": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequence of the frame of this view that added the node (lease feature births). A node removed and added again under the same id carries the later frame. Absent: not known."
         }
       },
       "required": [
         "id",
         "k"
       ],
+      "additionalProperties": false
+    },
+    "SurfaceRecentResult": {
+      "description": "A result lately removed from an inline view's transcript: a toast, or a node the program gave a notice role. Only this projection is kept, in memory, for one lease.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "b": { "type": "integer", "minimum": 0, "description": "Sequence of the frame that added it." },
+        "gone": { "type": "integer", "minimum": 0, "description": "Sequence of the frame that removed it." },
+        "k": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "role": { "type": "string", "maxLength": 256 },
+        "tone": { "type": "string", "maxLength": 64 },
+        "text": { "type": "string", "maxLength": 2048, "description": "What it said, at most 2048 bytes." },
+        "cut": { "const": true, "description": "Present when text was cut to fit." }
+      },
+      "required": ["id", "b", "gone", "k", "text"],
       "additionalProperties": false
     },
     "SurfaceDocument": {
@@ -2824,6 +2850,17 @@
         },
         "document": {
           "$ref": "#/$defs/SurfaceDocument"
+        },
+        "recent": {
+          "type": "array",
+          "maxItems": 64,
+          "description": "Results removed from this view's transcript, oldest first; at most 64 entries and 64 KiB of text. Empty after surface.open.",
+          "items": { "$ref": "#/$defs/SurfaceRecentResult" }
+        },
+        "recentFloor": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Present when removed results were dropped from recent for room or age: the newest frame sequence among them. A command sent before that sequence may have had a result that is no longer listed."
         }
       },
       "required": [

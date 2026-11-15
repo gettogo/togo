@@ -121,7 +121,9 @@ func (s *Service) Open(ctx context.Context, owner *rpc.Conn, id string, options 
 	}
 	r.runtime, r.lease.Generation = run, run.wireGeneration()
 	// What this program's companion can do beyond the protocol's own events.
-	r.lease.Features = slices.Clone(run.state.Features)
+	// And what this helper adds to the scene it serves: when each node was
+	// born, and the results lately removed from the transcript.
+	r.lease.Features = append(slices.Clone(run.state.Features), "births")
 	r.cache, err = OpenCache(run.cacheDir(), run.identity(), options)
 	if err != nil {
 		return fail(err)

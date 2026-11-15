@@ -84,4 +84,8 @@ type DispatchResult struct {
 	// did not take it because its screen had moved on. Nothing changed;
 	// the scene read next is what the program shows.
 	Refused *bool `json:"refused,omitempty"`
+	// Sequence is the sequence of the last frame applied to the event's
+	// view when the event was passed on, read before it was written to
+	// the program: what was added in a later frame came after the event.
+	Sequence *int64 `json:"sequence,omitempty"`
 }

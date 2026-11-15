@@ -30,6 +30,11 @@ type View struct {
 	Closed   bool      `json:"closed"`
 	Instance uint64    `json:"instance"`
 	Document *Document `json:"document"`
+	// Recent and RecentFloor are filled only while a scene is served: the
+	// results lately removed from this view's transcript, and the newest
+	// birth among those no longer kept. Never written to disk.
+	Recent      []RecentResult `json:"recent,omitempty"`
+	RecentFloor *int64         `json:"recentFloor,omitempty"`
 	// Adopting: the program took this view up again after switching
 	// renderers and has not yet sent its first frame. That frame adds
 	// again the parts it redraws, and each replaces what the view kept.
@@ -82,7 +87,7 @@ func (s *Scene) Handle(m Message) ([]Message, error) {
 			}
 		}
 		v.Document.maxBytes = budget
-		v.Document.replace = v.Adopting
+		v.Document.replace, v.Document.retain = v.Adopting, v.Mode == "inline"
 		bad, err := v.Document.Apply(m.Body)
 		v.Document.replace = false
 		if err == nil {
@@ -185,6 +190,7 @@ func (s *Scene) open(raw []byte) ([]Message, error) {
 	if v := s.View(p.ID); p.Adopt && v != nil && v.Mode == "inline" {
 		s.instances++
 		v.Closed, v.Listen, v.Instance, v.Adopting = false, listen, s.instances, true
+		v.Document.recent = recentLog{} // another instance: what the earlier one removed is not its
 		s.Revision++
 		return nil, nil
 	} else if p.Adopt {

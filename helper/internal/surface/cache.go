@@ -270,7 +270,11 @@ func (c *Cache) snapshot(after uint64) ([]byte, uint64, bool, error) {
 	if after != 0 && after == c.scene.Revision {
 		return nil, c.scene.Revision, true, nil
 	}
+	// Served, not stored: when each node was born, and the results lately
+	// removed from the transcript.
+	c.scene.stamp(true)
 	raw, err := json.Marshal(c.scene)
+	c.scene.stamp(false)
 	return raw, c.scene.Revision, false, err
 }
 
