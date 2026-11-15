@@ -85,25 +85,58 @@ struct NativeCommandNavigation<Content: View>: View {
 /// Uses the same adaptive presentation policy as API-backed command screens.
 /// A runtime command does not insert controls or layout into the transcript.
 struct NativeCommandPresentation: ViewModifier {
+    @Environment(\.scenePhase) private var scenePhase
     let store: HarnessSessionStore
     let showing: Bool
 
-    private struct Request: Identifiable {
-        let model: ChatSurfaceInteraction
-        var id: UUID { model.id }
+    private enum Request: Identifiable {
+        case surface(ChatSurfaceInteraction)
+        case terminal(TerminalNativeInteraction)
+        var id: UUID {
+            switch self {
+            case .surface(let model): model.id
+            case .terminal(let model): model.id
+            }
+        }
     }
 
     private var request: Request? {
+        if showing, let terminal = store.terminalInteraction, terminal.screen != nil,
+           terminal.phase == .active || terminal.failure != nil {
+            return .terminal(terminal)
+        }
         guard showing, let model = store.interaction, !model.retired,
               model.expectsScreen || !model.blocks.isEmpty || model.session.notice != nil else { return nil }
-        return Request(model: model)
+        return .surface(model)
     }
 
     func body(content: Content) -> some View {
         content.harnessPresent(item: Binding(get: { request }, set: { value in
-            if value == nil, request != nil { store.dismissNativeCommand() }
+            if value == nil, let current = request {
+                switch current {
+                case .surface: store.dismissNativeCommand()
+                case .terminal: store.dismissTerminalCommand(handbackOnFailure: true)
+                }
+            }
         }), as: .browse, name: "composer.nativeCommand") { request in
-            NativeCommandScreen(store: store, model: request.model)
+            switch request {
+            case .surface(let model): NativeCommandScreen(store: store, model: model)
+            case .terminal(let model): TerminalNativeScreen(store: store, model: model)
+            }
         }
+        .onChange(of: showing) { _, shown in if !shown { store.retireTerminalInteraction() } }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { store.retireTerminalInteraction() } }
+        .task(id: Attachment(active: showing && scenePhase == .active,
+            available: store.has(HarnessCapability.terminalNative) && store.phase == .live,
+            conversation: store.conversation)) {
+                guard showing, scenePhase == .active, store.phase == .live else { return }
+                await store.attachTerminalMenu()
+            }
+    }
+
+    private struct Attachment: Hashable {
+        let active: Bool
+        let available: Bool
+        let conversation: UUID
     }
 }

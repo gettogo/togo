@@ -36,6 +36,14 @@ import TogoKit
     }
 
     func surfaceConnection(_ s: HarnessSubject) async throws -> any SurfaceConnection {
+        try await dedicatedClient(s)
+    }
+
+    func terminalConnection(_ s: HarnessSubject) async throws -> any TerminalNativeConnection {
+        try await dedicatedClient(s)
+    }
+
+    private func dedicatedClient(_ s: HarnessSubject) async throws -> HelperClient {
         guard let record = records(s.hostID) else { throw LiveServiceError.unknownMachine }
         let client = HelperClient(channel: try await openFeed(record))
         do {

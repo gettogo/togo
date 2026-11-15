@@ -38,7 +38,7 @@ struct PickerItemDetail: View {
                 .padding(.vertical, 4)
                 .listRowBackground(Color.clear)
             }
-            if item.id != picker.selected, item.disabled != true {
+            if PickerModel.canSelect(item, in: picker) {
                 Section {
                     Button(action: onSelect) {
                         HStack {

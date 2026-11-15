@@ -1,0 +1,61 @@
+import SwiftUI
+import TogoKit
+
+/// Ordinary native screens from the generic terminal reader. No harness or
+/// command name selects a widget, action or key in this view.
+struct TerminalNativeScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    let store: HarnessSessionStore
+    let model: TerminalNativeInteraction
+
+    var body: some View {
+        NativeCommandNavigation(title: model.screen?.title ?? "", close: {
+            store.dismissTerminalCommand()
+        }, terminal: {
+            Task {
+                await model.close(cancel: false)
+                store.layer = .terminal
+                dismiss()
+            }
+        }) {
+            VStack(spacing: 0) {
+                if model.phase == .ended, let failure = model.failure {
+                    StateView(kind: .error, title: PrimitiveCopy.couldNotLoad, message: failure,
+                        action: .init(SurfaceCopy.open) { Task { await store.reopenTerminalMenu() } })
+                        .disabled(model.closing)
+                } else if let failure = model.failure {
+                    Text(verbatim: failure).font(.footnote).foregroundStyle(PrimitiveTint.fail)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding()
+                }
+                if model.phase != .ended, let screen = model.screen {
+                    PrimitiveScreenView(screen: screen, context: context)
+                        .id(screen.id)
+                        .disabled(model.busy)
+                } else if model.phase != .ended {
+                    StateView(kind: .loading, title: PrimitiveCopy.loading, message: "")
+                }
+            }
+        }
+        .interactiveDismissDisabled(model.busy)
+    }
+
+    private var context: PrimitiveContext {
+        var context = PrimitiveContext(run: { action, target, args in
+            let verb = action.hasPrefix("terminal.key.") ? "terminal.key" : action
+            return await model.run(verb, target: target, args: args)
+        }, openScreen: { _ in }, open: { _ in }, showTerminal: {
+            Task {
+                await model.close(cancel: false)
+                store.layer = .terminal
+            }
+        })
+        context.showsTerminal = false
+        context.searchScreen = { try await model.read(query: $0) }
+        context.readScreen = { try? await model.read() }
+        context.agent = store.agentName
+        context.subject = store.subject
+        // The interaction ends only when the helper observes completion.
+        // Applied with another screen is progress and keeps this host open.
+        return context
+    }
+}

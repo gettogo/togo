@@ -74,11 +74,13 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
     public var confirm: Confirm?
     public var status: HarnessStatus?
     public var actions: [HarnessActionRef]
+    /// Opaque ownership token for a source-driven native interaction.
+    public var interaction: String?
 
     public init(id: String, primitive: HarnessPrimitive, title: String, fetchedAt: WireDate, stale: Bool = false,
                 picker: Picker? = nil, settings: Settings? = nil, checklist: Checklist? = nil,
                 liveList: LiveList? = nil, detail: Detail? = nil, confirm: Confirm? = nil,
-                status: HarnessStatus? = nil, actions: [HarnessActionRef] = []) {
+                status: HarnessStatus? = nil, actions: [HarnessActionRef] = [], interaction: String? = nil) {
         self.id = id
         self.primitive = primitive
         self.title = title
@@ -92,6 +94,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         self.confirm = confirm
         self.status = status
         self.actions = actions
+        self.interaction = interaction
     }
 
     /// A searchable, grouped list with one selection. Selecting runs `onSelect` with
@@ -104,6 +107,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var searchMode: String?
         public var filters: [Filter]?
         public var onSelect: String
+        public var onSelectArgs: [String: JSONValue]?
         /// Asked (or applied with Undo) before `onSelect` runs, when set.
         public var onSelectConfirm: HarnessSelectConfirm?
         /// `onSelect`'s own words for an item's button ("Use for this session"), when it has them.
@@ -168,7 +172,8 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
                     onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil,
                     setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil,
                     onSelectLabel: String? = nil, searchMode: String? = nil,
-                    contextActions: [HarnessActionRef]? = nil, selectionBehavior: String? = nil, presentation: HarnessPickerPresentation? = nil) {
+                    contextActions: [HarnessActionRef]? = nil, selectionBehavior: String? = nil, presentation: HarnessPickerPresentation? = nil,
+                    onSelectArgs: [String: JSONValue]? = nil) {
             self.items = items
             self.onSelectLabel = onSelectLabel
             self.setup = setup
@@ -179,6 +184,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             self.searchMode = searchMode
             self.filters = filters
             self.onSelect = onSelect
+            self.onSelectArgs = onSelectArgs
             self.onSelectConfirm = onSelectConfirm
             self.itemActions = itemActions
             self.contextActions = contextActions

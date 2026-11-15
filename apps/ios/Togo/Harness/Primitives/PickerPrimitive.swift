@@ -115,6 +115,11 @@ struct PickerPrimitive: View {
                     if let subtitle = presentation.subtitle { Text(verbatim: subtitle).foregroundStyle(Color.togoMute) }
                     if let message = presentation.message { Text(verbatim: message).foregroundStyle(Color.togoMute) }
                     if presentation.state == "loading" { ProgressView(PrimitiveCopy.loading) }
+                    if presentation.state == "partial" {
+                        Text(String(localized: "picker.partial", defaultValue: "Showing part of this list."))
+                            .foregroundStyle(Color.togoMute)
+                        Button(PrimitiveCopy.openTerminal) { context.showTerminal() }
+                    }
                     if picker.items.isEmpty, presentation.state != "loading", let empty = presentation.emptyText {
                         Text(verbatim: empty).foregroundStyle(Color.togoMute)
                     }
@@ -225,7 +230,7 @@ struct PickerPrimitive: View {
             }
         }
         .accessibilityActions {
-            if item.id != picker.selected { Button(PrimitiveCopy.select) { select(item) } }
+            if PickerModel.canSelect(item, in: picker) { Button(PrimitiveCopy.select) { select(item) } }
             ForEach(itemActions) { ref in
                 Button("\(PrimitiveCopy.useAs) \(ref.label)") { assign(ref, item) }
             }
@@ -237,7 +242,7 @@ struct PickerPrimitive: View {
     }
 
     @ViewBuilder private func menu(for item: PickerModel.Item) -> some View {
-        if item.id != picker.selected, item.disabled != true {
+        if PickerModel.canSelect(item, in: picker) {
             Button(PrimitiveCopy.select, systemImage: "checkmark") { select(item) }
         }
         if !itemActions.isEmpty {

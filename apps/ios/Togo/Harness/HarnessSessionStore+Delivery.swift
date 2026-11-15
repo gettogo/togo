@@ -64,7 +64,7 @@ extension HarnessSessionStore {
     /// True when a prompt sent now reaches the session: the agent is idle, or the harness holds
     /// prompts itself while it works.
     var canSendNow: Bool {
-        phase == .live && feed.isLoaded && interaction == nil && !nativeInteractions.stopping && (!working || has(HarnessCapability.queue))
+        phase == .live && feed.isLoaded && interaction == nil && terminalInteraction == nil && !nativeInteractions.stopping && (!working || has(HarnessCapability.queue))
     }
 
     /// Sends what the queue holds once the session can take it. Only while the feed runs: a

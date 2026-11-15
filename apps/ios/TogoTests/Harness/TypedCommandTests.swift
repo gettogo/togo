@@ -98,6 +98,17 @@ import TogoKit
         #expect(session.nativeCommands == ["/model", "/model"])
     }
 
+    @Test func genericMenuCommandOpensFromThePaletteWithoutATerminalSwitch() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.terminalNative)
+        session.commands = [.init(insert: "/permission", title: "/permission", kind: .terminal,
+            native: .init(opens: "unknown"))]
+        let composer = make(session)
+        _ = await composer.perform(session.commands[0])
+        #expect(session.nativeCommands == ["/permission"])
+        #expect(session.terminal == 0 && session.sends.isEmpty)
+    }
+
     private func make(_ session: Session) -> CommandLineModel {
         session.commands = session.commands.isEmpty ? all : session.commands
         let defaults = UserDefaults(suiteName: "typed-tests-\(UUID().uuidString)")!

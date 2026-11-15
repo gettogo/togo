@@ -4,6 +4,7 @@ import TogoKit
 
 @MainActor @Observable final class NativeChatState {
     var current: ChatSurfaceInteraction?
+    var terminal: TerminalNativeInteraction?
     var stopping = false
     var requests = HarnessNativeRequests()
     @ObservationIgnored var stopTask: Task<Void, Never>?
@@ -22,6 +23,10 @@ extension HarnessSessionStore {
     }
 
     func runNativeCommand(_ text: String, command: HarnessCompletion? = nil) async throws {
+        if has(HarnessCapability.terminalNative) {
+            try await runTerminalCommand(text)
+            return
+        }
         let binding = conversation
         await retireWaitingInteraction()
         await nativeInteractions.stopTask?.value
@@ -56,11 +61,11 @@ extension HarnessSessionStore {
         let binding = conversation
         await retireWaitingInteraction()
         guard conversation == binding else { throw ConversationChanged() }
-        guard interaction == nil else { throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.finishCurrent) }
+        guard interaction == nil, terminalInteraction == nil else { throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.finishCurrent) }
     }
 
     func canOpenNativeQuestion(_ item: HarnessItem) -> Bool {
-        guard phase == .live, surfaceAvailable, interaction == nil, !nativeInteractions.stopping,
+        guard phase == .live, surfaceAvailable, interaction == nil, terminalInteraction == nil, !nativeInteractions.stopping,
               case .question(let question) = item.body else { return false }
         return !question.isAnswerable && (question.answered?.isEmpty ?? true)
     }
@@ -83,6 +88,10 @@ extension HarnessSessionStore {
     }
 
     func dismissNativeCommand() {
+        if terminalInteraction != nil {
+            dismissTerminalCommand()
+            return
+        }
         guard let current = interaction, nativeInteractions.dismissing != current.id else { return }
         nativeInteractions.dismissing = current.id
         Task { [weak self] in
@@ -123,7 +132,7 @@ extension HarnessSessionStore {
             current.attachRequest(id)
         }
         guard let id = nativeInteractions.requests.next(in: feed.timeline.conversation(),
-            available: surfaceAvailable && interaction == nil && !nativeInteractions.stopping) else { return }
+            available: surfaceAvailable && interaction == nil && terminalInteraction == nil && !nativeInteractions.stopping) else { return }
         interaction = makeInteraction(command: nil, requestID: id)
     }
 }

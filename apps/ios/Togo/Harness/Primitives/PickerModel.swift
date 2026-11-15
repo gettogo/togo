@@ -231,7 +231,11 @@ struct PickerModel: Equatable {
         if item.disabled == true { return .none }
         if let picking { return .assign(action: picking) }
         if picker.selectionBehavior == "preview" { return .details }
-        return item.id == picker.selected ? .none : .select
+        return Self.canSelect(item, in: picker) ? .select : .none
+    }
+
+    static func canSelect(_ item: Item, in picker: HarnessScreen.Picker) -> Bool {
+        item.disabled != true && (item.id != picker.selected || picker.selectionBehavior == "reselect")
     }
 
     /// Whether a selection's result closes its sheet: it landed, was typed, restarted the agent
@@ -246,10 +250,16 @@ struct PickerModel: Equatable {
     static func change(selecting item: Item, in picker: HarnessScreen.Picker, setting: String) -> GatedChange {
         let previous = picker.items.first { $0.id == picker.selected }
         return GatedChange(
-            action: picker.onSelect, target: item.id, args: args(for: item), confirm: picker.onSelectConfirm,
+            action: picker.onSelect, target: item.id, args: selectionArgs(for: item, picker: picker), confirm: picker.onSelectConfirm,
             setting: setting, value: item.title,
-            previous: previous.map { ($0.title, args(for: $0)) }
+            previous: previous.map { ($0.title, selectionArgs(for: $0, picker: picker)) }
         )
+    }
+
+    private static func selectionArgs(for item: Item, picker: HarnessScreen.Picker) -> [String: JSONValue] {
+        var values = args(for: item)
+        for (key, value) in picker.onSelectArgs ?? [:] { values[key] = value }
+        return values
     }
 
     /// The args a selection or item action carries: `{"id": item id}`.

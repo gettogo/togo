@@ -4,9 +4,8 @@ import SwiftUI
 import TogoKit
 import UIKit
 
-/// One session's native harness state: what the adapter can do, the conversation, mission
-/// control and the composer's queue. One store per open tab; the chat, the pill, mission
-/// control and the primitives read it.
+/// One store per open tab: the conversation, native interfaces, mission control
+/// and composer queue share this session's state.
 @MainActor @Observable final class HarnessSessionStore {
     /// Where the conversation stands.
     enum Phase: Equatable {
@@ -23,7 +22,6 @@ import UIKit
 
     let subject: HarnessSubject
     @ObservationIgnored let services: any HarnessServices
-
     /// nil until described; a descriptor with a nil adapter means terminal only.
     private(set) var descriptor: HarnessDescriptor?
     private(set) var phase: Phase = .describing
@@ -237,7 +235,7 @@ import UIKit
     private func invalidateConversation() {
         guard !changingConversation else { return }
         changingConversation = true
-        retireInteraction(pumpQueue: false)
+        retireNativeInteractions(pumpQueue: false)
         nativeInteractions.requests.reset()
         conversation = UUID()
         phase = .opening
@@ -353,7 +351,7 @@ import UIKit
     }
 
     func stop() {
-        retireInteraction(pumpQueue: false)
+        retireNativeInteractions(pumpQueue: false)
         runTask?.cancel()
         runTask = nil
         pumpTask?.cancel()
@@ -435,7 +433,7 @@ import UIKit
     }
 
     private func endNative(_ reason: String?) {
-        retireInteraction(pumpQueue: false)
+        retireNativeInteractions(pumpQueue: false)
         if descriptor == nil { descriptor = HarnessDescriptor() }
         fallback = reason
         phase = .terminalOnly

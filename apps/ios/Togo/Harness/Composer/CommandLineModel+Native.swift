@@ -3,11 +3,12 @@ import TogoKit
 
 extension CommandLineModel {
     var nativeCommandsAvailable: Bool {
-        routes.has(HarnessCapability.surface) && routes.nativeCommand != nil
+        (routes.has(HarnessCapability.surface) || routes.has(HarnessCapability.terminalNative)) && routes.nativeCommand != nil
     }
 
     func opensOriginalScreen(_ command: HarnessCompletion, arguments: String = "") -> Bool {
         guard nativeCommandsAvailable, command.action == nil, command.opens == nil, let metadata = command.native else { return false }
+        if routes.has(HarnessCapability.terminalNative), command.screen == nil, metadata.args != "required" { return true }
         let intent = metadata.intent(hasArguments: !arguments.isEmpty)
         return ["picker", "settings", "signin", "screen", "input", "text"].contains(intent)
     }
