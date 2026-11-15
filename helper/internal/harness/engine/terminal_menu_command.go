@@ -238,6 +238,9 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 			time.Sleep(e.scaled(60 * time.Millisecond))
 		}
 		if !seen {
+			if screen, err := e.cfg.Screen(ctx, s.id); err == nil && wrapsBelow(screen, typedLine) {
+				return "This command is wider than " + s.ad.Name + "'s terminal and could not be read back exactly. Nothing was run; its text is in the input line. Run it in the terminal.", nil
+			}
 			return s.ad.Name + " did not show the command's arguments in its input line. Nothing was run; check its input line.", nil
 		}
 		// The harness may offer to complete the last argument (a path).
@@ -424,38 +427,64 @@ func nothingNew(now string, earlier ...string) bool {
 // returns the rest of the screen without it. A command wider than the
 // terminal runs on to the lines below: the first must begin as the input
 // line did when the command's name was typed, and the lines after it must
-// carry on the command exactly, each joined to the one before with one
-// space (a break between words) or none (a break inside one).
+// carry on the command exactly.
+//
+// Where a line breaks, the screen does not always say whether a space
+// stood there: "shared docs" broken at its space and "shareddocs" broken
+// at the terminal's edge can look the same. So a break is taken only where
+// it is certain to be a space: the line before it is shorter than another
+// line of the same input, so it did not reach the edge and nothing but a
+// break between words ends it; and the command has exactly one space
+// there. A break after the input's longest line, or inside a word, is not
+// read: the command is then not found, and is not run.
 func commandBlock(screen, typedLine, whole string) (found bool, rest string) {
 	lines := strings.Split(screen, "\n")
+	extent := func(l string) int { return len([]rune(strings.TrimRight(l, " "))) }
 	for i, l := range lines {
 		first := trimEdge(l)
-		end := -1
-		switch {
-		case first == whole:
-			end = i
-		case typedLine != "" && strings.HasPrefix(first, typedLine) && strings.HasPrefix(whole, first):
-			left := whole[len(first):]
-			for j := i + 1; j < len(lines) && j <= i+8 && left != ""; j++ {
-				part := strings.TrimSpace(trimEdge(lines[j]))
-				if part == "" {
-					break
-				}
-				if strings.HasPrefix(left, " "+part) {
-					left = left[len(part)+1:]
-				} else if strings.HasPrefix(left, part) {
-					left = left[len(part):]
-				} else {
-					break
-				}
-				if left == "" {
-					end = j
-				}
+		if first == whole {
+			return true, strings.Join(append(append([]string{}, lines[:i]...), lines[i+1:]...), "\n")
+		}
+		if typedLine == "" || !strings.HasPrefix(first, typedLine) || !strings.HasPrefix(whole, first) {
+			continue
+		}
+		left, end := whole[len(first):], -1
+		for j := i + 1; j < len(lines) && j <= i+8 && left != ""; j++ {
+			part := strings.TrimSpace(trimEdge(lines[j]))
+			// Exactly one space at the break: two would look the same.
+			if part == "" || !strings.HasPrefix(left, " "+part) || strings.HasPrefix(part, " ") || strings.HasPrefix(left, "  ") {
+				break
+			}
+			if left = left[len(part)+1:]; left == "" {
+				end = j
 			}
 		}
-		if end >= 0 {
+		if end < 0 {
+			continue
+		}
+		widest := 0
+		for _, b := range lines[i : end+1] {
+			widest = max(widest, extent(b))
+		}
+		certain := true
+		for _, b := range lines[i:end] {
+			certain = certain && extent(b) < widest
+		}
+		if certain {
 			return true, strings.Join(append(append([]string{}, lines[:i]...), lines[end+1:]...), "\n")
 		}
 	}
 	return false, screen
+}
+
+// wrapsBelow reports whether the input line that began with the typed
+// command has text on the line under it.
+func wrapsBelow(screen, typedLine string) bool {
+	lines := strings.Split(screen, "\n")
+	for i, l := range lines {
+		if typedLine != "" && strings.HasPrefix(trimEdge(l), typedLine) && i+1 < len(lines) && strings.TrimSpace(trimEdge(lines[i+1])) != "" {
+			return true
+		}
+	}
+	return false
 }
