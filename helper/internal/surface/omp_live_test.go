@@ -204,6 +204,24 @@ func TestOriginalOMPTransport(t *testing.T) {
 	}
 	copyMode("send-keys", "-t", before.Pane, "-X", "cancel")
 	if dir := os.Getenv("TOGO_SURFACE_RECORD_DIR"); dir != "" {
+		// A saved conversation to list, copied into this session's own
+		// folder with its working folder rewritten to this test's.
+		if seed := os.Getenv("TOGO_SURFACE_SEED_SESSION"); seed != "" {
+			now, _ := companions.State(config)
+			raw, err := os.ReadFile(seed)
+			if err != nil || now.SessionFile == "" {
+				t.Fatalf("seed session: %v (session file %q)", err, now.SessionFile)
+			}
+			if from := os.Getenv("TOGO_SURFACE_SEED_CWD"); from != "" {
+				raw = []byte(strings.ReplaceAll(string(raw), from, root))
+			}
+			if err := os.MkdirAll(filepath.Dir(now.SessionFile), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(filepath.Dir(now.SessionFile), filepath.Base(seed)), raw, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		recordLiveScreens(t, ctx, svc, owner, lease, dir, strings.Fields(os.Getenv("TOGO_SURFACE_RECORD_COMMANDS")))
 		return
 	}
