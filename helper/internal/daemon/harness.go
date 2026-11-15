@@ -15,6 +15,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/ports"
+	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
 	"github.com/gettogo/togo/helper/internal/surface"
@@ -46,6 +47,7 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		Screen:    pane.Screen,
 		// Lists a harness draws in its terminal are read from this.
 		StyledScreen: pane.StyledScreen,
+		ClientGone:   rpc.ClientGone,
 		// The native surface service is built after the engine; both are
 		// read when called, never at construction.
 		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },

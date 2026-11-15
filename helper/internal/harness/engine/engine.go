@@ -48,6 +48,10 @@ type Config struct {
 	Approvals Approvals
 	// Screen returns the pane's visible text.
 	Screen func(ctx context.Context, id string) (string, error)
+	// ClientGone reports that the client a call is running for has gone
+	// away. A list is never driven further for a client that cannot see
+	// it. Nil means never.
+	ClientGone func(ctx context.Context) bool
 	// StyledScreen returns the pane's visible text with its colour
 	// sequences. Lists drawn in the terminal are read from it; nil means
 	// they are not read.

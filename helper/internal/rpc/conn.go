@@ -26,12 +26,39 @@ type Conn struct {
 
 	done      chan struct{}
 	closeOnce sync.Once
+
+	// gone is closed when the client has stopped sending (end of stream),
+	// before the calls still running are given their moment to reply.
+	gone     chan struct{}
+	goneOnce sync.Once
+}
+
+// ClientGone reports that the connection's client has stopped sending. A
+// call still running may finish what cannot be undone, but must not start
+// anything on the client's behalf: the client can no longer see or stop it.
+func ClientGone(ctx context.Context) bool {
+	c := ConnFrom(ctx)
+	if c == nil || c.gone == nil {
+		return false
+	}
+	select {
+	case <-c.gone:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Conn) clientGone() {
+	if c.gone != nil {
+		c.goneOnce.Do(func() { close(c.gone) })
+	}
 }
 
 type connKey struct{}
 
 func newConn(w io.Writer) *Conn {
-	return &Conn{w: w, done: make(chan struct{})}
+	return &Conn{w: w, done: make(chan struct{}), gone: make(chan struct{})}
 }
 
 // ConnFrom returns the connection serving the request carried by ctx, or nil

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"strconv"
 	"strings"
@@ -211,7 +212,7 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 	add(first)
 	m, steps := first, 0
 	for steps < menuMaxSteps && len(all) < menuMaxRows && len(all) < first.Total {
-		if err := e.cfg.Typist.Keys(ctx, s.id, "Down"); err != nil {
+		if err := e.menuKeys(ctx, s, "Down"); err != nil {
 			return all, false
 		}
 		steps++
@@ -224,7 +225,7 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 	}
 	_ = m
 	for ; steps > 0; steps-- {
-		if err := e.cfg.Typist.Keys(ctx, s.id, "Up"); err != nil {
+		if err := e.menuKeys(ctx, s, "Up"); err != nil {
 			return all, false
 		}
 	}
@@ -344,7 +345,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		}
 		before, ok := e.readMenu(ctx, s)
 		if ok {
-			if err := e.cfg.Typist.Keys(ctx, s.id, "Escape"); err != nil {
+			if err := e.menuKeys(ctx, s, "Escape"); err != nil {
 				return harness.ActionResult{}, err
 			}
 			if after, still := e.readMenu(ctx, s); still && after.Title == before.Title && len(after.Items) == len(before.Items) {
@@ -372,7 +373,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			e.setMenu(s.id, nil)
 			return failed("The screen changed at the desk. Nothing was pressed.")
 		}
-		if err := e.cfg.Typist.Keys(ctx, s.id, key); err != nil {
+		if err := e.menuKeys(ctx, s, key); err != nil {
 			return harness.ActionResult{}, err
 		}
 		return e.afterKey(ctx, s, "", m)
@@ -432,7 +433,7 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, want t
 			return fail("The screen changed at the desk. Nothing was chosen.")
 		}
 		if sameRow(now.Items[cur], want) {
-			if err := e.cfg.Typist.Keys(ctx, s.id, "Enter"); err != nil {
+			if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 				return harness.ActionResult{}, err
 			}
 			return e.afterKey(ctx, s, "", m)
@@ -452,7 +453,7 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, want t
 		if at > target {
 			key = "Up"
 		}
-		if err := e.cfg.Typist.Keys(ctx, s.id, key); err != nil {
+		if err := e.menuKeys(ctx, s, key); err != nil {
 			return harness.ActionResult{}, err
 		}
 	}
@@ -495,7 +496,7 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 			}
 		}
 	}
-	if err := e.cfg.Typist.Keys(ctx, s.id, "Enter"); err != nil {
+	if err := e.menuKeys(ctx, s, "Enter"); err != nil {
 		return "", err
 	}
 	return "", nil
@@ -540,4 +541,19 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		}
 	}
 	return *e.menuScreen(m, menu, true), nil
+}
+
+// errMenuAbandoned ends a list whose phone has gone: no further key.
+var errMenuAbandoned = errors.New("harness: the phone is no longer there; nothing more was pressed")
+
+// menuKeys presses keys in a list for the phone, and only while the phone
+// is still there: a closed connection or a cancelled call stops the list
+// before the next key, Enter included. The list is then one the phone let
+// go of, and nothing is typed until it is gone from the screen.
+func (e *Engine) menuKeys(ctx context.Context, s *sess, keys ...string) error {
+	if ctx.Err() != nil || (e.cfg.ClientGone != nil && e.cfg.ClientGone(ctx)) {
+		e.setMenu(s.id, nil)
+		return errMenuAbandoned
+	}
+	return e.cfg.Typist.Keys(ctx, s.id, keys...)
 }
