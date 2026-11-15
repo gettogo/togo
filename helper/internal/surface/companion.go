@@ -67,6 +67,9 @@ type CompanionState struct {
 	// Consumed is the sequence of the last send whose text the program's own
 	// editor submitted. Absent from companions that do not report it.
 	Consumed uint64 `json:"consumed,omitempty"`
+	// Released is why the program last left native rendering, in the
+	// companion's fixed words; empty while native or when never left.
+	Released string `json:"released,omitempty"`
 	// Features are the companion's additions to the protocol's own events.
 	Features []string `json:"features,omitempty"`
 	// Roots are the session's additional workspace folders, where the

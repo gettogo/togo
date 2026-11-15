@@ -5,7 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField, describeSecret, workspaceRoots } from '../omp.mjs'
+import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS, focusedField, submitFocusedField, describeSecret, workspaceRoots, inputShape } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -405,4 +405,14 @@ test('additional workspace folders come from the public getter, bounded, and say
   assert.ok(Buffer.byteLength(JSON.stringify(budget.roots)) <= 8 * 1024 + 64)
   assert.deepEqual(workspaceRoots({ getAdditionalDirectories: () => { throw new Error('gone') } }, '/work'), { roots: [], incomplete: true })
   assert.deepEqual(workspaceRoots({ getAdditionalDirectories: () => 'not a list' }, '/work'), { roots: [], incomplete: true })
+})
+
+test('terminal input is named by its kind, never by what it held', () => {
+  for (const [data, shape] of [
+    ['a', 'text'], ['secret words', 'texts'], ['\r', 'control'], ['\x1b', 'escape'],
+    ['\x1b[I', 'csi_I'], ['\x1b[12;40R', 'csi_R'], ['\x1b[?997;1n', 'csi_n'], ['\x1b[<0;10;5M', 'csi_M'], ['\x1b[200~', 'csi_~'],
+    ['\x1b]11;rgb:0000/0000/0000\x07', 'osc'], ['\x1bP>|term 1.0\x1b\\', 'dcs'], ['\x1b_Gi=1;OK\x1b\\', 'apc'], ['\x1bOA', 'ss3'],
+    ['\x1bx', 'escape_other'], [undefined, 'other'],
+  ]) assert.equal(inputShape(data), shape)
+  assert.ok(!inputShape('secret words').includes('secret'))
 })

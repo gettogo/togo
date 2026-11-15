@@ -199,7 +199,15 @@ func (s *Service) watch(ctx context.Context, r *renderer, observed <-chan error)
 			r.action.Unlock()
 			if err != nil {
 				if s.logf != nil {
-					s.logf("surface lease renewal stopped: %v", err)
+					why := ""
+					if b, ok := s.backend.(interface{ released(runtimeInfo) string }); ok {
+						why = b.released(r.runtime)
+					}
+					if why != "" {
+						s.logf("surface lease renewal stopped: %v (the program left native rendering: %s)", err, why)
+					} else {
+						s.logf("surface lease renewal stopped: %v", err)
+					}
 				}
 				goto end
 			}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"sync"
@@ -233,4 +234,16 @@ func wireMessage(data []byte) (Message, error) {
 		return Message{}, ErrMalformed
 	}
 	return msgs[0], nil
+}
+
+var releasedWords = regexp.MustCompile(`^[a-z_]+(:[A-Za-z_~]+)?$`)
+
+// released is why the program last left native rendering, for the log: the
+// companion's own fixed words, or nothing if it says anything else.
+func (b *paneBackend) released(run runtimeInfo) string {
+	state, err := b.companions.State(run.config)
+	if err != nil || len(state.Released) > 48 || !releasedWords.MatchString(state.Released) {
+		return ""
+	}
+	return state.Released
 }

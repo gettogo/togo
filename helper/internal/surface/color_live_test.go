@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,6 +53,10 @@ func checkLiveColorReplyHandback(t *testing.T, ctx context.Context, terminal *tm
 			t.Fatal(err)
 		}
 		if !current.Native && current.Reason == "terminal_input" {
+			// Why it left is kept in fixed words, without what was typed.
+			if !strings.HasPrefix(current.Released, "terminal_input:text") || strings.Contains(current.Released, "desktop") {
+				t.Fatalf("released = %q", current.Released)
+			}
 			break
 		}
 		select {

@@ -24,6 +24,18 @@ function terminalReport(data) {
     /^\x1b\[\?[0-9]+;[0-9]+\$y$/.test(data)
 }
 
+// inputShape names what kind of terminal input arrived, never what it held:
+// the family of an escape sequence and its final letter, or plain text and
+// how long it was.
+export function inputShape(data) {
+  if (typeof data !== 'string') return 'other'
+  if (!data.startsWith('\x1b')) return /^[\x00-\x1f\x7f]$/.test(data) ? 'control' : `text${data.length > 1 ? 's' : ''}`
+  const family = { '[': 'csi', ']': 'osc', P: 'dcs', _: 'apc', O: 'ss3' }[data[1]]
+  if (!family) return data.length === 1 ? 'escape' : 'escape_other'
+  const last = data[data.length - 1]
+  return family === 'csi' && /^[A-Za-z~]$/.test(last) ? `csi_${last}` : family
+}
+
 // Picker query is keyboard-owned upstream. Use the original public query
 // APIs, never terminal key sequences or a locally filtered copy of its rows.
 export function applyPickerQuery(tui, event) {
@@ -271,6 +283,9 @@ export default function (pi) {
   let ctx, tui, watcher, timer, stopInput
   let owner = '', deadline = 0, seq = 0, epoch = 0, available = false, reason = ''
   let stopped = false, processing = false, rerun = false
+  // Why the program last left native rendering, kept until native is next
+  // granted. `reason` cannot hold it: every later command clears that.
+  let released = ''
   let publishedNative
   // The sequence of the last native send whose text the original editor's
   // own submit callback received. Proof the program took it, not that it is done.
@@ -288,6 +303,7 @@ export default function (pi) {
     const value = { version: 1, generation: config.generation, pid: process.pid,
       pane: process.env.TMUX_PANE ?? '', cwd: process.cwd(), ...location(),
       epoch, available, reason, native: Boolean(tui?.nativeRendering), owner, seq, consumed, features: FEATURES }
+    if (released) value.released = released
     // Additional workspace folders, where the program reports them.
     const workspace = rootsNow()
     if (workspace) {
@@ -364,11 +380,14 @@ export default function (pi) {
     }
     tui.requestRender(true)
   }
-  function release() {
+  function release(why = 'requested') {
     unwatchSubmit?.()
     deadline = 0
     owner = ''
-    if (tui && (tui.nativeRendering || process.env.PI_TUI_NATIVE === '1')) switchRenderer(false)
+    if (tui && (tui.nativeRendering || process.env.PI_TUI_NATIVE === '1')) {
+      released = why
+      switchRenderer(false)
+    }
     publish()
   }
   function processCommand() {
@@ -389,7 +408,7 @@ export default function (pi) {
         if (request.mode === 'renew' && (!owner || deadline <= performance.now())) return
         owner = request.owner
         deadline = performance.now() + request.leaseMs
-        if (request.mode === 'native' && !tui.nativeRendering) switchRenderer(true)
+        if (request.mode === 'native' && !tui.nativeRendering) { released = ''; switchRenderer(true) }
       } else if (request.mode === 'ansi') {
         release()
       } else if (request.mode === 'event') {
@@ -417,7 +436,7 @@ export default function (pi) {
     } catch (error) {
       if (error?.code !== 'ENOENT' && error?.name !== 'SyntaxError') {
         reason = 'renderer_transition_failed'
-        try { release() } catch { available = false; publish() }
+        try { release('command_failed') } catch { available = false; publish() }
       }
     } finally {
       processing = false
@@ -425,7 +444,7 @@ export default function (pi) {
     }
   }
   function changed(next) {
-    try { release() } catch { reason = 'renderer_transition_failed'; available = false }
+    try { release('session_change') } catch { reason = 'renderer_transition_failed'; available = false }
     ctx = next
     epoch++
     bindInput()
@@ -444,7 +463,7 @@ export default function (pi) {
       // TSP events and terminal capability reports keep native ownership.
       if (deadline && typeof data === 'string' && !data.startsWith('\x1b_tsp;') && !terminalReport(data)) {
         reason = 'terminal_input'
-        try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() }
+        try { release('terminal_input:' + inputShape(data)) } catch { available = false; reason = 'renderer_transition_failed'; publish() }
       }
     })
   }
@@ -473,7 +492,7 @@ export default function (pi) {
       } catch { /* The bounded periodic poll below also delivers commands. */ }
       timer = setInterval(() => {
         if (deadline && performance.now() >= deadline) {
-          try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() }
+          try { release('lease_expired') } catch { available = false; reason = 'renderer_transition_failed'; publish() }
         }
         // start() probes asynchronously. Publish the confirmed renderer state,
         // including a protocol fallback, rather than only the requested mode.
@@ -495,7 +514,7 @@ export default function (pi) {
     }
   })
   for (const event of ['session_before_switch', 'session_before_branch', 'session_before_tree']) {
-    pi.on(event, () => { try { release() } catch { available = false; reason = 'renderer_transition_failed'; publish() } })
+    pi.on(event, () => { try { release('session_change') } catch { available = false; reason = 'renderer_transition_failed'; publish() } })
   }
   for (const event of ['session_switch', 'session_branch', 'session_tree']) pi.on(event, (_event, next) => changed(next))
   pi.on('session_shutdown', () => {
