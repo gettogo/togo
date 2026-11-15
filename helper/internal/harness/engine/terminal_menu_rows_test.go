@@ -116,7 +116,7 @@ func TestOnlyASingleSlashCommandIsTyped(t *testing.T) {
 		return len(pane.typed) + len(pane.keys)
 	}
 	n := typed()
-	for _, text := range []string{"hello", "/", "/models\n/exit", "/models\rrm -rf x", "/a\x1b[2J", "/" + strings.Repeat("x", 500), "  ", "/m /exit"} {
+	for _, text := range []string{"hello", "/", "/models\n/exit", "/models\rrm -rf x", "/a\x1b[2J", "/" + strings.Repeat("x", maxArgString+1), "  ", "/m /exit"} {
 		raw, _ := json.Marshal(text)
 		res, err := e.Act(context.Background(), harness.ActionRequest{Session: id, Action: "terminal.command", Args: map[string]json.RawMessage{"text": raw}})
 		// Refused either by the argument limits every action has (control

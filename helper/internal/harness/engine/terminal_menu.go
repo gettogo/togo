@@ -36,7 +36,6 @@ const (
 	menuLife          = 20 * time.Second
 	menuMaxRows       = 400
 	menuMaxSteps      = 420
-	maxMenuCommand    = 400
 	menuNotRecognised = "This screen could not be read as a list. Open the terminal to use it."
 )
 
@@ -201,7 +200,7 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 		}
 		// One command on one line: a slash, a name, its arguments. A line
 		// break would submit what follows it as something else.
-		if clean := strings.TrimSpace(text); len(clean) > maxMenuCommand || !strings.HasPrefix(clean, "/") || len(clean) < 2 ||
+		if clean := strings.TrimSpace(text); len(clean) > maxArgString || !strings.HasPrefix(clean, "/") || len(clean) < 2 ||
 			strings.ContainsFunc(clean, func(r rune) bool { return r < 0x20 || r == 0x7f || r == 0x85 || r == 0x2028 || r == 0x2029 }) {
 			return failed("That is not a single command.")
 		}
