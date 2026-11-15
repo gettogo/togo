@@ -75,7 +75,10 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 			return harness.SendResult{}, refuseBlocked(blocked)
 		}
 		if req.Mode == harness.SendNow || len(s.queue) >= MaxQueued {
+			queuedNow := len(s.queue)
 			s.mu.Unlock()
+			// Why, for the log: a refusal the phone shows only as "busy".
+			e.cfg.Logf("harness: %s: a prompt was not sent now: working=%v queued=%d", s.ad.Adapter.Adapter, working, queuedNow)
 			return harness.SendResult{}, harness.ErrBusy
 		}
 		it := s.newUserItemLocked(req.Text, images, true)

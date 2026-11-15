@@ -269,3 +269,143 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 	}
 	return m, len(m.Items) > 0
 }
+
+// readTitledPanel reads a list that has no cursor on any row yet: a panel
+// on its own background whose first line is its title with "esc" at the
+// right (a search just cleared leaves OpenCode's lists like this until a
+// key moves the cursor in). No row is marked as the cursor.
+func readTitledPanel(lines [][]cell) (Menu, bool) {
+	escTitle := regexp.MustCompile(`(?i)^(.*\S)\s{2,}esc$`)
+	for top, l := range lines {
+		// The stretch of this line on one background that reads "Title  esc".
+		byBG := map[string][2]int{}
+		for k, c := range l {
+			if c.bg == "" {
+				continue
+			}
+			span, seen := byBG[c.bg]
+			if !seen {
+				span = [2]int{k, k + 1}
+			}
+			span[1] = k + 1
+			byBG[c.bg] = span
+		}
+		for bg, span := range byBG {
+			g := escTitle.FindStringSubmatch(strings.TrimSpace(text(l[span[0]:span[1]])))
+			if g == nil {
+				continue
+			}
+			m := Menu{Title: strings.TrimSpace(g[1])}
+			type raw struct {
+				Item
+				fg string
+			}
+			var rows []raw
+			blanks := 0
+			for i := top + 1; i < len(lines) && blanks < 3; i++ {
+				row := lines[i]
+				lo, hi := span[0], span[1]
+				if lo >= len(row) {
+					break
+				}
+				if hi > len(row) {
+					hi = len(row)
+				}
+				onPanel := 0
+				for _, c := range row[lo:hi] {
+					if c.bg == bg {
+						onPanel++
+					}
+				}
+				if onPanel*2 < hi-lo {
+					break // the panel has ended
+				}
+				body := strings.TrimSpace(text(row[lo:hi]))
+				if body == "" {
+					blanks++
+					continue
+				}
+				blanks = 0
+				if strings.EqualFold(body, "search") && len(rows) == 0 {
+					m.Search, m.Query, m.QueryKnown = true, "", true
+					continue
+				}
+				// The first line under the title, set apart from the rows by
+				// an empty line, is the search field with text in it.
+				if len(rows) == 0 && !m.Search && i+1 < len(lines) && blankIn(lines[i+1], lo, hi) {
+					m.Search, m.Query, m.QueryKnown = true, strings.TrimRight(body, "█▌▏│ "), true
+					continue
+				}
+				// "No results found" is the list saying it is empty, not a row.
+				if noResults.MatchString(body) {
+					continue
+				}
+				if regexp.MustCompile(`(?i)\bctrl\+\w`).MatchString(body) {
+					if m.Hint != "" {
+						m.Hint += " · "
+					}
+					m.Hint += body
+					continue
+				}
+				isCurrent := strings.HasPrefix(body, "●") || strings.HasPrefix(body, "✓")
+				body = strings.TrimSpace(strings.TrimLeft(body, "●•✓"))
+				parts := gap.Split(body, 2)
+				detail := ""
+				if len(parts) > 1 {
+					detail = strings.TrimSpace(parts[1])
+				}
+				fgs := map[string]int{}
+				for _, c := range row[lo:hi] {
+					if c.r != ' ' {
+						fgs[c.fg]++
+					}
+				}
+				fg, n := "", 0
+				for k, v := range fgs {
+					if v > n {
+						fg, n = k, v
+					}
+				}
+				rows = append(rows, raw{Item{Label: parts[0], Detail: detail, Current: isCurrent}, fg})
+			}
+			if len(rows) == 0 {
+				continue
+			}
+			count := map[string]int{}
+			for _, r := range rows {
+				count[r.fg]++
+			}
+			common, n := "", 0
+			for k, v := range count {
+				if v > n {
+					common, n = k, v
+				}
+			}
+			group := ""
+			for _, r := range rows {
+				if r.fg != common && r.Detail == "" && !r.Current {
+					group = r.Label
+					continue
+				}
+				r.Group = group
+				m.Items = append(m.Items, r.Item)
+			}
+			if len(m.Items) > 0 {
+				return m, true
+			}
+		}
+	}
+	return Menu{}, false
+}
+
+var noResults = regexp.MustCompile(`(?i)^no (results|matches|items)\b`)
+
+func blankIn(row []cell, lo, hi int) bool {
+	if lo >= len(row) {
+		return true
+	}
+	if hi > len(row) {
+		hi = len(row)
+	}
+	return strings.TrimSpace(text(row[lo:hi])) == ""
+}

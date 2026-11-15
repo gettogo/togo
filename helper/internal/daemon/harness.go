@@ -47,7 +47,12 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		Screen:    pane.Screen,
 		// Lists a harness draws in its terminal are read from this.
 		StyledScreen: pane.StyledScreen,
+		Cursor:       pane.Cursor,
 		ClientGone:   rpc.ClientGone,
+		ClientClosed: func(client any) bool {
+			conn, _ := client.(*rpc.Conn)
+			return conn.Gone()
+		},
 		// A list driven for the phone belongs to the connection that opened it.
 		Client: func(ctx context.Context) any {
 			if conn := rpc.ConnFrom(ctx); conn != nil {

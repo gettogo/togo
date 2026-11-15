@@ -21,6 +21,9 @@ func (e *Engine) heldNatively(s *sess) *harness.FallbackError {
 	if e.drivingMenu(s.id) {
 		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " has a menu open that the phone is using. Nothing was typed: finish or close it first."}
 	}
+	if e.awaitingComposer(s) {
+		return &harness.FallbackError{Reason: "source", Detail: s.ad.Name + " is showing something in its terminal. Nothing was typed: finish or close it there first."}
+	}
 	if panel, open := e.menuLeftOpen(s); open {
 		name := panel
 		if name == "" {

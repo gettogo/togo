@@ -423,7 +423,9 @@ func (s *sess) stateLocked() map[string]string {
 		// A crashed or killed agent writes no turn end; its mappers would
 		// say working forever.
 		working = false
-	case status == "working" && !s.holdingStopLocked(states) && !feedEnded && !failed:
+	case status == "working" && !s.holdingStopLocked(states) && !feedEnded && !failed && !s.e.menuKeysJustNow(s.id, now):
+		// The hub calls a pane that keeps changing "working". Keys pressed
+		// in a list for the phone change it too; that is not the agent.
 		working = true
 	}
 	out["working"] = fmt.Sprint(working)

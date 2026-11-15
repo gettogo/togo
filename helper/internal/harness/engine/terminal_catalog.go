@@ -160,6 +160,7 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 	if err != nil {
 		return nil, false
 	}
+	e.menuKeyAt.Store(s.id, e.cfg.Now())
 	if err := e.cfg.Typist.Type(ctx, s.id, "/", false, false); err != nil {
 		return nil, false
 	}
@@ -226,6 +227,7 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 		if !ours() {
 			return out, false
 		}
+		e.menuKeyAt.Store(s.id, e.cfg.Now())
 		if err := e.cfg.Typist.Keys(ctx, s.id, "Down"); err != nil {
 			return out, false
 		}

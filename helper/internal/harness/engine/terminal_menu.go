@@ -79,6 +79,16 @@ func (e *Engine) drivingMenu(session string) bool {
 		delete(e.leftOpen, session)
 		return false
 	}
+	// The connection that was driving it has ended: the list is let go
+	// now, as one left open, so the phone can take it up again at once.
+	if m.client != nil && e.cfg.ClientClosed != nil && e.cfg.ClientClosed(m.client) {
+		if e.leftOpen == nil {
+			e.leftOpen = map[string]string{}
+		}
+		e.leftOpen[session] = m.panel
+		delete(e.menus, session)
+		return false
+	}
 	if time.Now().After(m.expires) {
 		if e.leftOpen == nil {
 			e.leftOpen = map[string]string{}

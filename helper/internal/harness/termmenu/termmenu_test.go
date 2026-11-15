@@ -201,6 +201,24 @@ func TestTheWideBarIsTheCursorNotAStrayPatch(t *testing.T) {
 	}
 }
 
+// After a search is cleared OpenCode shows its list with no row
+// highlighted until a key moves the cursor in. It is still the list.
+func TestATitledPanelWithNoCursorIsRead(t *testing.T) {
+	m, ok := read(t, "oc-themes-no-cursor")
+	if !ok || m.Title != "Themes" || !m.Search || !m.QueryKnown || m.Query != "" {
+		t.Fatalf("theme list = %v %q search %v query %q", ok, m.Title, m.Search, m.Query)
+	}
+	got := labels(m)
+	if len(got) != 6 || got[0] != "aura" || got[5] != "catppuccin-macchiato" {
+		t.Errorf("rows = %q", got)
+	}
+	for _, it := range m.Items {
+		if it.Cursor {
+			t.Errorf("a cursor was invented on %q", it.Label)
+		}
+	}
+}
+
 // A screen that is not a list is not read as one.
 func TestOtherScreensAreNotLists(t *testing.T) {
 	if m, ok := read(t, "omp-tree"); ok {

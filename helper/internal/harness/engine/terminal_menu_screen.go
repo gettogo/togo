@@ -57,10 +57,11 @@ func (e *Engine) menuScreen(m *terminalMenu, menu termmenu.Menu, complete bool) 
 	sc := &harness.Screen{ID: menuScreenPrefix + m.token, Interaction: m.token, Primitive: harness.PrimPicker, Title: title, FetchedAt: time.Now(), Picker: p}
 	// A list read only in part is fresh, not stale: its rows are what the
 	// harness shows now.
-	if m.ended {
-		complete = true
-	}
-	if !complete || (!m.ended && menu.Total > len(m.rows)) {
+	// Whole only on evidence: the end was seen while moving through the
+	// list, or the list says how many rows it has and all were read. A
+	// list that merely fits what was read so far is not known to end there.
+	complete = m.ended || (menu.Total > 0 && len(m.rows) >= menu.Total)
+	if !complete {
 		p.Presentation = &harness.PickerPresentation{State: "partial", Total: menu.Total}
 		// More rows can be read by moving the harness's cursor, which the
 		// phone asks for explicitly: in some lists it is not free (a theme
@@ -160,6 +161,11 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 			}
 		}
 		after, ok := e.readMenu(ctx, s)
+		for try := 0; !ok && try < 2; try++ {
+			// The list is redrawing under the new text; a list that really
+			// has no rows still reads as none after another look.
+			after, ok = e.readMenu(ctx, s)
+		}
 		if !ok || after.Title != m.panel {
 			// No rows match, or the list went away.
 			if ok {
@@ -170,6 +176,9 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		}
 		e.menuMu.Lock()
 		m.rows, m.query, m.search, m.scrolled, m.readQuery = after.Items, query, true, false, query
+		// Another search is another list: what was known of the old one's
+		// end says nothing about this one.
+		m.ended, m.first = false, ""
 		e.menuMu.Unlock()
 		sc := e.menuScreen(m, after, after.Total > 0 || rowsEndOnScreen(after))
 		return *sc, nil
@@ -184,6 +193,9 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		m.rows = append([]termmenu.Item(nil), menu.Items...)
 		for i := range m.rows {
 			m.rows[i].Cursor = false
+		}
+		if menu.Query != m.readQuery || len(menu.Items) == 0 {
+			m.ended, m.first = false, ""
 		}
 		m.scrolled, m.readQuery = false, menu.Query
 	}
@@ -272,6 +284,17 @@ func (e *Engine) pageMenu(ctx context.Context, s *sess, m *terminalMenu) (*harne
 	if ok && menu.Title != m.panel {
 		e.setMenu(s.id, nil)
 		return nil, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+	}
+	if ok && cursorOf(menu) < 0 {
+		// No cursor on a row yet: one Down brings it in.
+		if err := e.menuKeys(ctx, s, "Down"); err != nil {
+			return nil, err
+		}
+		menu, ok = e.readMenu(ctx, s)
+		if ok && menu.Title != m.panel {
+			e.setMenu(s.id, nil)
+			return nil, &harness.FallbackError{Reason: "moved", Detail: "The screen changed at the desk."}
+		}
 	}
 	if !ok || cursorOf(menu) < 0 {
 		// The list cannot be made out just now: what was read stands, and

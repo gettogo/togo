@@ -105,8 +105,20 @@ func (e *Engine) wholeList(ctx context.Context, s *sess, first termmenu.Menu) ([
 func (e *Engine) afterKey(ctx context.Context, s *sess, title string, previous *terminalMenu) (harness.ActionResult, error) {
 	menu, ok := e.readMenu(ctx, s)
 	if !ok {
-		e.setMenu(s.id, nil)
-		return harness.ActionResult{Result: harness.ResultApplied}, nil
+		// No list. Done only if the input line is seen again; otherwise
+		// the harness shows something the phone cannot.
+		e.menuMu.Lock()
+		mark := e.composers[s.id]
+		if previous != nil {
+			// The list this followed is over either way, and is not left
+			// behind as an open one.
+			delete(e.menus, s.id)
+		}
+		e.menuMu.Unlock()
+		if e.awaitComposer(ctx, s, mark) {
+			return harness.ActionResult{Result: harness.ResultApplied}, nil
+		}
+		return e.notShown(s, mark), nil
 	}
 	rows, complete := e.wholeList(ctx, s, menu)
 	// A list that scrolls without saying how long it is has been read only
@@ -140,14 +152,30 @@ func (e *Engine) selectRow(ctx context.Context, s *sess, m *terminalMenu, target
 			twins++
 		}
 	}
-	for step := 0; step <= len(m.rows)+2; step++ {
+	nudged := false
+	for step := 0; step <= len(m.rows)+3; step++ {
 		now, ok := e.readMenu(ctx, s)
+		if !ok {
+			now, ok = e.readMenu(ctx, s) // a list that is redrawing: one more look
+		}
 		if !ok {
 			return fail("The screen changed at the desk. Nothing was chosen.")
 		}
 		cur := cursorOf(now)
-		if cur < 0 || now.Title != m.panel {
+		if now.Title != m.panel {
 			return fail("The screen changed at the desk. Nothing was chosen.")
+		}
+		if cur < 0 {
+			// The list has no cursor on a row yet (a search just cleared):
+			// one Down brings it in, once.
+			if nudged {
+				return fail("The screen changed at the desk. Nothing was chosen.")
+			}
+			nudged = true
+			if err := e.menuKeys(ctx, s, "Down"); err != nil {
+				return harness.ActionResult{}, err
+			}
+			continue
 		}
 		if sameRow(now.Items[cur], want) && rightOccurrence(m.rows, now.Items, cur, target) {
 			if err := e.menuKeys(ctx, s, "Enter"); err != nil {
@@ -208,6 +236,16 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 	if err := e.clearInput(ctx, s); err != nil {
 		return "", err
 	}
+	// How the empty input line looks with the cursor in it: the proof,
+	// later, that the harness is back at it.
+	mark := e.markComposer(ctx, s)
+	e.menuMu.Lock()
+	if e.composers == nil {
+		e.composers = map[string]composerMark{}
+	}
+	e.composers[s.id] = mark
+	delete(e.awaiting, s.id)
+	e.menuMu.Unlock()
 	if err := e.menuType(ctx, s, text); err != nil {
 		return "", err
 	}
@@ -240,7 +278,23 @@ func (e *Engine) menuKeys(ctx context.Context, s *sess, keys ...string) error {
 	if err := e.menuStillOurs(ctx, s); err != nil {
 		return err
 	}
+	e.menuKeyAt.Store(s.id, e.cfg.Now())
 	return e.cfg.Typist.Keys(ctx, s.id, keys...)
+}
+
+// menuActivity is how long after the last key in a list the pane's changes
+// are still taken for the list's, not the agent's.
+const menuActivity = 8 * time.Second
+
+// menuKeysJustNow reports that a key was pressed in a list for the phone a
+// moment ago, or that a list is open for it now.
+func (e *Engine) menuKeysJustNow(session string, now time.Time) bool {
+	if v, ok := e.menuKeyAt.Load(session); ok {
+		if at, _ := v.(time.Time); now.Sub(at) < menuActivity {
+			return true
+		}
+	}
+	return false
 }
 
 // menuStillOurs is checked before every key and every text typed for a
@@ -266,6 +320,7 @@ func (e *Engine) menuType(ctx context.Context, s *sess, text string) error {
 	if err := e.menuStillOurs(ctx, s); err != nil {
 		return err
 	}
+	e.menuKeyAt.Store(s.id, e.cfg.Now())
 	return e.cfg.Typist.Type(ctx, s.id, text, false, false)
 }
 

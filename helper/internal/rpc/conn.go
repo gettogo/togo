@@ -49,6 +49,27 @@ func ClientGone(ctx context.Context) bool {
 	}
 }
 
+// Gone reports that this connection's client has stopped sending or the
+// connection has closed.
+func (c *Conn) Gone() bool {
+	if c == nil {
+		return false
+	}
+	if c.gone != nil {
+		select {
+		case <-c.gone:
+			return true
+		default:
+		}
+	}
+	select {
+	case <-c.done:
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *Conn) clientGone() {
 	if c.gone != nil {
 		c.goneOnce.Do(func() { close(c.gone) })

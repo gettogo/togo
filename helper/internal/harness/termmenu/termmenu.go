@@ -152,7 +152,10 @@ func Read(screen string) (Menu, bool) {
 	if m, ok := readGlyph(lines); ok {
 		return m, true
 	}
-	return readHighlight(lines)
+	if m, ok := readHighlight(lines); ok {
+		return m, true
+	}
+	return readTitledPanel(lines)
 }
 
 func lead(s string) int { return len([]rune(s)) - len([]rune(strings.TrimLeft(s, " "))) }

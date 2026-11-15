@@ -52,10 +52,17 @@ type Config struct {
 	// device is driving cannot be driven by another. Nil means lists are
 	// not tied to a connection.
 	Client func(ctx context.Context) any
+	// ClientClosed reports that a connection (as Client returned it) has
+	// ended. A list it was driving is let go at once, not when it expires.
+	ClientClosed func(client any) bool
 	// ClientGone reports that the client a call is running for has gone
 	// away. A list is never driven further for a client that cannot see
 	// it. Nil means never.
 	ClientGone func(ctx context.Context) bool
+	// Cursor reports where the pane's cursor is. A harness keeps it where
+	// typing goes, so it tells the input line from a dialog over it. Nil
+	// means it cannot be told.
+	Cursor func(ctx context.Context, id string) (x, y int, visible bool, err error)
 	// StyledScreen returns the pane's visible text with its colour
 	// sequences. Lists drawn in the terminal are read from it; nil means
 	// they are not read.
@@ -143,6 +150,16 @@ type Engine struct {
 	// closing it. It is still on the harness's screen and has no owner:
 	// nothing is typed until the screen no longer shows it.
 	leftOpen map[string]string
+	// menuKeyAt records, per session, when a key was last pressed in a
+	// list for the phone (session id -> time.Time). The pane changes under
+	// those keys, and that is not the agent working.
+	menuKeyAt sync.Map
+	// composers holds, per session, how the input line looked with the
+	// cursor in it before the last command was typed; awaiting names the
+	// sessions whose input line has not been seen again since something
+	// the phone could not show opened.
+	composers map[string]composerMark
+	awaiting  map[string]composerMark
 	// catalogs holds, per running session, the commands read from the
 	// harness's own "/" list.
 	catalogs map[*sess]*terminalCatalog

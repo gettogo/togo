@@ -186,3 +186,36 @@ func TestAListEndsWithItsConversation(t *testing.T) {
 		t.Error("a list of the old conversation still blocks typing in the new one")
 	}
 }
+
+// When the connection that was driving a list ends, the list is let go at
+// once, even with no key in flight: another connection can take it up
+// without waiting for it to expire, the old token is dead, and the list
+// is remembered as left open.
+func TestAListIsLetGoWhenItsConnectionEnds(t *testing.T) {
+	const id = "s_fakefake08"
+	e, _ := newFake(t, id, "1.2.3")
+	e.cfg.StyledScreen = func(context.Context, string) (string, error) { return "", nil }
+	type key struct{}
+	closed := map[any]bool{}
+	e.cfg.Client = func(ctx context.Context) any { return ctx.Value(key{}) }
+	e.cfg.ClientClosed = func(c any) bool { return closed[c] }
+	phone := context.WithValue(context.Background(), key{}, "phone")
+	back := context.WithValue(context.Background(), key{}, "phone again")
+	e.setMenu(id, &terminalMenu{client: "phone", token: "tok", panel: "Select model", rows: []termmenu.Item{{Label: "DeepSeek"}}})
+	if !e.drivingMenu(id) {
+		t.Fatal("the list is not held while its connection lives")
+	}
+	closed["phone"] = true
+	if e.drivingMenu(id) {
+		t.Error("the list is still held after its connection ended")
+	}
+	if e.menuOf(phone, id, "tok") != nil || e.menuOf(back, id, "tok") != nil {
+		t.Error("the old token still opens the list")
+	}
+	e.menuMu.Lock()
+	left := e.leftOpen[id]
+	e.menuMu.Unlock()
+	if left != "Select model" {
+		t.Errorf("not remembered as left open: %q", left)
+	}
+}
