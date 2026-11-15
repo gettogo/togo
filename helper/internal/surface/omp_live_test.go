@@ -40,7 +40,11 @@ func TestOriginalOMPTransport(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(os.Getenv("PI_CODING_AGENT_DIR"), "config.yml"), []byte("setupVersion: 3\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	limit := 30 * time.Second
+	if os.Getenv("TOGO_SURFACE_RECORD_DIR") != "" {
+		limit = 4 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	tmux := tmuxtest.New(t)
 	sessions := &session.Service{Tmux: tmux, Shell: "/bin/sh", Path: filepath.Dir(binary) + ":" + os.Getenv("PATH"), Home: os.Getenv("HOME"), LockFile: filepath.Join(root, "bib.lock")}
@@ -199,6 +203,10 @@ func TestOriginalOMPTransport(t *testing.T) {
 		previous = text
 	}
 	copyMode("send-keys", "-t", before.Pane, "-X", "cancel")
+	if dir := os.Getenv("TOGO_SURFACE_RECORD_DIR"); dir != "" {
+		recordLiveScreens(t, ctx, svc, owner, lease, dir, strings.Fields(os.Getenv("TOGO_SURFACE_RECORD_COMMANDS")))
+		return
+	}
 	command, _ := json.Marshal(map[string]any{"ev": "send", "sf": editorView.ID, "id": editor.ID, "text": "/resume"})
 	empty := ""
 	sent, err := liveInput(ctx, svc, owner, surface.InputParams{ID: created.ID, Lease: lease.Token, Surface: editorView.ID, Instance: editorView.Instance, Event: command, ExpectedText: &empty})
