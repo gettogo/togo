@@ -161,7 +161,7 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 		return nil, false
 	}
 	e.menuKeyAt.Store(s.id, e.cfg.Now())
-	if err := e.cfg.Typist.Type(ctx, s.id, "/", false, false); err != nil {
+	if err := e.typeAsKeys(ctx, s, "/"); err != nil {
 		return nil, false
 	}
 	first, opened := e.readMenu(ctx, s)

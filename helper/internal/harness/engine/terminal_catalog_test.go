@@ -49,3 +49,36 @@ func TestTheLineTheSlashWentOnIsFound(t *testing.T) {
 		t.Error("two candidates were resolved by guessing")
 	}
 }
+
+// The line a command was typed on is found by what the lines say: the
+// harness may have moved it (a list opened above it), and a draft may
+// stand after the text.
+func TestTheLineACommandWasTypedOnIsFound(t *testing.T) {
+	// A scrolling terminal: the list pushed the input line to another row.
+	before := "reply\n╰─\nstatus"
+	after := "reply\n╰─ /login\n❯ login   Sign in\n  logout  Sign out\nstatus"
+	if line, without, ok := ownTextLine(before, after, "/login"); !ok || line != "╰─ /login" || without != "╰─" {
+		t.Errorf("moved input line: %q %q %v", line, without, ok)
+	}
+	// An empty field's placeholder went when the text was typed.
+	if line, _, ok := ownTextLine("┃  Ask anything… \"Fix a TODO\"", "┃  /models", "/models"); !ok || line != "┃  /models" {
+		t.Errorf("placeholder: %q %v", line, ok)
+	}
+	// A draft after the cursor, with spaces before it: found, and the line
+	// does not end with the text, which is how the draft is known.
+	line, without, ok := ownTextLine("┃     spaced draft", "┃  /models   spaced draft", "/models")
+	if !ok || line != "┃  /models   spaced draft" || without != "┃     spaced draft" {
+		t.Errorf("draft after the cursor: %q %q %v", line, without, ok)
+	}
+	// A draft before the cursor.
+	if line, without, ok := ownTextLine("> half written", "> half written/models", "/models"); !ok || line != "> half written/models" || without != "> half written" {
+		t.Errorf("draft before the cursor: %q %q %v", line, without, ok)
+	}
+	// The text nowhere, or on two lines that both fit: not found.
+	if _, _, ok := ownTextLine("a\nb", "a\nb", "/x"); ok {
+		t.Error("found on an unchanged screen")
+	}
+	if _, _, ok := ownTextLine("in\nout", "in/x\nout/x", "/x"); ok {
+		t.Error("two candidates were resolved by guessing")
+	}
+}

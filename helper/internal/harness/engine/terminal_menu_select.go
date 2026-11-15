@@ -237,59 +237,79 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 	// it is empty is found out by typing the command: a harness offers its
 	// commands only at the start of an empty line.
 	mark := e.markComposer(ctx, s)
+	before, err := e.cfg.Screen(ctx, s.id)
+	if err != nil {
+		return "", err
+	}
 	if err := e.menuType(ctx, s, text); err != nil {
 		return "", err
 	}
-	// The harness redraws a moment after the keys arrive: wait until the
-	// line under the cursor ends with what was typed.
-	var x int
-	var line string
-	var located, typed bool
+	// Where the text landed is read from the screen: the one line that
+	// changed by exactly that text. The harness redraws a moment after the
+	// keys arrive, so it is looked for until it shows.
+	located := false
+	var typedLine, was string
 	for deadline := time.Now().Add(e.scaled(1500 * time.Millisecond)); ; {
-		x, line, _, located = e.cursorAt(ctx, s)
-		typed = located && strings.HasSuffix(strings.TrimRight(beforeCursor(line, x), " "), text)
-		if typed || !time.Now().Before(deadline) || ctx.Err() != nil {
+		if after, err := e.cfg.Screen(ctx, s.id); err == nil {
+			if typedLine, was, located = ownTextLine(before, after, text); located {
+				break
+			}
+		}
+		if !time.Now().Before(deadline) || ctx.Err() != nil {
 			break
 		}
 		time.Sleep(e.scaled(60 * time.Millisecond))
 	}
-	if mark.ok && located && x == mark.x+len([]rune(text)) {
+	if !located {
+		// What was typed cannot be found, so it cannot be proven ours to
+		// remove, or to run.
+		return s.ad.Name + " did not take the command where expected. Nothing was run; check its input line.", nil
+	}
+	if x, _, _, ok := e.cursorAt(ctx, s); ok && mark.ok && x == mark.x+len([]rune(text)) {
 		mark.tracks = true // the cursor followed what was typed
 	}
-	// takeBack removes exactly what was typed, and only from a line that
-	// ends with it under the cursor.
+	// takeBack removes exactly what was typed: one Backspace at a time,
+	// each seen to shorten that line by the character expected, until the
+	// line reads as it did. A step that is not seen stops it.
 	takeBack := func() {
-		x2, line2, _, ok := e.cursorAt(ctx, s)
-		if !ok || !strings.HasSuffix(strings.TrimRight(beforeCursor(line2, x2), " "), text) {
+		at := strings.LastIndex(typedLine, text)
+		if at < 0 {
 			return
 		}
-		// One character at a time, each seen to go before the next: a
-		// harness that redraws its list on every key can drop a key.
-		for left := len([]rune(text)); left > 0; left-- {
+		head, tail := typedLine[:at], typedLine[at+len(text):]
+		rest := []rune(text)
+		for len(rest) > 0 {
 			if e.menuKeys(ctx, s, "BSpace") != nil {
 				return
 			}
-			want := x2 - 1
-			for deadline := time.Now().Add(e.scaled(600 * time.Millisecond)); ; {
-				if now, _, _, ok := e.cursorAt(ctx, s); ok && now == want {
-					x2 = now
-					break
+			rest = rest[:len(rest)-1]
+			want := strings.TrimRight(head+string(rest)+tail, " ")
+			seen := false
+			for deadline := time.Now().Add(e.scaled(700 * time.Millisecond)); time.Now().Before(deadline); {
+				// The list a harness offers grows and shrinks as the text
+				// changes and can move the input line to another row: the
+				// line is looked for by what it must read now.
+				if screen, err := e.cfg.Screen(ctx, s.id); err == nil {
+					for _, l := range strings.Split(screen, "\n") {
+						if now := trimEdge(l); now == want || (len(rest) == 0 && now == was) {
+							seen = true
+							break
+						}
+					}
 				}
-				if !time.Now().Before(deadline) {
-					return // not seen to go: nothing more is removed
+				if seen {
+					break
 				}
 				time.Sleep(e.scaled(40 * time.Millisecond))
 			}
+			if !seen {
+				return
+			}
 		}
 	}
-	// The row may hold other parts of the screen further right; a draft is
-	// what starts right at the cursor.
-	if !typed {
-		// What was typed cannot be found under the cursor, so it cannot be
-		// proven ours to remove, or to run.
-		return s.ad.Name + " did not take the command where expected. Nothing was run; check its input line.", nil
-	}
-	if rest := []rune(line); x < len(rest) && rest[x] != ' ' && !strings.ContainsRune("│┃|", rest[x]) {
+	// Text right after what was typed is a draft the cursor sat in front
+	// of: the command would run with it, or replace it.
+	if !strings.HasSuffix(typedLine, text) {
 		takeBack()
 		return s.ad.Name + "'s input line holds a draft. Nothing was run.", nil
 	}
@@ -306,15 +326,11 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, text string) (str
 	if !offered || cur < 0 {
 		// No list of commands opened: the line was not empty (a draft at
 		// the desk), or this harness offers none. Nothing is run.
-		if typed {
-			takeBack()
-		}
+		takeBack()
 		return s.ad.Name + " did not offer its commands: its input line may hold a draft. Nothing was run.", nil
 	}
 	if on := strings.TrimPrefix(strings.Fields(menu.Items[cur].Label + " x")[0], "/"); on != word {
-		if typed {
-			takeBack()
-		}
+		takeBack()
 		return s.ad.Name + " would run “/" + on + "” for “" + text + "”. Nothing was run.", nil
 	}
 	// The input line was empty and is this one: its look is the proof,
@@ -402,6 +418,18 @@ func (e *Engine) menuType(ctx context.Context, s *sess, text string) error {
 		return err
 	}
 	e.menuKeyAt.Store(s.id, e.cfg.Now())
+	return e.typeAsKeys(ctx, s, text)
+}
+
+// typeAsKeys types text for a list as keystrokes where the typist can: a
+// harness reacts to keys (it offers commands, filters a list), not always
+// to a paste.
+func (e *Engine) typeAsKeys(ctx context.Context, s *sess, text string) error {
+	if k, ok := e.cfg.Typist.(interface {
+		TypeKeys(ctx context.Context, id, text string) error
+	}); ok {
+		return k.TypeKeys(ctx, s.id, text)
+	}
 	return e.cfg.Typist.Type(ctx, s.id, text, false, false)
 }
 
@@ -434,4 +462,47 @@ func beforeCursor(line string, x int) string {
 		x = 0
 	}
 	return string(rs[:x])
+}
+
+// ownTextLine finds the line text was typed on, by what the lines say and
+// not by where they are: a harness that draws in the scrolling terminal
+// moves its input line when its list of commands opens. It is the one line
+// that now holds the text and, with the text taken out, reads as a line
+// that was on the screen before (or as far as such a line goes, where an
+// empty field showed a placeholder the text replaced). It returns that
+// line and the same line without the text.
+func ownTextLine(before, after, text string) (line, without string, ok bool) {
+	had := map[string]bool{}
+	var old []string
+	for _, l := range strings.Split(before, "\n") {
+		t := trimEdge(l)
+		had[t] = true
+		old = append(old, t)
+	}
+	found := 0
+	for _, l := range strings.Split(after, "\n") {
+		is := trimEdge(l)
+		at := strings.LastIndex(is, text)
+		if at < 0 || had[is] {
+			continue
+		}
+		rest := strings.TrimRight(is[:at]+is[at+len(text):], " ")
+		match := had[rest]
+		if !match && strings.HasSuffix(is, text) {
+			// An empty field's placeholder went when the text was typed.
+			stem := strings.TrimRight(is[:at], " ")
+			for _, o := range old {
+				if stem != "" && o != stem && strings.HasPrefix(o, stem) {
+					match = true
+					break
+				}
+			}
+		}
+		if !match {
+			continue
+		}
+		found++
+		line, without = is, rest
+	}
+	return line, without, found == 1
 }
