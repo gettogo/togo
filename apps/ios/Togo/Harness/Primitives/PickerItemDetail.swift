@@ -90,10 +90,9 @@ struct PickerItemDetail: View {
             if !(picker.contextActions ?? []).isEmpty {
                 Section {
                     ForEach(picker.contextActions ?? []) { ref in
-                        Button(role: ref.role == .destructive ? .destructive : nil) {
+                        SourceActionButton(ref: ref, outcome: actions.outcome(ref.id, target: item.id), busy: actions.isBusy) {
                             onAssign(ref)
-                        } label: { Text(verbatim: ref.label) }
-                        .disabled(actions.isBusy)
+                        }
                         .groupedRows()
                     }
                 }

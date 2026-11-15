@@ -44,6 +44,10 @@ struct PickerRowLabel: View {
                     .padding(.top, 3)
                 }
                 if let appearance = item.appearance { PickerSourceMetadata(appearance: appearance) }
+                if item.facets?["native.highlighted"] == "true" {
+                    Text(String(localized: "picker.sourceHighlight", defaultValue: "Highlighted"))
+                        .font(.caption).foregroundStyle(Color.togoMute)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // The trailing accessory crossfades in place (spinner ↔ what the item holds).
@@ -79,6 +83,9 @@ struct PickerRowLabel: View {
     private var value: String {
         var parts: [String] = []
         if selected { parts.append(PrimitiveCopy.selected) }
+        if item.facets?["native.highlighted"] == "true" {
+            parts.append(String(localized: "picker.sourceHighlight", defaultValue: "Highlighted"))
+        }
         parts.append(contentsOf: held)
         if running { parts.append(PrimitiveCopy.running) }
         if let status = item.appearance?.status { parts.append(status) }

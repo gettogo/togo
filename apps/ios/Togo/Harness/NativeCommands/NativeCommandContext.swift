@@ -27,9 +27,10 @@ import TogoKit
             }
             return try screen()
         }
-        if NativeListScreen.list(in: block.node) == nil {
+        if block.node.kind == "picker", block.node.properties["strip"] == nil {
             context.preview = { id in
                 let node = try current()
+                try pickerRow(id, in: node)
                 if node.properties["selected"] != .string(id) {
                     try await event(node: node.id, kind: "select", fields: ["item": .string(id)])
                 }
@@ -69,13 +70,6 @@ import TogoKit
 
     func run(_ action: String, target: String?, args: [String: JSONValue]) async throws -> HarnessActionResult {
         let node = try current()
-        if action.hasPrefix(NativePickerScreen.actionPrefix), node.kind == "picker", let target,
-           SurfaceValues.string(node.properties["selected"]) != target {
-            try await event(node: node.id, kind: "select", fields: ["item": .string(target)])
-            guard try current().properties["selected"] == .string(target) else {
-                throw ChatSurfaceInteraction.Failure(message: SurfaceCopy.inputChanged)
-            }
-        }
         switch action {
         case NativeListScreen.choose:
             guard let target, let list = NativeListScreen.list(in: node),
@@ -97,6 +91,8 @@ import TogoKit
             return try await runForm(action, target: target, args: args)
         case NativePickerScreen.activate:
             guard let target else { throw NativeStructuredScreen.Unsupported.invalid }
+            try pickerRow(target, in: node)
+            try pickerPrimary(in: node, args: args)
             try await event(node: node.id, kind: "activate", fields: ["item": .string(target)])
         case "native.change":
             guard let target, let value = args["value"] else { throw NativeStructuredScreen.Unsupported.invalid }
@@ -110,7 +106,7 @@ import TogoKit
             try await event(node: node.id, kind: "action", fields: ["act": .string(act), "value": .string(target)])
         default:
             if action.hasPrefix(NativePickerScreen.actionPrefix), let act = SurfaceValues.string(args["act"]) {
-                try await event(node: node.id, kind: "action", fields: ["act": .string(act)])
+                try await pickerAction(act, target: target, args: args)
             } else if action.hasPrefix(NativePickerScreen.tabPrefix), let tab = args["tab"] {
                 try await event(node: node.id, kind: "action", fields: ["act": .string("tab"), "value": tab])
             } else if action.hasPrefix(NativePickerScreen.scopePrefix), let scope = args["scope"] {

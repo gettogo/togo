@@ -45,7 +45,8 @@ struct NativePickerScreenTests {
         #expect(row.map(\.id) == ["native.action.delete", "native.action.rename", "native.action.pin"])
         #expect(row.map(\.label) == ["Delete", "Rename", "Pin"])
         #expect(row.map(\.role) == [.destructive, .normal, .normal])
-        #expect(row[0].args == ["act": .string("delete")])
+        #expect(row[0].args == ["act": .string("delete"), NativePickerScreen.selectedKey: .string("/sessions/project/a.jsonl"),
+            NativePickerScreen.labelKey: .string("Delete")])
         // The list-wide action; Close is the system's, Resume is the choice.
         #expect(screen.actions.map(\.id) == ["native.action.scope"])
         #expect(screen.actions.first?.label == "All projects")
@@ -127,7 +128,7 @@ struct NativePickerScreenTests {
         #expect(row.chips == [.init(text: "web", on: false, auto: true)])
         #expect(row.mark == .init(text: "We", icon: "provider:web", seed: "web"))
 
-        let tree = try #require(try NativePickerScreen.map(try Self.node(Self.recorded("tree")), workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at).picker)
+        let tree = try #require(try NativePickerScreen.map(try Self.visibleTree(), workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at).picker)
         #expect(tree.items.first?.appearance?.depth == 0)
         #expect(tree.items.first?.appearance?.nodeKind == "marker")
         #expect(tree.items.first?.appearance?.status == "accent")
@@ -138,10 +139,10 @@ struct NativePickerScreenTests {
         #expect(bare.items.first?.appearance == nil)
     }
 
-    /// Nothing is guessed: a picker whose extra actions are not classified
-    /// for the workflow is refused, naming them.
-    @Test func unclassifiedActionsAreRefused() throws {
-        let tree = try NativePickerScreen.map(try Self.node(Self.recorded("tree")), workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at)
+    /// Existing presentation stays; an alias or extension does not need a
+    /// command-name table to offer the program's declared actions.
+    @Test func unclassifiedActionsKeepTheirObservedContext() throws {
+        let tree = try NativePickerScreen.map(try Self.visibleTree(), workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at)
         #expect(tree.picker?.contextActions?.map(\.id) == ["native.action.summarize", "native.action.label"])
         #expect(tree.picker?.contextActions?.allSatisfy({ $0.role == .normal }) == true)
         #expect(tree.actions.contains(where: { $0.id == "native.action.filter" }))
@@ -151,9 +152,58 @@ struct NativePickerScreenTests {
         #expect(tree.picker?.items.first?.facets?["native.depth"] == "0")
         #expect(tree.picker?.items.first?.facets?["native.node"] == "marker")
         #expect(tree.picker?.selected == tree.picker?.items.first?.id)
-        #expect(throws: NativePickerScreen.Unsupported.unknownActions(workflow: "other", actions: ["delete", "rename", "pin", "scope"])) {
-            try NativePickerScreen.map(try Self.node(Self.recorded("resume")), workflow: "other", fallbackTitle: "", fetchedAt: Self.at)
-        }
+        let source = try Self.node(Self.recorded("resume"))
+        let other = try NativePickerScreen.map(source, workflow: "other", fallbackTitle: "", fetchedAt: Self.at)
+        #expect(other.actions.map(\.id) == ["native.action.delete", "native.action.rename", "native.action.pin", "native.action.scope"])
+        #expect(other.actions.allSatisfy { $0.role == .normal && $0.args?[NativePickerScreen.selectedKey] == source.properties["selected"] })
+        #expect(other.picker?.contextActions == nil)
+        #expect(other.picker?.items.first(where: { JSONValue.string($0.id) == source.properties["selected"] })?.facets?["native.highlighted"] == "true")
+        #expect(other.picker?.onSelectArgs?[NativePickerScreen.primaryKey] == .string("resume"))
+    }
+
+    @Test func declaredToggleAndDisabledReasonArePreservedWithoutGuessing() throws {
+        var source = try Self.node(Self.recorded("resume"))
+        source.properties["actions"] = .array([
+            .object(["id": .string("expand"), "label": .string("Expand"), "on": .bool(false), "disabled": .string("Select an entry")]),
+            .object(["id": .string("close"), "label": .string("Close"), "end": .bool(true)])
+        ])
+        let mapped = try NativePickerScreen.map(source, workflow: "not-a-command", fallbackTitle: "", fetchedAt: Self.at)
+        let action = try #require(mapped.actions.first)
+        #expect(mapped.actions.count == 1)
+        #expect(action.args?[NativePickerScreen.onKey] == .bool(false))
+        #expect(action.args?[NativePickerScreen.disabledKey] == .string("Select an entry"))
+        #expect(action.args?["act"] == .string("expand"))
+        #expect(action.role == .normal)
+    }
+
+    @Test(arguments: ["none", "", "unknown"]) func noPreviewIsNotARequestToHighlightBeforeChoosing(value: String) throws {
+        var source = try Self.node(Self.recorded("login"))
+        source.properties["preview"] = .string(value)
+        let mapped = try NativePickerScreen.map(source, workflow: "login", fallbackTitle: "", fetchedAt: Self.at)
+        #expect(mapped.picker?.selectionBehavior == nil)
+    }
+
+    @Test func hiddenRowsStayHiddenAndAnEmptyReasonDoesNotDisable() throws {
+        let source = try Self.node(#"{"id":"n","k":"picker","p":{"items":[{"id":"hidden","hidden":true},{"id":"empty","label":"Empty reason","disabled":""},{"id":"reason","label":"Disabled","disabled":"Not available"}],"order":["hidden","empty","reason"]}}"#)
+        let picker = try #require(try NativePickerScreen.map(source, workflow: "", fallbackTitle: "", fetchedAt: Self.at).picker)
+        #expect(picker.items.map(\.id) == ["empty", "reason"])
+        #expect(picker.items.first?.disabled != true)
+        #expect(picker.items.last?.disabled == true)
+    }
+
+    @Test func recordedTreeFilterHidesItsUnfilteredItemAndCurrentMarker() throws {
+        let source = try Self.node(Self.recorded("tree"))
+        let picker = try #require(try NativePickerScreen.map(source, workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at).picker)
+        #expect(picker.items.isEmpty)
+        #expect(picker.selected == nil)
+    }
+
+    /// The recording has its sole row filtered out (order=[]). Expose that
+    /// same recorded row to test its annotations independently of filtering.
+    private static func visibleTree() throws -> SurfaceNode {
+        var source = try node(recorded("tree"))
+        source.properties["order"] = source.properties["current"]
+        return source
     }
 
     @Test func otherNodesAndNestedControlsAreRefused() throws {

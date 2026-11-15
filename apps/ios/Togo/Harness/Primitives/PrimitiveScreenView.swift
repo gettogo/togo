@@ -98,20 +98,22 @@ struct ScreenChrome: ViewModifier {
                 if !secondary.isEmpty {
                     ToolbarItemGroup(placement: .bottomBar) {
                         ForEach(secondary) { ref in
-                            Button(role: ref.role == .destructive ? .destructive : nil) {
-                                Task { await actions.trigger(ref, place: .label, context: context) }
-                            } label: {
-                                if ref.id.hasPrefix("native.") {
-                                    OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id))
-                                } else {
+                            if ref.id.hasPrefix("native.") {
+                                SourceActionButton(ref: ref, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id)) {
+                                    Task { await actions.trigger(ref, place: .label, context: context) }
+                                }
+                            } else {
+                                Button(role: ref.role == .destructive ? .destructive : nil) {
+                                    Task { await actions.trigger(ref, place: .label, context: context) }
+                                } label: {
                                     Label {
                                         OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id))
                                     } icon: {
                                         Image(systemName: PrimitiveActionSymbol.of(ref))
                                     }
                                 }
+                                .disabled(actions.isRunning(ref.id))
                             }
-                            .disabled(actions.isRunning(ref.id))
                         }
                     }
                 }

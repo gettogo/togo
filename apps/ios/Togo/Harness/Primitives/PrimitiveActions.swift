@@ -383,15 +383,10 @@ struct PrimitiveActionRow: View {
 
     @ViewBuilder private var buttons: some View {
         ForEach(refs) { ref in
-            Button {
+            SourceActionButton(ref: ref, outcome: actions.outcome(ref.id, target: target), busy: actions.isRunning(ref.id, target: target)) {
                 Task { await actions.trigger(ref, target: target, context: context) }
-            } label: {
-                OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id, target: target),
-                             busy: actions.isRunning(ref.id, target: target))
             }
             .buttonStyle(PrimitiveCapsuleStyle(role: ref.role, large: large))
-            .disabled(actions.isRunning(ref.id, target: target))
-            .accessibilityValue(actions.isRunning(ref.id, target: target) ? PrimitiveCopy.running : "")
         }
     }
 }

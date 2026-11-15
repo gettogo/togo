@@ -18,6 +18,13 @@ public enum NativePickerScreen {
     /// whether it is the current one.
     public static let tabPrefix = "native.tab."
     public static let scopePrefix = "native.scope."
+    /// State captured with a declared action, not arguments sent to the program.
+    public static let selectedKey = "native.selected"
+    public static let disabledKey = "native.disabled"
+    public static let onKey = "native.on"
+    public static let primaryKey = "native.primary"
+    public static let labelKey = "native.label"
+    public static let primaryLabelKey = "native.primaryLabel"
 
     public enum Unsupported: Error, Equatable, Sendable {
         /// The node is not a picker.
@@ -32,10 +39,8 @@ public enum NativePickerScreen {
         case malformedItem
     }
 
-    /// Which of a workflow's actions act on the highlighted row, which on the
-    /// whole list, and which row actions lose data. From the program's source
-    /// (omp 18.20) and recorded screens; a workflow with other actions is
-    /// unsupported. Deleting a conversation is the only one that loses data.
+    /// Existing row/list presentation hints from recorded screens. Other
+    /// declared actions remain available in their original source context.
     struct Scope: Sendable {
         var row: Set<String> = []
         var list: Set<String> = []
@@ -76,27 +81,35 @@ public enum NativePickerScreen {
         var primaryLabel: String?
         var rowActions: [HarnessActionRef] = []
         var listActions: [HarnessActionRef] = []
-        var unknown: [String] = []
+        var primaryID: String?
+        var contextual = false
         let scope = scopes[workflow]
         for action in array(p["actions"]) {
             guard let fields = object(action), let id = string(fields["id"]), !id.isEmpty else { continue }
-            let label = string(fields["label"]) ?? id
+            guard let label = string(fields["label"]), !label.isEmpty else {
+                throw Unsupported.unknownActions(workflow: workflow, actions: [id])
+            }
             if fields["end"] == .bool(true) { continue }
             if fields["primary"] == .bool(true) {
-                if primaryLabel == nil { primaryLabel = label }
+                if primaryLabel == nil { primaryLabel = label; primaryID = id }
                 continue
             }
-            let args: [String: JSONValue] = ["act": .string(id)]
+            var args: [String: JSONValue] = ["act": .string(id), selectedKey: p["selected"] ?? .null, labelKey: .string(label)]
+            if let disabled = fields["disabled"] { args[disabledKey] = disabled }
+            if case .bool = fields["on"] { args[onKey] = fields["on"] }
             if let scope, scope.row.contains(id) {
                 rowActions.append(HarnessActionRef(id: actionPrefix + id, label: label,
                                                    role: scope.destructive.contains(id) ? .destructive : .normal, args: args))
             } else if let scope, scope.list.contains(id) {
                 listActions.append(HarnessActionRef(id: actionPrefix + id, label: label, args: args))
             } else {
-                unknown.append(id)
+                // Unknown placement is not an unknown operation. Offer the
+                // original action in its current context, without guessing a
+                // row target or a destructive role from its name.
+                listActions.append(HarnessActionRef(id: actionPrefix + id, label: label, args: args))
+                contextual = true
             }
         }
-        guard unknown.isEmpty else { throw Unsupported.unknownActions(workflow: workflow, actions: unknown) }
 
         // Tabs and scopes the program offers, with the current one marked.
         for (key, prefix, current) in [("tabs", tabPrefix, string(p["tab"])), ("scopes", scopePrefix, string(p["scope"]))] {
@@ -114,7 +127,9 @@ public enum NativePickerScreen {
         var byID: [String: HarnessScreen.Picker.Item] = [:]
         var listed: [String] = []
         for entry in array(p["items"]) {
-            guard let fields = object(entry), let id = string(fields["id"]), !id.isEmpty,
+            guard let fields = object(entry) else { throw Unsupported.malformedItem }
+            if fields["hidden"] == .bool(true) { continue }
+            guard let id = string(fields["id"]), !id.isEmpty,
                   let label = plain(fields["label"]), !label.isEmpty else { throw Unsupported.malformedItem }
             var facets: [String: String] = [:]
             if let facts = object(fields["facts"]) {
@@ -126,7 +141,7 @@ public enum NativePickerScreen {
             if fields["mono"] == .bool(true) { facets["native.mono"] = "true" }
             let badge = array(fields["badges"]).compactMap { object($0).flatMap { string($0["text"]) } }.first
             var disabled: Bool?
-            if let value = fields["disabled"], value != .bool(false), value != .null { disabled = true }
+            if fields["disabled"] == .bool(true) || !(string(fields["disabled"]) ?? "").isEmpty { disabled = true }
             if let depth = fields["depth"], case .number(let level) = depth { facets["native.depth"] = String(Int(level)) }
             if let kind = string(fields["node"]), !kind.isEmpty { facets["native.node"] = kind }
             byID[id] = .init(id: id, title: label, subtitle: plain(fields["detail"]), badge: badge,
@@ -157,13 +172,20 @@ public enum NativePickerScreen {
 
         // What is in use now is `current`; the highlight is only a cursor.
         let current = array(p["current"]).compactMap(string).first { order.contains($0) }
+        if contextual, let highlight = string(p["selected"]), var item = byID[highlight] {
+            var facets = item.facets ?? [:]
+            facets["native.highlighted"] = "true"
+            item.facets = facets
+            byID[highlight] = item
+        }
         let searchable = p["query"] != nil
         let picker = HarnessScreen.Picker(
             items: order.compactMap { byID[$0] }, selected: current, searchable: searchable,
             onSelect: activate, onSelectLabel: primaryLabel, searchMode: searchable ? "remote" : nil,
             contextActions: rowActions.isEmpty ? nil : rowActions,
-            selectionBehavior: p["preview"] != nil ? "preview" : nil,
-            presentation: presentation(p), query: string(p["query"])
+            selectionBehavior: ["side", "bottom"].contains(string(p["preview"]) ?? "") ? "preview" : nil,
+            presentation: presentation(p), onSelectArgs: [primaryKey: primaryID.map(JSONValue.string) ?? .null,
+                primaryLabelKey: primaryLabel.map(JSONValue.string) ?? .null], query: string(p["query"])
         )
         let title = string(p["title"]).flatMap { $0.isEmpty ? nil : $0 } ?? fallbackTitle
         return HarnessScreen(id: node.id, primitive: .picker, title: title, fetchedAt: fetchedAt, picker: picker, actions: listActions)
