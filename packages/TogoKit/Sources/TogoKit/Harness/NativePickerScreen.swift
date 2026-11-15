@@ -130,7 +130,7 @@ public enum NativePickerScreen {
             if let depth = fields["depth"], case .number(let level) = depth { facets["native.depth"] = String(Int(level)) }
             if let kind = string(fields["node"]), !kind.isEmpty { facets["native.node"] = kind }
             byID[id] = .init(id: id, title: label, subtitle: plain(fields["detail"]), badge: badge,
-                             disabled: disabled, facets: facets.isEmpty ? nil : facets)
+                             disabled: disabled, facets: facets.isEmpty ? nil : facets, appearance: appearance(fields))
             listed.append(id)
         }
         var order: [String] = []
@@ -158,10 +158,67 @@ public enum NativePickerScreen {
             items: order.compactMap { byID[$0] }, selected: current, searchable: searchable,
             onSelect: activate, onSelectLabel: primaryLabel, searchMode: searchable ? "remote" : nil,
             contextActions: rowActions.isEmpty ? nil : rowActions,
-            selectionBehavior: p["preview"] != nil ? "preview" : nil
+            selectionBehavior: p["preview"] != nil ? "preview" : nil,
+            presentation: presentation(p)
         )
         let title = string(p["title"]).flatMap { $0.isEmpty ? nil : $0 } ?? fallbackTitle
         return HarnessScreen(id: node.id, primitive: .picker, title: title, fetchedAt: fetchedAt, picker: picker, actions: listActions)
+    }
+
+    /// What the program says about the list as a whole: its empty text, the
+    /// search prompt, a subtitle, what it calls its rows, whether it is still
+    /// loading, the row count, and which facts it shows as columns and how.
+    static func presentation(_ p: [String: JSONValue]) -> HarnessPickerPresentation? {
+        var columns: [HarnessPickerPresentation.Column] = []
+        for entry in array(p["columns"]) {
+            guard let fields = object(entry), let id = string(fields["id"]), !id.isEmpty else { continue }
+            columns.append(.init(id: id, format: string(fields["format"])))
+        }
+        var total: Int?
+        if case .number(let count)? = p["total"], count >= 0, count < 1e9 { total = Int(count) }
+        let result = HarnessPickerPresentation(
+            emptyText: nonEmpty(plain(p["empty"])), searchPrompt: nonEmpty(plain(p["placeholder"])),
+            subtitle: nonEmpty(plain(p["subtitle"])), noun: nonEmpty(string(p["noun"])), state: nonEmpty(string(p["state"])),
+            message: nonEmpty(plain(p["message"])), total: total, columns: columns.isEmpty ? nil : columns
+        )
+        return result == HarnessPickerPresentation() ? nil : result
+    }
+
+    /// How the program draws one row beyond its title: badges, the chips of
+    /// a model's roles, its avatar, its depth in a tree, its status.
+    static func appearance(_ fields: [String: JSONValue]) -> HarnessPickerItemAppearance? {
+        var badges: [HarnessPickerItemAppearance.Badge] = []
+        for entry in array(fields["badges"]) {
+            guard let badge = object(entry), let text = nonEmpty(plain(badge["text"])) else { continue }
+            badges.append(.init(text: text, tone: string(badge["tone"])))
+        }
+        var chips: [HarnessPickerItemAppearance.Chip] = []
+        for entry in array(fields["chips"]) {
+            guard let chip = object(entry), let text = nonEmpty(plain(chip["text"])) else { continue }
+            var on: Bool?, auto: Bool?
+            if case .bool(let value)? = chip["on"] { on = value }
+            if case .bool(let value)? = chip["auto"] { auto = value }
+            chips.append(.init(text: text, on: on, auto: auto))
+        }
+        var mark: HarnessPickerItemAppearance.Mark?
+        if let fields = object(fields["mark"]) {
+            let value = HarnessPickerItemAppearance.Mark(text: nonEmpty(string(fields["text"])), icon: nonEmpty(string(fields["icon"])),
+                                                         seed: nonEmpty(string(fields["seed"])))
+            if value != .init() { mark = value }
+        }
+        var depth: Int?
+        if case .number(let level)? = fields["depth"], level >= 0, level < 1024 { depth = Int(level) }
+        let result = HarnessPickerItemAppearance(
+            badges: badges.isEmpty ? nil : badges, chips: chips.isEmpty ? nil : chips, mark: mark, depth: depth,
+            status: nonEmpty(string(fields["dot"])), tone: nonEmpty(string(fields["tone"])),
+            icon: nonEmpty(string(fields["icon"])), nodeKind: nonEmpty(string(fields["node"]))
+        )
+        return result == HarnessPickerItemAppearance() ? nil : result
+    }
+
+    private static func nonEmpty(_ text: String?) -> String? {
+        guard let text, !text.isEmpty else { return nil }
+        return text
     }
 
     /// The preview pane: its title, the facts, and each section's text as the

@@ -100,6 +100,36 @@ struct NativePickerScreenTests {
         #expect(preview.body.kv?.isEmpty == false)
     }
 
+    /// What the program says about the list and about each row beyond its
+    /// title reaches the shared picker.
+    @Test func listAndRowAppearanceAreKept() throws {
+        let resume = try #require(try NativePickerScreen.map(try Self.node(Self.recorded("resume")), workflow: "resume", fallbackTitle: "Resume", fetchedAt: Self.at).picker)
+        let list = try #require(resume.presentation)
+        #expect(list.emptyText == "No sessions in this folder yet")
+        #expect(list.searchPrompt?.hasPrefix("Search sessions in") == true)
+        #expect(list.noun == "sessions")
+        #expect(list.state == "ready")
+        #expect(list.total == 1)
+        #expect(list.columns == [.init(id: "when", format: "time"), .init(id: "size", format: "dim")])
+        #expect(resume.items.first?.appearance?.status == "success")
+
+        let model = try #require(try NativePickerScreen.map(try Self.node(Self.recorded("model")), workflow: "model", fallbackTitle: "Model", fetchedAt: Self.at).picker)
+        let row = try #require(model.items.first?.appearance)
+        #expect(row.badges == [.init(text: "free", tone: "success")])
+        #expect(row.chips == [.init(text: "web", on: false, auto: true)])
+        #expect(row.mark == .init(text: "We", icon: "provider:web", seed: "web"))
+
+        let tree = try #require(try NativePickerScreen.map(try Self.node(Self.recorded("tree")), workflow: "tree", fallbackTitle: "Tree", fetchedAt: Self.at).picker)
+        #expect(tree.items.first?.appearance?.depth == 0)
+        #expect(tree.items.first?.appearance?.nodeKind == "marker")
+        #expect(tree.items.first?.appearance?.status == "accent")
+
+        // A list or a row that says nothing extra carries nothing extra.
+        let bare = try #require(try NativePickerScreen.map(try Self.node(#"{"id":"n","k":"picker","p":{"items":[{"id":"a","label":"A"}]}}"#), workflow: "login", fallbackTitle: "", fetchedAt: Self.at).picker)
+        #expect(bare.presentation == nil)
+        #expect(bare.items.first?.appearance == nil)
+    }
+
     /// Nothing is guessed: a picker whose extra actions are not classified
     /// for the workflow is refused, naming them.
     @Test func unclassifiedActionsAreRefused() throws {
