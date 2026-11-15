@@ -100,7 +100,7 @@ func (s *Service) Input(ctx context.Context, owner *rpc.Conn, p InputParams) (Di
 			return errLease
 		}
 		for parent := e; parent != nil; parent = d.nodes[parent.parent] {
-			if parent.node.Props["disabled"] == true || parent.node.Props["hidden"] == true {
+			if blocked(parent.node.Props) {
 				return errLease
 			}
 		}

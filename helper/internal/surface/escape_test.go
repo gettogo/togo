@@ -143,6 +143,26 @@ func TestARowIsChosenOnlyFromItsOwnListAsItIsNow(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	// A node under a parent that is disabled with a reason takes no event.
+	f.data <- apc(`f;{"sf":"one","s":3,"ops":[["add","off","one",null,{"id":"off","k":"col","p":{"disabled":"Not available here"},"c":[{"id":"off/b","k":"button","p":{"text":"Go"}}]}]]}`)
+	for i := 0; ; i++ {
+		found := false
+		_ = r.cache.Inspect(func(scene *Scene) error {
+			found = scene.View("one").Document.nodes["off/b"] != nil
+			return nil
+		})
+		if found {
+			break
+		}
+		if i > 2000 {
+			t.Fatal("the frame was not applied")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	under := json.RawMessage(`{"ev":"activate","sf":"one","id":"off/b"}`)
+	if _, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: under}); !errors.Is(err, errLease) {
+		t.Errorf("an event for a node under a parent disabled with a reason: %v", err)
+	}
 	for _, kind := range []string{"select", "activate"} {
 		event, _ := json.Marshal(map[string]any{"ev": kind, "sf": "one", "id": "pick", "item": "pick/a"})
 		if _, err := s.Input(context.Background(), owner, InputParams{ID: lease.ID, Lease: lease.Token, Surface: "one", Instance: 1, Event: event}); err != nil {
