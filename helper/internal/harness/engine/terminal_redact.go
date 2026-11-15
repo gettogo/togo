@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -98,23 +99,44 @@ func (e *Engine) redact(session, text string) string {
 		}
 		return text
 	}
-	for n, sums := range t.sums {
-		runes := []rune(text)
-		if len(runes) < n {
+	// Every entry is looked for in the text as it was read, longest first,
+	// and all that is found is replaced at once: replacing a short entry
+	// first would break up a longer one that contains it and leave the
+	// rest of the longer one showing.
+	lengths := make([]int, 0, len(t.sums))
+	for n := range t.sums {
+		lengths = append(lengths, n)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(lengths)))
+	runes := []rune(text)
+	hide := make([]bool, len(runes))
+	found := false
+	for _, n := range lengths {
+		for at := 0; at+n <= len(runes); at++ {
+			if t.sums[n][t.digest(runes[at:at+n])] {
+				found = true
+				for k := at; k < at+n; k++ {
+					hide[k] = true
+				}
+			}
+		}
+	}
+	if !found {
+		return text
+	}
+	var out []rune
+	for at := 0; at < len(runes); at++ {
+		if !hide[at] {
+			out = append(out, runes[at])
 			continue
 		}
-		var out []rune
-		for at := 0; at < len(runes); {
-			if at+n <= len(runes) && sums[t.digest(runes[at:at+n])] {
-				out = append(out, []rune(redacted)...)
-				at += n
-				continue
-			}
-			out = append(out, runes[at])
-			at++
+		// One mark for each run of hidden text, however many entries
+		// overlap in it.
+		if at == 0 || !hide[at-1] {
+			out = append(out, []rune(redacted)...)
 		}
-		text = string(out)
 	}
+	text = string(out)
 	return text
 }
 

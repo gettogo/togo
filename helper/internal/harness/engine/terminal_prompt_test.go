@@ -250,3 +250,24 @@ func TestAfterARestartNothingIsShownFromATerminalThatTookEntries(t *testing.T) {
 		t.Error("the marker outlived its session")
 	}
 }
+
+// Entries that contain or overlap one another are all hidden whole: hiding
+// the shorter one first must not leave the rest of the longer one showing.
+func TestOverlappingEntriesAreHiddenWhole(t *testing.T) {
+	const id = "s_fakefake37"
+	e, _ := newFake(t, id, "1.2.3")
+	for _, entry := range []string{"neutral", "neutral-entry-7291", "7291-tail"} {
+		if !e.noteEntry(id, entry) {
+			t.Fatal("entry refused")
+		}
+	}
+	for i := 0; i < 20; i++ { // the order entries are tried in must not matter
+		got := e.redact(id, "Invalid neutral-entry-7291-tail, was neutral")
+		if got != "Invalid "+redacted+", was "+redacted {
+			t.Fatalf("redacted text = %q", got)
+		}
+	}
+	if got := e.redact(id, "nothing entered here"); got != "nothing entered here" {
+		t.Errorf("text without an entry was changed: %q", got)
+	}
+}
