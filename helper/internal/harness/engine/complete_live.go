@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -104,6 +105,13 @@ func native(c *spec.Commands, l harness.LiveCommand, m map[string]any) *harness.
 	n.Opens, n.OpensWithArgs, n.Args, n.Destructive, n.ScreenID = intent.Opens, intent.OpensWithArgs, intent.Args, intent.Destructive, intent.Screen
 	if n.Opens == "" {
 		n.Opens = harness.OpensUnknown
+	}
+	// A command that shows something names what it shows, so the app can
+	// tell one picker from another: the command's own name unless the
+	// adapter gives one (/resume and /switch are both pickers).
+	if n.ScreenID == "" && slices.Contains([]string{harness.OpensPicker, harness.OpensSettings, harness.OpensSignIn,
+		harness.OpensScreen, harness.OpensInput, harness.OpensText}, n.Opens) {
+		n.ScreenID = l.Name
 	}
 	if n.Args == "" {
 		switch hint := strings.TrimSpace(toString(m["hint"])); {

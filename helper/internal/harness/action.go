@@ -174,7 +174,9 @@ type CommandNative struct {
 	Icon string `json:"icon,omitempty"`
 	// Source is builtin, skill, file, prompt, extension or custom.
 	Source string `json:"source,omitempty"`
-	// ScreenID names the screen an OpensScreen command shows.
+	// ScreenID names what a command shows (a picker, settings, sign-in, a
+	// screen, an input or a result): the command's canonical name unless the
+	// adapter names it. Absent for commands that show nothing or are unknown.
 	ScreenID string `json:"screenId,omitempty"`
 }
 

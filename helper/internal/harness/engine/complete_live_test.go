@@ -63,7 +63,7 @@ func TestTheProgramsOwnListIsTheCommandCatalog(t *testing.T) {
 	if m := by["/model"]; m.Screen != "model" || m.Kind != spec.CommandPicker || m.Native == nil || m.Native.State != "provider/model" || len(m.Native.Aliases) != 1 {
 		t.Errorf("static command lost its route or its native data: %+v %+v", m, m.Native)
 	}
-	if r := by["/resume"]; r.Native == nil || r.Native.Opens != harness.OpensPicker || r.Native.Args != "optional" || r.Native.Icon != "history" || r.Detail != "Resume a different session" || r.Kind != spec.CommandRun {
+	if r := by["/resume"]; r.Native == nil || r.Native.Opens != harness.OpensPicker || r.Native.Args != "optional" || r.Native.Icon != "history" || r.Native.ScreenID != "resume" || r.Detail != "Resume a different session" || r.Kind != spec.CommandRun {
 		t.Errorf("a command only the program lists: %+v %+v", r, r.Native)
 	}
 	f := by["/fast"]
@@ -82,7 +82,7 @@ func TestTheProgramsOwnListIsTheCommandCatalog(t *testing.T) {
 	if n := by["/need"]; n.Native.Args != "required" {
 		t.Errorf("required argument: %+v", n.Native)
 	}
-	if x := by["/ext"]; x.Native.Opens != harness.OpensUnknown || x.Native.Args != "" {
+	if x := by["/ext"]; x.Native.Opens != harness.OpensUnknown || x.Native.Args != "" || x.Native.ScreenID != "" || by["/exit"].Native.ScreenID != "" {
 		t.Errorf("unclassified command: %+v", x.Native)
 	}
 	if o := by["/only-api"]; o.Native != nil {
