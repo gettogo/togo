@@ -269,6 +269,103 @@ commands:
     - { name: effort, hint: '[level]', detail: Set reasoning effort, screen: effort }
     - { name: compact, hint: '[mode]', detail: Compact the session, action: compact }
   source: commands
-  select: '[.commands[] | {name: .name, detail: .description, hint: .input.hint}]'
+  select: '[.commands[] | {name: .name, detail: .description, hint: .input.hint, aliases: .aliases, source: .source, subcommands: [.subcommands[]? | {name: .name, detail: .description, hint: .usage}]}]'
+  # What each of omp's commands does when run, read from omp 18.20's source
+  # (slash-commands/builtin-*.ts and the handlers they call). A command with
+  # no entry is not known ahead: an extension's, or one whose handler was
+  # not read. They apply to omp's own command list, which the companion
+  # publishes from the running program; omp's RPC list leaves out every
+  # command that only works on its interactive screen (/resume, /new, ...).
+  intents:
+    'source:skill': { opens: turn, args: optional }
+    switch: { opens: picker, with_args: action, args: optional }
+    effort: { opens: picker, with_args: toggle, args: optional }
+    context: { opens: screen, args: none, screen: context }
+    login: { opens: signin, with_args: action, args: optional }
+    resume: { opens: picker, with_args: action, args: optional }
+    model: { opens: screen, args: none, screen: model }
+    loop: { opens: toggle, with_args: turn, args: optional }
+    goal: { opens: input, with_args: turn, args: optional }
+    security: { opens: text, with_args: action, args: optional, destructive: true }
+    settings: { opens: settings, args: none }
+    setup: { opens: signin, with_args: text, args: optional }
+    plan: { opens: toggle, with_args: turn, args: optional }
+    plan-review: { opens: input, args: none }
+    vibe: { opens: toggle, with_args: turn, args: optional }
+    guided-goal: { opens: turn, args: optional }
+    queue: { opens: text, with_args: action, args: optional }
+    fast: { opens: toggle, args: optional }
+    slow: { opens: toggle, args: optional }
+    skillful: { opens: toggle, args: optional }
+    extended-context: { opens: toggle, args: optional }
+    computer: { opens: toggle, args: optional }
+    ratchet: { opens: turn, args: optional, destructive: true }
+    prewalk: { opens: action, args: optional }
+    modelpreset: { opens: picker, with_args: action, args: optional, destructive: true }
+    advisor: { opens: toggle, args: optional }
+    export: { opens: action, args: optional }
+    trace: { opens: action, args: none }
+    dump: { opens: action, args: optional }
+    share: { opens: action, args: none, destructive: true }
+    collab: { opens: action, args: optional, destructive: true }
+    join: { opens: text, with_args: action, args: required }
+    leave: { opens: action, args: none }
+    browser: { opens: toggle, args: optional }
+    copy: { opens: picker, with_args: action, args: optional }
+    open: { opens: action, args: optional }
+    todo: { opens: text, with_args: action, args: optional, destructive: true }
+    session: { opens: text, with_args: action, args: optional, destructive: true }
+    jobs: { opens: text, with_args: action, args: optional, destructive: true }
+    usage: { opens: screen, with_args: picker, args: optional, destructive: true, screen: usage }
+    stats: { opens: text, args: optional }
+    changelog: { opens: text, args: optional }
+    hotkeys: { opens: text, args: none }
+    tools: { opens: text, args: none }
+    extensions: { opens: screen, args: none, screen: extensions }
+    agents: { opens: screen, args: none, screen: agents }
+    git: { opens: screen, args: optional, destructive: true, screen: git }
+    hub: { opens: screen, args: none, screen: hub }
+    branch: { opens: picker, args: none }
+    fork: { opens: action, args: optional }
+    tree: { opens: picker, args: none }
+    logout: { opens: picker, args: optional, destructive: true }
+    mcp: { opens: text, with_args: action, args: optional, destructive: true }
+    ssh: { opens: text, with_args: action, args: optional, destructive: true }
+    new: { opens: action, args: none }
+    fresh: { opens: action, args: none }
+    clear: { opens: action, args: none, destructive: true }
+    delete: { opens: action, args: none, destructive: true }
+    compact: { opens: action, args: optional, destructive: true }
+    shake: { opens: action, args: optional, destructive: true }
+    handoff: { opens: action, args: optional, destructive: true }
+    seance: { opens: picker, with_args: action, args: optional }
+    pin: { opens: toggle, args: optional }
+    unpin: { opens: action, args: optional }
+    btw: { opens: picker, with_args: turn, args: optional }
+    tan: { opens: text, with_args: action, args: required }
+    omfg: { opens: text, with_args: turn, args: required }
+    cleanse: { opens: picker, with_args: turn, args: optional, destructive: true }
+    retry: { opens: action, args: none }
+    debug: { opens: picker, args: none }
+    memory: { opens: text, with_args: action, args: optional, destructive: true }
+    rename: { opens: action, args: optional }
+    move: { opens: input, with_args: action, args: optional }
+    wt: { opens: action, args: optional, destructive: true }
+    add-dir: { opens: text, with_args: action, args: required }
+    remove-dir: { opens: text, with_args: action, args: required }
+    dirs: { opens: text, args: none }
+    exit: { opens: exit, args: none, destructive: true }
+    restart: { opens: exit, args: none, destructive: true }
+    marketplace: { opens: picker, with_args: action, args: optional, destructive: true }
+    plugins: { opens: text, with_args: action, args: optional }
+    reload-plugins: { opens: action, args: none }
+    skills: { opens: text, with_args: action, args: optional, destructive: true }
+    force: { opens: text, with_args: turn, args: required }
+    live: { opens: toggle, args: none }
+    record: { opens: toggle, args: none }
+    pause: { opens: screen, args: none, screen: pause }
+    forget-approvals: { opens: action, args: none, destructive: true }
+    quit: { opens: exit, args: none, destructive: true }
+    status: { opens: screen, with_args: unknown, args: optional, screen: status }
 mission:
   background: { source: jobs, refresh: 10s, map: { item.id: .rowId, item.title: .name, item.subtitle: '.command // .state // empty' } }

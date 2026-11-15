@@ -130,6 +130,69 @@ type Completion struct {
 	Opens string `json:"opens,omitempty"`
 	// Choices are a choice command's values, the current one selected.
 	Choices []CommandChoice `json:"choices,omitempty"`
+	// Native describes the command as the running program has it. It is set
+	// only when the list came from the program itself, which is then the
+	// complete list; without it the list may leave commands out.
+	Native *CommandNative `json:"native,omitempty"`
+}
+
+// What a command does when run, for CommandNative.Opens. Apps treat a value
+// they do not know as OpensUnknown.
+const (
+	OpensPicker   = "picker"   // a list to choose from
+	OpensSettings = "settings" // a settings editor
+	OpensSignIn   = "signin"   // a provider sign-in
+	OpensScreen   = "screen"   // a larger screen of its own (ScreenID names it)
+	OpensInput    = "input"    // asks for text or a confirmation
+	OpensText     = "text"     // shows a result
+	OpensToggle   = "toggle"   // flips a setting
+	OpensAction   = "action"   // acts at once
+	OpensTurn     = "turn"     // sends a prompt to the model
+	OpensExit     = "exit"     // ends or restarts the program
+	OpensUnknown  = "unknown"  // not known ahead: what the program draws decides
+)
+
+// CommandNative is what the running program and its source say about a
+// command. Every field is optional.
+type CommandNative struct {
+	// Opens is what the command does with no arguments; OpensWithArgs what
+	// it does with them, when that differs.
+	Opens         string `json:"opens,omitempty"`
+	OpensWithArgs string `json:"opensWithArgs,omitempty"`
+	// Args is none, optional or required.
+	Args string `json:"args,omitempty"`
+	// State is the program's current value for the command (a model, on).
+	State       string       `json:"state,omitempty"`
+	Subcommands []CommandSub `json:"subcommands,omitempty"`
+	Aliases     []string     `json:"aliases,omitempty"`
+	// Group is the folder the program lists the command under ("skill:").
+	Group string `json:"group,omitempty"`
+	// Destructive is set from the program's source: data loss, a discarded
+	// context, a git change or the end of the process.
+	Destructive bool `json:"destructive,omitempty"`
+	// Icon is the program's own name for the command's icon.
+	Icon string `json:"icon,omitempty"`
+	// Source is builtin, skill, file, prompt, extension or custom.
+	Source string `json:"source,omitempty"`
+	// ScreenID names the screen an OpensScreen command shows.
+	ScreenID string `json:"screenId,omitempty"`
+}
+
+// CommandSub is one subcommand of a command.
+type CommandSub struct {
+	Name   string `json:"name"`
+	Detail string `json:"detail,omitempty"`
+	Hint   string `json:"hint,omitempty"`
+}
+
+// MaxSubcommands bounds a command's subcommands.
+const MaxSubcommands = 32
+
+// LiveCommand is one command as the session's running program lists it.
+type LiveCommand struct {
+	Name, Detail, State, Icon, Group string
+	// Folder marks an entry that only groups other commands.
+	Folder bool
 }
 
 // MaxChoices bounds a completion's choices.

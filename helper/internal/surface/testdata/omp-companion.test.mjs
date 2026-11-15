@@ -5,7 +5,7 @@ import fsDefault from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS } from '../omp.mjs'
+import companion, { applyPickerQuery, watchSubmit, SUBMIT_WATCH_MS, listCommands, MAX_COMMANDS } from '../omp.mjs'
 
 test('picker query uses original session filter and never keyboard syntax', () => {
   const input = { value: '', getValue() { return this.value }, setValue(value) { this.value = value } }
@@ -274,4 +274,42 @@ test('the send names the text node inside the focused editor', () => {
   watchSubmit({ getFocused: () => editor }, { id: 'l.line/input', text: '/model' }, () => taken++)
   editor.onSubmit('/model')
   assert.equal(taken, 1)
+})
+
+// The program's own "/" list: complete, read-only, bounded.
+test('command list comes from the program provider, with folders expanded', async () => {
+  const asked = []
+  const provider = { async getSuggestions(lines, line, column) {
+    asked.push([lines[0], line, column])
+    if (lines[0] === '/') return { prefix: '/', items: [
+      { value: 'resume', label: 'resume', iconName: 'history', description: 'Resume a different session' },
+      { value: 'switch', iconName: 'swap', description: 'Model: provider/model-id', nativeDetail: 'Switch model for this session', state: 'provider/model-id' },
+      { value: 'skill:', iconName: 'skill', description: '2 skills' },
+      { value: 'resume', description: 'a duplicate is listed once' },
+      { value: 'has space', description: 'not a command name' },
+      { value: 42 }, null,
+    ] }
+    if (lines[0] === '/skill:') return { items: [
+      { value: 'skill:first', description: 'First   skill\nsecond line', iconName: 'skill' },
+      { value: 'skill:', description: 'the folder again' }, { value: 'other', description: 'not a member' },
+    ] }
+    return null
+  } }
+  assert.deepEqual(await listCommands(provider), [
+    { name: 'resume', detail: 'Resume a different session', state: undefined, icon: 'history', group: undefined },
+    { name: 'switch', detail: 'Switch model for this session', state: 'provider/model-id', icon: 'swap', group: undefined },
+    { name: 'skill:', detail: '2 skills', state: undefined, icon: 'skill', group: undefined, folder: true },
+    { name: 'skill:first', detail: 'First skill second line', state: undefined, icon: 'skill', group: 'skill:' },
+  ])
+  assert.deepEqual(asked, [['/', 0, 1], ['/skill:', 0, 7]])
+})
+
+test('command list is bounded and absent without a provider', async () => {
+  assert.equal(await listCommands(undefined), undefined)
+  assert.equal(await listCommands({}), undefined)
+  const many = { getSuggestions: async () => ({ items: Array.from({ length: MAX_COMMANDS + 50 }, (_, i) => ({ value: 'c' + i, description: 'x'.repeat(5000), state: 's'.repeat(900) })) }) }
+  const rows = await listCommands(many)
+  assert.equal(rows.length, MAX_COMMANDS)
+  assert.ok(Buffer.byteLength(rows[0].detail) <= 400 && Buffer.byteLength(rows[0].state) <= 200)
+  assert.deepEqual(await listCommands({ getSuggestions: async () => ({ items: 'nope' }) }), [])
 })

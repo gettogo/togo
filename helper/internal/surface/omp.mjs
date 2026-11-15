@@ -67,6 +67,55 @@ export function applyPickerQuery(tui, event) {
   return true
 }
 
+// The program's own slash commands, as its editor offers them after "/".
+// Its command list over RPC leaves out every command that only has a
+// handler for the interactive screen (resume, new, settings, tree, ...);
+// this is the complete one, for this session's skills and extensions too.
+export const MAX_COMMANDS = 400, MAX_COMMANDS_FILE = 256 * 1024
+const COMMANDS_EVERY_MS = 5000
+
+const short = (value, limit) => {
+  if (typeof value !== 'string') return undefined
+  const text = value.replace(/\s+/g, ' ').trim()
+  return text ? (Buffer.byteLength(text) > limit ? Buffer.from(text).subarray(0, limit).toString('utf8').replace(/\uFFFD$/, '') : text) : undefined
+}
+
+// listCommands asks the provider for the "/" suggestions and, for an entry
+// that is a folder of commands ("skill:"), for its members. It reads only:
+// the editor, its draft and the screen are not involved.
+export async function listCommands(provider) {
+  if (typeof provider?.getSuggestions !== 'function') return undefined
+  const ask = async text => {
+    const found = await provider.getSuggestions([text], 0, text.length)
+    return Array.isArray(found?.items) ? found.items : []
+  }
+  const rows = [], seen = new Set()
+  const add = (item, group) => {
+    const name = short(item?.value, 128)
+    if (!name || seen.has(name) || rows.length >= MAX_COMMANDS || /[\s/]/.test(name)) return undefined
+    seen.add(name)
+    const state = short(item.state, 200)
+    // With a state the description reads "<Label>: <state>" and the real
+    // description is in nativeDetail.
+    const detail = short(state === undefined ? item.description : item.nativeDetail ?? item.description, 400)
+    const row = { name, detail, state, icon: short(item.iconName, 40), group }
+    rows.push(row)
+    return row
+  }
+  for (const item of await ask('/')) {
+    const row = add(item)
+    if (!row || !row.name.endsWith(':')) continue
+    row.folder = true
+    try {
+      for (const member of await ask('/' + row.name)) {
+        const value = short(member?.value, 128)
+        if (value && value.startsWith(row.name) && value !== row.name) add(member, row.name)
+      }
+    } catch { /* The folder is still listed; its members are not known. */ }
+  }
+  return rows
+}
+
 // How long a send may wait for the original editor to submit it.
 export const SUBMIT_WATCH_MS = 2000
 
@@ -138,6 +187,7 @@ export default function (pi) {
   // The sequence of the last native send whose text the original editor's
   // own submit callback received. Proof the program took it, not that it is done.
   let consumed = 0, unwatchSubmit
+  let provider, publishedCommands = '', listing = false, listedAt = -Infinity
   let publishedGeneration = false
   const location = () => ({
     conversation: String(ctx?.sessionManager?.getSessionId?.() ?? ''),
@@ -163,6 +213,24 @@ export default function (pi) {
       }
       publishedNative = value.native
     } catch { /* Helper removal cannot prevent the in-process lease expiry. */ }
+  }
+  // Publishes the program's command list beside the state, when it changed.
+  async function publishCommands() {
+    if (stopped || listing || !provider) return
+    listing = true
+    listedAt = performance.now()
+    try {
+      const commands = await listCommands(provider)
+      if (!commands || stopped) return
+      const body = JSON.stringify({ version: 1, generation: config.generation, ...location(), commands })
+      if (body === publishedCommands || Buffer.byteLength(body) > MAX_COMMANDS_FILE) return
+      const temporary = path.join(root, `.commands-${process.pid}.tmp`)
+      fs.writeFileSync(temporary, body, { mode: 0o600 })
+      fs.renameSync(temporary, path.join(root, 'commands.json'))
+      publishedCommands = body
+    } catch { /* The helper falls back to the program's RPC list. */ } finally {
+      listing = false
+    }
   }
   function switchRenderer(native) {
     // OMP reads the override synchronously during start(). Keep the renderer
@@ -274,6 +342,11 @@ export default function (pi) {
         typeof tui?.injectDebugInput !== 'function') throw new Error('unsupported')
       available = true
       bindInput()
+      // The factory receives the program's provider each time it is rebuilt
+      // and returns it unchanged: this only keeps a reference for listing.
+      if (typeof ctx.ui.addAutocompleteProvider === 'function') {
+        try { ctx.ui.addAutocompleteProvider(current => { provider = current; listedAt = -Infinity; return current }) } catch { /* optional */ }
+      }
       try {
         watcher = fs.watch(root, (_event, file) => { if (!file || String(file) === 'command.json') processCommand() })
         watcher.on('error', () => { watcher?.close(); watcher = undefined })
@@ -286,6 +359,8 @@ export default function (pi) {
         // including a protocol fallback, rather than only the requested mode.
         if (Boolean(tui?.nativeRendering) !== publishedNative) publish()
         processCommand()
+        // Current values (model, effort, toggles) are part of the list.
+        if (performance.now() - listedAt >= COMMANDS_EVERY_MS) void publishCommands()
       }, 250)
       timer.unref?.()
       publish()

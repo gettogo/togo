@@ -3584,7 +3584,24 @@
               "role": { "description": "destructive: the app asks in a system confirmation before running.", "enum": ["normal", "destructive"] },
               "action": { "description": "A harness.action id the command runs instead of typing its text (e.g. compact, undo).", "type": "string" },
               "opens": { "description": "A native home the command opens instead of typing: status, changes, or a screen id.", "type": "string" },
-              "choices": { "description": "For kind choice: the values, with the current one selected.", "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/HarnessCommandChoice" } }
+              "choices": { "description": "For kind choice: the values, with the current one selected.", "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/HarnessCommandChoice" } },
+              "native": {
+                "description": "What the running program and its source say about a command. Present only when the list came from the program itself, which is then the complete list. Unknown keys and unknown opens values must be tolerated.",
+                "type": "object",
+                "properties": {
+                  "opens": { "description": "What the command does with no arguments: picker, settings, signin, screen, input, text, toggle, action, turn, exit or unknown.", "type": "string", "maxLength": 32 },
+                  "opensWithArgs": { "type": "string", "maxLength": 32 },
+                  "args": { "enum": ["none", "optional", "required"] },
+                  "state": { "description": "The program's current value for the command.", "type": "string", "maxLength": 200 },
+                  "subcommands": { "type": "array", "maxItems": 32, "items": { "type": "object", "properties": { "name": { "type": "string" }, "detail": { "type": "string" }, "hint": { "type": "string" } }, "required": ["name"] } },
+                  "aliases": { "type": "array", "maxItems": 32, "items": { "type": "string" } },
+                  "group": { "type": "string", "maxLength": 128 },
+                  "destructive": { "type": "boolean" },
+                  "icon": { "type": "string", "maxLength": 40 },
+                  "source": { "type": "string", "maxLength": 32 },
+                  "screenId": { "type": "string", "maxLength": 64 }
+                }
+              }
             },
             "required": ["insert", "title"],
             "additionalProperties": false

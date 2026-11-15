@@ -522,6 +522,21 @@ type Commands struct {
 	Source string          `yaml:"source"`
 	Select string          `yaml:"select"`
 	Static []StaticCommand `yaml:"static"`
+	// Intents says what each of the program's commands does when run, by
+	// command name, read from the program's source for the versions the
+	// adapter supports. A key "source:<kind>" covers every command of that
+	// source (skill, file, prompt) that has no entry of its own. They are
+	// used only with the program's own command list (Config.LiveCommands).
+	Intents map[string]Intent `yaml:"intents"`
+}
+
+// Intent is what a command does when run: see harness.CommandNative.
+type Intent struct {
+	Opens         string `yaml:"opens"`
+	OpensWithArgs string `yaml:"with_args"`
+	Args          string `yaml:"args"`
+	Destructive   bool   `yaml:"destructive"`
+	Screen        string `yaml:"screen"`
 }
 
 // StaticCommand is a slash command the adapter lists itself.

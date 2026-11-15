@@ -9,6 +9,7 @@ import (
 	claudehook "github.com/gettogo/togo/helper/internal/adapters/claude"
 	"github.com/gettogo/togo/helper/internal/agents"
 	"github.com/gettogo/togo/helper/internal/gitx"
+	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/adapters/shell"
 	"github.com/gettogo/togo/helper/internal/harness/anchor"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
@@ -16,6 +17,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/ports"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
+	"github.com/gettogo/togo/helper/internal/surface"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
@@ -46,7 +48,19 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		// read when called, never at construction.
 		SurfaceHeld:      func(id string) bool { return c.Surface != nil && c.Surface.Held(id) },
 		SurfaceAvailable: func(ctx context.Context, id string) bool { return c.Surface != nil && c.Surface.Available(ctx, id) },
-		Status:           c.Hub.Status,
+		// The running program's own command list, where its companion publishes one.
+		LiveCommands: func(id string) []harness.LiveCommand {
+			list, ok := (&surface.Companions{Home: o.Home}).Commands(id)
+			if !ok {
+				return nil
+			}
+			out := make([]harness.LiveCommand, 0, len(list))
+			for _, cmd := range list {
+				out = append(out, harness.LiveCommand{Name: cmd.Name, Detail: cmd.Detail, State: cmd.State, Icon: cmd.Icon, Group: cmd.Group, Folder: cmd.Folder})
+			}
+			return out
+		},
+		Status: c.Hub.Status,
 		Exit: func(id string) *wire.SessionExit {
 			_, x := c.Hub.Exit(id)
 			return x

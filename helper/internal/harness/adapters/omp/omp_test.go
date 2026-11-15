@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -387,4 +388,36 @@ func mustRead(t *testing.T, name string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// Every intent names something an app knows how to present.
+func TestCommandIntentsUseTheKnownVocabulary(t *testing.T) {
+	ad, err := spec.Parse(AdapterFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	known := []string{harness.OpensPicker, harness.OpensSettings, harness.OpensSignIn, harness.OpensScreen, harness.OpensInput,
+		harness.OpensText, harness.OpensToggle, harness.OpensAction, harness.OpensTurn, harness.OpensExit, harness.OpensUnknown}
+	if len(ad.Commands.Intents) < 80 {
+		t.Fatalf("only %d intents", len(ad.Commands.Intents))
+	}
+	for name, in := range ad.Commands.Intents {
+		if !slices.Contains(known, in.Opens) || (in.OpensWithArgs != "" && !slices.Contains(known, in.OpensWithArgs)) {
+			t.Errorf("/%s: opens %q, with args %q", name, in.Opens, in.OpensWithArgs)
+		}
+		if !slices.Contains([]string{"", "none", "optional", "required"}, in.Args) {
+			t.Errorf("/%s: args %q", name, in.Args)
+		}
+		if (in.Opens == harness.OpensScreen) != (in.Screen != "") {
+			t.Errorf("/%s: screen %q for opens %q", name, in.Screen, in.Opens)
+		}
+	}
+	for _, name := range []string{"resume", "new", "settings", "tree", "fork", "login"} {
+		if _, ok := ad.Commands.Intents[name]; !ok {
+			t.Errorf("/%s, which omp's RPC list leaves out, has no intent", name)
+		}
+	}
+	if in := ad.Commands.Intents["exit"]; in.Opens != harness.OpensExit || !in.Destructive {
+		t.Errorf("/exit = %+v", in)
+	}
 }

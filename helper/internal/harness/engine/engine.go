@@ -80,6 +80,10 @@ type Config struct {
 	// Keys typed then would be taken as someone at the desk and end the
 	// native screen, so nothing is typed while it is true. Nil means never.
 	SurfaceHeld func(session string) bool
+	// LiveCommands is the session's command list as its running program
+	// has it, or nil when the program does not publish one. It is the
+	// complete list, where a harness's command API may leave commands out.
+	LiveCommands func(session string) []harness.LiveCommand
 	// SurfaceAvailable reports, without taking anything, whether the
 	// session's running agent can show its screens natively. Nil means no.
 	SurfaceAvailable func(ctx context.Context, session string) bool
