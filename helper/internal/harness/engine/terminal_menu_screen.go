@@ -147,13 +147,38 @@ func (e *Engine) terminalMenuScreen(ctx context.Context, s *sess, fromName strin
 		// field holds something else now, someone searched at the desk in
 		// between: nothing is typed over it, and the hold is kept so the
 		// phone can read the list as it is.
-		if before, given := queryArg["before"]; given && before != menu.Query {
+		// A search that changes the field must say what it saw there.
+		before, given := queryArg["before"]
+		if !given || before != menu.Query {
 			return harness.Screen{}, &harness.FallbackError{Reason: "query", Detail: "The search changed at the desk. Nothing was typed."}
 		}
-		for range []rune(menu.Query) {
+		// The old text goes one character at a time, and before each
+		// Backspace the field must still read as the last one left it: a
+		// character typed at the desk meanwhile is not ours to remove.
+		changed := &harness.FallbackError{Reason: "query", Detail: "The search changed at the desk. Nothing more was typed."}
+		for left := []rune(menu.Query); len(left) > 0; {
+			now, ok := e.fieldText(ctx, s, m)
+			if !ok || now != string(left) {
+				return harness.Screen{}, changed
+			}
 			if err := e.menuKeys(ctx, s, "BSpace"); err != nil {
 				return harness.Screen{}, err
 			}
+			left = left[:len(left)-1]
+			seen := false
+			for deadline := time.Now().Add(e.scaled(700 * time.Millisecond)); time.Now().Before(deadline); {
+				if now, ok := e.fieldText(ctx, s, m); ok && now == string(left) {
+					seen = true
+					break
+				}
+				time.Sleep(e.scaled(40 * time.Millisecond))
+			}
+			if !seen {
+				return harness.Screen{}, changed
+			}
+		}
+		if now, ok := e.fieldText(ctx, s, m); !ok || now != "" {
+			return harness.Screen{}, changed
 		}
 		if query != "" {
 			if err := e.menuType(ctx, s, query); err != nil {
@@ -363,4 +388,18 @@ func (e *Engine) pageMenu(ctx context.Context, s *sess, m *terminalMenu) (*harne
 	m.ended = m.ended || ended
 	e.menuMu.Unlock()
 	return e.menuScreen(m, menu, ended), nil
+}
+
+// fieldText is the text in the list's search field now: read from the list
+// when it can be made out, else from the line under its title.
+func (e *Engine) fieldText(ctx context.Context, s *sess, m *terminalMenu) (string, bool) {
+	if styled, err := e.cfg.StyledScreen(ctx, s.id); err == nil {
+		if menu, ok := termmenu.Read(styled); ok && menu.Title == m.panel && menu.QueryKnown {
+			return menu.Query, true
+		}
+	}
+	if plain, err := e.cfg.Screen(ctx, s.id); err == nil && m.panel != "" {
+		return fieldUnderTitle(plain, m.panel)
+	}
+	return "", false
 }

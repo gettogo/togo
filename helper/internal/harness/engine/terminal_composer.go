@@ -25,6 +25,9 @@ import (
 // before the cursor, and the cursor's column.
 type composerMark struct {
 	prefix string
+	// suffix is what stood after the cursor: nothing, or the placeholder
+	// an empty line shows. A draft after the cursor reads differently.
+	suffix string
 	x      int
 	ok     bool
 	// visible: the harness showed its cursor there. A harness that never
@@ -64,7 +67,7 @@ func (e *Engine) markComposer(ctx context.Context, s *sess) composerMark {
 	if strings.TrimSpace(prefix) == "" {
 		return composerMark{}
 	}
-	return composerMark{prefix: prefix, x: x, ok: true, visible: visible, sess: s, conv: menuConv(ctx, s)}
+	return composerMark{prefix: prefix, suffix: afterCursor(lines[y], x), x: x, ok: true, visible: visible, sess: s, conv: menuConv(ctx, s)}
 }
 
 // cursorAt reports the cursor's column and the text of its line.
@@ -117,7 +120,7 @@ func (e *Engine) composerBack(ctx context.Context, s *sess, mark composerMark) b
 	for len(line) < x {
 		line = append(line, ' ')
 	}
-	if string(line[:x]) != mark.prefix {
+	if string(line[:x]) != mark.prefix || afterCursor(lines[y], x) != mark.suffix {
 		return false
 	}
 	if e.cfg.StyledScreen != nil {
@@ -198,4 +201,14 @@ func (e *Engine) awaitingComposer(s *sess) bool {
 	delete(e.awaiting, s.id)
 	e.menuMu.Unlock()
 	return false
+}
+
+// afterCursor is what a line holds from the cursor's column on, without
+// trailing spaces or a box's closing edge.
+func afterCursor(line string, x int) string {
+	rs := []rune(trimEdge(line))
+	if x < 0 || x >= len(rs) {
+		return ""
+	}
+	return strings.TrimRight(string(rs[x:]), " ")
 }
