@@ -421,3 +421,33 @@ func TestCommandIntentsUseTheKnownVocabulary(t *testing.T) {
 		t.Errorf("/exit = %+v", in)
 	}
 }
+
+// omp retries a request the provider failed: the reply after the failed
+// one, with no user entry between, runs in a new turn and ends it.
+func TestRetryAfterModelErrorContinuesWork(t *testing.T) {
+	m := newSession(env())
+	retry := `{"type":"message","id":"e0f1","parentId":"edd5d43e","timestamp":"2026-11-08T04:14:20.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Hello."}],"provider":"llama.cpp","model":"qwen3.8-27b","usage":{"input":1800,"output":12,"cacheRead":1500,"cacheWrite":0,"totalTokens":3312,"cost":{"total":0.0009}},"stopReason":"stop","timestamp":1794111260000}}`
+	recs := records(t, "error-401.jsonl", "session")
+	recs = append(recs[:7], harness.Record{Source: "session", At: t0, Data: json.RawMessage(retry)})
+	got := run(m, recs).last()
+	if a := got["e0f1"]; a.Assistant == nil || a.TurnID != "turn-e0f1" {
+		t.Fatalf("retry reply %+v", a)
+	}
+	if turn := got["turn-e0f1"]; turn.Turn == nil || turn.Turn.State != harness.StateOK {
+		t.Fatalf("retry turn %+v", turn.Turn)
+	}
+	if got["turn-95ab0ab2"].Turn.State != harness.StateFailed || m.State()["working"] != "false" {
+		t.Fatal("first turn or working state wrong")
+	}
+}
+
+func TestRetryTurnStaysWorkingUntilItEnds(t *testing.T) {
+	m := newSession(env())
+	retry := `{"type":"message","id":"e0f2","parentId":"edd5d43e","timestamp":"2026-11-08T04:14:20.000Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_r1","name":"read","arguments":{"path":"/Users/user/proj/a.go"}}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"toolUse","timestamp":1794111260000}}`
+	recs := records(t, "error-401.jsonl", "session")
+	recs = append(recs[:7], harness.Record{Source: "session", At: t0, Data: json.RawMessage(retry)})
+	run(m, recs)
+	if m.State()["working"] != "true" {
+		t.Fatalf("state %v", m.State())
+	}
+}

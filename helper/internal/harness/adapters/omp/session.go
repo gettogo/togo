@@ -312,6 +312,14 @@ func (s *session) assistant(id, parent string, m map[string]any, at time.Time) (
 	var items []harness.Item
 	var ops []harness.Op
 	tid := ""
+	if parent == "" && s.turn != nil && s.turn.ended && s.turn.item.Turn.State == harness.StateFailed {
+		// omp retries a failed request on its own: the reply that follows
+		// the failed one, with no user entry between, continues the work.
+		s.turn = &turn{files: map[string]bool{}, item: harness.Item{ID: "turn-" + id, Kind: harness.KindTurn, At: at,
+			Turn: &harness.TurnBody{State: harness.StateRunning, Started: at}}}
+		s.turn.item.TurnID = s.turn.item.ID
+		items = append(items, s.turn.item)
+	}
 	if parent == "" {
 		tid = s.turnID()
 		if p, mod := str(m, "provider"), str(m, "model"); mod != "" {
