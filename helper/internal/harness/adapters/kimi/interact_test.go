@@ -150,3 +150,40 @@ func TestAnswerBranch(t *testing.T) {
 		}
 	}
 }
+
+// Kimi can be cancelled, killed or relaunched with `--continue` while a
+// question waits, the log carrying on without a new header: the question
+// closes with the turn, else the card and its Needs row stay for good.
+func TestOpenQuestionClosesWhenItsTurnEnds(t *testing.T) {
+	lines := fixture(t, "wire-question.jsonl")
+	cut := -1
+	for i, l := range lines {
+		if strings.Contains(l, `"type":"interaction.request"`) {
+			cut = i
+			break
+		}
+	}
+	if cut < 0 {
+		t.Fatal("no question in the fixture")
+	}
+	for _, end := range []string{
+		`{"type":"turn.cancel","agentId":"main","time":1789999700000}`,
+		`{"type":"turn.prompt","agentId":"main","turnId":2,"time":1789999700000,"origin":{"kind":"user"},"input":[{"type":"text","text":"next"}]}`,
+	} {
+		m := NewWire(harness.Env{SessionID: "s1"})
+		out := replay(t, m, lines[:cut+1])
+		var id string
+		for k, it := range out.items {
+			if it.Question != nil {
+				id = k
+			}
+		}
+		if id == "" || out.items[id].Question.Answered != nil {
+			t.Fatalf("question not open before the end: %q", id)
+		}
+		after := replay(t, m, []string{end})
+		if q := after.items[id].Question; q == nil || q.Answered == nil {
+			t.Fatalf("%s: question still open: %+v", end[:40], q)
+		}
+	}
+}

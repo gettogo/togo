@@ -117,8 +117,7 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	defer w.mu.Unlock()
 	switch r.Type {
 	case "metadata":
-		items, ops := w.endTurn(harness.StateInterrupted, at)
-		return append(w.closeOpen(), items...), ops
+		return w.endTurn(harness.StateInterrupted, at)
 	case "profile.bind", "config.update", "llm.request":
 		return nil, w.setModel(r.ModelAlias, r.Effort)
 	case "permission.set_mode":
@@ -236,10 +235,12 @@ func (w *Wire) turnItem(state string, ended *time.Time) harness.Item {
 
 func (w *Wire) endTurn(state string, at time.Time) ([]harness.Item, []harness.Op) {
 	w.state["working"] = "false"
+	// A prompt still open when its turn ends is never answered (the turn
+	// was cancelled, or Kimi was killed and continued in this log).
+	items := w.closeOpen()
 	if w.turn == nil {
-		return nil, nil
+		return items, nil
 	}
-	var items []harness.Item
 	for id, tool := range w.tools {
 		if tool.Tool.State == harness.StateRunning {
 			tool.Tool.State, tool.Tool.Ended = harness.StateInterrupted, x.Ptr(at)
