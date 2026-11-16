@@ -11,7 +11,7 @@ import Foundation
 /// `event` notifications, sent once `subscribe` was called, go to `notifications`.
 public actor HelperClient {
     private let channel: any ExecChannel
-    private let callTimeout: Duration
+    private let callTimeout: Duration?
     private var nextID = 1
     private var pending: [Int: PendingCall] = [:]
     private var capabilities: Set<String>?
@@ -35,7 +35,7 @@ public actor HelperClient {
     /// `harness` notifications for opened sessions; see `HelperClient+Harness.swift`.
     public nonisolated let harnessNotifications: AsyncStream<HarnessNotification>
 
-    public init(channel: any ExecChannel, callTimeout: Duration = .seconds(10)) {
+    public init(channel: any ExecChannel, callTimeout: Duration? = nil) {
         self.channel = channel
         self.callTimeout = callTimeout
         (outbox, outboxSink) = AsyncStream.makeStream()
@@ -78,18 +78,6 @@ public actor HelperClient {
     public func listSessions() async throws -> [Session] {
         let list: SessionList = try await readyCall(.sessionList, EmptyParams())
         return list.sessions
-    }
-
-    public func createSession(_ params: CreateSessionParams) async throws -> Session {
-        try await readyCall(.sessionCreate, params)
-    }
-
-    public func killSession(id: String) async throws {
-        let _: EmptyResult = try await readyCall(.sessionKill, SessionIDParams(id: id))
-    }
-
-    public func renameSession(id: String, name: String) async throws -> Session {
-        try await readyCall(.sessionRename, RenameParams(id: id, name: name))
     }
 
     /// The argv to run on the host. Pass it through `shellQuote` before sending it
@@ -354,7 +342,7 @@ public actor HelperClient {
                 pending[id] = PendingCall(
                     method: method.rawValue,
                     continuation: continuation,
-                    timer: timer(for: id, method: method.rawValue, after: callTimeout * Self.queuedTimeoutFactor)
+                    timer: timer(for: id, method: method.rawValue, after: deadline(for: method.rawValue) * Self.queuedTimeoutFactor)
                 )
                 if Task.isCancelled {
                     finish(id, with: CancellationError())
@@ -372,6 +360,10 @@ public actor HelperClient {
         }
     }
 
+    private func deadline(for method: String) -> Duration {
+        callTimeout ?? HelperCallDeadline.duration(for: method)
+    }
+
     /// How much longer than the call timeout a frame may wait to be written.
     static let queuedTimeoutFactor = 3
 
@@ -386,7 +378,7 @@ public actor HelperClient {
     private func sent(_ id: Int) {
         guard let call = pending[id] else { return }
         call.timer.cancel()
-        pending[id]?.timer = timer(for: id, method: call.method, after: callTimeout)
+        pending[id]?.timer = timer(for: id, method: call.method, after: deadline(for: call.method))
     }
 
     private func finish(_ id: Int, with error: any Error) {
@@ -499,35 +491,4 @@ public actor HelperClient {
             call.continuation.resume(throwing: HelperError.closed)
         }
     }
-}
-
-private struct OutgoingFrame: Sendable {
-    let id: Int
-    let bytes: Data
-}
-
-private struct PendingCall {
-    let method: String
-    let continuation: CheckedContinuation<Data, any Error>
-    var timer: Task<Void, Never>
-}
-
-/// The routing fields of an incoming message. `result` is decoded later into the type
-/// the waiting call expects, so a large capture is parsed once, not via `JSONValue`.
-private struct Envelope: Decodable {
-    var id: RPCID?
-    var method: String?
-    var error: RPCErrorObject?
-}
-
-private struct EventNotification: Decodable {
-    var params: EventEnvelope
-}
-
-private struct SnapshotSeq: Decodable {
-    var seq: Int
-}
-
-private struct ResultEnvelope<R: Decodable>: Decodable {
-    var result: R
 }

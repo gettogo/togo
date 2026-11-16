@@ -87,7 +87,9 @@ final class NoHelper: HelperCalling {
         dropped.withLock { $0.append(id) }
     }
 
-    func dropAll() async {}
+    let dropAllCount = Mutex(0)
+
+    func dropAll() async { dropAllCount.withLock { $0 += 1 } }
 }
 
 final class CountingPrompter: ConnectionPrompter {

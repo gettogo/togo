@@ -363,4 +363,46 @@ import struct TogoPush.Pairing
 
         #expect(reports == [["r1"], []])
     }
+    @Test func failedAgentDiscoveryWaitsForAnotherOnlineEpoch() async throws {
+        let watches = Watches()
+        let helpers = NoHelper()
+        let services = services(watches: watches, helpers: helpers)
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let watch = try #require(watches[Samples.studio])
+        let online = HostSnapshot(hostID: Samples.studio, reach: .online)
+        watch.sink.yield(online)
+        await eventually { helpers.mayAsk.withLock { $0.count } == 1 }
+        // Let the failing background call finish before publishing another snapshot.
+        try await Task.sleep(for: .milliseconds(30))
+        for _ in 0..<5 { watch.sink.yield(online) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(helpers.mayAsk.withLock { $0.count } == 1)
+        watch.sink.yield(HostSnapshot(hostID: Samples.studio, reach: .offline("disconnected")))
+        watch.sink.yield(online)
+        await eventually { helpers.mayAsk.withLock { $0.count } == 2 }
+        #expect(helpers.mayAsk.withLock { $0 } == [false, false])
+    }
+
+    @Test func returningToForegroundCancelsDelayedHelperTeardown() async throws {
+        let helpers = NoHelper()
+        let services = services(watches: Watches(), helpers: helpers)
+        var cleanups: [CheckedContinuation<Void, Never>] = []
+        services.beforeDroppingHelpers = {
+            await withCheckedContinuation { cleanups.append($0) }
+        }
+        services.setForeground(false)
+        await eventually { cleanups.count == 1 }
+        services.setForeground(true)
+        cleanups[0].resume()
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(helpers.dropAllCount.withLock { $0 } == 0)
+
+        services.setForeground(false)
+        await eventually { cleanups.count == 2 }
+        cleanups[1].resume()
+        await eventually { helpers.dropAllCount.withLock { $0 } == 1 }
+        #expect(helpers.dropAllCount.withLock { $0 } == 1)
+    }
+
 }

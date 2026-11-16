@@ -56,13 +56,13 @@ actor HelperChannels {
         do {
             return try await HelperRequestExecution.once({ try await body(opened.client) }, onClosed: {
                 await self.drop(record.id, ifStill: opened)
+            }, onTimedOut: { _ in
+                // A timeout does not prove a mutation failed. Check the connection for the
+                // next request, then preserve uncertain delivery for this one.
+                if await HelperLiveness.isDead(ping: { try await opened.client.keepalive() }) {
+                    await self.drop(record.id, ifStill: opened)
+                }
             })
-        } catch HelperError.timeout(let method) {
-            // Slow, or dead without knowing it: one more ping tells which.
-            if await HelperLiveness.isDead(ping: { try await opened.client.keepalive() }) {
-                await drop(record.id, ifStill: opened)
-            }
-            throw HelperError.timeout(method: method)
         } catch {
             if error is SSHError { await drop(record.id, ifStill: opened) }
             throw error
@@ -92,8 +92,16 @@ actor HelperChannels {
     }
 
     func dropAll() async {
-        for id in Array(channels.keys) {
-            await drop(id)
+        guard !Task.isCancelled else { return }
+        // Detach the entire old generation before awaiting close. A new call may open a
+        // replacement while an earlier channel is still draining.
+        let retired = Array(channels.values)
+        channels.removeAll()
+        for task in retired {
+            if let channel = try? await task.value {
+                await channel.client.close()
+                await channel.connection.close()
+            }
         }
     }
 
