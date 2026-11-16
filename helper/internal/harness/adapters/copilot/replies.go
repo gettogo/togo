@@ -54,10 +54,17 @@ func replies(env harness.Env, session string, offset int64) ([]hookstyle.Reply, 
 		return nil, offset
 	}
 	var out []hookstyle.Reply
+	start := offset
 	r := bufio.NewReader(io.LimitReader(f, maxRead))
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
+			if offset+int64(len(line))-start >= maxRead {
+				// The read limit cut a line that is longer than a read
+				// (a large tool result): step over it, else every later
+				// read stops at the same place.
+				return out, skipLine(f, offset+int64(len(line)), offset)
+			}
 			// A line without its newline is still being written.
 			return out, offset
 		}
@@ -83,5 +90,25 @@ func replies(env harness.Env, session string, offset int64) ([]hookstyle.Reply, 
 			r.Calls = append(r.Calls, c.ToolCallID)
 		}
 		out = append(out, r)
+	}
+}
+
+// skipLine returns the offset just past the line that runs through from,
+// or fallback when its newline is not written yet.
+func skipLine(f *os.File, from, fallback int64) int64 {
+	if _, err := f.Seek(from, io.SeekStart); err != nil {
+		return fallback
+	}
+	r := bufio.NewReaderSize(f, 64<<10)
+	for {
+		chunk, err := r.ReadSlice('\n')
+		from += int64(len(chunk))
+		switch {
+		case err == nil:
+			return from
+		case err == bufio.ErrBufferFull:
+		default:
+			return fallback
+		}
 	}
 }

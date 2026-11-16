@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/adapters/hookstyle"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
@@ -139,4 +141,22 @@ func kinds(items []harness.Item) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// One log line longer than a read (a big tool result) must not stop the
+// replies that follow it.
+func TestRepliesStepOverALineLongerThanARead(t *testing.T) {
+	env, path := eventsFile(t)
+	big := `{"type":"tool.execution_complete","data":{"result":"` + strings.Repeat("x", maxRead+100) + `"}}`
+	appendLines(t, path, evUser, big, evFinal)
+	var got []hookstyle.Reply
+	offset := int64(0)
+	for i := 0; i < 4 && len(got) == 0; i++ {
+		var more []hookstyle.Reply
+		more, offset = replies(env, testSession, offset)
+		got = append(got, more...)
+	}
+	if len(got) != 1 || got[0].Text != "Every response now carries an X-Request-Id header." {
+		t.Fatalf("got %+v", got)
+	}
 }
