@@ -98,6 +98,7 @@ import UIKit
         hostStore = HostStore(records: hostRecords)
         settingsStore = SettingsStore(records: settingsRecords, syncSwitch: syncSwitch, device: device)
         deps = dependencies
+        settings = settingsStore.localSettings()
     }
 
     /// Lists the machines saved on this device straight away, so the first frame shows them.

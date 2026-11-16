@@ -27,6 +27,7 @@ final class ResumeLockController {
     init(biometrics: BiometricSession, isEnabled: @escaping @MainActor () -> Bool) {
         self.biometrics = biometrics
         self.isEnabled = isEnabled
+        locked = isEnabled()
     }
 
     func scenePhaseChanged(to phase: ScenePhase, now: Date = Date()) {
@@ -41,14 +42,8 @@ final class ResumeLockController {
             // tells it the background is over.
             biometrics.enteredForeground()
             let lock = ResumeLock.needsUnlock(backgroundedAt: since, now: now, enabled: isEnabled())
-            if lock {
-                locked = true
-                // A cached context would unlock without asking; the fresh one is then shared with signing.
-                pending = Task {
-                    await biometrics.invalidate()
-                    await authenticate()
-                }
-            }
+            if lock { locked = true }
+            if locked { requestUnlock(invalidate: true) }
         default:
             break
         }
@@ -66,11 +61,21 @@ final class ResumeLockController {
     }
 
     func unlock() {
-        pending = Task { await authenticate() }
+        requestUnlock(invalidate: false)
     }
 
     /// The work started by the last phase change or unlock tap, for callers that must wait for it.
     private(set) var pending: Task<Void, Never>?
+
+    private func requestUnlock(invalidate: Bool) {
+        guard locked, pending == nil else { return }
+        pending = Task {
+            // A cached signing context must not unlock a cold or resumed app silently.
+            if invalidate { await biometrics.invalidate() }
+            await authenticate()
+            pending = nil
+        }
+    }
 
     private func authenticate() async {
         do {
