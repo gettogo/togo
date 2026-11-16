@@ -225,7 +225,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 						// merely is newer qualifies only when no other agent
 						// of the kind runs in the folder.
 						inWindow := bornAfter(m.born, created)
-						if !c.pick || !(inWindow || (m.mtime.After(started) && !ambiguous())) || !claimOwn(pattern, id, m.path) {
+						if !c.pick || !(inWindow || (m.mtime.After(started) && !ambiguous())) || !latestFileless(pattern, id, m.born, created) || !claimOwn(pattern, id, m.path) {
 							continue
 						}
 						take(m)
@@ -271,6 +271,29 @@ func claimOwn(pattern, id, path string) bool {
 		claims.owner[path] = id
 		if w := claims.watchers[pattern][id]; w != nil {
 			w.files++
+		}
+	}
+	return true
+}
+
+// latestFileless reports whether session id is the watcher that most
+// plausibly started the unheld file born at born: among the watchers of the
+// pattern that still have no file and began no later than the file, the
+// latest. Two sessions started within bornWindow of each other both
+// qualify by time alone; the file belongs to the later one, whichever polls
+// first.
+func latestFileless(pattern, id string, born, created time.Time) bool {
+	if born.IsZero() {
+		return true
+	}
+	claims.Lock()
+	defer claims.Unlock()
+	for other, w := range claims.watchers[pattern] {
+		if other == id || w.files > 0 || w.created.IsZero() || !w.created.After(created) {
+			continue
+		}
+		if !w.created.After(born.Add(2 * time.Second)) {
+			return false
 		}
 	}
 	return true

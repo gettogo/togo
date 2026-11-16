@@ -419,3 +419,33 @@ func TestExclusiveNamedFileIsFollowed(t *testing.T) {
 		t.Fatalf("named file not followed: %v", c.recs)
 	}
 }
+
+// Two Pi sessions started 30 s apart in one folder, neither has a file
+// yet. The first prompt is typed in the second; its file is born after
+// both sessions began. It must go to the second, whichever watcher polls
+// first.
+func TestExclusiveTwoFilelessSessionsFileGoesToLatest(t *testing.T) {
+	envA, h := testEnv(t)
+	envA.SessionID, envA.Agent = "s_fileless0a", "pi"
+	envA.Vars["created"] = time.Now().Add(-60 * time.Second).UTC().Format(time.RFC3339)
+	envA.Procs = &fakeProcs{tree: []int{100}, others: map[string]bool{envA.Cwd: true}}
+	envB := envA
+	envB.Vars = map[string]string{VarHome: h, "created": time.Now().Add(-30 * time.Second).UTC().Format(time.RFC3339)}
+	envB.SessionID = "s_fileless0b"
+	envB.Procs = &fakeProcs{tree: []int{200}, others: map[string]bool{envA.Cwd: true}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a, b := &collector{}, &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), envA, a.emit) }()
+	time.Sleep(50 * time.Millisecond)
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), envB, b.emit) }()
+	time.Sleep(50 * time.Millisecond)
+	writeLine(t, filepath.Join(h, stamped(time.Now().Add(-25*time.Second), "bfile")), `{"f":"b1"}`)
+	b.wait(t, 1)
+	time.Sleep(300 * time.Millisecond)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.recs) != 0 {
+		t.Fatalf("A took B's file: %v", a.recs)
+	}
+}
