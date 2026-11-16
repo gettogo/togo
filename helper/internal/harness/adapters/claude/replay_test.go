@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -61,5 +62,37 @@ func TestRetryNoticeSettlesWhenTheRequestSucceeds(t *testing.T) {
 	retry := r.final["u2.retry"].Notice
 	if retry == nil || retry.Level != "info" || strings.Contains(retry.Text, "retrying") {
 		t.Fatalf("retry after success = %+v", retry)
+	}
+}
+
+// A task notification can reach the transcript as the user record Claude Code
+// writes for itself with no queued copy before it (a background shell or
+// agent finished while the session restarted). The agent or shell it names
+// still ends.
+func TestTaskNotificationUserRecordSettlesBackgroundWork(t *testing.T) {
+	var recs []harness.Record
+	for _, rec := range records(t, "transcript-real.jsonl") {
+		var d map[string]any
+		if json.Unmarshal(rec.Data, &d) == nil && d["type"] == "queue-operation" {
+			d["type"], d["origin"] = "user", map[string]any{"kind": "task-notification"}
+			delete(d, "operation")
+			d["message"] = map[string]any{"role": "user", "content": d["content"]}
+			delete(d, "content")
+			rec.Data, _ = json.Marshal(d)
+		}
+		recs = append(recs, rec)
+	}
+	r := mapAll(newTranscript(env()), recs)
+	for _, id := range []string{"agent-a5c86855b3d4b6de7", "bg-b7nnmqbeo", "agent-a8b7ce01541ed1304"} {
+		it := r.final[id]
+		state := ""
+		if it.Agent != nil {
+			state = it.Agent.State
+		} else if it.Background != nil {
+			state = it.Background.State
+		}
+		if state != harness.StateOK {
+			t.Errorf("%s state %q, want ok", id, state)
+		}
 	}
 }

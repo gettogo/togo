@@ -287,7 +287,7 @@ func (t *transcript) prompt(e entry, at time.Time, text string, images []harness
 		}
 		return append(items, t.notice(e, at, noticeCode(out), "info", firstLine(out))...), nil
 	} else if parent == "" && isTaskNotification(e, text) {
-		return t.continued(e, at, text), nil
+		return t.continued(e, at, text)
 	} else if anyTag.MatchString(text) {
 		return nil, nil
 	}
