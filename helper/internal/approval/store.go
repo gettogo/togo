@@ -293,6 +293,11 @@ func (s *Store) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <
 	for i, label := range p.Options {
 		a.Options = append(a.Options, wire.Option{N: i + 1, Label: truncate(label, wire.MaxOptionLabel), Role: roles[i]})
 	}
+	if p.TimeoutSec > 0 {
+		// The caller waits this long, whatever the store's own limit.
+		exp := a.CreatedAt.Add(time.Duration(p.TimeoutSec) * time.Second)
+		a.ExpiresAt = &exp
+	}
 	ch := make(chan string, 1)
 	return s.open(a, "", ch), ch
 }
@@ -353,27 +358,10 @@ func (s *Store) open(a wire.Approval, fingerprint string, ask chan string) wire.
 	e := &entry{a: a, fingerprint: fingerprint, ask: ask}
 	s.mu.Lock()
 	s.entries[a.RequestID] = e
-	time.AfterFunc(s.cfg.TTL, func() { s.expire(a.RequestID) })
+	time.AfterFunc(a.ExpiresAt.Sub(a.CreatedAt), func() { s.expire(a.RequestID) })
 	s.cfg.Pub.Publish(wire.EventApprovalOpen, a.SessionID, wire.ApprovalOpenEvent{Approval: a})
 	s.mu.Unlock()
 	return a
-}
-
-// expire closes a still-pending approval at its TTL and later forgets it,
-// once a late answer no longer needs to learn the outcome.
-func (s *Store) expire(requestID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	e, ok := s.entries[requestID]
-	if !ok {
-		return
-	}
-	if e.state == statePending {
-		s.closeLocked(e, wire.ResolutionExpired)
-		time.AfterFunc(s.cfg.TTL, func() { s.forget(requestID) })
-		return
-	}
-	delete(s.entries, requestID)
 }
 
 func (s *Store) forget(requestID string) {
