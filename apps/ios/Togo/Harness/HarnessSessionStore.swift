@@ -7,24 +7,16 @@ import UIKit
 /// One store per open tab: the conversation, native interfaces, mission control
 /// and composer queue share this session's state.
 @MainActor @Observable final class HarnessSessionStore {
-    /// Where the conversation stands.
-    enum Phase: Equatable {
-        /// Asking the helper what serves the session.
-        case describing
-        /// Opening the conversation.
-        case opening
-        case live
-        /// The connection dropped; trying again.
-        case reconnecting
-        /// No adapter, no chat, or its source failed: the terminal only.
-        case terminalOnly
-    }
-
     let subject: HarnessSubject
     @ObservationIgnored let services: any HarnessServices
     /// nil until described; a descriptor with a nil adapter means terminal only.
     private(set) var descriptor: HarnessDescriptor?
-    private(set) var phase: Phase = .describing
+    private(set) var phase: Phase = .describing {
+        didSet {
+            if phase == .live { liveWork?.pausedAt = nil }
+            else if liveWork?.pausedAt == nil { liveWork?.pausedAt = .now }
+        }
+    }
     /// Not observed as a whole: a streamed note changes it several times a second, and views
     /// read the narrower `timeline`, `mission` and `working`, which say when they change.
     @ObservationIgnored var feed = HarnessFeedState() {
@@ -191,11 +183,12 @@ import UIKit
         }
     }
     private func updateLiveWork(_ conversation: [HarnessItem], now: Date = .now) {
-        let next = WorkingLogic.state(
+        var next = WorkingLogic.state(
             items: conversation, working: working, awaitingSince: awaitingSince,
             localSince: localWorkSince, now: now, needsYou: feed.mission.summary.needsYou,
             resolvedAt: resolvedAt
         )
+        if phase != .live { next?.pausedAt = liveWork?.pausedAt ?? now }
         if next != liveWork { liveWork = next }
     }
 
@@ -359,6 +352,7 @@ import UIKit
     }
 
     func stop() {
+        if phase == .live { phase = .opening }
         retireNativeInteractions(pumpQueue: false)
         runTask?.cancel()
         runTask = nil

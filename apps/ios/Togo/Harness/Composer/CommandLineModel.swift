@@ -109,7 +109,7 @@ import TogoKit
         StateChip.title(rows: sessionRows, status: status, modeLabel: modeLabel, describing: routes.describing())
     }
     var showsStateChip: Bool { !sessionRows.isEmpty }
-    var canInterrupt: Bool { working && routes.has(HarnessCapability.interrupt) }
+    var canInterrupt: Bool { working && routes.has(HarnessCapability.interrupt) && routes.canInterruptNow() }
     var scope: String { routes.scope() }
 
     /// Queued prompts, oldest first: the conversation's, then this phone's not yet shown there.

@@ -18,10 +18,11 @@ struct LiveLine: View {
     @Environment(\.loopsPaused) private var loopsPaused
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
     let state: WorkingState
+    private var waiting: Bool { state.waiting && state.pausedAt == nil }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            LiveGlyph(waiting: state.waiting)
+            LiveGlyph(waiting: waiting, paused: state.pausedAt != nil)
                 .frame(width: side)
             VStack(alignment: .leading, spacing: 2) {
                 label
@@ -39,14 +40,14 @@ struct LiveLine: View {
     private var label: some View {
         HStack(spacing: 0) {
             Text(verbatim: WorkingCopy.word(state))
-                .fontWeight(state.waiting ? .semibold : .regular)
-                .foregroundStyle(state.waiting ? Color.togoAccentText : Color.togoMute)
+                .fontWeight(waiting ? .semibold : .regular)
+                .foregroundStyle(waiting ? Color.togoAccentText : Color.togoMute)
                 .contentTransition(reduceMotion ? .identity : .interpolate)
                 // motion: state change — "Working" becomes "Waiting for you" in the beacon, in place; only the word moves.
-                .motion(.respond, value: state.waiting)
+                .motion(.respond, value: waiting)
             if WorkingCopy.seconds(state, now: .now) != nil {
                 Text(verbatim: LiveLineLayout.separator)
-                TimelineView(.clock(from: LiveLineLayout.origin(state), paused: loopsPaused)) { context in
+                TimelineView(.clock(from: LiveLineLayout.origin(state), paused: loopsPaused || state.pausedAt != nil)) { context in
                     Text(verbatim: WorkingCopy.clock(state, now: context.date))
                         .clockText()
                 }
@@ -58,12 +59,12 @@ struct LiveLine: View {
     /// What the agent does now, in a slot one line tall that is there all turn, so a step
     /// arriving or leaving never moves the chat. It changes instantly: it is status text.
     private var stepLine: some View {
-        Text(verbatim: state.step ?? " ")
+        Text(verbatim: state.pausedAt == nil ? (state.step ?? " ") : " ")
             .font(.footnote)
             // trunc-ok: one line so the live line never changes height; the full step is in the work line's steps and their details
             .lineLimit(1)
             .truncationMode(.middle)
-            .opacity(state.step == nil ? 0 : 1)
+            .opacity(state.step == nil || state.pausedAt != nil ? 0 : 1)
             .contentTransition(.identity)
             .transaction { $0.animation = nil }
     }
@@ -100,6 +101,7 @@ enum LiveLineLayout {
 private struct LiveGlyph: View {
     @ScaledMetric(relativeTo: .footnote) private var beacon: CGFloat = 7
     let waiting: Bool
+    let paused: Bool
 
     var body: some View {
         ZStack {
@@ -107,7 +109,11 @@ private struct LiveGlyph: View {
             Text(verbatim: "⠿")
                 .font(.system(.body, design: .monospaced).weight(.heavy))
                 .hidden()
-            if waiting {
+            if paused {
+                Circle()
+                    .fill(Color.togoMute)
+                    .frame(width: beacon, height: beacon)
+            } else if waiting {
                 Circle()
                     .fill(Color.togoAccent)
                     .frame(width: beacon, height: beacon)

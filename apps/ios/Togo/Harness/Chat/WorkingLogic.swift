@@ -11,6 +11,8 @@ struct WorkingState: Equatable {
     var step: String?
     /// The agent waits on an approval or a question: the row says so instead of "Working".
     var waiting = false
+    /// The feed stopped reporting: hold the display, without marking the agent idle.
+    var pausedAt: Date?
 }
 
 /// Pure rules behind the working row, so they are tested without a view.
@@ -180,12 +182,14 @@ enum WorkingCopy {
 
     /// The words before the clock: "Working", or "Waiting for you" while a request is open.
     static func word(_ state: WorkingState) -> String {
-        state.waiting ? waiting : working
+        if state.pausedAt != nil { return ChatCopy.reconnecting }
+        return state.waiting ? waiting : working
     }
 
     /// The seconds the line shows: the current wait while waiting, the working time otherwise.
     /// nil while waiting on a request the clock cannot place.
     static func seconds(_ state: WorkingState, now: Date) -> TimeInterval? {
+        let now = min(now, state.pausedAt ?? now)
         guard state.waiting else { return state.clock.worked(at: now) }
         return state.clock.currentWait(at: now)
     }
@@ -204,7 +208,7 @@ enum WorkingCopy {
     /// "Working, 12 seconds, Reading src/a.ts"; "Waiting for you, 12 seconds" while a request
     /// is open.
     static func spoken(_ state: WorkingState, now: Date) -> String {
-        [word(state), seconds(state, now: now).map(ChatCopy.spokenClock), state.step]
+        [word(state), seconds(state, now: now).map(ChatCopy.spokenClock), state.pausedAt == nil ? state.step : nil]
             .compactMap { $0 }.joined(separator: ", ")
     }
 }
