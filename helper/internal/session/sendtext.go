@@ -148,13 +148,16 @@ func typeReply(ctx context.Context, p replyPane, id, text string, submit bool, s
 func settle(ctx context.Context, p replyPane, id, text string, sleep func(context.Context, time.Duration) error) error {
 	last := strings.TrimSpace(text[strings.LastIndexByte(text, '\n')+1:])
 	prev, prevErr := p.CaptureHistory(ctx, id, 0, true)
+	// A short last line ("yes", "}") can be on the screen before the
+	// paste is: only one more of it than at the start is the paste's.
+	before := strings.Count(prev, last)
 	for waited := time.Duration(0); waited < settleMax; {
 		if err := sleep(ctx, settleInterval); err != nil {
 			return err
 		}
 		waited += settleInterval
 		cur, err := p.CaptureHistory(ctx, id, 0, true)
-		calm := err == nil && prevErr == nil && (cur == prev || last != "" && strings.Contains(cur, last))
+		calm := err == nil && prevErr == nil && (cur == prev || last != "" && strings.Count(cur, last) > before)
 		if waited >= settleMin && (calm || err != nil) {
 			return nil
 		}
