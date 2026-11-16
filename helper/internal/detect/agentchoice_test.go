@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -100,6 +101,21 @@ func TestTextKeys(t *testing.T) {
 		p := mustDetect(t, fixture(t, name))
 		if !reflect.DeepEqual(p.TextKeys, want) {
 			t.Errorf("%s: text keys %#v, want %#v", name, p.TextKeys, want)
+		}
+	}
+}
+
+// A list with no cursor marker gets no keys: counted from no row they would
+// select the row after the one meant.
+func TestCursorlessListsOfferNoKeys(t *testing.T) {
+	for _, f := range []string{"copilot/real-ask-single.txt", "cline/real-ask-single.txt", "copilot/real-ask-single-moved.txt", "cline/real-ask-single-moved.txt"} {
+		b, err := os.ReadFile("testdata/" + f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := strings.ReplaceAll(strings.ReplaceAll(string(b), "❯", " "), "> ", "  ")
+		if p, ok := Detect(s); ok && len(p.Keys) > 0 {
+			t.Errorf("%s: cursorless list offers keys %v", f, p.Keys)
 		}
 	}
 }
