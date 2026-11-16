@@ -110,13 +110,14 @@ func userService() (daemon.Service, error) {
 // uninstallService stops and removes the service. When a service is
 // installed it first writes the stop marker, which tells the daemon the stop
 // is on purpose, so it withdraws the silence alert it left with the relay
-// instead of letting the relay report the machine as gone quiet. If the
+// instead of letting the relay report the machine as gone quiet. A daemon
+// that serve started has no service file but gets the marker too. If the
 // uninstall fails the daemon may still be running, so the marker is removed
 // again: a later OS shutdown must leave the alert armed.
 func uninstallService(ctx context.Context, svc daemon.Service, stderr io.Writer) error {
 	marker := filepath.Join(svc.TogoHome, mailbox.StopMarkerName)
 	wrote := false
-	if svc.HasFile() {
+	if svc.HasFile() || daemonRunning(svc.TogoHome) {
 		if err := state.WriteFile(marker, nil); err != nil {
 			fmt.Fprintf(stderr, "togo: %v\n", err)
 		} else {
