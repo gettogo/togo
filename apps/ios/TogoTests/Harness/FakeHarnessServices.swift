@@ -49,6 +49,9 @@ import TogoKit
     var feeds: [FeedScript] = []
     var sendFailures = 0
     var beforeSendResult: (@MainActor () async throws -> Void)?
+    var actionError: HelperError?
+    var interruptResult = HarnessActionResult(result: .applied)
+    var actionResult = HarnessActionResult(result: .applied)
     var beforeActionResult: (@MainActor () async -> Void)?
     private(set) var actions: [String] = []
     private(set) var describes = 0
@@ -81,8 +84,9 @@ import TogoKit
 
     func act(_ s: HarnessSubject, action: String, target: String?, args: [String: JSONValue]?) async throws -> HarnessActionResult {
         actions.append(action)
+        if let actionError { throw actionError }
         await beforeActionResult?()
-        return HarnessActionResult(result: .applied)
+        return actionResult
     }
 
     func send(_ s: HarnessSubject, text: String, mode: HarnessSendParams.Mode, images: [String]) async throws -> HarnessItem {
@@ -98,7 +102,7 @@ import TogoKit
                            body: .user(.init(text: text, queued: false, source: "phone")))
     }
 
-    func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult { HarnessActionResult(result: .applied) }
+    func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult { interruptResult }
 
     func complete(_ s: HarnessSubject, kind: HarnessCompleteParams.Kind, query: String) async throws -> [HarnessCompletion] {
         []

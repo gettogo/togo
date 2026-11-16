@@ -63,6 +63,7 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
 
     private static func describeReason(_ reason: String) -> String? {
         switch reason {
+        case "busy": String(localized: "The agent is busy. Try again after this reply.", bundle: .module)
         case "running": String(localized: "The agent is still running.", bundle: .module)
         case "shell": String(localized: "This session is a plain shell, so nothing was typed.", bundle: .module)
         case "ended": String(localized: "The agent has stopped, so nothing was typed.", bundle: .module)
@@ -122,7 +123,7 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         case RPCErrorCode.notReady: String(localized: "The Togo helper on the machine was asked before it was ready.", bundle: .module)
         case RPCErrorCode.invalidPath: String(localized: "That folder does not exist on the machine.", bundle: .module)
         case RPCErrorCode.unsupportedVersion: String(localized: "The Togo helper on the machine speaks a different protocol version. Update the app or the helper.", bundle: .module)
-        case RPCErrorCode.conflict: String(localized: "That request was already answered.", bundle: .module)
+        case RPCErrorCode.conflict: error.reason.flatMap(Self.describeReason) ?? String(localized: "That request was already answered.", bundle: .module)
         // The helper says why in its own words when it can ("That mode is not in this
         // session's cycle"); otherwise the reason picks the sentence.
         case RPCErrorCode.refused:
