@@ -101,6 +101,13 @@ public final class PendingStore: Sendable {
 
     public func request(_ requestId: String) -> PendingRequest? { blob.read().first { $0.requestId == requestId } }
 
+    /// An unknown notification may supply its original delivery date. A remote Live Activity
+    /// without a local record has no trustworthy age, so absence alone is not expiry.
+    public func isExpired(_ requestId: String, deliveredAt: Date? = nil) -> Bool {
+        guard let received = request(requestId)?.receivedAt ?? deliveredAt else { return false }
+        return clock().timeIntervalSince(received) >= RequestLifetime.seconds
+    }
+
     /// Adds a request the store has not seen. A request it already holds keeps its state and
     /// receipt time, so a replayed push can neither reopen an answered request nor make an
     /// old one look new.
@@ -120,7 +127,9 @@ public final class PendingStore: Sendable {
         let now = clock()
         update { values in
             if let index = values.firstIndex(where: { $0.requestId == requestId }) {
-                guard values[index].isOpen(at: now) else { return }
+                guard values[index].isOpen(at: now),
+                      now.timeIntervalSince(values[index].receivedAt) < RequestLifetime.seconds
+                else { return }
                 values[index].answered = .sending
                 values[index].claimedAt = now
             } else {

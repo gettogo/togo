@@ -142,7 +142,7 @@ import WidgetKit
         router.onAction = { response in
             let link = await actions.handle(
                 actionIdentifier: response.actionIdentifier, userInfo: response.userInfo, target: response.link,
-                text: response.userText
+                text: response.userText, deliveredAt: response.deliveredAt
             )
             if let link { activeStore()?.open(link) }
         }

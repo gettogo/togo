@@ -13,6 +13,7 @@ struct NotificationResponse: Sendable, Equatable {
     var sessionId: String?
     /// What the user typed for Reply.
     var userText: String? = nil
+    var deliveredAt: Date? = nil
 }
 
 /// Decides how notifications show while Togo is open and where a tap goes.
@@ -83,7 +84,7 @@ struct NotificationResponse: Sendable, Equatable {
             actionIdentifier: response.actionIdentifier, link: content.targetContentIdentifier,
             requestId: togo?["requestId"] as? String, hostId: togo?["hostId"] as? String,
             sessionId: togo?["sessionId"] as? String,
-            userText: (response as? UNTextInputNotificationResponse)?.userText
+            userText: (response as? UNTextInputNotificationResponse)?.userText, deliveredAt: response.notification.date
         )
         await handle(values)
     }

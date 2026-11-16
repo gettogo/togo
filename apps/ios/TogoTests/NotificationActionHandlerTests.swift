@@ -41,6 +41,7 @@ final class FakeRelay: AnswerSending {
     var failures: [String] = []
     var offlineRemoved: [String] = []
     var unconfirmed: [String] = []
+    var expired: [String] = []
 
     func removeOffline(hostId: String) async { offlineRemoved.append(hostId) }
     func delivered() async -> [DeliveredRequest] { shown }
@@ -49,6 +50,7 @@ final class FakeRelay: AnswerSending {
         shown.removeAll { requestIds.contains($0.requestId) }
     }
     func postSendFailure(threadID: String) async { failures.append(threadID) }
+    func postRequestExpired(threadID: String) async { expired.append(threadID) }
     func postAnswerUnconfirmed(threadID: String) async { unconfirmed.append(threadID) }
 }
 
@@ -341,6 +343,23 @@ struct NotificationActionHandlerTests {
         #expect(await clear.didReceiveRemoteNotification(["c": envelope]))
         #expect(savedBeforeReceipt)
         #expect(pending.request(id)?.answered == nil)
+    }
+
+    @Test(arguments: [true, false])
+    func expiredRequestNeverUsesLiveOrRelay(_ known: Bool) async {
+        let store = PendingStore(directory: directory, clock: { start.addingTimeInterval(3600) })
+        if !known { store.remove(requestID) }
+        let handler = NotificationActionHandler(dependencies: .init(
+            pairings: pairings, pending: store, relay: relay, live: live, notifications: notifications
+        ))
+        let result = await handler.answer(
+            hostId: hostID, requestId: requestID, decision: "approve", deliveredAt: start
+        )
+        #expect(result == .stale)
+        #expect(live.sent.isEmpty && relay.sent.withLock { $0 }.isEmpty)
+        #expect(notifications.expired == [hostID])
+        #expect(store.request(requestID)?.answered == nil)
+        #expect(notifications.shown.isEmpty)
     }
 
     @Test func clearRemovesDelivered() async throws {

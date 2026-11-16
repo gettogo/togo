@@ -47,6 +47,13 @@ extension StoresTests {
         #expect(!reopened.claim("r_aaaaaaaaaa", hostId: Self.hostID))
     }
 
+    @Test(arguments: [599.0, 600.0, 3600.0])
+    func claimsRespectTheStoredRequestLifetime(_ age: TimeInterval) {
+        let store = PendingStore(directory: directory(), clock: { Self.now })
+        store.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-age)))
+        #expect(store.claim("r_aaaaaaaaaa", hostId: Self.hostID) == (age < RequestLifetime.seconds))
+    }
+
     @Test func expiredQuestionsGetNoChoiceCategories() {
         let options = [PushOption(n: 1, label: "One", role: "choice")]
         let stale = request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-600), options: options)

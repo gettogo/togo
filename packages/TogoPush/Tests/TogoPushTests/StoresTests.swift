@@ -184,6 +184,22 @@ struct StoresTests {
         #expect(PairingStore(directory: dir).all().count == 40)
     }
 
+    @Test func expiredAnswerNeverReachesTheMailbox() async throws {
+        StubProtocol.reset(status: 202)
+        let store = PendingStore(directory: directory(), clock: { Self.now })
+        store.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-600)))
+        let sender = RelayAnswerSender(
+            keys: InMemoryDeviceKeys(), session: StubProtocol.session(), pending: store, clock: { Self.now }
+        )
+        let p = pairing(hostKey: Curve25519.KeyAgreement.PrivateKey().publicKey)
+        for decision in ["approve", "deny"] {
+            await #expect(throws: AnswerError.notAllowed("request_too_old")) {
+                try await sender.send(requestId: "r_aaaaaaaaaa", decision: decision, pairing: p)
+            }
+        }
+        #expect(StubProtocol.requests().isEmpty)
+    }
+
     @Test func answerSenderRefusesText() async throws {
         let host = Curve25519.KeyAgreement.PrivateKey()
         StubProtocol.reset(status: 202)

@@ -9,8 +9,9 @@ import WidgetKit
 /// mailbox. The pending store claims the request first, so a second tap, or the notification's
 /// own button, sends nothing more. Anything else is answered in the app.
 enum LiveAnswer {
-    enum Failure: Error {
+    enum Failure: Error, Equatable {
         case unavailable
+        case expired
         /// Approving without unlocking was turned off after the card was drawn.
         case needsUnlock
     }
@@ -45,6 +46,10 @@ enum LiveAnswer {
     ) async throws {
         if let request = pending.request(requestId), request.hostId != hostId { throw Failure.unavailable }
         guard pending.claim(requestId, hostId: hostId) else {
+            if pending.isExpired(requestId) {
+                await refresh(.failed)
+                throw Failure.expired
+            }
             if let feedback = LiveAnswerFeedback.resolve(pending.request(requestId), local: nil, now: Date()) {
                 await refresh(feedback)
             }

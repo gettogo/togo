@@ -35,6 +35,7 @@ public struct RelayAnswerSender: AnswerSending {
     }
 
     public func send(requestId: String, decision: String, pairing: Pairing) async throws {
+        guard pending?.isExpired(requestId) != true else { throw AnswerError.notAllowed("request_too_old") }
         try check(decision, requestId: requestId)
         let ts = Mailbox.milliseconds(clock())
         let message = Signing.approvalBytes(hostID: pairing.hostId, requestID: requestId, decision: decision, ts: ts)

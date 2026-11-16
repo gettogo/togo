@@ -1,6 +1,17 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "notif.requestExpired" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This request expired. Open Togo to check the session."
+          }
+        }
+      }
+    },
     "awake.changeFailed" : {
       "extractionState" : "manual",
       "localizations" : {

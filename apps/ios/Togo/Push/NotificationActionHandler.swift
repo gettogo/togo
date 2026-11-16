@@ -24,6 +24,7 @@ struct DeliveredRequest: Hashable, Sendable {
     func removeOffline(hostId: String) async
     /// "Could not send. Open Togo to answer." in the request's thread.
     func postSendFailure(threadID: String) async
+    func postRequestExpired(threadID: String) async
     func postAnswerUnconfirmed(threadID: String) async
 }
 
@@ -70,7 +71,7 @@ struct DeliveredRequest: Hashable, Sendable {
     /// the user typed for Reply.
     @discardableResult
     func handle(
-        actionIdentifier: String, userInfo: [AnyHashable: Any], target: String?, text: String? = nil
+        actionIdentifier: String, userInfo: [AnyHashable: Any], target: String?, text: String? = nil, deliveredAt: Date? = nil
     ) async -> DeepLink? {
         switch actionIdentifier {
         case NotificationActionID.approve, NotificationActionID.deny:
@@ -80,7 +81,7 @@ struct DeliveredRequest: Hashable, Sendable {
             else { return nil }
             let session = (info["sessionId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             let decision = actionIdentifier == NotificationActionID.approve ? "approve" : "deny"
-            await answer(hostId: hostId, requestId: requestId, decision: decision, threadID: session ?? hostId)
+            await answer(hostId: hostId, requestId: requestId, decision: decision, threadID: session ?? hostId, deliveredAt: deliveredAt)
             return nil
         case NotificationActionID.runAgain:
             if let info = userInfo[NotificationServiceCore.infoKey] as? [String: Any],
@@ -112,7 +113,7 @@ struct DeliveredRequest: Hashable, Sendable {
                       let hostId = info["hostId"] as? String
                 else { return nil }
                 let session = (info["sessionId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-                await answer(hostId: hostId, requestId: requestId, decision: "option:\(n)", threadID: session ?? hostId)
+                await answer(hostId: hostId, requestId: requestId, decision: "option:\(n)", threadID: session ?? hostId, deliveredAt: deliveredAt)
                 return nil
             }
             return target.flatMap(URL.init(string:)).flatMap(DeepLink.init(url:))
@@ -123,15 +124,23 @@ struct DeliveredRequest: Hashable, Sendable {
     /// `deny` or `option:<n>`; an option whose role is `approve_always` is refused, since that
     /// needs the app open.
     @discardableResult
-    func answer(hostId: String, requestId: String, decision: String, threadID: String? = nil) async -> Outcome {
+    func answer(
+        hostId: String, requestId: String, decision: String, threadID: String? = nil, deliveredAt: Date? = nil
+    ) async -> Outcome {
         let thread = threadID ?? hostId
+        guard !deps.pending.isExpired(requestId, deliveredAt: deliveredAt) else {
+            return await expired(requestId, thread: thread)
+        }
         guard let wire = wireDecision(decision, requestId: requestId),
               let pairing = deps.pairings.pairing(hostId: hostId)
         else {
             await deps.notifications.postSendFailure(threadID: thread)
             return .failed
         }
-        guard deps.pending.claim(requestId, hostId: hostId) else { return .repeated }
+        guard deps.pending.claim(requestId, hostId: hostId) else {
+            if deps.pending.isExpired(requestId) { return await expired(requestId, thread: thread) }
+            return .repeated
+        }
 
         do {
             let sentLive = try await deps.live?.answerIfConnected(pairing, requestId: requestId, decision: wire) ?? false
@@ -152,6 +161,12 @@ struct DeliveredRequest: Hashable, Sendable {
         deps.pending.mark(requestId, wire == .deny ? .denied : .approved)
         await deps.notifications.removeDelivered(requestIds: [requestId])
         return .sent
+    }
+
+    private func expired(_ requestId: String, thread: String) async -> Outcome {
+        await deps.notifications.removeDelivered(requestIds: [requestId])
+        await deps.notifications.postRequestExpired(threadID: thread)
+        return .stale
     }
 
     private func failed(_ requestId: String, thread: String) async -> Outcome {
@@ -212,6 +227,12 @@ struct DeliveredRequest: Hashable, Sendable {
 
     func postSendFailure(threadID: String) async {
         await post(threadID: threadID, message: String(localized: "notif.sendFailed", defaultValue: "Could not send. Open Togo to answer."))
+    }
+
+    func postRequestExpired(threadID: String) async {
+        await post(threadID: threadID, message: String(
+            localized: "notif.requestExpired", defaultValue: "This request expired. Open Togo to check the session."
+        ))
     }
 
     func postAnswerUnconfirmed(threadID: String) async {

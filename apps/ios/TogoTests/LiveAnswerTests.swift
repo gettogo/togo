@@ -42,6 +42,21 @@ struct LiveAnswerTests {
         #expect(trace.state.withLock { $0.feedback } == [.sending, .sent])
     }
 
+    @Test func expiredLiveActivityDoesNotReportASend() async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let old = PendingStore(directory: directory, clock: { Date().addingTimeInterval(3600) })
+        let trace = AnswerTrace()
+        await #expect(throws: LiveAnswer.Failure.expired) {
+            try await LiveAnswer.perform("approve", hostId: answerHost, requestId: answerRequest, pending: old) {
+                trace.state.withLock { $0.sends += 1 }
+            } refresh: { feedback in trace.state.withLock { $0.feedback.append(feedback) } }
+        }
+        #expect(trace.state.withLock { $0.sends } == 0)
+        #expect(trace.state.withLock { $0.feedback } == [.failed])
+        #expect(pending.request(answerRequest)?.answered == nil)
+    }
+
     @Test func failedSendShowsFailureAndCanBeRetried() async throws {
         let (pending, directory) = answerStore()
         defer { try? FileManager.default.removeItem(at: directory) }
