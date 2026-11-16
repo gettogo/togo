@@ -21,9 +21,9 @@ const Marker = "[redacted]"
 var secretKey = regexp.MustCompile(`(?i)(api[_-]?key|secret|token|password|passwd|authorization|bearer|cookie|credential|private[_-]?key|access[_-]?key|session[_-]?key|oauth)`)
 
 // usageKey matches keys that name token usage (input_tokens, tokenUsage,
-// total_output_tokens, token_count); their values are usage figures, not
+// total_output_tokens, token_count, tokensBefore); their values are usage figures, not
 // secrets, when Counts says so.
-var usageKey = regexp.MustCompile(`(?i)(tokens|token_?count|tokens_[a-z_]+|token_?usage|tokens_?used)$`)
+var usageKey = regexp.MustCompile(`(?i)(tokens|token_?count|tokens_[a-z_]+|tokens(?:before|after)|token_?usage|tokens_?used)$`)
 
 // headersKey names an object of HTTP headers (MCP server configs, custom
 // providers); its values often carry credentials, so only names are kept.

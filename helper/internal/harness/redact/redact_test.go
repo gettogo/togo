@@ -284,3 +284,19 @@ func TestStringMoreTokensAndSpacedAssignments(t *testing.T) {
 		}
 	}
 }
+
+// Pi and omp record the size of a compaction as tokensBefore and
+// tokensAfter; these are counts, not secrets.
+func TestCompactionTokenCountsSurvive(t *testing.T) {
+	in := `{"type":"compaction","tokensBefore":123456,"tokensAfter":4567,"apiToken":"abcdefghijklmnop"}`
+	var got map[string]any
+	if err := json.Unmarshal(JSON(json.RawMessage(in)), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["tokensBefore"] != float64(123456) || got["tokensAfter"] != float64(4567) {
+		t.Fatalf("counts changed: %v", got)
+	}
+	if got["apiToken"] == "abcdefghijklmnop" {
+		t.Fatalf("secret kept: %v", got)
+	}
+}
