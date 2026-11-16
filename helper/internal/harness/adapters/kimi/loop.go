@@ -47,7 +47,12 @@ func (w *Wire) loopEvent(raw json.RawMessage, at time.Time) ([]harness.Item, []h
 	case "tool.result":
 		return w.toolResult(e, at)
 	case "step.end":
-		// Protocol 1.4 has no turn.ended: the last step ends the turn.
+		// Protocol 1.4 has no turn.ended: the last step ends the turn. From
+		// 1.5 the turn can go on after an end_turn step (a steer, a
+		// background notice) and turn.ended says when it is over.
+		if w.endsTurns {
+			return nil, nil
+		}
 		switch e.Finish {
 		case "end_turn":
 			return w.endTurn(harness.StateOK, at)

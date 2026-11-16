@@ -29,6 +29,9 @@ type Wire struct {
 	byCall   map[string]string        // tool call id -> task id
 	open     map[string]harness.Item  // unanswered questions and approvals by interaction id
 	status   harness.StatusBlock
+	// endsTurns: the log says when a turn ends (protocol 1.5 writes
+	// turn.ended), so a step's end_turn finish does not end it.
+	endsTurns bool
 }
 
 type turn struct {
@@ -61,6 +64,7 @@ func (w *Wire) State() map[string]string {
 
 type record struct {
 	Type          string          `json:"type"`
+	Protocol      string          `json:"protocol_version"`
 	Time          int64           `json:"time"`
 	ModelAlias    string          `json:"modelAlias"`
 	Effort        string          `json:"thinkingEffort"`
@@ -117,6 +121,7 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	defer w.mu.Unlock()
 	switch r.Type {
 	case "metadata":
+		w.endsTurns = protocolAtLeast(r.Protocol, 1, 5)
 		return w.endTurn(harness.StateInterrupted, at)
 	case "profile.bind", "config.update", "llm.request":
 		return nil, w.setModel(r.ModelAlias, r.Effort)
@@ -141,6 +146,7 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "turn.cancel":
 		return w.endTurn(harness.StateInterrupted, at)
 	case "turn.ended":
+		w.endsTurns = true
 		switch r.Reason {
 		case "cancelled":
 			return w.endTurn(harness.StateInterrupted, at)
@@ -155,6 +161,17 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return w.taskStarted(r.Info, at)
 	}
 	return nil, nil
+}
+
+// protocolAtLeast reads a "major.minor" protocol version.
+func protocolAtLeast(v string, major, minor int) bool {
+	a, b, ok := strings.Cut(v, ".")
+	x, err1 := strconv.Atoi(a)
+	y, err2 := strconv.Atoi(b)
+	if !ok || err1 != nil || err2 != nil {
+		return false
+	}
+	return x > major || (x == major && y >= minor)
 }
 
 func (w *Wire) setModel(model, effort string) []harness.Op {

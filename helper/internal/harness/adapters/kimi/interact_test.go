@@ -187,3 +187,24 @@ func TestOpenQuestionClosesWhenItsTurnEnds(t *testing.T) {
 		}
 	}
 }
+
+// Protocol 1.5 writes turn.ended; a step that finishes end_turn is not the
+// turn's end, since a steer or a background notice runs more steps in it.
+func TestStepEndDoesNotEndATurnOnProtocol15(t *testing.T) {
+	lines := fixture(t, "wire-question.jsonl")
+	last := -1
+	for i, l := range lines {
+		if strings.Contains(l, `"type":"step.end"`) {
+			last = i
+		}
+	}
+	m := NewWire(harness.Env{SessionID: "s1"})
+	replay(t, m, lines[:last+1])
+	if m.State()["working"] != "true" {
+		t.Fatal("the turn ended at the step, before turn.ended")
+	}
+	replay(t, m, lines[last+1:])
+	if m.State()["working"] != "false" {
+		t.Fatal("turn.ended did not end the turn")
+	}
+}
