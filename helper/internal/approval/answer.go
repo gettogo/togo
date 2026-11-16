@@ -220,7 +220,12 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		if err := s.send(ctx, tgt, false, p.TextKeys...); err != nil {
 			return err
 		}
-		s.awaitChange(ctx, tgt, screen)
+		// Words typed before the field opens would land in the option
+		// list, where a digit picks an option. No change on screen, or a
+		// capture that fails, means nothing more is typed.
+		if !s.awaitChange(ctx, tgt, screen) {
+			return errUnconfirmed
+		}
 	}
 	if d.Kind == wire.DecisionText {
 		if a.SignIn != nil && a.SignIn.Secret {
@@ -234,7 +239,11 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		if err := s.send(ctx, tgt, true, d.Text); err != nil {
 			return err
 		}
-		return s.send(ctx, tgt, false, "Enter")
+		if err := s.send(ctx, tgt, false, "Enter"); err != nil {
+			return err
+		}
+		// Recorded as answered only once the prompt has left the screen.
+		return s.awaitTaken(ctx, tgt, fingerprint)
 	}
 	if err := s.send(ctx, tgt, false, "Escape"); err != nil {
 		return err
@@ -253,6 +262,8 @@ var (
 	answerSelect  = 2 * time.Second
 	answerConfirm = 3 * time.Second
 	answerPoll    = 80 * time.Millisecond
+	// answerFieldWait is how long a typed answer waits for its field.
+	answerFieldWait = 2 * time.Second
 )
 
 // awaitSelected waits for the screen to show the cursor on the option
@@ -308,13 +319,19 @@ func (s *Store) send(ctx context.Context, tgt string, literal bool, keys ...stri
 }
 
 // awaitChange waits a moment for the pane to differ from before, as a
-// field opens after the key that asked for it.
-func (s *Store) awaitChange(ctx context.Context, tgt, before string) {
-	deadline := time.Now().Add(2 * time.Second)
+// field opens after the key that asked for it. It reports whether a
+// capture differed; a failed capture or the deadline report false.
+func (s *Store) awaitChange(ctx context.Context, tgt, before string) bool {
+	deadline := time.Now().Add(answerFieldWait)
 	for time.Now().Before(deadline) && ctx.Err() == nil {
 		time.Sleep(100 * time.Millisecond)
-		if now, err := s.cfg.Tmux.CapturePane(ctx, tgt); err != nil || now != before {
-			return
+		now, err := s.cfg.Tmux.CapturePane(ctx, tgt)
+		if err != nil {
+			return false
+		}
+		if now != before {
+			return true
 		}
 	}
+	return false
 }
