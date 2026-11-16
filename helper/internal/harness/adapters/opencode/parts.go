@@ -52,6 +52,10 @@ func (e *Events) partUpdated(raw json.RawMessage, at time.Time) ([]harness.Item,
 		return nil, nil
 	}
 	pt := p.Part
+	if pt.Type == "tool" && (pt.State.Status == "pending" || pt.State.Status == "running") ||
+		(pt.Type == "text" || pt.Type == "reasoning") && (pt.Time == nil || pt.Time.End == 0) {
+		e.running(pt.SessionID)
+	}
 	msg, known := e.messages[pt.MessageID]
 	turnID := msg.turn
 	parent := e.parentOf(pt.SessionID)
@@ -142,6 +146,7 @@ func (e *Events) partDelta(raw json.RawMessage, at time.Time) ([]harness.Item, [
 	if st == nil || st.kind == harness.KindUser {
 		return nil, nil
 	}
+	e.running(p.SessionID)
 	st.text += p.Delta
 	if !st.last.IsZero() && at.Sub(st.last) < partialEvery {
 		return nil, nil

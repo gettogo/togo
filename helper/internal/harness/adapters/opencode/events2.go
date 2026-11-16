@@ -30,6 +30,7 @@ type Events2 struct {
 	mu          sync.Mutex
 	state       map[string]string
 	main        string
+	lost        bool                // the stream came back: the next sign of a running turn says so
 	children    map[string]*session // child session id -> its agent
 	texts       map[string]*part    // streamed text and reasoning by item id
 	tools       map[string]harness.Item
@@ -228,6 +229,7 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		items, ops := e.ended(d.SessionID, harness.StateInterrupted, at)
 		return append(items, e.notice("interrupted-"+ev.ID, t, d.SessionID, at, "info", harness.NoticeInterrupted, "Interrupted")), ops
 	case "session.step.started":
+		e.running(d.SessionID)
 		if d.SessionID == e.main {
 			e.setAgentModel(d.Agent, d.Model)
 		}
@@ -244,11 +246,15 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "session.text.started", "session.reasoning.started":
 		e.textStarted(ev.Type, d, at)
 	case "session.text.delta", "session.reasoning.delta":
+		e.running(d.SessionID)
 		return e.textDelta(ev.Type, d, at)
 	case "session.text.ended", "session.reasoning.ended":
 		return e.textEnded(ev.Type, d, at)
 	case "session.tool.input.started", "session.tool.called", "session.tool.progress",
 		"session.tool.success", "session.tool.failed":
+		if ev.Type != "session.tool.success" && ev.Type != "session.tool.failed" {
+			e.running(d.SessionID)
+		}
 		return e.tool(ev.Type, d, at)
 	case "session.step.failed":
 		if d.Error != nil && d.Error.Type != "aborted" && e.follows(d.SessionID) {
@@ -498,6 +504,17 @@ func lostRev(at time.Time) string { return "reconnected-" + at.Format(time.RFC33
 func (e *Events2) lostTrack() {
 	if e.state["working"] == "true" {
 		e.state["working"], e.state["idle"] = "false", "true"
+	}
+	e.lost = true
+}
+
+// running notes a step, text or tool update of a turn that is still going:
+// after a reconnect it is the first sign the turn kept running while the
+// stream was down, so the session is working again.
+func (e *Events2) running(sess string) {
+	if e.lost && sess == e.main {
+		e.state["working"], e.state["idle"] = "true", "false"
+		e.lost = false
 	}
 }
 

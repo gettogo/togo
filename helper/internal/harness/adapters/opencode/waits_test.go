@@ -108,3 +108,56 @@ func TestIdleFlushesStreamedText(t *testing.T) {
 		t.Fatalf("text after idle %+v", body)
 	}
 }
+
+func reconnected() harness.Record {
+	return harness.Record{Data: json.RawMessage(`{"type":"stream.reconnected"}`)}
+}
+
+// A stream that drops and comes back in the middle of a turn: the turn is
+// not known to run until the stream says so, and its next streamed text or
+// tool update does.
+func TestReconnectMidTurnWorksAgain(t *testing.T) {
+	recs := recorded(t)
+	at := indexOf(t, recs, "message.part.delta", "prt_1b3e21b50001enXgCLCa7we0L4")
+	m := NewEvents(harness.Env{SessionID: "s_oc", Cwd: "/Users/me/proj"})
+	run(m, recs[:at+4])
+	if m.State()["working"] != "true" {
+		t.Fatalf("not working mid-turn: %v", m.State())
+	}
+	m.Map(reconnected())
+	if m.State()["working"] != "false" {
+		t.Fatalf("working after reconnect: %v", m.State())
+	}
+	run(m, recs[at+4:at+6])
+	if m.State()["working"] != "true" || m.State()["idle"] != "false" {
+		t.Fatalf("not working after the turn went on: %v", m.State())
+	}
+	// A turn that ended while the stream was down stays ended.
+	idle := indexOf(t, recs, "session.idle", recordedSession)
+	m.Map(recs[idle])
+	if m.State()["working"] != "false" {
+		t.Fatalf("working after idle: %v", m.State())
+	}
+}
+
+func TestReconnectMidTurnWorksAgain2(t *testing.T) {
+	recs := recorded2(t)
+	at := indexOf(t, recs, "session.text.delta", "1\\n2\\n3")
+	m := NewEvents2(harness.Env{SessionID: "s_oc2", Cwd: "/tmp/work"})
+	run(m, recs[:at+1])
+	if m.State()["working"] != "true" {
+		t.Fatalf("not working mid-turn: %v", m.State())
+	}
+	m.Map(reconnected())
+	if m.State()["working"] != "false" {
+		t.Fatalf("working after reconnect: %v", m.State())
+	}
+	run(m, recs[at+1:at+3])
+	if m.State()["working"] != "true" || m.State()["idle"] != "false" {
+		t.Fatalf("not working after the turn went on: %v", m.State())
+	}
+	run(m, recs[at+3:at+10]) // text ended ... execution.interrupted
+	if m.State()["working"] != "false" {
+		t.Fatalf("working after the turn ended: %v", m.State())
+	}
+}

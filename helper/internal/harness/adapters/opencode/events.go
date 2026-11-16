@@ -21,6 +21,7 @@ type Events struct {
 	mu        sync.Mutex
 	state     map[string]string
 	main      string
+	lost      bool // the stream came back: the next sign of a running turn says so
 	sessions  map[string]*session
 	messages  map[string]message
 	parts     map[string]*part
@@ -387,6 +388,7 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 	}
 	if sess == e.main {
 		e.state["working"], e.state["idle"] = "false", "true"
+		e.lost = false
 	}
 	ids := make([]string, 0, len(e.turns))
 	for id, tu := range e.turns {
@@ -423,5 +425,16 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 func (e *Events) lostTrack() {
 	if e.state["working"] == "true" {
 		e.state["working"], e.state["idle"] = "false", "true"
+	}
+	e.lost = true
+}
+
+// running notes a part, tool or text update of a turn that is still going:
+// after a reconnect it is the first sign the turn kept running while the
+// stream was down, so the session is working again.
+func (e *Events) running(sess string) {
+	if e.lost && sess == e.main {
+		e.state["working"], e.state["idle"] = "true", "false"
+		e.lost = false
 	}
 }
