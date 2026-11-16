@@ -226,3 +226,57 @@ func asAskError(err error, target **AskError) bool {
 	}
 	return ok
 }
+
+func TestAnswerAskMatchesAQuestionTheTerminalWrapped(t *testing.T) {
+	fastAsk(t)
+	sim := newSim(simQ{"Which database should the new service\nuse for its job queue?", false, []string{"Postgres", "Redis"}})
+	st := New(Config{Tmux: sim, Pub: &fakePub{}})
+	err := st.AnswerAsk(context.Background(), sess, []AskAnswer{
+		{Prompt: "Which database should the new service use for its job queue?", Labels: []string{"Redis"}},
+	})
+	if err != nil || !sim.closed || sim.answers[0] != "Redis" {
+		t.Fatalf("err %v sim %+v", err, sim)
+	}
+	// A different question that merely shares no prefix is still refused.
+	sim2 := newSim(simQ{"Which database should the new service\nuse?", false, []string{"Redis"}})
+	err = New(Config{Tmux: sim2, Pub: &fakePub{}}).AnswerAsk(context.Background(), sess, []AskAnswer{{Prompt: "Which cache?", Labels: []string{"Redis"}}})
+	if err == nil || len(sim2.sent) != 0 {
+		t.Fatalf("err %v sent %v", err, sim2.sent)
+	}
+}
+
+func TestAnswerAskMultiSelectChecksEveryLabelBeforeTheFirstKey(t *testing.T) {
+	fastAsk(t)
+	sim := newSim(simQ{"Which fruits?", true, []string{"Apple", "Pear"}})
+	st := New(Config{Tmux: sim, Pub: &fakePub{}})
+	err := st.AnswerAsk(context.Background(), sess, []AskAnswer{{Prompt: "Which fruits?", Multi: true, Labels: []string{"Apple", "Mango"}}})
+	var ae *AskError
+	if !asAskError(err, &ae) || !strings.Contains(ae.Msg, "Mango") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(sim.sent) != 0 {
+		t.Fatalf("keys sent before the labels were checked: %v", sim.sent)
+	}
+}
+
+// followOnSim shows another question as soon as the dialog closes.
+type followOnSim struct{ *askSim }
+
+func (f followOnSim) CapturePane(ctx context.Context, tgt string) (string, error) {
+	f.mu.Lock()
+	closed := f.closed
+	f.mu.Unlock()
+	if closed {
+		return newSim(simQ{"Anything else?", false, []string{"No"}}).CapturePane(ctx, tgt)
+	}
+	return f.askSim.CapturePane(ctx, tgt)
+}
+
+func TestAnswerAskIsDoneWhenAnotherQuestionFollows(t *testing.T) {
+	fastAsk(t)
+	sim := followOnSim{newSim(simQ{"Which color?", false, []string{"Red", "Blue"}})}
+	st := New(Config{Tmux: sim, Pub: &fakePub{}})
+	if err := st.AnswerAsk(context.Background(), sess, []AskAnswer{{Prompt: "Which color?", Labels: []string{"Red"}}}); err != nil {
+		t.Fatalf("answer applied, but: %v", err)
+	}
+}

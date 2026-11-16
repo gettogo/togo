@@ -58,7 +58,7 @@ func (s *Store) AnswerAsk(ctx context.Context, sessionID string, answers []AskAn
 	d := askDriver{s: s, ctx: ctx, target: target(sessionID)}
 	var last detect.Ask
 	for i, a := range answers {
-		cur, ok := d.await(func(x detect.Ask) bool { return !x.Review && x.Prompt == a.Prompt })
+		cur, ok := d.await(func(x detect.Ask) bool { return !x.Review && samePrompt(x.Prompt, a.Prompt) })
 		if !ok {
 			if i == 0 {
 				return &AskError{"The question is not waiting at the terminal"}
@@ -72,7 +72,7 @@ func (s *Store) AnswerAsk(ctx context.Context, sessionID string, answers []AskAn
 	}
 	if len(last.Tabs) == 0 && !last.Multi {
 		// One single-select question: its digit submitted it.
-		return d.gone()
+		return d.gone(func(x detect.Ask) bool { return !x.Review && x.Prompt == last.Prompt })
 	}
 	review, ok := d.await(func(x detect.Ask) bool { return x.Review })
 	if !ok {
@@ -85,7 +85,7 @@ func (s *Store) AnswerAsk(ctx context.Context, sessionID string, answers []AskAn
 	if err := d.keys(false, key); err != nil {
 		return err
 	}
-	return d.gone()
+	return d.gone(func(x detect.Ask) bool { return x.Review })
 }
 
 type askDriver struct {
@@ -146,16 +146,18 @@ func (d askDriver) answer(cur detect.Ask, a AskAnswer) error {
 		}
 		return d.moved(cur, strconv.Itoa(n))
 	}
+	// Every label is checked before the first key: a missing one must not
+	// leave the other boxes half toggled.
+	for _, l := range a.Labels {
+		if _, ok := cur.OptionN(l); !ok {
+			return &AskError{"The terminal does not offer " + l}
+		}
+	}
 	for _, o := range cur.Options {
 		if want := slices.Contains(a.Labels, o.Label); want != o.Checked {
 			if err := d.keys(false, strconv.Itoa(o.N)); err != nil {
 				return err
 			}
-		}
-	}
-	for _, l := range a.Labels {
-		if _, ok := cur.OptionN(l); !ok {
-			return &AskError{"The terminal does not offer " + l}
 		}
 	}
 	if _, ok := d.await(func(x detect.Ask) bool { return x.Prompt == cur.Prompt && checks(x, a.Labels) }); !ok {
@@ -182,11 +184,13 @@ func (d askDriver) moved(cur detect.Ask, key string) error {
 	}
 }
 
-// gone waits for the dialog to close after the last step.
-func (d askDriver) gone() error {
+// gone waits for the dialog that was answered to leave the screen after the
+// last step. A different dialog drawn at once (the agent asking again) means
+// this one was taken, so only still(x), the same dialog, keeps waiting.
+func (d askDriver) gone(still func(detect.Ask) bool) error {
 	deadline := time.Now().Add(askWait)
 	for {
-		if _, found := d.read(); !found {
+		if x, found := d.read(); !found || !still(x) {
 			return nil
 		}
 		if time.Now().After(deadline) || d.ctx.Err() != nil {
