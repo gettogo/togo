@@ -67,7 +67,7 @@ func init() {
 	register("doctor", func(ctx context.Context, args []string, _ map[string]string, _ io.Reader, stdout, _ io.Writer) int {
 		e := doctor.DefaultEnv(state.LoginPath(ctx))
 		e.Awake = awakeDoctorCheck
-		return runDoctor(args, e, stdout)
+		return runDoctorContext(ctx, args, e, stdout)
 	})
 	register("version", func(_ context.Context, _ []string, _ map[string]string, _ io.Reader, stdout, _ io.Writer) int {
 		fmt.Fprintf(stdout, "togo %s\n", version.String())
@@ -79,6 +79,8 @@ const (
 	exitOK    = 0
 	exitError = 1
 	exitUsage = 2
+	// exitInterrupted is the shell convention for a command ended by Ctrl-C.
+	exitInterrupted = 130
 )
 
 func main() {

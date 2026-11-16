@@ -91,7 +91,7 @@ func runAsk(ctx context.Context, args []string, env map[string]string, stdin io.
 	var res wire.AskResult
 	if err := localCall(callCtx, sock, wire.MethodLocalAsk, p, &res); err != nil {
 		if errors.Is(err, errUnreachable) && !*remote && isTerminal(stdin) {
-			return askHere(stdin, stdout, stderr, question, opts, deny)
+			return askHere(ctx, stdin, stdout, stderr, question, opts, deny)
 		}
 		fmt.Fprintf(stderr, "togo: %v\n", err)
 		if errors.Is(err, errUnreachable) {
@@ -134,15 +134,20 @@ func denyLabel(opts []string, approve, deny string) string {
 }
 
 // askHere prompts on the terminal: the answer's number or text.
-func askHere(stdin io.Reader, stdout, stderr io.Writer, question string, opts []string, deny string) int {
+func askHere(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, question string, opts []string, deny string) int {
 	fmt.Fprintln(stderr, question)
 	for i, o := range opts {
 		fmt.Fprintf(stderr, "  %d. %s\n", i+1, o)
 	}
 	fmt.Fprint(stderr, "Answer: ")
-	line, err := bufio.NewReader(stdin).ReadString('\n')
+	line, err := readLineContext(ctx, stdin)
+	if err != nil && ctx.Err() != nil {
+		fmt.Fprintln(stderr)
+		return exitInterrupted
+	}
 	if err != nil && line == "" {
-		return exitTimeout
+		// No input and no daemon: the question could not be put to anyone.
+		return exitUnreachable
 	}
 	line = strings.TrimSpace(line)
 	if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(opts) {
@@ -162,7 +167,35 @@ func isTerminal(r io.Reader) bool {
 		return false
 	}
 	st, err := f.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
+	if err != nil || st.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	// /dev/null is a character device too, and reads EOF at once.
+	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(st, null) {
+		return false
+	}
+	return true
+}
+
+// readLineContext reads one line from r, giving up with ctx's error when
+// ctx ends first so Ctrl-C works at a prompt. The abandoned read ends with
+// the process.
+func readLineContext(ctx context.Context, r io.Reader) (string, error) {
+	type result struct {
+		line string
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		line, err := bufio.NewReader(r).ReadString('\n')
+		ch <- result{line, err}
+	}()
+	select {
+	case res := <-ch:
+		return res.line, res.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 }
 
 // checkRoleLabels makes sure --approve and --deny each name one of opts

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -162,8 +161,12 @@ func setupBattery(ctx context.Context, admin awake.Admin, stdin io.Reader, stdou
 		"togo installs this rule at %s:\n\n%s\n"+
 		"sudo asks for your password once now. Continue? [y/N] ",
 		admin.SudoersPath, indent(rule))
-	answer, _ := bufio.NewReader(stdin).ReadString('\n')
+	answer, rerr := readLineContext(ctx, stdin)
 	fmt.Fprintln(stdout)
+	if rerr != nil && ctx.Err() != nil {
+		fmt.Fprintln(stderr, "togo: battery mode not set up; nothing changed")
+		return exitInterrupted
+	}
 	if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
 		fmt.Fprintln(stderr, "togo: battery mode not set up; nothing changed")
 		return exitError
