@@ -27,3 +27,38 @@ func TestUnrecognisedTodoListIsFlagged(t *testing.T) {
 		t.Fatal("empty list flagged")
 	}
 }
+
+// /new starts a log with a metadata header: the old session's plan, agent
+// and background rows must not stay in mission control. An emptied todo
+// list clears the plan too.
+func TestNewLogAndEmptyTodoListClearTheRows(t *testing.T) {
+	m := NewWire(harness.Env{Cwd: "/Users/user/proj", SessionID: "s1"})
+	out := replay(t, m, fixture(t, "wire-h1.jsonl"))
+	sections := map[string]bool{}
+	for _, op := range out.ops {
+		if op.Row != nil || len(op.Rows) > 0 {
+			sections[op.Section] = true
+		}
+	}
+	if !sections[harness.SectionPlan] || !sections[harness.SectionBackground] {
+		t.Fatalf("the recording made no rows: %v", sections)
+	}
+	_, ops := m.Map(harness.Record{Data: []byte(`{"type":"metadata","protocol_version":"1.4","created_at":1789999634362}`)})
+	cleared := map[string]bool{}
+	for _, op := range ops {
+		if op.Op == harness.OpReplace && len(op.Rows) == 0 {
+			cleared[op.Section] = true
+		}
+	}
+	for s := range sections {
+		if !cleared[s] {
+			t.Errorf("%s rows stay after a new log", s)
+		}
+	}
+	m = NewWire(harness.Env{SessionID: "s1"})
+	replay(t, m, []string{todoLine(`{"todos":[{"title":"a","status":"in_progress"}]}`)})
+	_, ops = m.Map(harness.Record{Data: []byte(todoLine(`{"todos":[]}`))})
+	if len(ops) != 1 || ops[0].Op != harness.OpReplace || ops[0].Section != harness.SectionPlan || len(ops[0].Rows) != 0 {
+		t.Fatalf("an emptied list left the plan: %+v", ops)
+	}
+}

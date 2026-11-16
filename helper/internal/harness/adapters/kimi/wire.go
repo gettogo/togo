@@ -32,6 +32,8 @@ type Wire struct {
 	// endsTurns: the log says when a turn ends (protocol 1.5 writes
 	// turn.ended), so a step's end_turn finish does not end it.
 	endsTurns bool
+	// sections are the mission sections the log has put rows in.
+	sections map[string]bool
 }
 
 type turn struct {
@@ -45,7 +47,7 @@ type turn struct {
 func NewWire(env harness.Env) *Wire {
 	return &Wire{env: env, state: map[string]string{"working": "false", "mode": initialMode(env.Argv, defaultPlanMode())}, texts: map[string]*harness.Item{},
 		tools: map[string]harness.Item{}, tasks: map[string]harness.Item{}, byCall: map[string]string{},
-		open: map[string]harness.Item{}}
+		open: map[string]harness.Item{}, sections: map[string]bool{}}
 }
 
 func (w *Wire) Name() string { return MapperWire }
@@ -119,10 +121,22 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	items, ops := w.mapRecord(r, at)
+	for _, op := range ops {
+		if op.Row != nil || len(op.Rows) > 0 {
+			w.sections[op.Section] = true
+		}
+	}
+	return items, ops
+}
+
+func (w *Wire) mapRecord(r record, at time.Time) ([]harness.Item, []harness.Op) {
 	switch r.Type {
 	case "metadata":
+		// A new log (/new, a restart): nothing of the old one goes on.
 		w.endsTurns = protocolAtLeast(r.Protocol, 1, 5)
-		return w.endTurn(harness.StateInterrupted, at)
+		items, ops := w.endTurn(harness.StateInterrupted, at)
+		return items, append(ops, w.clearSections()...)
 	case "profile.bind", "config.update", "llm.request":
 		return nil, w.setModel(r.ModelAlias, r.Effort)
 	case "permission.set_mode":
@@ -161,6 +175,20 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return w.taskStarted(r.Info, at)
 	}
 	return nil, nil
+}
+
+// clearSections empties the plan, agent and background rows the log made,
+// and forgets the tasks they stood for.
+func (w *Wire) clearSections() []harness.Op {
+	w.tasks, w.byCall = map[string]harness.Item{}, map[string]string{}
+	var ops []harness.Op
+	for _, s := range []string{harness.SectionPlan, harness.SectionAgents, harness.SectionBackground} {
+		if w.sections[s] {
+			ops = append(ops, harness.Op{Op: harness.OpReplace, Section: s, Rows: []harness.Row{}})
+		}
+	}
+	w.sections = map[string]bool{}
+	return ops
 }
 
 // protocolAtLeast reads a "major.minor" protocol version.

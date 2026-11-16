@@ -86,6 +86,11 @@ func (w *Wire) plan(raw json.RawMessage, at time.Time) ([]harness.Item, []harnes
 		var probe map[string]json.RawMessage
 		if json.Unmarshal(raw, &probe) != nil || probe["todos"] == nil {
 			w.NoteUnrecognisedPlan() // the call stays a tool step
+			return nil, nil
+		}
+		if len(a.Todos) == 0 && w.sections[harness.SectionPlan] {
+			// An emptied list: the plan is gone.
+			return nil, []harness.Op{{Op: harness.OpReplace, Section: harness.SectionPlan, Rows: []harness.Row{}}}
 		}
 		return nil, nil
 	}
