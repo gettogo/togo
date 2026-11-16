@@ -336,12 +336,17 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	defer fh.Close()
 	var recs []json.RawMessage
+	var header json.RawMessage // the file's first record, kept when the replay is cut
 	replaying := t.replay
 	if t.replay {
 		t.replay = false
 		// Replay at most the last MaxFileRead bytes, then the last
-		// MaxRecords records of those.
+		// MaxRecords records of those. The first record (the session
+		// header, which names the session) is always kept.
 		if start := st.Size() - MaxFileRead; start > t.offset {
+			if !t.lines && t.offset == 0 {
+				header = firstRecord(fh)
+			}
 			t.offset, t.skip = start, true
 		}
 	}
@@ -383,7 +388,16 @@ func (t *tail) poll(emit func(harness.Record)) error {
 		t.pending = append([]byte(nil), data[i+1:]...)
 	}
 	if len(recs) > MaxRecords && !t.lines {
+		if replaying && header == nil {
+			header = recs[0] // the file's start is in view
+		}
 		recs = recs[len(recs)-MaxRecords:]
+	}
+	if replaying && header != nil && len(recs) > 0 {
+		if len(recs) >= MaxRecords {
+			recs = recs[1:]
+		}
+		recs = append([]json.RawMessage{header}, recs...)
 	}
 	now := time.Now()
 	if replaying && len(recs) > 0 {
@@ -392,6 +406,24 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	for _, r := range recs {
 		emit(harness.Record{Source: t.name, At: now, Data: r})
+	}
+	return nil
+}
+
+// firstHeaderMax bounds how much of a file's start is read for its header.
+const firstHeaderMax = 64 << 10
+
+// firstRecord returns the first line of the file when it is a JSON value,
+// else nil.
+func firstRecord(fh *os.File) json.RawMessage {
+	buf := make([]byte, firstHeaderMax)
+	n, _ := fh.ReadAt(buf, 0)
+	i := bytes.IndexByte(buf[:n], '\n')
+	if i <= 0 {
+		return nil
+	}
+	if rs := Records(buf[:i], 1); len(rs) == 1 {
+		return rs[0]
 	}
 	return nil
 }
