@@ -22,7 +22,8 @@ func (c *Client) PasteText(ctx context.Context, target, text string) error {
 	if _, err := c.runInput(ctx, text, "load-buffer", "-b", name, "-"); err != nil {
 		return fmt.Errorf("tmux: load buffer: %w", noSession(err))
 	}
-	if _, err := c.run(ctx, "paste-buffer", "-p", "-d", "-b", name, "-t", target); err != nil {
+	paste := append(leaveMode(target), "paste-buffer", "-p", "-d", "-b", name, "-t", target)
+	if _, err := c.run(ctx, paste...); err != nil {
 		_, _ = c.run(context.WithoutCancel(ctx), "delete-buffer", "-b", name)
 		return fmt.Errorf("tmux: paste: %w", noSession(err))
 	}
