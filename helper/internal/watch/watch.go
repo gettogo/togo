@@ -107,6 +107,8 @@ type Watcher struct {
 	// settledGone checks the pane for an agent gone without a report: gone,
 	// in a pane that did not just start.
 	settledGone func(context.Context, string) (bool, error)
+	// agentBack checks the pane for the agent's program running again.
+	agentBack func(ctx context.Context, id, program string) (bool, error)
 	// pruneRecord prunes the restore record; nil skips it. pruned is
 	// set after the first reconcile.
 	pruneRecord func(context.Context) error
@@ -153,6 +155,7 @@ func New(cfg Config) (*Watcher, error) {
 	}
 	w.agentGone = w.paneGone
 	w.settledGone = w.paneSettledGone
+	w.agentBack = w.paneAgentBack
 	w.pruneRecord = cfg.Sessions.Settle
 	return w, nil
 }
@@ -311,6 +314,7 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 			w.restoreExit(ctx, s, e, scan)
 		}
 		e.mu.Unlock()
+		w.revive(ctx, s)
 	}
 
 	type vanished struct {
