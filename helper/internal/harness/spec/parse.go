@@ -104,6 +104,9 @@ func (a *Adapter) Validate() error {
 		if f.Mapper == "" {
 			bad("feeds.%s: mapper is required", name)
 		}
+		if f.CLI != nil || f.HTTP != nil || f.Static != nil || (f.RPC != nil && len(f.RPC.Child) > 0) {
+			bad("feeds.%s: this kind cannot stream; use jsonl, file, sse, rpc, sqlite, hook or statusline", name)
+		}
 		checkStability(bad, "feeds."+name, f.Stability)
 	}
 	for _, name := range sortedKeys(a.Sources) {
