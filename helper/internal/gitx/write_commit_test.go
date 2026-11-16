@@ -300,3 +300,17 @@ func TestCommitReportsRacedHead(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCommitKeepsHashPrefixedLines(t *testing.T) {
+	dir := seeded(t)
+	s := writer(dir)
+	write(t, dir, "README.md", "hello again\n")
+	git(t, dir, "add", "README.md")
+	msg := "#30: unfreeze copy mode\n\n#42 was the cause\n# Heading\nplain"
+	if err := call(t, s, "git.commit", commitParams(msg, false, ""), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimRight(git(t, dir, "log", "-1", "--format=%B"), "\n"); got != msg {
+		t.Errorf("message %q, want %q", got, msg)
+	}
+}

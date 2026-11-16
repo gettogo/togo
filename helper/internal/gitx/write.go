@@ -501,7 +501,7 @@ func (g *Git) Commit(ctx context.Context, dir, message string, amend bool, head 
 			return res, err
 		}
 	}
-	args := []string{"commit", "-q", "--no-verify", "--no-gpg-sign", "--cleanup=strip", "-F", "-"}
+	args := []string{"commit", "-q", "--no-verify", "--no-gpg-sign", "--cleanup=whitespace", "-F", "-"}
 	if amend {
 		args = append(args, "--amend", "--no-post-rewrite")
 	}
