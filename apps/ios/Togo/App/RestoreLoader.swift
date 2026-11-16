@@ -78,7 +78,7 @@ extension AppStore {
 
     private func loadRestorable(_ host: HostID, tools: any MachineTools) async {
         do {
-            let list = try await tools.call(host) { try await $0.restorable() }
+            let list = try await tools.quietCall(host) { try await $0.restorable() }
             // The machine may have gone away and been asked about again while this was in flight.
             guard restoreLoaded.contains(host), let m = controlCenter.machines.firstIndex(where: { $0.id == host }) else { return }
             controlCenter.machines[m].restorable = list

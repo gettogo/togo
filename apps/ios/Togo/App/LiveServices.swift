@@ -265,7 +265,7 @@ import UIKit
 
     func listDir(hostID: HostID, path: String) async throws -> ListDirResult {
         let record = try helperRecord(hostID)
-        return try await call(record, prompter: userPrompter(record)) { try await $0.listDir(path: path, showHidden: false) }
+        return try await call(record, prompter: userPrompter(record)) { try await $0.listDir(path: path, showHidden: true) }
     }
 
     func terminal(hostID: HostID, sessionID: String, transport: TransportPreference?, userStarted: Bool) -> TerminalHandle {

@@ -92,7 +92,6 @@ private struct PromptBarFeed: ViewModifier {
 
     private func wire() {
         let store = self.store
-        let library = agentLibrary
         model.onAnswer = { request, answer in
             // Words for a prompt that takes none are never typed into it: Enter would pick its
             // highlighted option.
@@ -105,9 +104,9 @@ private struct PromptBarFeed: ViewModifier {
                 store.startNewSession()
                 return
             }
-            // The agent comes back as the first saved preset that runs it, when there is one.
-            let preset = library?.presets.first { $0.agent == target.agent }?.id
-            store.newSessionPrefill = NewSessionPrefill(hostID: target.hostID, folder: target.folder, presetID: preset)
+            // The suggestion names a plain agent, never an arbitrary same-agent preset.
+            store.newSessionPrefill = NewSessionPrefill(
+                hostID: target.hostID, folder: target.folder, presetID: nil, agentID: target.agent)
             store.showSheet(.newSession(target.hostID))
         }
         model.onOpenStartSheet = { store.startNewSession() }

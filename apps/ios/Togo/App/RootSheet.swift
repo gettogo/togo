@@ -59,6 +59,7 @@ struct RootSheet: View {
             NewSessionSheet(
                 model: NewSessionModel(
                     services: store.services, hostID: hostID, machines: store.controlCenter.machines,
+                    machinesNow: { [weak store] in store?.controlCenter.machines ?? [] },
                     library: agentLibrary ?? .inMemory(),
                     open: { hostID, sessionID, agent in
                         store.sheet = nil

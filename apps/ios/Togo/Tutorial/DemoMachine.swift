@@ -220,6 +220,10 @@ import UIKit
 
 /// Tools for the demo machine's settings pages: there is no helper to ask.
 @MainActor final class DemoMachineTools: MachineTools {
+    func quietCall<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
+        try await call(host, body)
+    }
+
     func call<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
         throw DemoServices.ReadOnly()
     }

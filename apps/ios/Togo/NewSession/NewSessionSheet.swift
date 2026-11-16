@@ -33,6 +33,8 @@ struct NewSessionSheet: View {
         .tint(.primary)
         .toggleStyle(.systemSwitch)
         .task { await model.start() }
+        .onChange(of: model.flagsAvailable) { Task { await model.refreshPresetEligibility() } }
+        .onChange(of: model.presets) { Task { await model.refreshPresetEligibility() } }
         .onChange(of: path) {
             // Going back from the browser leaves it; choosing in it has left it already.
             if !path.contains(.browse), model.browsing != .idle { model.leaveBrowsing() }

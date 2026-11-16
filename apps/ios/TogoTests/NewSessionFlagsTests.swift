@@ -127,6 +127,12 @@ import TogoKit
         #expect(model.flagsFooter == "Update the helper on Studio to use flags.")
         #expect(!model.canUse(kimi))
         model.flags = "--yolo"
+        #expect(!model.canStart)
+        #expect(await model.create() == nil)
+        #expect(created == nil)
+        #expect(model.flags == "--yolo")
+        model.choose(agent: "claude")
+        #expect(model.canStart)
         _ = await model.create()
         #expect(created == CreateSessionParams(agent: "claude", cwd: folder))
     }

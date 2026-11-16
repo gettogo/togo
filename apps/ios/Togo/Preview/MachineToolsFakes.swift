@@ -32,6 +32,10 @@ import TogoKit
         capabilitySets[host] ?? defaultCapabilities
     }
 
+    func quietCall<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
+        try await call(host, body)
+    }
+
     func call<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
         calledHosts.append(host)
         let client = HelperClient(channel: FakeHelperChannel(script: script, capabilities: capabilities(host)))

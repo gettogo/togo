@@ -17,7 +17,7 @@ import struct TogoPush.Pairing
     }
 
     private func services(
-        watches: Watches, helpers: NoHelper = NoHelper(), local: MemoryBackend = MemoryBackend(),
+        watches: Watches, helpers: any HelperCalling = NoHelper(), local: MemoryBackend = MemoryBackend(),
         remote: MemoryBackend? = nil, syncOn: Bool = true,
         forgotPasswords: ForgottenPasswords? = nil, reported: @escaping (HostID, Set<String>) -> Void = { _, _ in }
     ) -> LiveServices {
@@ -363,6 +363,17 @@ import struct TogoPush.Pairing
 
         #expect(reports == [["r1"], []])
     }
+    @Test func folderBrowserFetchIncludesHiddenFoldersForItsLocalToggle() async throws {
+        let helper = ScriptedHelper()
+        helper.answer("fs.listDir", #"{"path":"/tmp","entries":[{"name":".config","dir":true}]}"#)
+        let services = services(watches: Watches(), helpers: helper)
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let listing = try await services.listDir(hostID: Samples.studio, path: "/tmp")
+        #expect(listing.entries.map(\.name) == [".config"])
+        #expect(helper.requests.last?.params["showHidden"] == .bool(true))
+    }
+
     @Test func failedAgentDiscoveryWaitsForAnotherOnlineEpoch() async throws {
         let watches = Watches()
         let helpers = NoHelper()

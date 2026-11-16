@@ -42,6 +42,16 @@ import TogoKit
         #expect(helper.lastPrompterWasGiven)
     }
 
+    @Test func backgroundCallsNeverReceiveTheUserPrompter() async throws {
+        let helper = ScriptedHelper()
+        helper.answer("host.info", #"{"interfaces":[],"wakeOnLan":null}"#)
+        let tools = tools(helper, record: record(), prompter: CountingPrompter())
+        _ = try await tools.quietCall(host) { try await $0.hostInfo() }
+        #expect(!helper.lastPrompterWasGiven)
+        _ = try await tools.call(host) { try await $0.hostInfo() }
+        #expect(helper.lastPrompterWasGiven)
+    }
+
     @Test func unknownMachineFailsWithoutCalling() async {
         let helper = ScriptedHelper()
         let tools = tools(helper, record: record())
