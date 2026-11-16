@@ -81,8 +81,9 @@ func taskList(args map[string]any) []task {
 	var out []task
 	for _, el := range asList(args["tasks"]) {
 		m := obj(el)
-		t := task{id: str(m, "id"), role: firstNonEmpty(str(m, "agent"), role),
-			title: firstNonEmpty(str(m, "description"), firstLine(str(m, "assignment")), str(m, "id"))}
+		// 18.19 on names a task by "name" and gives its work as "task".
+		t := task{id: firstNonEmpty(str(m, "id"), str(m, "name")), role: firstNonEmpty(str(m, "agent"), role),
+			title: firstNonEmpty(str(m, "description"), str(m, "name"), firstLine(firstNonEmpty(str(m, "assignment"), str(m, "task"))), str(m, "id"))}
 		out = append(out, t)
 	}
 	if len(out) == 0 {
@@ -126,7 +127,8 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 	it.Tool = &b
 	items := []harness.Item{*it}
 	var ops []harness.Op
-	if it.Parent == "" {
+	agents := s.taskCalls[b.CallID]
+	if it.Parent == "" && len(agents) == 0 {
 		ji, jo := s.jobStarted(it, details, at)
 		items, ops = append(items, ji...), append(ops, jo...)
 	}
@@ -141,7 +143,19 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 		items = append(items, *q)
 		delete(s.asks, b.CallID)
 	}
-	if agents := s.taskCalls[b.CallID]; len(agents) > 0 {
+	if it.Parent == "" {
+		si, so := s.agentsSettled(asList(obj(details["proc"])["jobs"]), at)
+		items, ops = append(items, si...), append(ops, so...)
+	}
+	if str(obj(details["async"]), "state") == "running" {
+		// A background task call returns at once: its agents keep running,
+		// and their files are still to come. omp reports each one later.
+		for _, aid := range agents {
+			s.detached[aid] = true
+		}
+		return items, ops
+	}
+	if len(agents) > 0 {
 		results := map[string]map[string]any{}
 		for _, r := range asList(details["results"]) {
 			rm := obj(r)
@@ -245,4 +259,27 @@ func resultImages(content any) []harness.ImageRef {
 		}
 	}
 	return out
+}
+
+// parentOf names the conversation an entry belongs to. The session feed
+// reads only the terminal's own conversation, so its entries are the main
+// one's whatever was read last; a subagent file's entries follow their
+// parent entry, or the header read last.
+func (s *session) parentOf(e map[string]any, main bool) string {
+	if main {
+		if id := str(e, "id"); id != "" {
+			s.parents[id] = ""
+		}
+		return ""
+	}
+	if p := str(e, "parentId"); p != "" {
+		if o, ok := s.parents[p]; ok {
+			s.parents[str(e, "id")] = o
+			return o
+		}
+	}
+	if id := str(e, "id"); id != "" {
+		s.parents[id] = s.cur
+	}
+	return s.cur
 }

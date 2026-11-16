@@ -35,6 +35,7 @@ type session struct {
 	jobs      map[string]*harness.Item // async jobs by omp job id (jobs.go)
 	taskCalls map[string][]string      // task call id -> agent item ids
 	pending   []string                 // agent item ids still waiting for their file
+	detached  map[string]bool          // agent item ids of background task calls
 	agents    map[string]*harness.Item
 	headers   map[string]string // subagent header id -> agent item id
 	files     map[string]bool
@@ -58,7 +59,7 @@ type turn struct {
 func newSession(env harness.Env) *session {
 	return &session{env: env, cwd: env.Cwd, state: map[string]string{}, parents: map[string]string{},
 		tools: map[string]*harness.Item{}, asks: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
-		headers: map[string]string{}, files: map[string]bool{},
+		headers: map[string]string{}, files: map[string]bool{}, detached: map[string]bool{},
 		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}, jobs: map[string]*harness.Item{}}
 }
 
@@ -115,14 +116,20 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	at := stamp(e["timestamp"], rec.At)
+	main := rec.Source == feedSession
+	if str(e, "type") == "session" {
+		return s.header(e, at, main)
+	}
+	// Every entry is placed, also the ones not shown: a note omp adds (a
+	// background result, a reminder) is the parent of what the agent says
+	// next.
+	parent := s.parentOf(e, main)
 	switch str(e, "type") {
 	case "title":
-		if s.cur == "" && str(e, "title") != "" {
+		if parent == "" && str(e, "title") != "" {
 			s.state["title"] = str(e, "title")
 		}
 		return nil, nil
-	case "session":
-		return s.header(e, at, rec.Source == feedSession)
 	case "custom_message":
 		if str(e, "customType") == "async-result" && rec.Source == feedSession {
 			return s.jobsSettled(e, at)
@@ -138,7 +145,6 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		return append(out, harness.Item{ID: "reset-" + str(e, "id"), Kind: harness.KindNotice, At: at,
 			Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeCompacted, Text: "Context cleared. The agent no longer sees the messages above."}}), nil
 	}
-	parent := s.parentOf(e)
 	if parent == dropped {
 		return nil, nil
 	}
@@ -262,19 +268,6 @@ func (s *session) restart() {
 	delete(s.state, "compactions")
 }
 
-func (s *session) parentOf(e map[string]any) string {
-	if p := str(e, "parentId"); p != "" {
-		if o, ok := s.parents[p]; ok {
-			s.parents[str(e, "id")] = o
-			return o
-		}
-	}
-	if id := str(e, "id"); id != "" {
-		s.parents[id] = s.cur
-	}
-	return s.cur
-}
-
 func (s *session) turnID() string {
 	if s.turn == nil {
 		return ""
@@ -377,7 +370,8 @@ func (s *session) assistant(id, parent string, m map[string]any, at time.Time) (
 			Assistant: &harness.TextBody{Text: clip(t)}})
 	}
 	if parent != "" {
-		return items, ops
+		si, so := s.agentStopped(parent, str(m, "stopReason"), at)
+		return append(items, si...), append(ops, so...)
 	}
 	if u := obj(m["usage"]); u != nil {
 		s.usage = u
