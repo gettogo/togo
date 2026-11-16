@@ -42,6 +42,9 @@ const (
 	// CapForegroundDevice: events.subscribe takes deviceId, and only that
 	// device is left out of pushes while its app is on screen.
 	CapForegroundDevice = "fgdevice.v1"
+	// CapReceipt: push.pair takes answerReceipts, and a device that set it
+	// is told what became of each answer it sends through the relay.
+	CapReceipt = "receipt.v1"
 )
 
 // App-facing methods.
@@ -587,6 +590,8 @@ type PairParams struct {
 	// The device's notification service applies it to pushes; the host
 	// applies it to the Live Activity update that stands in for one.
 	DoneSilent bool `json:"doneSilent,omitempty"`
+	// AnswerReceipts says the device understands answer pushes.
+	AnswerReceipts bool `json:"answerReceipts,omitempty"`
 	// SSHKey is the public key the device signs in with over SSH; Device
 	// stores it under the same name.
 	SSHKey string `json:"sshKey,omitempty"`

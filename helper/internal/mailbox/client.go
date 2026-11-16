@@ -64,6 +64,9 @@ type Config struct {
 	// Will, when set, is sent on every connect and again whenever it
 	// changes.
 	Will WillSource
+	// Answered runs after an answer was handed to Answer, with the device
+	// that sent it and what Answer returned. Nil skips it.
+	Answered func(ctx context.Context, deviceID, requestID string, err error)
 	// Returned runs when a connection opens after the relay may have sent
 	// the will, so what the will put on the devices can be replaced. Nil
 	// skips it.
@@ -440,6 +443,9 @@ func (r *runner) handle(ctx context.Context, f frame) bool {
 		}
 	} else {
 		err = r.cfg.Answer(ctx, m.Answer.RequestID, m.Answer.Decision, ByPhone)
+		if r.cfg.Answered != nil && ctx.Err() == nil {
+			r.cfg.Answered(ctx, m.Answer.DeviceID, m.Answer.RequestID, err)
+		}
 	}
 	if err != nil {
 		if m.Context != nil {

@@ -1430,6 +1430,10 @@
         "liveActivityCommand": {
           "type": "boolean"
         },
+        "answerReceipts": {
+          "description": "The device understands the answer push (see PushPlaintext) and wants one for each answer it sends through the relay mailbox. Send it only when the helper advertises receipt.v1: an older helper rejects push.pair with a field it does not know.",
+          "type": "boolean"
+        },
         "doneSilent": {
           "description": "The user's choice to have done arrive without sound; the host applies it to the Live Activity update that stands in for the done push. Send it only when the helper advertises donesilent.v1.",
           "type": "boolean"
@@ -3723,7 +3727,7 @@
       "additionalProperties": false
     },
     "PushPlaintext": {
-      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting. allowText, optional and only on needs_you, is true when the approval takes a typed answer (the phone offers Reply); the answer itself still travels only over SSH.",
+      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. receipt.v1 adds kind answer, sent only to the one device that sent an answer through the relay mailbox and that paired with answerReceipts: requestId and result are required, title and body are empty strings, sessionId, bib and agent are null. It is an alert push when result is expired, prompt_gone, unconfirmed or failed (the user believes the answer landed) and a background push when it is applied or answered. No answer push arrives while the machine is asleep or unreachable, so a device treats an answer as delivered only once this push says applied. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting. allowText, optional and only on needs_you, is true when the approval takes a typed answer (the phone offers Reply); the answer itself still travels only over SSH.",
       "type": "object",
       "properties": {
         "v": {
@@ -3738,7 +3742,8 @@
             "clear",
             "ended",
             "failed",
-            "offline"
+            "offline",
+            "answer"
           ]
         },
         "sessionId": {
@@ -3814,6 +3819,10 @@
         "allowText": {
           "description": "Optional, needs_you only: true when the approval takes a typed answer as well as its options. Absent means false.",
           "type": "boolean"
+        },
+        "result": {
+          "description": "kind answer only, required there: what became of the answer. applied: the machine took it. answered: someone answered first. expired or prompt_gone: the request was over. unconfirmed: the keys were sent and the prompt is still on screen, so the request stays open. failed: not applied for another reason.",
+          "enum": ["applied", "answered", "expired", "prompt_gone", "unconfirmed", "failed"]
         },
         "expires": {
           "description": "Optional, needs_you only, from helpers advertising expiry.v1: Unix time in seconds when the request stops taking answers, as the helper knew it when it sealed the push. The helper may keep a request open longer, never shorter. Absent from older helpers: the request lives 600 seconds from ts.",
@@ -3915,6 +3924,11 @@
         {
           "if": { "properties": { "kind": { "const": "needs_you" } } },
           "else": { "properties": { "reminder": false, "allowText": false, "expires": false } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "answer" } } },
+          "then": { "required": ["requestId", "result"], "properties": { "requestId": true, "result": true, "title": { "const": "" }, "body": { "const": "" }, "options": false } },
+          "else": { "properties": { "result": false } }
         }
       ]
     },

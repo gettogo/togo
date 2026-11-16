@@ -15,6 +15,17 @@ const (
 	PushEnded    = "ended"
 	PushFailed   = "failed"
 	PushOffline  = "offline"
+	// PushAnswer tells one device what became of the answer it sent
+	// through the relay (receipt.v1).
+	PushAnswer = "answer"
+)
+
+// What became of an answer, carried as the result of an answer push. The
+// conflict reasons answered, prompt_gone and expired are results too.
+const (
+	AnswerApplied     = "applied"
+	AnswerUnconfirmed = "unconfirmed" // keys sent, prompt still on screen; the request stays open
+	AnswerFailed      = "failed"      // not applied, for a reason the phone cannot act on
 )
 
 // LiveWorking is the Live Activity status while an agent works with nothing
@@ -55,6 +66,8 @@ type PushPlaintext struct {
 	// seconds as the helper knew it when it sealed the push. The helper
 	// may keep a request open longer, never shorter.
 	Expires int64 `json:"expires,omitempty"`
+	// Result is what became of the answer, on kind answer only.
+	Result string `json:"result,omitempty"`
 }
 
 // MarshalJSON writes options as [] for needs_you even when there are none,
