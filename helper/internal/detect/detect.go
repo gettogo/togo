@@ -268,14 +268,14 @@ func truncate(s string, max int) string {
 
 func fingerprint(p Prompt) string {
 	h := sha256.New()
-	h.Write([]byte(normalise(p.Title)))
+	h.Write([]byte(squash(p.Title)))
 	h.Write([]byte{0})
 	if p.Detail != nil {
-		h.Write([]byte(normalise(*p.Detail)))
+		h.Write([]byte(squash(*p.Detail)))
 	}
 	for _, o := range p.Options {
 		h.Write([]byte{0})
-		h.Write([]byte(normalise(o.Label)))
+		h.Write([]byte(squash(o.Label)))
 	}
 	if s := p.SignIn; s != nil {
 		h.Write([]byte{0})
@@ -284,11 +284,23 @@ func fingerprint(p Prompt) string {
 			h.Write([]byte{1})
 		}
 	}
+	// What is asked about is part of which request this is: many agents
+	// ask for every command under one fixed title and the same choices,
+	// and an answer meant for one must not reach the next.
+	if s := p.Subject; s != nil {
+		h.Write([]byte{2})
+		h.Write([]byte(s.Kind + "\x00" + squash(s.Text)))
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// normalise collapses runs of whitespace, including line breaks from a
-// redraw at a different width, to single spaces.
+// squash removes whitespace, including the breaks a redraw at another
+// width puts between words or inside a long one.
+func squash(s string) string {
+	return strings.Join(strings.Fields(s), "")
+}
+
+// normalise collapses runs of whitespace to single spaces.
 func normalise(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
