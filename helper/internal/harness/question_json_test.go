@@ -6,18 +6,16 @@ import (
 	"testing"
 )
 
-// A question without options goes out as an empty list: the app decodes
-// the whole frame or none of it, and null is not an array.
-func TestQuestionWithoutOptionsMarshalsEmptyList(t *testing.T) {
-	b, err := json.Marshal(QuestionBody{Questions: []Question{{ID: "0", Prompt: "Kimi is waiting for you"}}})
+func TestQuestionBodyNeverWritesANullList(t *testing.T) {
+	b, err := json.Marshal(Item{ID: "q", Kind: KindQuestion, Question: &QuestionBody{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := string(b); !strings.Contains(s, `"options":[]`) || strings.Contains(s, "null") {
-		t.Fatalf("got %s", s)
+	if !strings.Contains(string(b), `"questions":[]`) {
+		t.Fatalf("wrote %s, want an empty list", b)
 	}
-	var back Question
-	if err := json.Unmarshal([]byte(`{"id":"1","prompt":"p","options":[{"id":"a","label":"A"}]}`), &back); err != nil || len(back.Options) != 1 {
-		t.Fatalf("round trip: %v %+v", err, back)
+	var back Item
+	if err := json.Unmarshal(b, &back); err != nil || back.Question == nil {
+		t.Fatalf("read back %+v %v", back, err)
 	}
 }

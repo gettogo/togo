@@ -299,9 +299,7 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 			t.Title = clipRunes(red.String(t.Title), harness.MaxTitle)
 			t.Output = tailBytes(red.String(t.Output), harness.MaxToolOutput)
 			if t.Subject != nil {
-				sub := *t.Subject
-				sub.Text = red.String(sub.Text)
-				t.Subject = &sub
+				t.Subject = sendableSubject(*t.Subject, red.String(t.Subject.Text))
 			}
 		}
 	case harness.KindShell:

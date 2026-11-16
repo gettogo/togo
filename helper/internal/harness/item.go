@@ -216,6 +216,17 @@ type QuestionBody struct {
 	Deny    string `json:"-"`
 }
 
+// MarshalJSON writes an absent question list as [], never null: the app
+// reads the list as required and drops an item that has null there.
+func (q QuestionBody) MarshalJSON() ([]byte, error) {
+	type plain QuestionBody
+	p := plain(q)
+	if p.Questions == nil {
+		p.Questions = []Question{}
+	}
+	return json.Marshal(p)
+}
+
 // Question is one question of a Confirm, in an item or a screen.
 type Question struct {
 	ID        string   `json:"id"`
