@@ -90,6 +90,8 @@ type Mapper struct {
 	seenCalls map[string]bool
 	// agents are the subagent rows not stopped yet, by hook agent id.
 	agents map[string][]agentRow
+	// lastError is the text of the last failure drawn, until a turn begins.
+	lastError string
 	// closed are the ops end made that the Map call in progress returns.
 	closed []harness.Op
 }
@@ -288,6 +290,12 @@ func (m *Mapper) mapRecord(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		tid := m.turn
 		items := m.end(p, at, draw, harness.StateFailed)
+		// The same failure reported again once its turn has ended (Copilot's
+		// errorOccurred, then sessionEnd with the error): one notice.
+		if tid == "" && p.ErrorDetails != "" && p.ErrorDetails == m.lastError {
+			return items, nil
+		}
+		m.lastError = p.ErrorDetails
 		if !draw && p.ErrorDetails == "" && p.ErrorReason == "" {
 			// The transcript draws the error itself, in the harness's
 			// own words.
@@ -344,6 +352,7 @@ func (m *Mapper) working(at time.Time) {
 }
 
 func (m *Mapper) begin(at time.Time) {
+	m.lastError = ""
 	m.turn, m.started = "turn-"+strconv.FormatInt(at.UnixMilli(), 10), at
 	m.steps = map[string]bool{}
 	m.running = map[string][]string{}

@@ -165,3 +165,21 @@ func TestSubagentRowsAreKeyedPerAgentAndClosedWithTheTurn(t *testing.T) {
 		t.Fatalf("after the turn ended: %v", rows)
 	}
 }
+
+// Copilot reports a fatal error and then the session's end with the same
+// error: the notice is drawn once.
+func TestOneNoticeForAFailureReportedTwice(t *testing.T) {
+	items, _ := feed(t, "copilot",
+		[2]string{"userPromptSubmitted", `{"prompt":"hi"}`},
+		[2]string{"errorOccurred", `{"error":{"message":"Request failed with status 401: Unauthorized","name":"CAPIError"},"errorContext":"model_call","recoverable":false}`},
+		[2]string{"sessionEnd", `{"reason":"error","error":"Request failed with status 401: Unauthorized"}`})
+	n := 0
+	for _, x := range items {
+		if x.Notice != nil {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d notices", n)
+	}
+}
