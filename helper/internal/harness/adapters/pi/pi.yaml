@@ -34,7 +34,7 @@ sources:
       select: '[split("\n")[1:][] | select(length > 0) | [splits(" +")] | {id: (.[0] + "/" + .[1]), provider: .[0], name: .[1], context: .[2], thinking: (.[4] == "yes")}]'
   sessions:
     file: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', format: jsonl }
-    select: '[.[] | {id: (.head.id // .name), title: ([.tail[] | select(.type == "session_info") | .name] | last // .name), updated: .mtime}]'
+    select: '[.[] | {id: (.head[0].id // .name), title: (([.tail[] | select(.type == "session_info") | .name] | last) // ([.head[] | select(.type == "message" and .message.role == "user") | .message.content | if type == "string" then . else ([.[] | select(.type == "text") | .text] | join(" ")) end | gsub("\\s+"; " ") | .[:80]] | first) // .name), updated: .mtime}]'
     cache: 30s
     stability: documented
 screens:
