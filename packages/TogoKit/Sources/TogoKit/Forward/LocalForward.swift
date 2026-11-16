@@ -57,6 +57,8 @@ public actor LocalForward {
     private let exactLocalPort: Bool
     /// Called on each connection accepted, before its channel opens.
     private let onAccept: (@Sendable () -> Void)?
+    /// The upstream returned its first bytes to an accepted connection.
+    private let onResponse: (@Sendable () -> Void)?
     private let queue = DispatchQueue(label: "app.togo.forward")
 
     private var listener: NWListener?
@@ -75,13 +77,15 @@ public actor LocalForward {
 
     public init(
         opener: any TCPChannelOpener, target: ForwardTarget, preferredLocalPort: Int?,
-        exactLocalPort: Bool = false, onAccept: (@Sendable () -> Void)? = nil
+        exactLocalPort: Bool = false, onAccept: (@Sendable () -> Void)? = nil,
+        onResponse: (@Sendable () -> Void)? = nil
     ) {
         self.opener = opener
         self.target = target
         self.preferredLocalPort = preferredLocalPort
         self.exactLocalPort = exactLocalPort && preferredLocalPort != nil
         self.onAccept = onAccept
+        self.onResponse = onResponse
         (events, sink) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(16))
     }
 
@@ -215,7 +219,7 @@ public actor LocalForward {
             return
         }
         links[id]?.channel = channel
-        await Self.pipe(connection, channel)
+        await Self.pipe(connection, channel, onResponse: onResponse)
     }
 
     private func report(_ error: any Error) {
@@ -251,10 +255,12 @@ public actor LocalForward {
 
     // MARK: Piping
 
-    private static func pipe(_ connection: NWConnection, _ channel: any ExecChannel) async {
+    private static func pipe(
+        _ connection: NWConnection, _ channel: any ExecChannel, onResponse: (@Sendable () -> Void)?
+    ) async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await upload(from: connection, to: channel) }
-            group.addTask { await download(from: channel, to: connection) }
+            group.addTask { await download(from: channel, to: connection, onResponse: onResponse) }
             await group.next()
             connection.cancel()
             await channel.close()
@@ -276,9 +282,16 @@ public actor LocalForward {
         }
     }
 
-    private static func download(from channel: any ExecChannel, to connection: NWConnection) async {
+    private static func download(
+        from channel: any ExecChannel, to connection: NWConnection, onResponse: (@Sendable () -> Void)?
+    ) async {
+        var reported = false
         for await chunk in channel.incoming {
             guard await send(chunk, isComplete: false, on: connection) else { return }
+            if !reported, !chunk.isEmpty {
+                reported = true
+                onResponse?()
+            }
         }
         _ = await send(nil, isComplete: true, on: connection)
     }

@@ -101,8 +101,11 @@ public struct WebAuthFlow: Equatable, Sendable {
             phase = .delivered
             return [.settleLater]
         case (.settled, .delivered):
-            return finish()
-        case (.providerSetUp, _), (.codeSent, .needsCode), (.codeSent, .browsing):
+            return close() + [.stopForward]
+        case (.codeSent, .needsCode), (.codeSent, .browsing):
+            phase = .delivered
+            return close() + [.stopForward]
+        case (.providerSetUp, _):
             guard !isOver else { return [] }
             return finish()
         case (.browserEnded, .browsing), (.browserEnded, .preparing):
@@ -111,11 +114,11 @@ public struct WebAuthFlow: Equatable, Sendable {
             return offersCode ? [] : [.stopForward]
         case (.browserEnded, .delivered):
             browserOpen = false
-            return finish()
+            return [.stopForward]
         case (.browserEnded, _):
             browserOpen = false
             return []
-        case (.reopen, .needsCode), (.reopen, .cancelled), (.reopen, .failed):
+        case (.reopen, .needsCode), (.reopen, .delivered), (.reopen, .cancelled), (.reopen, .failed):
             phase = .preparing
             return needsForward ? [.stopForward, .openForward] : open(as: .browsing)
         default:

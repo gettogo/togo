@@ -37,6 +37,27 @@ import TogoKit
         #expect(model.progress.phase == .sending)
     }
 
+    @Test(arguments: [false, true])
+    func requestIsConsumedOnlyAfterTheBrowserStarts(_ canStart: Bool) {
+        let browser = FakeBrowser()
+        browser.canStart = canStart
+        let runner = SignInRunner(url: URL(string: "https://github.com/login/device")!, hostID: UUID(),
+                                  sessionID: "test", tunnel: nil, browser: browser)
+        var opened = 0
+        runner.onOpened = { opened += 1 }
+        runner.begin()
+        #expect(opened == (canStart ? 1 : 0))
+        runner.finish()
+    }
+
+    @Test func failedOrUnconfirmedSignInHasAVisibleOutcome() {
+        #expect(LinkCenter.hasOutcome(.failed("forward unavailable")))
+        #expect(LinkCenter.hasOutcome(.delivered))
+        #expect(LinkCenter.hasOutcome(.needsCode))
+        #expect(!LinkCenter.hasOutcome(.browsing))
+        #expect(!LinkCenter.hasOutcome(.cancelled))
+    }
+
     @Test func lateWatchExpiryCannotReplaceConfirmedSuccess() {
         var progress = SignInProgress()
         progress.listed(setUp: true)

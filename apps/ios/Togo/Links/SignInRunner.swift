@@ -17,7 +17,9 @@ import TogoKit
     @ObservationIgnored var onEnd: (@MainActor (WebAuthFlow.Phase) -> Void)?
     /// The authentication browser closed, by code or by the user.
     @ObservationIgnored var onBrowserClosed: (@MainActor () -> Void)?
-    /// The callback went through to the machine.
+    /// The authentication browser started successfully.
+    @ObservationIgnored var onOpened: (@MainActor () -> Void)?
+    /// A response went through to the machine; agent confirmation is still needed.
     @ObservationIgnored var onDelivered: (@MainActor () -> Void)?
 
     @ObservationIgnored private let tunnel: (any CallbackTunnel)?
@@ -129,7 +131,7 @@ import TogoKit
 
     private func openBrowser() {
         let opened = browser.open(page.url) { [weak self] in self?.send(.browserEnded) }
-        if !opened { send(.browserEnded) }
+        if opened { onOpened?() } else { send(.browserEnded) }
     }
 
     private func finishForward() {

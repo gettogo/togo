@@ -8,8 +8,10 @@ import TogoKit
     private(set) var opened: [URL] = []
     private(set) var closes = 0
     private var ended: (@MainActor () -> Void)?
+    var canStart = true
 
     func open(_ url: URL, ended: @escaping @MainActor () -> Void) -> Bool {
+        guard canStart else { return false }
         opened.append(url)
         self.ended = ended
         return true
@@ -53,6 +55,8 @@ import TogoKit
         #expect(closed == 1)
         #expect(runner.phase == .needsCode)
         runner.codeSent()
+        #expect(runner.phase == .delivered)
+        runner.providerSetUp()
         #expect(runner.phase == .signedIn)
     }
 

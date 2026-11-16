@@ -69,7 +69,7 @@ struct WebAuthFlowTests {
     static let claude = SignInURL(SignInURLTests.claude)
     static let device = SignInURL(URL(string: "https://github.com/login/device")!)
 
-    @Test func callbackThroughTheForwardSignsIn() {
+    @Test func callbackThroughTheForwardStillNeedsAgentConfirmation() {
         var flow = WebAuthFlow(Self.claude)
         #expect(flow.start() == [.openForward])
         #expect(flow.phase == .preparing)
@@ -79,10 +79,10 @@ struct WebAuthFlowTests {
         #expect(flow.handle(.callbackSeen) == [.settleLater])
         #expect(flow.phase == .delivered)
         #expect(flow.handle(.settled) == [.closeBrowser, .stopForward])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.phase == .delivered)
         // The cancel from code comes back as the browser ending; nothing more happens.
-        #expect(flow.handle(.browserEnded) == [])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.handle(.browserEnded) == [.stopForward])
+        #expect(flow.phase == .delivered)
     }
 
     @Test func busyPortFallsBackToTheCode() {
@@ -93,7 +93,7 @@ struct WebAuthFlowTests {
         #expect(flow.handle(.browserEnded) == [])
         #expect(flow.phase == .needsCode)
         #expect(flow.handle(.codeSent) == [.stopForward])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.phase == .delivered)
     }
 
     @Test func closingTheBrowserFirstOffersTheCodeWhenThereIsOne() {
@@ -125,13 +125,13 @@ struct WebAuthFlowTests {
         #expect(flow.handle(.providerSetUp) == [])
     }
 
-    @Test func closingAfterTheCallbackStillSignsIn() {
+    @Test func closingAfterTheCallbackStillNeedsAgentConfirmation() {
         var flow = WebAuthFlow(Self.claude)
         _ = flow.start()
         _ = flow.handle(.forwardReady)
         _ = flow.handle(.callbackSeen)
         #expect(flow.handle(.browserEnded) == [.stopForward])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.phase == .delivered)
     }
 
     @Test func lostForwardWithACodeWaitsForIt() {

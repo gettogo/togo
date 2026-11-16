@@ -70,37 +70,45 @@ import UIKit
 
     /// Opens a pending request here: a sign-in in the authentication browser, else Safari's view.
     func use(_ open: PendingOpen) {
-        requests.resolve(open.id)
         if SignInRoute.isSignIn(open.url) {
-            signIn(open.url, from: open.origin)
+            signIn(open.url, from: open.origin, onOpened: { [weak self] in self?.requests.resolve(open.id) })
         } else {
             self.open(open.url, from: open.origin)
+            requests.resolve(open.id)
         }
     }
 
     /// A sign-in page, from an agent's request or the bar's Open: the system's authentication
     /// browser, with the callback forward first when it returns to the machine. Its outcome
     /// comes up as a sheet when it closes.
-    func signIn(_ url: URL, from origin: Origin) {
+    func signIn(_ url: URL, from origin: Origin, onOpened: (@MainActor () -> Void)? = nil) {
         guard LinkPolicy.allows(url) else { return }
         let runner = makeRunner(url, hostID: origin.hostID, sessionID: origin.sessionID)
+        runner.onOpened = onOpened
         let id = ObjectIdentifier(runner)
         running[id] = runner
         var shown = false
         runner.onEnd = { [weak self, weak runner] phase in
             guard let self, let runner else { return }
-            if phase == .signedIn, !shown { shown = true; self.presentOutcome(runner) }
+            if Self.hasOutcome(phase), !shown { shown = true; self.presentOutcome(runner) }
             self.running[id] = nil
         }
         runner.onBrowserClosed = { [weak self, weak runner] in
             guard let self, let runner, !shown else { return }
-            if runner.phase == .needsCode || runner.phase == .delivered {
+            if Self.hasOutcome(runner.phase) {
                 shown = true
                 self.presentOutcome(runner)
             }
             self.running[id] = nil
         }
         runner.begin()
+    }
+
+    static func hasOutcome(_ phase: WebAuthFlow.Phase) -> Bool {
+        switch phase {
+        case .signedIn, .delivered, .needsCode, .failed: true
+        default: false
+        }
     }
 
     /// A runner for `url`, with this app's tunnel.

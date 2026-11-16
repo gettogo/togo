@@ -33,7 +33,7 @@ import Foundation
 
     public let port: Int
     public private(set) var state: State = .idle
-    /// A connection came in: the browser followed the redirect.
+    /// The callback listener returned bytes through the forward; sign-in acceptance is unconfirmed.
     public var onCallback: (@MainActor () -> Void)?
     /// The forward was lost for good.
     public var onLost: (@MainActor (Loss) -> Void)?
@@ -98,7 +98,7 @@ import Foundation
     private func bind(_ opener: any TCPChannelOpener, _ target: ForwardTarget) async throws -> Bool {
         let forward = LocalForward(
             opener: opener, target: target, preferredLocalPort: port, exactLocalPort: true,
-            onAccept: { [weak self] in Task { @MainActor in self?.accepted() } }
+            onResponse: { [weak self] in Task { @MainActor in self?.responded() } }
         )
         do {
             _ = try await forward.start()
@@ -121,7 +121,7 @@ import Foundation
         }
     }
 
-    private func accepted() {
+    private func responded() {
         guard state == .listening else { return }
         onCallback?()
     }
