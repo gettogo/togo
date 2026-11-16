@@ -13,9 +13,9 @@ func agentOps(p payload, at time.Time) []harness.Op {
 	if p.AgentID == "" {
 		return nil
 	}
-	row := harness.Row{ID: p.AgentID, Title: firstOf(p.AgentType, "Subagent"), State: harness.RowActive, Started: &at}
+	row := harness.Row{ID: p.AgentID, Title: firstOf(p.AgentType, "Subagent"), State: harness.StateRunning, Started: &at}
 	if p.Event == SubagentStop {
-		row.State, row.Started = harness.RowDone, nil
+		row.State, row.Started = harness.StateOK, nil
 	}
 	return []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}}
 }

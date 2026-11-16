@@ -93,17 +93,20 @@ func TestRecordedSession(t *testing.T) {
 	if k[harness.KindUser] != 2 || k[harness.KindTool] < 30 || k[harness.KindThinking] == 0 || k[harness.KindAssistant] == 0 || k[harness.KindPlan] == 0 {
 		t.Fatalf("kinds %v", k)
 	}
-	var bgDone, planRows bool
+	var bgDone, bgRunning, planRows bool
 	for _, op := range out.ops {
-		if op.Section == harness.SectionBackground && op.Row.State == harness.RowDone {
+		if op.Section == harness.SectionBackground && op.Row.State == harness.StateOK {
 			bgDone = true
+		}
+		if op.Section == harness.SectionBackground && op.Row.State == harness.StateRunning {
+			bgRunning = true // the summary counts only run states
 		}
 		if op.Op == harness.OpReplace && op.Section == harness.SectionPlan && len(op.Rows) > 3 {
 			planRows = true
 		}
 	}
-	if !bgDone || !planRows {
-		t.Fatalf("background done %v, plan rows %v", bgDone, planRows)
+	if !bgDone || !bgRunning || !planRows {
+		t.Fatalf("background done %v, running %v, plan rows %v", bgDone, bgRunning, planRows)
 	}
 	for _, it := range out.items {
 		if it.Kind == harness.KindTool && it.Tool.Category == "" {

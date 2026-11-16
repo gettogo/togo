@@ -114,3 +114,23 @@ func TestRepliesFromTheEndWhenTheSessionIsNew(t *testing.T) {
 		}
 	}
 }
+
+// Agent rows carry run states, which the mission summary counts.
+func TestSubagentRowsCarryRunStates(t *testing.T) {
+	d, _ := For("cursor")
+	var states []string
+	m := New(harness.Env{SessionID: "s-agents"}, Options{Name: "cursor.hooks"})
+	for i, e := range []string{"subagentStart", "subagentStop"} {
+		_, norm, err := Normalize(d, e, []byte(`{"conversation_id":"c1","session_id":"c1","subagent_id":"a1","subagent_type":"explore"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, ops := m.Map(harness.Record{At: t0.Add(time.Duration(i) * time.Second), Data: norm})
+		for _, op := range ops {
+			states = append(states, op.Row.State)
+		}
+	}
+	if len(states) != 2 || states[0] != harness.StateRunning || states[1] != harness.StateOK {
+		t.Fatalf("states %v", states)
+	}
+}
