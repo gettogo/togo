@@ -44,6 +44,21 @@ struct RoutePlanTests {
         #expect(RoutePlan.ordered(routes, saved: "10.0.0.1", last: nil).count == RoutePlan.limit)
     }
 
+    @Test func crowdedLanKeepsSavedAndTailnetRoutes() {
+        let lan = (1...20).map { HostRoute(host: "10.0.0.\($0)", kind: .lan) }
+        let tailnet = [
+            HostRoute(host: "studio.tail1234.ts.net", kind: .tailscale),
+            HostRoute(host: "100.101.102.103", kind: .tailscale),
+        ]
+        let order = RoutePlan.ordered(lan + tailnet, saved: "remote.example.com", last: "10.0.0.2")
+        #expect(order.count == RoutePlan.limit)
+        #expect(order.first == "10.0.0.2")
+        #expect(order.contains("remote.example.com"))
+        #expect(order.contains("studio.tail1234.ts.net"))
+        #expect(order.contains("100.101.102.103"))
+        #expect(Set(order.map { $0.lowercased() }).count == order.count)
+    }
+
     @Test func jumpHostMeansOneRoute() {
         var profile = HostProfile(
             id: UUID(), name: "lab", endpoint: HostEndpoint(host: "10.0.0.5", user: "ops"),

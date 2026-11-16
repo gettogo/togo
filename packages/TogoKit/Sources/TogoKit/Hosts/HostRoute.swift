@@ -99,7 +99,26 @@ public enum RoutePlan {
         for route in ranked where seen.insert(route.id).inserted {
             hosts.append(route.host)
         }
-        return Array(hosts.prefix(limit))
+        guard hosts.count > limit else { return hosts }
+        // Preserve route diversity before filling the remaining slots by speed. Many LAN
+        // aliases must not crowd out the saved address or the only off-LAN route.
+        var reserved: Set<String> = [saved.lowercased()]
+        if let last, seen.contains(last.lowercased()) { reserved.insert(last.lowercased()) }
+        for kind in [HostRoute.Kind.local, .lan, .other, .tailscale] {
+            if let route = ranked.first(where: { $0.kind == kind }) { reserved.insert(route.id) }
+        }
+        for isName in [true, false] {
+            if let route = ranked.first(where: { $0.kind == .tailscale && $0.isName == isName }) {
+                reserved.insert(route.id)
+            }
+        }
+        var remaining = limit - reserved.count
+        return hosts.filter { host in
+            if reserved.contains(host.lowercased()) { return true }
+            guard remaining > 0 else { return false }
+            remaining -= 1
+            return true
+        }
     }
 
     /// The routes to race for `profile`. A jump host means one route: the saved address,

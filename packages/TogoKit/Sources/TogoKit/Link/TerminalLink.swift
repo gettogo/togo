@@ -71,6 +71,7 @@ public actor TerminalLink {
     /// The attempt number that made the current attachment, and when it went live.
     private var streak = 0
     private var liveSince: ContinuousClock.Instant?
+    private var resumeProbeUntil: ContinuousClock.Instant?
     private var backgroundedAt: ContinuousClock.Instant?
     public private(set) var resizesSent = 0
     private var wasEverLive = false
@@ -154,6 +155,7 @@ public actor TerminalLink {
     }
 
     public func didEnterBackground() async {
+        resumeProbeUntil = nil
         backgroundedAt = clock.now
     }
 
@@ -171,6 +173,7 @@ public actor TerminalLink {
         }
         guard let since = backgroundedAt, clock.now - since >= Self.backgroundReconnect else { return }
         if current?.kind == .ssh { reconnect() }
+        else if current != nil { resumeProbeUntil = clock.now + Self.backgroundReconnect }
     }
 
     public func stop() async {
@@ -299,6 +302,7 @@ public actor TerminalLink {
         generation += 1
         isLive = false
         isRoaming = false
+        resumeProbeUntil = nil
         roamTask?.cancel()
         roamTask = nil
         sentSize = nil
@@ -327,10 +331,13 @@ public actor TerminalLink {
             guard tag == generation else { return }
             switch state {
             case .roaming:
+                guard !roaming else { continue }
                 roaming = true
                 isRoaming = true
                 stateSink.yield(.roaming)
-                if let current { checkRoaming(current, generation: tag, after: Self.roamCheck) }
+                let justResumed = resumeProbeUntil.map { clock.now <= $0 } ?? false
+                resumeProbeUntil = nil
+                if let current { checkRoaming(current, generation: tag, after: justResumed ? .zero : Self.roamCheck) }
             case .connected where roaming:
                 roaming = false
                 isRoaming = false
