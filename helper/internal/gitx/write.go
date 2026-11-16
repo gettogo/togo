@@ -141,6 +141,8 @@ func checkInside(root, p string) error {
 		}
 		last := i == len(parts)-1
 		switch {
+		case last && info.IsDir() && gitEntry(cur):
+			return &session.InvalidParamsError{Msg: fmt.Sprintf("%q is a submodule or another repository, which cannot be changed from here", p)}
 		case last && info.IsDir():
 			return &session.InvalidParamsError{Msg: fmt.Sprintf("%q is a folder; name each file", p)}
 		case !last && !info.IsDir():
@@ -152,6 +154,12 @@ func checkInside(root, p string) error {
 		}
 	}
 	return nil
+}
+
+// gitEntry reports whether folder dir holds its own .git.
+func gitEntry(dir string) bool {
+	_, err := os.Lstat(filepath.Join(dir, ".git"))
+	return err == nil
 }
 
 // prepare checks every path against a fresh status and the letters the
