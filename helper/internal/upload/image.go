@@ -163,13 +163,20 @@ func sniff(data []byte) string {
 	return ""
 }
 
+// shrinkSlots lets one picture be decoded at a time: a decoded picture of
+// maxImagePixels takes hundreds of megabytes, and fs.image calls run
+// concurrently.
+var shrinkSlots = make(chan struct{}, 1)
+
 var errCannotShrink = errors.New("fs.image: the picture is too large and cannot be shrunk")
 
 // shrink re-encodes a PNG, JPEG or GIF as a JPEG of at most limit bytes,
 // halving its long side from imageSide until it fits.
 func shrink(data []byte, limit int) ([]byte, error) {
+	shrinkSlots <- struct{}{}
+	defer func() { <-shrinkSlots }()
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > maxImagePixels {
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxImagePixels {
 		return nil, &session.InvalidParamsError{Msg: errCannotShrink.Error()}
 	}
 	src, _, err := image.Decode(bytes.NewReader(data))
