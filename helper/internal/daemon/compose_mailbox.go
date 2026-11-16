@@ -36,9 +36,14 @@ func (c *Components) runMailbox(ctx context.Context) {
 		Register:     c.Push.Devices().UpdateTokens,
 		ContextReady: c.Push.Devices().ContextReady,
 		// A dismissed or ended activity no longer stands in for a push.
-		EndLive:    c.Push.Devices().EndLiveActivity,
-		Logf:       c.logf,
-		Will:       c.Will,
+		EndLive: c.Push.Devices().EndLiveActivity,
+		Logf:    c.logf,
+		Will:    c.Will,
+		Returned: func() {
+			if c.Sender != nil {
+				c.Sender.ResendLive()
+			}
+		},
 		StopMarker: c.stopMarker,
 	})
 	if err != nil {
