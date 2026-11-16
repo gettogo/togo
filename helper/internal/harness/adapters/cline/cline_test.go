@@ -255,3 +255,22 @@ func TestMessagesFollowsAResumeRelaunch(t *testing.T) {
 		t.Fatal("the resumed session was not mapped")
 	}
 }
+
+// The mapper keeps a hash of each item it sent, not the item's JSON: a long
+// session would hold a second copy of the conversation.
+func TestMessagesKeepsNoCopyOfTheConversation(t *testing.T) {
+	h, doc := home(t)
+	m := newMessages(env(h, "2026-11-08T03:37:52Z"))
+	m.Map(harness.Record{Data: doc})
+	if len(m.sent) == 0 {
+		t.Fatal("nothing sent")
+	}
+	for id, v := range m.sent {
+		if len(v) > 64 {
+			t.Errorf("item %s: %d bytes kept", id, len(v))
+		}
+	}
+	if again, _ := m.Map(harness.Record{Source: "messages", Data: doc}); len(again) != 0 {
+		t.Fatalf("the same document sent %d items", len(again))
+	}
+}

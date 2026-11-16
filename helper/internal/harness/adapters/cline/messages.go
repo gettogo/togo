@@ -2,6 +2,7 @@ package cline
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ type messages struct {
 	state    map[string]string
 	session  string
 	updated  string
-	sent     map[string]string // item id -> its JSON as last returned
+	sent     map[string]string // item id -> a hash of its JSON as last returned
 	idleAt   map[string]time.Time
 	lastTurn string
 	lastOpen bool
@@ -276,6 +277,10 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		m.lock(d.SessionID)
 		m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
+		m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+	} else if d.UpdatedAt != "" && d.UpdatedAt == m.updated && len(d.Messages) == len(m.lastMsgs) {
+		// The same document again (both feeds read each rewrite).
+		return nil, nil
 	}
 	m.updated = d.UpdatedAt
 	m.lastMsgs = d.Messages
@@ -302,10 +307,12 @@ func (m *messages) changed(items []harness.Item) []harness.Item {
 	var out []harness.Item
 	for _, it := range items {
 		b, _ := json.Marshal(it)
-		if m.sent[it.ID] == string(b) {
+		sum := sha256.Sum256(b)
+		h := string(sum[:16])
+		if m.sent[it.ID] == h {
 			continue
 		}
-		m.sent[it.ID] = string(b)
+		m.sent[it.ID] = h
 		out = append(out, it)
 	}
 	return out
