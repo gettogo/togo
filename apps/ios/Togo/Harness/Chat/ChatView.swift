@@ -332,20 +332,28 @@ struct ChatView: View {
         case .approval(let approval):
             ApprovalRow(
                 item: item, approval: approval, card: actions.card(approval.requestId),
-                failure: actions.failure(approval.requestId), showInTerminal: terminalAction(item)
+                failure: actions.failure(approval.requestId), showInTerminal: terminalAction(item), openNative: nativeRequestAction(item)
             ) { decision in
                 actions.answer(approval.requestId, decision)
             }
             .contextMenu { terminalButton(item) }
         case .question(let question):
             QuestionRow(item: item, question: question, showInTerminal: terminalAction(item),
-                        openNative: store.canOpenNativeQuestion(item) ? { store.openNativeQuestion(item.id) } : nil) { args in
+                        openNative: nativeRequestAction(item)) { args in
                 await store.answerReporting(item, args: args)
             }
             .contextMenu { terminalButton(item) }
         default:
             EmptyView()
         }
+    }
+
+    private func nativeRequestAction(_ item: HarnessItem) -> (() -> Void)? {
+        if store.canOpenNativeQuestion(item) { return { store.openNativeQuestion(item.id) } }
+        guard store.canRecoverTerminalRequest(item) else { return nil }
+        if case .approval(let approval) = item.body, let card = actions.card(approval.requestId),
+           ApprovalRow.shape(approval: approval, card: card) != .waiting { return nil }
+        return { Task { await store.recoverTerminalRequest(item) } }
     }
 
     /// "Show in terminal" for an item that has a place there.

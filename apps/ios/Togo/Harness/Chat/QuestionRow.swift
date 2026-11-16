@@ -189,8 +189,7 @@ struct QuestionRow: View {
             if let openNative {
                 Button(SurfaceCopy.open, action: openNative)
                     .buttonStyle(PlainAnswerStyle())
-            }
-            if let showInTerminal {
+            } else if let showInTerminal {
                 Button(ChatCopy.showInTerminal, systemImage: "terminal", action: showInTerminal)
                     .buttonStyle(PlainAnswerStyle())
                     .font(.subheadline)

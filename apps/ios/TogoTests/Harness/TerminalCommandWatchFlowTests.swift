@@ -55,6 +55,46 @@ import TogoKit
         return try JSONDecoder().decode(HarnessItem.self, from: Data(wire.utf8))
     }
 
+    @Test func staleReadOnlyRequestDoesNotHoldInputAndExplicitOpenPrefersNative() async throws {
+        let connection = Connection()
+        connection.results = [.init(result: .applied, screen: menu("request")), .init(result: .applied)]
+        let (store, _) = try await make(connection)
+        defer { store.stop() }
+        let item = try approval()
+        store.feed.insertSent(item)
+        #expect(store.canSendNow)
+        try await store.prepareHarnessInput()
+        #expect(store.canSendNow)
+        await store.recoverTerminalRequest(item)
+        #expect(connection.calls.map(\.action) == ["terminal.attach"])
+        #expect(store.shownLayer == .chat)
+        #expect(!store.canSendNow) // A real, open screen still owns input.
+        store.retireTerminalInteraction()
+        await store.nativeInteractions.stopTask?.value
+        #expect(store.canSendNow)
+    }
+
+    @Test func explicitRequestOpenUsesTerminalOnlyWhenNoNativeScreenExists() async throws {
+        let connection = Connection()
+        connection.results = [.init(result: .fallback)]
+        let (store, _) = try await make(connection)
+        defer { store.stop() }
+        let item = try approval()
+        store.feed.insertSent(item)
+        await store.recoverTerminalRequest(item)
+        #expect(connection.calls.map(\.action) == ["terminal.attach"])
+        #expect(store.terminalInteraction == nil)
+        #expect(store.shownLayer == .terminal)
+        #expect(store.canSendNow)
+        var resolved = item
+        if case .approval(var value) = resolved.body {
+            value.resolved = "desk"
+            resolved.body = .approval(value)
+            #expect(!store.canRecoverTerminalRequest(resolved))
+            #expect(ApprovalRow.shape(approval: value, card: nil) == .settled(ChatCopy.resolved("desk")))
+        }
+    }
+
     @Test func aQuestionArrivalInvalidatesPresentationWithoutAWorkChange() async throws {
         let (store, _) = try await make(Connection())
         defer { store.stop() }

@@ -118,4 +118,18 @@ struct PickerLayoutTests {
         model.query = "unmatched"
         #expect(model.emptyTitle(picker) == PrimitiveCopy.noMatches)
     }
+
+    @Test func terminalSectionHeadingsKeepValuesAndHideOpaqueTargets() {
+        let picker = HarnessScreen.Picker(items: [
+            Item(id: "token/a391", title: "Dark Theme", group: "Theme"),
+            Item(id: "token/b251", title: "Editor mode", subtitle: "vim", group: "Composer"),
+        ], searchable: false, onSelect: "terminal.select")
+        let model = PickerModel(picker)
+        #expect(model.expanded == ["Theme", "Composer"])
+        #expect(model.groups(picker).map(\.name) == ["Theme", "Composer"])
+        #expect(model.groups(picker).flatMap(\.items).map(\.title) == ["Dark Theme", "Editor mode"])
+        #expect(PickerModel.selector(of: picker.items[1], in: picker) == nil)
+        #expect(PickerModel.chips(of: picker.items[1], in: picker).isEmpty)
+        #expect(PickerModel.subtitleLine(of: picker.items[1], in: picker) == "vim")
+    }
 }

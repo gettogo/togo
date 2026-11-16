@@ -46,6 +46,7 @@ import UIKit
     /// leaving with the switch never reflows the text mid-fade.
     public var isCovered = false {
         didSet {
+            engine.terminalView.acceptsReplies.store(!isCovered, ordering: .relaxed)
             guard isCovered != oldValue else { return }
             layerFit?.cancel()
             layerHeld = true
@@ -64,6 +65,9 @@ import UIKit
 
     public init(engine: SwiftTermEngine, gestureConfig: GestureConfig = GestureConfig()) {
         self.engine = engine
+        // LiveTerminal starts its link before its host declares which layer is
+        // visible. Silence automatic replies until that decision reaches us.
+        engine.terminalView.acceptsReplies.store(false, ordering: .relaxed)
         gestures = GestureController(engine: engine, view: root, bindings: gestureConfig)
         super.init(nibName: nil, bundle: nil)
     }
@@ -203,6 +207,7 @@ import UIKit
 
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        engine.terminalView.acceptsReplies.store(!isCovered, ordering: .relaxed)
         engine.useMetalIfAvailable()
         if !engine.keyboardDismissed { engine.view.becomeFirstResponder() }
         updateDisplayLink()
@@ -211,6 +216,7 @@ import UIKit
 
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        engine.terminalView.acceptsReplies.store(false, ordering: .relaxed)
         displayLink?.invalidate()
         displayLink = nil
     }

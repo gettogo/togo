@@ -85,6 +85,7 @@ extension CommandLineModel {
         memory.record(CommandMemory.commandWord(CommandKind.line(command)), scope: scope)
         if opensOriginalScreen(command), command.native?.args != "required" {
             paletteOpen = false
+            pendingArgs = nil
             await send(line: CommandKind.line(command))
             return .close
         }

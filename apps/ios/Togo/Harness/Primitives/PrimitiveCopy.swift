@@ -11,7 +11,7 @@ enum PrimitiveCopy {
     static let restarted = String(localized: "primitive.restarted", defaultValue: "Restarted the agent")
     static let failed = String(localized: "primitive.failed", defaultValue: "That didn't work")
     static let openedTerminal = String(localized: "primitive.openedTerminal", defaultValue: "Opened in the terminal")
-    static let noAnswer = String(localized: "primitive.noAnswer", defaultValue: "The machine didn't answer")
+    static let noAnswer = String(localized: "primitive.noAnswer", defaultValue: "No response. Try again.")
     static let cancel = String(localized: "primitive.cancel", defaultValue: "Cancel")
     static let close = String(localized: "primitive.close", defaultValue: "Close")
     static let select = String(localized: "primitive.select", defaultValue: "Select")
@@ -25,6 +25,8 @@ enum PrimitiveCopy {
     static let actions = String(localized: "primitive.actions", defaultValue: "Actions")
     static let search = String(localized: "primitive.search", defaultValue: "Search")
     static let showAll = String(localized: "primitive.showAll", defaultValue: "Show all")
+    static let showMore = String(localized: "primitive.showMore", defaultValue: "Show more")
+    static let loadingMore = String(localized: "primitive.loadingMore", defaultValue: "Loading more items")
     static let noMatches = String(localized: "primitive.noMatches", defaultValue: "No matches")
     static let tryShorter = String(localized: "primitive.tryShorter", defaultValue: "Try a shorter search or clear the filters.")
     static let nothingHere = String(localized: "primitive.nothingHere", defaultValue: "Nothing here yet")
@@ -33,7 +35,7 @@ enum PrimitiveCopy {
     static let notSet = String(localized: "primitive.notSet", defaultValue: "Not set")
     static let replace = String(localized: "primitive.replace", defaultValue: "Replace")
     static let save = String(localized: "primitive.save", defaultValue: "Save")
-    static let newValue = String(localized: "primitive.newValue", defaultValue: "New value")
+    static let newValue = String(localized: "primitive.newValue", defaultValue: "Enter a value")
     static let secretFooter = String(
         localized: "primitive.secretFooter",
         defaultValue: "Sent to the machine. Togo never shows it and keeps no copy."
@@ -59,15 +61,15 @@ enum PrimitiveCopy {
     static let unknownTitle = String(localized: "primitive.unknownTitle", defaultValue: "Shown in the terminal")
     static let unknownMessage = String(
         localized: "primitive.unknownMessage",
-        defaultValue: "This version of Togo can't draw this screen. The terminal has it."
+        defaultValue: "Open Terminal to continue."
     )
-    static let couldNotLoad = String(localized: "primitive.couldNotLoad", defaultValue: "Couldn't read this screen")
+    static let couldNotLoad = String(localized: "primitive.couldNotLoad", defaultValue: "Couldn't load this screen")
     static let fallbackMessage = String(
-        localized: "primitive.fallbackMessage", defaultValue: "The agent didn't answer in a way Togo can show. The terminal has it."
+        localized: "primitive.fallbackMessage", defaultValue: "Open Terminal to continue with this request."
     )
     static let tryAgain = String(localized: "primitive.tryAgain", defaultValue: "Try again")
-    static let loading = String(localized: "primitive.loading", defaultValue: "Reading")
-    static let noBody = String(localized: "primitive.noBody", defaultValue: "Nothing to show")
+    static let loading = String(localized: "primitive.loading", defaultValue: "Loading…")
+    static let noBody = String(localized: "primitive.noBody", defaultValue: "No details")
     static let moreLines = String(localized: "primitive.moreLines", defaultValue: "More in the terminal")
     static let changes = String(localized: "primitive.changes", defaultValue: "Changes")
     static let on = String(localized: "primitive.on", defaultValue: "on")

@@ -64,6 +64,7 @@ struct PickerModel: Equatable {
     /// holding the first item action (the default role), and the only group when there is one.
     static func initiallyExpanded(_ picker: HarnessScreen.Picker) -> Set<String> {
         let names = Set(picker.items.map { $0.group ?? "" })
+        if picker.onSelect == "terminal.select" { return names }
         if names.count == 1 { return names }
         if let selected = picker.items.first(where: { $0.id == picker.selected }) {
             return [selected.group ?? ""]

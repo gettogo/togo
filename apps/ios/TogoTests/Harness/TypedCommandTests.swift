@@ -185,6 +185,49 @@ import TogoKit
         return CommandLineModel(store: .preview(), memory: CommandMemory(defaults: defaults), routes: session.routes())
     }
 
+    @Test func nativeOptionalInputOverridesLegacyRequiredHintAndLeavesComposerUsable() async {
+        let session = Session()
+        session.caps.insert(HarnessCapability.terminalNative)
+        let command = HarnessCompletion(insert: "/goal ", title: "/goal", hint: "<objective>", kind: .args,
+            native: .init(opens: "input", args: "optional"))
+        session.commands = [command]
+        let composer = make(session)
+        #expect(!CommandKind.needsArgument(command))
+        composer.draft = "/goal"
+        await composer.submit()
+        #expect(session.nativeCommands == ["/goal"])
+        #expect(composer.draft.isEmpty)
+        composer.draft = "Continue here"
+        #expect(composer.canSend)
+        await composer.submit()
+        #expect(session.sends == ["Continue here"])
+        _ = await composer.perform(command)
+        #expect(session.nativeCommands == ["/goal", "/goal"])
+        composer.draft = "Another message"
+        #expect(composer.canSend)
+        var required = command
+        required.native?.args = "required"
+        #expect(CommandKind.needsArgument(required))
+    }
+
+    @Test func inlineMenuOpensOptionalNativeInputInsteadOfLeavingAnArgumentPlaceholder() async throws {
+        let session = Session()
+        session.caps.insert(HarnessCapability.terminalNative)
+        let command = HarnessCompletion(insert: "/goal ", title: "/goal", hint: "<objective>", kind: .args,
+            native: .init(opens: "input", args: "optional"))
+        session.commands = [command]
+        let composer = make(session)
+        composer.draft = "/go"
+        await composer.draftChanged()
+        composer.choose(command)
+        let deadline = ContinuousClock.now + .seconds(2)
+        while session.nativeCommands.isEmpty, ContinuousClock.now < deadline { await Task.yield() }
+        #expect(session.nativeCommands == ["/goal"])
+        #expect(composer.draft.isEmpty)
+        composer.draft = "Next message"
+        #expect(composer.canSend)
+    }
+
     private func send(_ text: String, _ session: Session) async -> CommandLineModel {
         let composer = make(session)
         composer.draft = text

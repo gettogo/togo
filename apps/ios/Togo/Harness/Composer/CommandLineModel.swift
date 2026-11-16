@@ -264,6 +264,13 @@ import TogoKit
     /// it); false when it opened its screen or went to the field; true when the caller should
     /// `perform` it.
     private func takeFromMenu(_ completion: HarnessCompletion, typed: Bool) -> Bool? {
+        if opensOriginalScreen(completion), completion.native?.args != "required" {
+            closeMenu()
+            cache = nil
+            draft = ""
+            pendingArgs = nil
+            return true
+        }
         let dispatch = typed ? CommandKind.dispatch(completion) : CommandKind.picking(completion)
         if case .choose = dispatch { return nil }
         closeMenu()

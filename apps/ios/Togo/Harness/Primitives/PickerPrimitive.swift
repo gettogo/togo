@@ -143,25 +143,12 @@ struct PickerPrimitive: View {
                     }
                 }
             }
-            if let presentation = picker.presentation {
+            if let presentation = picker.presentation,
+               presentation.subtitle?.isEmpty == false || presentation.message?.isEmpty == false || presentation.state == "loading" {
                 Section {
                     if let subtitle = presentation.subtitle { Text(verbatim: subtitle).foregroundStyle(Color.togoMute) }
                     if let message = presentation.message { Text(verbatim: message).foregroundStyle(Color.togoMute) }
                     if presentation.state == "loading" { ProgressView(PrimitiveCopy.loading) }
-                    if presentation.state == "partial" {
-                        Text(String(localized: "picker.partial", defaultValue: "Showing part of this list."))
-                            .foregroundStyle(Color.togoMute)
-                        if let more = presentation.moreAction {
-                            Button {
-                                Task { await actions.trigger(more, context: context) }
-                            } label: {
-                                OutcomeLabel(title: more.label, outcome: actions.outcome(more.id), busy: actions.isRunning(more.id))
-                            }
-                            .disabled(actions.isBusy || searchBlocked)
-                        } else if context.showsTerminal {
-                            Button(PrimitiveCopy.openTerminal) { context.showTerminal() }
-                        }
-                    }
                 }
             }
             if initialPicker.searchMode == "remote", searchBlocked, !searchConflict {
@@ -215,6 +202,25 @@ struct PickerPrimitive: View {
                     run: { item, value in setUp(item, with: action, value: value) }
                 )
                 .disabled(searchBlocked)
+            }
+            if picker.presentation?.state == "partial", picker.presentation?.moreAction != nil || context.showsTerminal {
+                Section {
+                    if let more = picker.presentation?.moreAction {
+                        Button {
+                            Task { await actions.trigger(more, context: context) }
+                        } label: {
+                            HStack {
+                                Text(PrimitiveCopy.showMore)
+                                Spacer()
+                                if actions.isRunning(more.id) { ProgressView().controlSize(.small) }
+                            }
+                        }
+                        .disabled(actions.isBusy || searchBlocked)
+                        .accessibilityValue(actions.isRunning(more.id) ? PrimitiveCopy.loadingMore : "")
+                    } else if context.showsTerminal {
+                        Button(PrimitiveCopy.openTerminal) { context.showTerminal() }
+                    }
+                }
             }
         }
         .groupedList()

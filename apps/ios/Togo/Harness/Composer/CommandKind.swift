@@ -79,7 +79,10 @@ enum CommandKind {
 
     /// The command cannot go without words ("<file>", or kind args): Send waits for them.
     static func needsArgument(_ command: HarnessCompletion) -> Bool {
-        kind(of: command) == .args || requiresArgument(command.hint)
+        if let args = command.native?.args, ["none", "optional", "required"].contains(args) {
+            return args == "required"
+        }
+        return kind(of: command) == .args || requiresArgument(command.hint)
     }
 
     /// "/compact": the command word, without a trailing space.

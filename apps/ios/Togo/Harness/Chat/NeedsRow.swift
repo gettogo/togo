@@ -43,6 +43,7 @@ struct ApprovalRow: View {
     var failure: String?
     /// The way to the prompt in the terminal, when the item has a place there.
     var showInTerminal: (() -> Void)?
+    var openNative: (() -> Void)?
     let answer: (Decision) -> Void
 
     @Namespace private var answerSpace
@@ -59,13 +60,14 @@ struct ApprovalRow: View {
 
     init(
         item: HarnessItem, approval: HarnessItem.Approval, card: RequestCard?, failure: String? = nil,
-        showInTerminal: (() -> Void)? = nil, answer: @escaping (Decision) -> Void
+        showInTerminal: (() -> Void)? = nil, openNative: (() -> Void)? = nil, answer: @escaping (Decision) -> Void
     ) {
         self.item = item
         self.approval = approval
         self.card = card
         self.failure = failure
         self.showInTerminal = showInTerminal
+        self.openNative = openNative
         self.answer = answer
         _shown = State(initialValue: Mirrored(Self.shape(approval: approval, card: card)))
         _lastCard = State(initialValue: card)
@@ -155,10 +157,14 @@ struct ApprovalRow: View {
                 // Not answerable from here: the prompt waits in the terminal, and the card
                 // says so with the way there. Never an Approve or Deny that cannot work.
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(ChatCopy.waitingInTerminal)
+                    Text(openNative == nil ? ChatCopy.waitingInTerminal : SurfaceCopy.openForm)
                         .font(.subheadline)
                         .foregroundStyle(Color.togoMute)
-                    if let showInTerminal {
+                    if let openNative {
+                        Button(SurfaceCopy.open, action: openNative)
+                            .buttonStyle(PlainAnswerStyle())
+                            .font(.subheadline)
+                    } else if let showInTerminal {
                         Button(ChatCopy.showInTerminal, systemImage: "terminal", action: showInTerminal)
                             .buttonStyle(PlainAnswerStyle())
                             .font(.subheadline)
@@ -174,7 +180,7 @@ struct ApprovalRow: View {
         .accessibilityIdentifier("chat.needs.approval")
         // A double-tap never answers: the card is heard as its request only, so Approve and Deny
         // are named actions. It shows the prompt in the terminal, when it has a place there.
-        .accessibilityAction { showInTerminal?() }
+        .accessibilityAction { (shown.value == .waiting ? openNative ?? showInTerminal : showInTerminal)?() }
         .accessibilityActions {
             if let card, card.phase == .open {
                 if Self.yesOrNo(card) {

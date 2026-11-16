@@ -73,6 +73,39 @@ extension HarnessSessionStore {
         }
     }
 
+    func canRecoverTerminalRequest(_ item: HarnessItem) -> Bool {
+        guard phase == .live, !surfaceAvailable, has(HarnessCapability.terminalNative) else { return false }
+        switch item.body {
+        case .approval(let approval): return approval.resolved == nil && approval.owner == nil
+        case .question(let question): return !question.isAnswerable && (question.answered?.isEmpty ?? true)
+        default: return false
+        }
+    }
+
+    /// Explicit Open may retry a request that could not be attached automatically.
+    /// Only a real screen keeps the chat here; otherwise the terminal is the fallback.
+    func recoverTerminalRequest(_ item: HarnessItem) async {
+        let binding = conversation
+        await nativeInteractions.stopTask?.value
+        guard conversation == binding, canRecoverTerminalRequest(item), interaction == nil, terminalInteraction == nil else { return }
+        nativeInteractions.terminalWatch.cancel()
+        let items = timeline.conversation()
+        _ = nativeInteractions.requests.next(in: items, available: true,
+            skipping: Set(items.map(\.id)).subtracting([item.id]), unanswerableApprovals: [item.id])
+        let model = makeTerminalInteraction(binding: binding)
+        terminalInteraction = model
+        do {
+            let result = try await model.attach()
+            guard conversation == binding else { return }
+            if result.screen != nil, model.phase == .active { return }
+        } catch {
+            if terminalInteraction === model { retireTerminalInteraction() }
+            await nativeInteractions.stopTask?.value
+        }
+        guard conversation == binding else { return }
+        await showInTerminal(item)
+    }
+
     private func makeTerminalInteraction(binding: UUID) -> TerminalNativeInteraction {
         let model = TerminalNativeInteraction(sessionID: subject.sessionID) { [services, subject] in
             try await services.terminalConnection(subject)

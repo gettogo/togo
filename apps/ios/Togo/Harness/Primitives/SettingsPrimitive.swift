@@ -367,10 +367,12 @@ private struct SecretField: View {
     }
 
     private var entryField: some View {
-        SecureField(PrimitiveCopy.newValue, text: $entry, prompt: Text(field.placeholder ?? PrimitiveCopy.newValue))
-            .font(.mono(.body))
+        SecureField(field.label, text: $entry, prompt: Text(field.placeholder ?? field.label))
+            .font(.body)
             .accessibilityLabel(field.label)
-            .textContentType(.password)
+            .textContentType(isPrompt ? nil : .password)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
             .focusOnReveal($focused, revealed: isPrompt || editing)
             .submitLabel(isPrompt ? .continue : .done)
             .onSubmit(save)
