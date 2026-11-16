@@ -155,7 +155,7 @@ func TestUpdateRefusesOlderVersion(t *testing.T) {
 	if latest, newer, err := update.Check(context.Background(), s.Source(), "dev"); err != nil || latest != "v1.0.0" || !newer {
 		t.Errorf("Check from dev = %q, %v, %v; want v1.0.0 newer", latest, newer, err)
 	}
-	order := []string{"dev", "v0.9.9", "v1.0.0-rc.1", "v1.0.0-rc.2", "v1.0.0-rc.10", "v1.0.0", "v1.0.1", "v1.2.0", "v1.10.0", "v2.0.0"}
+	order := []string{"dev", "v0.9.9", "v1.0.0-rc.1", "v1.0.0-rc.2", "v1.0.0-rc.10", "v1.0.0", "v1.0.0-dirty", "v1.0.0-2-g0776030", "v1.0.0-10-gabcdef1", "v1.0.0-10-gabcdef1-dirty", "v1.0.1", "v1.2.0", "v1.10.0", "v2.0.0"}
 	for i := range order {
 		for j := range order {
 			want := 0
