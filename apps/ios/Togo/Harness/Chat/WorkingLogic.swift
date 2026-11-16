@@ -58,14 +58,15 @@ enum WorkingLogic {
     /// An approval or a question, the main agent's or a subagent's, still waits for an answer.
     /// Only requests since the newest sent prompt count, so an old one the helper never closed
     /// does not hold the row.
-    static func hasOpenNeeds(_ items: [HarnessItem]) -> Bool {
+    static func hasOpenNeeds(_ items: [HarnessItem]) -> Bool { !openNeeds(items).isEmpty }
+
+    static func openNeeds(_ items: [HarnessItem]) -> [HarnessItem] {
         let lastPrompt = items.lastIndex { item in
             guard item.parent == nil, case .user(let user) = item.body else { return false }
             return !user.queued
         } ?? -1
-        return items.indices.contains { index in
-            guard index > lastPrompt else { return false }
-            switch items[index].body {
+        return items.suffix(from: lastPrompt + 1).filter { item in
+            switch item.body {
             case .approval(let approval): return approval.resolved == nil
             case .question(let question): return (question.answered ?? [:]).isEmpty
             default: return false
@@ -73,10 +74,17 @@ enum WorkingLogic {
         }
     }
 
-    /// The same for a conversation already folded into rows, such as a subagent's thread.
-    static func hasOpenNeeds(rows: [ChatRow]) -> Bool {
-        hasOpenNeeds(rows.compactMap { row in if case .needs(let item) = row { item } else { nil } })
+    static func openNeeds(rows: [ChatRow]) -> [HarnessItem] {
+        openNeeds(rows.compactMap { row in
+            switch row {
+            case .prompt(let item), .needs(let item): item
+            default: nil
+            }
+        })
     }
+
+    /// The same cutoff applies to a folded conversation, including its prompt rows.
+    static func hasOpenNeeds(rows: [ChatRow]) -> Bool { !openNeeds(rows: rows).isEmpty }
 
     /// True when a sent prompt no longer holds the row up by itself.
     static func awaitingEnded(

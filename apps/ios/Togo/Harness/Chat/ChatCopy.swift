@@ -106,7 +106,7 @@ enum ChatCopy {
     static let questionChanged = String(
         localized: "chat.needs.changed", defaultValue: "The question changed. Check your answer."
     )
-    static let jumpToNeeds = String(localized: "chat.needs.jump", defaultValue: "Needs you, below")
+    static let jumpToNeeds = String(localized: "chat.needs.jump", defaultValue: "Go to Request")
     static let jumpToNeedsHint = String(localized: "chat.needs.jump.hint", defaultValue: "Scrolls to the request")
 
     // MARK: Links and text

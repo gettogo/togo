@@ -72,8 +72,7 @@ enum ChatScroll {
 
     /// The open needs cards in row order. `ready` says whether an approval's card has arrived.
     static func marks(_ rows: [ChatRow], ready: (HarnessItem.Approval) -> Bool) -> [NeedsMark] {
-        rows.compactMap { row in
-            guard case .needs(let item) = row, WorkingLogic.hasOpenNeeds([item]) else { return nil }
+        WorkingLogic.openNeeds(rows: rows).map { item in
             if case .approval(let approval) = item.body { return NeedsMark(id: item.id, ready: ready(approval)) }
             return NeedsMark(id: item.id, ready: true)
         }
@@ -328,7 +327,7 @@ struct ChatScrolling: ViewModifier {
                 // A card scrolled past for a moment is not news; one that stays off screen is.
                 try? await Task.sleep(for: .milliseconds(600))
                 guard !Task.isCancelled else { return }
-                // motion: attention — a card that needs you is below, off screen; the capsule
+                // motion: attention — a card that needs you is off screen; the capsule
                 // fades in place above the composer and leaves once the card is in view.
                 withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { scroll.capsule = candidate }
             }

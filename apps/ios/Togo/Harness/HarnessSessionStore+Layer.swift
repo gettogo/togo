@@ -103,10 +103,7 @@ extension HarnessSessionStore {
 
     /// The oldest needs card the user has not answered yet, in the main chat.
     var oldestOpenNeeds: String? {
-        rows.first { row in
-            guard case .needs(let item) = row else { return false }
-            return WorkingLogic.hasOpenNeeds([item])
-        }?.id
+        WorkingLogic.openNeeds(rows: rows).first?.id
     }
 
     /// Shows the chat and scrolls it to a needs card: `id`, or the oldest one still open. Used
