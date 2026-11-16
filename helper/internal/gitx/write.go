@@ -81,8 +81,8 @@ type repo struct {
 // separated pathspec list, so no path is ever read as an option or glob.
 func (g *Git) gitWrite(ctx context.Context, r repo, stdin []byte, args ...string) ([]byte, error) {
 	argv := append(append([]string{}, writeArgs...), args...)
-	out, _, err := g.run(ctx, r.root, stdin, listLimit, argv...)
-	if stderrMentions(err, "index.lock") {
+	out, _, err := g.forWrites().run(ctx, r.root, stdin, listLimit, argv...)
+	if stderrMentions(err, "index.lock", ".lock': File exists") {
 		return nil, conflict(wire.ConflictLocked)
 	}
 	return out, err
