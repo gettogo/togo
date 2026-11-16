@@ -21,12 +21,16 @@ import TogoKit
         next.mission.summary.working = false
         second.yield(.opened(next))
         if trigger == "reconnect" {
+            // The first reply used the old cursor; the changed helper epoch must be read
+            // again from zero before that reply can replace the held conversation.
+            services.feeds.append(.init(elements: [.opened(next)], end: .hold))
             first.finish(throwing: HelperError.closed)
         } else {
             first.yield(.note(HarnessNotification(sessionId: ChatTests.subject.sessionID, kind: .reset,
                 ts: WireDate(.now), epoch: next.epoch, reason: "epoch")))
         }
-        try await wait { services.opens.count == 2 && chat.phase == .live }
+        let expectedOpens = trigger == "reconnect" ? 3 : 2
+        try await wait { services.opens.count == expectedOpens && chat.phase == .live }
         #expect(services.sent.isEmpty)
         #expect(services.actions.isEmpty)
         #expect(chat.queue.prompts.map(\.text) == ["only for the original conversation"])

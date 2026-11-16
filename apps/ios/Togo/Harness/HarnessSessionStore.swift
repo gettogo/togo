@@ -126,13 +126,14 @@ import UIKit
     @ObservationIgnored private var sawWorking = false
     @ObservationIgnored private var graceTask: Task<Void, Never>?
     var isRunning: Bool { runTask != nil }
+    @ObservationIgnored private var runID: UUID?
     @ObservationIgnored private var runTask: Task<Void, Never>?
     /// Delivers held prompts after a change; cancelled with the feed.
     @ObservationIgnored var pumpTask: Task<Void, Never>?
     @ObservationIgnored var pumpToken: UUID?
     @ObservationIgnored private var needsDescribe = true
-    @ObservationIgnored private let retryFloor: Duration
-    @ObservationIgnored private let retryCeiling: Duration
+    @ObservationIgnored let retryFloor: Duration
+    @ObservationIgnored let retryCeiling: Duration
     @ObservationIgnored private let pendingTimeout: Duration
     @ObservationIgnored private var waitTask: Task<Void, Never>?
 
@@ -281,7 +282,15 @@ import UIKit
     /// the store only for one step at a time, so a store nobody keeps goes, and its loop with it.
     func launch() {
         guard runTask == nil else { return }
-        runTask = Task { [weak self] in await HarnessSessionStore.run(weak: self) }
+        let id = UUID()
+        runID = id
+        needsDescribe = true
+        runTask = Task { [weak self] in
+            await HarnessSessionStore.run(weak: self)
+            guard self?.runID == id else { return }
+            self?.runTask = nil
+            self?.runID = nil
+        }
         startWaitClock()
     }
 
@@ -302,20 +311,9 @@ import UIKit
         await Self.run(weak: self)
     }
 
-    /// One store's loop. Each pass takes the store afresh and ends once it is gone, so the loop
-    /// never keeps a closed tab's store, and its connections, alive.
-    private static func run(weak store: HarnessSessionStore?) async {
-        weak let weakStore = store
-        var delay = weakStore?.retryFloor ?? .zero
-        var reopenDelay = delay
-        while !Task.isCancelled {
-            guard let store = weakStore, await store.step(delay: &delay, reopenDelay: &reopenDelay) else { return }
-        }
-    }
-
     /// One pass of the loop: describe if needed, follow the feed, wait before the next pass.
     /// False when the loop should end.
-    private func step(delay: inout Duration, reopenDelay: inout Duration) async -> Bool {
+    func step(delay: inout Duration, reopenDelay: inout Duration) async -> Bool {
         guard subject.available else {
             endNative(nil)
             return false
@@ -359,6 +357,7 @@ import UIKit
         retireNativeInteractions(pumpQueue: false)
         runTask?.cancel()
         runTask = nil
+        runID = nil
         pumpTask?.cancel()
         pumpTask = nil
         graceTask?.cancel()
@@ -375,10 +374,17 @@ import UIKit
         phase = .opening
         var opened = false
         do {
-            for try await element in services.feed(subject, after: feed.openAfter) {
+            let requestedAfter = feed.openAfter
+            for try await element in services.feed(subject, after: requestedAfter) {
                 switch element {
                 case .opened(let incoming):
-                    if feed.isLoaded, feed.timeline.epoch != incoming.epoch { invalidateConversation() }
+                    if feed.isLoaded, feed.timeline.epoch != incoming.epoch {
+                        invalidateConversation()
+                        if requestedAfter > 0 {
+                            feed.reopenFromStart()
+                            return .reopen
+                        }
+                    }
                     let result = try await completeOpen(incoming)
                     try Task.checkCancellation()
                     opened = true
@@ -404,17 +410,6 @@ import UIKit
         } catch {
             return .dropped(opened: opened)
         }
-    }
-
-    /// Waits before trying again, doubling the wait up to the ceiling. False once cancelled.
-    private func pause(_ delay: inout Duration) async -> Bool {
-        do {
-            try await Task.sleep(for: delay)
-        } catch {
-            return false
-        }
-        delay = min(delay * 2, retryCeiling)
-        return !Task.isCancelled
     }
 
     private func rememberMode() {
