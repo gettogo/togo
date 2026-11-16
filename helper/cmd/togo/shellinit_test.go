@@ -138,3 +138,33 @@ func TestShellInitHelpExplains(t *testing.T) {
 		}
 	}
 }
+
+// A failing "togo new" must leave the user in their shell; a finished one
+// closes the window, as exec did.
+func TestShellInitFallsThroughWhenTogoFails(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh", "fish"} {
+		for _, tc := range []struct {
+			name     string
+			exit     string
+			survives bool
+		}{{"failure", "1", true}, {"success", "0", false}} {
+			t.Run(shell+" "+tc.name, func(t *testing.T) {
+				bin, err := exec.LookPath(shell)
+				if err != nil {
+					t.Skipf("%s not installed", shell)
+				}
+				binDir := t.TempDir()
+				script := "#!/bin/sh\nexit " + tc.exit + "\n"
+				if err := os.WriteFile(filepath.Join(binDir, "togo"), []byte(script), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				cmd := exec.Command(bin, "-i", "-c", shellInitSnippet(t, shell)+"\necho survived\n")
+				cmd.Env = []string{"PATH=" + binDir + ":/usr/bin:/bin", "HOME=" + t.TempDir(), "TOGO_SHELL_INIT=1"}
+				out, _ := cmd.CombinedOutput()
+				if got := strings.Contains(string(out), "survived"); got != tc.survives {
+					t.Errorf("shell kept running = %v, want %v: %s", got, tc.survives, out)
+				}
+			})
+		}
+	}
+}
