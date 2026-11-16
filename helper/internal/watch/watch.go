@@ -116,6 +116,9 @@ type Watcher struct {
 	// scans counts the reconciles that listed the sessions. The first
 	// restores stored exits; the first two look for agents already gone.
 	scans int
+	// reconciling lets one Reconcile run at a time: an older listing must
+	// not report as vanished a session a newer one has already taken in.
+	reconciling sync.Mutex
 
 	mu       sync.Mutex
 	sessions map[string]*entry
@@ -265,6 +268,8 @@ func (w *Watcher) Run(ctx context.Context) {
 // sessions that have vanished. A failed listing changes nothing, so a tmux
 // hiccup is never mistaken for every session ending.
 func (w *Watcher) Reconcile(ctx context.Context) {
+	w.reconciling.Lock()
+	defer w.reconciling.Unlock()
 	all, err := w.list(ctx)
 	if err != nil {
 		return
