@@ -388,8 +388,12 @@ enum ConnectPhase: Equatable, Sendable {
     // MARK: Saving
 
     /// An empty field while editing keeps whatever password is saved; anything else replaces it.
-    private func savePassword(for machine: UUID) throws {
+    func savePassword(for machine: UUID) throws {
         guard draft.auth == .password, draft.savePassword else {
+            // A metadata lookup may have been unavailable when Edit opened. An unchanged
+            // off setting and empty field must not delete a credential we could not inspect.
+            if let originalDraft, originalDraft.auth == .password, draft.auth == .password,
+               !originalDraft.savePassword, !draft.savePassword, draft.password.isEmpty { return }
             try services.setSavedPassword(nil, for: machine)
             return
         }

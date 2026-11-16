@@ -15,6 +15,7 @@ import TogoKit
     private(set) var forgotten: [String] = []
     private(set) var savedPasswords: [SavedPassword] = []
     var storedPasswords: Set<UUID> = []
+    var passwordCheckFails = false
     var keyLabels: [String: String] = [:]
 
     init(events: [DiscoveryEvent] = [.hosts(OnboardingSamples.hosts)], outcomes: [ConnectOutcome] = [], newKey: HostKeyPrompt? = nil) {
@@ -71,7 +72,7 @@ import TogoKit
         if password == nil { storedPasswords.remove(machine) } else { storedPasswords.insert(machine) }
     }
 
-    func hasSavedPassword(for machine: UUID) -> Bool { storedPasswords.contains(machine) }
+    func hasSavedPassword(for machine: UUID) -> Bool { !passwordCheckFails && storedPasswords.contains(machine) }
 
     func keyLabel(id: String) -> String? {
         keyLabels[id]
