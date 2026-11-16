@@ -176,6 +176,14 @@ func (w *Wire) toolResult(e loopEvent, at time.Time) ([]harness.Item, []harness.
 		ab := *ag.Agent
 		if running && task != "" {
 			delete(w.tasks, e.ToolCallID)
+			// task.started may have made a Background item for this task
+			// first: the agent replaces it, so close it, or it runs for good.
+			if old, ok := w.tasks[task]; ok && old.Background != nil {
+				bb := *old.Background
+				bb.State, bb.Ended = harness.StateOK, x.Ptr(at)
+				old.Background = &bb
+				items, ops = append(items, old), append(ops, taskRow(old))
+			}
 			w.tasks[task] = ag
 		} else {
 			ab.State, ab.Ended = tb.State, x.Ptr(at)

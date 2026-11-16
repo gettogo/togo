@@ -236,3 +236,29 @@ func TestBackgroundAgentDoneByAPromptTurn(t *testing.T) {
 		t.Fatalf("agent %+v", a.Agent)
 	}
 }
+
+// task.started can announce a background Agent's task before the Agent
+// call's result names it; the agent then owns the task id, and the
+// Background row task.started made must not be left running.
+func TestAgentTaskReplacesItsBackgroundRow(t *testing.T) {
+	m := NewWire(harness.Env{})
+	out := replay(t, m, []string{
+		`{"type":"turn.prompt","input":[{"type":"text","text":"audit it"}],"origin":{"kind":"user"},"promptId":"msg_1","turnId":0}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.call","toolCallId":"tool_a","name":"Agent","args":{"description":"Audit the gem","subagent_type":"explore"},"display":{"kind":"agent_call"}}}`,
+		`{"type":"task.started","info":{"taskId":"agent-86r","description":"Audit the gem","startedAt":1789999634362},"time":1789999634362}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.result","toolCallId":"tool_a","result":{"output":"task_id: agent-86r\nstatus: running\nagent_id: agent-0"}}}`,
+	})
+	bg := out.items["bg-agent-86r"]
+	if bg.Background == nil || bg.Background.State == harness.StateRunning {
+		t.Fatalf("background item left running: %+v", bg.Background)
+	}
+	last := map[string]string{}
+	for _, op := range out.ops {
+		if op.Row != nil {
+			last[op.Section+"/"+op.Row.ID] = op.Row.State
+		}
+	}
+	if last["background/agent-86r"] == harness.StateRunning {
+		t.Fatalf("background row left running: %v", last)
+	}
+}
