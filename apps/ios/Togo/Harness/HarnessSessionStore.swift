@@ -167,7 +167,7 @@ import UIKit
 
     var mission: MissionState {
         access(keyPath: \.mission)
-        return feed.mission
+        return MissionNeedsPresentation.state(mirroredMission)
     }
 
     /// A turn is running, so a prompt waits and Interrupt shows.
@@ -180,8 +180,9 @@ import UIKit
     /// working only when they did.
     private func mirrorFeed() {
         withMutation(keyPath: \.timeline) {}
-        if feed.mission.mission != mirroredMission {
-            mirroredMission = feed.mission.mission
+        let presented = MissionNeedsPresentation.snapshot(feed.mission.mission, in: feed.timeline)
+        if presented != mirroredMission {
+            mirroredMission = presented
             withMutation(keyPath: \.mission) {}
         }
         let nowWorking = feed.mission.summary.working
@@ -189,7 +190,6 @@ import UIKit
             withMutation(keyPath: \.working) { mirroredWorking = nowWorking }
         }
     }
-
     private func updateLiveWork(_ conversation: [HarnessItem], now: Date = .now) {
         let next = WorkingLogic.state(
             items: conversation, working: working, awaitingSince: awaitingSince,
