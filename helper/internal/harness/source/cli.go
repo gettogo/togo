@@ -78,6 +78,11 @@ func RunStderr(ctx context.Context, argv []string, env harness.Env, merge bool) 
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = time.Second
 	err = cmd.Run()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// The program exited well but a child it left behind still holds
+		// the output pipe: what it wrote before exiting is complete.
+		err = nil
+	}
 	if out.over {
 		return nil, ErrTooLarge
 	}
