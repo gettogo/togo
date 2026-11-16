@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -85,5 +86,30 @@ func TestResumeRows(t *testing.T) {
 	row := out[0].([]any)[0].(map[string]any)
 	if row["id"] != "7c1e2a90-3b4d-4c55-9e10-aa11bb22cc33" || row["title"] != "Fix the failing test in parser.go" {
 		t.Fatalf("%v", row)
+	}
+}
+
+// A folder with glob characters in its name still matches its own
+// session files.
+func TestSessionFolderWithGlobCharacters(t *testing.T) {
+	a, _ := spec.Parse(AdapterFile())
+	for _, cwd := range []string{"/work/[client] site", "/work/app/[slug]", "/work/what?", "/work/a*b"} {
+		root := t.TempDir()
+		dir := filepath.Join(root, ".pi/agent/sessions", "-"+strings.ReplaceAll(cwd, "/", "-")+"--")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		file := filepath.Join(dir, "2026-11-12T15-57-52-145Z_abc.jsonl")
+		if err := os.WriteFile(file, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		pattern, err := engine.Render(a.Feeds["session"].JSONL.Glob, map[string]any{"cwd": cwd})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := filepath.Glob(strings.Replace(pattern, "~", root, 1))
+		if err != nil || len(got) != 1 || got[0] != file {
+			t.Errorf("%s: pattern %q matched %v (%v)", cwd, pattern, got, err)
+		}
 	}
 }

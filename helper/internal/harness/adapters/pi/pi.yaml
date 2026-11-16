@@ -17,7 +17,7 @@ feeds:
     # exclusive: follow only a file this session's own agent process holds open (a /new moves it,
     # the old file is dropped); a file another process holds is never taken; with no evidence the
     # session keeps its file.
-    jsonl: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
+    jsonl: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-" | replace "[" "[[]" | replace "*" "[*]" | replace "?" "[?]"}}--/*.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
     mapper: pi.session
     stability: documented
 sources:
@@ -33,7 +33,7 @@ sources:
       cli: { argv: [pi, --list-models, --offline], format: text, stderr: merge }
       select: '[split("\n")[1:][] | select(length > 0) | [splits(" +")] | {id: (.[0] + "/" + .[1]), provider: .[0], name: .[1], context: .[2], thinking: (.[4] == "yes")}]'
   sessions:
-    file: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-"}}--/*.jsonl', format: jsonl }
+    file: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-" | replace "[" "[[]" | replace "*" "[*]" | replace "?" "[?]"}}--/*.jsonl', format: jsonl }
     select: '[.[] | {id: (.head[0].id // .name), title: (([.tail[] | select(.type == "session_info") | .name] | last) // ([.head[] | select(.type == "message" and .message.role == "user") | .message.content | if type == "string" then . else ([.[] | select(.type == "text") | .text] | join(" ")) end | gsub("\\s+"; " ") | .[:80]] | first) // .name), updated: .mtime}]'
     cache: 30s
     stability: documented
