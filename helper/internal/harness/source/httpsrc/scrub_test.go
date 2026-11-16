@@ -49,8 +49,13 @@ func TestScrubStringPatterns(t *testing.T) {
 			t.Errorf("%q not redacted: %q", s, out)
 		}
 	}
-	if ScrubString("plain text 123") != "plain text 123" {
-		t.Error("plain text changed")
+	for _, plain := range []string{"plain text 123", "task-management-service", "src/risk-assessment-report.ts", "ask-user-question-tool", "task-add-user-authentication"} {
+		if ScrubString(plain) != plain {
+			t.Errorf("%q changed: %q", plain, ScrubString(plain))
+		}
+	}
+	if got := ScrubString("tok glpat-abcdefghij0123456789"); strings.Contains(got, "glpat") {
+		t.Errorf("gitlab token kept: %q", got)
 	}
 }
 

@@ -37,8 +37,6 @@ var headersKey = regexp.MustCompile(`(?i)^(headers|http_?headers|env_?http_?head
 
 var valuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?s:.*?)(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)`),
-	regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+`),
-	regexp.MustCompile(`sk-[A-Za-z0-9_-]{16,}`),
 	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{16,}`),
 	regexp.MustCompile(`github_pat_[A-Za-z0-9_]{16,}`),
 	regexp.MustCompile(`xox[abposr]-[A-Za-z0-9-]{8,}`),
@@ -126,6 +124,7 @@ func ScrubString(s string) string {
 	if s == "" {
 		return s
 	}
+	s = redact.Tokens(s)
 	for _, re := range valuePatterns {
 		s = re.ReplaceAllString(s, Marker)
 	}

@@ -244,3 +244,43 @@ func TestFormTextRedactedAsBefore(t *testing.T) {
 		}
 	}
 }
+
+// Ordinary names, code and prose are data: only key-shaped values go.
+func TestStringKeepsOrdinaryText(t *testing.T) {
+	for _, in := range []string{
+		"task-management-service", "risk-assessment-report.ts", "task-scheduler-service.ts",
+		"flask-sqlalchemy-session", "disk-usage-analyzer", "ask-user-question-tool",
+		"branch task-add-user-authentication",
+		"primary_key=True", "max_tokens=4096", "tokenizer=AutoTokenizer.from_pretrained(name)",
+		"- password: must be at least 8 characters",
+		"<div>", "100%!", "PROJ-1234",
+		"hf_hub_download(repo)", "npm_config_cache=/tmp",
+	} {
+		if got := String(in); got != in {
+			t.Errorf("String(%q) = %q", in, got)
+		}
+	}
+}
+
+func TestStringMoreTokensAndSpacedAssignments(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"npm", "npm_" + strings.Repeat("a1", 18), "[redacted]"},
+		{"gitlab", "glpat-abcdefghij0123456789", "[redacted]"},
+		{"hf", "use hf_" + strings.Repeat("aB", 17) + " now", "use [redacted] now"},
+		{"stripe live", "sk_live_abcdefghij0123456789", "[redacted]"},
+		{"stripe restricted", "rk_live_abcdefghij0123456789", "[redacted]"},
+		{"aws temp", "ASIAABCDEFGHIJKLMNOP", "[redacted]"},
+		{"slack app", "xapp-1-A0123-4567-abcdef", "[redacted]"},
+		{"prefixed sk", "OPENAI=sk-abcdefghijklmnop1234", "OPENAI=[redacted]"},
+		{"spaced double", `password = "hunter2"`, `password = "[redacted]"`},
+		{"spaced single", `api_key = 'plainsecret1'`, `api_key = '[redacted]'`},
+		{"env still", "OPENAI_API_KEY=abc123", "OPENAI_API_KEY=[redacted]"},
+		{"env lowercase", "my_api_key=plainsecret", "my_api_key=[redacted]"},
+		{"yaml short phrase", "password: hunter2hunter", "password: [redacted]"},
+	}
+	for _, c := range cases {
+		if got := String(c.in); got != c.want {
+			t.Errorf("%s: String(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+}
