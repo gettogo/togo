@@ -99,6 +99,9 @@ import TogoMosh
         )
         let push = isolated ? nil : AppPush.make()
         self.push = push
+        let foregroundDeviceID: @Sendable () -> String?
+        if let push { foregroundDeviceID = push.foregroundDeviceID }
+        else { foregroundDeviceID = { nil } }
         // Only the public half of the key Togo made, read from the index without unlocking it.
         push?.pairing.deviceKey = { record in
             DeviceKeyLine.of(record, deviceKeyID: LiveOnboardingServices.storedDeviceKeyID) {
@@ -126,11 +129,11 @@ import TogoMosh
                             if let connection = await signedIn.take(record.id) {
                                 return record.noHelper
                                     ? PlainTmuxSource(record: record, connected: connection, helperFound: found)
-                                    : HelperSource(record: record, connected: connection)
+                                    : HelperSource(record: record, connected: connection, deviceID: foregroundDeviceID)
                             }
                             return record.noHelper
                                 ? PlainTmuxSource(record: record, env: env, helperFound: found)
-                                : HelperSource(record: record, env: env)
+                                : HelperSource(record: record, env: env, deviceID: foregroundDeviceID)
                         },
                         path: SystemPathSource()
                     )

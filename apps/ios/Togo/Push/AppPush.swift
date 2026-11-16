@@ -20,6 +20,11 @@ import WidgetKit
     private let pairings: PairingStore
     private let pending: PendingStore
     private let keys: any DeviceKeyStore
+    /// The same identity used by push.pair; no separate installation or window identifier.
+    var foregroundDeviceID: @Sendable () -> String? {
+        let keys = self.keys
+        return { try? keys.deviceID() }
+    }
     private let source = SettingsSource()
     private var actions: NotificationActionHandler?
     private var clear: ClearHandler?

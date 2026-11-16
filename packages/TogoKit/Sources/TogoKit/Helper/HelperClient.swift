@@ -149,8 +149,10 @@ public actor HelperClient {
     /// `foreground` suppresses pushes for sessions the app shows; the helper treats it
     /// as a lease that lapses 45 s after the last request, so an idle app on screen
     /// calls `keepalive()` about every 20 s.
-    public func subscribe(foreground: Bool) async throws -> EventSnapshot {
-        try await readyCall(.eventsSubscribe, EventsSubscribeParams(foreground: foreground), needs: Capability.events)
+    public func subscribe(foreground: Bool, deviceID: String? = nil) async throws -> EventSnapshot {
+        let id = capabilities?.contains(Capability.foregroundDevice) == true
+            ? deviceID.flatMap { $0.isEmpty ? nil : $0 } : nil
+        return try await readyCall(.eventsSubscribe, EventsSubscribeParams(foreground: foreground, deviceId: id), needs: Capability.events)
     }
 
     /// Renews the foreground lease; any other request renews it too.

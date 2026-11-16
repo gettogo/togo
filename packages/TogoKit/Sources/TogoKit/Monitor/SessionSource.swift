@@ -44,9 +44,9 @@ public struct HelperSource: SessionSource {
     public let events: AsyncStream<EventEnvelope>
     private let link: HelperLink
 
-    public init(record: HostRecord, env: SessionEnvironment) {
+    public init(record: HostRecord, env: SessionEnvironment, deviceID: @escaping @Sendable () -> String? = { nil }) {
         let command = record.helperPath.map { shellQuote([$0, "serve", "--stdio"]) } ?? HelperCommand.serveStdio
-        self.init(host: record.profile.name, clock: SystemClock()) {
+        self.init(host: record.profile.name, clock: SystemClock(), deviceID: deviceID) {
             let connection = SSHConnection(
                 profile: record.profile, keys: env.keys, secrets: env.secrets, biometrics: env.biometrics,
                 hostKeys: env.hostKeys, prompter: SilentPrompter()
@@ -63,9 +63,9 @@ public struct HelperSource: SessionSource {
 
     /// Runs over a connection that is already signed in, such as one the user just answered a
     /// one-time code for. The source owns it from here and closes it when done.
-    public init(record: HostRecord, connected connection: SSHConnection) {
+    public init(record: HostRecord, connected connection: SSHConnection, deviceID: @escaping @Sendable () -> String? = { nil }) {
         let command = record.helperPath.map { shellQuote([$0, "serve", "--stdio"]) } ?? HelperCommand.serveStdio
-        self.init(host: record.profile.name, clock: SystemClock()) {
+        self.init(host: record.profile.name, clock: SystemClock(), deviceID: deviceID) {
             do {
                 return HelperDial(channel: try await connection.openExec(command), hangUp: { await connection.close() })
             } catch {
@@ -77,12 +77,13 @@ public struct HelperSource: SessionSource {
 
     init(
         host: String, clock: any LinkClock, callTimeout: Duration = .seconds(10),
+        deviceID: @escaping @Sendable () -> String? = { nil },
         dial: @escaping @Sendable () async throws -> HelperDial
     ) {
         // A consumer that falls behind loses the oldest events; the seq gap makes it resubscribe.
         let (events, sink) = AsyncStream<EventEnvelope>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.events = events
-        link = HelperLink(host: host, clock: clock, callTimeout: callTimeout, dial: dial, events: sink)
+        link = HelperLink(host: host, clock: clock, callTimeout: callTimeout, deviceID: deviceID, dial: dial, events: sink)
     }
 
     public func open() async throws -> (HelperPresence, Set<String>) { try await link.open() }
@@ -132,6 +133,7 @@ actor HelperLink {
     private let clock: any LinkClock
     private let callTimeout: Duration
     private let dial: @Sendable () async throws -> HelperDial
+    private let deviceID: @Sendable () -> String?
     private let sink: AsyncStream<EventEnvelope>.Continuation
     private var hangUp: (@Sendable () async -> Void)?
     private var client: HelperClient?
@@ -143,13 +145,14 @@ actor HelperLink {
     private var keepalive: Task<Void, Never>?
 
     init(
-        host: String, clock: any LinkClock, callTimeout: Duration,
+        host: String, clock: any LinkClock, callTimeout: Duration, deviceID: @escaping @Sendable () -> String?,
         dial: @escaping @Sendable () async throws -> HelperDial, events: AsyncStream<EventEnvelope>.Continuation
     ) {
         self.host = host
         self.clock = clock
         self.callTimeout = callTimeout
         self.dial = dial
+        self.deviceID = deviceID
         sink = events
     }
 
@@ -197,7 +200,7 @@ actor HelperLink {
     func snapshot() async throws -> EventSnapshot {
         let client = try readyClient()
         if capabilities.contains(Capability.events) {
-            let snapshot = try await client.subscribe(foreground: foreground)
+            let snapshot = try await client.subscribe(foreground: foreground, deviceID: deviceID())
             restartKeepalive()
             return snapshot
         }
