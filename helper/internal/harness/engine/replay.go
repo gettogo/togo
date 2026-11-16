@@ -53,5 +53,6 @@ func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Rec
 	s.summaryChangedLocked()
 	if run := s.feeds[rec.Source]; run != nil {
 		run.failures = 0
+		s.recoverLocked(run)
 	}
 }

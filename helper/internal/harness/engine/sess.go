@@ -140,6 +140,9 @@ type feedRun struct {
 	rendered string
 	cancel   context.CancelFunc
 	failures int
+	// down are the capabilities this feed's failures took away, given
+	// back when it delivers a record again.
+	down []string
 }
 
 func newSess(e *Engine, info session.Session) *sess {
@@ -572,7 +575,8 @@ func (s *sess) runFeed(ctx context.Context, run *feedRun, spec harness.SourceSpe
 			run.failures++
 			if run.failures == 3 {
 				s.e.cfg.Logf("harness: %s feed %s (%s) failed three times: %v", s.ad.Adapter.Adapter, spec.Name, s.ad.Feeds[spec.Name].Stability, err)
-				s.degradeLocked(feedCaps(spec.Kind))
+				run.down = feedCaps(spec.Kind)
+				s.degradeLocked(run.down)
 			}
 		}
 		s.mu.Unlock()
@@ -603,6 +607,24 @@ func feedCaps(kind string) []string {
 		return nil
 	}
 	return []string{harness.CapHistory, harness.CapChatStream}
+}
+
+// recoverLocked gives back what a feed's failures took away once it
+// delivers again: a feed that failed three times and then recovered would
+// otherwise leave the chat off for the life of the session.
+func (s *sess) recoverLocked(run *feedRun) {
+	changed := false
+	for _, c := range run.down {
+		if s.degraded[c] {
+			delete(s.degraded, c)
+			changed = true
+		}
+	}
+	run.down = nil
+	if changed {
+		s.e.cfg.Logf("harness: %s feed %s delivers again", s.ad.Adapter.Adapter, run.name)
+		s.notifyLocked(harness.Notification{Kind: harness.NoteReset, Reason: "adapter"})
+	}
 }
 
 func (s *sess) degradeLocked(caps []string) {
@@ -658,6 +680,7 @@ func (s *sess) recordLocked(mapper string, rec harness.Record) {
 	s.afterRecordLocked()
 	if run := s.feeds[rec.Source]; run != nil {
 		run.failures = 0
+		s.recoverLocked(run)
 	}
 }
 
