@@ -209,3 +209,33 @@ func TestDoctorPrintsIntegrations(t *testing.T) {
 		t.Fatalf("json: %s", buf.String())
 	}
 }
+
+func TestHookOptionsNameTheBinaryThatSurvivesBrewUpgrade(t *testing.T) {
+	prefix := t.TempDir()
+	cellar := filepath.Join(prefix, "Cellar", "togo", "1.0.3", "bin")
+	if err := os.MkdirAll(cellar, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	versioned := filepath.Join(cellar, "togo")
+	if err := os.WriteFile(versioned, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(prefix, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stable := filepath.Join(prefix, "bin", "togo")
+	if err := os.Symlink(versioned, stable); err != nil {
+		t.Fatal(err)
+	}
+	old := currentExecutable
+	currentExecutable = func() (string, error) { return versioned, nil }
+	t.Cleanup(func() { currentExecutable = old })
+	t.Setenv("HOME", t.TempDir())
+	o, err := hookOptions(map[string]string{}, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Binary != stable {
+		t.Fatalf("hooks name %q, want the stable path %q", o.Binary, stable)
+	}
+}
