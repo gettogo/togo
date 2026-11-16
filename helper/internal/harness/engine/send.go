@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"time"
@@ -34,15 +35,21 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 			// The harness API takes a / line as a command, not as prompt
 			// text the model would read (OpenCode's /init).
 			err := e.runCommand(ctx, s, act, name, args)
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			if s.convGen != gen {
-				return harness.SendResult{}, errMoved
+			// A line the API will not run is typed like any other: a
+			// command before the first prompt, one only the terminal
+			// has, or a prompt that merely starts with a slash word.
+			var refused *harness.FallbackError
+			if !errors.As(err, &refused) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				if s.convGen != gen {
+					return harness.SendResult{}, errMoved
+				}
+				if err != nil {
+					return harness.SendResult{}, err
+				}
+				return s.userItemLocked(req.Text, nil, false), nil
 			}
-			if err != nil {
-				return harness.SendResult{}, err
-			}
-			return s.userItemLocked(req.Text, nil, false), nil
 		}
 	}
 	api, viaAPI := e.sendAction(s)

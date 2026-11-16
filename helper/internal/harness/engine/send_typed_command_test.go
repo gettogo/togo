@@ -72,3 +72,36 @@ func TestSendTypesTheTerminalsOwnCommand(t *testing.T) {
 		t.Errorf("command calls\n%s\nwant\n%s", got, want)
 	}
 }
+
+// A / line the harness's API refuses is not lost: a prompt that only starts
+// with a slash word, or a command sent before anything started, is typed
+// into the terminal as written.
+func TestSendTypesASlashLineTheAPIRefuses(t *testing.T) {
+	const id = "s_faketui002"
+	bin, home := t.TempDir(), t.TempDir()
+	rec := "#!/bin/sh\n[ \"$2\" = tmp ] && exit 1\necho \"$@\" >> rec.log\n"
+	if err := os.WriteFile(filepath.Join(bin, "rec"), []byte(rec), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pane := &seqPane{}
+	e := New(Config{
+		Sessions: fakeSessions{id: session.Session{ID: id, Agent: "faketui", Managed: true, Cwd: home, Command: []string{"faketui"}}},
+		Typist:   pane, Marker: &fakeMarker{}, Home: home,
+		LoginPath: func(context.Context) string { return bin + ":/bin:/usr/bin" },
+		Log:       &Log{NewEpoch: func() string { return "e1" }},
+		Scale:     0.1,
+	})
+	t.Cleanup(func() { e.Forget(id) })
+	ctx := context.Background()
+	if _, err := e.Describe(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	const text = "/tmp is full, clean it"
+	r, err := e.Send(ctx, harness.SendRequest{Session: id, Text: text, Mode: harness.SendNow})
+	if err != nil || r.Item.User == nil || r.Item.User.Text != text {
+		t.Fatalf("send %q: %+v %v", text, r, err)
+	}
+	if _, typed := pane.snapshot(); !reflect.DeepEqual(typed, []string{text}) {
+		t.Errorf("typed %q, want the line as written", typed)
+	}
+}
