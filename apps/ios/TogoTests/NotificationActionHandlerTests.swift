@@ -360,7 +360,7 @@ struct NotificationActionHandlerTests {
         #expect(await clear.didReceiveRemoteNotification(["c": "AQ"]) == false)
         #expect(await clear.didReceiveRemoteNotification(["aps": ["content-available": 1], "c": envelope]))
         #expect(notifications.shown.isEmpty)
-        #expect(pending.request(requestID) == nil)
+        #expect(pending.request(requestID)?.answered == .elsewhere)
         #expect(widgetReloads == 1)
         #expect(watchCleared == [requestID])
     }
@@ -387,6 +387,35 @@ struct NotificationActionHandlerTests {
         #expect(pending.claimOffline(hostId: hostID, ts: 5) == true, "a reconnect forgets the shown offline push")
     }
 
+    @Test func clearBeforeAlertCannotReopenTheQuestion() async throws {
+        let keys = InMemoryDeviceKeys()
+        let core = NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { start })
+        let clear = ClearHandler(dependencies: .init(
+            core: core, pending: pending, notifications: notifications, reloadWidgets: {}
+        ))
+        let id = "r_dddddddddd"
+        func sealed(_ payload: PushPayload) throws -> [AnyHashable: Any] {
+            ["c": try Seal.seal(
+                to: keys.agreementKey().publicKey, JSONEncoder().encode(payload), label: Labels.push,
+                aad: Data("\(hostID)|\(try keys.deviceID())".utf8)
+            )]
+        }
+        #expect(await clear.didReceiveRemoteNotification(try sealed(
+            PushPayload(kind: .clear, title: "", body: "", requestId: id, ts: 1)
+        )))
+        let alert = UNMutableNotificationContent()
+        alert.userInfo = try sealed(PushPayload(
+            kind: .needsYou, title: "Approve?", body: "", requestId: id,
+            options: [PushOption(n: 1, label: "Yes", role: "approve")],
+            ts: Int64(start.timeIntervalSince1970 * 1000)
+        ))
+        let result = core.process(alert)
+        #expect(result.content.categoryIdentifier.isEmpty)
+        #expect(result.content.sound == nil)
+        #expect(pending.request(id)?.answered == .elsewhere)
+        #expect(!pending.claim(id, hostId: hostID))
+    }
+
     @Test func foregroundDropsWhatTheMachineNoLongerLists() async {
         let other = DeliveredRequest(requestId: "r_bbbbbbbbbb", hostId: "h_bbbbbbbbbbbbbbbbbbbbbbbbbb")
         notifications.shown.append(other)
@@ -396,6 +425,6 @@ struct NotificationActionHandlerTests {
         ))
         await clear.didEnterForeground(open: [], reported: [hostID])
         #expect(notifications.shown == [other], "a machine that has not reported keeps its notifications")
-        #expect(pending.request(requestID) == nil)
+        #expect(pending.request(requestID)?.answered == .elsewhere)
     }
 }

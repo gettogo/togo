@@ -135,7 +135,7 @@ public enum NotificationCategorySet {
         _ pending: [PendingRequest], approveWithoutUnlock: Bool, now: Date = Date()
     ) -> Set<UNNotificationCategory> {
         var out = Set<UNNotificationCategory>()
-        for request in pending where request.isOpen(at: now) && offersChoices(request.options) {
+        for request in RequestLifetime.waiting(pending, now: now) where offersChoices(request.options) {
             var actions: [UNNotificationAction] = request.options.map { option in
                 UNNotificationAction(
                     identifier: NotificationActionID.option(option.n),

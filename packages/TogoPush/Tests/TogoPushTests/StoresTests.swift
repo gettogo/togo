@@ -48,14 +48,14 @@ struct StoresTests {
     @Test func pendingPrunesOld() {
         let clock = Mutex(Self.now)
         let store = PendingStore(directory: directory(), clock: { clock.withLock { $0 } })
-        store.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-601)))
+        store.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-PendingStore.retention - 1)))
         store.upsert(request("r_bbbbbbbbbb", receivedAt: Self.now.addingTimeInterval(-30)))
         store.mark("r_bbbbbbbbbb", .sending)
         #expect(store.all().count == 2)
         store.prune()
         #expect(store.all().map(\.requestId) == ["r_bbbbbbbbbb"])
         #expect(store.all().first?.answered == .sending)
-        clock.withLock { $0 = Self.now.addingTimeInterval(600) }
+        clock.withLock { $0 = Self.now.addingTimeInterval(PendingStore.retention) }
         store.prune()
         #expect(store.all().isEmpty)
         store.upsert(request("r_cccccccccc", receivedAt: Self.now))
@@ -83,7 +83,7 @@ struct StoresTests {
         store.prune()
         store.remove("r_aaaaaaaaaa")
         _ = store.all()
-        #expect(writes.withLock { $0 } == 6)
+        #expect(writes.withLock { $0 } == 5)
     }
 
     /// Two stores on one directory stand in for two processes answering the same request.

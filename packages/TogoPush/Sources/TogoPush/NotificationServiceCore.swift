@@ -68,7 +68,7 @@ public struct NotificationServiceCore: Sendable {
     public static func generic() -> UNNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = "Togo"
-        content.body = String(localized: "notif.generic", defaultValue: "A session needs you")
+        content.body = String(localized: "notif.quiet", defaultValue: "Open Togo for the latest.")
         content.sound = .default
         content.threadIdentifier = "togo"
         return content
@@ -115,9 +115,10 @@ public struct NotificationServiceCore: Sendable {
         guard age <= limit, age >= -Self.maxSkew else {
             return Result(content: Self.quiet(), pendingChanged: false)
         }
+        let pruned = pending.prune()
         if p.kind == .offline {
             guard pending.claimOffline(hostId: opened.pairing.hostId, ts: p.ts) else {
-                return Result(content: Self.quiet(), pendingChanged: false)
+                return Result(content: Self.quiet(), pendingChanged: pruned)
             }
         } else {
             // Heard from the machine: its next silence is a new outage.
@@ -162,12 +163,11 @@ public struct NotificationServiceCore: Sendable {
         }
         let clearsOffline = p.kind == .offline ? nil : opened.pairing.hostId
 
-        var changed = false
+        var changed = pruned
         if p.kind == .needsYou, let requestId = p.requestId {
             if let known = pending.request(requestId), !known.isOpen(at: clock()) {
-                // Answered already, here or in another process: show it, offer nothing.
-                content.categoryIdentifier = NotificationCategoryID.info
-                return Result(content: content, pendingChanged: false, clearsOfflineOf: clearsOffline)
+                // A clear may precede its alert. Do not repeat the closed question.
+                return Result(content: Self.quiet(), pendingChanged: pruned, clearsOfflineOf: clearsOffline)
             }
             // Only identifiers and option labels: the app answers from these, and the
             // question and command stay out of anything the system keeps beside the text.

@@ -39,7 +39,7 @@ import WidgetKit
             return changed
         }
         guard opened.payload.kind == .clear, let requestId = opened.payload.requestId else { return false }
-        await clear([requestId])
+        await clear([requestId], hostId: opened.pairing.hostId)
         return true
     }
 
@@ -84,12 +84,11 @@ import WidgetKit
         if !all.isEmpty { await clear(all) }
     }
 
-    private func clear(_ requestIds: Set<String>) async {
+    private func clear(_ requestIds: Set<String>, hostId: String = "") async {
+        // Persist before the first await: an alert or an action may arrive meanwhile.
+        for id in requestIds { deps.pending.close(id, hostId: hostId) }
         await deps.notifications.removeDelivered(requestIds: requestIds)
-        for id in requestIds {
-            deps.pending.remove(id)
-            deps.cleared(id)
-        }
+        for id in requestIds { deps.cleared(id) }
         deps.reloadWidgets()
     }
 }

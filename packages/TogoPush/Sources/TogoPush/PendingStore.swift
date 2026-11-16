@@ -153,6 +153,26 @@ public final class PendingStore: Sendable {
         }
     }
 
+    /// Keeps a closed record even if its alert has not arrived yet. A late push cannot
+    /// reopen it. Refresh the retention window from the clear, not the original receipt.
+    public func close(_ requestId: String, hostId: String = "") {
+        let now = clock()
+        update { values in
+            if let index = values.firstIndex(where: { $0.requestId == requestId }) {
+                if values[index].answered != .approved && values[index].answered != .denied {
+                    values[index].answered = .elsewhere
+                }
+                values[index].claimedAt = nil
+                values[index].receivedAt = now
+            } else {
+                values.append(PendingRequest(
+                    requestId: requestId, hostId: hostId, sessionId: nil, bib: nil, agent: nil, host: nil,
+                    title: "", subject: nil, options: [], receivedAt: now, answered: .elsewhere
+                ))
+            }
+        }
+    }
+
     /// Gives back every abandoned claim (`claimAbandoned`), as the Watch does at launch: the
     /// request opens again, and a placeholder `claim` made for an id never pushed here goes
     /// rather than open as a blank request. Claims still inside their time are left alone,
@@ -196,10 +216,21 @@ public final class PendingStore: Sendable {
         update { $0.removeAll { $0.requestId == requestId } }
     }
 
-    /// Drops requests received more than `age` seconds ago. The helper refuses answers to them
-    /// by then anyway.
-    public func prune(olderThan age: TimeInterval = 600) {
+    /// Retains closed replay barriers beyond the answer window, including clock-skew slack.
+    /// Old open records are retained briefly for expiry feedback, never for new actions.
+    public static let retention: TimeInterval = 2 * RequestLifetime.seconds
+
+    /// Drops old records during push processing as well as foreground refresh.
+    @discardableResult
+    public func prune(olderThan age: TimeInterval = PendingStore.retention) -> Bool {
         let cutoff = clock().addingTimeInterval(-age)
-        update { $0.removeAll { $0.receivedAt < cutoff } }
+        guard blob.read().contains(where: { $0.receivedAt < cutoff }) else { return false }
+        var removed = false
+        update { values in
+            let count = values.count
+            values.removeAll { $0.receivedAt < cutoff }
+            removed = values.count != count
+        }
+        return removed
     }
 }

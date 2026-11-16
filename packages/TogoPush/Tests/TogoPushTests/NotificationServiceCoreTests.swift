@@ -156,7 +156,7 @@ struct NotificationServiceCoreTests {
         pending.mark("r_aaaaaaaaaa", .approved)
         let replay = core.process(try generic(ts: 1_793_707_200_000 - 5_000))
         #expect(pending.request("r_aaaaaaaaaa")?.answered == .approved)
-        #expect(replay.content.categoryIdentifier == "togo.info", "an answered request offers no actions")
+        expectQuiet(replay.content, "an answered request does not repeat the question")
         #expect(replay.content.userInfo["togo"] == nil)
     }
 
@@ -439,7 +439,7 @@ struct NotificationServiceCoreTests {
 
 /// The parts of a delivered content the tests look at.
 private struct Seen: Equatable, Sendable {
-    static let generic = Seen(title: "Togo", subtitle: "", body: "A session needs you", category: "", infoKeys: [])
+    static let generic = Seen(title: "Togo", subtitle: "", body: "Open Togo for the latest.", category: "", infoKeys: [])
     static let quiet = Seen(title: "Togo", subtitle: "", body: "Open Togo for the latest.", category: "", infoKeys: [])
 
     var title, subtitle, body, category: String
