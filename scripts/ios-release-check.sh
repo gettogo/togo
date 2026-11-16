@@ -29,6 +29,10 @@ for image in "${images[@]}"; do
   fi
   found=$(printf '%s\n' "$table" | grep -cE 'Debug(Entry|RootView)' || true)
   symbols=$((symbols + found))
+  # A stripped binary keeps no local symbols, but Swift type names stay in
+  # its metadata strings, so look there too.
+  found=$(strings -a "$image" | grep -cE 'Debug(Entry|RootView)' || true)
+  symbols=$((symbols + found))
 done
 echo "$symbols"
 if [ "$symbols" != "0" ]; then
