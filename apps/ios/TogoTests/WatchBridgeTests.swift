@@ -7,9 +7,11 @@ import TogoPush
 @MainActor private final class FakeWatchLink: Togo.WatchLink {
     var canReachWatchApp = true
     var sent: [[String: Any]] = []
+    var lastApplicationContext: [String: Any] = [:]
 
     func updateApplicationContext(_ context: [String: Any]) throws {
         sent.append(context)
+        lastApplicationContext = context
     }
 
     func last<T: Decodable>(_ key: String, as type: T.Type) throws -> T {
@@ -49,6 +51,19 @@ import TogoPush
             title: "Run tests?", subject: nil, options: [], receivedAt: Samples.now.addingTimeInterval(-age),
             answered: answered
         )
+    }
+
+    @Test func backgroundBridgeRestartKeepsTheRosterWhenClearingARequest() throws {
+        let sessions = [WatchSession(hostName: "Studio", bib: "01", agentName: "OMP", status: "idle",
+                                     activity: nil, machineId: Samples.studio.uuidString, sessionId: "s1")]
+        bridge().publish(sessions: sessions, requests: [])
+        let restarted = bridge()
+        restarted.sendPairings([])
+        #expect(try link.last(WatchLinkKey.context, as: WatchContext.self).sessions == sessions)
+        restarted.cleared("finished-request")
+        let context = try link.last(WatchLinkKey.context, as: WatchContext.self)
+        #expect(context.sessions == sessions)
+        #expect(context.closedRequestIds.contains("finished-request"))
     }
 
     @Test func watchDeviceForwardedToCoordinator() async throws {

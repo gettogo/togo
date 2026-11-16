@@ -204,7 +204,7 @@ import WidgetKit
         pairing.onPairingsChanged = { [weak watch] in watch?.sendPairings($0) }
         watch.sendPairings(pairings.all())
         watchFeed = Task { [weak watch] in
-            let feed = Observations { WatchFeed(activeStore()?.controlCenter ?? ControlCenterState()) }
+            let feed = Observations { WatchFeed.ready(activeStore()?.controlCenter) }
             // A change of status or requests goes at once; a session's activity line alone at
             // most every few seconds, so a busy agent does not keep the Watch link awake.
             let gate = WatchFeedGate()
@@ -213,7 +213,12 @@ import WidgetKit
                 gate.didSend(next, at: .now)
                 watch?.publish(sessions: next.sessions, requests: pending.all(), textRequests: next.textRequests)
             }
-            for await next in feed {
+            for await update in feed {
+                guard let next = update else {
+                    trailing?.cancel()
+                    trailing = nil
+                    continue
+                }
                 switch gate.offer(next, now: .now) {
                 case .skip:
                     break

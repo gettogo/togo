@@ -6,7 +6,13 @@ import WatchConnectivity
 @MainActor protocol WatchLink: AnyObject {
     /// The session is active, a Watch is paired and the Togo Watch app is on it.
     var canReachWatchApp: Bool { get }
+    /// The system's last sent context, retained independently of a window or this bridge.
+    var lastApplicationContext: [String: Any] { get }
     func updateApplicationContext(_ context: [String: Any]) throws
+}
+
+extension WatchLink {
+    var lastApplicationContext: [String: Any] { [:] }
 }
 
 /// The phone's side of the Watch: it takes the Watch's push identity and hands it to pairing,
@@ -54,6 +60,10 @@ import WatchConnectivity
         self.clock = clock
         devices = defaults.data(forKey: Self.devicesKey)
             .flatMap { try? JSONDecoder().decode([WatchDevice].self, from: $0) } ?? []
+        if let data = link?.lastApplicationContext[WatchLinkKey.context] as? Data {
+            context = try? JSONDecoder().decode(WatchContext.self, from: data)
+            lastTextRequests = context?.textRequestIds ?? []
+        }
     }
 
     /// The bridge over `WCSession.default`, or nil on devices that cannot pair a Watch.
@@ -238,6 +248,8 @@ import WatchConnectivity
         self.session = session
     }
 
+    var lastApplicationContext: [String: Any] { session.applicationContext }
+
     var canReachWatchApp: Bool {
         session.activationState == .activated && session.isPaired && session.isWatchAppInstalled
     }
@@ -270,6 +282,15 @@ extension WatchSession {
 struct WatchFeed: Equatable {
     var sessions: [WatchSession]
     var textRequests: [String]
+
+    /// Unknown launch/background state must not replace the Watch's retained roster with
+    /// an empty list. Empty is authoritative only after every listed machine is online.
+    static func ready(_ state: ControlCenterState?) -> WatchFeed? {
+        guard let state, state.loaded else { return nil }
+        let next = WatchFeed(state)
+        guard !next.sessions.isEmpty || state.machines.allSatisfy({ $0.reachability == .online }) else { return nil }
+        return next
+    }
 
     init(_ state: ControlCenterState) {
         sessions = WatchSession.rows(state.machines)

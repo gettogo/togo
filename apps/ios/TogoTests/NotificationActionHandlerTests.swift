@@ -162,7 +162,7 @@ struct NotificationActionHandlerTests {
         let link = await h.handle(
             actionIdentifier: NotificationActionID.runAgain, userInfo: shown.userInfo, target: shown.targetContentIdentifier
         )
-        #expect(link == .session(bib: "01", host: "studio"))
+        #expect(link == .session(bib: "01", host: "studio", hostID: Samples.studio, sessionID: "s_abcdefghij"))
         await running?.value
         #expect(tools.calledHosts == [Samples.studio])
         #expect(tools.requests == [FakeMachineTools.Request(method: "session.relaunch", params: ["id": .string("s_abcdefghij")])])
