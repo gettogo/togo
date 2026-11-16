@@ -119,7 +119,7 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
     private static func describe(_ error: RPCErrorObject) -> String {
         switch error.code {
         case RPCErrorCode.notFound: String(localized: "This session has ended.", bundle: .module)
-        case RPCErrorCode.tmuxUnavailable: String(localized: "The machine needs tmux 3.2 or newer.", bundle: .module)
+        case RPCErrorCode.tmuxUnavailable: describeTmux(error)
         case RPCErrorCode.notReady: String(localized: "The Togo helper on the machine was asked before it was ready.", bundle: .module)
         case RPCErrorCode.invalidPath: String(localized: "That folder does not exist on the machine.", bundle: .module)
         case RPCErrorCode.unsupportedVersion: String(localized: "The Togo helper on the machine speaks a different protocol version. Update the app or the helper.", bundle: .module)
@@ -132,5 +132,20 @@ public enum HelperError: Error, Equatable, Sendable, LocalizedError {
         case RPCErrorCode.invalidParams: String(localized: "The Togo helper on the machine turned that request down. Update the app or the helper.", bundle: .module)
         default: String(localized: "The Togo helper on the machine could not do that.", bundle: .module)
         }
+    }
+
+    private static func describeTmux(_ error: RPCErrorObject) -> String {
+        let fallback = String(localized: "Togo needs tmux 3.2 or newer on this machine. Install or update tmux, then try again.\n\nIf tmux is already up to date, restart Togo on the machine.", bundle: .module)
+        let missing = String(localized: "tmux is not installed on this machine. Install tmux 3.2 or newer, then try again.\n\nIf tmux is already installed, restart Togo on the machine.", bundle: .module)
+        guard case .object(let fields)? = error.data, let found = fields["found"] else { return fallback }
+        if found == .null { return missing }
+        guard case .string(let value) = found else { return fallback }
+        let version = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !version.isEmpty else { return missing }
+        // A version token is useful; arbitrary command output is not interface copy.
+        guard version.utf8.count <= 32, let first = version.utf8.first, (48...57).contains(first),
+              version.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 46 || $0 == 45 })
+        else { return fallback }
+        return String(localized: "This machine has tmux \(version). Togo needs version 3.2 or newer. Update tmux, then try again.\n\nIf tmux is already up to date, restart Togo on the machine.", bundle: .module)
     }
 }
