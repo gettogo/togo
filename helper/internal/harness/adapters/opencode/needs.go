@@ -97,6 +97,7 @@ func (e *Events) permission(raw json.RawMessage, at time.Time) ([]harness.Item, 
 			b.State = harness.StateWaiting
 			x.Tool = &b
 			e.tools[p.Tool.CallID] = x
+			e.waits[p.ID] = p.Tool.CallID
 			items = append(items, x)
 		}
 	}
@@ -148,7 +149,27 @@ func (e *Events) answered(kind string, raw json.RawMessage) ([]harness.Item, []h
 		}
 	}
 	x.Question = &body
-	return []harness.Item{x}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: p.RequestID}}
+	return append([]harness.Item{x}, e.resume(p.RequestID)...), []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: p.RequestID}}
+}
+
+// resume sets the tool that waited on a request back to running: its
+// later progress updates must not show it as waiting for an approval it
+// already has.
+func (e *Events) resume(request string) []harness.Item {
+	call, ok := e.waits[request]
+	if !ok {
+		return nil
+	}
+	delete(e.waits, request)
+	x, ok := e.tools[call]
+	if !ok || x.Tool.State != harness.StateWaiting {
+		return nil
+	}
+	b := *x.Tool
+	b.State = harness.StateRunning
+	x.Tool = &b
+	e.tools[call] = x
+	return []harness.Item{x}
 }
 
 // dropOpen closes every open question and permission after the event
@@ -173,6 +194,7 @@ func (e *Events) dropOpen() ([]harness.Item, []harness.Op) {
 		}
 		x.Question = &body
 		items = append(items, x)
+		items = append(items, e.resume(id)...)
 		ops = append(ops, harness.Op{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id})
 	}
 	return items, ops

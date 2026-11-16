@@ -136,6 +136,7 @@ func (e *Events2) permission2(d ev2, at time.Time) ([]harness.Item, []harness.Op
 			b.State = harness.StateWaiting
 			x.Tool = &b
 			e.tools[d.Source.ID] = x
+			e.waits[needID(d.ID, d.SessionID)] = d.Source.ID
 			items = append(items, x)
 		}
 	}
@@ -177,6 +178,7 @@ func (e *Events2) form(d ev2, loc *location2, at time.Time) ([]harness.Item, []h
 				b.State = harness.StateWaiting
 				x.Tool = &b
 				e.tools[id] = x
+				e.waits[needID(f.ID, f.SessionID)] = id
 				items = append(items, x)
 			}
 		}
@@ -210,7 +212,7 @@ func (e *Events2) permissionReplied(d ev2) ([]harness.Item, []harness.Op) {
 	}
 	delete(e.open, id)
 	x = closeQuestion(x, func(string) []string { return []string{d.Reply} })
-	return []harness.Item{x}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
+	return append([]harness.Item{x}, e.resume(id)...), []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
 }
 
 func (e *Events2) formDone(kind string, d ev2) ([]harness.Item, []harness.Op) {
@@ -225,7 +227,7 @@ func (e *Events2) formDone(kind string, d ev2) ([]harness.Item, []harness.Op) {
 		pick = func(qid string) []string { return answerValues(d.Answer[fieldKey(qid)]) }
 	}
 	x = closeQuestion(x, pick)
-	return []harness.Item{x}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
+	return append([]harness.Item{x}, e.resume(id)...), []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
 }
 
 // closeQuestion marks a question item answered; pick gives each question's
@@ -270,4 +272,23 @@ func answerValues(v any) []string {
 		return []string{x}
 	}
 	return []string{fmt.Sprint(v)}
+}
+
+// resume sets the tool that waited on a request back to running (see
+// Events.resume).
+func (e *Events2) resume(need string) []harness.Item {
+	id, ok := e.waits[need]
+	if !ok {
+		return nil
+	}
+	delete(e.waits, need)
+	x, ok := e.tools[id]
+	if !ok || x.Tool.State != harness.StateWaiting {
+		return nil
+	}
+	b := *x.Tool
+	b.State = harness.StateRunning
+	x.Tool = &b
+	e.tools[id] = x
+	return []harness.Item{x}
 }

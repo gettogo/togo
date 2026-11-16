@@ -27,6 +27,7 @@ type Events struct {
 	turns     map[string]*turn
 	open      map[string]harness.Item // questions and permissions not yet answered
 	tools     map[string]harness.Item // tool items by call id, for permission waits
+	waits     map[string]string       // request id -> call id of the tool waiting on it
 	planFirst map[string]time.Time
 }
 
@@ -63,7 +64,7 @@ type turn struct {
 func NewEvents(env harness.Env) *Events {
 	return &Events{env: env, state: map[string]string{"working": "false", "idle": "true"},
 		sessions: map[string]*session{}, messages: map[string]message{}, parts: map[string]*part{},
-		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{},
+		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{}, waits: map[string]string{},
 		planFirst: map[string]time.Time{}}
 }
 

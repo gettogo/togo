@@ -33,6 +33,7 @@ type Events2 struct {
 	children    map[string]*session // child session id -> its agent
 	texts       map[string]*part    // streamed text and reasoning by item id
 	tools       map[string]harness.Item
+	waits       map[string]string          // need id -> id of the tool waiting on it
 	inputs      map[string]json.RawMessage // tool input by call id
 	turns       map[string]*turn
 	turnOf      map[string]string // session -> its running turn
@@ -50,7 +51,7 @@ type Events2 struct {
 // NewEvents2 returns a 2.x mapper for one session.
 func NewEvents2(env harness.Env) *Events2 {
 	e := &Events2{env: env, state: map[string]string{"working": "false", "idle": "true"},
-		children: map[string]*session{}, texts: map[string]*part{}, tools: map[string]harness.Item{}, inputs: map[string]json.RawMessage{},
+		children: map[string]*session{}, texts: map[string]*part{}, tools: map[string]harness.Item{}, waits: map[string]string{}, inputs: map[string]json.RawMessage{},
 		turns: map[string]*turn{}, turnOf: map[string]string{}, inbox: map[string]string{}, open: map[string]harness.Item{}}
 	if id := sessionFlag(env.Argv); id != "" {
 		e.setMain(id)
@@ -480,6 +481,7 @@ func (e *Events2) dropOpen() ([]harness.Item, []harness.Op) {
 		x := closeQuestion(e.open[id], nil)
 		delete(e.open, id)
 		items = append(items, x)
+		items = append(items, e.resume(id)...)
 		ops = append(ops, harness.Op{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id})
 	}
 	return items, ops

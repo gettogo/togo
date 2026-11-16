@@ -1282,6 +1282,26 @@
      "kind": "file",
      "text": "/etc/hosts"
     },
+    "state": "running",
+    "startedAt": "2026-11-07T02:43:16.426Z",
+    "endedAt": null
+   }
+  },
+  {
+   "id": "KXscQAlidTyuoCUB0mF0fKv641KhETeO",
+   "seq": 0,
+   "turnId": "msg_1b3e387240019POJUd4yMPPXV0",
+   "kind": "tool",
+   "at": "2026-11-07T02:43:16.426Z",
+   "tool": {
+    "callId": "KXscQAlidTyuoCUB0mF0fKv641KhETeO",
+    "name": "read",
+    "title": "Read hosts",
+    "category": "read",
+    "subject": {
+     "kind": "file",
+     "text": "/etc/hosts"
+    },
     "state": "denied",
     "startedAt": "2026-11-07T02:43:16.426Z",
     "endedAt": "2026-11-07T02:43:22.702Z",
