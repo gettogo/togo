@@ -45,12 +45,25 @@ public enum SessionAttach {
 
     /// Attaches to a tmux session on a host without the helper, by the id `PlainTmuxSource` gave it.
     public static func connectPlainTmux(profile: HostProfile, sessionID: String, env: SessionEnvironment) -> LinkConnect {
-        connect(profile: profile, env: env) { _ in
-            guard let name = PlainTmux.name(forID: sessionID) else {
-                throw HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "no such session"))
+        connect(profile: profile, env: env) { connection in
+            try await plainAttachArgv(sessionID: sessionID) { command in
+                try await connection.run(command, timeout: .seconds(10)).status
             }
-            return PlainTmux.attachArgv(name: name)
         }
+    }
+
+    static func plainAttachArgv(
+        sessionID: String, run: @Sendable (String) async throws -> Int32
+    ) async throws -> [String] {
+        guard let name = PlainTmux.name(forID: sessionID) else {
+            throw HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "no such session"))
+        }
+        let status = try await run(shellQuote(PlainTmux.sessionProbeArgv(name: name)))
+        if status == 1 {
+            throw HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "no such session"))
+        }
+        guard status == 0 else { throw SSHError.channelClosed(exitStatus: status) }
+        return PlainTmux.attachArgv(name: name)
     }
 
     private static func connect(

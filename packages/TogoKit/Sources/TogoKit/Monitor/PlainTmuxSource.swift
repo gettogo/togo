@@ -158,6 +158,12 @@ public enum PlainTmux {
         script(candidates: tmuxCandidates, #"if [ -n "$t" ]; then exec "$t" attach-session -t "=$1"; fi; exec "${SHELL:-/bin/sh}" -l"#, name)
     }
 
+    /// No tmux still permits the plain-shell fallback. With tmux, a missing session must
+    /// end the tab rather than starting another attach that exits immediately.
+    static func sessionProbeArgv(name: String) -> [String] {
+        script(#"if [ -n "$t" ]; then exec "$t" has-session -t "=$1"; fi; exit 0"#, name)
+    }
+
     /// Creates a detached session. `cwd` is `$2` and only used when not empty.
     public static func newArgv(name: String, cwd: String? = nil) -> [String] {
         script(
