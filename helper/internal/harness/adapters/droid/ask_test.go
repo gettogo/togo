@@ -161,3 +161,21 @@ func TestRealExecHooksShape(t *testing.T) {
 		t.Fatal("no PostToolUse in the real run")
 	}
 }
+
+// An answer that mentions "dismissed" or "cancelled by user" is still an
+// answer; only a result with no answer blocks is a cancel.
+func TestAskAnswerWordsAreNotACancel(t *testing.T) {
+	in := json.RawMessage(`{"questionnaire":"1. [question] Banner\nWhat should the banner do?\n[option] stay\n[option] hide"}`)
+	for _, ans := range []string{"the banner should be dismissed on tap", "cancelled by user requests only"} {
+		resp, _ := json.Marshal("1. [question] Banner\n[answer] " + ans)
+		got := askAnswered("AskUser", in, resp)
+		if len(got) != 1 || len(got["0"]) != 1 || got["0"][0] != ans {
+			t.Errorf("%q: answers %v", ans, got)
+		}
+	}
+	resp, _ := json.Marshal("User cancelled by user")
+	got := askAnswered("AskUser", in, resp)
+	if len(got) != 1 || len(got["0"]) != 0 {
+		t.Errorf("cancel answers %v", got)
+	}
+}

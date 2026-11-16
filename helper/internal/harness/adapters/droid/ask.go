@@ -219,15 +219,6 @@ func askAnswered(tool string, input, response json.RawMessage) map[string][]stri
 	if text == "" {
 		return nil
 	}
-	low := strings.ToLower(text)
-	if strings.Contains(low, "cancelled askuser") || strings.Contains(low, "askuser cancelled") ||
-		strings.Contains(low, "cancelled by user") || strings.Contains(low, "dismissed") {
-		out := map[string][]string{}
-		for _, x := range q.Questions {
-			out[x.ID] = []string{}
-		}
-		return out
-	}
 	answers := map[int]string{}
 	cur := 0
 	var buf []string
@@ -254,6 +245,17 @@ func askAnswered(tool string, input, response json.RawMessage) map[string][]stri
 	}
 	save()
 	if len(answers) == 0 {
+		// No answer block: a cancel says so in words, anything else is
+		// unreadable.
+		low := strings.ToLower(text)
+		if strings.Contains(low, "cancelled askuser") || strings.Contains(low, "askuser cancelled") ||
+			strings.Contains(low, "cancelled by user") || strings.Contains(low, "dismissed") {
+			out := map[string][]string{}
+			for _, x := range q.Questions {
+				out[x.ID] = []string{}
+			}
+			return out
+		}
 		return nil
 	}
 	out := map[string][]string{}
