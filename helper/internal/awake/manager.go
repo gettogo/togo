@@ -93,17 +93,22 @@ type Manager struct {
 	idleSince time.Time
 	poke      chan struct{}
 
-	mu         sync.Mutex
-	settings   Settings
-	holding    bool
-	holdErr    error
-	overrideOn bool
-	overErr    error
-	belowFloor bool
-	power      Power
-	powerAt    time.Time
-	last       *Status
-	stopped    bool
+	mu       sync.Mutex
+	settings Settings
+	holding  bool
+	holdErr  error
+	// holdFails counts holds that failed or ended on their own without
+	// lasting; holdRetryAt is the earliest the next try may start.
+	holdFails   int
+	holdSince   time.Time
+	holdRetryAt time.Time
+	overrideOn  bool
+	overErr     error
+	belowFloor  bool
+	power       Power
+	powerAt     time.Time
+	last        *Status
+	stopped     bool
 }
 
 // New loads the settings from cfg.Home. A bad settings file is logged and
@@ -264,7 +269,7 @@ func (m *Manager) Update(ctx context.Context) Status {
 	}
 	want := m.cfg.Supported && s.Mode != ModeOff && (active || grace)
 
-	m.applyHold(want)
+	m.applyHold(want, now)
 
 	discharging := pw.Source == PowerBattery && !pw.Charging
 	switch {
@@ -308,7 +313,7 @@ func (m *Manager) Update(ctx context.Context) Status {
 	return st
 }
 
-func (m *Manager) applyHold(want bool) {
+func (m *Manager) applyHold(want bool, now time.Time) {
 	h := m.cfg.Holder
 	if h == nil {
 		return
@@ -316,16 +321,23 @@ func (m *Manager) applyHold(want bool) {
 	if m.holding {
 		if err := h.Err(); err != nil {
 			m.holding = false
+			m.holdFailed(now)
 			m.setHoldErr(err)
+		} else if m.holdFails > 0 && now.Sub(m.holdSince) >= holdLasting {
+			m.holdFails = 0
 		}
 	}
 	switch {
 	case want && !m.holding:
+		if now.Before(m.holdRetryAt) {
+			return
+		}
 		if err := h.Hold(); err != nil {
+			m.holdFailed(now)
 			m.setHoldErr(err)
 			return
 		}
-		m.holding = true
+		m.holding, m.holdSince = true, now
 		m.setHoldErr(nil)
 	case !want:
 		if m.holding {
@@ -334,8 +346,28 @@ func (m *Manager) applyHold(want bool) {
 			}
 			m.holding = false
 		}
-		m.holdErr = nil
+		m.holdErr, m.holdFails, m.holdRetryAt = nil, 0, time.Time{}
 	}
+}
+
+// Retries of a hold that keeps failing (a refused logind block starts and
+// exits at once): the first retry is the next update, then the wait
+// doubles from tick up to holdRetryMax. A hold that lasts holdLasting
+// starts the count again.
+const (
+	holdRetryMax = 5 * time.Minute
+	holdLasting  = time.Minute
+)
+
+func (m *Manager) holdFailed(now time.Time) {
+	m.holdFails++
+	if m.holdFails < 2 {
+		m.holdRetryAt = time.Time{}
+		return
+	}
+	wait := min(tick<<(m.holdFails-2), holdRetryMax)
+	m.holdRetryAt = now.Add(wait)
+	m.cfg.Logf("awake: hold failed %d times in a row; next try in %s", m.holdFails, wait)
 }
 
 // setHoldErr records a hold failure, logging it only when it changes so a
