@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -117,5 +118,20 @@ func TestSQLiteWatchSkipsUnchangedDatabase(t *testing.T) {
 	}
 	if w.queries != 2 || got != 2 {
 		t.Fatalf("queries = %d, emitted = %d", w.queries, got)
+	}
+}
+
+// Without a sqlite3 program the feed fails at once, in words that do not
+// read as a missing database.
+func TestSQLiteWatchFailsPlainlyWithoutProgram(t *testing.T) {
+	p, env := sqliteDB(t, `create table m(id integer primary key, v text);`)
+	old := sqliteFallback
+	sqliteFallback = filepath.Join(t.TempDir(), "no-sqlite3")
+	defer func() { sqliteFallback = old }()
+	env.Vars[VarPath] = t.TempDir()
+	w := &sqliteWatch{q: spec.SQLite{Path: p, Query: "select id from m"}, path: p, name: "db", seen: map[string]string{}}
+	err := w.poll(context.Background(), env, func(harness.Record) {})
+	if err == nil || strings.Contains(err.Error(), "no such file") {
+		t.Fatalf("err = %v", err)
 	}
 }
