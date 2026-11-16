@@ -109,6 +109,7 @@ type Sender struct {
 	held        heldPushes
 	exits       map[string]string // session id -> the exit last announced
 	requests    requestSeen       // needs_you pushed or closed, per request id
+	retries     map[string]int    // request id -> needs_you sends that reached no device
 
 	liveMu           sync.Mutex
 	liveDev          map[string]*deviceLive

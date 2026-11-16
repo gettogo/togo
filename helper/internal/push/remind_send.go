@@ -15,12 +15,17 @@ func (s *Sender) afterDeliver(m Message, res []Result, sid string) {
 	switch m.Plaintext.Kind {
 	case wire.PushClear:
 		s.Remind.Cancel(m.Plaintext.RequestID)
+		s.forgetRetry(m.Plaintext.RequestID)
 	case wire.PushNeedsYou:
 		for _, r := range res {
 			if r.Err == nil {
+				s.forgetRetry(m.Plaintext.RequestID)
 				s.Remind.Schedule(m)
 				return
 			}
+		}
+		if len(res) > 0 {
+			s.retryLater(m)
 		}
 	}
 }
