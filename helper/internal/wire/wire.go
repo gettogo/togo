@@ -39,6 +39,9 @@ const (
 	// CapExpiry: a needs_you push and the Live Activity context say when
 	// the request stops taking answers.
 	CapExpiry = "expiry.v1"
+	// CapForegroundDevice: events.subscribe takes deviceId, and only that
+	// device is left out of pushes while its app is on screen.
+	CapForegroundDevice = "fgdevice.v1"
 )
 
 // App-facing methods.

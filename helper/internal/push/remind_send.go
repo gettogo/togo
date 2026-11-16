@@ -46,9 +46,11 @@ func (s *Sender) cancelReminders(ev wire.Event, sid string) {
 // deliverReminder sends a reminder unless the machine or session is muted
 // or an app is in the foreground, which has the request in front of it.
 func (s *Sender) deliverReminder(ctx context.Context, m Message) {
-	if s.Hub.ForegroundSubscribers() > 0 || (s.Muted != nil && s.Muted()) {
+	all, skip := s.front()
+	if all || (s.Muted != nil && s.Muted()) {
 		return
 	}
+	m.skip = skip
 	if m.Plaintext.SessionID != nil && s.Session != nil {
 		if info, _ := s.Session(*m.Plaintext.SessionID); info.Muted {
 			return
