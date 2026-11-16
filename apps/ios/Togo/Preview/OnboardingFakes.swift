@@ -9,6 +9,7 @@ import TogoKit
     var outcomes: [ConnectOutcome]
     var newKey: HostKeyPrompt?
     private(set) var connected: [HostProfile] = []
+    private(set) var passwords: [String?] = []
     private(set) var trustAnswers: [Bool] = []
     /// The answers sent with each connect, nil when there were none.
     private(set) var answered: [[String]?] = []
@@ -53,6 +54,7 @@ import TogoKit
         trustNewKey: @escaping @Sendable (HostKeyPrompt) async -> Bool
     ) async -> ConnectOutcome {
         connected.append(profile)
+        passwords.append(password)
         answered.append(answers)
         if let prompt = newKey {
             newKey = nil

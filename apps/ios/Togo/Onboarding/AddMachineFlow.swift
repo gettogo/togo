@@ -301,7 +301,7 @@ enum ConnectPhase: Equatable, Sendable {
         }
         guard let profile = draft.profile(id: id, deviceKeyID: deviceKey?.id) else { return }
         self.profile = profile
-        let password = draft.auth == .password ? draft.password : nil
+        let password = draft.auth == .password && !draft.password.isEmpty ? draft.password : nil
         let given = answers
         answers = nil
         let outcome = await services.connect(profile, password: password, answers: given) { [weak self] prompt in
