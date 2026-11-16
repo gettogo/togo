@@ -62,6 +62,7 @@ import UIKit
         if let palette {
             palette.dismiss(animated: true)
             self.palette = nil
+            if !edit { return }
         }
         if edit {
             onEdit()

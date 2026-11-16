@@ -103,6 +103,7 @@ extension AppStore {
     /// ⌘K: the roster's search. Beside the terminal it shows the roster column; in a compact
     /// window it goes back to the roster. Tabs stay attached either way.
     func showControlCenter() {
+        guard sheet?.isForm != true else { return }
         if workspaceInline {
             sidebar.hidden = false
         } else {
@@ -116,7 +117,7 @@ extension AppStore {
 
     /// ⌘T: the prompt bar's start line where the bar shows it, else the new-session sheet.
     func requestStart() {
-        guard !services.hosts.isEmpty, reviewing == nil else { return }
+        guard !services.hosts.isEmpty, reviewing == nil, sheet?.isForm != true else { return }
         startRequests += 1
     }
 

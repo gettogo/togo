@@ -301,6 +301,7 @@ import UIKit
         guard let entry = entries.removeValue(forKey: id) else { return }
         if !keepHost { hosts[id] = nil }
         phases[id] = nil
+        for window in windows { window.store.setLink(.connecting, for: id) }
         entry.feed.cancel()
         entry.handle.stop()
     }

@@ -82,6 +82,15 @@ import TogoKit
         #expect(services.stoppedTerminals == [tab("s-01")])
     }
 
+    @Test func evictedListedTabDoesNotKeepAStaleLiveLink() throws {
+        let a = store()
+        open("s-01", in: a, window: left)
+        a.setLink(.live(transport: "SSH", note: nil), for: tab("s-01"))
+        for session in ["s-02", "s-04", "s-05", "s-scratch"] { open(session, in: a, window: left) }
+        #expect(!pool.attached.contains(tab("s-01")))
+        #expect(try #require(a.workspace.tabs.first { $0.id == tab("s-01") }).link == .connecting)
+    }
+
     @Test func showHereMovesTheTerminal() {
         let a = store(), b = store()
         open("s-01", in: a, window: left)
