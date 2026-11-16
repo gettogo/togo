@@ -83,6 +83,8 @@ type Handlers struct {
 	// Clock and NewJobID default to time.Now and wire.NewJobID.
 	Clock    func() time.Time
 	NewJobID func() string
+	// TurnStarted, when set, hears of each prompt hook: a new turn began.
+	TurnStarted func(sessionID string)
 	// Harness, when set, receives every hook of a managed session with the
 	// agent's raw payload (nil from helpers that do not forward it), after
 	// the hook's own effects.
@@ -209,6 +211,9 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	switch ev.Event {
 	case EventPrompt:
+		if h.TurnStarted != nil {
+			h.TurnStarted(id)
+		}
 		// A new turn makes any prompt left from the last one moot.
 		h.closeAgentPrompts(id)
 		h.Hub.SetStatus(id, statusWorking, nil)

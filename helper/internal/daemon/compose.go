@@ -181,7 +181,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	if svc.Manifest != nil {
 		svc.Manifest.Logf = logf
 	}
-	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach, DoneGrace: 3 * time.Second}
+	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach, DoneGrace: 3 * time.Second, TurnStarted: pub.newTurn}
 	c.Local.Agents = &local.AgentCache{Lookup: func(ctx context.Context, id string) string {
 		sess, err := svc.Resolve(ctx, id)
 		if err != nil {
@@ -426,6 +426,14 @@ func (d *doneDedupe) Publish(kind string, sessionID *string, payload any) {
 		d.mu.Unlock()
 	}
 	d.pub.Publish(kind, sessionID, payload)
+}
+
+// newTurn forgets the session's last done: a prompt started another turn,
+// and its end is a new thing to report however soon it comes.
+func (d *doneDedupe) newTurn(sessionID string) {
+	d.mu.Lock()
+	delete(d.last, sessionID)
+	d.mu.Unlock()
 }
 
 func isDone(payload any) bool {

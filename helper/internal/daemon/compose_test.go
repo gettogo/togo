@@ -41,6 +41,24 @@ func TestDoneNotifyDedupedPerTurn(t *testing.T) {
 	}
 }
 
+// A follow-up prompt starts another turn: its end is reported even when
+// it comes within the window of the last one.
+func TestDoneOfAQuickSecondTurnIsReported(t *testing.T) {
+	rec := &recordPub{}
+	now := time.Unix(1000, 0)
+	d := newDoneDedupe(rec, func() time.Time { return now })
+	a := "s_aaaaaaaaaa"
+	done := wire.NotifyEvent{Title: "Claude finished", Level: wire.LevelDone}
+	d.Publish(wire.EventNotify, &a, done)
+	now = now.Add(20 * time.Second)
+	d.newTurn(a)
+	d.Publish(wire.EventNotify, &a, done)
+	d.Publish(wire.EventNotify, &a, done) // the idle timer after the Stop hook
+	if got := strings.Join(rec.kinds, " "); got != "notify:done notify:done" {
+		t.Fatalf("published %q, want one done per turn", got)
+	}
+}
+
 func TestMailboxDevicesMarkDeadAndDropUnpaired(t *testing.T) {
 	home := t.TempDir()
 	c := &Components{Push: &push.Service{Home: home}, logf: t.Logf}
