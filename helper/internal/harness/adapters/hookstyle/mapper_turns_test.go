@@ -134,3 +134,34 @@ func TestSubagentRowsCarryRunStates(t *testing.T) {
 		t.Fatalf("states %v", states)
 	}
 }
+
+// Copilot's subagent hooks carry the agent's name and no id: two agents of
+// one type get a row each, and a turn that ends closes what never stopped.
+func TestSubagentRowsAreKeyedPerAgentAndClosedWithTheTurn(t *testing.T) {
+	d, _ := For("copilot")
+	m := New(harness.Env{SessionID: "s-sub"}, Options{Name: "copilot.hooks"})
+	rows := map[string]string{}
+	step := func(i int, event, body string) {
+		_, norm, err := Normalize(d, event, []byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, ops := m.Map(harness.Record{At: t0.Add(time.Duration(i) * time.Second), Data: norm})
+		for _, op := range ops {
+			if op.Section == harness.SectionAgents {
+				rows[op.Row.ID] = op.Row.State
+			}
+		}
+	}
+	step(0, "userPromptSubmitted", `{"prompt":"go"}`)
+	step(1, "subagentStart", `{"agentName":"explore"}`)
+	step(2, "subagentStart", `{"agentName":"explore"}`)
+	step(3, "subagentStop", `{"agentName":"explore"}`)
+	if len(rows) != 2 || rows["explore"] != harness.StateOK || rows["explore#2"] != harness.StateRunning {
+		t.Fatalf("after one stop: %v", rows)
+	}
+	step(4, "userPromptSubmitted", `{"prompt":"go on"}`) // interrupts the turn
+	if rows["explore#2"] != harness.StateCancelled {
+		t.Fatalf("after the turn ended: %v", rows)
+	}
+}

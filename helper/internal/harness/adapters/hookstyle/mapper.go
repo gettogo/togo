@@ -88,13 +88,17 @@ type Mapper struct {
 	replyFrom    int64
 	// seenCalls are the tool calls the replies read so far requested.
 	seenCalls map[string]bool
+	// agents are the subagent rows not stopped yet, by hook agent id.
+	agents map[string][]agentRow
+	// closed are the ops end made that the Map call in progress returns.
+	closed []harness.Op
 }
 
 // New returns a mapper for one session.
 func New(env harness.Env, opts Options) *Mapper {
 	m := &Mapper{env: env, opts: opts, state: map[string]string{"working": "false", "idle": "true"},
 		steps: map[string]bool{}, running: map[string][]string{}, tools: map[string]harness.Item{},
-		asks: map[string]harness.Item{}, seenCalls: map[string]bool{}}
+		asks: map[string]harness.Item{}, seenCalls: map[string]bool{}, agents: map[string][]agentRow{}}
 	if env.Cwd != "" {
 		// Sources filter the harness's session lists by $state.cwd.
 		m.state["cwd"] = env.Cwd
@@ -166,6 +170,14 @@ type payload struct {
 
 // Map reads one payload.
 func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
+	items, ops := m.mapRecord(rec)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ops, m.closed = append(ops, m.closed...), nil
+	return items, ops
+}
+
+func (m *Mapper) mapRecord(rec harness.Record) ([]harness.Item, []harness.Op) {
 	var p payload
 	if json.Unmarshal(rec.Data, &p) != nil {
 		return nil, nil
@@ -289,7 +301,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case PostCompact:
 		return m.notice(at, harness.NoticeCompacted, "info", "Conversation compacted"), nil
 	case SubagentStart, SubagentStop:
-		return nil, agentOps(p, at)
+		return nil, m.agentOps(p, at)
 	case TaskCreated, TaskCompleted:
 		ops := planOps(p)
 		m.planned = m.planned || len(ops) > 0
@@ -344,6 +356,14 @@ func (m *Mapper) begin(at time.Time) {
 // end closes the turn, with the final reply when the payload carries it.
 func (m *Mapper) end(p payload, at time.Time, draw bool, state string) []harness.Item {
 	m.idle(at)
+	rowState := harness.StateOK
+	switch state {
+	case harness.StateInterrupted:
+		rowState = harness.StateCancelled
+	case harness.StateFailed:
+		rowState = harness.StateFailed
+	}
+	m.closed = append(m.closed, m.closeAgents(rowState)...)
 	clearDrawn(m.env.SessionID, m.turn)
 	if !draw || m.turn == "" {
 		return nil

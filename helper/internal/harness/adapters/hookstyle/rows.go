@@ -2,22 +2,53 @@ package hookstyle
 
 import (
 	"encoding/json"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
 
-// agentOps turns a subagent hook into an agent row.
-func agentOps(p payload, at time.Time) []harness.Op {
+// agentOps turns a subagent hook into an agent row. Rows are keyed by the
+// hook's agent id; Copilot names only the agent type, so a second agent of
+// a running type gets its own row and a stop closes the oldest of its type.
+func (m *Mapper) agentOps(p payload, at time.Time) []harness.Op {
 	if p.AgentID == "" {
 		return nil
 	}
 	row := harness.Row{ID: p.AgentID, Title: firstOf(p.AgentType, "Subagent"), State: harness.StateRunning, Started: &at}
+	open := m.agents[p.AgentID]
 	if p.Event == SubagentStop {
+		if len(open) > 0 {
+			row.ID, m.agents[p.AgentID] = open[0].id, open[1:]
+			row.Title = open[0].title
+		}
 		row.State, row.Started = harness.StateOK, nil
+	} else {
+		if len(open) > 0 {
+			row.ID = p.AgentID + "#" + strconv.Itoa(len(open)+1)
+		}
+		m.agents[p.AgentID] = append(open, agentRow{row.ID, row.Title})
 	}
 	return []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}}
+}
+
+type agentRow struct{ id, title string }
+
+// closeAgents ends the agent rows no SubagentStop closed: the turn that
+// started them is over.
+func (m *Mapper) closeAgents(state string) []harness.Op {
+	var ops []harness.Op
+	for key, open := range m.agents {
+		for _, a := range open {
+			ops = append(ops, harness.Op{Op: harness.OpUpsert, Section: harness.SectionAgents,
+				Row: &harness.Row{ID: a.id, Title: a.title, State: state}})
+		}
+		delete(m.agents, key)
+	}
+	slices.SortFunc(ops, func(a, b harness.Op) int { return strings.Compare(a.Row.ID, b.Row.ID) })
+	return ops
 }
 
 // isPlanTool is a todo or plan tool by name.
