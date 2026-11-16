@@ -193,6 +193,9 @@ func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.I
 	id := str(e, "id")
 	parent := e["parentSession"]
 	if main || parent == nil || parent == "" {
+		if main && s.state["harness_session"] != "" {
+			s.restart()
+		}
 		s.cur = ""
 		if id != "" {
 			s.state["harness_session"] = id
@@ -234,6 +237,29 @@ func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.I
 	s.cur = agentID
 	it := *s.agents[agentID]
 	return []harness.Item{it}, []harness.Op{s.agentRow(&it)}
+}
+
+// restart forgets what the main conversation accumulated, for a header
+// read again: the file is replayed (a feed restart) or the terminal moved
+// to another one. Spend, step counts, the plan and running tools come from
+// the records that follow, not from the pass before. Agent rows, which are
+// keyed by task id, are kept: their files are read by another feed.
+func (s *session) restart() {
+	s.turn, s.cost, s.usage = nil, 0, nil
+	for id, it := range s.tools {
+		if it.Parent == "" {
+			delete(s.tools, id)
+		}
+	}
+	for id, it := range s.asks {
+		if it.Parent == "" {
+			delete(s.asks, id)
+		}
+	}
+	s.jobs = map[string]*harness.Item{}
+	s.todo, s.todoBefore, s.todoUnread = nil, map[string][]todoPhase{}, map[string]bool{}
+	s.files = map[string]bool{}
+	delete(s.state, "compactions")
 }
 
 func (s *session) parentOf(e map[string]any) string {

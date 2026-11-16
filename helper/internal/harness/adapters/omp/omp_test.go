@@ -470,3 +470,35 @@ func TestReusedTaskIDKeepsRunsApart(t *testing.T) {
 		t.Fatalf("first %+v second %+v", first.Agent, second.Agent)
 	}
 }
+
+// A feed restart reads the same file again through the same mapper: spend,
+// compactions and step counts are those of the file, not doubled.
+func TestReplayDoesNotDoubleCount(t *testing.T) {
+	once := newSession(env())
+	first := run(once, records(t, "session.jsonl", "session"))
+	twice := newSession(env())
+	second := run(twice, records(t, "session.jsonl", "session"), records(t, "session.jsonl", "session"))
+	lastCost := func(m mapped) *float64 {
+		var c *float64
+		for _, op := range m.Ops {
+			if op.Status != nil && op.Status.CostUSD != nil {
+				c = op.Status.CostUSD
+			}
+		}
+		return c
+	}
+	a, b := lastCost(first), lastCost(second)
+	if a == nil || b == nil || *a != *b {
+		t.Fatalf("cost once %v, twice %v", a, b)
+	}
+	if once.State()["compactions"] != twice.State()["compactions"] {
+		t.Fatalf("compactions %q then %q", once.State()["compactions"], twice.State()["compactions"])
+	}
+	for id, it := range first.last() {
+		if it.Kind == harness.KindTurn {
+			if got := second.last()[id].Turn; got.Steps != it.Turn.Steps || got.FilesChanged != it.Turn.FilesChanged {
+				t.Fatalf("turn %s once %+v twice %+v", id, it.Turn, got)
+			}
+		}
+	}
+}

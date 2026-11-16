@@ -57,8 +57,10 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 				AgentID: strings.TrimPrefix(aid, "agent-"), Name: truncate(t.title, harness.MaxTitle), Role: t.role,
 				State: harness.StateRunning, Started: at}}
 			s.agents[aid] = a
-			s.taskCalls[callID] = append(s.taskCalls[callID], aid)
-			s.pending = append(s.pending, aid)
+			if !slices.Contains(s.taskCalls[callID], aid) { // a replay reads the call again
+				s.taskCalls[callID] = append(s.taskCalls[callID], aid)
+				s.pending = append(s.pending, aid)
+			}
 			items = append(items, *a)
 			ops = append(ops, s.agentRow(a))
 		}
