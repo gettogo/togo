@@ -67,6 +67,7 @@ import UIKit
     /// Kept until completion even after close/disappear, so a new call cannot reuse
     /// an in-flight handle that the old call still has to clean up.
     private var opening: [Int: Task<Int?, Never>] = [:]
+    private let forwardOwner = UUID()
     private var poller: Task<Void, Never>?
     private var idleTimer: Task<Void, Never>?
     /// Reads forward events while the screen is up or a forward is open.
@@ -326,7 +327,7 @@ import UIKit
         states[port.port] = .opening
         notes[port.port] = nil
         do {
-            let info = try await services.forward(subject, port: port)
+            let info = try await services.forward(subject, port: port, owner: forwardOwner)
             guard states[port.port] == .opening else {
                 // Closed or left while it opened.
                 await services.stopForward(localPort: info.localPort)

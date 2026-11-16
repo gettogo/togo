@@ -205,6 +205,33 @@ import TogoKit
         await services.stopForward(localPort: info.localPort)
     }
 
+    @Test func newPortsModelDoesNotLoseAnOldModelsOpeningForward() async throws {
+        var waiting: CheckedContinuation<Void, Never>?
+        var calls = 0
+        let services = services(beforeOpen: {
+            calls += 1
+            if calls == 1 { await withCheckedContinuation { waiting = $0 } }
+        }) { RefusingOpener() }
+        let old = PortsModel(subject: subject, services: services)
+        let first = Task { await old.open(port(3000)) }
+        for _ in 0..<100 where waiting == nil { try? await Task.sleep(for: .milliseconds(10)) }
+        let release = try #require(waiting)
+        old.disappear()
+        let next = PortsModel(subject: subject, services: services)
+        var secondStarted = false
+        let second = Task { secondStarted = true; await next.open(port(3000)) }
+        for _ in 0..<100 where !secondStarted { await Task.yield() }
+        release.resume()
+        await first.value
+        await second.value
+        let local = try #require(next.localPort(3000))
+        #expect(services.openLocalPorts == [local])
+        #expect(LoopbackProbe.accepts(local))
+        #expect(old.preview == nil)
+        next.disappear()
+        await services.stopForward(localPort: local)
+    }
+
     @Test func refusedUpstreamBecomesMessage() async throws {
         let opener = RefusingOpener()
         let services = services(opener: opener)

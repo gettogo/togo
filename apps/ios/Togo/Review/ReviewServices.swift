@@ -26,6 +26,8 @@ import TogoKit
     func commit(_ s: ReviewSubject, message: String, amend: Bool, head: String?) async throws -> GitCommitResult
     func ports(_ s: ReviewSubject) async throws -> [ListeningPort]
     func forward(_ s: ReviewSubject, port: ListeningPort) async throws -> ForwardInfo
+    /// An independent preview owner must never inherit another screen's pending cleanup.
+    func forward(_ s: ReviewSubject, port: ListeningPort, owner: UUID) async throws -> ForwardInfo
     func stopForward(localPort: Int) async
     /// Forwards that ended on their own, or whose server stopped answering, with what to tell the
     /// user. Each call returns its own stream; it ends when its reader is cancelled.
@@ -33,6 +35,9 @@ import TogoKit
 }
 
 extension ReviewServices {
+    func forward(_ s: ReviewSubject, port: ListeningPort, owner: UUID) async throws -> ForwardInfo {
+        try await forward(s, port: port)
+    }
     /// Services without a file list: the search falls back to the folders already read.
     func files(_ s: ReviewSubject, ref: String?) async throws -> GitFiles { throw ReviewUnavailable() }
 
