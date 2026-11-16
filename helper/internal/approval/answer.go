@@ -184,7 +184,7 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		return errPromptGone
 	}
 	tgt := target(*a.SessionID)
-	screen, err := s.cfg.Tmux.CapturePane(ctx, tgt)
+	screen, err := s.firstCapture(ctx, tgt)
 	if err != nil {
 		return fmt.Errorf("capture pane: %w", err)
 	}
@@ -337,4 +337,26 @@ func (s *Store) awaitChange(ctx context.Context, tgt, before string) bool {
 		}
 	}
 	return false
+}
+
+// captureRetries are the waits before reading the screen again after a read
+// that failed. Nothing has been typed yet at that point, so reading again is
+// safe, and an answer that came through the relay cannot be sent twice: one
+// failed start of tmux must not lose it.
+var captureRetries = []time.Duration{150 * time.Millisecond, 600 * time.Millisecond}
+
+func (s *Store) firstCapture(ctx context.Context, tgt string) (string, error) {
+	screen, err := s.cfg.Tmux.CapturePane(ctx, tgt)
+	for _, wait := range captureRetries {
+		if err == nil || ctx.Err() != nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return "", err
+		case <-time.After(wait):
+		}
+		screen, err = s.cfg.Tmux.CapturePane(ctx, tgt)
+	}
+	return screen, err
 }
