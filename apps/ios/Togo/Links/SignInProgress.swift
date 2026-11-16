@@ -81,6 +81,13 @@ struct SignInProgress: Equatable {
         phase = .signedIn
     }
 
+    /// The bounded provider watch ended without confirmation. Keep the existing page for
+    /// inspection and offer the same explicit retry as other sign-in failures.
+    mutating func expired(_ message: String) {
+        guard watching else { return }
+        phase = .failed(message)
+    }
+
     /// Trying the command again after a failure.
     mutating func retry() {
         phase = .sending

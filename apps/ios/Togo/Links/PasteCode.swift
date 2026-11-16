@@ -24,7 +24,11 @@ enum CodeSendResult: Equatable {
         case failed(String)
     }
 
-    var text = ""
+    var text = "" {
+        didSet {
+            if phase == .sent, text != oldValue, !text.isEmpty { phase = .editing }
+        }
+    }
     private(set) var phase: Phase = .editing
     let hostID: HostID
     let sessionID: String
