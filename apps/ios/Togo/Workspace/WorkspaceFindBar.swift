@@ -67,3 +67,20 @@ struct WorkspaceFindBar: View {
         withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { missed = value }
     }
 }
+
+/// Owns the exact terminal search that opened Find, even after workspace focus moves.
+@MainActor struct WorkspaceFindState {
+    private(set) var search: TerminalSearch?
+    var isPresented: Bool { search != nil }
+
+    mutating func open(_ search: TerminalSearch) {
+        close()
+        self.search = search
+    }
+
+    mutating func close() {
+        let previous = search
+        search = nil
+        previous?.clear()
+    }
+}
