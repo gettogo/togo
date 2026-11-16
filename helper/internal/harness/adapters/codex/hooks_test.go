@@ -80,8 +80,8 @@ func TestHooksQuietWhileAppServerLive(t *testing.T) {
 	if len(out.items) != 0 {
 		t.Fatalf("hooks drew %d items while the app-server is live", len(out.items))
 	}
-	if hooks.State()["harness_session"] != "thr-9" {
-		t.Fatal("hooks state not kept")
+	if st := hooks.State(); st["harness_session"] != "" || st["model"] != "" {
+		t.Fatalf("hooks overrode the app-server's thread or model: %v", st)
 	}
 	app.Map(harness.Record{Data: json.RawMessage(`{"method":"` + rpc.MethodClosed + `"}`)})
 	out = run(hooks, hookRecs(hookTurn[1]))
@@ -122,5 +122,19 @@ func TestHooksLeaveTurnToLiveAppServer(t *testing.T) {
 	app.Map(harness.Record{Data: json.RawMessage(`{"method":"` + rpc.MethodClosed + `"}`)})
 	if hooks.State()["working"] != "true" {
 		t.Fatal("hooks own working again once the app-server feed closed")
+	}
+}
+
+// Once the app-server feed's connection closes, the hooks' thread and model
+// are the only ones left and are reported again.
+func TestHooksReportSessionAndModelWhenAppServerClosed(t *testing.T) {
+	env := harness.Env{SessionID: "s_closed"}
+	app := NewAppServer(env)
+	run(app, records(t, "appserver-turn.jsonl")[:1])
+	hooks := NewHooks(env)
+	run(hooks, hookRecs(hookTurn...))
+	app.Map(harness.Record{Data: json.RawMessage(`{"method":"` + rpc.MethodClosed + `"}`)})
+	if hooks.State()["harness_session"] != "thr-9" || hooks.State()["model"] != "gpt-5.5" {
+		t.Fatalf("state %v", hooks.State())
 	}
 }
