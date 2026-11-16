@@ -232,7 +232,7 @@ import WidgetKit
         }
         if let notice {
             let model = replyModel(target)
-            if model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.keep(text, problem: notice) }
+            if model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.keep(text, problem: notice, id: id) }
         }
         return notice
     }

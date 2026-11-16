@@ -51,7 +51,8 @@ import WatchKit
     }
 
     /// Words that did not go from elsewhere, such as a notification, kept here with why.
-    func keep(_ words: String, problem: String) {
+    func keep(_ words: String, problem: String, id: String? = nil) {
+        if let id { replyID = id }
         text = words
         attempted = words
         state = .problem(problem)

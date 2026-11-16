@@ -198,6 +198,24 @@ private let session = "s_abcdefghij"
         #expect(store.replyModel(other).text == "carry on", "no draft yet: the words are kept")
     }
 
+    @Test func retryingKeptNotificationWordsKeepsThePhoneDeduplicationID() async {
+        let store = store()
+        let phone = Phone()
+        store.sendReply = { message in phone.sent.append(message); return phone.outcome }
+        let target = WatchReplyMessage.Target.prompt(machineId: host, sessionId: session)
+        _ = await store.replyFromNotification(target: target, text: "carry on", notification: "n-1")
+        let draft = store.replyModel(target)
+        #expect(draft.replyID == phone.sent[0].id)
+        await draft.send()
+        #expect(phone.sent.count == 2)
+        #expect(phone.sent[0].id == phone.sent[1].id)
+        draft.text = "different words"
+        draft.edited()
+        await draft.send()
+        #expect(phone.sent.count == 3)
+        #expect(phone.sent[2].id != phone.sent[0].id)
+    }
+
     /// Run again on a notification shown on the Watch goes to the phone, which starts the
     /// session over its own connection. A retry of the same tap is the same message; a tap that
     /// does not go gets a notice that says why.
