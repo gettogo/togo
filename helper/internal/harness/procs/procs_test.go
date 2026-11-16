@@ -95,3 +95,20 @@ func TestOthersFindsAgentInFolderOutsideTree(t *testing.T) {
 		t.Fatal("counted a process in the tree")
 	}
 }
+
+func TestMatchCommandsBehindInterpreterFlags(t *testing.T) {
+	out := "  21 node --max-old-space-size=4096 /usr/lib/bin/pi\n  22 python3 -m kimi\n  23 node --require ./hook.js /usr/lib/bin/omp\n  24 node --flag /usr/lib/bin/other\n"
+	got := MatchCommands(out, []string{"omp", "pi", "kimi"})
+	if !slices.Equal(got, []int{21, 22, 23}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+// lsof in the C locale prints bytes outside ASCII as \xNN.
+func TestParseLsofEscapedNames(t *testing.T) {
+	real := map[string]string{"/r/caf\u00e9/a.jsonl": "/a.jsonl"}
+	got := ParseLsof([]byte("p42\nn/r/caf\\xc3\\xa9/a.jsonl\n"), real)
+	if !slices.Equal(got["/a.jsonl"], []int{42}) {
+		t.Fatalf("got %v", got)
+	}
+}
