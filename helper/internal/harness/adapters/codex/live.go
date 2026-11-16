@@ -385,14 +385,23 @@ func (a *AppServer) request(m msg, at time.Time) ([]harness.Item, []harness.Op) 
 		return a.question(key, m.Params, at)
 	case "item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval":
 		var p struct {
-			ItemID             string   `json:"itemId"`
-			ThreadID           string   `json:"threadId"`
-			TurnID             string   `json:"turnId"`
-			Reason             string   `json:"reason"`
-			AvailableDecisions []string `json:"availableDecisions"`
+			ItemID             string            `json:"itemId"`
+			ThreadID           string            `json:"threadId"`
+			TurnID             string            `json:"turnId"`
+			Reason             string            `json:"reason"`
+			AvailableDecisions []json.RawMessage `json:"availableDecisions"`
 		}
 		if json.Unmarshal(m.Params, &p) != nil {
 			return nil, nil
+		}
+		// A decision is a name, or an object for the amendment kinds
+		// ({"acceptWithExecpolicyAmendment": {...}}); only names are offered.
+		var decisions []string
+		for _, raw := range p.AvailableDecisions {
+			var d string
+			if json.Unmarshal(raw, &d) == nil {
+				decisions = append(decisions, d)
+			}
 		}
 		var items []harness.Item
 		x, ok := a.tools[p.ItemID]
@@ -409,7 +418,7 @@ func (a *AppServer) request(m msg, at time.Time) ([]harness.Item, []harness.Op) 
 			}
 			return items, nil
 		}
-		if q, ok := a.approval(key, m.Method, x, ok, p.ThreadID, p.TurnID, p.Reason, p.AvailableDecisions, at); ok {
+		if q, ok := a.approval(key, m.Method, x, ok, p.ThreadID, p.TurnID, p.Reason, decisions, at); ok {
 			items = append(items, q)
 		}
 		return items, nil

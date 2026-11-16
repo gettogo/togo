@@ -403,3 +403,19 @@ func TestCommandApprovalRequestIsAQuestion(t *testing.T) {
 		t.Fatal("an unknown decision was accepted")
 	}
 }
+
+// Codex lists an exec-policy amendment as an object among the decisions;
+// the approval still reaches the phone with the decisions Togo can answer.
+func TestApprovalWithObjectDecisionStillAsks(t *testing.T) {
+	m := NewAppServer(harness.Env{SessionID: "s_obj"})
+	items, _ := m.Map(harness.Record{Data: json.RawMessage(`{"id":9,"method":"item/commandExecution/requestApproval","params":{"threadId":"t","turnId":"u","itemId":"exec-1","reason":null,"availableDecisions":["accept",{"acceptWithExecpolicyAmendment":{"execpolicy_amendment":["git","status"]}},"decline"]}}`)})
+	var q *harness.QuestionBody
+	for _, x := range items {
+		if x.Question != nil {
+			q = x.Question
+		}
+	}
+	if q == nil || q.Approve != "accept" {
+		t.Fatalf("no approval question: %+v", items)
+	}
+}
