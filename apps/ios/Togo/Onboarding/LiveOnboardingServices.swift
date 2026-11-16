@@ -150,6 +150,10 @@ import TogoKit
         try secrets.set(Data(password.utf8), for: account, requireUserPresence: true)
     }
 
+    func hasSavedPassword(for machine: UUID) -> Bool {
+        (try? secrets.contains(SSHConnection.passwordAccount(machine))) ?? false
+    }
+
     func keyLabel(id: String) -> String? {
         (try? keys.info(id: id))?.label
     }

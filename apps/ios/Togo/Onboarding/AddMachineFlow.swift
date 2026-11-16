@@ -49,8 +49,14 @@ enum ConnectOutcome: Equatable, Sendable {
     func forgetHostKey(_ hostID: String) async throws
     /// Keeps `password` for the machine in this device's keychain, or removes it when nil.
     func setSavedPassword(_ password: String?, for machine: UUID) throws
+    /// Metadata only: opening Edit must not ask for or read the password.
+    func hasSavedPassword(for machine: UUID) -> Bool
     /// The label of a key in this device's keychain, or nil when the key is not here.
     func keyLabel(id: String) -> String?
+}
+
+extension OnboardingServices {
+    func hasSavedPassword(for machine: UUID) -> Bool { false }
 }
 
 enum DiscoveryPhase: Equatable, Sendable {

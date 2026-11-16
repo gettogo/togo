@@ -19,4 +19,6 @@ public final class MemorySecretStore: SecretStore {
     public func delete(_ account: String) throws {
         _ = items.withLock { $0.removeValue(forKey: account) }
     }
+
+    public func contains(_ account: String) throws -> Bool { items.withLock { $0[account] != nil } }
 }

@@ -63,6 +63,20 @@ public final class KeychainSecretStore: SecretStore {
         guard status == errSecSuccess || status == errSecItemNotFound else { throw SecretStoreError(status: status) }
     }
 
+    public func contains(_ account: String) throws -> Bool {
+        var query = baseQuery(account)
+        query[kSecReturnAttributes] = true
+        query[kSecMatchLimit] = kSecMatchLimitOne
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext] = context
+        switch operations.find(query as CFDictionary) {
+        case errSecSuccess: return true
+        case errSecItemNotFound: return false
+        case let status: throw SecretStoreError(status: status)
+        }
+    }
+
     private func baseQuery(_ account: String) -> [CFString: Any] {
         [
             kSecClass: kSecClassGenericPassword,
@@ -79,6 +93,7 @@ struct KeychainSecretOperations: Sendable {
     var add: @Sendable (CFDictionary) -> OSStatus
     var update: @Sendable (CFDictionary, CFDictionary) -> OSStatus
     var delete: @Sendable (CFDictionary) -> OSStatus
+    var find: @Sendable (CFDictionary) -> OSStatus = { SecItemCopyMatching($0, nil) }
 
     static let live = Self(
         add: { SecItemAdd($0, nil) }, update: { SecItemUpdate($0, $1) }, delete: { SecItemDelete($0) }

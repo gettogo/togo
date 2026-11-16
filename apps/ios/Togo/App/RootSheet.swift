@@ -158,6 +158,7 @@ extension AddMachineFlow {
         switch profile.auth {
         case .password:
             draft.auth = .password
+            draft.savePassword = services.hasSavedPassword(for: record.id)
         case .key(let id) where id == LiveOnboardingServices.storedDeviceKeyID:
             draft.auth = .deviceKey
         case .key(let id):
