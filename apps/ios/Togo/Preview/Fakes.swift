@@ -20,6 +20,7 @@ import UIKit
     }
 
     var hosts: [HostRecordView]
+    var hostsLoaded = true
     var settings = AppSettings()
     var failure: (any Error)?
     /// Per-path wait before `listDir` answers, to reorder responses in tests.

@@ -67,6 +67,7 @@ import struct TogoPush.Pairing
         let services = services(watches: Watches(), local: local)
         services.showLocalHosts()
         #expect(services.hosts.map(\.id) == [Samples.studio])
+        #expect(services.hostRecord(Samples.studio)?.profile.name == "Studio")
         let arrived = Mutex<[HostID]>([])
         services.onMachineArrived = { id in arrived.withLock { $0.append(id) } }
         let waiting = services.terminal(hostID: Samples.studio, sessionID: "s1", transport: nil, userStarted: true)

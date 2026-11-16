@@ -142,6 +142,12 @@ public struct NotificationServiceCore: Sendable {
         }
         if let bib = p.bib, var link = URLComponents(string: "togo://session/\(bib)") {
             link.queryItems = [URLQueryItem(name: "host", value: opened.pairing.machineName)]
+            if let hostID = opened.pairing.appHostID {
+                link.queryItems?.append(URLQueryItem(name: "hostID", value: hostID.uuidString))
+                if let sessionID = p.sessionId, !sessionID.isEmpty {
+                    link.queryItems?.append(URLQueryItem(name: "sessionID", value: sessionID))
+                }
+            }
             content.targetContentIdentifier = link.string
         }
 

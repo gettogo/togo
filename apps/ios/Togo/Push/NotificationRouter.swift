@@ -19,6 +19,7 @@ struct NotificationResponse: Sendable, Equatable {
 @MainActor final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     /// The session on screen, as its bib and machine name, or nil when no session is in front.
     var frontSession: @MainActor () -> (bib: String, machine: String)? = { nil }
+    var frontIdentity: @MainActor () -> TabID? = { nil }
     /// Opens a `togo://` link.
     var open: @MainActor (DeepLink) -> Void = { _ in }
     /// Answers from a notification action. Tapping the notification itself is handled here.
@@ -29,19 +30,28 @@ struct NotificationResponse: Sendable, Equatable {
     func deliver(to target: @escaping @MainActor () -> AppStore?) {
         open = { target()?.open($0) }
         frontSession = {
-            guard let store = target(), store.workspaceOpen, let tab = store.selectedTab,
+            guard let store = target(), store.workspaceOpen, let tab = store.focusedTab,
                   let bib = store.session(for: tab)?.bib ?? tab.bib else { return nil }
             let machine = store.machineName(for: tab.hostID)
             return machine.isEmpty ? nil : (bib, machine)
+        }
+        frontIdentity = {
+            guard let store = target(), store.workspaceOpen else { return nil }
+            return store.focusedTab?.id
         }
     }
 
     /// A banner for the session the user is looking at would only repeat the screen.
     func presentation(for link: String?) -> UNNotificationPresentationOptions {
-        if let link, let url = URL(string: link), case .session(let bib, let host)? = DeepLink(url: url),
-           let front = frontSession(), front.bib == bib,
-           host.map({ $0.localizedCaseInsensitiveCompare(front.machine) == .orderedSame }) ?? true {
-            return [.list]
+        if let link, let url = URL(string: link),
+           case .session(let bib, let host, let hostID, let sessionID)? = DeepLink(url: url), let front = frontSession() {
+            if let hostID {
+                if let identity = frontIdentity(), identity.hostID == hostID,
+                   sessionID.map({ identity.sessionID == $0 }) ?? (front.bib == bib) { return [.list] }
+            } else if front.bib == bib,
+                      host.map({ $0.localizedCaseInsensitiveCompare(front.machine) == .orderedSame }) ?? true {
+                return [.list]
+            }
         }
         return [.banner, .list, .sound]
     }

@@ -115,6 +115,10 @@ enum LiveCopy {
         pairings?.pairing(hostId: hostId)?.machineName ?? unknownMachine
     }
 
+    static func machineID(hostId: String, pairings: PairingStore?) -> UUID? {
+        pairings?.pairing(hostId: hostId)?.appHostID
+    }
+
     /// The pairings the app shares with its extensions; nil without the app group.
     static func sharedPairings() -> PairingStore? {
         SharedGroup.storeDirectory(SharedGroup.ios).map(PairingStore.init(directory:))
@@ -122,12 +126,14 @@ enum LiveCopy {
 
     /// `togo://session/<bib>?host=<machine>`: the link a tap opens, the same one notifications
     /// carry, so the app lands on the session that is asking.
-    static func link(bib: String?, machine: String?) -> URL? {
+    static func link(bib: String?, machine: String?, hostID: UUID? = nil, sessionID: String? = nil) -> URL? {
         guard let bib, !bib.isEmpty, var parts = URLComponents(string: "togo://session/") else { return nil }
         parts.path = "/" + bib
-        if let machine, !machine.isEmpty, machine != unknownMachine {
-            parts.queryItems = [URLQueryItem(name: "host", value: machine)]
-        }
+        var items: [URLQueryItem] = []
+        if let machine, !machine.isEmpty, machine != unknownMachine { items.append(URLQueryItem(name: "host", value: machine)) }
+        if let hostID { items.append(URLQueryItem(name: "hostID", value: hostID.uuidString)) }
+        if let sessionID, !sessionID.isEmpty { items.append(URLQueryItem(name: "sessionID", value: sessionID)) }
+        if !items.isEmpty { parts.queryItems = items }
         return parts.url
     }
 

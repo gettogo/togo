@@ -20,10 +20,10 @@ struct NotificationServiceCoreTests {
         NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { Self.now })
     }
 
-    func pair(_ hostID: String, name: String) {
+    func pair(_ hostID: String, name: String, appHostID: UUID? = nil) {
         pairings.put(Pairing(
             hostId: hostID, hostKey: Base64URL.encode(Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation),
-            relayURL: URL(string: "https://relay.example")!, machineName: name, appHostID: nil, pairedAt: Self.now,
+            relayURL: URL(string: "https://relay.example")!, machineName: name, appHostID: appHostID, pairedAt: Self.now,
             tokenHash: "a1b2c3", liveActivityCommand: false
         ))
     }
@@ -61,6 +61,16 @@ struct NotificationServiceCoreTests {
     func expectQuiet(_ content: UNNotificationContent, _ comment: Comment) {
         #expect(Seen(content) == Seen.quiet, comment)
         #expect(content.sound == nil && content.interruptionLevel == .passive, comment)
+    }
+
+    @Test func notificationLinksRetainThePairedMachineAndExactSession() throws {
+        let id = UUID()
+        pair(Self.hostID, name: "Saved alias", appHostID: id)
+        let content = core.process(try generic()).content
+        let text = try #require(content.targetContentIdentifier)
+        let url = try #require(URLComponents(string: text))
+        #expect(url.queryItems?.first { $0.name == "hostID" }?.value == id.uuidString)
+        #expect(url.queryItems?.first { $0.name == "sessionID" }?.value == "s_abcdefghij")
     }
 
     @Test func opensAndRenders() throws {

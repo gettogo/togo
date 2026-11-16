@@ -39,6 +39,8 @@ import TogoKit
     var pastedImage: PastedImage?
     /// A session link waiting for its machine to report.
     var pendingLink: DeepLink?
+    @ObservationIgnored var linkGeneration = UUID()
+    @ObservationIgnored var pendingLinkTask: Task<Void, Never>?
     /// What a link asked the next new-session sheet to start with. The sheet that reads it
     /// takes it, so it is not observed.
     @ObservationIgnored var newSessionPrefill: NewSessionPrefill?

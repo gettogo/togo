@@ -28,20 +28,21 @@ struct NewSessionIntent: AppIntent {
     }
 
     @MainActor func perform() async throws -> some IntentResult {
-        IntentHub.current.open(Self.link(machine: machine.name, folder: folder, preset: agent?.id))
+        IntentHub.current.open(Self.link(machine: machine.name, hostID: machine.id, folder: folder, preset: agent?.id))
         return .result()
     }
 
     /// Built as a URL and read back, so the intent's link passes the same checks as any other.
-    static func link(machine: String, folder: String?, preset: UUID?) -> DeepLink {
+    static func link(machine: String, hostID: HostID? = nil, folder: String?, preset: UUID?) -> DeepLink {
         var parts = URLComponents()
         parts.scheme = DeepLink.scheme
         parts.host = "new"
         parts.queryItems = [
             URLQueryItem(name: "host", value: machine),
+            hostID.map { URLQueryItem(name: "hostID", value: $0.uuidString) },
             folder.map { URLQueryItem(name: "folder", value: $0) },
             preset.map { URLQueryItem(name: "agent", value: $0.uuidString) },
         ].compactMap { $0 }
-        return parts.url.flatMap(DeepLink.init(url:)) ?? .newSession(host: machine)
+        return parts.url.flatMap(DeepLink.init(url:)) ?? .newSession(host: machine, hostID: hostID)
     }
 }

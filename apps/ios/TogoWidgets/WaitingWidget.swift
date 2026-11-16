@@ -22,13 +22,14 @@ struct WaitingSummary: Equatable {
         self.oldest = oldest
     }
 
-    init(requests: [PendingRequest], now: Date, machineName: (String) -> String) {
+    init(requests: [PendingRequest], now: Date, machineID: (String) -> UUID? = { _ in nil }, machineName: (String) -> String) {
         let open = Self.open(requests, now: now)
         count = open.count
         oldest = open.first.map { request in
             Oldest(
                 bib: request.bib, agent: request.agent ?? "",
-                link: LiveCopy.link(bib: request.bib, machine: request.host ?? machineName(request.hostId))
+                link: LiveCopy.link(bib: request.bib, machine: machineName(request.hostId),
+                    hostID: machineID(request.hostId), sessionID: request.sessionId)
             )
         }
     }
@@ -70,7 +71,8 @@ struct WaitingProvider: TimelineProvider {
 
     private func entry(at date: Date, requests: [PendingRequest]) -> WaitingEntry {
         let pairings = LiveCopy.sharedPairings()
-        return WaitingEntry(date: date, summary: WaitingSummary(requests: requests, now: date) {
+        return WaitingEntry(date: date, summary: WaitingSummary(requests: requests, now: date,
+            machineID: { LiveCopy.machineID(hostId: $0, pairings: pairings) }) {
             LiveCopy.machineName(hostId: $0, pairings: pairings)
         })
     }

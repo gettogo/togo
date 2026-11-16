@@ -106,8 +106,9 @@ import UIKit
     /// machines elsewhere never flashes first run. Monitors start in `start()`.
     func showLocalHosts() {
         guard !hostsLoaded else { return }
-        let local = hostStore.localHosts()
+        let local = deviceMachines.resolve(hostStore.localHosts())
         guard !local.isEmpty else { return }
+        records = Dictionary(local.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         hosts = local.map(Self.view(of:))
         hostsLoaded = true
     }
@@ -262,7 +263,7 @@ import UIKit
     }
 
     func terminal(hostID: HostID, sessionID: String, transport: TransportPreference?, userStarted: Bool) -> TerminalHandle {
-        guard let record = records[hostID] else { return awaitingMachine(hostID) }
+        guard recordsLoaded, let record = records[hostID] else { return awaitingMachine(hostID) }
         let preference = transport ?? (record.profile.transport == .auto ? settings.transport : record.profile.transport)
         let prompter = AttachPrompter(
             prompts: attachPrompts, hostID: hostID, machine: record.profile.name,
