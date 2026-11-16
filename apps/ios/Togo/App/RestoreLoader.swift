@@ -16,7 +16,7 @@ enum RestoreActions {
     static func title(_ action: RestoreAction) -> String {
         switch action {
         case .restore: String(localized: "restore.restore", defaultValue: "Restore")
-        case .restoreAndContinue: String(localized: "restore.restoreContinue", defaultValue: "Restore and continue")
+        case .restoreAndContinue: String(localized: "restore.restoreContinue", defaultValue: "Restore and Continue")
         }
     }
 }

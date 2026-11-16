@@ -154,7 +154,7 @@ struct AnswerOptionsSheet: View {
 }
 
 enum AnswerOptionsCopy {
-    static let title = String(localized: "answers.more.title", defaultValue: "More answers")
+    static let title = String(localized: "answers.more.title", defaultValue: "More Answers")
     static let cancel = String(localized: "answers.more.cancel", defaultValue: "Cancel")
     static let show = String(localized: "answers.more.show", defaultValue: "More")
     static let hide = String(localized: "answers.more.hide", defaultValue: "Fewer")

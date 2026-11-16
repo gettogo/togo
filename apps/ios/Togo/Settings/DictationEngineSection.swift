@@ -200,8 +200,8 @@ extension DictationCopy {
         localized: "dictation.whisper.footer", defaultValue: "Downloaded once from Hugging Face, then runs on this device."
     )
     static let whisperDownloaded = String(localized: "dictation.whisper.downloaded", defaultValue: "Downloaded")
-    static let whisperCancel = String(localized: "dictation.whisper.cancel", defaultValue: "Cancel download")
-    static let whisperDelete = String(localized: "dictation.whisper.delete", defaultValue: "Delete model")
+    static let whisperCancel = String(localized: "dictation.whisper.cancel", defaultValue: "Cancel Download")
+    static let whisperDelete = String(localized: "dictation.whisper.delete", defaultValue: "Delete Model")
     static let whisperFailed = String(
         localized: "dictation.whisper.failed",
         defaultValue: "The download didn't finish. Dictation keeps using Apple speech."

@@ -43,7 +43,7 @@ struct ChecklistPrimitive: View {
         // Refreshes are network-driven, so the swap is keyed on emptiness alone.
         // motion: state change — empty ↔ items crossfade in place.
         .motion(.respond, value: checklist.items.isEmpty)
-        .accessibilityRotor(String(localized: "primitive.rotor.open", defaultValue: "Open items")) {
+        .accessibilityRotor(String(localized: "primitive.rotor.open", defaultValue: "Open Items")) {
             ForEach(ChecklistLogic.flatten(checklist.items).filter { !ChecklistLogic.isFinished($0.item.state) }, id: \.item.id) { entry in
                 AccessibilityRotorEntry(entry.item.text, id: entry.item.id)
             }

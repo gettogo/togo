@@ -12,6 +12,9 @@ struct RosterModel: Equatable {
 
         var name: String { machine.name }
         var count: Int { lines.count }
+        var togoLines: [Line] { lines.filter { SessionActions.wasStartedInTogo($0.row, on: machine) } }
+        var terminalOnlyLines: [Line] { lines.filter { !SessionActions.wasStartedInTogo($0.row, on: machine) } }
+        var showsTerminalOnlyHeader: Bool { !togoLines.isEmpty && !terminalOnlyLines.isEmpty }
     }
 
     struct Line: Identifiable, Equatable {
@@ -59,7 +62,9 @@ struct RosterModel: Equatable {
         var tally = Tally()
         var needing = Set<TabID>()
         let groups = machines.map { machine in
-            Group(machine: machine, lines: machine.sessions.map { row in
+            let rows = machine.sessions.filter { SessionActions.wasStartedInTogo($0, on: machine) }
+                + machine.sessions.filter { !SessionActions.wasStartedInTogo($0, on: machine) }
+            return Group(machine: machine, lines: rows.map { row in
                 let id = TabID(hostID: row.hostID, sessionID: row.id)
                 // An open tab's store is live; the snapshot covers every other session.
                 let mission = missions[id] ?? row.mission
@@ -152,24 +157,24 @@ enum RosterCopy {
     static let idle = String(localized: "roster.tally.idle", defaultValue: "idle")
     static let done = String(localized: "roster.tally.done", defaultValue: "done")
 
-    static let newSession = String(localized: "roster.newSession", defaultValue: "New session")
+    static let newSession = String(localized: "roster.newSession", defaultValue: "New Session")
     static let show = String(localized: "roster.show.filter", defaultValue: "Show")
     static let searchPrompt = String(localized: "roster.search", defaultValue: "Search")
-    static let clearSearch = String(localized: "roster.search.clear", defaultValue: "Clear search")
+    static let clearSearch = String(localized: "roster.search.clear", defaultValue: "Clear Search")
     static let settings = String(localized: "roster.settings", defaultValue: "Settings")
-    static let addMachine = String(localized: "roster.addMachine", defaultValue: "Add machine")
+    static let addMachine = String(localized: "roster.addMachine", defaultValue: "Add Machine")
     static let archive = String(localized: "roster.archive", defaultValue: "Archive")
     static let noSessions = String(localized: "roster.noSessions", defaultValue: "No sessions")
 
     static let noMachinesTitle = String(localized: "roster.noMachines.title", defaultValue: "No machines yet")
-    static let noMachinesAction = String(localized: "roster.noMachines.action", defaultValue: "Add a machine")
+    static let noMachinesAction = String(localized: "roster.noMachines.action", defaultValue: "Add a Machine")
 
     static let detailClear = String(localized: "roster.detail.clear", defaultValue: "All clear")
     static let detailWaiting = String(localized: "roster.detail.waiting", defaultValue: "Something needs you")
     static let detailMessage = String(
         localized: "roster.detail.message", defaultValue: "Pick a line to open its terminal."
     )
-    static let showAll = String(localized: "roster.filter.showAll", defaultValue: "Show all")
+    static let showAll = String(localized: "roster.filter.showAll", defaultValue: "Show All")
 
     static func machineCount(_ name: String, _ count: Int) -> String {
         String(localized: "roster.machine.spoken", defaultValue: "\(name), \(count) sessions")

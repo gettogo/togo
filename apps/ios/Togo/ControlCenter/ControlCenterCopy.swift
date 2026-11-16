@@ -3,16 +3,17 @@ import TogoKit
 
 /// Every sentence the control center shows, keyed under `cc.` in the string catalog.
 enum ControlCenterCopy {
-    static let newSession = String(localized: "cc.newSession", defaultValue: "New session")
+    static let terminalOnly = String(localized: "cc.terminalOnly", defaultValue: "Terminal Only")
+    static let newSession = String(localized: "cc.newSession", defaultValue: "New Session")
     static let settings = String(localized: "cc.settings", defaultValue: "Settings")
-    static let waitingOnYou = String(localized: "cc.waitingOnYou", defaultValue: "Waiting on you")
+    static let waitingOnYou = String(localized: "cc.waitingOnYou", defaultValue: "Waiting on You")
     static let filter = String(localized: "cc.filter", defaultValue: "Show")
     static let searchPrompt = String(localized: "cc.searchPrompt", defaultValue: "Sessions, folders, agents")
 
     static func filterName(_ filter: SessionFilter) -> String {
         switch filter {
         case .all: String(localized: "cc.filter.all", defaultValue: "All")
-        case .needsYou: String(localized: "cc.filter.needsYou", defaultValue: "Needs you")
+        case .needsYou: String(localized: "cc.filter.needsYou", defaultValue: "Needs You")
         case .working: String(localized: "cc.filter.working", defaultValue: "Working")
         case .done: String(localized: "cc.filter.done", defaultValue: "Done")
         }
@@ -32,12 +33,12 @@ enum ControlCenterCopy {
 
     // MARK: First run
 
-    static let firstRunTitle = String(localized: "cc.firstRun.title", defaultValue: "Add a machine")
+    static let firstRunTitle = String(localized: "cc.firstRun.title", defaultValue: "Add a Machine")
     static let firstRunMessage = String(
         localized: "cc.firstRun.message", defaultValue: "Togo connects over SSH to your Mac or Linux machine."
     )
-    static let addMachine = String(localized: "cc.firstRun.add", defaultValue: "Add machine")
-    static let withoutHelper = String(localized: "cc.firstRun.withoutHelper", defaultValue: "Connect without the helper")
+    static let addMachine = String(localized: "cc.firstRun.add", defaultValue: "Add Machine")
+    static let withoutHelper = String(localized: "cc.firstRun.withoutHelper", defaultValue: "Connect without the Helper")
 
     // MARK: Machines
 
@@ -53,8 +54,8 @@ enum ControlCenterCopy {
         localized: "cc.machine.plainSSH", defaultValue: "No helper. Install it to see what agents are doing."
     )
     static let install = String(localized: "cc.machine.install", defaultValue: "Install")
-    static let tryAgain = String(localized: "cc.machine.tryAgain", defaultValue: "Try again")
-    static let signInAgain = String(localized: "cc.machine.signInAgain", defaultValue: "Sign in again")
+    static let tryAgain = String(localized: "cc.machine.tryAgain", defaultValue: "Try Again")
+    static let signInAgain = String(localized: "cc.machine.signInAgain", defaultValue: "Sign In Again")
     static let edit = String(localized: "cc.machine.edit", defaultValue: "Edit")
     static let update = String(localized: "cc.machine.update", defaultValue: "Update")
 
@@ -84,7 +85,7 @@ enum ControlCenterCopy {
         )
     }
 
-    static let setUp = String(localized: "cc.machine.setUp", defaultValue: "Set up")
+    static let setUp = String(localized: "cc.machine.setUp", defaultValue: "Set Up")
 
     /// The machine showed another key. Reviewing it in Edit machine is the only way on: there
     /// the old key can be forgotten if the machine really was reinstalled.
@@ -92,7 +93,7 @@ enum ControlCenterCopy {
         localized: "cc.machine.hostKeyChanged",
         defaultValue: "This machine's key changed. If nobody reinstalled it, someone may be intercepting the connection."
     )
-    static let reviewKey = String(localized: "cc.machine.reviewKey", defaultValue: "Review key")
+    static let reviewKey = String(localized: "cc.machine.reviewKey", defaultValue: "Review Key")
     static let keyChangedCaption = String(localized: "cc.machine.keyChangedCaption", defaultValue: "Key changed")
 
     /// The phone itself has no network, so no machine is tried.
@@ -120,12 +121,12 @@ enum ControlCenterCopy {
 
     static let muted = String(localized: "cc.row.muted", defaultValue: "Muted")
     static let open = String(localized: "cc.action.open", defaultValue: "Open")
-    static let connectWith = String(localized: "cc.action.connectWith", defaultValue: "Connect with")
+    static let connectWith = String(localized: "cc.action.connectWith", defaultValue: "Connect With")
     static let rename = String(localized: "cc.action.rename", defaultValue: "Rename")
     static let mute = String(localized: "cc.action.mute", defaultValue: "Mute")
     static let unmute = String(localized: "cc.action.unmute", defaultValue: "Unmute")
-    static let copyPath = String(localized: "cc.action.copyPath", defaultValue: "Copy path")
-    static let kill = String(localized: "cc.action.kill", defaultValue: "End session")
+    static let copyPath = String(localized: "cc.action.copyPath", defaultValue: "Copy Path")
+    static let kill = String(localized: "cc.action.kill", defaultValue: "End Session")
     static let cancel = String(localized: "cc.action.cancel", defaultValue: "Cancel")
     static let name = String(localized: "cc.rename.field", defaultValue: "Name")
     static let startedOutside = String(localized: "cc.row.startedOutside", defaultValue: "Started outside Togo")

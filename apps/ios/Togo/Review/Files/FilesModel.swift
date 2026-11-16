@@ -5,11 +5,11 @@ import UIKit
 
 /// Words on the file browser and viewer, under `review.files.`.
 enum FilesCopy {
-    static let hidden = String(localized: "review.files.hidden", defaultValue: "Show hidden files")
-    static let backToWorkingTree = String(localized: "review.files.backToWorkingTree", defaultValue: "Back to working tree")
+    static let hidden = String(localized: "review.files.hidden", defaultValue: "Show Hidden Files")
+    static let backToWorkingTree = String(localized: "review.files.backToWorkingTree", defaultValue: "Back to Working Tree")
     static let loading = String(localized: "review.files.loading", defaultValue: "Opening the folder")
     static let failed = String(localized: "review.files.failed", defaultValue: "Couldn't open this folder")
-    static let tryAgain = String(localized: "review.files.tryAgain", defaultValue: "Try again")
+    static let tryAgain = String(localized: "review.files.tryAgain", defaultValue: "Try Again")
     static let emptyFolder = String(localized: "review.files.emptyFolder", defaultValue: "This folder is empty")
     static let onlyHidden = String(
         localized: "review.files.onlyHidden", defaultValue: "Everything in it is hidden. Turn on Show hidden files to see it."
@@ -20,13 +20,13 @@ enum FilesCopy {
     static let emptyFile = String(localized: "review.files.emptyFile", defaultValue: "This file is empty")
     static let emptyFileMessage = String(localized: "review.files.emptyFileMessage", defaultValue: "There is nothing in it to show.")
     static let truncated = String(localized: "review.files.truncated", defaultValue: "Showing the first 512 KB.")
-    static let wrap = String(localized: "review.files.wrap", defaultValue: "Wrap lines")
+    static let wrap = String(localized: "review.files.wrap", defaultValue: "Wrap Lines")
     static let options = String(localized: "review.files.options", defaultValue: "Options")
     static let findPrompt = String(localized: "review.files.findPrompt", defaultValue: "Find in file")
-    static let closeFind = String(localized: "review.files.closeFind", defaultValue: "Close find")
+    static let closeFind = String(localized: "review.files.closeFind", defaultValue: "Close Find")
     static let noMatches = String(localized: "review.files.noMatches", defaultValue: "No matches")
-    static let previousMatch = String(localized: "review.files.previousMatch", defaultValue: "Previous match")
-    static let nextMatch = String(localized: "review.files.nextMatch", defaultValue: "Next match")
+    static let previousMatch = String(localized: "review.files.previousMatch", defaultValue: "Previous Match")
+    static let nextMatch = String(localized: "review.files.nextMatch", defaultValue: "Next Match")
     static let link = String(localized: "review.files.link", defaultValue: "Link")
     static let linkHint = String(localized: "review.files.linkHint", defaultValue: "Links aren't followed from here.")
     static let zoomHint = String(localized: "review.files.zoomHint", defaultValue: "Pinch to zoom. Double tap to zoom in or out.")

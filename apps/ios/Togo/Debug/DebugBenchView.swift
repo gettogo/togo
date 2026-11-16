@@ -118,11 +118,11 @@ struct DebugBenchView: View {
             Text(model.status).font(.headline)
             if let replay = model.replay { Text("Paced replay: \(replay)").font(.caption.monospaced()) }
             if let scroll = model.scroll { Text("Scroll pass: \(scroll)").font(.caption.monospaced()) }
-            Button("Run bench") { Task { await model.run() } }.disabled(model.running)
+            Button("Run Bench") { Task { await model.run() } }.disabled(model.running)
             TerminalHost(controller: model.controller)
         }
         .padding(.horizontal)
-        .navigationTitle("Rendering bench")
+        .navigationTitle("Rendering Bench")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

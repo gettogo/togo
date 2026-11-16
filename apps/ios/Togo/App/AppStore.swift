@@ -248,9 +248,11 @@ import TogoKit
         do {
             try await services.kill(hostID: row.hostID, sessionID: row.id)
             closeEndedTab(TabID(hostID: row.hostID, sessionID: row.id))
+            controlCenter.archived.removeAll { $0.hostID == row.hostID && $0.id == row.id }
         } catch let error as HelperError where error.isSessionGone {
             // Already ended: that is what the user asked for.
             closeEndedTab(TabID(hostID: row.hostID, sessionID: row.id))
+            controlCenter.archived.removeAll { $0.hostID == row.hostID && $0.id == row.id }
         } catch {
             notice = Notice(text: String(
                 localized: "cc.kill.failed", defaultValue: "Couldn't end \(Self.label(row)): \(ServiceErrors.message(error))"
@@ -349,7 +351,7 @@ import TogoKit
         var live: [SessionRow] = []
         var archived: [SessionRow] = []
         for row in rows {
-            if row.status.isFinished && now.timeIntervalSince(row.statusSince) > archiveAfter {
+            if row.status.hasEnded && now.timeIntervalSince(row.statusSince) > archiveAfter {
                 archived.append(row)
             } else {
                 live.append(row)

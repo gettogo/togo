@@ -4,7 +4,7 @@ import TogoKit
 /// Every word mission control says, keyed under `mission.` in the string catalog. Machine words
 /// (counts, plan progress) are joined by two spaces, never by dots.
 enum MissionCopy {
-    static let title = String(localized: "mission.title", defaultValue: "Mission control")
+    static let title = String(localized: "mission.title", defaultValue: "Mission Control")
     static let openHint = String(localized: "mission.open.hint", defaultValue: "Opens the session's agents, jobs, plan and status")
     static let toggleHint = String(localized: "mission.toggle.hint", defaultValue: "Shows or hides mission control beside the chat")
     static let done = String(localized: "mission.done", defaultValue: "Done")
@@ -16,17 +16,17 @@ enum MissionCopy {
     static let unavailableDetail = String(
         localized: "mission.unavailable.detail", defaultValue: "Terminal only"
     )
-    static let answerInChat = String(localized: "mission.answerInChat", defaultValue: "Answer in the chat")
-    static let openTerminal = String(localized: "mission.openTerminal", defaultValue: "Open terminal")
-    static let openChat = String(localized: "mission.openChat", defaultValue: "Open chat")
-    static let openDiff = String(localized: "mission.openDiff", defaultValue: "Review changes")
-    static let openPreview = String(localized: "mission.openPreview", defaultValue: "Open preview")
+    static let answerInChat = String(localized: "mission.answerInChat", defaultValue: "Answer in the Chat")
+    static let openTerminal = String(localized: "mission.openTerminal", defaultValue: "Open Terminal")
+    static let openChat = String(localized: "mission.openChat", defaultValue: "Open Chat")
+    static let openDiff = String(localized: "mission.openDiff", defaultValue: "Review Changes")
+    static let openPreview = String(localized: "mission.openPreview", defaultValue: "Open Preview")
     static let more = String(localized: "mission.more", defaultValue: "More")
     static let noOutputYet = String(localized: "mission.background.noOutput", defaultValue: "No output yet")
 
     // MARK: Bar item and session menu
 
-    static let goToRequest = String(localized: "mission.menu.goToRequest", defaultValue: "Go to request")
+    static let goToRequest = String(localized: "mission.menu.goToRequest", defaultValue: "Go to Request")
     static let stop = String(localized: "mission.menu.stop", defaultValue: "Stop")
     static let compactMenu = String(localized: "mission.menu.compact", defaultValue: "Compact…")
     static let compactConfirm = String(localized: "mission.menu.compactConfirm", defaultValue: "Compact the conversation now?")
@@ -55,7 +55,7 @@ enum MissionCopy {
 
     static func header(_ kind: MissionSectionKind) -> String {
         switch kind {
-        case .needs: String(localized: "mission.section.needs", defaultValue: "Needs you")
+        case .needs: String(localized: "mission.section.needs", defaultValue: "Needs You")
         case .agents: String(localized: "mission.section.agents", defaultValue: "Agents")
         case .background: String(localized: "mission.section.background", defaultValue: "Background")
         case .plan: String(localized: "mission.section.plan", defaultValue: "Plan")

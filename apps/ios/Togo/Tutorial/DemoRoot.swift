@@ -130,7 +130,7 @@ enum DemoCopy {
         localized: "tutorial.demo.unavailable.machine",
         defaultValue: "The demo machine can't be changed. Add your own machine to connect to it."
     )
-    static let addMachine = String(localized: "onboard.firstRun.add", defaultValue: "Add a machine")
+    static let addMachine = String(localized: "onboard.firstRun.add", defaultValue: "Add a Machine")
     static let notifications = String(
         localized: "tutorial.demo.notifications",
         defaultValue: "Notifications come from your own machines once one is paired. The demo machine sends none."

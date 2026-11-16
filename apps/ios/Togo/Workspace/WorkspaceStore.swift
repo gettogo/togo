@@ -135,11 +135,11 @@ extension AppStore {
         machine(for: hostID)?.name ?? services.hosts.first { $0.id == hostID }?.name ?? ""
     }
 
-    /// "04 Claude Code" for a tab chip, falling back to the tab's own title for a session the
+    /// The same number and session name as its list row, falling back to the tab's saved title if the
     /// control center does not list.
     func chipLabel(for tab: WorkspaceTab) -> (bib: String?, name: String) {
         if let row = session(for: tab) {
-            return (row.bib, row.bib == nil ? SessionActions.label(row) : row.agentName)
+            return (row.bib, row.name.isEmpty ? row.agentName : row.name)
         }
         return (tab.bib, tab.title)
     }

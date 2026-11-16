@@ -201,7 +201,7 @@ enum LinkCopy {
     static let copy = String(localized: "links.copy", defaultValue: "Copy")
     static let copied = String(localized: "links.copied", defaultValue: "Copied")
     static let openOnMac = String(localized: "links.openOnMac", defaultValue: "Open on Mac")
-    static let linksOnScreen = String(localized: "links.onScreen", defaultValue: "Links on screen")
+    static let linksOnScreen = String(localized: "links.onScreen", defaultValue: "Links on Screen")
     static let noLinks = String(localized: "links.none", defaultValue: "No links on screen or in recent output.")
     static let done = String(localized: "links.done", defaultValue: "Done")
     static let dismiss = String(localized: "links.dismiss", defaultValue: "Dismiss")

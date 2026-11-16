@@ -349,8 +349,8 @@ enum PortsCopy {
     static let opening = String(localized: "review.ports.opening", defaultValue: "Opening")
     static let show = String(localized: "review.ports.show", defaultValue: "Show")
     static let forwardedTo = String(localized: "review.ports.forwardedTo", defaultValue: "Forwarded to ")
-    static let copyLink = String(localized: "review.ports.copyLink", defaultValue: "Copy link")
-    static let stop = String(localized: "review.ports.stop", defaultValue: "Stop preview")
+    static let copyLink = String(localized: "review.ports.copyLink", defaultValue: "Copy Link")
+    static let stop = String(localized: "review.ports.stop", defaultValue: "Stop Preview")
     static let gone = String(localized: "review.ports.gone", defaultValue: "Not listening any more")
     static let idleStopped = String(
         localized: "review.ports.idleStopped", defaultValue: "Stopped after 10 minutes without use."
@@ -360,7 +360,7 @@ enum PortsCopy {
     static let forward = String(localized: "review.ports.forward", defaultValue: "Forward")
     static let reload = String(localized: "review.ports.reload", defaultValue: "Reload")
     static let pageFailed = String(localized: "review.ports.pageFailed", defaultValue: "The page didn't load")
-    static let manualTitle = String(localized: "review.ports.manual", defaultValue: "Open another port")
+    static let manualTitle = String(localized: "review.ports.manual", defaultValue: "Open Another Port")
     static let manualPlaceholder = String(localized: "review.ports.manualPlaceholder", defaultValue: "Port number")
     static let manualFooter = String(
         localized: "review.ports.manualFooter", defaultValue: "For a server this session didn't start."

@@ -104,9 +104,9 @@ struct MachineRoutesSection: View {
     private var addRow: some View {
         HStack(spacing: 12) {
             TextField(
-                String(localized: "routes.add.field", defaultValue: "Add an address"),
+                String(localized: "routes.add.field", defaultValue: "Add an Address"),
                 text: $draft.newRoute,
-                prompt: Text(String(localized: "routes.add.prompt", defaultValue: "Add an address")).foregroundStyle(Color.togoMute)
+                prompt: Text(String(localized: "routes.add.prompt", defaultValue: "Add an Address")).foregroundStyle(Color.togoMute)
             )
             .font(.body)
             .foregroundStyle(Color.togoSnow)
@@ -125,8 +125,8 @@ struct MachineRoutesSection: View {
     static func caption(_ route: HostRoute) -> String {
         let kind = switch route.kind {
         case .tailscale: String(localized: "routes.kind.tailscale", defaultValue: "Tailscale")
-        case .local, .lan: String(localized: "routes.kind.local", defaultValue: "Local network")
-        case .other: String(localized: "routes.kind.other", defaultValue: "Other network")
+        case .local, .lan: String(localized: "routes.kind.local", defaultValue: "Local Network")
+        case .other: String(localized: "routes.kind.other", defaultValue: "Other Network")
         }
         guard route.manual else { return kind }
         return String(localized: "routes.kind.manual", defaultValue: "\(kind) · added by you")

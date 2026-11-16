@@ -136,7 +136,7 @@ struct SignInPhaseView: View {
                 kind: .error,
                 title: String(localized: "onboard.signIn.failed", defaultValue: "Couldn't sign in to \(machine)"),
                 message: message,
-                action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: onRetry)
+                action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try Again"), run: onRetry)
             )
         }
     }

@@ -132,12 +132,12 @@ struct PickerPrimitive: View {
                 Section {
                     Text(String(localized: "picker.searchChanged", defaultValue: "Search changed in Terminal. Your text is kept here."))
                         .foregroundStyle(PrimitiveTint.warn)
-                    Button(String(localized: "picker.useSourceSearch", defaultValue: "Use search from Terminal")) {
+                    Button(String(localized: "picker.useSourceSearch", defaultValue: "Use Search from Terminal")) {
                         model.query = initialPicker.query ?? ""
                         searchConflict = false
                         searchRetry += 1
                     }
-                    Button(String(localized: "picker.applySearch", defaultValue: "Apply my search")) {
+                    Button(String(localized: "picker.applySearch", defaultValue: "Apply My Search")) {
                         searchConflict = false
                         searchRetry += 1
                     }

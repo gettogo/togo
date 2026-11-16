@@ -18,7 +18,7 @@ enum WatchCopy {
     static let answeredElsewhere = String(localized: "watch.answeredElsewhere", defaultValue: "Answered elsewhere")
     static let expired = String(localized: "watch.expired", defaultValue: "Expired")
     static let sending = String(localized: "watch.sending", defaultValue: "Sending")
-    static let answerOnPhone = String(localized: "watch.answerOnPhone", defaultValue: "Open Togo on iPhone to answer")
+    static let answerOnPhone = String(localized: "watch.answerOnPhone", defaultValue: "Open Togo on iPhone to Answer")
     static let sendFailed = String(localized: "watch.sendFailed", defaultValue: "Could not send. Try again.")
     /// The title of a notice the Watch posts itself.
     static let noticeTitle = String(localized: "watch.notice.title", defaultValue: "Togo")

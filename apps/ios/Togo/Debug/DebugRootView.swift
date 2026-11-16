@@ -26,10 +26,10 @@ struct DebugRootView: View {
                         }
                     }
                     .onDelete { hosts.delete(at: $0) }
-                    Button("Add host") { adding = true }
+                    Button("Add Host") { adding = true }
                 }
                 Section("Keys") {
-                    Button("Copy public key") { Task { await copyPublicKey() } }
+                    Button("Copy Public Key") { Task { await copyPublicKey() } }
                     if let keyMessage {
                         Text(keyMessage).font(.caption).foregroundStyle(.secondary)
                     }

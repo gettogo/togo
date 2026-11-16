@@ -122,7 +122,7 @@ enum NativeFormScreen {
                 // A well may show a placeholder or a masked password. Do not
                 // copy its display text into a new draft; focus the real input.
                 result.append(.init(id: child.id, label: label, kind: .action, value: .null,
-                    action: "native.focusField", warning: warning, actionLabel: String(localized: "native.form.edit", defaultValue: "Edit answer")))
+                    action: "native.focusField", warning: warning, actionLabel: String(localized: "native.form.edit", defaultValue: "Edit Answer")))
             }
         }
         guard !result.isEmpty else { throw NativeStructuredScreen.Unsupported.field(field.id) }

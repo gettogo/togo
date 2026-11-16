@@ -263,7 +263,7 @@ struct SettingsView: View {
     /// Opens the guide rather than pushing a page, so it has no chevron.
     private var gettingStarted: some View {
         Button(action: actions.openGuide) {
-            let title = String(localized: "tutorial.settings.row", defaultValue: "Getting started")
+            let title = String(localized: "tutorial.settings.row", defaultValue: "Getting Started")
             if dynamicTypeSize.isAccessibilitySize {
                 Text(title)
             } else {

@@ -9,7 +9,7 @@ import UIKit
 enum ComposeCopy {
     static let send = String(localized: "compose.send", defaultValue: "Send")
     static let dismiss = String(localized: "compose.dismiss", defaultValue: "Dismiss")
-    static let tryAgain = String(localized: "compose.tryAgain", defaultValue: "Try again")
+    static let tryAgain = String(localized: "compose.tryAgain", defaultValue: "Try Again")
     static let sendingImage = String(localized: "compose.sendingImage", defaultValue: "Sending image")
     static let uploadFailed = String(localized: "compose.uploadFailed", defaultValue: "Couldn't send the image.")
     static let tooLarge = String(localized: "compose.tooLarge", defaultValue: "This image is too large to send.")

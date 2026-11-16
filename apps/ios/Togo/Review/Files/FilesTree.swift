@@ -11,7 +11,7 @@ enum FileTreeCopy {
     static let partial = String(
         localized: "review.files.partial", defaultValue: "Searching only the folders opened so far. Update the helper to search every file."
     )
-    static let showChanges = String(localized: "review.files.showChanges", defaultValue: "Show changes")
+    static let showChanges = String(localized: "review.files.showChanges", defaultValue: "Show Changes")
     static let modified = String(localized: "review.files.modified", defaultValue: "Modified")
     static let added = String(localized: "review.files.added", defaultValue: "Added")
     static let untracked = String(localized: "review.files.untracked", defaultValue: "Untracked")

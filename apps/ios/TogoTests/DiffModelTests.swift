@@ -264,7 +264,7 @@ import UIKit
         #expect(model.commentActionTitle == "Open the session to send comments")
         let withSession = self.model(.worktree(path: "src/router.ts"), send: { _ in true })
         #expect(withSession.canSendComments)
-        #expect(withSession.commentActionTitle == "Send to session")
+        #expect(withSession.commentActionTitle == "Send to Session")
     }
 
     @Test func commentThatDidNotReachTheSessionSaysSo() async {
@@ -569,11 +569,11 @@ import UIKit
         status.files.append(ReviewFixtures.file("src/store.ts", "R", "M", from: "src/db.ts"))
         let model = model(.worktree(path: "src/store.ts"), services: FakeReviewServices(status: status))
         await model.load()
-        #expect(model.discardActionTitle == "Undo rename")
+        #expect(model.discardActionTitle == "Undo Rename")
         await model.perform(.discard)
         #expect(model.pendingDiscard?.title == "Undo the rename?")
         #expect(model.pendingDiscard?.message == "src/db.ts comes back and src/store.ts is removed.")
-        #expect(model.pendingDiscard?.button == "Undo rename")
+        #expect(model.pendingDiscard?.button == "Undo Rename")
         await model.confirmDiscard()
         #expect(model.emptyTitle == "Rename undone")
         #expect(model.emptyMessage == "src/db.ts is back as it was in the last commit.")

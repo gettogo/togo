@@ -24,7 +24,7 @@ struct DiscoveryList: View {
         }
         .phaseSwap(phase == .denied ? "denied" : "list")
         .background(Color.togoInk)
-        .navigationTitle(String(localized: "onboard.discovery.title", defaultValue: "Add a machine"))
+        .navigationTitle(String(localized: "onboard.discovery.title", defaultValue: "Add a Machine"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -46,7 +46,7 @@ struct DiscoveryList: View {
             Section {
                 Button(action: onEnterAddress) {
                     Label(
-                        String(localized: "onboard.discovery.enterAddress", defaultValue: "Enter an address"),
+                        String(localized: "onboard.discovery.enterAddress", defaultValue: "Enter an Address"),
                         systemImage: "keyboard"
                     )
                     .font(.body)
@@ -107,11 +107,11 @@ struct DiscoveryList: View {
                     localized: "onboard.discovery.denied.message",
                     defaultValue: "Turn on Local Network for Togo in Settings, or type the machine's address."
                 ),
-                action: .init(String(localized: "onboard.discovery.openSettings", defaultValue: "Open settings")) {
+                action: .init(String(localized: "onboard.discovery.openSettings", defaultValue: "Open Settings")) {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 }
             )
-            Button(String(localized: "onboard.discovery.enterAddress", defaultValue: "Enter an address"), action: onEnterAddress)
+            Button(String(localized: "onboard.discovery.enterAddress", defaultValue: "Enter an Address"), action: onEnterAddress)
                 .buttonStyle(.secondary)
                 .padding(.horizontal, Layout.margin)
                 .padding(.bottom, 16)

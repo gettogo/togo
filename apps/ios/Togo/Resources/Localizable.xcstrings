@@ -1032,7 +1032,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Run again"
+            "value" : "Run Again"
           }
         }
       }
@@ -1219,7 +1219,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Other agents"
+            "value" : "Other Agents"
           }
         }
       }
@@ -1286,7 +1286,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remember for this folder"
+            "value" : "Remember for This Folder"
           }
         }
       }
@@ -1660,7 +1660,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Restore and continue"
+            "value" : "Restore and Continue"
           }
         }
       }
@@ -2189,7 +2189,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect with"
+            "value" : "Connect With"
           }
         }
       }
@@ -2200,7 +2200,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copy path"
+            "value" : "Copy Path"
           }
         }
       }
@@ -2211,7 +2211,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "End session"
+            "value" : "End Session"
           }
         }
       }
@@ -2366,7 +2366,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Needs you"
+            "value" : "Needs You"
           }
         }
       }
@@ -2421,7 +2421,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add machine"
+            "value" : "Add Machine"
           }
         }
       }
@@ -2443,7 +2443,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add a machine"
+            "value" : "Add a Machine"
           }
         }
       }
@@ -2454,7 +2454,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect without the helper"
+            "value" : "Connect without the Helper"
           }
         }
       }
@@ -2564,7 +2564,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign in again"
+            "value" : "Sign In Again"
           }
         }
       }
@@ -2586,7 +2586,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Try again"
+            "value" : "Try Again"
           }
         }
       }
@@ -2619,7 +2619,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New session"
+            "value" : "New Session"
           }
         }
       }
@@ -2894,7 +2894,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Waiting on you"
+            "value" : "Waiting on You"
           }
         }
       }
@@ -2949,7 +2949,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mark up"
+            "value" : "Mark Up"
           }
         }
       }
@@ -3059,7 +3059,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Try again"
+            "value" : "Try Again"
           }
         }
       }
@@ -3136,7 +3136,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Download speech for %@"
+            "value" : "Download Speech for %@"
           }
         }
       }
@@ -3158,7 +3158,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Download speech for %1$@, %2$@"
+            "value" : "Download Speech for %1$@, %2$@"
           }
         }
       }
@@ -3246,7 +3246,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open settings"
+            "value" : "Open Settings"
           }
         }
       }
@@ -3279,7 +3279,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear recent dictations"
+            "value" : "Clear Recent Dictations"
           }
         }
       }
@@ -3345,7 +3345,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recent dictations"
+            "value" : "Recent Dictations"
           }
         }
       }
@@ -3411,7 +3411,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stop dictating"
+            "value" : "Stop Dictating"
           }
         }
       }
@@ -3455,7 +3455,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cancel download"
+            "value" : "Cancel Download"
           }
         }
       }
@@ -3488,7 +3488,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete model"
+            "value" : "Delete Model"
           }
         }
       }
@@ -3741,7 +3741,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Other folders"
+            "value" : "Other Folders"
           }
         }
       }
@@ -3752,7 +3752,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recent folders"
+            "value" : "Recent Folders"
           }
         }
       }
@@ -3785,7 +3785,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show hidden folders"
+            "value" : "Show Hidden Folders"
           }
         }
       }
@@ -3807,7 +3807,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Parent folder"
+            "value" : "Parent Folder"
           }
         }
       }
@@ -3818,7 +3818,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use this folder"
+            "value" : "Use This Folder"
           }
         }
       }
@@ -3928,7 +3928,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New session"
+            "value" : "New Session"
           }
         }
       }
@@ -3939,7 +3939,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Try again"
+            "value" : "Try Again"
           }
         }
       }
@@ -3950,7 +3950,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This machine"
+            "value" : "This Machine"
           }
         }
       }
@@ -3961,7 +3961,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This device's key"
+            "value" : "This Device's Key"
           }
         }
       }
@@ -3972,7 +3972,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Import a key"
+            "value" : "Import a Key"
           }
         }
       }
@@ -4005,7 +4005,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Check again"
+            "value" : "Check Again"
           }
         }
       }
@@ -4104,7 +4104,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copy command"
+            "value" : "Copy Command"
           }
         }
       }
@@ -4148,7 +4148,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter an address"
+            "value" : "Enter an Address"
           }
         }
       }
@@ -4203,7 +4203,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open settings"
+            "value" : "Open Settings"
           }
         }
       }
@@ -4236,7 +4236,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add a machine"
+            "value" : "Add a Machine"
           }
         }
       }
@@ -4247,7 +4247,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add a machine"
+            "value" : "Add a Machine"
           }
         }
       }
@@ -4269,7 +4269,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose a key file"
+            "value" : "Choose a Key File"
           }
         }
       }
@@ -4434,7 +4434,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect through a jump host"
+            "value" : "Connect Through a Jump Host"
           }
         }
       }
@@ -4445,7 +4445,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jump host"
+            "value" : "Jump Host"
           }
         }
       }
@@ -4511,7 +4511,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign in with"
+            "value" : "Sign In With"
           }
         }
       }
@@ -4533,7 +4533,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New machine"
+            "value" : "New Machine"
           }
         }
       }
@@ -4632,7 +4632,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add the Togo helper"
+            "value" : "Add the Togo Helper"
           }
         }
       }
@@ -4665,7 +4665,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Update the Togo helper"
+            "value" : "Update the Togo Helper"
           }
         }
       }
@@ -4698,7 +4698,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use without the helper"
+            "value" : "Use without the Helper"
           }
         }
       }
@@ -4775,7 +4775,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Forget the old key"
+            "value" : "Forget the Old Key"
           }
         }
       }
@@ -4841,7 +4841,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Check this machine's key"
+            "value" : "Check This Machine's Key"
           }
         }
       }
@@ -4863,7 +4863,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trust this machine"
+            "value" : "Trust This Machine"
           }
         }
       }
@@ -4929,7 +4929,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add this device's key"
+            "value" : "Add This Device's Key"
           }
         }
       }
@@ -4973,7 +4973,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Small board"
+            "value" : "Small Board"
           }
         }
       }
@@ -4984,7 +4984,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cloud machine"
+            "value" : "Cloud Machine"
           }
         }
       }
@@ -5039,7 +5039,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Try again"
+            "value" : "Try Again"
           }
         }
       }
@@ -5116,7 +5116,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Folder or agent"
+            "value" : "Folder or Agent"
           }
         }
       }
@@ -5138,7 +5138,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "More options"
+            "value" : "More Options"
           }
         }
       }
@@ -5149,7 +5149,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New session"
+            "value" : "New Session"
           }
         }
       }
@@ -5226,7 +5226,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show all"
+            "value" : "Show All"
           }
         }
       }
@@ -6876,7 +6876,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Needs you"
+            "value" : "Needs You"
           }
         }
       }
@@ -7019,7 +7019,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "How it works"
+            "value" : "How It Works"
           }
         }
       }
@@ -7030,7 +7030,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What the helper does not do"
+            "value" : "What the Helper Does Not Do"
           }
         }
       }
@@ -7118,7 +7118,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add your first machine"
+            "value" : "Add Your First Machine"
           }
         }
       }
@@ -7140,7 +7140,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Getting started"
+            "value" : "Getting Started"
           }
         }
       }
@@ -7415,7 +7415,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What Offline means"
+            "value" : "What Offline Means"
           }
         }
       }
@@ -7437,7 +7437,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Answer from here"
+            "value" : "Answer from Here"
           }
         }
       }
@@ -7459,7 +7459,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chat or terminal"
+            "value" : "Chat or Terminal"
           }
         }
       }
@@ -7492,7 +7492,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wake address"
+            "value" : "Wake Address"
           }
         }
       }
@@ -7525,7 +7525,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Session actions"
+            "value" : "Session Actions"
           }
         }
       }
@@ -7536,7 +7536,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "All sessions"
+            "value" : "All Sessions"
           }
         }
       }
@@ -7547,7 +7547,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Close tab"
+            "value" : "Close Tab"
           }
         }
       }
@@ -7580,7 +7580,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copy last 500 lines"
+            "value" : "Copy Last 500 Lines"
           }
         }
       }
@@ -7624,7 +7624,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Next match"
+            "value" : "Next Match"
           }
         }
       }
@@ -7646,7 +7646,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Previous match"
+            "value" : "Previous Match"
           }
         }
       }
@@ -7844,7 +7844,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Try again"
+            "value" : "Try Again"
           }
         }
       }
@@ -7877,7 +7877,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open sessions"
+            "value" : "Open Sessions"
           }
         }
       }
@@ -7921,7 +7921,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zen mode"
+            "value" : "Zen Mode"
           }
         }
       }
@@ -7932,7 +7932,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show controls"
+            "value" : "Show Controls"
           }
         }
       }
@@ -8042,7 +8042,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show less"
+            "value" : "Show Less"
           }
         }
       }
@@ -8053,7 +8053,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Learn more"
+            "value" : "Learn More"
           }
         }
       }
@@ -8075,7 +8075,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Edit machine"
+            "value" : "Edit Machine"
           }
         }
       }
@@ -8086,7 +8086,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Install or update helper"
+            "value" : "Install or Update Helper"
           }
         }
       }
@@ -8108,7 +8108,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New session here"
+            "value" : "New Session Here"
           }
         }
       }
@@ -8119,7 +8119,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign in again"
+            "value" : "Sign In Again"
           }
         }
       }
@@ -8141,7 +8141,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Get notified when an agent needs you"
+            "value" : "Get Notified When an Agent Needs You"
           }
         }
       }
@@ -8163,7 +8163,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Turn on notifications"
+            "value" : "Turn on Notifications"
           }
         }
       }
@@ -8174,7 +8174,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not now"
+            "value" : "Not Now"
           }
         }
       }
@@ -8240,7 +8240,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save and install tmux later"
+            "value" : "Save and Install tmux Later"
           }
         }
       }
@@ -8416,7 +8416,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chat with your agents"
+            "value" : "Chat with Your Agents"
           }
         }
       }
@@ -8438,7 +8438,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Start agents, review their work"
+            "value" : "Start Agents, Review Their Work"
           }
         }
       }
@@ -8449,7 +8449,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set up your machine"
+            "value" : "Set Up Your Machine"
           }
         }
       }
@@ -8504,7 +8504,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The terminal is one tap away"
+            "value" : "The Terminal Is One Tap Away"
           }
         }
       }
@@ -8526,7 +8526,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agents keep running"
+            "value" : "Agents Keep Running"
           }
         }
       }
@@ -8548,7 +8548,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Some sessions open as a terminal"
+            "value" : "Some Sessions Open as a Terminal"
           }
         }
       }
@@ -8570,7 +8570,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In a notification"
+            "value" : "In a Notification"
           }
         }
       }
@@ -8614,7 +8614,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Approve asks you to unlock first"
+            "value" : "Approve Asks You to Unlock First"
           }
         }
       }
@@ -8636,7 +8636,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What the relay sees"
+            "value" : "What the Relay Sees"
           }
         }
       }
@@ -8658,7 +8658,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Start a session"
+            "value" : "Start a Session"
           }
         }
       }
@@ -8680,7 +8680,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Review changes"
+            "value" : "Review Changes"
           }
         }
       }
@@ -8790,7 +8790,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Answer from a notification"
+            "value" : "Answer from a Notification"
           }
         }
       }

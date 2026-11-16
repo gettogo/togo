@@ -4,16 +4,16 @@ import Foundation
 /// shared with the session menu in the control center come from `ControlCenterCopy`.
 enum WorkspaceCopy {
     static let sessions = String(localized: "ws.sessions", defaultValue: "Sessions")
-    static let actions = String(localized: "ws.actions", defaultValue: "Session actions")
-    static let tabs = String(localized: "ws.tabs", defaultValue: "Open sessions")
+    static let actions = String(localized: "ws.actions", defaultValue: "Session Actions")
+    static let tabs = String(localized: "ws.tabs", defaultValue: "Open Sessions")
     /// VoiceOver reads the screen's text as the value, so the label only names what it is.
     static let terminal = String(localized: "ws.terminal", defaultValue: "Terminal")
     /// VoiceOver's name for the terminal row the cursor is on, and for an empty one.
     static let cursorLine = String(localized: "ws.terminal.cursorLine", defaultValue: "Cursor line")
     static let blankLine = String(localized: "ws.terminal.blank", defaultValue: "blank")
-    static let closeTab = String(localized: "ws.closeTab", defaultValue: "Close tab")
+    static let closeTab = String(localized: "ws.closeTab", defaultValue: "Close Tab")
     /// The title menu's way back to the roster, under a compact horizontal bar.
-    static let allSessions = String(localized: "ws.allSessions", defaultValue: "All sessions")
+    static let allSessions = String(localized: "ws.allSessions", defaultValue: "All Sessions")
 
     static func ended(_ label: String) -> String {
         String(localized: "ws.ended", defaultValue: "\(label) ended")
@@ -68,7 +68,7 @@ enum WorkspaceCopy {
         localized: "ws.overlay.keyChangedMessage",
         defaultValue: "Togo won't connect until you review it. If nobody reinstalled this machine, someone may be intercepting the connection."
     )
-    static let reviewKey = String(localized: "ws.overlay.reviewKey", defaultValue: "Review key")
+    static let reviewKey = String(localized: "ws.overlay.reviewKey", defaultValue: "Review Key")
 
     static func deviceOffline(_ device: String) -> String {
         String(localized: "ws.overlay.deviceOffline", defaultValue: "This \(device) is offline")
@@ -77,12 +77,12 @@ enum WorkspaceCopy {
     static let deviceOfflineMessage = String(
         localized: "ws.overlay.deviceOfflineMessage", defaultValue: "The terminal reconnects when the network is back."
     )
-    static let tryAgain = String(localized: "ws.overlay.tryAgain", defaultValue: "Try again")
-    static let signInAgain = String(localized: "ws.overlay.signInAgain", defaultValue: "Sign in again")
+    static let tryAgain = String(localized: "ws.overlay.tryAgain", defaultValue: "Try Again")
+    static let signInAgain = String(localized: "ws.overlay.signInAgain", defaultValue: "Sign In Again")
     static let machineGone = String(
         localized: "ws.overlay.machineGone", defaultValue: "This machine is no longer in Togo. Add it again to open its sessions."
     )
-    static let addMachine = String(localized: "ws.overlay.addMachine", defaultValue: "Add machine")
+    static let addMachine = String(localized: "ws.overlay.addMachine", defaultValue: "Add Machine")
 
     static func signInUnfinished(_ machine: String) -> String {
         String(localized: "ws.overlay.signInUnfinished", defaultValue: "\(machine) asked a question to finish signing in.")
@@ -90,7 +90,7 @@ enum WorkspaceCopy {
 
     // MARK: Actions
 
-    static let copyLines = String(localized: "ws.copyLines", defaultValue: "Copy last 500 lines")
+    static let copyLines = String(localized: "ws.copyLines", defaultValue: "Copy Last 500 Lines")
     static let copied = String(localized: "ws.copied", defaultValue: "Copied the last 500 lines")
 
     static func copyFailed(_ machine: String) -> String {
@@ -103,8 +103,8 @@ enum WorkspaceCopy {
 
     static let find = String(localized: "ws.find", defaultValue: "Find")
     static let findPrompt = String(localized: "ws.find.prompt", defaultValue: "Find in terminal")
-    static let findNext = String(localized: "ws.find.next", defaultValue: "Next match")
-    static let findPrevious = String(localized: "ws.find.previous", defaultValue: "Previous match")
+    static let findNext = String(localized: "ws.find.next", defaultValue: "Next Match")
+    static let findPrevious = String(localized: "ws.find.previous", defaultValue: "Previous Match")
     static let findDone = String(localized: "ws.find.done", defaultValue: "Done")
     static let noMatches = String(localized: "ws.find.none", defaultValue: "No matches")
 

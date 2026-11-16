@@ -73,7 +73,8 @@ extension AppStore {
     /// that ended while the app was closed goes with the machine's first report.
     func restore(_ saved: WindowRestoration) {
         var seen: Set<TabID> = []
-        let ids = saved.tabs.filter { seen.insert($0).inserted }
+        let machines = Set(services.hosts.map(\.id))
+        let ids = saved.tabs.filter { machines.contains($0.hostID) && seen.insert($0).inserted }
         let labels = Dictionary((saved.labels ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         workspace.tabs = ids.map { id in
             let label = labels[id]

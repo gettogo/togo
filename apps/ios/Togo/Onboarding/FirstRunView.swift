@@ -55,10 +55,10 @@ struct FirstRunView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 4) {
-                Button(String(localized: "onboard.firstRun.add", defaultValue: "Add a machine"), action: onAddMachine)
+                Button(String(localized: "onboard.firstRun.add", defaultValue: "Add a Machine"), action: onAddMachine)
                     .buttonStyle(.primary)
                 if tutorial != nil {
-                    Button(String(localized: "tutorial.firstRun.open", defaultValue: "How it works"), action: openGuide)
+                    Button(String(localized: "tutorial.firstRun.open", defaultValue: "How It Works"), action: openGuide)
                         .buttonStyle(.secondary)
                 }
                 Button(SetupPage.demoTitle) {

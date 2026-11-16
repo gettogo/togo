@@ -4,7 +4,7 @@ import Foundation
 enum DiffCopy {
     static let truncated = String(localized: "review.diff.truncated", defaultValue: "Showing the first 512 KB of this diff.")
     static let binary = String(localized: "review.diff.binary", defaultValue: "Binary file, not shown")
-    static let openFile = String(localized: "review.diff.openFile", defaultValue: "Open file")
+    static let openFile = String(localized: "review.diff.openFile", defaultValue: "Open File")
     static let emptyNewFile = String(localized: "review.diff.emptyNewFile", defaultValue: "This new file is empty.")
     static let emptyDeletedFile = String(
         localized: "review.diff.emptyDeletedFile", defaultValue: "This file was empty when it was deleted."
@@ -39,11 +39,11 @@ enum DiffCopy {
     // Toolbar
     static let layout = String(localized: "review.diff.layout", defaultValue: "Layout")
     static let unified = String(localized: "review.diff.unified", defaultValue: "Unified")
-    static let sideBySide = String(localized: "review.diff.sideBySide", defaultValue: "Side by side")
-    static let wrap = String(localized: "review.diff.wrap", defaultValue: "Wrap lines")
-    static let options = String(localized: "review.diff.options", defaultValue: "View options")
-    static let previousHunk = String(localized: "review.diff.previousHunk", defaultValue: "Previous change")
-    static let nextHunk = String(localized: "review.diff.nextHunk", defaultValue: "Next change")
+    static let sideBySide = String(localized: "review.diff.sideBySide", defaultValue: "Side by Side")
+    static let wrap = String(localized: "review.diff.wrap", defaultValue: "Wrap Lines")
+    static let options = String(localized: "review.diff.options", defaultValue: "View Options")
+    static let previousHunk = String(localized: "review.diff.previousHunk", defaultValue: "Previous Change")
+    static let nextHunk = String(localized: "review.diff.nextHunk", defaultValue: "Next Change")
     static let files = String(localized: "review.diff.files", defaultValue: "Files")
     static let stage = String(localized: "review.diff.stage", defaultValue: "Stage")
     static let unstage = String(localized: "review.diff.unstage", defaultValue: "Unstage")
@@ -57,7 +57,7 @@ enum DiffCopy {
     }
 
     // Comments
-    static let sendToSession = String(localized: "review.diff.sendToSession", defaultValue: "Send to session")
+    static let sendToSession = String(localized: "review.diff.sendToSession", defaultValue: "Send to Session")
     static let openSessionToSend = String(
         localized: "review.diff.openSessionToSend", defaultValue: "Open the session to send comments"
     )

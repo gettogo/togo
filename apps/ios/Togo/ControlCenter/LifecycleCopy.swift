@@ -42,7 +42,7 @@ enum LifecycleCopy {
         LifecycleWords.agentWaiting(status: status.rawValue, reason: exit?.reason.rawValue, code: exit?.code)
     }
 
-    static let runAgain = String(localized: "lifecycle.runAgain", defaultValue: "Run again")
+    static let runAgain = String(localized: "lifecycle.runAgain", defaultValue: "Run Again")
 
     static func runAgainFailed(_ label: String, reason: String) -> String {
         String(localized: "lifecycle.runAgainFailed", defaultValue: "Couldn't run \(label) again: \(reason)")

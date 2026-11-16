@@ -7,8 +7,8 @@ enum DraftAuth: Hashable, Sendable, CaseIterable {
 
     var label: String {
         switch self {
-        case .deviceKey: String(localized: "onboard.auth.deviceKey", defaultValue: "This device's key")
-        case .importedKey: String(localized: "onboard.auth.importedKey", defaultValue: "Import a key")
+        case .deviceKey: String(localized: "onboard.auth.deviceKey", defaultValue: "This Device's Key")
+        case .importedKey: String(localized: "onboard.auth.importedKey", defaultValue: "Import a Key")
         case .password: String(localized: "onboard.auth.password", defaultValue: "Password")
         }
     }

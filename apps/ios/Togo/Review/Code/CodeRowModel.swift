@@ -27,11 +27,11 @@ struct CodeRowSide: Hashable, Sendable {
 enum CodeCopy {
     static let clipped = String(localized: "review.diff.clipped", defaultValue: "cut at 2,000 characters")
     static let noNewline = String(localized: "review.diff.noNewline", defaultValue: "No newline at end of file")
-    static let copyLine = String(localized: "review.diff.copyLine", defaultValue: "Copy line")
-    static let comment = String(localized: "review.diff.comment", defaultValue: "Comment on line")
+    static let copyLine = String(localized: "review.diff.copyLine", defaultValue: "Copy Line")
+    static let comment = String(localized: "review.diff.comment", defaultValue: "Comment on Line")
     /// VoiceOver's two comments on a side-by-side row that changed: one per half.
-    static let commentOld = String(localized: "review.diff.commentOld", defaultValue: "Comment on old line")
-    static let commentNew = String(localized: "review.diff.commentNew", defaultValue: "Comment on new line")
+    static let commentOld = String(localized: "review.diff.commentOld", defaultValue: "Comment on Old Line")
+    static let commentNew = String(localized: "review.diff.commentNew", defaultValue: "Comment on New Line")
     static let blank = String(localized: "review.diff.blank", defaultValue: "blank")
     /// Under a side-by-side pair whose text was cut, which has no room for the inline marker.
     static let clippedNotice = String(

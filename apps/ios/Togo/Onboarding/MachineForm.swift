@@ -69,7 +69,7 @@ struct MachineForm: View {
                 authDetail
                     .id(MachineDraft.Field.key)
             } header: {
-                SectionHeading(String(localized: "onboard.form.signIn", defaultValue: "Sign in with"))
+                SectionHeading(String(localized: "onboard.form.signIn", defaultValue: "Sign In With"))
             } footer: {
                 SectionFooter {
                     if draft.auth == .deviceKey {
@@ -102,12 +102,12 @@ struct MachineForm: View {
             Section {
                 DisclosureGroup(isExpanded: $jumpShown) {
                     field(
-                        .jump, String(localized: "onboard.form.jumpField", defaultValue: "Jump host"), text: $draft.jump,
+                        .jump, String(localized: "onboard.form.jumpField", defaultValue: "Jump Host"), text: $draft.jump,
                         prompt: "sam@bastion.example.com"
                     )
                     .keyboardType(.asciiCapable)
                 } label: {
-                    Text(String(localized: "onboard.form.jump", defaultValue: "Connect through a jump host"))
+                    Text(String(localized: "onboard.form.jump", defaultValue: "Connect Through a Jump Host"))
                         .foregroundStyle(Color.togoSnow)
                 }
             }
@@ -115,7 +115,7 @@ struct MachineForm: View {
         }
         .groupedList()
         .navigationTitle(draft.trimmedName.isEmpty
-            ? String(localized: "onboard.form.title", defaultValue: "New machine") : draft.trimmedName)
+            ? String(localized: "onboard.form.title", defaultValue: "New Machine") : draft.trimmedName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // The number pad has no Return key, so the chain would stop at Port on a phone.
@@ -195,7 +195,7 @@ struct MachineForm: View {
             choosingKeyFile = true
         } label: {
             Label(
-                draft.importedKey?.label ?? String(localized: "onboard.form.chooseKey", defaultValue: "Choose a key file"),
+                draft.importedKey?.label ?? String(localized: "onboard.form.chooseKey", defaultValue: "Choose a Key File"),
                 systemImage: draft.importedKey == nil ? "doc.badge.plus" : "key"
             )
             .foregroundStyle(Color.togoSnow)
@@ -211,13 +211,13 @@ struct MachineForm: View {
         PasteButton(payloadType: String.self) { strings in
             let mark = ClipboardMark(SystemKeyPasteboard())
             guard let text = strings.first, text.utf8.count < 64 * 1024 else { return }
-            onImportKey(text, String(localized: "onboard.form.pastedKeyLabel", defaultValue: "Pasted key"), .clipboard(mark))
+            onImportKey(text, String(localized: "onboard.form.pastedKeyLabel", defaultValue: "Pasted Key"), .clipboard(mark))
         }
         .labelStyle(.titleAndIcon)
         .buttonBorderShape(.capsule)
         .tint(Color.togoSnow)
         .frame(minHeight: 44)
-        .accessibilityLabel(String(localized: "onboard.form.pasteKeyA11y", defaultValue: "Paste key from clipboard"))
+        .accessibilityLabel(String(localized: "onboard.form.pasteKeyA11y", defaultValue: "Paste Key from Clipboard"))
     }
 
     private func field(
@@ -356,8 +356,8 @@ extension HostSymbol {
         case .desktop: String(localized: "onboard.symbol.desktop", defaultValue: "Desktop")
         case .server: String(localized: "onboard.symbol.server", defaultValue: "Server")
         case .mini: String(localized: "onboard.symbol.mini", defaultValue: "Mac mini")
-        case .cloud: String(localized: "onboard.symbol.cloud", defaultValue: "Cloud machine")
-        case .raspberry: String(localized: "onboard.symbol.board", defaultValue: "Small board")
+        case .cloud: String(localized: "onboard.symbol.cloud", defaultValue: "Cloud Machine")
+        case .raspberry: String(localized: "onboard.symbol.board", defaultValue: "Small Board")
         }
     }
 }

@@ -28,7 +28,7 @@ enum WakeCopy {
         String(localized: "wake.failed", defaultValue: "Couldn't send a wake signal to \(machine). Check that you are on the same network.")
     }
 
-    static let formLabel = String(localized: "wake.form.label", defaultValue: "Wake address")
+    static let formLabel = String(localized: "wake.form.label", defaultValue: "Wake Address")
 
     /// The button shows on an offline machine that has a stored target.
     static func showsButton(for machine: MachineSection, enabled: Bool) -> Bool {

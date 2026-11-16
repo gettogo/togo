@@ -18,7 +18,7 @@ enum ReviewEntryCopy {
     static let close = String(localized: "review.entry.close", defaultValue: "Close")
     /// The bar item that opens the review on its Changes list, like an editor's source control.
     static let changesItem = String(localized: "review.entry.changesItem", defaultValue: "Changes")
-    static let allChanges = String(localized: "review.entry.allChanges", defaultValue: "All changes")
+    static let allChanges = String(localized: "review.entry.allChanges", defaultValue: "All Changes")
     static let allChangesHint = String(
         localized: "review.entry.allChangesHint", defaultValue: "Shows every change in this session's folder"
     )

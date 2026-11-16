@@ -16,17 +16,17 @@ enum ChatCopy {
     static let reconnecting = String(localized: "chat.reconnecting", defaultValue: "Reconnecting")
     static let emptyTitle = String(localized: "chat.empty.title", defaultValue: "Nothing said yet")
     static let emptyDetail = String(localized: "chat.empty.detail.short", defaultValue: "Write below to start.")
-    static let earlier = String(localized: "chat.earlier", defaultValue: "Show earlier")
+    static let earlier = String(localized: "chat.earlier", defaultValue: "Show Earlier")
     static let historyUnavailable = String(
         localized: "chat.history.unavailable", defaultValue: "Some messages from before reconnection are no longer available."
     )
 
     static let copy = String(localized: "chat.copy", defaultValue: "Copy")
-    static let copyCode = String(localized: "chat.copyCode", defaultValue: "Copy code")
+    static let copyCode = String(localized: "chat.copyCode", defaultValue: "Copy Code")
     /// The whole row, beside the edit menu's Copy of the words selected.
-    static let copyMessage = String(localized: "chat.copyMessage", defaultValue: "Copy message")
-    static let copyDiff = String(localized: "chat.copyDiff", defaultValue: "Copy diff")
-    static let copyTable = String(localized: "chat.copyTable", defaultValue: "Copy table")
+    static let copyMessage = String(localized: "chat.copyMessage", defaultValue: "Copy Message")
+    static let copyDiff = String(localized: "chat.copyDiff", defaultValue: "Copy Diff")
+    static let copyTable = String(localized: "chat.copyTable", defaultValue: "Copy Table")
 
     static func table(rows: Int) -> String {
         String(localized: "chat.table.spoken", defaultValue: "Table, \(rows) rows")
@@ -36,8 +36,8 @@ enum ChatCopy {
         String(localized: "chat.table.columns", defaultValue: "Columns: \(names.joined(separator: ", "))")
     }
     static let copied = String(localized: "chat.copied", defaultValue: "Copied")
-    static let showInTerminal = String(localized: "chat.showInTerminal", defaultValue: "Show in terminal")
-    static let quote = String(localized: "chat.quote", defaultValue: "Quote in reply")
+    static let showInTerminal = String(localized: "chat.showInTerminal", defaultValue: "Show in Terminal")
+    static let quote = String(localized: "chat.quote", defaultValue: "Quote in Reply")
     static let expand = String(localized: "chat.expand", defaultValue: "Expand")
     static let collapse = String(localized: "chat.collapse", defaultValue: "Collapse")
     static let collapsed = String(localized: "chat.collapsed", defaultValue: "collapsed")
@@ -46,7 +46,7 @@ enum ChatCopy {
     static let details = String(localized: "chat.details", defaultValue: "Details")
 
     static let rotorPrompts = String(localized: "chat.rotor.prompts", defaultValue: "Prompts")
-    static let rotorNeeds = String(localized: "chat.rotor.needs", defaultValue: "Needs you")
+    static let rotorNeeds = String(localized: "chat.rotor.needs", defaultValue: "Needs You")
     static let rotorReplies = String(localized: "chat.rotor.replies", defaultValue: "Replies")
 
     // MARK: Prompts
@@ -59,7 +59,7 @@ enum ChatCopy {
     static let changeUnconfirmed = String(localized: "chat.changes.unconfirmed", defaultValue: "The conversation changed. Check the previous conversation for changes already sent. Remaining changes were canceled.")
     static let sendFailed = String(localized: "chat.prompt.sendFailed", defaultValue: "Send failed")
     static let cancel = String(localized: "chat.prompt.cancel", defaultValue: "Cancel")
-    static let tryAgain = String(localized: "chat.prompt.retry", defaultValue: "Try again")
+    static let tryAgain = String(localized: "chat.prompt.retry", defaultValue: "Try Again")
     static let fromDesk = String(localized: "chat.prompt.desk", defaultValue: "Typed at the desk")
 
     /// "Opening OMP": a session on its way to its chat or terminal.
@@ -99,10 +99,10 @@ enum ChatCopy {
     )
     static let answerFailed = String(localized: "chat.needs.failed", defaultValue: "Couldn't send the answer. Try again.")
     /// The card cannot be answered from the phone: its answers live in the terminal.
-    static let answerInTerminal = String(localized: "chat.needs.answerInTerminal", defaultValue: "Answer in the terminal")
+    static let answerInTerminal = String(localized: "chat.needs.answerInTerminal", defaultValue: "Answer in the Terminal")
     /// The answer reached the terminal but the harness could not take it from the phone.
-    static let finishInTerminal = String(localized: "chat.needs.finishInTerminal", defaultValue: "Finish this in the terminal")
-    static let otherAnswer = String(localized: "chat.needs.other", defaultValue: "Other answer")
+    static let finishInTerminal = String(localized: "chat.needs.finishInTerminal", defaultValue: "Finish This in the Terminal")
+    static let otherAnswer = String(localized: "chat.needs.other", defaultValue: "Other Answer")
     static let questionChanged = String(
         localized: "chat.needs.changed", defaultValue: "The question changed. Check your answer."
     )
@@ -111,7 +111,7 @@ enum ChatCopy {
 
     // MARK: Links and text
 
-    static let selectText = String(localized: "chat.selectText", defaultValue: "Select text")
+    static let selectText = String(localized: "chat.selectText", defaultValue: "Select Text")
     static let openLink = String(localized: "chat.link.open", defaultValue: "Open")
 
     static func spokenNeeds(_ title: String) -> String {

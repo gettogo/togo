@@ -40,7 +40,7 @@ enum ChangesCopy {
     static func sectionTitle(_ kind: ChangeSection.Kind) -> String {
         switch kind {
         case .staged: String(localized: "review.changes.section.staged", defaultValue: "Staged")
-        case .changed: String(localized: "review.changes.section.changed", defaultValue: "Not staged")
+        case .changed: String(localized: "review.changes.section.changed", defaultValue: "Not Staged")
         case .untracked: String(localized: "review.changes.section.untracked", defaultValue: "Untracked")
         case .conflicted: String(localized: "review.changes.section.conflicted", defaultValue: "Conflicts")
         }
@@ -119,11 +119,11 @@ enum ChangesCopy {
     static let unstage = String(localized: "review.changes.unstage", defaultValue: "Unstage")
     static let discard = String(localized: "review.changes.discard", defaultValue: "Discard")
     static let delete = String(localized: "review.changes.delete", defaultValue: "Delete")
-    static let undoRename = String(localized: "review.changes.undoRename", defaultValue: "Undo rename")
-    static let stageAll = String(localized: "review.changes.stageAll", defaultValue: "Stage all")
-    static let unstageAll = String(localized: "review.changes.unstageAll", defaultValue: "Unstage all")
+    static let undoRename = String(localized: "review.changes.undoRename", defaultValue: "Undo Rename")
+    static let stageAll = String(localized: "review.changes.stageAll", defaultValue: "Stage All")
+    static let unstageAll = String(localized: "review.changes.unstageAll", defaultValue: "Unstage All")
     static func sectionActions(_ title: String) -> String {
-        String(localized: "review.changes.sectionActions", defaultValue: "\(title) actions")
+        String(localized: "review.changes.sectionActions", defaultValue: "\(title) Actions")
     }
     static let commit = String(localized: "review.changes.commit", defaultValue: "Commit")
     static let dismiss = String(localized: "review.changes.dismiss", defaultValue: "Dismiss")
@@ -195,8 +195,8 @@ enum ChangesCopy {
     static let messagePlaceholder = String(
         localized: "review.changes.commit.placeholder", defaultValue: "Summary on the first line, details below"
     )
-    static let messageLabel = String(localized: "review.changes.commit.message", defaultValue: "Commit message")
-    static let amend = String(localized: "review.changes.commit.amend", defaultValue: "Amend the last commit")
+    static let messageLabel = String(localized: "review.changes.commit.message", defaultValue: "Commit Message")
+    static let amend = String(localized: "review.changes.commit.amend", defaultValue: "Amend the Last Commit")
     static let amendButton = String(localized: "review.changes.commit.amendButton", defaultValue: "Amend")
     static let amendQuestion = String(localized: "review.changes.commit.amendQuestion", defaultValue: "Replace the last commit?")
     static func replaces(_ commit: GitCommit) -> String {

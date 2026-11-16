@@ -69,8 +69,17 @@ struct SessionRow: Identifiable, Equatable, Sendable {
 }
 
 extension SessionStatus {
-    /// The agent is no longer running: it finished its turn and the session ended, or it
-    /// exited, crashed or stopped on a limit. These rows archive and count as done.
+    /// A finished turn can leave a live agent at its prompt. Only lifecycle
+    /// termination, not `.done`, makes its session eligible for the archive.
+    var hasEnded: Bool {
+        switch self {
+        case .exited, .ended, .failed: true
+        case .done, .working, .needsYou, .idle, .unknown: false
+        }
+    }
+
+    /// A completed turn or ended process counts as done. A completed turn can still
+    /// belong to a live session, so archive eligibility uses `hasEnded` instead.
     var isFinished: Bool {
         switch self {
         case .done, .exited, .ended, .failed: true

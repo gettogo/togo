@@ -7,29 +7,29 @@ enum ComposerCopy {
     static let interrupt = String(localized: "composer.interrupt", defaultValue: "Interrupt")
     static let stop = String(localized: "composer.stop", defaultValue: "Stop")
     static let commands = String(localized: "composer.commands", defaultValue: "Commands")
-    static let mention = String(localized: "composer.mention", defaultValue: "Mention a file")
-    static let closeMenu = String(localized: "composer.closeMenu", defaultValue: "Close suggestions")
+    static let mention = String(localized: "composer.mention", defaultValue: "Mention a File")
+    static let closeMenu = String(localized: "composer.closeMenu", defaultValue: "Close Suggestions")
     static let queued = String(localized: "composer.queued", defaultValue: "Queued")
-    static let cancelQueued = String(localized: "composer.cancelQueued", defaultValue: "Take back")
-    static let favourite = String(localized: "composer.favourite", defaultValue: "Add to favourites")
-    static let unfavourite = String(localized: "composer.unfavourite", defaultValue: "Remove from favourites")
+    static let cancelQueued = String(localized: "composer.cancelQueued", defaultValue: "Take Back")
+    static let favourite = String(localized: "composer.favourite", defaultValue: "Add to Favourites")
+    static let unfavourite = String(localized: "composer.unfavourite", defaultValue: "Remove from Favourites")
     static let favourites = String(localized: "composer.favourites", defaultValue: "Favourites")
     static let recent = String(localized: "composer.recent", defaultValue: "Recent")
-    static let allCommands = String(localized: "composer.allCommands", defaultValue: "All commands")
+    static let allCommands = String(localized: "composer.allCommands", defaultValue: "All Commands")
     static let noCommands = String(localized: "composer.noCommands", defaultValue: "No commands match")
     static let filterCommands = String(localized: "composer.filterCommands", defaultValue: "Type to filter")
     static let notSent = String(localized: "composer.notSent", defaultValue: "Not sent")
     static let notInterrupted = String(localized: "composer.notInterrupted", defaultValue: "Couldn't stop")
-    static let openTerminal = String(localized: "composer.openTerminal", defaultValue: "Open terminal")
+    static let openTerminal = String(localized: "composer.openTerminal", defaultValue: "Open Terminal")
     static let session = String(localized: "composer.session", defaultValue: "Session")
-    static let sessionState = String(localized: "composer.sessionState", defaultValue: "Model, effort and mode")
+    static let sessionState = String(localized: "composer.sessionState", defaultValue: "Model, Effort and Mode")
     static let commandsFailed = String(localized: "composer.commandsFailed", defaultValue: "Couldn't read the commands")
     static let filesUnavailable = String(localized: "composer.filesUnavailable", defaultValue: "Couldn't search all workspace folders.")
-    static let tryAgain = String(localized: "composer.tryAgain", defaultValue: "Try again")
+    static let tryAgain = String(localized: "composer.tryAgain", defaultValue: "Try Again")
     static let notCancelled = String(localized: "composer.notCancelled", defaultValue: "Couldn't take it back")
     static let modeNotChanged = String(localized: "composer.modeNotChanged", defaultValue: "The mode didn't change")
-    static let focusField = String(localized: "composer.focusField", defaultValue: "Focus the message field")
-    static let history = String(localized: "composer.history", defaultValue: "Previous message")
+    static let focusField = String(localized: "composer.focusField", defaultValue: "Focus the Message Field")
+    static let history = String(localized: "composer.history", defaultValue: "Previous Message")
 
     /// "2 queued".
     static func queuedCount(_ count: Int) -> String {
@@ -41,7 +41,7 @@ enum ComposerCopy {
         String(localized: "composer.message", defaultValue: "Message \(name)")
     }
 
-    static let sendAsText = String(localized: "composer.sendAsText", defaultValue: "Send as text")
+    static let sendAsText = String(localized: "composer.sendAsText", defaultValue: "Send as Text")
 
     /// "Model…": a long list on its own screen.
     static func opensList(_ title: String) -> String {

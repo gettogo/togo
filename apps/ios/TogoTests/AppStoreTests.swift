@@ -48,7 +48,7 @@ import TogoKit
         #expect(machines.flatMap(\.sessions).map(\.status) == [.needsYou])
     }
 
-    @Test func doneOlderThanSixHoursArchived() {
+    @Test func liveAgentsStayListedAfterSixHours() {
         let store = store(ControlCenterState())
         let sixHours = AppStore.archiveAfter
         store.apply(snapshot(sessions: [
@@ -57,8 +57,8 @@ import TogoKit
             Samples.row(bib: "03", name: "recent", status: .done, cwd: "/srv", since: now.addingTimeInterval(-sixHours + 60)),
             Samples.row(bib: "04", name: "idle", status: .idle, cwd: "/srv", since: now.addingTimeInterval(-sixHours * 3)),
         ]))
-        #expect(bibs(store) == ["03", "04"])
-        #expect(store.controlCenter.archived.compactMap(\.bib) == ["01", "02"])
+        #expect(bibs(store) == ["01", "03", "04"])
+        #expect(store.controlCenter.archived.compactMap(\.bib) == ["02"])
     }
 
     @Test func rowsKeepBibOrderAcrossStatusChange() {

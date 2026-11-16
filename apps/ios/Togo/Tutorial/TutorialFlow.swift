@@ -97,7 +97,7 @@ struct TutorialFlow: View {
             VStack(spacing: 4) {
                 if lastShown {
                     Group {
-                        Button(String(localized: "tutorial.ready.add", defaultValue: "Add your first machine")) {
+                        Button(String(localized: "tutorial.ready.add", defaultValue: "Add Your First Machine")) {
                             model.finish()
                             onClose(.addMachine)
                         }

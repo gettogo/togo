@@ -112,7 +112,7 @@ import TogoKit
         )
         #expect(away.available.contains(.runAgain))
         #expect(!away.allows(.runAgain))
-        #expect(SessionAction.runAgain.title(for: failed) == "Run again")
+        #expect(SessionAction.runAgain.title(for: failed) == "Run Again")
     }
 
     @Test func runAgainHiddenForUsageLimit() {

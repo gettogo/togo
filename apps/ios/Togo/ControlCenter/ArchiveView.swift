@@ -28,6 +28,13 @@ struct ArchiveView: View {
                                 SessionAction.copyPath.title(for: row),
                                 systemImage: SessionAction.copyPath.systemImage(for: row)
                             ) { perform(.copyPath(row)) }
+                            let actions = SessionActions.actions(for: row, on: group.machine)
+                            if actions.available.contains(.kill) {
+                                Button(ControlCenterCopy.kill, systemImage: "xmark.circle", role: .destructive) {
+                                    perform(.kill(row))
+                                }
+                                .disabled(!actions.allows(.kill))
+                            }
                         }
                     }
                 } header: {

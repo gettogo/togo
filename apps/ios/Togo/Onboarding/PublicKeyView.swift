@@ -25,7 +25,7 @@ struct PublicKeyView: View {
 
     var body: some View {
         OnboardingStep(
-            title: String(localized: "onboard.publicKey.title", defaultValue: "Add this device's key"),
+            title: String(localized: "onboard.publicKey.title", defaultValue: "Add This Device's Key"),
             message: String(
                 localized: "onboard.publicKey.message",
                 defaultValue: "Add this key to ~/.ssh/authorized_keys on \(machine)."
@@ -74,7 +74,7 @@ struct PublicKeyView: View {
                     Label(
                         copiedCommand
                             ? String(localized: "onboard.copied", defaultValue: "Copied")
-                            : String(localized: "onboard.copyCommand", defaultValue: "Copy command"),
+                            : String(localized: "onboard.copyCommand", defaultValue: "Copy Command"),
                         systemImage: copiedCommand ? "checkmark" : "doc.on.doc"
                     )
                     .contentTransition(.identity)
@@ -82,7 +82,7 @@ struct PublicKeyView: View {
                 .buttonStyle(.secondary(.fit))
             }
         } actions: {
-            Button(String(localized: "onboard.checkAgain", defaultValue: "Check again"), action: onCheckAgain)
+            Button(String(localized: "onboard.checkAgain", defaultValue: "Check Again"), action: onCheckAgain)
                 .buttonStyle(.primary)
         }
         .task(id: copied) {

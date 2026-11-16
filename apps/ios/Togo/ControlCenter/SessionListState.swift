@@ -106,6 +106,7 @@ struct RequestCollapse: ViewModifier {
 struct ArchiveScreen: View {
     @Environment(\.machineTools) private var machineTools
     let store: AppStore
+    @State private var ending: SessionRow?
 
     var body: some View {
         ArchiveView(rows: store.controlCenter.archived, machines: store.listMachines) { command in
@@ -114,8 +115,9 @@ struct ArchiveScreen: View {
             } else {
                 store.run(command, tools: machineTools, open: { row, transport in
                     store.open(hostID: row.hostID, sessionID: row.id, transport: transport)
-                }, kill: { _ in }, rename: { _ in })
+                }, kill: { ending = $0 }, rename: { _ in })
             }
         }
+        .modifier(SessionDialogs(store: store, kill: $ending, rename: .constant(nil)))
     }
 }

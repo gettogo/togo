@@ -389,7 +389,7 @@ struct SetupPage: View {
 struct HelperLimits: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeading(String(localized: "tutorial.helper.limits", defaultValue: "What the helper does not do"))
+            SectionHeading(String(localized: "tutorial.helper.limits", defaultValue: "What the Helper Does Not Do"))
             TutorialPoint(
                 String(localized: "tutorial.helper.port.title", defaultValue: "It never opens a network port"),
                 systemImage: "network.slash",

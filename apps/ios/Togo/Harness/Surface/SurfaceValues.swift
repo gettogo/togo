@@ -130,7 +130,7 @@ enum SurfaceValues {
 }
 
 enum SurfaceCopy {
-    static let currentScreen = String(localized: "surface.currentScreen", defaultValue: "Current screen")
+    static let currentScreen = String(localized: "surface.currentScreen", defaultValue: "Current Screen")
     static let open = String(localized: "surface.open", defaultValue: "Open")
     static let openForm = String(localized: "surface.openForm", defaultValue: "Open this request to respond.")
     static let deskDraft = String(localized: "surface.deskDraft", defaultValue: "Text is waiting in Terminal. Send or clear it there before running another command.")
@@ -139,7 +139,7 @@ enum SurfaceCopy {
     static let openingForm = String(localized: "surface.openingForm", defaultValue: "Opening form…")
     static let openingCommand = String(localized: "surface.openingCommand", defaultValue: "Opening command…")
     static let finishCurrent = String(localized: "surface.finishCurrent", defaultValue: "Finish or close the open request, then try again.")
-    static let interface = String(localized: "surface.interface", defaultValue: "Session controls")
+    static let interface = String(localized: "surface.interface", defaultValue: "Session Controls")
     static let close = String(localized: "surface.close", defaultValue: "Close")
     static let terminal = String(localized: "surface.terminal", defaultValue: "Terminal")
     static let loading = String(localized: "surface.loading", defaultValue: "Opening session controls…")
