@@ -261,7 +261,10 @@ type messagePayload struct {
 		ProviderID string `json:"providerID"`
 		Agent      string `json:"agent"`
 		Mode       string `json:"mode"`
-		Time       struct {
+		// Summary is on the updates a user message gets after its prompt
+		// started the turn; the first update of a prompt has none.
+		Summary json.RawMessage `json:"summary"`
+		Time    struct {
 			Created   int64 `json:"created"`
 			Completed int64 `json:"completed"`
 		} `json:"time"`
@@ -306,6 +309,12 @@ func (e *Events) messageInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 	}
 	if in.Role == "user" {
 		if _, ok := e.turns[in.ID]; ok {
+			return nil, nil
+		}
+		if len(in.Summary) > 0 && e.state["working"] != "true" {
+			// A later update of a prompt this mapper did not see start (it
+			// started after the turn): not a new prompt, and nothing
+			// would close its turn.
 			return nil, nil
 		}
 		tu := &turn{session: in.SessionID, started: orAt(ms(in.Time.Created), at), state: harness.StateRunning,

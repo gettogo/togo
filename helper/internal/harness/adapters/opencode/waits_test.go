@@ -193,3 +193,16 @@ func TestSwitchingSessionResetsWorking2(t *testing.T) {
 		t.Fatalf("state after the switch %v", st)
 	}
 }
+
+// A mapper that starts after a turn ended gets the user message's later
+// update (it carries a summary): that is not a prompt, so no turn opens.
+func TestLateUserMessageUpdateOpensNoTurn(t *testing.T) {
+	recs := recorded(t)
+	late := indexOf(t, recs, "message.updated", `"summary": {"diffs": []}, "id": "msg_1b3e387240019POJUd4yMPPXV0"`)
+	m := NewEvents(harness.Env{SessionID: "s_oc", Cwd: "/Users/me/proj"})
+	m.Map(harness.Record{Data: json.RawMessage(`{"type":"tui.session.select","properties":{"sessionID":"` + recordedSession + `"}}`)})
+	items, _ := m.Map(recs[late])
+	if len(items) != 0 || m.State()["working"] != "false" {
+		t.Fatalf("late update opened a turn: %+v %v", items, m.State())
+	}
+}
