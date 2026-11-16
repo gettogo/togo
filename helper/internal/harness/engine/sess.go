@@ -856,9 +856,12 @@ func (s *sess) agentExitedLocked() {
 		ended = append(ended, it)
 	}
 	s.queue = nil
+	asked := s.unansweredLocked()
+	ended = append(ended, asked...)
 	if len(ended) > 0 {
 		s.publishLocked(ended, nil)
 	}
+	s.forgetQuestionsLocked()
 }
 
 // closeIdleLocked publishes what IdleCloser mappers close once the session
