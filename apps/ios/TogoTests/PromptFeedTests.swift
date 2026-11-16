@@ -6,6 +6,40 @@ import TogoKit
 /// What the prompt bar holds: the oldest request first with its place in the queue, a reply
 /// kept while its request waits, and otherwise nothing: the bar is never a terminal's input.
 @MainActor struct PromptFeedTests {
+    @Test func readOnlyWaitingNeverInventsAnswersAndOpensItsOwnTerminal() async throws {
+        let source = Approval(requestId: "readonly", sessionId: "s-01", bib: "01", agent: "omp", source: .screen,
+            title: "Waiting for input", detail: nil, snippet: "", options: [], allowText: false,
+            createdAt: Samples.now, expiresAt: nil, answerable: false)
+        var mapper = SnapshotMapper()
+        let snapshot = HostSnapshot(hostID: Samples.studio, reach: .online, approvals: [source])
+        let card = try #require(mapper.map(snapshot, noHelper: false, now: Samples.now).requests.first)
+        #expect(!card.answerable)
+        var cases = [card]
+        var legacy = card; legacy.answerable = true; cases.append(legacy)
+        var contradictory = card
+        contradictory.allowText = true
+        contradictory.options = [.init(n: 1, label: "Yes", role: .approve), .init(n: 2, label: "No", role: .deny)]
+        cases.append(contradictory)
+        for candidate in cases {
+            let request = PromptFeed.request(candidate, row: nil, machineName: "Machine")
+            #expect(request.requiresTerminal && !request.answerable)
+            #expect(!request.asksYesOrNo && !request.allowsReply && request.more.isEmpty)
+            #expect(!ApprovalRow.answerable(candidate))
+            for answer in [PromptAnswer.yes, .no, .option(1), .reply("text")] {
+                #expect(PromptFeed.decision(answer, for: candidate) == nil)
+            }
+        }
+        let service = FakeAppServices()
+        let app = AppStore(services: service)
+        app.controlCenter.requests = [card]
+        await app.answer(card.id, .approve)
+        #expect(service.calls.isEmpty)
+        app.openRequest(card)
+        let target = TabID(hostID: card.hostID, sessionID: "s-01")
+        #expect(app.workspace.selected == target)
+        #expect(app.layer(for: target) == .terminal)
+    }
+
     private let services = FakeAppServices(hosts: Samples.hosts)
     private let four = TabID(hostID: Samples.studio, sessionID: "s-04")
 
@@ -174,8 +208,8 @@ import TogoKit
 
         var plain = card
         plain.options = []
-        #expect(PromptFeed.decision(.yes, for: plain) == .approve)
-        #expect(PromptFeed.decision(.no, for: plain) == .deny)
+        #expect(PromptFeed.decision(.yes, for: plain) == nil)
+        #expect(PromptFeed.decision(.no, for: plain) == nil)
     }
 
     @Test func suggestionsComeFromKnownFoldersOnceEach() {

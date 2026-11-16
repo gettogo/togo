@@ -182,6 +182,10 @@ import WidgetKit
         request.options.contains { $0.role == "approve" }
     }
 
+    static func canDeny(_ request: PendingRequest) -> Bool {
+        request.options.contains { $0.role == "deny" }
+    }
+
     /// Reads the store again, after another process may have changed it.
     func reload() {
         let now = deps.clock()
@@ -289,6 +293,7 @@ import WidgetKit
             return
         }
         if decision == "approve", !Self.canApprove(request) { return }
+        if decision == "deny", !Self.canDeny(request) { return }
         await send(hostId: request.hostId, requestId: requestId, decision: decision)
     }
 
@@ -329,6 +334,8 @@ import WidgetKit
             return
         }
         guard decision == "approve" || decision == "deny" else { return }
+        if let known = deps.pending.request(requestId),
+           decision == "approve" ? !Self.canApprove(known) : !Self.canDeny(known) { return }
         guard let pairing = deps.pairings.pairing(hostId: hostId) else {
             outcomes[requestId] = .notSetUp
             revision += 1

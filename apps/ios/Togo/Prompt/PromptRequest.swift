@@ -26,10 +26,12 @@ struct PromptRequest: Identifiable, Equatable, Sendable {
     var signIn: SignInStep?
     /// The machine the request came from, for opening its sign-in page.
     var hostID: HostID?
+    var requiresTerminal = false
 
     /// Whether an answer can be sent now.
     var answerable: Bool {
-        switch state {
+        guard !requiresTerminal else { return false }
+        return switch state {
         case .open, .failed: true
         case .sending, .done, .withdrawn: false
         }

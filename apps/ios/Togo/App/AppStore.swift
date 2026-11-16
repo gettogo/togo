@@ -204,7 +204,8 @@ import TogoKit
     }
 
     func answer(_ cardID: String, _ decision: Decision) async {
-        guard let card = controlCenter.requests.first(where: { $0.id == cardID }), card.phase == .open else { return }
+        guard let card = controlCenter.requests.first(where: { $0.id == cardID }), card.phase == .open,
+              card.answerable, !card.options.isEmpty || card.allowText else { return }
         answerFailures[cardID] = nil
         setPhase(.sending(decision), of: cardID)
         do {

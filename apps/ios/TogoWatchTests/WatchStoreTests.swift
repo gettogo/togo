@@ -23,6 +23,22 @@ private final class Clock: Sendable {
 }
 
 @MainActor struct WatchStoreTests {
+    @Test func readOnlyWaitingHasNoYesOrNoAndSendsNeither() async {
+        let model = store()
+        var request = push(.needsYou, "r_readonly")
+        request.options = []
+        request.allowText = false
+        model.ingest(request, hostId: "h_studio")
+        let pendingRequest = pending.request("r_readonly")!
+        #expect(!WatchStore.canApprove(pendingRequest))
+        #expect(!WatchStore.canDeny(pendingRequest))
+        await model.answer("r_readonly", "approve")
+        await model.answer("r_readonly", "deny")
+        await model.answerFromNotification(hostId: "h_studio", requestId: "r_readonly", decision: "deny")
+        #expect(sender.decisions.isEmpty)
+        #expect(pending.request("r_readonly")?.answered == nil)
+    }
+
     private let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     private let sender = FakeSender()
     private let clock = Clock()

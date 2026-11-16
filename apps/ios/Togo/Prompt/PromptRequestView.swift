@@ -201,6 +201,11 @@ struct PromptRequestView: View {
     /// Each answer names this request, so one that lands after the bar moved on is dropped.
     @ViewBuilder private var answerButtons: some View {
         let hint = request.command.map { PromptCopy.answerHint(question: request.question, command: $0) } ?? request.question
+        if request.requiresTerminal, !request.sessionID.isEmpty {
+            Button(SurfaceCopy.open, systemImage: "terminal") { model.onOpen(request) }
+                .buttonStyle(.promptCapsule(.beacon))
+                .accessibilityHint(ChatCopy.waitingInTerminal)
+        }
         if request.asksYesOrNo {
             Button(PromptCopy.yes) { answer(.yes) }
                 .buttonStyle(.promptCapsule(.beacon))

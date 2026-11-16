@@ -112,14 +112,10 @@ private struct PromptBarFeed: ViewModifier {
         model.onOpenStartSheet = { store.startNewSession() }
         model.onOpen = { request in
             guard let card = store.controlCenter.requests.first(where: { $0.id == request.id }),
-                  let sessionID = card.sessionID else { return }
+                  card.sessionID != nil else { return }
             // As a tap on its line: beside the roster out from under whatever the detail had
             // pushed, into the focused pane.
-            if store.workspaceInline {
-                store.showSession(TabID(hostID: card.hostID, sessionID: sessionID))
-            } else {
-                store.open(hostID: card.hostID, sessionID: sessionID)
-            }
+            store.openRequest(card)
         }
     }
 }

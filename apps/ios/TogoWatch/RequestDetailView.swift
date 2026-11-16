@@ -184,46 +184,50 @@ private struct AnswerButtons: View {
                 .font(.footnote)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        Button {
-            guard armed else { return }
-            Task { await store.answer(request.requestId, "approve") }
-        } label: {
-            Text(WatchCopy.yes)
-                .fontWeight(.medium)
-                .frame(maxWidth: .infinity)
-                .foregroundStyle(canApprove ? Color.black : Color.secondary)
+        if canApprove {
+            Button {
+                guard armed else { return }
+                Task { await store.answer(request.requestId, "approve") }
+            } label: {
+                Text(WatchCopy.yes)
+                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(canApprove ? Color.black : Color.secondary)
+            }
+            .buttonStyle(.borderedProminent)
+            // Not `.capsule`: that shape caps the button at about 178pt on a 207pt screen, leaving a
+            // right margin. A radius past half the height draws the same pill at the full column width.
+            .buttonBorderShape(.roundedRectangle(radius: 40))
+            .tint(.togoAccent)
+            .disabled(!canApprove || sending)
+            // Double Tap approves, the one thing this page is for. Only while Approve can go:
+            // otherwise Double Tap scrolls the page as usual.
+            .handGestureShortcut(.primaryAction, isEnabled: canApprove && armed && (state == .open || state == .failed))
+            // motion: cause → effect — the buttons give way to the result in the same place
+            .transition(Motion.swap(reduce: reduceMotion))
         }
-        .buttonStyle(.borderedProminent)
-        // Not `.capsule`: that shape caps the button at about 178pt on a 207pt screen, leaving a
-        // right margin. A radius past half the height draws the same pill at the full column width.
-        .buttonBorderShape(.roundedRectangle(radius: 40))
-        .tint(.togoAccent)
-        .disabled(!canApprove || sending)
-        // Double Tap approves, the one thing this page is for. Only while Approve can go:
-        // otherwise Double Tap scrolls the page as usual.
-        .handGestureShortcut(.primaryAction, isEnabled: canApprove && armed && (state == .open || state == .failed))
-        // motion: cause → effect — the buttons give way to the result in the same place
-        .transition(Motion.swap(reduce: reduceMotion))
         if !canApprove {
             Text(WatchCopy.answerOnPhone)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        Button {
-            guard armed else { return }
-            Task { await store.answer(request.requestId, "deny") }
-        } label: {
-            Text(WatchCopy.no)
-                .fontWeight(.medium)
-                .frame(maxWidth: .infinity)
+        if WatchStore.canDeny(request) {
+            Button {
+                guard armed else { return }
+                Task { await store.answer(request.requestId, "deny") }
+            } label: {
+                Text(WatchCopy.no)
+                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity)
+            }
+            // A full-width capsule the height of Yes: the whole row answers, and the pair reads as one choice.
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.roundedRectangle(radius: 40))
+            .disabled(sending)
+            // motion: cause → effect — the buttons give way to the result in the same place
+            .transition(Motion.swap(reduce: reduceMotion))
         }
-        // A full-width capsule the height of Yes: the whole row answers, and the pair reads as one choice.
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.roundedRectangle(radius: 40))
-        .disabled(sending)
-        // motion: cause → effect — the buttons give way to the result in the same place
-        .transition(Motion.swap(reduce: reduceMotion))
     }
 
     private func result(_ title: String, systemImage: String) -> some View {

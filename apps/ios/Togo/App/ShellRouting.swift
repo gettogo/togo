@@ -2,6 +2,17 @@ import Foundation
 import TogoKit
 
 extension AppStore {
+    /// A read-only request opens the harness's own controls without inventing an answer.
+    func openRequest(_ card: RequestCard) {
+        guard let session = card.sessionID else { return }
+        let id = TabID(hostID: card.hostID, sessionID: session)
+        if workspaceInline { showSession(id) }
+        else { open(hostID: card.hostID, sessionID: session) }
+        if PromptFeed.request(card, row: nil, machineName: "").requiresTerminal {
+            harness(for: id)?.layer = .terminal
+        }
+    }
+
     /// The workspace is what the window shows: pushed over the roster in a compact window, or
     /// the terminal column beside it (which shows the empty detail while no tab is open).
     var workspaceOnScreen: Bool {

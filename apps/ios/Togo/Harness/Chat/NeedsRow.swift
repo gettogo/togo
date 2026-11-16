@@ -213,7 +213,7 @@ struct ApprovalRow: View {
     /// A request the phone can answer: it offers options, or takes words. One with neither (a
     /// hook saw the prompt before the screen did) waits in the terminal.
     static func answerable(_ card: RequestCard) -> Bool {
-        !card.options.isEmpty || card.allowText
+        card.answerable && (!card.options.isEmpty || card.allowText)
     }
 
     /// Yes and No in a row, stacked when the labels are too long for one. Extra answers open

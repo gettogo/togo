@@ -82,10 +82,9 @@ struct RequestPromptSheet: View {
     }
 
     private func openSession() {
-        guard store.sheet == sheet, let sessionID = card?.sessionID else { return }
+        guard store.sheet == sheet, let card, card.sessionID != nil else { return }
         close()
-        if store.workspaceInline { store.showSession(TabID(hostID: hostID, sessionID: sessionID)) }
-        else { store.open(hostID: hostID, sessionID: sessionID) }
+        store.openRequest(card)
     }
 }
 
