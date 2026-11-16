@@ -91,6 +91,7 @@ enum FilesCopy {
     /// The working tree's changes, by path as this tree names them.
     var marks = ChangeMarks()
     let search: FileSearch
+    @ObservationIgnored var loadGeneration = 0
 
     init(subject: ReviewSubject, services: any ReviewServices, path: String, ref: String?, base: ReviewPathBase = .session) {
         self.subject = subject
@@ -130,21 +131,30 @@ enum FilesCopy {
     }
 
     func loadIfNeeded() async {
-        guard state == .loading, entries.isEmpty else { return }
+        // The retained model may have changed while another review tab was visible.
         await load()
     }
 
     /// Reads the root again, the folders open in it, and what changed.
     func load() async {
+        loadGeneration &+= 1
+        let mine = loadGeneration
         do {
-            entries = try await services.listDir(subject, path: path, ref: ref, base: base).entries
+            let listed = try await services.listDir(subject, path: path, ref: ref, base: base)
+            guard mine == loadGeneration, !Task.isCancelled else { return }
+            entries = listed.entries
             state = .ready
         } catch {
+            guard mine == loadGeneration, !Task.isCancelled else { return }
             state = .failed(ServiceErrors.message(error))
+            search.retry()
             return
         }
-        await reloadOpenFolders()
-        await loadMarks()
+        await reloadOpenFolders(generation: mine)
+        guard mine == loadGeneration, !Task.isCancelled else { return }
+        await loadMarks(generation: mine)
+        guard mine == loadGeneration, !Task.isCancelled else { return }
+        search.retry()
     }
 
     private func item(_ entry: DirEntry, in folder: String) -> Item {

@@ -55,6 +55,7 @@ extension HelperError {
     var refLogs: [String: [GitCommit]] = [:]
     /// What `files` answers: every file of the fixtures' tree.
     var fileIndex = ReviewFixtures.allFiles
+    var fileIndexTruncated = false
     /// What `ports` answers.
     var portList = ReviewFixtures.ports
     private(set) var logRequests: [(ref: String?, limit: Int)] = []
@@ -149,7 +150,7 @@ extension HelperError {
 
     func files(_ s: ReviewSubject, ref: String?) async throws -> GitFiles {
         try await enter(.files)
-        return GitFiles(paths: fileIndex, truncated: false)
+        return GitFiles(paths: fileIndex, truncated: fileIndexTruncated)
     }
 
     func stage(_ s: ReviewSubject, paths: [String], seen: [String: GitSeen]) async throws -> GitStatus {

@@ -1,6 +1,17 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "review.files.searchIncomplete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some files are missing from this list. Browse folders to find them."
+          }
+        }
+      }
+    },
     "composer.attach.loading" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -121,6 +121,69 @@ import UIKit
         #expect(!model.search.isActive)
     }
 
+    @Test func transientIndexFailureStaysRetryableAndIsNotAnUpgradeHint() async {
+        let services = FakeReviewServices()
+        services.failures[.files] = ReviewFixtureError.offline
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        model.search.query = "health"
+        await model.search.settle()
+        #expect(model.search.state == .failed("The machine didn't answer."))
+        #expect(!model.search.partial)
+        services.failures[.files] = nil
+        model.search.query = "store"
+        await model.search.settle()
+        #expect(model.search.state == .ready)
+        #expect(!model.search.partial)
+        #expect(model.search.hits.map(\.path) == ["src/store.ts"])
+    }
+
+    @Test func aTruncatedRepositoryIndexIsNeverReportedAsComplete() async {
+        let services = FakeReviewServices()
+        services.fileIndexTruncated = true
+        services.fileIndex = ["src/handlers/health.ts"]
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        model.search.query = "health"
+        await model.search.settle()
+        #expect(model.search.partial)
+        #expect(model.search.hits.map(\.path) == ["src/handlers/health.ts"])
+    }
+
+    @Test func sameQueryRetriesAfterATemporaryFailure() async {
+        let services = FakeReviewServices()
+        services.failures[.files] = ReviewFixtureError.offline
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        model.search.query = "health"
+        await model.search.settle()
+        services.failures[.files] = nil
+        model.search.retry()
+        await model.search.settle()
+        #expect(model.search.query == "health")
+        #expect(model.search.state == .ready && !model.search.partial)
+        #expect(model.search.hits.map(\.path) == ["src/handlers/health.ts"])
+    }
+
+    @Test func refreshRebuildsTheRepositorySearchIndex() async {
+        let services = FakeReviewServices()
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        await model.load()
+        model.search.query = "health"
+        await model.search.settle()
+        services.fileIndex = ["fresh/health.ts"]
+        await model.load()
+        await model.search.settle()
+        #expect(model.search.hits.map(\.path) == ["fresh/health.ts"])
+    }
+
+    @Test func nextAppearanceReadsFreshFolderContents() async {
+        let services = FakeReviewServices()
+        services.trees[""] = [DirEntry(name: "old.txt", dir: false)]
+        let model = FilesModel(subject: subject, services: services, path: "", ref: nil)
+        await model.loadIfNeeded()
+        services.trees[""] = [DirEntry(name: "new.txt", dir: false)]
+        await model.loadIfNeeded()
+        #expect(model.items.map(\.name) == ["new.txt"])
+    }
+
     @Test func searchWithoutTheFileListUsesOpenedFolders() async {
         let services = FakeReviewServices()
         services.failures[.files] = HelperError.unsupported(capability: Capability.gitFiles)

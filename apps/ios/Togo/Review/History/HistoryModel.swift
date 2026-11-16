@@ -135,7 +135,7 @@ extension GitBranches.Branch {
     var reachedLimit: Bool { limit >= Self.maxCommits && commits.count >= Self.maxCommits }
 
     func loadIfNeeded() async {
-        guard commits.isEmpty, branches.isEmpty, state == .loading else { return }
+        // Re-entry must include commits made while Changes or another tab was visible.
         await load()
     }
 
@@ -145,17 +145,23 @@ extension GitBranches.Branch {
         let mine = generation
         limit = Self.pageSize
         moreFailed = false
-        let ref = selectedRef
+        let picked = selectedRef
         do {
             let result = try await services.branches(subject)
+            guard mine == generation, !Task.isCancelled else { return }
+            let current = result.current ?? result.branches.first(where: \.current)?.name
+            let ref = picked.flatMap { name in
+                name != current && result.branches.contains(where: { $0.name == name }) ? name : nil
+            }
             let page = try await services.log(subject, ref: ref, limit: limit)
-            guard mine == generation else { return }
+            guard mine == generation, !Task.isCancelled else { return }
             branches = Self.ordered(result)
-            currentBranch = result.current ?? result.branches.first(where: \.current)?.name
+            currentBranch = current
+            selectedRef = ref
             commits = page
             state = .ready
         } catch {
-            guard mine == generation else { return }
+            guard mine == generation, !Task.isCancelled else { return }
             state = .failed(ServiceErrors.message(error))
         }
     }

@@ -9,7 +9,11 @@ enum FileTreeCopy {
     static let noResults = String(localized: "review.files.noResults", defaultValue: "No files found")
     static let searchFailed = String(localized: "review.files.searchFailed", defaultValue: "Couldn't search the files")
     static let partial = String(
-        localized: "review.files.partial", defaultValue: "Searching only the folders opened so far. Update the helper to search every file."
+        localized: "review.files.partial", defaultValue: "Searching only the folders opened so far."
+    )
+    static let incompleteIndex = String(
+        localized: "review.files.searchIncomplete",
+        defaultValue: "Some files are missing from this list. Browse folders to find them."
     )
     static let showChanges = String(localized: "review.files.showChanges", defaultValue: "Show Changes")
     static let modified = String(localized: "review.files.modified", defaultValue: "Modified")
@@ -59,29 +63,37 @@ extension FilesModel {
         return items(of: entries, in: folder)
     }
 
-    func read(_ folder: String) async {
+    func read(_ folder: String, generation: Int? = nil) async {
         folders[folder] = .loading
         do {
             let entries = try await reviewServices.listDir(subject, path: folder, ref: ref, base: base).entries
+            guard !Task.isCancelled, generation == nil || generation == loadGeneration else { return }
             folders[folder] = .ready(entries)
         } catch {
+            guard !Task.isCancelled, generation == nil || generation == loadGeneration else { return }
             folders[folder] = .failed(ServiceErrors.message(error))
         }
     }
 
     /// After a pull to refresh: the folders still open are read again, the closed ones forgotten.
-    func reloadOpenFolders() async {
+    func reloadOpenFolders(generation: Int? = nil) async {
         folders = folders.filter { expanded.contains($0.key) }
-        for folder in expanded.sorted() { await read(folder) }
+        for folder in expanded.sorted() {
+            guard !Task.isCancelled, generation == nil || generation == loadGeneration else { return }
+            await read(folder, generation: generation)
+        }
     }
 
     /// The working tree's changes, marked on the files and folders that hold them. Commits and
     /// folders outside the repository have none; a failed read leaves the marks off.
-    func loadMarks() async {
-        guard ref == nil, subject.canRead, let status = try? await reviewServices.status(subject), status.repo else {
+    func loadMarks(generation: Int? = nil) async {
+        guard ref == nil, subject.canRead else {
             marks = ChangeMarks()
             return
         }
+        let status = try? await reviewServices.status(subject)
+        guard !Task.isCancelled, generation == nil || generation == loadGeneration else { return }
+        guard let status, status.repo else { marks = ChangeMarks(); return }
         let prefix: String? = switch base {
         case .repository: ""
         case .session: status.root.flatMap { ChangeMarks.sessionPrefix(cwd: subject.cwd, root: $0) }
@@ -231,6 +243,16 @@ struct ChangeMarks: Equatable {
     }
 
     var isActive: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    var partialMessage: String { index == nil ? FileTreeCopy.partial : FileTreeCopy.incompleteIndex }
+
+    func retry() {
+        task?.cancel()
+        index = nil
+        partial = false
+        hits = []
+        more = false
+        run()
+    }
 
     /// Waits for the search for the current query to finish.
     func settle() async { await task?.value }
@@ -249,7 +271,17 @@ struct ChangeMarks: Equatable {
         task = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(120))
             guard !Task.isCancelled, let self else { return }
-            let (paths, base) = await source()
+            let paths: [String]
+            let base: ReviewPathBase
+            do {
+                (paths, base) = try await source()
+            } catch {
+                guard !Task.isCancelled else { return }
+                hits = []
+                more = false
+                state = .failed(ServiceErrors.message(error))
+                return
+            }
             guard !Task.isCancelled else { return }
             let hidden = showsHidden()
             let limit = Self.limit + 1
@@ -265,15 +297,22 @@ struct ChangeMarks: Equatable {
     }
 
     /// Every repository path, read once; the tree's paths when the helper cannot list them.
-    private func source() async -> ([String], ReviewPathBase) {
+    private func source() async throws -> ([String], ReviewPathBase) {
         if let index { return (index, .repository) }
         if !partial {
             do {
                 let files = try await services.files(subject, ref: ref)
+                try Task.checkCancellation()
                 index = files.paths
+                partial = files.truncated
                 return (files.paths, .repository)
             } catch {
-                partial = true
+                try Task.checkCancellation()
+                switch error as? HelperError {
+                case .unsupported?: partial = true
+                case .rpc(let reply)? where reply.code == -32601: partial = true
+                default: throw error
+                }
             }
         }
         let loaded = loadedPaths()
