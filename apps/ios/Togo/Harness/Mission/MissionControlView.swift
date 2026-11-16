@@ -286,10 +286,14 @@ struct MissionControlStack: View {
         }
     }
 
+    func subagentView(_ id: String) -> SubagentChatView {
+        SubagentChatView(store: store, agentID: id, actions: actions)
+    }
+
     @ViewBuilder private func destination(_ route: MissionRoute) -> some View {
         switch route {
         case .agent(let id):
-            SubagentChatView(store: store, agentID: id)
+            subagentView(id)
                 .background(Color.togoInk)
         case .job(let row):
             // The live tail, and Open terminal when the process has a pane of its own; the host
