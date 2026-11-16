@@ -395,7 +395,7 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 		}
 	}
 	sort.Strings(ids)
-	var items []harness.Item
+	items := e.flushParts(sess)
 	for _, id := range ids {
 		tu := e.turns[id]
 		if tu.state == harness.StateRunning {

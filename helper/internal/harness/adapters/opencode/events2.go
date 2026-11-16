@@ -414,7 +414,7 @@ func (e *Events2) ended(sess, state string, at time.Time) ([]harness.Item, []har
 	if sess == e.main {
 		e.state["working"], e.state["idle"] = "false", "true"
 	}
-	var items []harness.Item
+	items := e.flushTexts(sess)
 	var ops []harness.Op
 	if id := e.turnOf[sess]; id != "" {
 		delete(e.turnOf, sess)

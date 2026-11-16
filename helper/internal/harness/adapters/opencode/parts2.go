@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -131,4 +132,25 @@ func contentText(cs []content2) string {
 		}
 	}
 	return b.String()
+}
+
+// flushTexts closes the streamed text of a session whose turn ended (see
+// Events.flushParts).
+func (e *Events2) flushTexts(sess string) []harness.Item {
+	ids := make([]string, 0, len(e.texts))
+	for id, st := range e.texts {
+		if st.sess == sess {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	var items []harness.Item
+	for _, id := range ids {
+		st := e.texts[id]
+		delete(e.texts, id)
+		if strings.TrimSpace(st.text) != "" {
+			items = append(items, textItem(id, st.turn, e.parent(st.sess), st.kind, st.start, st.text, false))
+		}
+	}
+	return items
 }
