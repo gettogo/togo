@@ -115,8 +115,14 @@ extension KeyEncoder {
         characters: String,
         charactersIgnoringModifiers: String,
         modifiers: UIKeyModifierFlags,
-        optionAsMeta: Bool
+        optionAsMeta: Bool,
+        keyCode: Int? = nil
     ) -> [UInt8]? {
+        let chord = modifiers.intersection([.shift, .control, .alternate, .command])
+        if chord == .shift, let keyCode,
+           [.keyboardReturnOrEnter, .keypadEnter].contains(UIKeyboardHIDUsage(rawValue: keyCode)) {
+            return encode(KeyStroke(.enter, .shift), applicationCursor: false)
+        }
         guard let stroke = hardwareStroke(characters: characters, charactersIgnoringModifiers: charactersIgnoringModifiers,
                                           modifiers: modifiers, optionAsMeta: optionAsMeta) else { return nil }
         let bytes = encode(stroke, applicationCursor: false)

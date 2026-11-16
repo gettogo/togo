@@ -410,7 +410,7 @@ final class TogoTerminalView: TerminalView {
             optionAsMeta: optionAsMetaKey, mode: extendedKeyMode?() ?? .legacy)
         guard let bytes = extended ?? KeyEncoder.hardware(
             characters: characters, charactersIgnoringModifiers: charactersIgnoringModifiers,
-            modifiers: modifiers, optionAsMeta: optionAsMetaKey) else { return false }
+            modifiers: modifiers, optionAsMeta: optionAsMetaKey, keyCode: keyCode) else { return false }
         send(data: bytes[...])
         chordRepeater.start(key: keyCode, bytes: bytes, isHeld: isHeld)
         return true
