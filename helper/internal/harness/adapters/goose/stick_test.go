@@ -59,3 +59,18 @@ func TestGooseDoesNotAdoptAnOlderConversation(t *testing.T) {
 		t.Fatalf("followed %q", got)
 	}
 }
+
+// A resumed conversation was last touched before this Togo session began,
+// so the sessions feed never lists it: the chat moves to it at once.
+func TestGooseResumeMovesTheChatBeforeTheRowIsListed(t *testing.T) {
+	m := newDB(harness.Env{Cwd: "/w/proj"})
+	m.Map(row(t, sess("a", "2026-11-12 10:00:00")))
+	m.Relaunched([]string{"goose", "session", "--resume", "--session-id", "b"}, time.Now())
+	if got := m.State()["harness_session"]; got != "b" {
+		t.Fatalf("session %q, want b", got)
+	}
+	fresh := newDB(harness.Env{Cwd: "/w/proj", Argv: []string{"goose", "session", "--resume", "--session-id", "b"}})
+	if got := fresh.State()["harness_session"]; got != "b" {
+		t.Fatalf("at launch %q, want b", got)
+	}
+}

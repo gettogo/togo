@@ -59,3 +59,18 @@ func TestCrushDoesNotAdoptAnOlderConversation(t *testing.T) {
 		t.Fatalf("followed %q", got)
 	}
 }
+
+// A resumed conversation was last touched before this Togo session began,
+// so the sessions feed never lists it: the chat moves to it at once.
+func TestCrushResumeMovesTheChatBeforeTheRowIsListed(t *testing.T) {
+	m := newDB(harness.Env{Cwd: "/w/proj"})
+	m.Map(rec(t, srow("a", 100)))
+	m.Relaunched([]string{"crush", "--session", "b"}, time.Now())
+	if got := m.State()["harness_session"]; got != "b" {
+		t.Fatalf("session %q, want b", got)
+	}
+	fresh := newDB(harness.Env{Cwd: "/w/proj", Argv: []string{"crush", "--session", "b"}})
+	if got := fresh.State()["harness_session"]; got != "b" {
+		t.Fatalf("at launch %q, want b", got)
+	}
+}

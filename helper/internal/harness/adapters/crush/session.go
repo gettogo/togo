@@ -32,8 +32,14 @@ type db struct {
 }
 
 func newDB(env harness.Env) *db {
-	return &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{},
+	m := &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{},
 		done: map[string]bool{}, asks: map[string]asked{}, b: turns.New()}
+	if m.pin != "" {
+		// Resumed at launch: the chat is that conversation now, before the
+		// sessions feed (which lists only recently touched rows) names it.
+		m.state["harness_session"] = m.pin
+	}
+	return m
 }
 
 func (m *db) Name() string { return MapperDB }
@@ -178,6 +184,14 @@ func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
 		m.pin = id
 		if r, ok := m.sessions[id]; ok {
 			m.session(r)
+		} else if m.state["harness_session"] != id {
+			// The feed lists only rows touched since this Togo session
+			// began, which a resumed conversation may not be.
+			m.b.Reset()
+			m.done = map[string]bool{}
+			m.asks = map[string]asked{}
+			m.state["harness_session"] = id
+			m.shown = false
 		}
 	}
 	return nil
