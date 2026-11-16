@@ -26,4 +26,18 @@ import TogoKit
         #expect(result?.message == "The agent is busy. Try again after this reply.")
     }
 
+    @Test(arguments: [HelperCallInterrupted.Reason.closed, .timedOut])
+    func aLostActionResultPreservesItsUncertainDeliveryWarning(_ reason: HelperCallInterrupted.Reason) async {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        let error = HelperCallInterrupted(reason: reason)
+        services.actionError = error
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: services)
+        let context = PrimitiveContext.store(store, openScreen: { _ in }, open: { _ in }, showTerminal: {})
+        let result = await context.run("set_model", nil, nil)
+        #expect(result?.result == .failed)
+        #expect(result?.message == error.localizedDescription)
+        #expect(result?.message?.contains("may have completed") == true)
+        #expect(services.actions == ["set_model"])
+    }
+
 }

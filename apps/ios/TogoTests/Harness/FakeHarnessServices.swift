@@ -49,7 +49,7 @@ import TogoKit
     var feeds: [FeedScript] = []
     var sendFailures = 0
     var beforeSendResult: (@MainActor () async throws -> Void)?
-    var actionError: HelperError?
+    var actionError: (any Error)?
     var interruptResult = HarnessActionResult(result: .applied)
     var actionResult = HarnessActionResult(result: .applied)
     var beforeActionResult: (@MainActor () async -> Void)?
