@@ -82,6 +82,7 @@ import TogoKit
             if chosen.contains(option) { chosen.remove(option) } else { chosen.insert(option) }
         } else {
             chosen = chosen.contains(option) ? [] : [option]
+            texts[question.id] = nil
         }
         selections[question.id] = chosen.isEmpty ? nil : chosen
         edited = true
@@ -91,8 +92,11 @@ import TogoKit
     func text(for question: HarnessQuestion) -> String { texts[question.id] ?? "" }
 
     func setText(_ text: String, for question: HarnessQuestion) {
-        guard question.allowText else { return }
+        guard phase != .sending, question.allowText else { return }
         texts[question.id] = text
+        if !question.multi, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            selections[question.id] = nil
+        }
         edited = true
         if !text.isEmpty { changed = false }
     }
@@ -105,7 +109,7 @@ import TogoKit
             var answer = question.options.map(\.id).filter { selections[question.id]?.contains($0) ?? false }
             if question.allowText {
                 let typed = (texts[question.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !typed.isEmpty { answer.append(typed) }
+                if !typed.isEmpty { answer = question.multi ? answer + [typed] : [typed] }
             }
             if !answer.isEmpty { out[question.id] = answer }
         }
@@ -130,7 +134,10 @@ import TogoKit
             let ids = Set(question.options.map(\.id))
             let chosen = values.filter { ids.contains($0) }
             if !chosen.isEmpty { selections[question.id] = Set(question.multi ? chosen : Array(chosen.prefix(1))) }
-            if question.allowText, let text = values.first(where: { !ids.contains($0) }) { texts[question.id] = text }
+            if question.allowText, let text = values.first(where: { !ids.contains($0) }) {
+                texts[question.id] = text
+                if !question.multi, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { selections[question.id] = nil }
+            }
         }
     }
 
