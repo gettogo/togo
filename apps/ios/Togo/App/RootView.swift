@@ -195,6 +195,7 @@ struct RootView: View {
         let store = self.store
         return SettingsActions(
             update: { store.services.settings = $0 },
+            currentSettings: { store.services.settings },
             addMachine: { store.sheet = settingsHandover.open(.addMachine, from: store.sheet) },
             editMachine: { store.sheet = settingsHandover.open(.editMachine($0), from: store.sheet) },
             removeMachine: { id in

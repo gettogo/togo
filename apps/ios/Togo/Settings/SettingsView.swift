@@ -67,6 +67,7 @@ struct SettingsMachine: Identifiable, Equatable, Sendable {
 
 struct SettingsActions {
     var update: (AppSettings) -> Void
+    var currentSettings: (() -> AppSettings)?
     var addMachine: () -> Void
     var editMachine: (HostID) -> Void
     var removeMachine: (HostID) -> Void
@@ -81,6 +82,7 @@ struct SettingsActions {
 
     init(
         update: @escaping (AppSettings) -> Void,
+        currentSettings: (() -> AppSettings)? = nil,
         addMachine: @escaping () -> Void = {},
         editMachine: @escaping (HostID) -> Void = { _ in },
         removeMachine: @escaping (HostID) -> Void = { _ in },
@@ -90,6 +92,7 @@ struct SettingsActions {
         machineImport: MachineImport? = nil
     ) {
         self.update = update
+        self.currentSettings = currentSettings
         self.addMachine = addMachine
         self.editMachine = editMachine
         self.removeMachine = removeMachine
@@ -241,7 +244,7 @@ struct SettingsView: View {
         case .privacy:
             PrivacySettingsView(settings: settings, biometry: values.biometry, update: actions.update)
         case .dictation:
-            DictationSettingsView(settings: settings, update: actions.update)
+            DictationSettingsView(settings: settings, update: actions.update, currentSettings: actions.currentSettings)
         case .diagnostics:
             DiagnosticsView(settings: settings)
         case .about:
