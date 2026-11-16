@@ -112,3 +112,23 @@ func TestParseLsofEscapedNames(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+// A ps that never answers does not hold the caller for ever.
+func TestTreeGivesUpOnHungPS(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ps"), []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	old := cmdTimeout
+	cmdTimeout = 200 * time.Millisecond
+	defer func() { cmdTimeout = old }()
+	s := Session{Panes: func(context.Context) ([]int, error) { return []int{1}, nil }}
+	start := time.Now()
+	if got := s.Tree(context.Background()); got != nil {
+		t.Fatalf("tree = %v", got)
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("took %v", d)
+	}
+}

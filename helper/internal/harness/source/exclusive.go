@@ -28,6 +28,11 @@ type claimWatch struct {
 	files   int
 }
 
+// droppedAskEvery is how long a file the session left is not asked about
+// again while it does not change: a lookup of open files costs a process
+// listing.
+func droppedAskEvery() time.Duration { return 10 * globEvery }
+
 // maxHeldCandidates bounds the files asked about when a session has none.
 const maxHeldCandidates = 20
 
@@ -98,6 +103,11 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 	claims.Unlock()
 	tails := map[string]*tail{}
 	dropped := map[string]bool{} // files left for a newer one; not taken back without evidence
+	type asked struct {
+		at    time.Time
+		mtime time.Time
+	}
+	askedDropped := map[string]asked{} // when a dropped file was last put to the process view
 	defer unregisterWatch(pattern, id, me, tails)
 	var lastGlob time.Time
 	every := globEvery
@@ -142,6 +152,14 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 				// With no file yet, an agent that was already writing before
 				// the watch began (a helper restart) is found by who holds it.
 				known := env.Procs != nil && len(tails) == 0 && i < maxHeldCandidates
+				if dropped[m.path] && !rem {
+					// A file left behind stays newer than the watch for ever;
+					// ask about it again only when it changed or after a while.
+					if a, ok := askedDropped[m.path]; ok && !m.mtime.After(a.mtime) && time.Since(a.at) < droppedAskEvery() {
+						continue
+					}
+					askedDropped[m.path] = asked{time.Now(), m.mtime}
+				}
 				if known || pick || rem {
 					cands = append(cands, cand{m, pick, rem})
 					paths = append(paths, m.path)

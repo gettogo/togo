@@ -13,7 +13,21 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// cmdTimeout bounds each ps or lsof call: lsof can block for good on a dead
+// network mount, and the poll loop that asked would block with it.
+var cmdTimeout = 5 * time.Second
+
+// run is exec.Command(...).Output() under cmdTimeout.
+func run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, cmdTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = time.Second
+	return cmd.Output()
+}
 
 // Session is the process view of one tmux session. Panes lists the pane
 // processes; everything below them is the session's.
@@ -31,7 +45,7 @@ func (s Session) Tree(ctx context.Context) []int {
 	if err != nil || len(roots) == 0 {
 		return nil
 	}
-	out, err := exec.CommandContext(ctx, "ps", "-A", "-o", "pid=,ppid=").Output()
+	out, err := run(ctx, "ps", "-A", "-o", "pid=,ppid=")
 	if err != nil {
 		return nil
 	}
@@ -52,7 +66,7 @@ func (s Session) Others(ctx context.Context, commands []string, cwd string) (boo
 	if len(tree) == 0 {
 		return false, errors.New("procs: session tree unknown")
 	}
-	out, err := exec.CommandContext(ctx, "ps", "-A", "-o", "pid=,command=").Output()
+	out, err := run(ctx, "ps", "-A", "-o", "pid=,command=")
 	if err != nil {
 		return false, err
 	}
@@ -178,7 +192,7 @@ func workingDirs(ctx context.Context, pids []int) ([]string, error) {
 	for i, p := range pids {
 		list[i] = strconv.Itoa(p)
 	}
-	out, err := exec.CommandContext(ctx, "lsof", "-nP", "-a", "-d", "cwd", "-Fn", "-p", strings.Join(list, ",")).Output()
+	out, err := run(ctx, "lsof", "-nP", "-a", "-d", "cwd", "-Fn", "-p", strings.Join(list, ","))
 	var exit *exec.ExitError
 	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
 		return nil, err
@@ -278,7 +292,7 @@ func lsofHolders(ctx context.Context, real map[string]string) (map[string][]int,
 	for r := range real {
 		args = append(args, r)
 	}
-	out, err := exec.CommandContext(ctx, "lsof", args...).Output()
+	out, err := run(ctx, "lsof", args...)
 	var exit *exec.ExitError
 	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
 		return nil, err
