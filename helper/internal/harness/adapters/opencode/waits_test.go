@@ -206,3 +206,24 @@ func TestLateUserMessageUpdateOpensNoTurn(t *testing.T) {
 		t.Fatalf("late update opened a turn: %+v %v", items, m.State())
 	}
 }
+
+// Closed turns are forgotten, yet a late update of their prompt still does
+// not open one.
+func TestClosedTurnsAreForgotten(t *testing.T) {
+	recs := recorded(t)
+	m := NewEvents(harness.Env{SessionID: "s_oc", Cwd: "/Users/me/proj"})
+	run(m, recs)
+	open := 0
+	for _, tu := range m.turns {
+		if tu.state != "" {
+			open++
+		}
+	}
+	if len(m.turns) != open {
+		t.Fatalf("%d turns kept, %d open", len(m.turns), open)
+	}
+	first := indexOf(t, recs, "message.updated", `"id": "msg_1b3e1efe3001r05Q37r0vH1Go0"`)
+	if items, _ := m.Map(recs[first]); len(items) != 0 {
+		t.Fatalf("a closed prompt opened a turn: %+v", items)
+	}
+}

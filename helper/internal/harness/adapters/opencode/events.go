@@ -30,6 +30,8 @@ type Events struct {
 	tools     map[string]harness.Item // tool items by call id, for permission waits
 	waits     map[string]string       // request id -> call id of the tool waiting on it
 	retries   map[string]int          // turn id -> attempts of its retry notice
+	closed    map[string]bool         // the last turns closed, so a late update of their prompt opens none
+	closedIDs []string
 	planFirst map[string]time.Time
 }
 
@@ -66,7 +68,7 @@ type turn struct {
 func NewEvents(env harness.Env) *Events {
 	return &Events{env: env, state: map[string]string{"working": "false", "idle": "true"},
 		sessions: map[string]*session{}, messages: map[string]message{}, parts: map[string]*part{},
-		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{}, waits: map[string]string{}, retries: map[string]int{},
+		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{}, waits: map[string]string{}, retries: map[string]int{}, closed: map[string]bool{},
 		planFirst: map[string]time.Time{}}
 }
 
@@ -309,7 +311,7 @@ func (e *Events) messageInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 		}
 	}
 	if in.Role == "user" {
-		if _, ok := e.turns[in.ID]; ok {
+		if _, ok := e.turns[in.ID]; ok || e.closed[in.ID] {
 			return nil, nil
 		}
 		if len(in.Summary) > 0 && e.state["working"] != "true" {
@@ -428,7 +430,7 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 			}
 		}
 		items = append(items, e.turnItem(id, tu, ptr(at)))
-		tu.state = "" // closed
+		e.closeTurn(id)
 	}
 	s := e.sessions[sess]
 	if s == nil || s.agent.Agent == nil || s.agent.Agent.State != harness.StateRunning {
@@ -440,6 +442,21 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 	x.Agent = &body
 	s.agent = x
 	return append(items, x), []harness.Op{agentRow(x)}
+}
+
+// maxClosed is how many closed turns are remembered by id.
+const maxClosed = 256
+
+// closeTurn forgets a turn that ended. Its id is kept for a while: OpenCode
+// updates a user message again after its turn, and that is not a prompt.
+func (e *Events) closeTurn(id string) {
+	delete(e.turns, id)
+	e.closed[id] = true
+	e.closedIDs = append(e.closedIDs, id)
+	if len(e.closedIDs) > maxClosed {
+		delete(e.closed, e.closedIDs[0])
+		e.closedIDs = e.closedIDs[1:]
+	}
 }
 
 // lostTrack forgets whether the main session's turn runs: the stream that
