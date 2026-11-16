@@ -451,3 +451,22 @@ func TestRetryTurnStaysWorkingUntilItEnds(t *testing.T) {
 		t.Fatalf("state %v", m.State())
 	}
 }
+
+// A second task call that reuses a task id gets a row of its own.
+func TestReusedTaskIDKeepsRunsApart(t *testing.T) {
+	m := newSession(env())
+	call := `{"type":"message","id":"e020","parentId":"e011","timestamp":"2026-11-06T10:00:30.000Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_task_2","name":"task","arguments":{"agent":"explore","tasks":[{"id":"FindCallers","description":"Find callers again","assignment":"List every caller of Parse."}]}}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"toolUse","timestamp":1794045630000}}`
+	res := `{"type":"message","id":"e021","parentId":"e020","timestamp":"2026-11-06T10:00:40.000Z","message":{"role":"toolResult","toolCallId":"call_task_2","toolName":"task","content":[{"type":"text","text":"1 task finished"}],"details":{"results":[{"index":0,"id":"FindCallers","agent":"explore","exitCode":1,"output":"failed this time","error":"failed"}]},"isError":false,"timestamp":1794045640000}}`
+	recs := records(t, "session.jsonl", "session")
+	for _, l := range []string{call, res} {
+		recs = append(recs, harness.Record{Source: "session", At: t0, Data: json.RawMessage(l)})
+	}
+	got := run(m, recs).last()
+	first, second := got["agent-FindCallers"], got["agent-call_task_2-FindCallers"]
+	if first.Agent == nil || second.Agent == nil {
+		t.Fatalf("rows: %+v / %+v", first, second)
+	}
+	if first.Agent.State != harness.StateOK || second.Agent.State != harness.StateFailed || second.Agent.Summary != "failed this time" {
+		t.Fatalf("first %+v second %+v", first.Agent, second.Agent)
+	}
+}

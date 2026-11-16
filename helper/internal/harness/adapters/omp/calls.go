@@ -2,6 +2,7 @@ package omp
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -47,6 +48,11 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 	if info.category == harness.ToolAgent && parent == "" {
 		for _, t := range taskList(args) {
 			aid := "agent-" + firstNonEmpty(t.id, callID+"-"+itoa(len(s.taskCalls[callID])+1))
+			if _, taken := s.agents[aid]; taken && !slices.Contains(s.taskCalls[callID], aid) {
+				// Another task call used this id ("1", "explore"): its own
+				// row, not a merge into the earlier run's.
+				aid = "agent-" + callID + "-" + firstNonEmpty(t.id, itoa(len(s.taskCalls[callID])+1))
+			}
 			a := &harness.Item{ID: aid, TurnID: tid, Kind: harness.KindAgent, At: at, Agent: &harness.AgentBody{
 				AgentID: strings.TrimPrefix(aid, "agent-"), Name: truncate(t.title, harness.MaxTitle), Role: t.role,
 				State: harness.StateRunning, Started: at}}
@@ -144,7 +150,11 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 			ab := *a.Agent
 			ab.Ended = ptr(at)
 			ab.State = b.State
-			if r, ok := results[aid]; ok {
+			r, ok := results[aid]
+			if !ok {
+				r, ok = results["agent-"+strings.TrimPrefix(aid, "agent-"+b.CallID+"-")]
+			}
+			if ok {
 				ab.State = harness.StateOK
 				if code, ok := num(r["exitCode"]); ok && code != 0 {
 					ab.State = harness.StateFailed
