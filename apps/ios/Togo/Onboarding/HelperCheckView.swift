@@ -152,7 +152,7 @@ struct HelperCheckView: View {
             message: outdated
                 ? String(
                     localized: "onboard.helper.outdated.message",
-                    defaultValue: "The helper on \(machine) is too old for this version of Togo. The current one adds:"
+                    defaultValue: "Togo couldn't check the helper on \(machine). Update it to use:"
                 )
                 : String(
                     localized: "onboard.helper.missing.message",

@@ -8295,7 +8295,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The helper on %@ is too old for this version of Togo. The current one adds:"
+            "value" : "Togo couldn't check the helper on %@. Update it to use:"
           }
         }
       }

@@ -342,11 +342,12 @@ enum ConnectPhase: Equatable, Sendable {
     /// A machine with a usable helper is saved at once. Without one, the user decides on the
     /// helper screen, unless the machine was already saved without it.
     private func settle(_ report: HelperReport) async {
-        if case .missing = report.helper {
+        switch report.helper {
+        case .missing:
             if keepsNoHelper { await save(withHelper: false) } else { showConnect() }
-        } else if report.tmuxSupported {
+        case .present where report.tmuxSupported:
             await save(withHelper: true)
-        } else {
+        default:
             showConnect()
         }
     }

@@ -132,6 +132,18 @@ struct AddMachineFlowTests {
     }
 
     /// The checkmark finishes the job: a machine with the helper is saved without a second screen.
+    @Test func unreadableHelperVersionRequiresRecoveryBeforeSaving() async {
+        let saved = SavedRecords()
+        let report = HelperReport(helper: .outdated(""), path: "/opt/bin/togo", tmux: "tmux 3.5a", os: "Darwin")
+        let flow = flow(FakeOnboardingServices(outcomes: [.ready(report)]), saved: saved)
+        flow.connect()
+        await flow.runAttempt()
+        #expect(saved.records.isEmpty)
+        #expect(saved.finished.isEmpty)
+        #expect(flow.path.last == .connect)
+        #expect(flow.phase == .helper(report))
+    }
+
     @Test func successSavesWithoutPushingAScreen() async {
         let saved = SavedRecords()
         let flow = flow(FakeOnboardingServices(outcomes: [.ready(OnboardingSamples.ready)]), saved: saved)
