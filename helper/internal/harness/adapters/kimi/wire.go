@@ -261,7 +261,8 @@ func (w *Wire) prompt(r record, at time.Time) ([]harness.Item, []harness.Op) {
 	t := &turn{id: "turn-" + key + "-" + strconv.FormatInt(at.UnixMilli(), 36), started: at, files: map[string]bool{}}
 	w.turn = t
 	w.state["turn"], w.state["working"] = t.id, "true"
-	if r.Origin.Kind == "user" {
+	// A skill the user runs (a slash command) starts its turn the same way.
+	if r.Origin.Kind == "user" || r.Origin.Kind == "skill_activation" {
 		id := r.PromptID
 		if id == "" {
 			id = "u-" + t.id

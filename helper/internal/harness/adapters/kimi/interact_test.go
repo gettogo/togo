@@ -208,3 +208,18 @@ func TestStepEndDoesNotEndATurnOnProtocol15(t *testing.T) {
 		t.Fatal("turn.ended did not end the turn")
 	}
 }
+
+// A turn a skill starts (a slash command) has no user item unless the
+// prompt is drawn: the fixture's two turns both begin so.
+func TestSkillActivationDrawsItsPrompt(t *testing.T) {
+	m := NewWire(harness.Env{SessionID: "s1"})
+	out := replay(t, m, fixture(t, "wire-question.jsonl"))
+	if out.kinds()[harness.KindUser] != 2 {
+		t.Fatalf("user items: %d", out.kinds()[harness.KindUser])
+	}
+	for _, it := range out.items {
+		if it.Kind == harness.KindUser && (it.User.Text == "" || it.TurnID == "") {
+			t.Fatalf("user item %+v", it)
+		}
+	}
+}
