@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"text/template/parse"
 	"time"
 	"unicode/utf8"
 
@@ -40,6 +41,72 @@ var funcs = template.FuncMap{
 	"slots":    slotsFilter,
 	"form":     formFilter,
 	"part":     part,
+	"printf":   strictPrintf,
+	"nv":       noValueFilter,
+}
+
+// noValueFilter is appended to every printed action so a missing value
+// prints as nothing without scanning the output (which holds user text).
+func noValueFilter(v any) any {
+	if v == nil {
+		return ""
+	}
+	return v
+}
+
+// strictPrintf is printf that fails on a missing or mistyped value
+// ("%!s(<nil>)") instead of printing it, so such output never lands in a
+// config file, argv or a request. The check looks at this call's own
+// result, not at the rest of the rendered text.
+func strictPrintf(format string, args ...any) (string, error) {
+	out := fmt.Sprintf(format, args...)
+	if !strings.Contains(out, "%!") {
+		return out, nil
+	}
+	if strings.Contains(format, "%!") {
+		return out, nil
+	}
+	for _, a := range args {
+		if strings.Contains(fmt.Sprint(a), "%!") {
+			return out, nil
+		}
+	}
+	return "", fmt.Errorf("printf: a value is missing")
+}
+
+// quietMissing appends the nv filter to every printed action in t.
+func quietMissing(t *template.Template) {
+	for _, tt := range t.Templates() {
+		if tt.Tree != nil && tt.Tree.Root != nil {
+			quietList(tt.Tree.Root)
+		}
+	}
+}
+
+func quietList(l *parse.ListNode) {
+	if l == nil {
+		return
+	}
+	for _, n := range l.Nodes {
+		switch x := n.(type) {
+		case *parse.ActionNode:
+			if len(x.Pipe.Decl) == 0 {
+				x.Pipe.Cmds = append(x.Pipe.Cmds, &parse.CommandNode{
+					NodeType: parse.NodeCommand,
+					Args:     []parse.Node{parse.NewIdentifier("nv")},
+				})
+			}
+		case *parse.IfNode:
+			quietList(x.List)
+			quietList(x.ElseList)
+		case *parse.RangeNode:
+			quietList(x.List)
+			quietList(x.ElseList)
+		case *parse.WithNode:
+			quietList(x.List)
+			quietList(x.ElseList)
+		}
+	}
 }
 
 // part returns the i-th piece of s split on sep, or "" when there is none:
@@ -194,19 +261,14 @@ func Render(src string, data map[string]any) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("template: %w", err)
 		}
+		quietMissing(t)
 		tmplCache.Store(src, t)
 	}
 	var b bytes.Buffer
 	if err := t.Execute(&b, data); err != nil {
 		return "", fmt.Errorf("template: %w", err)
 	}
-	out := strings.ReplaceAll(b.String(), noValue, "")
-	if strings.Contains(out, "%!") {
-		// printf met a missing or mistyped value ("%!s(<nil>)"): never let
-		// that reach a config file, argv or a request.
-		return "", fmt.Errorf("template: a value is missing")
-	}
-	return out, nil
+	return b.String(), nil
 }
 
 // RenderJSON renders every string inside a JSON value.
