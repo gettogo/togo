@@ -237,7 +237,9 @@ var (
 	cmdName   = regexp.MustCompile(`(?s)<command-name>(.*?)</command-name>`)
 	cmdArgs   = regexp.MustCompile(`(?s)<command-args>(.*?)</command-args>`)
 	cmdStdout = regexp.MustCompile(`(?s)<local-command-stdout>(.*?)</local-command-stdout>`)
-	anyTag    = regexp.MustCompile(`^\s*<([a-z-]+)>`)
+	// anyTag is the wrappers Claude Code writes around its own user
+	// records; any other leading tag is part of what the user typed.
+	anyTag = regexp.MustCompile(`^\s*<(?:system-reminder|local-command-[a-z]+|command-[a-z]+|bash-input|bash-stdout|bash-stderr|task-notification|user-prompt-submit-hook)>`)
 )
 
 // prompt maps a user message: a typed prompt starts a turn; command
