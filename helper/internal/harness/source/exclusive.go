@@ -98,16 +98,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 	claims.Unlock()
 	tails := map[string]*tail{}
 	dropped := map[string]bool{} // files left for a newer one; not taken back without evidence
-	defer func() {
-		claims.Lock()
-		delete(claims.watchers[pattern], id)
-		for p := range tails {
-			if claims.owner[p] == id {
-				delete(claims.owner, p)
-			}
-		}
-		claims.Unlock()
-	}()
+	defer unregisterWatch(pattern, id, me, tails)
 	var lastGlob time.Time
 	every := globEvery
 	return pollLoop(ctx, func() error {
@@ -252,6 +243,22 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 	})
 }
 
+// unregisterWatch removes a finished watcher's entry and claims. The entry
+// goes only if it is still this watcher's: a newer watcher with the same
+// session id may have replaced it, and must keep its own.
+func unregisterWatch(pattern, id string, me *claimWatch, tails map[string]*tail) {
+	claims.Lock()
+	defer claims.Unlock()
+	if claims.watchers[pattern][id] == me {
+		delete(claims.watchers[pattern], id)
+	}
+	for p := range tails {
+		if claims.owner[p] == id {
+			delete(claims.owner, p)
+		}
+	}
+}
+
 // claimOwn records that session id follows path on the strength of its
 // own process holding it. It fails only if another session already does.
 func claimOwn(pattern, id, path string) bool {
@@ -262,7 +269,9 @@ func claimOwn(pattern, id, path string) bool {
 	}
 	if _, ok := claims.owner[path]; !ok {
 		claims.owner[path] = id
-		claims.watchers[pattern][id].files++
+		if w := claims.watchers[pattern][id]; w != nil {
+			w.files++
+		}
 	}
 	return true
 }
@@ -286,6 +295,9 @@ func claim(pattern, id, path string, empty bool) bool {
 		return o == id
 	}
 	me := claims.watchers[pattern][id]
+	if me == nil {
+		return false
+	}
 	for other, w := range claims.watchers[pattern] {
 		if other == id || w.files > 0 {
 			continue
