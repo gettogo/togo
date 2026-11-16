@@ -100,7 +100,11 @@ import UIKit
     /// When the phone first saw the current stretch of work, for adapters without turn items.
     private(set) var localWorkSince: Date?
     /// The last mode the session reported, kept while later updates leave it out.
-    private(set) var rememberedMode: String?
+    private(set) var rememberedMode: String? {
+        didSet { if rememberedMode != oldValue { modeRevision &+= 1 } }
+    }
+    /// Invalidates optimistic choices even when the view missed an intermediate mode.
+    private(set) var modeRevision: UInt64 = 0
     /// When this phone saw each request answered, for the turn's stopwatch (`TurnClock`).
     private(set) var resolvedAt: [String: Date] = [:]
     @ObservationIgnored private var ledger = ResolutionLedger()
@@ -272,6 +276,7 @@ import UIKit
         liveWork = nil
         loadingOlder = false
         rememberedMode = nil
+        modeRevision &+= 1
         graceTask?.cancel()
         graceTask = nil
     }

@@ -8,6 +8,7 @@ extension CommandLineModel {
         guard id != mode, let choice = modes.first(where: { $0.id == id }) else { return }
         let previous = modes.first { $0.id == mode }
         let over = routes.mode()
+        let revision = routes.modeRevision()
         let change = GatedChange(
             action: "set_mode", args: ["id": .string(id)], confirm: nil, setting: PrimitiveCopy.mode, value: choice.label,
             previous: previous.map { ($0.label, ["id": .string($0.id)]) }
@@ -18,7 +19,7 @@ extension CommandLineModel {
             case .failed?, .fallback?, nil:
                 if result != nil { self.notice = result?.message ?? ComposerCopy.modeNotChanged }
             default:
-                self.modeOverride = (id, over)
+                self.modeOverride = (id, over, revision)
                 self.notice = nil
                 self.paletteOpen = false
             }

@@ -61,7 +61,7 @@ import TogoKit
     private(set) var pendingQueued: [HarnessItem] = []
     /// A mode this phone set, with the mode it replaced: it holds until the session reports
     /// another mode than that one.
-    var modeOverride: (id: String, over: String)?
+    var modeOverride: (id: String, over: String, revision: UInt64)?
     private var historyIndex: Int?
     /// The last Send's words, so a late dictation result does not put them back (`SentEcho`).
     @ObservationIgnored private var sentEcho: SentEcho?
@@ -90,7 +90,8 @@ import TogoKit
     /// The mode chip's current mode id.
     var mode: String {
         let reported = routes.mode()
-        guard let modeOverride, modeOverride.over == reported else { return reported }
+        guard let modeOverride, modeOverride.over == reported,
+              modeOverride.revision == routes.modeRevision() else { return reported }
         return modeOverride.id
     }
     var modes: [HarnessChoice] { routes.modes() }
