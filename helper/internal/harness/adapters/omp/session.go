@@ -125,8 +125,11 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	// next.
 	parent := s.parentOf(e, main)
 	switch str(e, "type") {
-	case "title":
-		if parent == "" && str(e, "title") != "" {
+	case "title", "title_change":
+		// The conversation's own title, also when omp changes it later. A
+		// subagent's file opens with a title too, read before its header
+		// says whose it is.
+		if rec.Source != feedSubagents && parent == "" && str(e, "title") != "" {
 			s.state["title"] = str(e, "title")
 		}
 		return nil, nil
@@ -177,6 +180,9 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		// /todo in the terminal edits the list by hand and saves the whole
 		// list (seen on 18.20: "/todo done" wrote user_todo_edit and the
 		// plan stayed 0/2). It replaces the plan like a todo result does.
+		if main && str(e, "customType") == "session_exit" {
+			return s.exited(at)
+		}
 		if parent == "" && str(e, "customType") == "user_todo_edit" {
 			if phases, ok := phasesFromDetails(obj(e["data"])); ok {
 				s.todo = phases
@@ -189,6 +195,9 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 
 // feedSession is the feed of the conversation the terminal shows.
 const feedSession = "session"
+
+// feedSubagents is the feed of the files omp's subagents write.
+const feedSubagents = "subagents"
 
 // header starts a session file: the main session's, or a subagent's. A file
 // the session feed reads is the terminal's own conversation whatever its

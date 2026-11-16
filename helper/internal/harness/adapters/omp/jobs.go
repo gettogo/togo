@@ -1,6 +1,7 @@
 package omp
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -69,15 +70,38 @@ func (s *session) jobsSettled(e map[string]any, at time.Time) ([]harness.Item, [
 
 func jobRow(it *harness.Item) harness.Op {
 	b := it.Background
-	state := harness.RowSkipped
-	switch b.State {
-	case harness.StateRunning:
-		state = harness.RowActive
-	case harness.StateOK:
-		state = harness.RowDone
-	}
 	return harness.Op{Op: harness.OpUpsert, Section: harness.SectionBackground, Row: &harness.Row{ID: it.ID, Title: b.Title,
-		Subtitle: b.Command, State: state, Started: ptr(b.Started)}}
+		Subtitle: b.Command, State: b.State, Started: ptr(b.Started)}}
+}
+
+// exited ends the background agents and jobs omp left running when it
+// recorded its own exit (custom "session_exit", seen on 18.16 to 18.20).
+// They ran inside omp, so nothing reports them again, and omp numbers its
+// jobs from one after a resume.
+func (s *session) exited(at time.Time) ([]harness.Item, []harness.Op) {
+	var items []harness.Item
+	var ops []harness.Op
+	for _, a := range s.agents {
+		if a.Agent.Ended != nil {
+			continue
+		}
+		ab := *a.Agent
+		ab.State, ab.Ended = harness.StateInterrupted, ptr(at)
+		a.Agent = &ab
+		items = append(items, *a)
+		ops = append(ops, s.agentRow(a))
+	}
+	for id, it := range s.jobs {
+		b := *it.Background
+		b.State, b.Ended = harness.StateInterrupted, ptr(at)
+		it.Background = &b
+		delete(s.jobs, id)
+		items = append(items, *it)
+		ops = append(ops, jobRow(it))
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	sort.Slice(ops, func(i, j int) bool { return ops[i].Row.ID < ops[j].Row.ID })
+	return items, ops
 }
 
 // jobState maps the status omp gives a settled job.

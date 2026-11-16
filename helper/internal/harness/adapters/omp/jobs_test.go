@@ -76,12 +76,12 @@ func TestAsyncJobShowsWhileItRunsAndCloses(t *testing.T) {
 		}
 		return r
 	}
-	if r := row(start); r == nil || r.State != harness.RowActive || !strings.Contains(r.Subtitle, "sleep 15") {
-		t.Fatalf("running job row = %+v, want an active row with the command", r)
+	if r := row(start); r == nil || r.State != harness.StateRunning || !strings.Contains(r.Subtitle, "sleep 15") {
+		t.Fatalf("running job row = %+v, want a running row with the command", r)
 	}
 	done := run(m, []harness.Record{rec(`{"type":"custom_message","customType":"async-result","content":"<system-notice>\nBackground job bg_1 has completed.\n</system-notice>","display":true,"details":{"jobs":[{"jobId":"bg_1","type":"bash","status":"completed","label":"sleep 15; printf OMP_ASYNC_LOCAL","durationMs":15084}]},"id":"4b222f56","parentId":"f9287723","timestamp":"2026-11-14T00:52:05.504Z"}`)})
-	if r := row(done); r == nil || r.State != harness.RowDone {
-		t.Fatalf("settled job row = %+v, want done", r)
+	if r := row(done); r == nil || r.State != harness.StateOK {
+		t.Fatalf("settled job row = %+v, want ok", r)
 	}
 	var ended bool
 	for _, it := range done.Items {
