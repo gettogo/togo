@@ -192,10 +192,10 @@ struct GatedChange {
                 }
             }
             note(PrimitiveCopy.restartedWith(change.value), SessionNote.Echo(value: change.value), back)
-        case .typed:
+        case .typed, .queued:
             note(PrimitiveCopy.setWaiting(change.setting, change.value, agent: context.agent),
                  SessionNote.Echo(value: change.value, waiting: true), nil)
-        case .applied, .queued:
+        case .applied:
             note(PrimitiveCopy.setTo(change.setting, change.value), SessionNote.Echo(value: change.value), nil)
         default:
             break

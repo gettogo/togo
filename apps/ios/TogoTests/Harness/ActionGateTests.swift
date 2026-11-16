@@ -182,6 +182,17 @@ import TogoKit
         #expect(runs == ["set_model"])
     }
 
+    @Test func aQueuedSettingIsWaitingForItsEffect() async {
+        var notes: [String] = []
+        var waiting: [Bool] = []
+        var context = context(working: false, results: ["set_effort": .queued])
+        context.note = { text, echo, _ in notes.append(text); waiting.append(echo?.waiting ?? false) }
+        let change = GatedChange(action: "set_effort", args: ["value": .string("high")], confirm: nil, setting: "Effort", value: "high")
+        await PrimitiveActions().change(change, context: context)
+        #expect(notes == [PrimitiveCopy.setWaiting("Effort", "high", agent: "Auggie")])
+        #expect(waiting == [true])
+    }
+
     @Test func anAppliedChangeNotesTheNewValue() async {
         var notes: [String] = []
         let context = context(working: false, results: ["set_effort": .typed], notes: { text, _ in notes.append(text) })
