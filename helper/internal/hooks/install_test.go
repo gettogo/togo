@@ -466,3 +466,34 @@ func TestInstallAddsSessionEndAndStopFailure(t *testing.T) {
 
 // claudeCodex are the two harnesses newEnv sets up.
 var claudeCodex = []string{Claude, Codex}
+
+func TestOtherToolsHookCommandIsNotOwned(t *testing.T) {
+	for _, c := range []string{
+		"/usr/local/bin/notifier hook claude Stop",
+		"[ -x '/opt/x/bin/tool' ] && exec '/opt/x/bin/tool' hook claude Stop || true",
+		"hook claude Stop",
+	} {
+		if owned(c, Claude) {
+			t.Errorf("%q claimed as togo's", c)
+		}
+	}
+	for _, c := range []string{"/opt/homebrew/bin/togo hook claude Stop", "togo --x hook claude Stop"} {
+		if !owned(c, Claude) {
+			t.Errorf("%q not recognised as togo's", c)
+		}
+	}
+}
+
+func TestInstallLeavesAnotherToolsClaudeHookAlone(t *testing.T) {
+	e := newEnv(t)
+	other := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/usr/local/bin/notifier hook claude Stop"}]}]}}` + "\n"
+	write(t, settingsPath(e), []byte(other))
+	mustOK(t, Install(e.o, []string{Claude}))
+	if !strings.Contains(read(t, settingsPath(e)), "/usr/local/bin/notifier hook claude Stop") {
+		t.Fatal("install dropped another tool's hook")
+	}
+	mustOK(t, Uninstall(e.o, []string{Claude}))
+	if !strings.Contains(read(t, settingsPath(e)), "/usr/local/bin/notifier hook claude Stop") {
+		t.Fatal("uninstall removed another tool's hook")
+	}
+}
