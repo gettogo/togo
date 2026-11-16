@@ -220,3 +220,19 @@ func TestPlanModeTogglesInPlace(t *testing.T) {
 		t.Errorf("yolo -> default = %+v", r)
 	}
 }
+
+// A background Agent that finishes while Kimi is idle: its notice starts a
+// turn (turn.prompt, not turn.steer), and the row must still end.
+func TestBackgroundAgentDoneByAPromptTurn(t *testing.T) {
+	m := NewWire(harness.Env{})
+	out := replay(t, m, []string{
+		`{"type":"turn.prompt","input":[{"type":"text","text":"audit it"}],"origin":{"kind":"user"},"promptId":"msg_1","turnId":0}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.call","toolCallId":"tool_a","name":"Agent","args":{"description":"Audit the gem","subagent_type":"explore"},"display":{"kind":"agent_call"}}}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.result","toolCallId":"tool_a","result":{"output":"task_id: agent-86r\nstatus: running\nagent_id: agent-0"}}}`,
+		`{"type":"context.append_loop_event","event":{"type":"step.end","finishReason":"end_turn"}}`,
+		`{"type":"turn.prompt","input":[{"type":"text","text":"<notification/>"}],"origin":{"kind":"background_task","taskId":"agent-86r","status":"completed"},"turnId":1}`,
+	})
+	if a := out.items["agent-tool_a"]; a.Agent == nil || a.Agent.State != harness.StateOK || a.Agent.Ended == nil {
+		t.Fatalf("agent %+v", a.Agent)
+	}
+}

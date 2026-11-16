@@ -269,7 +269,14 @@ func (w *Wire) prompt(r record, at time.Time) ([]harness.Item, []harness.Op) {
 		items = append(items, harness.Item{ID: id, TurnID: t.id, Kind: harness.KindUser, At: at,
 			User: &harness.UserBody{Text: x.Clip(joinText(r.Input)), Source: "unknown"}})
 	}
-	return append(items, w.turnItem(harness.StateRunning, nil)), ops
+	items = append(items, w.turnItem(harness.StateRunning, nil))
+	if r.Origin.Kind == "background_task" {
+		// A task that finished while Kimi sat idle starts the turn that
+		// reports it, as a steer would have mid-turn.
+		done, doneOps := w.taskDone(r.Origin.TaskID, r.Origin.Status, at)
+		items, ops = append(items, done...), append(ops, doneOps...)
+	}
+	return items, ops
 }
 
 func (w *Wire) turnItem(state string, ended *time.Time) harness.Item {
