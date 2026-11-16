@@ -256,7 +256,7 @@ func (t *transcript) prompt(e entry, at time.Time, text string, images []harness
 			// over, such as one a task notification started.
 			t.workingAt = at
 		}
-		if t.turn != nil && !t.turn.ended {
+		if parent == "" && t.turn != nil && !t.turn.ended {
 			t.turn.state = harness.StateInterrupted
 			items = append(items, t.endTurn(at)...)
 		}
