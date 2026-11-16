@@ -29,6 +29,7 @@ type Events struct {
 	open      map[string]harness.Item // questions and permissions not yet answered
 	tools     map[string]harness.Item // tool items by call id, for permission waits
 	waits     map[string]string       // request id -> call id of the tool waiting on it
+	retries   map[string]int          // turn id -> attempts of its retry notice
 	planFirst map[string]time.Time
 }
 
@@ -65,7 +66,7 @@ type turn struct {
 func NewEvents(env harness.Env) *Events {
 	return &Events{env: env, state: map[string]string{"working": "false", "idle": "true"},
 		sessions: map[string]*session{}, messages: map[string]message{}, parts: map[string]*part{},
-		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{}, waits: map[string]string{},
+		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{}, waits: map[string]string{}, retries: map[string]int{},
 		planFirst: map[string]time.Time{}}
 }
 
@@ -383,6 +384,7 @@ func (e *Events) sessionStatus(raw json.RawMessage, at time.Time) ([]harness.Ite
 		}
 		// One notice per turn, updated on each attempt.
 		t := e.state["turn"]
+		e.retries[t] = max(p.Status.Attempt, 1)
 		return []harness.Item{e.noticeBody("retry-"+t, t, e.parentOf(p.SessionID), at,
 			retryBody("", 0, p.Status.Message, p.Status.Attempt))}, nil
 	case "offline":
@@ -418,6 +420,12 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 		tu := e.turns[id]
 		if tu.state == harness.StateRunning {
 			tu.state = harness.StateOK
+		}
+		if n := e.retries[id]; n > 0 {
+			delete(e.retries, id)
+			if tu.state == harness.StateOK {
+				items = append(items, recoveredNotice("retry-"+id, id, e.parentOf(sess), at, n))
+			}
 		}
 		items = append(items, e.turnItem(id, tu, ptr(at)))
 		tu.state = "" // closed

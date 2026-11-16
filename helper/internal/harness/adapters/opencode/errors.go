@@ -3,6 +3,7 @@ package opencode
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
@@ -99,4 +100,15 @@ func retryBody(name string, status int, msg string, attempt int) *harness.Notice
 		b.Text = truncate(strings.TrimSuffix(b.Text, ".")+" (retrying)", harness.MaxNoticeText)
 	}
 	return b
+}
+
+// recoveredNotice replaces a retry notice once the turn it belonged to
+// ended fine: the retry worked, so the warning must not stay.
+func recoveredNotice(id, turn, parent string, at time.Time, attempts int) harness.Item {
+	text := "Recovered after a retry"
+	if attempts > 1 {
+		text = fmt.Sprintf("Recovered after %d retries", attempts)
+	}
+	return harness.Item{ID: id, TurnID: turn, Parent: parent, Kind: harness.KindNotice, At: at,
+		Notice: &harness.NoticeBody{Level: "info", Code: "retried", Text: text}}
 }

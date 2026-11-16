@@ -31,6 +31,7 @@ type Events2 struct {
 	state       map[string]string
 	main        string
 	lost        bool                // the stream came back: the next sign of a running turn says so
+	retries     map[string]int      // turn id -> attempts of its retry notice
 	children    map[string]*session // child session id -> its agent
 	texts       map[string]*part    // streamed text and reasoning by item id
 	tools       map[string]harness.Item
@@ -52,7 +53,7 @@ type Events2 struct {
 // NewEvents2 returns a 2.x mapper for one session.
 func NewEvents2(env harness.Env) *Events2 {
 	e := &Events2{env: env, state: map[string]string{"working": "false", "idle": "true"},
-		children: map[string]*session{}, texts: map[string]*part{}, tools: map[string]harness.Item{}, waits: map[string]string{}, inputs: map[string]json.RawMessage{},
+		children: map[string]*session{}, texts: map[string]*part{}, tools: map[string]harness.Item{}, waits: map[string]string{}, retries: map[string]int{}, inputs: map[string]json.RawMessage{},
 		turns: map[string]*turn{}, turnOf: map[string]string{}, inbox: map[string]string{}, open: map[string]harness.Item{}}
 	if id := sessionFlag(env.Argv); id != "" {
 		e.setMain(id)
@@ -273,6 +274,8 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			id := "retry-" + t
 			if t == "" {
 				id = "retry-" + ev.ID
+			} else {
+				e.retries[t] = max(d.Attempt, 1)
 			}
 			return []harness.Item{e.noticeBody(id, t, d.SessionID, at, retryBody(name, status, msg, d.Attempt))}, nil
 		}
@@ -430,6 +433,12 @@ func (e *Events2) ended(sess, state string, at time.Time) ([]harness.Item, []har
 	var ops []harness.Op
 	if id := e.turnOf[sess]; id != "" {
 		delete(e.turnOf, sess)
+		if n := e.retries[id]; n > 0 {
+			delete(e.retries, id)
+			if state == harness.StateOK {
+				items = append(items, recoveredNotice("retry-"+id, id, e.parent(sess), at, n))
+			}
+		}
 		if tu := e.turns[id]; tu != nil {
 			tu.state = state
 			items = append(items, e.turnItem(id, tu, ptr(at)))

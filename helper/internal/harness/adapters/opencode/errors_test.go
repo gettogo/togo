@@ -173,3 +173,43 @@ func TestV2ChildModelNotFoundIsOneNotice(t *testing.T) {
 		t.Fatalf("notices %+v", ns)
 	}
 }
+
+// A provider call that failed once and then worked leaves no warning
+// behind: the retry notice becomes a note that it recovered.
+func TestRetryNoticeBecomesRecovered(t *testing.T) {
+	recs := recorded(t)
+	at := indexOf(t, recs, "message.part.delta", "prt_1b3e21b50001enXgCLCa7we0L4")
+	m := NewEvents(harness.Env{SessionID: "s_oc", Cwd: "/Users/me/proj"})
+	feed := append([]harness.Record{}, recs[:at]...)
+	feed = append(feed,
+		harness.Record{Data: json.RawMessage(`{"type":"session.status","properties":{"sessionID":"` + recordedSession + `","status":{"type":"retry","attempt":2,"message":"Rate limit reached","next":1794111954334}}}`)},
+		harness.Record{Data: json.RawMessage(`{"type":"session.idle","properties":{"sessionID":"` + recordedSession + `"}}`)})
+	retry := ""
+	for _, x := range run(m, feed).last() {
+		if x.Notice != nil && strings.HasPrefix(x.ID, "retry-") {
+			retry = x.Notice.Text + "|" + x.Notice.Level
+		}
+	}
+	if retry != "Recovered after 2 retries|info" {
+		t.Fatalf("retry notice %q", retry)
+	}
+}
+
+func TestRetryNoticeBecomesRecovered2(t *testing.T) {
+	recs := jsonl(t, "testdata/v2/retry-transport.jsonl")
+	recs = recs[:len(recs)-1] // the user's interrupt: the retry worked instead
+	recs = append(recs, harness.Record{Data: json.RawMessage(`{"id":"evt_x","created":1794111743526,"type":"session.execution.succeeded","data":{"sessionID":"ses_e469c2cf9ffes4LwLEApci43jG"}}`)})
+	m := NewEvents2(harness.Env{SessionID: "s", Cwd: "/w/proj"})
+	n := 0
+	for _, x := range run(m, recs).last() {
+		if x.Notice != nil && strings.HasPrefix(x.ID, "retry-") {
+			n++
+			if x.Notice.Level != "info" || !strings.HasPrefix(x.Notice.Text, "Recovered after 8 retries") {
+				t.Fatalf("retry notice %+v", x.Notice)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d retry notices", n)
+	}
+}
