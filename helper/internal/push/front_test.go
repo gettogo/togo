@@ -68,3 +68,14 @@ func TestSkippedDeviceToldAfterItLeaves(t *testing.T) {
 		t.Fatalf("alerts = %v, want one to dev_a only", got)
 	}
 }
+
+// An app in front on a device that never paired speaks only for itself.
+func TestUnpairedDeviceInFrontSilencesNobody(t *testing.T) {
+	e := newEnv(t, 2)
+	e.hub.setFront("dev_unpaired")
+	e.handle(approvalOpen("r_abcdefghij"))
+	got := e.alertsTo(t)
+	if got["dev_a"] != 1 || got["dev_b"] != 1 {
+		t.Fatalf("alerts = %v, want one to each paired device", got)
+	}
+}
