@@ -55,6 +55,7 @@ struct HelperUpdateLine: View {
                 }
                 .accessibilityLabel(HelperUpdateCopy.availableOn(name))
                 .accessibilityAction(named: HelperUpdateCopy.updateOn(name)) { Task { await updates.update(machine) } }
+                .disabled(updates.isChecking(machine))
             }
         case .updating:
             HStack(spacing: 12) {
@@ -82,6 +83,12 @@ struct HelperUpdateLine: View {
             MachineMessage("\(HelperUpdateCopy.failed) \(message)", action: HelperUpdateCopy.tryAgain) {
                 Task { await updates.update(machine) }
             }
+        case .unconfirmed(let message):
+            MachineMessage("\(HelperUpdateCopy.unconfirmed) \(message)",
+                           action: updates.isChecking(machine) ? HelperUpdateCopy.checking : HelperUpdateCopy.check) {
+                Task { await updates.checkIfDue(machine) }
+            }
+            .disabled(updates.isChecking(machine))
         }
     }
 }

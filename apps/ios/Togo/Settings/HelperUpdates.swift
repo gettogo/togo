@@ -2,8 +2,16 @@ import Observation
 import SwiftUI
 import TogoKit
 
+/// The SSH exec was attempted and its result was lost. Connection/authentication failures
+/// before that point remain ordinary errors, so checking cannot prompt for login a second time.
+struct HelperUpdateCommandInterrupted: Error {
+    let cause: any Error
+    init(_ cause: any Error) { self.cause = cause }
+}
+
 /// Which machines have a newer helper, and the update itself. A machine is asked at most once a
-/// day, on connecting, by running the helper's own `update --check` over its SSH connection; the
+/// day, on connecting, by running the helper's own `update --check` over its SSH connection; an
+/// uncertain installation is checked again on reconnect or an explicit Check Update. The
 /// machine reaches the release server, this device never does. What it learned is kept per
 /// machine on this device. An answer it cannot read shows nothing and is tried again tomorrow.
 ///
@@ -18,11 +26,12 @@ import TogoKit
         case updating
         case updated(String?)
         case failed(String)
+        case unconfirmed(String)
     }
 
     private(set) var ledger: HelperUpdateLedger
     private(set) var phases: [HostID: Phase] = [:]
-    @ObservationIgnored private var checking: Set<HostID> = []
+    private var active: [HostID: UUID] = [:]
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let helperPath: (HostID) -> String?
     @ObservationIgnored private let run: Run?
@@ -30,7 +39,8 @@ import TogoKit
     private static let key = "helperUpdates.v1"
     private static let helperTimeout = Duration.seconds(120)
 
-    /// `run` executes a command on the machine and gives its output; nil where there is no machine.
+    /// `run` gives the command's output, or wraps a possibly started exec's error in
+    /// `HelperUpdateCommandInterrupted`. Errors before the exec are not wrapped.
     init(
         defaults: UserDefaults = .standard, helperPath: @escaping (HostID) -> String? = { _ in nil },
         now: @escaping () -> Date = Date.init, run: Run? = nil
@@ -51,15 +61,30 @@ import TogoKit
     func state(_ host: HostID) -> HelperUpdateState? { ledger.machines[host] }
 
     func phase(_ host: HostID) -> Phase { phases[host] ?? .idle }
+    func isChecking(_ host: HostID) -> Bool { active[host] != nil }
+    func requiresCheck(_ host: HostID) -> Bool {
+        if case .unconfirmed = phase(host) { return true }
+        return false
+    }
 
-    /// Asks the machine, if it has not been asked today. Never throws: a failure is just no news.
+    /// Asks once a day, or again to resolve an uncertain installation. Never retries an update.
     func checkIfDue(_ host: HostID) async {
-        guard let run, ledger.isDue(host, now: now()), checking.insert(host).inserted else { return }
-        defer { checking.remove(host) }
+        guard run != nil, active[host] == nil,
+              requiresCheck(host) || ledger.isDue(host, now: now()) else { return }
+        let token = UUID()
+        active[host] = token
+        defer { if active[host] == token { active[host] = nil } }
+        await check(host, token: token)
+    }
+
+    private func check(_ host: HostID, token: UUID) async {
+        guard let run else { return }
+        let recovering = requiresCheck(host)
         let path = helperPath(host)
         var check: HelperUpdateCheck?
         var viaHomebrew = false
         if let output = try? await run(host, HelperUpdate.checkCommand(helperPath: path), Self.helperTimeout) {
+            guard active[host] == token, !Task.isCancelled else { return }
             check = HelperUpdate.parseCheck(stdout: text(output.stdout), stderr: text(output.stderr), status: output.status)
             if check == .homebrew {
                 viaHomebrew = true
@@ -69,7 +94,20 @@ import TogoKit
                 }
             }
         }
+        guard active[host] == token, !Task.isCancelled else { return }
+        // A failed read cannot turn an uncertain installation into either success or failure.
+        if recovering, check == nil { return }
+        let previous = ledger.machines[host]?.installed
         ledger.record(check, for: host, at: now(), viaHomebrew: viaHomebrew)
+        if recovering {
+            switch check {
+            case .upToDate(let installed):
+                let advanced = previous.map { HelperUpdate.isNewer(installed, than: $0) } ?? false
+                phases[host] = advanced ? .updated(installed) : .idle
+            case .available: phases[host] = .idle
+            default: break
+            }
+        }
         save()
     }
 
@@ -77,14 +115,20 @@ import TogoKit
     /// may drop; the app reconnects on its own. A helper that refuses because Homebrew owns it
     /// gets the Homebrew steps run for it.
     func update(_ host: HostID) async {
-        guard let run, phase(host) != .updating else { return }
+        if requiresCheck(host) { await checkIfDue(host); return }
+        guard let run, phase(host) != .updating, active[host] == nil else { return }
+        let token = UUID()
+        active[host] = token
+        defer { if active[host] == token { active[host] = nil } }
         phases[host] = .updating
         let path = helperPath(host)
         do {
             var output = try await run(host, HelperUpdate.updateCommand(helperPath: path), Self.helperTimeout)
+            guard active[host] == token else { return }
             var outcome = HelperUpdate.parseUpdate(stdout: text(output.stdout), stderr: text(output.stderr), status: output.status)
             if outcome == .homebrew {
                 output = try await run(host, HelperUpdate.brewUpgradeCommand(helperPath: path), HelperUpdate.brewTimeout)
+                guard active[host] == token else { return }
                 outcome = HelperUpdate.parseBrewUpgrade(stdout: text(output.stdout), stderr: text(output.stderr), status: output.status)
             }
             switch outcome {
@@ -99,7 +143,13 @@ import TogoKit
             }
             save()
         } catch {
-            phases[host] = .failed(error.localizedDescription)
+            guard active[host] == token else { return }
+            guard let interrupted = error as? HelperUpdateCommandInterrupted else {
+                phases[host] = .failed(ServiceErrors.message(error))
+                return
+            }
+            phases[host] = .unconfirmed(ServiceErrors.message(interrupted.cause))
+            if !Task.isCancelled { await check(host, token: token) }
         }
     }
 
@@ -107,7 +157,8 @@ import TogoKit
 
     /// Puts a finished update or failure away, so its line leaves the Control Center.
     func settle(_ host: HostID) {
-        if phase(host) != .updating { phases[host] = nil }
+        guard phase(host) != .updating, !requiresCheck(host) else { return }
+        phases[host] = nil
     }
 
     #if DEBUG
@@ -116,6 +167,7 @@ import TogoKit
     #endif
 
     func forget(_ host: HostID) {
+        active[host] = nil
         ledger.forget(host)
         phases[host] = nil
         save()
@@ -147,5 +199,8 @@ enum HelperUpdateCopy {
             ?? settingsText("helperUpdate.updated", "Helper updated")
     }
     static var failed: String { settingsText("helperUpdate.failed", "The helper didn't update.") }
+    static var unconfirmed: String { settingsText("helperUpdate.unconfirmed", "Couldn't confirm the helper update. It may have completed.") }
+    static var check: String { settingsText("helperUpdate.check", "Check Update") }
+    static var checking: String { settingsText("helperUpdate.checking", "Checking…") }
     static var tryAgain: String { settingsText("helperUpdate.tryAgain", "Try again") }
 }

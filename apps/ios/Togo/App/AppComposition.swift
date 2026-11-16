@@ -194,7 +194,9 @@ import TogoMosh
             helperPath: { [weak services] in services?.hostRecord($0)?.helperPath },
             run: { [weak services] id, command, timeout in
                 guard let record = await services?.hostRecord(id) else { throw LiveServiceError.unknownMachine }
-                return try await helpers.connection(for: record).run(command, timeout: timeout)
+                let connection = try await helpers.connection(for: record)
+                do { return try await connection.run(command, timeout: timeout) }
+                catch { throw HelperUpdateCommandInterrupted(error) }
             }
         )
         LinkCenter.shared.tunnel = LiveCallbackTunnel(
