@@ -134,7 +134,7 @@ func (t *transcript) toolResult(e entry, b block, at time.Time) ([]harness.Item,
 	case "Edit", "MultiEdit", "Write", "NotebookEdit":
 		if fc := fileChange(res, t.cwd); fc != nil {
 			body.Files = []harness.FileChange{*fc}
-			ops = append(ops, t.changed(*fc)...)
+			ops = append(ops, t.changed(b.ToolUseID, *fc)...)
 			if it.Parent == "" && t.turn != nil {
 				t.turn.files[fc.Path] = true
 			}
@@ -254,12 +254,18 @@ func fileChange(res map[string]any, cwd string) *harness.FileChange {
 }
 
 // changed keeps a running count per file for the Changes section.
-func (t *transcript) changed(fc harness.FileChange) []harness.Op {
+// A call's result read again replaces its share of the counts.
+func (t *transcript) changed(call string, fc harness.FileChange) []harness.Op {
 	cur, ok := t.changes[fc.Path]
 	if !ok {
 		cur = &harness.FileChange{Path: fc.Path}
 		t.changes[fc.Path] = cur
 	}
+	if prev, ok := t.changeBy[call+"\x00"+fc.Path]; ok {
+		cur.Added -= prev.Added
+		cur.Removed -= prev.Removed
+	}
+	t.changeBy[call+"\x00"+fc.Path] = fc
 	cur.Added += fc.Added
 	cur.Removed += fc.Removed
 	row := harness.Row{ID: fc.Path, Title: fc.Path, Subtitle: fmt.Sprintf("+%d -%d", cur.Added, cur.Removed),
@@ -349,7 +355,11 @@ func (t *transcript) planUse(b block, in map[string]any, at time.Time, turn, par
 				Title: firstNonEmpty(str(m, "content"), str(m, "activeForm")), State: planState(str(m, "status"))})
 		}
 	case "TaskCreate":
+		if _, again := t.taskBy[b.ID]; again {
+			break // this call's row is already in the plan
+		}
 		id := firstNonEmpty(str(in, "id"), strconv.Itoa(len(t.plan)+1))
+		t.taskBy[b.ID] = id
 		t.plan = append(t.plan, harness.Row{ID: id, Title: firstNonEmpty(str(in, "subject"), str(in, "description")), State: harness.RowPending})
 	case "TaskUpdate":
 		id := firstNonEmpty(str(in, "taskId"), str(in, "id"))
