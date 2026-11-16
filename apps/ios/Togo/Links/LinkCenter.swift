@@ -29,6 +29,9 @@ import UIKit
     /// Whether a session's agent shows a prompt for a code or key now.
     var awaitsCode: ((HostID, String) -> Bool)?
 
+    /// The existing Ports screen for a known, connected session with ports support.
+    var portPreviewModel: ((Origin) -> PortsModel?)?
+
     /// Pages agents asked to open, until used or expired.
     let requests = OpenRequests()
 
@@ -70,7 +73,7 @@ import UIKit
 
     /// Opens a pending request here: a sign-in in the authentication browser, else Safari's view.
     func use(_ open: PendingOpen) {
-        if SignInRoute.isSignIn(open.url) {
+        if SessionWebLink.destination(open.url) == .signIn {
             signIn(open.url, from: open.origin, onOpened: { [weak self] in self?.requests.resolve(open.id) })
         } else {
             self.open(open.url, from: open.origin)
@@ -140,9 +143,15 @@ import UIKit
     /// A link the user chose: tapped in a terminal or picked from a list.
     func open(_ url: URL, from origin: Origin) {
         guard LinkPolicy.allows(url) else { return }
-        if SignInRoute.returnsToLoopback(url) {
+        switch SessionWebLink.destination(url) {
+        case .localPreview:
+            openLocalPage(url, from: origin)
+            return
+        case .signIn:
             signIn(url, from: origin)
             return
+        case .web:
+            break
         }
         let configuration = SFSafariViewController.Configuration()
         configuration.entersReaderIfAvailable = false
@@ -150,6 +159,32 @@ import UIKit
         let safari = SFSafariViewController(url: url, configuration: configuration)
         safari.dismissButtonStyle = .done
         LinkPresenter.present(safari, height: nil, name: "link.safari")
+    }
+
+    private func openLocalPage(_ url: URL, from origin: Origin) {
+        guard let model = portPreviewModel?(origin) else {
+            let alert = UIAlertController(
+                title: String(localized: "links.localPage.unavailable", defaultValue: "Cannot open this local page"),
+                message: String(localized: "links.localPage.needsSession", defaultValue:
+                    "Connect the session and try again, or open the page on the machine."), preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: LinkCopy.done, style: .default))
+            LinkPresenter.present(alert, height: nil, name: "link.localPageUnavailable")
+            return
+        }
+        let handle = SheetHandle()
+        let view = NavigationStack {
+            PortsView(model: model, initialURL: url)
+                .navigationTitle(ReviewCopy.tabName(.ports))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(LinkCopy.done, systemImage: "checkmark", role: .confirm) { handle.close() }
+                    }
+                }
+        }
+        let controller = LinkSheetController(rootView: AnyView(view.togoControls()))
+        handle.controller = controller
+        LinkPresenter.present(controller, height: nil, name: "link.localPage")
     }
 
     /// Every link on a terminal's screen and recent scrollback, newest first.

@@ -6,10 +6,12 @@ import UIKit
 /// loopback opens in a preview here, through an SSH forward.
 struct PortsView: View {
     @Bindable var model: PortsModel
+    let initialURL: URL?
     @Environment(\.scenePhase) private var scenePhase
 
-    init(model: PortsModel) {
+    init(model: PortsModel, initialURL: URL? = nil) {
         self.model = model
+        self.initialURL = initialURL
     }
 
     var body: some View {
@@ -17,6 +19,7 @@ struct PortsView: View {
             .phaseSwap(model.subject.canPorts ? CaseName.of(model.phase) : "unavailable")
             .background(Color.togoInk)
             .onAppear { model.appear() }
+            .task { if let initialURL { await model.openLink(initialURL) } }
             .onDisappear { model.disappear() }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
@@ -29,7 +32,8 @@ struct PortsView: View {
             // local port is a new item, so the sheet comes back with the page at the new address.
             .presentSheet("review.portPreview", item: $model.preview) { preview in
                 PreviewSheet(
-                    url: preview.url, title: PortsCopy.previewTitle(preview.remote),
+                    url: SessionWebLink.previewURL(initialURL, remote: preview.remote, local: preview.url),
+                    title: PortsCopy.previewTitle(preview.remote),
                     activity: { model.touch() }
                 )
                 // A web page wants the room: full height on a phone, page-sized in a regular window.

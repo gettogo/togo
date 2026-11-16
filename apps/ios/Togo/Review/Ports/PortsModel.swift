@@ -221,6 +221,29 @@ import UIKit
         shown = Preview(remote: port.port, localPort: localPort)
     }
 
+    /// A terminal link may open only a listener freshly listed for this session. A page on
+    /// an unknown port must never be guessed to be an OAuth callback or a manual forward.
+    func openLink(_ url: URL) async {
+        guard SignInRoute.isLoopback(url) else { return }
+        let number = url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)
+        do {
+            let listed = try await services.ports(subject)
+            guard !Task.isCancelled, foreground else { return }
+            apply(listed)
+            phase = .loaded
+            guard let port = listed.first(where: { $0.port == number && Self.isPreviewable($0) }) else {
+                manualError = String(localized: "review.ports.linkUnavailable", defaultValue:
+                    "This page's port is not listed for this session. Open it on the machine.")
+                return
+            }
+            manualError = nil
+            await open(port)
+        } catch {
+            guard !Task.isCancelled else { return }
+            phase = .failed(ServiceErrors.message(error))
+        }
+    }
+
     /// A port typed by hand, for a server this session didn't start.
     func openManual(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespaces)

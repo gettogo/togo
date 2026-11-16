@@ -200,6 +200,14 @@ import TogoMosh
         LinkCenter.shared.tunnel = LiveCallbackTunnel(
             helpers: helpers, records: { [weak services] in services?.hostRecord($0) }, review: review
         )
+        LinkCenter.shared.portPreviewModel = { [weak services, weak review] origin in
+            guard let review, let hostID = origin.hostID, let sessionID = origin.sessionID, !sessionID.isEmpty,
+                  let capabilities = services?.latest[hostID]?.capabilities,
+                  capabilities.contains(Capability.ports) else { return nil }
+            let subject = ReviewSubject(hostID: hostID, sessionID: sessionID, bib: nil,
+                                        title: ReviewCopy.tabName(.ports), cwd: "", managed: false, capabilities: capabilities)
+            return PortsModel(subject: subject, services: review)
+        }
         LinkCenter.shared.openOnMac = { [weak machineTools] hostID, url in
             let link = url.absoluteString
             try await machineTools?.call(hostID) { try await $0.openOnMac(url: link) }
