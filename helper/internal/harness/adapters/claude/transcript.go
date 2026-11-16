@@ -376,7 +376,9 @@ func (t *transcript) assistant(e entry) ([]harness.Item, []harness.Op) {
 	var items []harness.Item
 	var ops []harness.Op
 	if !e.IsSidechain && m.Model != "<synthetic>" {
-		ops = append(ops, contextOps(m)...)
+		if !hasStatusContext(t.env.SessionID) {
+			ops = append(ops, contextOps(m)...)
+		}
 		items = append(items, t.retryDone()...)
 	}
 	for _, b := range blocks {
