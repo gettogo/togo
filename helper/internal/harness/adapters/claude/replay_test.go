@@ -96,3 +96,18 @@ func TestTaskNotificationUserRecordSettlesBackgroundWork(t *testing.T) {
 		}
 	}
 }
+
+// A finished call's output goes out with its item; the mapper does not keep
+// it for the rest of the session.
+func TestMapperDoesNotKeepToolOutput(t *testing.T) {
+	m := newTranscript(env())
+	r := mapAll(m, records(t, "transcript-basic.jsonl"))
+	if r.final["toolu_01"].Tool.Output == "" {
+		t.Fatal("the published item lost its output")
+	}
+	for id, it := range m.tools {
+		if it.Tool != nil && it.Tool.Output != "" {
+			t.Errorf("mapper keeps the output of %s", id)
+		}
+	}
+}

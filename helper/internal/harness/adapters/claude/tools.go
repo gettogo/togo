@@ -159,7 +159,13 @@ func (t *transcript) toolResult(e entry, b block, at time.Time) ([]harness.Item,
 	body.Output = strings.TrimSpace(plain(out))
 	next := *it
 	next.Tool = &body
-	t.tools[b.ToolUseID] = &next
+	// The mapper keeps the call for later lookups (a background shell or an
+	// agent names it again) but not its output, which can be large and
+	// which the published item carries only the tail of.
+	kept, keptBody := next, body
+	keptBody.Output = ""
+	kept.Tool = &keptBody
+	t.tools[b.ToolUseID] = &kept
 	return append([]harness.Item{next}, items...), ops
 }
 
