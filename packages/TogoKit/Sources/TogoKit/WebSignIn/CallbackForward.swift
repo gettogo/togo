@@ -9,7 +9,8 @@ import Foundation
     /// on whatever route works now.
     func opener(hostID: UUID, fresh: Bool) async throws -> any TCPChannelOpener
     /// The loopback address the agent listens on for `port`: "127.0.0.1" or "::1".
-    func loopbackAddress(hostID: UUID, sessionID: String?, port: Int) async -> String
+    /// Throws when the session's listener cannot be verified. Never guess a destination.
+    func loopbackAddress(hostID: UUID, sessionID: String?, port: Int) async throws -> String
 }
 
 /// Listens on 127.0.0.1:PORT on this phone, the very port a sign-in's redirect names, and
@@ -67,7 +68,7 @@ import Foundation
     /// Opens the forward. Returns false when the port is taken on this phone.
     public func start() async throws -> Bool {
         guard state == .idle || state == .stopped else { return state == .listening }
-        let address = await tunnel.loopbackAddress(hostID: hostID, sessionID: sessionID, port: port)
+        let address = try await tunnel.loopbackAddress(hostID: hostID, sessionID: sessionID, port: port)
         guard let target = ForwardTarget(ListeningPort(port: port, address: address, pid: 0, command: "")) else {
             state = .busy
             return false

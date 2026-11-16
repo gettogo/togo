@@ -24,14 +24,31 @@ import TogoKit
         return try await helpers.connection(for: record)
     }
 
-    func loopbackAddress(hostID: HostID, sessionID: String?, port: Int) async -> String {
-        guard let sessionID, !sessionID.isEmpty else { return "127.0.0.1" }
+    func loopbackAddress(hostID: HostID, sessionID: String?, port: Int) async throws -> String {
+        guard let sessionID, !sessionID.isEmpty else { throw CallbackTargetError.unverified }
         let subject = ReviewSubject(
             hostID: hostID, sessionID: sessionID, bib: nil, title: "", cwd: "", managed: true, capabilities: []
         )
         // The session's list says which loopback address the agent took, IPv4 or IPv6.
-        guard let listed = try? await review.ports(subject).first(where: { $0.port == port }) else { return "127.0.0.1" }
-        return ForwardTarget(listed)?.host ?? "127.0.0.1"
+        let ports = try await review.ports(subject)
+        return try Self.verifiedAddress(sessionID: sessionID, port: port, ports: ports)
+    }
+
+    static func verifiedAddress(sessionID: String?, port: Int, ports: [ListeningPort]) throws -> String {
+        guard let sessionID, !sessionID.isEmpty,
+              let target = ports.lazy.filter({ $0.port == port }).compactMap(ForwardTarget.init).first else {
+            throw CallbackTargetError.unverified
+        }
+        return target.host
+    }
+}
+
+enum CallbackTargetError: LocalizedError, Equatable {
+    case unverified
+
+    var errorDescription: String? {
+        String(localized: "links.callback.unverified", defaultValue:
+            "This session has no verified sign-in listener on that port. Sign in on the machine, or paste the code.")
     }
 }
 
