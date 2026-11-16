@@ -476,8 +476,11 @@ func (m *Mapper) replies(at time.Time, draw bool, wait time.Duration, want func(
 		return nil
 	}
 	if session != m.replySession {
-		m.replySession, m.replyFrom = session, 0
+		// A session no prompt began here (the helper restarted mid-turn):
+		// its log holds earlier conversation, so read from the end.
 		m.seenCalls = map[string]bool{}
+		_, end := m.opts.Replies(m.env, session, -1)
+		m.replySession, m.replyFrom = session, end
 	}
 	var got []Reply
 	deadline := time.Now().Add(wait)

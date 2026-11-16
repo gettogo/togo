@@ -91,3 +91,26 @@ func TestRepliesDoNotWaitForWhatCannotArrive(t *testing.T) {
 		t.Errorf("a call without an id waited %v", d)
 	}
 }
+
+// After a helper restart the first hook the mapper sees is a tool call:
+// the log's earlier messages are not this turn's.
+func TestRepliesFromTheEndWhenTheSessionIsNew(t *testing.T) {
+	m := New(harness.Env{SessionID: "s-restart"}, Options{Name: "copilot.hooks",
+		Replies: func(_ harness.Env, _ string, off int64) ([]Reply, int64) {
+			if off < 0 {
+				return nil, 900
+			}
+			if off == 0 {
+				return []Reply{{Text: "an answer from long ago"}}, 900
+			}
+			return nil, off
+		}})
+	d, _ := For("copilot")
+	_, norm, _ := Normalize(d, "preToolUse", []byte(`{"session_id":"copilot-session-1","toolName":"bash","toolCallId":"c1","toolArgs":"{}"}`))
+	items, _ := m.Map(harness.Record{Source: "hooks", At: t0, Data: norm})
+	for _, x := range items {
+		if x.Kind == harness.KindAssistant {
+			t.Fatalf("replayed %q", x.Assistant.Text)
+		}
+	}
+}
