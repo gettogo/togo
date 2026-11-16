@@ -33,7 +33,7 @@ func runNotify(ctx context.Context, args []string, env map[string]string, stderr
 	fs := newFlagSet("notify")
 	title := fs.String("title", "", "notification title")
 	strict := fs.Bool("strict", false, "exit 4 when the notification is not delivered")
-	pos, err := parseArgs(fs, args)
+	pos, err := parseTextArgs(fs, args)
 	if err != nil {
 		return usageError(stderr, err)
 	}

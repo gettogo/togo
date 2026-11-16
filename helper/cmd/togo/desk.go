@@ -23,20 +23,71 @@ const nestedTmuxNote = "togo: you are inside tmux, so this nests tmux in your cu
 
 // parseArgs parses flags and returns the positional arguments. Unlike
 // flag.Parse it accepts flags after positionals, so both
-// "togo new codex --detach" and "togo new --detach codex" work.
+// "togo new codex --detach" and "togo new --detach codex" work. A "--"
+// ends flag parsing: everything after it is positional.
 func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
+	return parseArgsMode(fs, args, false)
+}
+
+// parseTextArgs is parseArgs for commands whose positionals are free text
+// ("togo notify '-3 tests failed'"): a word that starts with "-" but names
+// no flag is text, not a usage error.
+func parseTextArgs(fs *flag.FlagSet, args []string) ([]string, error) {
+	return parseArgsMode(fs, args, true)
+}
+
+const undefinedFlag = "flag provided but not defined: -"
+
+func parseArgsMode(fs *flag.FlagSet, args []string, text bool) ([]string, error) {
 	var positional []string
 	for {
-		if err := fs.Parse(args); err != nil {
-			return nil, err
+		err := fs.Parse(args)
+		if err != nil {
+			name, ok := strings.CutPrefix(err.Error(), undefinedFlag)
+			if !text || !ok {
+				return nil, err
+			}
+			i := slices.IndexFunc(args, func(a string) bool {
+				a = strings.TrimLeft(a, "-")
+				a, _, _ = strings.Cut(a, "=")
+				return a == name
+			})
+			if i < 0 {
+				return nil, err
+			}
+			positional = append(positional, args[i])
+			args = args[i+1:]
+			continue
 		}
-		args = fs.Args()
+		rest := fs.Args()
+		if n := len(args) - len(rest); n > 0 && args[n-1] == "--" && !(n > 1 && takesValue(fs, args[n-2])) {
+			return append(positional, rest...), nil
+		}
+		args = rest
 		if len(args) == 0 {
 			return positional, nil
 		}
 		positional = append(positional, args[0])
 		args = args[1:]
 	}
+}
+
+// takesValue reports whether tok is a defined non-boolean flag written
+// without "=", so the word after it is its value.
+func takesValue(fs *flag.FlagSet, tok string) bool {
+	name, ok := strings.CutPrefix(strings.TrimPrefix(tok, "-"), "-")
+	if !ok {
+		name = strings.TrimPrefix(tok, "-")
+	}
+	if tok == name || strings.Contains(name, "=") {
+		return false
+	}
+	f := fs.Lookup(name)
+	if f == nil {
+		return false
+	}
+	b, isBool := f.Value.(interface{ IsBoolFlag() bool })
+	return !(isBool && b.IsBoolFlag())
 }
 
 func newFlagSet(name string) *flag.FlagSet {

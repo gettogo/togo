@@ -51,7 +51,7 @@ func runAsk(ctx context.Context, args []string, env map[string]string, stdin io.
 	text := fs.Bool("text", false, "accept a typed answer (over SSH only)")
 	approve := fs.String("approve", "", "the option a notification's Approve picks (default: inferred from labels)")
 	denyFlag := fs.String("deny", "", "the option a notification's Deny picks (default: inferred from labels)")
-	pos, err := parseArgs(fs, args)
+	pos, err := parseTextArgs(fs, args)
 	if err != nil {
 		return usageError(stderr, err)
 	}

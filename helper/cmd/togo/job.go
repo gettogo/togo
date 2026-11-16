@@ -32,7 +32,7 @@ func runJob(ctx context.Context, args []string, env map[string]string, stdout, s
 	progress := fs.Int("progress", -1, "percent done, 0-100")
 	message := fs.String("message", "", "short status message")
 	status := fs.String("status", "", "ok or failed (end only)")
-	pos, err := parseArgs(fs, args[1:])
+	pos, err := parseTextArgs(fs, args[1:])
 	if err != nil {
 		return usageError(stderr, err)
 	}
