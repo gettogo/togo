@@ -73,7 +73,7 @@ func (s *Store) Answer(ctx context.Context, requestID, raw, by string) error {
 		return err
 	}
 	if e.a.Source == wire.SourceAsk {
-		e.ask <- answerFor(e.a, d, opt)
+		e.ask <- answerFor(e, d, opt)
 		e.ask = nil
 		s.closeLocked(e, by)
 		s.mu.Unlock()
@@ -160,9 +160,12 @@ func pick(a wire.Approval, d wire.Decision) (*wire.Option, error) {
 
 // answerFor is what an ask receives: the chosen option's label, the text,
 // or "deny" when the user declined an ask with no deny option.
-func answerFor(a wire.Approval, d wire.Decision, opt *wire.Option) string {
+func answerFor(e *entry, d wire.Decision, opt *wire.Option) string {
 	switch {
 	case opt != nil:
+		if l, ok := e.labels[opt.N]; ok {
+			return l
+		}
 		return opt.Label
 	case d.Kind == wire.DecisionText:
 		return d.Text

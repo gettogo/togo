@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -384,5 +385,17 @@ func TestSessionGoneDropsThePaneLock(t *testing.T) {
 	st.mu.Unlock()
 	if n != 0 {
 		t.Fatalf("%d pane locks kept for a session that is gone", n)
+	}
+}
+
+func TestAskAnswerIsTheLabelAsGivenNotTheWireCopy(t *testing.T) {
+	st := New(Config{Tmux: &fakeTmux{}, Pub: &fakePub{}})
+	long := strings.Repeat("Do not deploy to production today, ", 4)
+	a, ch := st.OpenAsk(context.Background(), wire.AskParams{Title: "Deploy?", Options: []string{"Deploy", long}})
+	if err := st.Answer(context.Background(), a.RequestID, "option:2", wire.ByPhone); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-ch; got != long {
+		t.Fatalf("ask received %q, want the full label", got)
 	}
 }

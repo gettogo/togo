@@ -58,6 +58,7 @@ type entry struct {
 	resolution  string // wire.Resolution*, set when closed
 	fingerprint string // empty for ask approvals and hooks with no prompt on screen
 	ask         chan string
+	labels      map[int]string // an ask's option labels as given, by option number
 }
 
 // notAnswerable is Approval.Answerable for a request the phone cannot
@@ -170,7 +171,7 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		a.Answerable = notAnswerable()
 	}
 	withSubject(&a, p.Subject)
-	s.open(a, p.Fingerprint, nil)
+	s.open(a, p.Fingerprint, nil, nil)
 }
 
 // PromptGone records that the prompt on a session's screen went away, which
@@ -272,7 +273,7 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 		s.closeLocked(cur, wire.ResolutionDesk)
 	}
 	s.mu.Unlock()
-	return s.open(a, fp, nil)
+	return s.open(a, fp, nil, nil)
 }
 
 // OpenAsk opens an approval for `togo ask`. Nothing is typed when it is
@@ -302,7 +303,12 @@ func (s *Store) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <
 		a.ExpiresAt = &exp
 	}
 	ch := make(chan string, 1)
-	return s.open(a, "", ch), ch
+	// The wire label is cut to MaxOptionLabel; the caller gets its own back.
+	full := make(map[int]string, len(p.Options))
+	for i, label := range p.Options {
+		full[i+1] = label
+	}
+	return s.open(a, "", ch, full), ch
 }
 
 // CloseDesk closes a pending approval as answered at the desk.
@@ -357,8 +363,8 @@ func (s *Store) base(ctx context.Context, sessionID, source string) wire.Approva
 	return a
 }
 
-func (s *Store) open(a wire.Approval, fingerprint string, ask chan string) wire.Approval {
-	e := &entry{a: a, fingerprint: fingerprint, ask: ask}
+func (s *Store) open(a wire.Approval, fingerprint string, ask chan string, labels map[int]string) wire.Approval {
+	e := &entry{a: a, fingerprint: fingerprint, ask: ask, labels: labels}
 	s.mu.Lock()
 	s.entries[a.RequestID] = e
 	time.AfterFunc(a.ExpiresAt.Sub(a.CreatedAt), func() { s.expire(a.RequestID) })
