@@ -236,3 +236,22 @@ func TestMessagesTurnGoesOnAfterAnIdleClose(t *testing.T) {
 		t.Fatalf("the turn stayed closed: %+v", turn)
 	}
 }
+
+// Resume relaunches Cline with --id; the mapper survives the relaunch and
+// must move to that session at once, even when its manifest does not say
+// this process owns it yet.
+func TestMessagesFollowsAResumeRelaunch(t *testing.T) {
+	h, doc := home(t)
+	m := newMessages(env(h, "2026-11-08T04:00:00Z")) // began after the fixture session
+	r, ok := any(m).(harness.Relauncher)
+	if !ok {
+		t.Fatal("the mapper does not follow a relaunch")
+	}
+	r.Relaunched([]string{"cline", "-i", "--id", fixtureID}, time.Now())
+	if st := m.State(); st["harness_session"] != fixtureID || !strings.HasSuffix(st["transcript_path"], fixtureID+".messages.json") {
+		t.Fatalf("state %v", st)
+	}
+	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
+		t.Fatal("the resumed session was not mapped")
+	}
+}

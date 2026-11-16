@@ -282,6 +282,21 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	return m.changed(m.render(d.Messages)), nil
 }
 
+// Relaunched follows the session a resume relaunch (`--id <id>`) opens:
+// the chat moves to it at once, not when Cline next rewrites its file.
+func (m *messages) Relaunched(argv []string, _ time.Time) []harness.Op {
+	id := argvID(argv)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id == "" || id == m.session {
+		return nil
+	}
+	m.lock(id)
+	m.updated, m.lastMsgs, m.lastTurn, m.lastOpen, m.lastAsking = "", nil, "", false, false
+	m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+	return nil
+}
+
 // changed keeps the items whose content differs from what was returned.
 func (m *messages) changed(items []harness.Item) []harness.Item {
 	var out []harness.Item
