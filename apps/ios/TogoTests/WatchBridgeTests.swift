@@ -155,7 +155,7 @@ import TogoPush
     }
 
     /// The phone may never have seen a request the Watch holds, so it names only what it knows
-    /// is closed: answered, expired or cleared.
+    /// is closed: answered or cleared. Expiry alone is not evidence of an answer.
     @Test func contextCarriesOnlyClosedRequests() throws {
         let bridge = bridge()
         let session = WatchSession(hostName: "Studio", bib: "04", agentName: "Claude", status: "needs_you", activity: nil)
@@ -165,13 +165,13 @@ import TogoPush
             Self.request("r_expired", age: 700),
         ])
         let context = try link.last(WatchLinkKey.context, as: WatchContext.self)
-        #expect(context.closedRequestIds == ["r_approved", "r_elsewhere", "r_expired"])
+        #expect(context.closedRequestIds == ["r_approved", "r_elsewhere"])
         #expect(context.sessions == [session])
         #expect(context.at == Samples.now)
 
         bridge.cleared("r_open")
         #expect(try link.last(WatchLinkKey.context, as: WatchContext.self).closedRequestIds
-            == ["r_approved", "r_elsewhere", "r_expired", "r_open"])
+            == ["r_approved", "r_elsewhere", "r_open"])
     }
 
     @Test func sessionRowsUseCleanActivity() {

@@ -80,6 +80,19 @@ private final class Clock: Sendable {
         #expect(store.requests.map(\.requestId) == ["r_1"])
     }
 
+    @Test func missingRecordDoesNotInventAnAnswer() {
+        let store = store()
+        #expect(store.state(of: "r_missing") == .unavailable)
+        #expect(!store.state(of: "r_missing").isActionable)
+        store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
+        clock.advance(601)
+        store.apply(context: context(closed: [], at: clock.date))
+        #expect(store.state(of: "r_1") == .expired)
+        clock.advance(PendingStore.retention)
+        store.apply(context: context(closed: [], at: clock.date))
+        #expect(store.state(of: "r_1") == .unavailable)
+    }
+
     @Test func clearRemovesRequest() {
         let store = store()
         store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
@@ -301,7 +314,7 @@ private final class Clock: Sendable {
         let store = store()
         let delivered = clock.date
         store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
-        clock.advance(601)
+        clock.advance(PendingStore.retention + 1)
         store.apply(context: context(closed: [], at: clock.date))
         #expect(pending.request("r_1") == nil)
 

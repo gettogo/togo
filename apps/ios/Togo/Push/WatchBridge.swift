@@ -92,8 +92,12 @@ extension WatchLink {
         lastRequests = requests
         if let textRequests { lastTextRequests = textRequests }
         cleared = cleared.filter { now.timeIntervalSince($0.value) < RequestLifetime.seconds }
-        let waiting = Set(RequestLifetime.waiting(requests, now: now).map(\.requestId))
-        let closed = requests.filter { $0.answered != .sending && !waiting.contains($0.requestId) }.map(\.requestId)
+        let closed = requests.filter {
+            switch $0.answered {
+            case .approved, .denied, .elsewhere: true
+            case .sending, nil: false
+            }
+        }.map(\.requestId)
         context = WatchContext(
             sessions: sessions, closedRequestIds: Set(closed).union(cleared.keys).sorted(), at: now,
             textRequestIds: lastTextRequests

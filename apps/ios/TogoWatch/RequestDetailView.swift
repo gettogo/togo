@@ -117,6 +117,8 @@ private struct AnswerButtons: View {
                     result(WatchCopy.answered, systemImage: "checkmark.circle")
                 case .answeredElsewhere:
                     result(WatchCopy.answeredElsewhere, systemImage: "checkmark.circle")
+                case .unavailable:
+                    result(WatchCopy.unavailable, systemImage: "questionmark.circle")
                 case .expired:
                     result(WatchCopy.expired, systemImage: "clock")
                 case .open, .sending, .failed, .notSetUp:
@@ -230,7 +232,7 @@ private extension WatchStore.RequestState {
     /// The request is settled and its result line takes the buttons' place.
     var isResult: Bool {
         switch self {
-        case .approved, .denied, .answered, .answeredElsewhere, .expired: true
+        case .approved, .denied, .answered, .answeredElsewhere, .expired, .unavailable: true
         case .open, .sending, .failed, .notSetUp: false
         }
     }

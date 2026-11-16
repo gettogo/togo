@@ -496,6 +496,17 @@
         }
       }
     },
+    "watch.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request no longer available"
+          }
+        }
+      }
+    },
     "watch.waiting.empty" : {
       "extractionState" : "manual",
       "localizations" : {

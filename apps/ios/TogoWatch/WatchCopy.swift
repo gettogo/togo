@@ -16,6 +16,7 @@ enum WatchCopy {
     static let answered = String(localized: "watch.answered", defaultValue: "Answered")
     /// Answered on the phone or at the desk, or closed by the machine.
     static let answeredElsewhere = String(localized: "watch.answeredElsewhere", defaultValue: "Answered elsewhere")
+    static let unavailable = String(localized: "watch.unavailable", defaultValue: "Request no longer available")
     static let expired = String(localized: "watch.expired", defaultValue: "Expired")
     static let sending = String(localized: "watch.sending", defaultValue: "Sending")
     static let answerOnPhone = String(localized: "watch.answerOnPhone", defaultValue: "Open Togo on iPhone to Answer")

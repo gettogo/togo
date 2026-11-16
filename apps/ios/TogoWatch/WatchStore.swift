@@ -31,6 +31,8 @@ import WidgetKit
         case answeredElsewhere
         /// Past the ten minutes the helper accepts an answer in.
         case expired
+        /// The local record is gone; no answer can be inferred from its absence.
+        case unavailable
 
         var isActionable: Bool { self == .open || self == .failed || self == .notSetUp }
     }
@@ -120,7 +122,7 @@ import WidgetKit
         case .sending: return .sending
         case .failed, .notSetUp, nil: break
         }
-        guard let request = deps.pending.request(requestId) else { return .answeredElsewhere }
+        guard let request = deps.pending.request(requestId) else { return .unavailable }
         switch request.answered {
         case .approved, .denied: return .answered
         case .elsewhere: return .answeredElsewhere
@@ -290,6 +292,7 @@ import WidgetKit
         switch state(of: requestId) {
         case .answeredElsewhere: return WatchCopy.answeredElsewhere
         case .expired: return WatchCopy.expired
+        case .unavailable: return WatchCopy.unavailable
         default: return nil
         }
     }
@@ -329,17 +332,11 @@ import WidgetKit
     /// Marks a request answered elsewhere, or keeps a clear for one not seen yet, so its push
     /// arriving late cannot open it.
     private func close(_ requestId: String) {
-        switch deps.pending.request(requestId)?.answered {
-        case .approved, .denied, .elsewhere:
-            return
-        case nil, .sending:
-            _ = deps.pending.claim(requestId, hostId: "")
-            deps.pending.mark(requestId, .elsewhere)
-        }
+        deps.pending.close(requestId)
     }
 
     private func changed() {
-        deps.pending.prune(olderThan: RequestLifetime.seconds)
+        deps.pending.prune()
         reload()
         deps.reloadComplication()
     }
