@@ -373,3 +373,16 @@ func TestHookSubjectWinsOverScreen(t *testing.T) {
 		}
 	})
 }
+
+func TestSessionGoneDropsThePaneLock(t *testing.T) {
+	st := New(Config{Tmux: &fakeTmux{}, Pub: &fakePub{}})
+	pr, _ := detect.Detect(menu)
+	st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+	st.SessionGone(context.Background(), "s_aaaaaaaaaa")
+	st.mu.Lock()
+	n := len(st.paneLocks)
+	st.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d pane locks kept for a session that is gone", n)
+	}
+}

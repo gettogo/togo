@@ -199,6 +199,9 @@ func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	for cur := s.pendingForSession(sessionID); cur != nil; cur = s.pendingForSession(sessionID) {
 		s.closeLocked(cur, wire.ResolutionGone)
 	}
+	// The session is gone for good: its pane lock would otherwise stay in
+	// the map for the life of the daemon.
+	delete(s.paneLocks, sessionID)
 }
 
 // OpenFromHook opens an approval for an agent permission hook. The title
