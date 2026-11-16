@@ -158,7 +158,10 @@ import UIKit
                     restart(tab, store: listing(id)?.store ?? windows[0].store, userStarted: true)
                 }
             } else {
-                start(tab, services: services, userStarted: !attachedBefore.contains(id))
+                let requested = windows.contains { window in
+                    window.store.workspace.tabs.contains { $0.id == id && !$0.restored }
+                }
+                start(tab, services: services, userStarted: requested && !attachedBefore.contains(id))
             }
         }
         placeTerminals(pinned: pinned)

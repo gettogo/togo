@@ -23,6 +23,32 @@ import TogoKit
         pool.sync(window: window, with: store)
     }
 
+    @Test func restoredTabsNeverAskAtFirstAutomaticAttach() {
+        let app = store()
+        app.restore(WindowRestoration(tabs: [tab("s-01")], selected: tab("s-01"), workspaceOpen: true))
+        pool.sync(window: left, with: app)
+        #expect(services.terminalsUserStarted == [false])
+        pool.restart(app.workspace.tabs[0], store: app)
+        #expect(services.terminalsUserStarted == [false, true])
+    }
+
+    @Test func explicitlyReopenedRestoredTabMayAsk() {
+        let app = store()
+        app.restore(WindowRestoration(tabs: [tab("s-01")], selected: tab("s-01"), workspaceOpen: true))
+        app.open(hostID: Samples.studio, sessionID: "s-01")
+        pool.sync(window: left, with: app)
+        #expect(services.terminalsUserStarted == [true])
+    }
+
+    @Test func explicitOpenInAnotherWindowStillMayAsk() {
+        let restored = store(), opened = store()
+        pool.sync(window: left, with: restored)
+        restored.restore(WindowRestoration(tabs: [tab("s-01")], selected: tab("s-01"), workspaceOpen: true))
+        opened.open(hostID: Samples.studio, sessionID: "s-01")
+        pool.sync(window: right, with: opened)
+        #expect(services.terminalsUserStarted == [true])
+    }
+
     @Test func tabInTwoWindowsHasOneConnection() {
         let a = store(), b = store()
         open("s-01", in: a, window: left)

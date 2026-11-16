@@ -293,6 +293,7 @@ import TogoKit
     func open(hostID: HostID, sessionID: String, transport: TransportPreference? = nil, agent: String? = nil) {
         let id = TabID(hostID: hostID, sessionID: sessionID)
         if let index = workspace.tabs.firstIndex(where: { $0.id == id }) {
+            workspace.tabs[index].restored = false
             if let transport {
                 workspace.tabs[index].transport = transport
             }

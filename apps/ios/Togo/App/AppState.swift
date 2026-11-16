@@ -173,6 +173,8 @@ struct WorkspaceTab: Identifiable, Equatable, Sendable {
     /// The agent's id when the tab was opened before the roster listed it (a session just
     /// created), so the tab can expect its chat instead of showing the terminal first.
     var agentID: String? = nil
+    /// Restored without a fresh user request; automatic attachment must not ask for credentials.
+    var restored = false
 }
 
 enum LinkPhase: Equatable, Sendable {

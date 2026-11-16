@@ -80,7 +80,7 @@ extension AppStore {
             let label = labels[id]
             return WorkspaceTab(
                 hostID: id.hostID, sessionID: id.sessionID, bib: label?.bib, title: label?.title ?? id.sessionID,
-                link: .connecting, agent: label?.agent
+                link: .connecting, agent: label?.agent, restored: true
             )
         }
         let selected = saved.selected.flatMap { seen.contains($0) ? $0 : nil } ?? ids.first
