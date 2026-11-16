@@ -61,8 +61,8 @@ public final class KeychainKeyStore: KeyStore {
         try indexLock.withLock { _ in
             var index = try readIndex()
             index.removeAll { $0.id == id }
-            try secrets.delete(Self.account(id))
             try writeIndex(index)
+            try secrets.delete(Self.account(id))
         }
     }
 
