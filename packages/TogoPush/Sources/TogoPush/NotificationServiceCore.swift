@@ -22,11 +22,14 @@ public struct NotificationServiceCore: Sendable {
         /// The machine whose delivered "stopped answering" notifications should be removed,
         /// because it just sent something else.
         public var clearsOfflineOf: String?
+        public var answerReceipt: AnswerReceiptEvent?
 
-        public init(content: UNNotificationContent, pendingChanged: Bool, clearsOfflineOf: String? = nil) {
+        public init(content: UNNotificationContent, pendingChanged: Bool, clearsOfflineOf: String? = nil,
+                    answerReceipt: AnswerReceiptEvent? = nil) {
             self.content = content
             self.pendingChanged = pendingChanged
             self.clearsOfflineOf = clearsOfflineOf
+            self.answerReceipt = answerReceipt
         }
     }
 
@@ -102,8 +105,9 @@ public struct NotificationServiceCore: Sendable {
     }
 
     public func process(_ original: UNNotificationContent) -> Result {
-        guard let opened = open(userInfo: original.userInfo),
-              let text = NotificationTextBuilder.build(
+        guard let opened = open(userInfo: original.userInfo) else { return Result(content: Self.generic(), pendingChanged: false) }
+        if opened.payload.kind == .answer { return processReceipt(opened, original: original) }
+        guard let text = NotificationTextBuilder.build(
                   opened.payload, hostId: opened.pairing.hostId, hostName: opened.pairing.machineName,
                   multipleHosts: pairings.all().count > 1
               )
@@ -193,6 +197,36 @@ public struct NotificationServiceCore: Sendable {
             }
         }
         return Result(content: content, pendingChanged: changed, clearsOfflineOf: clearsOffline)
+    }
+
+    private func processReceipt(_ opened: Opened, original: UNNotificationContent) -> Result {
+        let host = opened.pairing.hostId
+        guard let event = AnswerReceiptEvent(payload: opened.payload, hostId: host, now: clock()) else {
+            return Result(content: Self.quiet(), pendingChanged: false)
+        }
+        let pruned = pending.prune()
+        guard pending.receive(event, now: clock()) else { return Result(content: Self.quiet(), pendingChanged: pruned) }
+        pending.clearOfflineMark(hostId: host)
+        guard let text = NotificationTextBuilder.build(opened.payload, hostId: host, hostName: opened.pairing.machineName) else {
+            return Result(content: Self.quiet(), pendingChanged: true, clearsOfflineOf: host, answerReceipt: event)
+        }
+        let content = UNMutableNotificationContent()
+        content.title = text.title
+        content.subtitle = text.subtitle
+        content.body = text.body
+        content.categoryIdentifier = NotificationCategoryID.info
+        content.threadIdentifier = text.threadID
+        content.sound = original.sound
+        content.userInfo = [Self.infoKey: ["hostId": host]]
+        if let request = pending.request(event.requestId), let bib = request.bib,
+           var link = URLComponents(string: "togo://session/\(bib)") {
+            link.queryItems = [URLQueryItem(name: "host", value: opened.pairing.machineName)]
+            if let id = opened.pairing.appHostID, let session = request.sessionId {
+                link.queryItems? += [URLQueryItem(name: "hostID", value: id.uuidString), URLQueryItem(name: "sessionID", value: session)]
+            }
+            content.targetContentIdentifier = link.string
+        }
+        return Result(content: content, pendingChanged: true, clearsOfflineOf: host, answerReceipt: event)
     }
 }
 

@@ -187,20 +187,23 @@ extension RelayRegisterSender: PushTokenRegistering {}
         // A choice sent through the mailbox is confirmed over SSH, even when it matches the old one.
         let reportsLive = reconnected && live.update != nil
         let contextReceipts = capabilities.contains(Capability.liveContext)
+        let answerReceipts = capabilities.contains(Capability.answerReceipts)
         let apnsHash = SHA256.hash(data: Data(apnsToken.utf8)).map { String(format: "%02x", $0) }.joined()
         if let stored, stored.tokenHash == hash, stored.relayURL == relay, stored.liveActivityCommand == command,
-           sentChoice[stored.hostId] == nil, !reportsLive, stored.liveContextReceipts == contextReceipts, stored.apnsTokenHash == apnsHash {
+           sentChoice[stored.hostId] == nil, !reportsLive, stored.liveContextReceipts == contextReceipts,
+           stored.apnsTokenHash == apnsHash, (stored.answerReceipts ?? false) == answerReceipts {
             return
         }
 
         guard let phone = try? params(
-            apnsToken: apnsToken, live: live, relay: relay, command: command, sshKey: sshKey, doneSilent: doneSilent
+            apnsToken: apnsToken, live: live, relay: relay, command: command, sshKey: sshKey, doneSilent: doneSilent,
+            answerReceipts: answerReceipts
         ),
               let result = try? await pair(phone)
         else { return }
         var pairedWatches: [WatchDevice] = []
         for device in watches {
-            if (try? await pair(Self.params(device, relay: relay, command: command))) != nil {
+            if (try? await pair(Self.params(device, relay: relay, command: command, answerReceipts: answerReceipts))) != nil {
                 pairedWatches.append(device)
             }
         }
@@ -212,7 +215,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
             pairedAt: clock(), tokenHash: Self.tokenHash(
                 apns: apnsToken, live: live, watches: pairedWatches, sshKey: sshKey, doneSilent: doneSilent
             ),
-            liveActivityCommand: command, liveContextReceipts: contextReceipts, apnsTokenHash: apnsHash
+            liveActivityCommand: command, liveContextReceipts: contextReceipts, apnsTokenHash: apnsHash, answerReceipts: answerReceipts
         )
         if let removal = removedWhilePairing.removeValue(forKey: hostID) {
             // Removed while the helper was pairing: it holds this device now, so tell it to forget.
@@ -417,7 +420,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
 
     private func params(
         apnsToken: String, live: (update: String?, start: String?), relay: URL, command: Bool, sshKey: String?,
-        doneSilent: Bool = false
+        doneSilent: Bool = false, answerReceipts: Bool = false
     ) throws -> PushPairParams {
         PushPairParams(
             deviceId: try keys.deviceID(), name: deviceName,
@@ -425,16 +428,16 @@ extension RelayRegisterSender: PushTokenRegistering {}
             approvalKey: Base64URL.encode(try keys.signingKey().publicKey.rawRepresentation),
             apnsToken: apnsToken, env: PushEnvironment.apns, relayUrl: relay.absoluteString,
             liveActivityToken: live.update, platform: .ios, liveActivityStartToken: live.start,
-            liveActivityCommand: command, sshKey: sshKey, doneSilent: doneSilent
+            liveActivityCommand: command, sshKey: sshKey, doneSilent: doneSilent, answerReceipts: answerReceipts
         )
     }
 
-    private static func params(_ device: WatchDevice, relay: URL, command: Bool) -> PushPairParams {
+    private static func params(_ device: WatchDevice, relay: URL, command: Bool, answerReceipts: Bool = false) -> PushPairParams {
         PushPairParams(
             deviceId: device.deviceId, name: String(String.UnicodeScalarView(device.name.unicodeScalars.prefix(64))),
             x25519: device.x25519, approvalKey: device.approvalKey, apnsToken: device.apnsToken,
             env: PushEnvironment.apns, relayUrl: relay.absoluteString, platform: .watchos,
-            liveActivityCommand: command
+            liveActivityCommand: command, answerReceipts: answerReceipts && device.answerReceipts == true
         )
     }
 
@@ -448,6 +451,7 @@ extension RelayRegisterSender: PushTokenRegistering {}
     ) -> String {
         var parts = [apns, live.update ?? "", live.start ?? ""]
         parts += watches.map { "\($0.deviceId):\($0.apnsToken)" }
+        parts += watches.filter { $0.answerReceipts == true }.map { "receipts:\($0.deviceId)" }
         if let sshKey { parts.append("ssh:" + sshKey) }
         if doneSilent { parts.append("done-silent") }
         let digest = SHA256.hash(data: Data(parts.joined(separator: "|").utf8))

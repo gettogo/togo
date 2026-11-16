@@ -11,6 +11,7 @@ import TogoPush
 enum LiveStatus: Equatable {
     case needsYou, working, done, ended, failed, offline, other, expired, notUpdated
     case sending, sent, sendFailed, answeredElsewhere
+    case applied, closed, unconfirmed, notApplied
 
     init(_ raw: String, stale: Bool = false, feedback: LiveAnswerFeedback? = nil) {
         if stale {
@@ -23,6 +24,11 @@ enum LiveStatus: Equatable {
             case .sent: self = .sent
             case .failed: self = .sendFailed
             case .answeredElsewhere: self = .answeredElsewhere
+            case .applied: self = .applied
+            case .expired: self = .expired
+            case .closed: self = .closed
+            case .unconfirmed: self = .unconfirmed
+            case .notApplied: self = .notApplied
             }
             return
         }
@@ -51,7 +57,11 @@ enum LiveStatus: Equatable {
         case .sending: String(localized: "live.answer.sending", defaultValue: "Sending")
         case .sent: String(localized: "live.answer.sent", defaultValue: "Answer sent")
         case .sendFailed: String(localized: "live.answer.failed", defaultValue: "Could not send")
-        case .answeredElsewhere: String(localized: "live.answer.elsewhere", defaultValue: "Answered elsewhere")
+        case .answeredElsewhere: String(localized: "live.answer.already", defaultValue: "Already answered")
+        case .applied: String(localized: "live.answer.applied", defaultValue: "Answer applied")
+        case .closed: String(localized: "live.answer.closed", defaultValue: "No longer waiting")
+        case .unconfirmed: String(localized: "live.answer.unconfirmed", defaultValue: "Answer not confirmed")
+        case .notApplied: String(localized: "live.answer.notApplied", defaultValue: "Could not apply answer")
         }
     }
 

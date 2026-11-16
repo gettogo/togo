@@ -13,6 +13,7 @@ public struct PushPayload: Codable, Sendable, Equatable {
         case failed
         /// The machine went quiet while sessions were working.
         case offline
+        case answer
     }
 
     public var v: Int
@@ -41,6 +42,7 @@ public struct PushPayload: Codable, Sendable, Equatable {
     public var sessionName: String?
     /// Unix seconds; absent on older helpers (the sealed timestamp plus ten minutes).
     public var expires: Int64?
+    public var result: String?
     public var requestExpiry: Date {
         Date(timeIntervalSince1970: expires.map(Double.init) ?? Double(ts) / 1000 + RequestLifetime.seconds)
     }
@@ -49,7 +51,7 @@ public struct PushPayload: Codable, Sendable, Equatable {
         v: Int = 1, kind: Kind, sessionId: String? = nil, bib: String? = nil, agent: String? = nil,
         host: String? = nil, title: String, body: String, requestId: String? = nil, options: [PushOption]? = nil,
         subject: PushSubject? = nil, ts: Int64, exit: PushExit? = nil, active: Int? = nil, reminder: Bool? = nil,
-        allowText: Bool? = nil, sessionName: String? = nil, expires: Int64? = nil
+        allowText: Bool? = nil, sessionName: String? = nil, expires: Int64? = nil, result: String? = nil
     ) {
         self.v = v
         self.kind = kind
@@ -69,6 +71,7 @@ public struct PushPayload: Codable, Sendable, Equatable {
         self.allowText = allowText
         self.sessionName = sessionName
         self.expires = expires
+        self.result = result
     }
 }
 

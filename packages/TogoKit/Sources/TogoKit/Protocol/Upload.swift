@@ -17,6 +17,7 @@ public enum Capability {
     public static let push = "push.v1"
     public static let liveContext = "livecontext.v1"
     public static let foregroundDevice = "fgdevice.v1"
+    public static let answerReceipts = "receipt.v1"
     public static let capture = "capture.v1"
     public static let launch = "launch.v1"
     public static let lifecycle = "lifecycle.v1"

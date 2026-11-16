@@ -41,6 +41,7 @@ final class NotificationService: UNNotificationServiceExtension {
         let receiptHost = info?["hostId"] as? String
         let receiptRequest = info?["requestId"] as? String
         let offlineHost = result.clearsOfflineOf
+        let answerReceipt = result.answerReceipt
         let content = UncheckedContent(result.content)
         let receipts = LiveContextReceiptSender(
             keys: KeychainDeviceKeys(accessGroup: nil), pairings: PairingStore(directory: directory),
@@ -48,6 +49,9 @@ final class NotificationService: UNNotificationServiceExtension {
         )
         Task {
             if let host = offlineHost { await OfflineNotifications.removeDelivered(hostId: host) }
+            if let answerReceipt {
+                await AnswerReceiptActivities.refresh(answerReceipt, pending: PendingStore(directory: directory, clock: { Date() }))
+            }
             if let host = receiptHost, let id = receiptRequest {
                 do { try await receipts.send(hostID: host, requestID: id) }
                 catch { Logger(subsystem: "app.togo", category: "push").error("Request-data receipt failed; notification still delivered") }

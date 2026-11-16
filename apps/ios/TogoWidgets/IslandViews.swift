@@ -77,9 +77,9 @@ struct IslandCompactTrailing: View {
 
     static func symbol(_ status: LiveStatus) -> String {
         switch status {
-        case .done, .answeredElsewhere: "checkmark"
+        case .done, .answeredElsewhere, .applied: "checkmark"
         case .sent: "paperplane"
-        case .sendFailed: "exclamationmark.triangle"
+        case .sendFailed, .notApplied, .unconfirmed: "exclamationmark.triangle"
         case .ended: "stop.fill"
         case .failed: "exclamationmark.triangle"
         case .offline: "wifi.slash"

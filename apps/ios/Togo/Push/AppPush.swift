@@ -139,6 +139,9 @@ import WidgetKit
             received: { host, id in
                 do { try await receipts.send(hostID: host, requestID: id) }
                 catch { Logger(subsystem: "app.togo", category: "push").error("Request-data receipt failed; normal notification remains available") }
+            },
+            answerReceived: { event in
+                await AnswerReceiptActivities.refresh(event, pending: pending)
             }
         ))
         AppDelegate.registrar = registrar

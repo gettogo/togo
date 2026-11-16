@@ -115,8 +115,16 @@ private struct AnswerButtons: View {
                     result(WatchCopy.denied, systemImage: "xmark")
                 case .answered:
                     result(WatchCopy.answered, systemImage: "checkmark.circle")
+                case .sent:
+                    result(WatchCopy.sent, systemImage: "paperplane")
+                case .closed:
+                    result(WatchCopy.closed, systemImage: "minus.circle")
+                case .unconfirmed:
+                    result(WatchCopy.unconfirmed, systemImage: "exclamationmark.circle")
+                case .notApplied:
+                    result(WatchCopy.notApplied, systemImage: "exclamationmark.circle")
                 case .answeredElsewhere:
-                    result(WatchCopy.answeredElsewhere, systemImage: "checkmark.circle")
+                    result(WatchCopy.alreadyAnswered, systemImage: "checkmark.circle")
                 case .unavailable:
                     result(WatchCopy.unavailable, systemImage: "questionmark.circle")
                 case .expired:
@@ -141,7 +149,7 @@ private struct AnswerButtons: View {
                 done()
             case .failed, .notSetUp:
                 WKInterfaceDevice.current().play(.failure)
-            case .sending, nil:
+            case .sending, .sent, nil:
                 break
             }
         }
@@ -232,7 +240,7 @@ private extension WatchStore.RequestState {
     /// The request is settled and its result line takes the buttons' place.
     var isResult: Bool {
         switch self {
-        case .approved, .denied, .answered, .answeredElsewhere, .expired, .unavailable: true
+        case .approved, .denied, .sent, .answered, .answeredElsewhere, .expired, .unavailable, .closed, .unconfirmed, .notApplied: true
         case .open, .sending, .failed, .notSetUp: false
         }
     }

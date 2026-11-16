@@ -142,8 +142,9 @@ struct DeliveredRequest: Hashable, Sendable {
             return .repeated
         }
 
+        var sentLive = false
         do {
-            let sentLive = try await deps.live?.answerIfConnected(pairing, requestId: requestId, decision: wire) ?? false
+            sentLive = try await deps.live?.answerIfConnected(pairing, requestId: requestId, decision: wire) ?? false
             if !sentLive {
                 try await deps.relay.send(requestId: requestId, decision: decision, pairing: pairing)
             }
@@ -156,9 +157,14 @@ struct DeliveredRequest: Hashable, Sendable {
             await deps.notifications.postAnswerUnconfirmed(threadID: thread)
             return .failed
         } catch {
+            if let request = deps.pending.request(requestId), request.answered == .confirmed || request.answerReceipt != nil {
+                if request.answered == .confirmed { return .sent }
+                return request.answerReceipt?.isFailure == true ? .failed : .stale
+            }
             return await failed(requestId, thread: thread)
         }
-        deps.pending.mark(requestId, wire == .deny ? .denied : .approved)
+        if sentLive { deps.pending.mark(requestId, .confirmed) }
+        else { deps.pending.markRelaySent(requestId) }
         await deps.notifications.removeDelivered(requestIds: [requestId])
         return .sent
     }

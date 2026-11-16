@@ -177,7 +177,7 @@ struct NotificationActionHandlerTests {
         #expect(link == nil)
         #expect(live.sent == ["\(requestID) approve"])
         #expect(relay.sent.withLock { $0 }.isEmpty)
-        #expect(pending.request(requestID)?.answered == .approved)
+        #expect(pending.request(requestID)?.answered == .confirmed)
         #expect(notifications.removed == [[requestID]])
     }
 
@@ -216,14 +216,14 @@ struct NotificationActionHandlerTests {
         await h.handle(actionIdentifier: "togo.approve", userInfo: userInfo, target: nil)
         #expect(relay.sent.withLock { $0 } == ["\(hostID) \(requestID) approve"])
         #expect(live.sent.isEmpty)
-        #expect(pending.request(requestID)?.answered == .approved)
+        #expect(pending.request(requestID)?.answered == .sent)
         #expect(notifications.shown.isEmpty)
     }
 
     @Test func denyUsesRelayWhenNotLive() async {
         await handler().handle(actionIdentifier: "togo.deny", userInfo: userInfo, target: nil)
         #expect(relay.sent.withLock { $0 } == ["\(hostID) \(requestID) deny"])
-        #expect(pending.request(requestID)?.answered == .denied)
+        #expect(pending.request(requestID)?.answered == .sent)
     }
 
     @Test func approveTwiceSendsOnce() async {
@@ -445,5 +445,30 @@ struct NotificationActionHandlerTests {
         await clear.didEnterForeground(open: [], reported: [hostID])
         #expect(notifications.shown == [other], "a machine that has not reported keeps its notifications")
         #expect(pending.request(requestID)?.answered == .elsewhere)
+    }
+
+    @Test func aSilentReceiptUpdatesTheStoredResultOnceWithoutSendingAgain() async throws {
+        let keys = InMemoryDeviceKeys()
+        var received: [String] = []
+        var cleared: [String] = []
+        let clear = ClearHandler(dependencies: .init(
+            core: NotificationServiceCore(keys: keys, pairings: pairings, pending: pending, clock: { start }),
+            pending: pending, notifications: notifications, reloadWidgets: {},
+            cleared: { cleared.append($0) }, answerReceived: { received.append($0.requestId) }
+        ))
+        #expect(pending.claim(requestID, hostId: hostID))
+        pending.markRelaySent(requestID)
+        let payload = PushPayload(kind: .answer, title: "", body: "", requestId: requestID,
+            ts: Int64(Date().timeIntervalSince1970 * 1000), result: "applied")
+        let info: [AnyHashable: Any] = ["c": try Seal.seal(
+            to: keys.agreementKey().publicKey, JSONEncoder().encode(payload), label: Labels.push,
+            aad: Data("\(hostID)|\(try keys.deviceID())".utf8)
+        )]
+        #expect(await clear.didReceiveRemoteNotification(info))
+        #expect(!((await clear.didReceiveRemoteNotification(info))))
+        #expect(pending.request(requestID)?.answered == .confirmed)
+        #expect(received == [requestID] && cleared == [requestID])
+        #expect(notifications.removed == [[requestID]])
+        #expect(relay.sent.withLock { $0.isEmpty })
     }
 }

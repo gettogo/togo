@@ -13,14 +13,14 @@ import WidgetKit
 /// replayed push cannot bring it back.
 @MainActor @Observable final class WatchStore {
     enum Outcome: Equatable, Sendable {
-        case sending, approved, denied, failed
+        case sending, sent, approved, denied, failed
         /// The phone has not given this Watch a pairing for the request's machine yet.
         case notSetUp
     }
 
     /// What a request's screen shows. Only `open`, `failed` and `notSetUp` offer Approve and Deny.
     enum RequestState: Equatable, Sendable {
-        case open, sending, failed
+        case open, sending, sent, failed, closed, unconfirmed, notApplied
         /// This Watch cannot answer for the machine until the phone sends its pairing.
         case notSetUp
         /// The relay took this screen's answer.
@@ -116,15 +116,30 @@ import WidgetKit
     }
 
     func state(of requestId: String, at now: Date) -> RequestState {
+        if let request = deps.pending.request(requestId) {
+            if request.answered == .confirmed { return .answered }
+            if let result = request.answerReceipt {
+                switch result {
+                case .applied: return .answered
+                case .answered: return .answeredElsewhere
+                case .expired: return .expired
+                case .promptGone: return .closed
+                case .unconfirmed: return .unconfirmed
+                case .failed: return .notApplied
+                }
+            }
+        }
         switch outcomes[requestId] {
         case .approved: return .approved
         case .denied: return .denied
         case .sending: return .sending
+        case .sent: return .sent
         case .failed, .notSetUp, nil: break
         }
         guard let request = deps.pending.request(requestId) else { return .unavailable }
         switch request.answered {
-        case .approved, .denied: return .answered
+        case .approved, .denied, .sent: return .sent
+        case .confirmed: return .answered
         case .elsewhere: return .answeredElsewhere
         case .sending: return .sending
         case nil: break
@@ -182,6 +197,10 @@ import WidgetKit
     func ingest(_ push: PushPayload, hostId: String) {
         guard let requestId = push.requestId else { return }
         switch push.kind {
+        case .answer:
+            guard let event = AnswerReceiptEvent(payload: push, hostId: hostId, now: deps.clock()),
+                  deps.pending.receive(event, now: deps.clock()) else { return }
+            outcomes[requestId] = nil
         case .needsYou:
             let age = deps.clock().timeIntervalSince1970 - Double(push.ts) / 1000
             guard deps.clock() < push.requestExpiry, age >= -NotificationServiceCore.maxSkew else { return }
@@ -320,13 +339,18 @@ import WidgetKit
         do {
             try await deps.sender.send(requestId: requestId, decision: decision, pairing: pairing)
         } catch {
+            if let request = deps.pending.request(requestId), request.answered == .confirmed || request.answerReceipt != nil {
+                outcomes[requestId] = nil
+                changed()
+                return
+            }
             if let claimed = deps.pending.request(requestId), claimed.answered == .sending { giveBack(claimed) }
             outcomes[requestId] = .failed
             reload()
             return
         }
-        deps.pending.mark(requestId, decision == "approve" ? .approved : .denied)
-        outcomes[requestId] = decision == "approve" ? .approved : .denied
+        deps.pending.markRelaySent(requestId)
+        outcomes[requestId] = .sent
         changed()
     }
 

@@ -54,6 +54,12 @@ enum LiveAnswer {
         if let request = pending.request(requestId), request.hostId != hostId { throw Failure.unavailable }
         guard pending.request(requestId) != nil || expiresAt != nil else { throw Failure.unavailable }
         guard pending.claim(requestId, hostId: hostId, expiresAt: expiresAt) else {
+            let known = pending.request(requestId)
+            if known?.answered == .confirmed || known?.answerReceipt != nil,
+               let feedback = LiveAnswerFeedback.resolve(known, local: nil, now: Date()) {
+                await refresh(feedback)
+                return
+            }
             if pending.isExpired(requestId, expiresAt: expiresAt) {
                 await refresh(.failed)
                 throw Failure.expired
@@ -67,12 +73,19 @@ enum LiveAnswer {
         do {
             try await send()
         } catch {
+            let known = pending.request(requestId)
+            if known?.answered == .confirmed || known?.answerReceipt != nil,
+               let feedback = LiveAnswerFeedback.resolve(known, local: nil, now: Date()) {
+                await refresh(feedback)
+                if feedback == .applied || feedback == .answeredElsewhere { return }
+                throw error
+            }
             pending.release(requestId)
             await refresh(.failed)
             throw error
         }
-        pending.mark(requestId, decision == "deny" ? .denied : .approved)
-        await refresh(.sent)
+        pending.markRelaySent(requestId)
+        await refresh(LiveAnswerFeedback.resolve(pending.request(requestId), local: .sent, now: Date()) ?? .sent)
     }
 
     /// Mutate only the activity still showing this request. A late result must not replace

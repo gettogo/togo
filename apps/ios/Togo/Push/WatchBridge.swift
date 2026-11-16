@@ -94,7 +94,7 @@ extension WatchLink {
         cleared = cleared.filter { now.timeIntervalSince($0.value) < RequestLifetime.seconds }
         let closed = requests.filter {
             switch $0.answered {
-            case .approved, .denied, .elsewhere: true
+            case .approved, .denied, .sent, .confirmed, .elsewhere: true
             case .sending, nil: false
             }
         }.map(\.requestId)

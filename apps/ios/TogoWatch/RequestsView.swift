@@ -39,7 +39,7 @@ struct RequestsView: View {
         }
         // The request the page shows, held or not: the focused one or the oldest.
         .onChange(of: WatchHome.page(for: store.requests, focus: focus).requestId) { old, new in
-            let answered = old.map { store.outcome($0) == .approved || store.outcome($0) == .denied } ?? false
+            let answered = old.map { store.outcome($0) == .approved || store.outcome($0) == .denied || store.outcome($0) == .sent } ?? false
             guard WatchHome.holds(previous: old, next: new, answeredHere: answered), let old else { return }
             held = old
             // A model-level hold: the page itself changes through `shown`'s transaction.

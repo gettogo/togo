@@ -162,16 +162,17 @@ import TogoPush
         bridge.publish(sessions: [session], requests: [
             Self.request("r_open"), Self.request("r_sending", answered: .sending),
             Self.request("r_approved", answered: .approved), Self.request("r_elsewhere", answered: .elsewhere),
+            Self.request("r_sent", answered: .sent), Self.request("r_confirmed", answered: .confirmed),
             Self.request("r_expired", age: 700),
         ])
         let context = try link.last(WatchLinkKey.context, as: WatchContext.self)
-        #expect(context.closedRequestIds == ["r_approved", "r_elsewhere"])
+        #expect(context.closedRequestIds == ["r_approved", "r_confirmed", "r_elsewhere", "r_sent"])
         #expect(context.sessions == [session])
         #expect(context.at == Samples.now)
 
         bridge.cleared("r_open")
         #expect(try link.last(WatchLinkKey.context, as: WatchContext.self).closedRequestIds
-            == ["r_approved", "r_elsewhere", "r_open"])
+            == ["r_approved", "r_confirmed", "r_elsewhere", "r_open", "r_sent"])
     }
 
     @Test func sessionRowsUseCleanActivity() {

@@ -8,13 +8,16 @@ public struct WatchDevice: Codable, Equatable, Sendable {
     public var x25519: String
     public var approvalKey: String
     public var apnsToken: String
+    /// A new Watch advertises this before the phone opts it into answer pushes.
+    public var answerReceipts: Bool?
 
-    public init(deviceId: String, name: String, x25519: String, approvalKey: String, apnsToken: String) {
+    public init(deviceId: String, name: String, x25519: String, approvalKey: String, apnsToken: String, answerReceipts: Bool? = nil) {
         self.deviceId = deviceId
         self.name = name
         self.x25519 = x25519
         self.approvalKey = approvalKey
         self.apnsToken = apnsToken
+        self.answerReceipts = answerReceipts
     }
 }
 

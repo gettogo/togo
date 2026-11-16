@@ -4,7 +4,7 @@ import Foundation
 /// can show and answer it. Only structured fields; never screen text.
 public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public enum Answered: String, Codable, Sendable {
-        case sending, approved, denied, elsewhere
+        case sending, approved, denied, elsewhere, sent, confirmed
     }
 
     public var id: String { requestId }
@@ -26,6 +26,8 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public var claimedAt: Date?
     /// Helper-supplied deadline, or nil for legacy records using receivedAt plus ten minutes.
     public var expiresAt: Date?
+    public var answerReceipt: AnswerReceiptResult?
+    public var answerReceiptTS: Int64?
 
     /// How long a claim holds. A send is over well before this (the relay post and the live
     /// channel give up sooner), so a claim still sending after it was left by a process that
@@ -98,7 +100,7 @@ public final class PendingStore: Sendable {
         self.onChange = onChange
     }
 
-    private func update(_ change: (inout [PendingRequest]) -> Void) {
+    func update(_ change: (inout [PendingRequest]) -> Void) {
         blob.update(change)
         onChange?()
     }
@@ -181,8 +183,9 @@ public final class PendingStore: Sendable {
         let now = clock()
         update { values in
             if let index = values.firstIndex(where: { $0.requestId == requestId }) {
-                if values[index].answered != .approved && values[index].answered != .denied {
-                    values[index].answered = .elsewhere
+                switch values[index].answered {
+                case .approved, .denied, .confirmed, .sent: break
+                default: values[index].answered = .elsewhere
                 }
                 values[index].claimedAt = nil
                 values[index].receivedAt = now
@@ -247,7 +250,10 @@ public final class PendingStore: Sendable {
     public func prune(olderThan age: TimeInterval = PendingStore.retention) -> Bool {
         let cutoff = clock().addingTimeInterval(-age)
         let now = clock()
-        let removable: (PendingRequest) -> Bool = { $0.receivedAt < cutoff && $0.expiry <= now }
+        let removable: (PendingRequest) -> Bool = {
+            let receipt = $0.answerReceiptTS.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? $0.receivedAt
+            return max($0.receivedAt, receipt) < cutoff && $0.expiry <= now
+        }
         guard blob.read().contains(where: removable) else { return false }
         var removed = false
         update { values in

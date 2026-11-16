@@ -14,6 +14,11 @@ enum WatchCopy {
     static let approved = String(localized: "watch.approved", defaultValue: "Approved")
     static let denied = String(localized: "watch.denied", defaultValue: "Denied")
     static let answered = String(localized: "watch.answered", defaultValue: "Answered")
+    static let sent = String(localized: "watch.answer.sent", defaultValue: "Answer sent")
+    static let alreadyAnswered = String(localized: "watch.answer.already", defaultValue: "Already answered")
+    static let closed = String(localized: "watch.answer.closed", defaultValue: "No longer waiting")
+    static let unconfirmed = String(localized: "watch.answer.unconfirmed", defaultValue: "Answer not confirmed. Open Togo on iPhone to check.")
+    static let notApplied = String(localized: "watch.answer.notApplied", defaultValue: "Answer not applied. Open Togo on iPhone to check.")
     /// Answered on the phone or at the desk, or closed by the machine.
     static let answeredElsewhere = String(localized: "watch.answeredElsewhere", defaultValue: "Answered elsewhere")
     static let unavailable = String(localized: "watch.unavailable", defaultValue: "Request no longer available")

@@ -16,6 +16,7 @@ import WidgetKit
         /// Tells the Watch the request is gone, when it is reachable.
         var cleared: (String) -> Void = { _ in }
         var received: (String, String) async -> Void = { _, _ in }
+        var answerReceived: (AnswerReceiptEvent) async -> Void = { _ in }
     }
 
     private let deps: Dependencies
@@ -28,6 +29,20 @@ import WidgetKit
     @discardableResult
     func didReceiveRemoteNotification(_ userInfo: [AnyHashable: Any]) async -> Bool {
         guard let opened = deps.core.open(userInfo: userInfo) else { return false }
+        if opened.payload.kind == .answer {
+            guard let event = AnswerReceiptEvent(payload: opened.payload, hostId: opened.pairing.hostId, now: Date()) else { return false }
+            deps.pending.prune()
+            guard deps.pending.receive(event, now: Date()) else { return false }
+            deps.pending.clearOfflineMark(hostId: opened.pairing.hostId)
+            await deps.notifications.removeOffline(hostId: opened.pairing.hostId)
+            deps.reloadWidgets()
+            if !event.result.isFailure || event.result == .expired || event.result == .promptGone {
+                await deps.notifications.removeDelivered(requestIds: [event.requestId])
+                deps.cleared(event.requestId)
+            }
+            await deps.answerReceived(event)
+            return true
+        }
         // Anything the machine sends means it is answering again.
         if opened.payload.kind != .offline {
             deps.pending.clearOfflineMark(hostId: opened.pairing.hostId)
