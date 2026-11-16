@@ -40,7 +40,7 @@ struct PromptRequestView: View {
                 .foregroundStyle(Color.togoSnow)
                 // trunc-ok: at accessibility sizes the question keeps to three lines; Show all opens the rest in a sheet.
                 // Over a terminal that has the keyboard it keeps to two, so the terminal keeps the height.
-                .lineLimit(model.compact ? 2 : large ? 3 : nil)
+                .lineLimit(questionPresentation.lineLimit)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             if replying {
@@ -59,9 +59,9 @@ struct PromptRequestView: View {
                         command: command, types: model.introPending(.command, for: request.id),
                         lineLimit: large || model.compact ? min(2, PromptCommandWell.lineLimit) : PromptCommandWell.lineLimit,
                         onType: { _ = model.takeIntro(.command, for: request.id) },
-                        onShowAll: { showingAll = true }
+                        onShowAll: { showingAll = true }, alwaysShowAll: questionPresentation.commandDisclosure
                     )
-                } else if large {
+                } else if questionPresentation.questionDisclosure {
                     Button(PromptCopy.showAll) { showingAll = true }
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color.togoSnow)
@@ -90,6 +90,10 @@ struct PromptRequestView: View {
         .haptic(.approve, trigger: request.state) { _, new in new == .done(.approved) }
         .haptic(.deny, trigger: request.state) { _, new in new == .done(.denied) }
         .haptic(.error, trigger: request.state) { _, new in if case .failed = new { true } else { false } }
+    }
+
+    private var questionPresentation: PromptQuestionPresentation {
+        PromptQuestionPresentation(compact: model.compact, accessibilitySize: large, command: request.command)
     }
 
     private var large: Bool { typeSize.isAccessibilitySize }
@@ -305,6 +309,7 @@ struct PromptCommandWell: View {
     var lineLimit = PromptCommandWell.lineLimit
     var onType: () -> Void = {}
     var onShowAll: () -> Void = {}
+    var alwaysShowAll = false
     @State private var typed: Int?
     @State private var fullHeight: CGFloat = 0
     @State private var shownHeight: CGFloat = 0
@@ -333,7 +338,7 @@ struct PromptCommandWell: View {
             .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(command)
-            if fullHeight > shownHeight + 1 {
+            if alwaysShowAll || fullHeight > shownHeight + 1 {
                 // Known from the first layout, so it is there from the first frame; a later
                 // change (rotation, text size) lands with that change.
                 Button(PromptCopy.showAll, action: onShowAll)
