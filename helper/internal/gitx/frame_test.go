@@ -29,3 +29,19 @@ func TestFilesStayInsideOneFrame(t *testing.T) {
 		t.Errorf("truncated=%v with %d paths", res.Truncated, len(res.Paths))
 	}
 }
+
+func TestDiffStaysInsideOneFrame(t *testing.T) {
+	dir := seeded(t)
+	write(t, dir, "README.md", strings.Repeat("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n", 20000))
+	var d gitx.Diff
+	if err := call(t, service(dir), "git.diff", `{`+sid+`}`, &d); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "result": d})
+	if len(b) > rpc.MaxFrame {
+		t.Errorf("response is %d bytes, frame limit %d", len(b), rpc.MaxFrame)
+	}
+	if !d.Truncated || !strings.HasPrefix(d.Diff, "diff --git") {
+		t.Errorf("truncated=%v, diff starts %.20q", d.Truncated, d.Diff)
+	}
+}
