@@ -138,12 +138,12 @@ func runHook(ctx context.Context, args []string, env map[string]string, stdin io
 			return exitOK
 		}
 	}
-	if blocks && (block || env["TOGO_HOOK_BLOCK"] == "1") {
-		hookBlock(ctx, sock, agent, ev, decision, stdout, log)
+	if ev.SessionID == nil {
+		// Outside a managed session there is nothing to report or ask.
 		return exitOK
 	}
-	if ev.SessionID == nil {
-		// Outside a managed session there is nothing to report.
+	if blocks && (block || env["TOGO_HOOK_BLOCK"] == "1") {
+		hookBlock(ctx, sock, agent, ev, decision, stdout, log)
 		return exitOK
 	}
 	callCtx, cancel := context.WithTimeout(ctx, hookCallTimeout)
