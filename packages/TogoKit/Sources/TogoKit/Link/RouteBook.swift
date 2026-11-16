@@ -49,6 +49,17 @@ public actor RouteBook {
         mismatched[id, default: []].formUnion(hosts.map { $0.lowercased() })
     }
 
+    /// A learned LAN address may now belong to a different device. Quarantine it even
+    /// when no route won; only those learned numeric addresses can soften a key warning.
+    /// Explicit addresses, names and tailnet routes retain their normal security warning.
+    func recordFailedRace(_ hosts: [String], for profile: HostProfile, sawPinnedKey: Bool) -> Bool {
+        let learned = Set((routes[profile.id] ?? profile.routes).filter {
+            $0.kind == .lan && !$0.manual && !$0.isName && $0.id != profile.endpoint.host.lowercased()
+        }.map(\.id))
+        recordMismatches(hosts, for: profile.id)
+        return sawPinnedKey || (!hosts.isEmpty && hosts.allSatisfy { learned.contains($0.lowercased()) })
+    }
+
     public func mismatches(_ id: UUID) -> Set<String> {
         mismatched[id] ?? []
     }
