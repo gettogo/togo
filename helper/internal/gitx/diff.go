@@ -93,7 +93,7 @@ func (g *Git) Diff(ctx context.Context, dir string, o DiffOptions) (Diff, error)
 // parentOrEmpty returns the first parent of commit hash, or the empty tree
 // in the repository's hash format when hash is a root commit.
 func (g *Git) parentOrEmpty(ctx context.Context, dir, hash string) (string, error) {
-	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", "--end-of-options", hash+"^1^{commit}")
+	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", hash+"^1^{commit}")
 	var ee *ExitError
 	if errors.As(err, &ee) {
 		out, _, err = g.RunInput(ctx, dir, []byte{}, 1024, "hash-object", "-t", "tree", "--stdin")

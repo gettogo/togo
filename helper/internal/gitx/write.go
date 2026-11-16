@@ -545,7 +545,7 @@ func (g *Git) Commit(ctx context.Context, dir, message string, amend bool, head 
 
 // parents returns the parent hashes of commit hash, first parent first.
 func (g *Git) parents(ctx context.Context, root, hash string) ([]string, error) {
-	out, _, err := g.Run(ctx, root, 4096, "rev-list", "--parents", "-n", "1", "--end-of-options", hash)
+	out, _, err := g.Run(ctx, root, 4096, "rev-list", "--parents", "-n", "1", hash)
 	if err != nil {
 		return nil, err
 	}

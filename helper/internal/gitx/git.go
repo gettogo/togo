@@ -265,7 +265,7 @@ func (g *Git) ResolveCommit(ctx context.Context, dir, ref string) (string, error
 	if err := CheckRef(ref); err != nil {
 		return "", err
 	}
-	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
+	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	var ee *ExitError
 	if errors.As(err, &ee) {
 		return "", fmt.Errorf("%w: ref does not resolve", fsx.ErrInvalidPath)
