@@ -139,9 +139,12 @@ import TogoPush
             guard let state = activity.state, LiveStatus(state.status) == .needsYou,
                   !openHosts.contains(activity.hostId)
             else { continue }
-            let started = Date(timeIntervalSince1970: TimeInterval(state.since))
-            let over = state.requestId.map { cleared.contains($0) || known[$0] != nil } == true
-                || now.timeIntervalSince(started) >= WaitingSummary.openFor
+            let request = state.requestId.flatMap { known[$0] }
+            let context = state.ctx.flatMap { LiveContext.open($0, hostId: activity.hostId, keys: KeychainDeviceKeys(accessGroup: nil)) }
+            let sealedExpiry = context?.expires.map { Date(timeIntervalSince1970: Double($0)) }
+            let deadline = request.map { max($0.expiry, sealedExpiry ?? $0.expiry) } ?? sealedExpiry
+                ?? Date(timeIntervalSince1970: Double(state.since) + RequestLifetime.seconds)
+            let over = state.requestId.map(cleared.contains) == true || request?.isOpen(at: now) == false || now >= deadline
             if over { await activity.end() }
         }
     }

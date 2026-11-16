@@ -24,6 +24,8 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     /// When this device took the request's one answer (`PendingStore.claim`); set only while
     /// `answered` is `sending`. Absent in older records.
     public var claimedAt: Date?
+    /// Helper-supplied deadline, or nil for legacy records using receivedAt plus ten minutes.
+    public var expiresAt: Date?
 
     /// How long a claim holds. A send is over well before this (the relay post and the live
     /// channel give up sooner), so a claim still sending after it was left by a process that
@@ -33,7 +35,7 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public init(
         requestId: String, hostId: String, sessionId: String?, bib: String?, agent: String?, host: String?,
         title: String, subject: PushSubject?, options: [PushOption], receivedAt: Date, answered: Answered?,
-        allowText: Bool? = nil, claimedAt: Date? = nil
+        allowText: Bool? = nil, claimedAt: Date? = nil, expiresAt: Date? = nil
     ) {
         self.requestId = requestId
         self.hostId = hostId
@@ -48,6 +50,7 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
         self.answered = answered
         self.allowText = allowText
         self.claimedAt = claimedAt
+        self.expiresAt = expiresAt
     }
 
     /// A claim nobody is finishing: still `sending` past `claimTimeout`, or a sending record
@@ -63,6 +66,9 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public func isOpen(at now: Date) -> Bool {
         answered == nil || claimAbandoned(at: now)
     }
+
+    public var expiry: Date { expiresAt ?? receivedAt.addingTimeInterval(RequestLifetime.seconds) }
+    public func isAnswerable(at now: Date) -> Bool { isOpen(at: now) && now < expiry }
 
     /// A record `claim` made for an id this device never got a push for: nothing to show.
     public var isPlaceholder: Bool {
@@ -103,9 +109,11 @@ public final class PendingStore: Sendable {
 
     /// An unknown notification may supply its original delivery date. A remote Live Activity
     /// without a local record has no trustworthy age, so absence alone is not expiry.
-    public func isExpired(_ requestId: String, deliveredAt: Date? = nil) -> Bool {
-        guard let received = request(requestId)?.receivedAt ?? deliveredAt else { return false }
-        return clock().timeIntervalSince(received) >= RequestLifetime.seconds
+    public func isExpired(_ requestId: String, deliveredAt: Date? = nil, expiresAt: Date? = nil) -> Bool {
+        let stored = request(requestId)?.expiry
+        let deadline = stored.map { max($0, expiresAt ?? $0) } ?? expiresAt
+            ?? deliveredAt?.addingTimeInterval(RequestLifetime.seconds)
+        return deadline.map { clock() >= $0 } ?? false
     }
 
     /// Adds a request the store has not seen. A request it already holds keeps its state and
@@ -113,7 +121,11 @@ public final class PendingStore: Sendable {
     /// old one look new.
     public func upsert(_ request: PendingRequest) {
         update { values in
-            guard !values.contains(where: { $0.requestId == request.requestId }) else { return }
+            if let index = values.firstIndex(where: { $0.requestId == request.requestId }) {
+                if values[index].hostId == request.hostId, let deadline = request.expiresAt,
+                   deadline > values[index].expiry { values[index].expiresAt = deadline }
+                return
+            }
             values.append(request)
         }
     }
@@ -122,20 +134,21 @@ public final class PendingStore: Sendable {
     /// true, or returns false when it is already sending or answered, from any process. An id
     /// the store never saw is recorded so it too is answered once. A claim abandoned by a
     /// process stopped mid-send (`claimAbandoned`) is taken over.
-    public func claim(_ requestId: String, hostId: String) -> Bool {
+    public func claim(_ requestId: String, hostId: String, expiresAt: Date? = nil) -> Bool {
         var claimed = false
         let now = clock()
         update { values in
             if let index = values.firstIndex(where: { $0.requestId == requestId }) {
-                guard values[index].isOpen(at: now),
-                      now.timeIntervalSince(values[index].receivedAt) < RequestLifetime.seconds
-                else { return }
+                guard values[index].hostId == hostId else { return }
+                if let expiresAt, expiresAt > values[index].expiry { values[index].expiresAt = expiresAt }
+                guard values[index].isAnswerable(at: now) else { return }
                 values[index].answered = .sending
                 values[index].claimedAt = now
             } else {
+                guard expiresAt.map({ now < $0 }) ?? true else { return }
                 values.append(PendingRequest(
                     requestId: requestId, hostId: hostId, sessionId: nil, bib: nil, agent: nil, host: nil, title: "",
-                    subject: nil, options: [], receivedAt: now, answered: .sending, claimedAt: now
+                    subject: nil, options: [], receivedAt: now, answered: .sending, claimedAt: now, expiresAt: expiresAt
                 ))
             }
             claimed = true
@@ -233,11 +246,13 @@ public final class PendingStore: Sendable {
     @discardableResult
     public func prune(olderThan age: TimeInterval = PendingStore.retention) -> Bool {
         let cutoff = clock().addingTimeInterval(-age)
-        guard blob.read().contains(where: { $0.receivedAt < cutoff }) else { return false }
+        let now = clock()
+        let removable: (PendingRequest) -> Bool = { $0.receivedAt < cutoff && $0.expiry <= now }
+        guard blob.read().contains(where: removable) else { return false }
         var removed = false
         update { values in
             let count = values.count
-            values.removeAll { $0.receivedAt < cutoff }
+            values.removeAll(where: removable)
             removed = values.count != count
         }
         return removed

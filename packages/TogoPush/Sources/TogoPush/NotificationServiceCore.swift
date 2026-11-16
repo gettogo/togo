@@ -112,7 +112,8 @@ public struct NotificationServiceCore: Sendable {
         let p = opened.payload
         let age = clock().timeIntervalSince1970 - Double(p.ts) / 1000
         let limit = p.kind == .offline ? Self.offlineMaxAge : Self.maxAge
-        guard age <= limit, age >= -Self.maxSkew else {
+        let current = p.kind == .needsYou ? clock() < p.requestExpiry : age <= limit
+        guard current, age >= -Self.maxSkew else {
             return Result(content: Self.quiet(), pendingChanged: false)
         }
         let pruned = pending.prune()
@@ -182,10 +183,14 @@ public struct NotificationServiceCore: Sendable {
                 host: p.host ?? opened.pairing.machineName, title: PromptText.clean(p.title, maxLines: 1),
                 // The window runs from when the machine sent it: a push can arrive late.
                 subject: p.subject, options: p.options ?? [],
-                receivedAt: min(clock(), Date(timeIntervalSince1970: Double(p.ts) / 1000)), answered: nil,
-                allowText: p.allowText == true ? true : nil
+                receivedAt: Date(timeIntervalSince1970: Double(p.ts) / 1000), answered: nil,
+                allowText: p.allowText == true ? true : nil,
+                expiresAt: p.expires.map { Date(timeIntervalSince1970: Double($0)) }
             ))
             changed = true
+            if pending.isExpired(requestId) {
+                return Result(content: Self.quiet(), pendingChanged: changed, clearsOfflineOf: clearsOffline)
+            }
         }
         return Result(content: content, pendingChanged: changed, clearsOfflineOf: clearsOffline)
     }

@@ -37,7 +37,7 @@ struct WaitingSummary: Equatable {
     /// Unanswered requests still inside their window, oldest first.
     static func open(_ requests: [PendingRequest], now: Date) -> [PendingRequest] {
         requests
-            .filter { $0.isOpen(at: now) && now.timeIntervalSince($0.receivedAt) < openFor }
+            .filter { $0.isAnswerable(at: now) }
             .sorted { $0.receivedAt < $1.receivedAt }
     }
 }
@@ -63,7 +63,7 @@ struct WaitingProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<WaitingEntry>) -> Void) {
         let now = Date.now
         let requests = Self.requests()
-        let expiries = WaitingSummary.open(requests, now: now).map { $0.receivedAt.addingTimeInterval(WaitingSummary.openFor) }
+        let expiries = WaitingSummary.open(requests, now: now).map(\.expiry)
         let dates = [now] + Array(Set(expiries)).sorted()
         let entries = dates.map { entry(at: $0, requests: requests) }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))

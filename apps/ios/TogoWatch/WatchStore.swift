@@ -147,7 +147,7 @@ import WidgetKit
     }
 
     private static func expired(_ request: PendingRequest, at now: Date) -> Bool {
-        now.timeIntervalSince(request.receivedAt) >= RequestLifetime.seconds
+        now >= request.expiry
     }
 
     /// The time the sessions are from, when that is more than five minutes ago.
@@ -173,7 +173,7 @@ import WidgetKit
         requests = deps.pending.all()
             .filter {
                 ($0.answered == nil || $0.answered == .sending)
-                    && now.timeIntervalSince($0.receivedAt) < RequestLifetime.seconds
+                    && now < $0.expiry
             }
             .sorted { $0.receivedAt < $1.receivedAt }
     }
@@ -184,14 +184,15 @@ import WidgetKit
         switch push.kind {
         case .needsYou:
             let age = deps.clock().timeIntervalSince1970 - Double(push.ts) / 1000
-            guard age <= NotificationServiceCore.maxAge, age >= -NotificationServiceCore.maxSkew else { return }
+            guard deps.clock() < push.requestExpiry, age >= -NotificationServiceCore.maxSkew else { return }
             deps.pending.upsert(PendingRequest(
                 requestId: requestId, hostId: hostId, sessionId: push.sessionId, bib: push.bib, agent: push.agent,
                 host: push.host, title: PromptText.clean(push.title, maxLines: 2), subject: push.subject,
                 // From when the machine sent it: watchOS can hold a silent push for minutes.
                 options: push.options ?? [],
-                receivedAt: min(deps.clock(), Date(timeIntervalSince1970: Double(push.ts) / 1000)), answered: nil,
-                allowText: push.allowText == true ? true : nil
+                receivedAt: Date(timeIntervalSince1970: Double(push.ts) / 1000), answered: nil,
+                allowText: push.allowText == true ? true : nil,
+                expiresAt: push.expires.map { Date(timeIntervalSince1970: Double($0)) }
             ))
         case .clear:
             close(requestId)

@@ -49,14 +49,15 @@ import WidgetKit
         let now = Date()
         let sent = Date(timeIntervalSince1970: Double(p.ts) / 1000)
         let age = now.timeIntervalSince(sent)
-        guard let requestId = p.requestId, age <= NotificationServiceCore.maxAge,
-              age >= -NotificationServiceCore.maxSkew, deps.pending.request(requestId) == nil
+        guard let requestId = p.requestId, now < p.requestExpiry,
+              age >= -NotificationServiceCore.maxSkew
         else { return false }
         deps.pending.upsert(PendingRequest(
             requestId: requestId, hostId: hostId, sessionId: p.sessionId, bib: p.bib, agent: p.agent,
             host: p.host ?? machine, title: PromptText.clean(p.title, maxLines: 1), subject: p.subject,
-            options: p.options ?? [], receivedAt: min(now, sent), answered: nil,
-            allowText: p.allowText == true ? true : nil
+            options: p.options ?? [], receivedAt: sent, answered: nil,
+            allowText: p.allowText == true ? true : nil,
+            expiresAt: p.expires.map { Date(timeIntervalSince1970: Double($0)) }
         ))
         deps.reloadWidgets()
         return true

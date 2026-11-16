@@ -123,3 +123,32 @@ struct LiveAnswerTests {
         #expect(try JSONDecoder().decode(State.self, from: old).answerFeedback == nil)
     }
 }
+
+extension LiveAnswerTests {
+    @Test func anUnknownActivityWithoutATrustworthyAgeCannotSend() async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let trace = AnswerTrace()
+        await #expect(throws: LiveAnswer.Failure.unavailable) {
+            try await LiveAnswer.perform("approve", hostId: answerHost, requestId: "r_unknown", pending: pending) {
+                trace.state.withLock { $0.sends += 1 }
+            } refresh: { _ in }
+        }
+        #expect(trace.state.withLock { $0.sends } == 0)
+    }
+
+    @Test func anUnknownActivityCarriesItsSealedDeadlineIntoTheClaim() async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let deadline = Date().addingTimeInterval(-1)
+        let trace = AnswerTrace()
+        await #expect(throws: LiveAnswer.Failure.expired) {
+            try await LiveAnswer.perform("approve", hostId: answerHost, requestId: "r_unknown", pending: pending,
+                                         expiresAt: deadline) {
+                trace.state.withLock { $0.sends += 1 }
+            } refresh: { _ in }
+        }
+        #expect(trace.state.withLock { $0.sends } == 0)
+        #expect(pending.request("r_unknown") == nil)
+    }
+}

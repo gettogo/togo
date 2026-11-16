@@ -73,7 +73,8 @@ public struct LiveCard: Equatable, Sendable {
 
     public init(
         agent: String, status: String, waiting: Int, requestId: String?, command: String?, context: LiveContext?,
-        machine: String?, stale: Bool, showsCommand: Bool = true, feedback: LiveAnswerFeedback? = nil
+        machine: String?, stale: Bool, showsCommand: Bool = true, feedback: LiveAnswerFeedback? = nil,
+        expiresAt: Date? = nil, now: Date = Date()
     ) {
         let phase: Phase = stale ? .other : status == "needs_you" ? .needsYou : status == "working" ? .working : .other
         self.phase = phase
@@ -106,7 +107,10 @@ public struct LiveCard: Equatable, Sendable {
             if !ask.isEmpty, detail == nil || ask.contains(" ") {
                 self.ask = ask
             }
-            if requestId != nil, self.feedback?.blocksAnswer != true { answer = context?.answer }
+            let deadline = expiresAt ?? context?.expires.map { Date(timeIntervalSince1970: Double($0)) }
+            if requestId != nil, self.feedback?.blocksAnswer != true, deadline.map({ now < $0 }) ?? true {
+                answer = context?.answer
+            }
         case .other:
             break
         }

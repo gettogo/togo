@@ -29,7 +29,14 @@ enum LiveAnswer {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
         }
         let sender = RelayAnswerSender(keys: KeychainDeviceKeys(accessGroup: nil), pending: pending, clock: { Date() })
-        try await perform(decision, hostId: hostId, requestId: requestId, pending: pending) {
+        let state = Activity<TogoActivityAttributes>.activities.first {
+            $0.attributes.hostId == hostId && $0.content.state.status == "needs_you" && $0.content.state.requestId == requestId
+        }?.content.state
+        let context = state?.ctx.flatMap { LiveContext.open($0, hostId: hostId, keys: KeychainDeviceKeys(accessGroup: nil)) }
+        let deadline = context?.expires.map { Date(timeIntervalSince1970: Double($0)) }
+            ?? pending.request(requestId)?.expiry
+            ?? state.flatMap { $0.since > 0 ? Date(timeIntervalSince1970: Double($0.since) + RequestLifetime.seconds) : nil }
+        try await perform(decision, hostId: hostId, requestId: requestId, pending: pending, expiresAt: deadline) {
             #if DEBUG
             if SharedSettings.defaults?.bool(forKey: "ui.demo.liveAnswers") == true { return }
             #endif
@@ -40,13 +47,14 @@ enum LiveAnswer {
     }
 
     static func perform(
-        _ decision: String, hostId: String, requestId: String, pending: PendingStore,
+        _ decision: String, hostId: String, requestId: String, pending: PendingStore, expiresAt: Date? = nil,
         send: @Sendable () async throws -> Void,
         refresh: @Sendable (LiveAnswerFeedback) async -> Void
     ) async throws {
         if let request = pending.request(requestId), request.hostId != hostId { throw Failure.unavailable }
-        guard pending.claim(requestId, hostId: hostId) else {
-            if pending.isExpired(requestId) {
+        guard pending.request(requestId) != nil || expiresAt != nil else { throw Failure.unavailable }
+        guard pending.claim(requestId, hostId: hostId, expiresAt: expiresAt) else {
+            if pending.isExpired(requestId, expiresAt: expiresAt) {
                 await refresh(.failed)
                 throw Failure.expired
             }
