@@ -41,8 +41,6 @@ import TogoKit
         let target: ForwardTarget
         let forward: LocalForward
         var events: Task<Void, Never>?
-        /// A failure was already reported, so its end needs no second message.
-        var failed = false
     }
 
     private struct ForwardKey: Hashable {
@@ -299,6 +297,8 @@ import TogoKit
                     // A preview still shows the old address, which nothing serves now.
                     await stopForward(localPort: localPort)
                     emit(entry.localPort, Self.previewClosed)
+                } else if !foreground {
+                    await stopAll(detach([localPort]))
                 }
             } catch {
                 emit(entry.localPort, ServiceErrors.message(error))
@@ -328,7 +328,11 @@ import TogoKit
         case .upstreamRefused:
             emit(localPort, ReviewCopy.nothingListening(remote))
         case .upstreamFailed(let detail):
-            forwards[localPort]?.failed = true
+            // A fatal channel error is not a server that may start listening later.
+            // Remove the handle before notifying readers so their failed row cannot orphan it.
+            forwards[localPort] = nil
+            open.events?.cancel()
+            Task { await open.forward.stop() }
             if foreground { emit(localPort, detail) }
         case .stopped:
             if !foreground {
@@ -336,7 +340,7 @@ import TogoKit
                 _ = detach([localPort])
             } else {
                 forwards[localPort] = nil
-                if !open.failed { emit(localPort, Self.previewClosed) }
+                emit(localPort, Self.previewClosed)
             }
         }
     }
