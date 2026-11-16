@@ -9,6 +9,7 @@ enum PrimitiveCopy {
     static let sent = String(localized: "primitive.sent", defaultValue: "Sent")
     static let queued = String(localized: "primitive.queued", defaultValue: "Queued")
     static let restarted = String(localized: "primitive.restarted", defaultValue: "Restarted the agent")
+    static let changeUnavailable = String(localized: "primitive.changeUnavailable", defaultValue: "The change couldn’t be applied here. Check the terminal.")
     static let failed = String(localized: "primitive.failed", defaultValue: "That didn't work")
     static let openedTerminal = String(localized: "primitive.openedTerminal", defaultValue: "Opened in the terminal")
     static let noAnswer = String(localized: "primitive.noAnswer", defaultValue: "No response. Try again.")

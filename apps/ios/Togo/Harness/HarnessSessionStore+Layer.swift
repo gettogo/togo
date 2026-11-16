@@ -289,8 +289,12 @@ extension HarnessSessionStore {
                 let result = try? await self.run(action: change.action, target: change.target, args: change.args)
                 guard self.conversation == binding, !Task.isCancelled else { return }
                 switch result?.result {
+                case .relaunched?: self.note(change.note, code: "model")
+                case .applied?: self.note(PrimitiveCopy.done, code: "model")
+                case .typed?: self.note(PrimitiveCopy.sent, code: "model")
+                case .queued?: self.note(PrimitiveCopy.queued, code: "model")
                 case .failed?, nil: self.note(result?.message ?? PrimitiveCopy.failed, code: "error")
-                default: self.note(change.note, code: "model")
+                default: self.note(result?.message ?? PrimitiveCopy.changeUnavailable, code: "error")
                 }
             }
         }
