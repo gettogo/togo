@@ -71,7 +71,7 @@ struct RootSheet: View {
         case .signIn(let id):
             SignInSheet(model: SignInModel(
                 hostID: id, machine: store.machineName(for: id), services: store.services,
-                finish: { store.sheet = nil }
+                finish: { if store.sheet == .signIn(id) { store.sheet = nil } }
             ))
         case .settings:
             settings?()
