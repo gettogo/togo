@@ -263,7 +263,7 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 	switch it.Kind {
 	case harness.KindUser:
 		if u := it.User; u != nil {
-			u.Text = clipBytes(red.String(u.Text), harness.MaxItemText)
+			u.Text = clipItemText(red.String(u.Text))
 			if u.Source == "" {
 				u.Source = "unknown"
 			}
@@ -292,7 +292,7 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 		}
 	case harness.KindAssistant, harness.KindThinking:
 		if t := partialText(*it); t != nil {
-			t.Text = clipBytes(red.String(t.Text), harness.MaxItemText)
+			t.Text = clipItemText(red.String(t.Text))
 		}
 	case harness.KindTool:
 		if t := it.Tool; t != nil {
@@ -452,6 +452,17 @@ func (s *sess) currentModeLocked() string {
 		}
 	}
 	return state["mode"]
+}
+
+// textCutMarker ends a text that was cut at MaxItemText.
+const textCutMarker = "\n\n[Text cut here. The terminal has the full text.]"
+
+// clipItemText limits chat text to MaxItemText bytes and says so when it cuts.
+func clipItemText(s string) string {
+	if len(s) <= harness.MaxItemText {
+		return s
+	}
+	return clipBytes(s, harness.MaxItemText-len(textCutMarker)) + textCutMarker
 }
 
 func clipBytes(s string, n int) string {
