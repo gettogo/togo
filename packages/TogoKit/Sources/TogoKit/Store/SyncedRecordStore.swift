@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A value with the metadata needed to merge edits from several devices.
 /// A nil `value` is a deletion marker.
@@ -111,6 +112,7 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
     public func put(_ id: String, _ value: Value) {
         prepare()
         let key = prefix + id
+        guard canWrite([key]) else { return }
         if read(key, from: local)?.value == value { return }
         write(Stamped(value: value, updatedAt: nextStamp(for: key), deviceID: deviceID), key: key)
     }
@@ -127,6 +129,9 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
     /// receives it before `value` still knows it as a merge, not a removal.
     public func put(_ id: String, _ value: Value, deleting deleted: [String]) {
         prepare()
+        // Refuse the entire merge if any participant belongs to a newer schema. Writing
+        // the destination but retaining an unreadable source would only half-merge it.
+        guard canWrite(([id] + deleted).map { prefix + $0 }) else { return }
         var changed = false
         let key = prefix + id
         if read(key, from: local)?.value != value {
@@ -284,6 +289,15 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
     private func isUndecodable(_ key: String, in backend: any KeyValueBackend) -> Bool {
         guard let data = backend.data(forKey: key) else { return false }
         return (try? Self.decoder.decode(Stamped<Value>.self, from: data)) == nil
+    }
+
+    private func canWrite(_ keys: [String]) -> Bool {
+        guard !keys.contains(where: { isUndecodable($0, in: local) }) else {
+            Logger(subsystem: "app.togo", category: "SyncedRecordStore")
+                .error("Stored record could not be decoded; changes were skipped.")
+            return false
+        }
+        return true
     }
 
     private func read(_ key: String, from backend: any KeyValueBackend) -> Stamped<Value>? {
