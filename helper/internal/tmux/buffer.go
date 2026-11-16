@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -54,6 +55,7 @@ func (c *Client) runInput(ctx context.Context, input string, args ...string) (st
 		full = append(full, "-f", c.Config)
 	}
 	cmd := exec.CommandContext(ctx, c.Bin, append(full, args...)...)
+	cmd.Env = outsideTmux(os.Environ())
 	var out, errBuf strings.Builder
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stdout = &out

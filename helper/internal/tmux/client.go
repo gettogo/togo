@@ -387,6 +387,7 @@ func (c *Client) run(ctx context.Context, args ...string) (string, error) {
 	}
 	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, c.Bin, full...)
+	cmd.Env = outsideTmux(os.Environ())
 	var out, errBuf strings.Builder
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
@@ -395,6 +396,20 @@ func (c *Client) run(ctx context.Context, args ...string) (string, error) {
 		return out.String(), c.mapError(err, errBuf.String())
 	}
 	return out.String(), nil
+}
+
+// outsideTmux returns env without TMUX and TMUX_PANE. A helper started
+// from inside a tmux pane inherits them, and a client given no socket
+// would follow TMUX to that pane's server instead of the default one.
+func outsideTmux(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "TMUX=") || strings.HasPrefix(kv, "TMUX_PANE=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }
 
 // mapError translates an exec error into a driver error, keeping the stderr

@@ -136,7 +136,8 @@ type Service struct {
 
 	mu          sync.Mutex
 	tmuxChecked bool
-	tmuxErr     error
+	// findTmux looks for the tmux binary again; nil keeps the one given.
+	findTmux func(context.Context)
 }
 
 // TmuxFallbacks are where package managers and systems install tmux, for
@@ -164,9 +165,22 @@ func NewService(ctx context.Context, home string) (*Service, error) {
 	label := cmp.Or(os.Getenv("TOGO_TMUX_LABEL"), "togo")
 	userHome, _ := os.UserHomeDir()
 	bin := resolveTmux(state.LoginPath(ctx), TmuxFallbacks(userHome))
+	managed, user := &tmux.Client{Bin: bin, Socket: []string{"-L", label}, Config: conf}, &tmux.Client{Bin: bin}
 	return &Service{
-		Tmux:     &tmux.Client{Bin: bin, Socket: []string{"-L", label}, Config: conf},
-		User:     &tmux.Client{Bin: bin},
+		Tmux: managed,
+		User: user,
+		// tmux installed after the helper started is found without a
+		// restart: looked for again each time it is still missing.
+		findTmux: func(ctx context.Context) {
+			// Only a tmux found nowhere at start is looked for again; a
+			// path that was found stays the one the helper uses.
+			if filepath.IsAbs(managed.Bin) {
+				return
+			}
+			if p := resolveTmux(state.LoginPath(ctx), TmuxFallbacks(userHome)); p != managed.Bin {
+				managed.Bin, user.Bin = p, p
+			}
+		},
 		Recent:   &state.Recent{File: filepath.Join(home, "recent.json")},
 		Manifest: &Manifest{Path: filepath.Join(home, "sessions.json")},
 		LockFile: filepath.Join(home, "run", "bib.lock"),
@@ -428,19 +442,26 @@ func (s *Service) checkTmux(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tmuxChecked {
-		return s.tmuxErr
+		return nil
 	}
 	major, minor, raw, err := s.Tmux.Version(ctx)
+	if errors.Is(err, tmux.ErrNotInstalled) && s.findTmux != nil {
+		s.findTmux(ctx)
+		major, minor, raw, err = s.Tmux.Version(ctx)
+	}
+	// Only a tmux that works is remembered: one missing or too old is
+	// checked again on the next call, so installing or upgrading it takes
+	// effect while the helper runs.
 	switch {
 	case errors.Is(err, tmux.ErrNotInstalled):
-		s.tmuxErr = &TmuxUnavailableError{}
+		return &TmuxUnavailableError{}
 	case err != nil && raw == "":
 		return fmt.Errorf("tmux version: %w", err)
 	case err != nil || major < requiredMajor || major == requiredMajor && minor < requiredMinor:
-		s.tmuxErr = &TmuxUnavailableError{Found: strings.TrimPrefix(raw, "tmux ")}
+		return &TmuxUnavailableError{Found: strings.TrimPrefix(raw, "tmux ")}
 	}
 	s.tmuxChecked = true
-	return s.tmuxErr
+	return nil
 }
 
 func (s *Service) newID() string {

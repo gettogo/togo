@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -43,6 +44,7 @@ func (c *Client) ObservePane(ctx context.Context, session, pane string, ready fu
 	}
 	args = append(args, "-C", "attach-session", "-f", "ignore-size", "-t", "="+escapeArg(session)+":")
 	cmd := exec.CommandContext(childCtx, c.Bin, args...)
+	cmd.Env = outsideTmux(os.Environ())
 	cmd.Stderr = io.Discard
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
