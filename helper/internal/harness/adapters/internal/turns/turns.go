@@ -20,6 +20,9 @@ type Builder struct {
 	started time.Time
 	steps   int
 	tools   map[string]harness.Item
+	// ended are the calls that finished in this turn, as they ended: a
+	// message rewritten after its result is stored lists them again.
+	ended map[string]harness.Item
 	// Working is "true" while a turn runs, "false" after one ended, ""
 	// before any; WorkingAt stamps the last change.
 	Working   string
@@ -27,12 +30,12 @@ type Builder struct {
 }
 
 // New returns an empty builder.
-func New() *Builder { return &Builder{tools: map[string]harness.Item{}} }
+func New() *Builder { return &Builder{tools: map[string]harness.Item{}, ended: map[string]harness.Item{}} }
 
 // Reset forgets the open turn (another session's history follows).
 func (b *Builder) Reset() {
 	b.turn, b.steps, b.Working, b.WorkingAt = "", 0, "", ""
-	b.tools = map[string]harness.Item{}
+	b.tools, b.ended = map[string]harness.Item{}, map[string]harness.Item{}
 }
 
 // Open reports whether a turn runs.
@@ -44,6 +47,7 @@ func (b *Builder) User(id, text string, at time.Time) []harness.Item {
 	if b.turn != "" {
 		items = b.Close(harness.StateOK, at)
 	}
+	b.ended = map[string]harness.Item{}
 	b.turn, b.started, b.steps = id+".turn", at, 0
 	b.working("true", at)
 	items = append(items, harness.Item{ID: id, TurnID: b.turn, Kind: harness.KindUser, At: at,
@@ -77,6 +81,9 @@ func (b *Builder) ToolStart(callID, name string, args json.RawMessage, at time.T
 		args = nil
 	}
 	title, cat, subj := hookstyle.ToolTitle(ShortName(name), args)
+	if x, ok := b.ended[callID]; ok {
+		return x // finished; a rewritten message must not start it again
+	}
 	if x, ok := b.tools[callID]; ok {
 		body := *x.Tool
 		body.Title, body.Category, body.Subject = hookstyle.Truncate(title, harness.MaxTitle), cat, subj
@@ -102,6 +109,7 @@ func (b *Builder) ToolEnd(callID, output, state string, at time.Time) (harness.I
 	body := *x.Tool
 	body.State, body.Ended, body.Output = state, &at, hookstyle.Tail(output, harness.MaxToolOutput)
 	x.Tool = &body
+	b.ended[callID] = x
 	return x, true
 }
 
@@ -116,6 +124,7 @@ func (b *Builder) Close(state string, at time.Time) []harness.Item {
 		body.State, body.Ended = harness.StateInterrupted, &at
 		x.Tool = &body
 		items = append(items, x)
+		b.ended[id] = x
 		delete(b.tools, id)
 	}
 	items = append(items, b.TurnItem(state, &at))
