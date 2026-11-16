@@ -49,3 +49,18 @@ func (h *Handlers) setTurn(id string, open bool) bool {
 	}
 	return was
 }
+
+// Forget drops what the handlers keep for a session that was removed, so
+// nothing of it grows for the life of the daemon or reaches a later
+// session.
+func (h *Handlers) Forget(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.meta, id)
+	delete(h.turns, id)
+	delete(h.asking, id)
+	if t := h.doneT[id]; t != nil {
+		t.Stop()
+		delete(h.doneT, id)
+	}
+}

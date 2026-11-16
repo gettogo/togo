@@ -250,6 +250,9 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	// The hub cannot publish from inside its own consumer, so the session
 	// id is handed to Run.
 	c.Hub.OnEvent(func(ev wire.Event) {
+		if ev.SessionID != nil && ev.Kind == wire.EventSessionRemoved {
+			c.Local.Forget(*ev.SessionID)
+		}
 		if ev.SessionID == nil || (ev.Kind != wire.EventApprovalOpen && ev.Kind != wire.EventApprovalClosed) {
 			return
 		}
