@@ -314,6 +314,7 @@ type tail struct {
 	size    int64
 	replay  bool
 	skip    bool
+	ident   os.FileInfo // the file as last seen, to notice a replacement
 }
 
 func (t *tail) poll(emit func(harness.Record)) error {
@@ -321,14 +322,15 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	if err != nil {
 		return err
 	}
-	if st.Size() == t.size && st.ModTime().Equal(t.mtime) {
+	if st.Size() == t.size && st.ModTime().Equal(t.mtime) && (t.ident == nil || os.SameFile(t.ident, st)) {
 		return nil
 	}
-	if st.Size() < t.offset {
+	if st.Size() < t.offset || (t.ident != nil && !os.SameFile(t.ident, st)) {
 		// Truncated or replaced: start over.
-		t.offset, t.pending = 0, nil
+		t.offset, t.pending, t.skip = 0, nil, false
 		t.replay = true
 	}
+	t.ident = st
 	t.size, t.mtime = st.Size(), st.ModTime()
 	fh, err := openRegular(t.path)
 	if err != nil {

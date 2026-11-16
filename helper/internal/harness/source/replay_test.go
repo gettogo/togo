@@ -115,3 +115,31 @@ func TestHeadTailHeadIsTheFirstRecords(t *testing.T) {
 		t.Fatalf("head = %s", head)
 	}
 }
+
+// A followed file replaced by a larger one is read again from its start.
+func TestTailNoticesReplacedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.jsonl")
+	if err := os.WriteFile(path, []byte("{\"a\":1}\n{\"a\":2}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []harness.Record
+	tl := &tail{path: path, name: "session", replay: true}
+	emit := func(r harness.Record) { got = append(got, r) }
+	if err := tl.poll(emit); err != nil {
+		t.Fatal(err)
+	}
+	next := filepath.Join(dir, "next.jsonl")
+	if err := os.WriteFile(next, []byte("{\"b\":1}\n{\"b\":2}\n{\"b\":3}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(next, path); err != nil {
+		t.Fatal(err)
+	}
+	if err := tl.poll(emit); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || len(got[1].Replay) != 3 || string(got[1].Replay[0]) != `{"b":1}` {
+		t.Fatalf("got %+v", got)
+	}
+}
