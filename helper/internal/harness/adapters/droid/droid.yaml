@@ -15,7 +15,7 @@ capabilities: [chat, chat.anchors, send.queue, interrupt, commands, files, needs
 feeds:
   hooks:            # `togo hook droid <event>` in ~/.factory/hooks.json (installed only by `togo hooks install --agent droid`)
     hook:
-      events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop,
+      events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop, StopFailure,
         SubagentStop, PreCompact, SessionEnd]
     mapper: droid.hooks
     stability: documented

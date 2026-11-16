@@ -15,7 +15,7 @@ harness: { version: [amp, --version], pattern: '^(\d+\.\d+\.\d+)', range: ">=0.0
 capabilities: [chat, chat.anchors, send.queue, interrupt, needs.approvals]
 feeds:
   hooks:
-    hook: { events: [SessionStart, UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop] }
+    hook: { events: [SessionStart, UserPromptSubmit, PostToolUse, PostToolUseFailure, Stop, StopFailure] }
     mapper: amp.hooks
     stability: unverified
 actions:
