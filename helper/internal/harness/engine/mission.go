@@ -179,6 +179,27 @@ func countRunning(rows []harness.Row) int {
 	return n
 }
 
+// stopRunning is the rows of subagents and background jobs still running,
+// marked interrupted: they ran inside an agent process that has exited.
+func (m *missionState) stopRunning() []harness.Op {
+	var ops []harness.Op
+	for _, kind := range []string{harness.SectionAgents, harness.SectionBackground} {
+		sec := m.section(kind)
+		if sec == nil {
+			continue
+		}
+		for _, r := range sec.Rows {
+			if r.State != harness.StateRunning && r.State != harness.StateWaiting {
+				continue
+			}
+			row := r
+			row.State = harness.StateInterrupted
+			ops = append(ops, harness.Op{Op: harness.OpUpsert, Section: kind, Row: &row})
+		}
+	}
+	return ops
+}
+
 // snapshot returns a deep copy.
 func (m *missionState) snapshot() harness.Mission {
 	out := harness.Mission{Rev: m.rev, Summary: m.summary, Sections: []harness.Section{}}

@@ -845,9 +845,9 @@ func agentGone(status string) bool {
 	return status == wire.StatusEnded || status == wire.StatusFailed || status == "exited"
 }
 
-// agentExitedLocked closes what the dead agent left open: running turns
-// and tools end as interrupted, and prompts queued behind them are
-// withdrawn, since nothing will ever drain them.
+// agentExitedLocked closes what the dead agent left open: running turns,
+// tools, subagents and background jobs end as interrupted, and prompts
+// queued behind them are withdrawn, since nothing will ever drain them.
 func (s *sess) agentExitedLocked() {
 	recent, _, _ := s.e.log.Since(s.id, 0, 200)
 	now := s.e.cfg.Now()
@@ -862,12 +862,21 @@ func (s *sess) agentExitedLocked() {
 			t := *it.Tool
 			t.State, t.Ended = harness.StateInterrupted, &now
 			it.Tool = &t
+		case it.Kind == harness.KindAgent && it.Agent != nil && it.Agent.State == harness.StateRunning:
+			a := *it.Agent
+			a.State, a.Ended = harness.StateInterrupted, &now
+			it.Agent = &a
+		case it.Kind == harness.KindBackground && it.Background != nil && it.Background.State == harness.StateRunning:
+			b := *it.Background
+			b.State, b.Ended = harness.StateInterrupted, &now
+			it.Background = &b
 		default:
 			continue
 		}
 		it.Seq = 0
 		ended = append(ended, it)
 	}
+	rows := s.mission.stopRunning()
 	for _, q := range s.queue {
 		if q.item.User == nil {
 			continue
@@ -881,8 +890,8 @@ func (s *sess) agentExitedLocked() {
 	s.queue = nil
 	asked := s.unansweredLocked()
 	ended = append(ended, asked...)
-	if len(ended) > 0 {
-		s.publishLocked(ended, nil)
+	if len(ended) > 0 || len(rows) > 0 {
+		s.publishLocked(ended, rows)
 	}
 	s.forgetQuestionsLocked()
 }
