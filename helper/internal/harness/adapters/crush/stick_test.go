@@ -47,3 +47,15 @@ func TestCrushFollowsItsOwnResume(t *testing.T) {
 		t.Fatalf("session %q, want b", got)
 	}
 }
+
+// Two Crush sessions in one project: the older conversation gets a message
+// while this Togo session's own row has none yet.
+func TestCrushDoesNotAdoptAnOlderConversation(t *testing.T) {
+	started := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
+	m := newDB(harness.Env{Cwd: "/w/proj", Vars: map[string]string{"created": started.Format(time.RFC3339)}})
+	m.Map(rec(t, map[string]any{"id": "ours", "title": "ours", "created_at": started.Unix() + 5, "updated_at": started.Unix() + 5}))
+	m.Map(rec(t, map[string]any{"id": "old", "title": "old", "created_at": started.Unix() - 3600, "updated_at": started.Unix() + 300}))
+	if got := m.State()["harness_session"]; got != "ours" {
+		t.Fatalf("followed %q", got)
+	}
+}

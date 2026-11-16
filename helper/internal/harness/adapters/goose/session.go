@@ -141,12 +141,7 @@ func (m *db) session(s sessionRow) {
 		return
 	}
 	m.sessions[s.ID] = s
-	best := sessionRow{}
-	for _, c := range m.sessions {
-		if c.Updated > best.Updated || (c.Updated == best.Updated && c.ID > best.ID) {
-			best = c
-		}
-	}
+	best := m.pick()
 	if m.pin != "" {
 		p, ok := m.sessions[m.pin]
 		if !ok {
@@ -155,6 +150,9 @@ func (m *db) session(s sessionRow) {
 		best = p
 	} else if m.shown && m.state["harness_session"] != "" {
 		best = m.sessions[m.state["harness_session"]]
+	}
+	if best.ID == "" {
+		return
 	}
 	if best.ID != m.state["harness_session"] {
 		m.b.Reset()
@@ -168,6 +166,38 @@ func (m *db) session(s sessionRow) {
 	if best.Mode != "" {
 		m.state["mode"] = best.Mode
 	}
+}
+
+// pick chooses the session this Togo session's agent created. A row made
+// before this session started (more than a minute, for clock skew) is
+// another conversation that was only touched since; it is never taken. Of
+// the rest, the one made after the session began and first is the row the
+// TUI created at launch; otherwise the newest updated. Rows with no
+// readable creation time are all candidates.
+func (m *db) pick() sessionRow {
+	started, _ := time.Parse(time.RFC3339, m.env.Vars["created"])
+	var best sessionRow
+	var bestAt time.Time
+	bestFresh := false
+	for _, c := range m.sessions {
+		made, err := time.Parse(time.DateTime, c.Created)
+		known := err == nil && !started.IsZero()
+		if known && made.Before(started.Add(-time.Minute)) {
+			continue
+		}
+		fresh := known && !made.Before(started)
+		switch {
+		case best.ID == "", fresh && !bestFresh:
+		case fresh != bestFresh:
+			continue
+		case fresh && (made.Before(bestAt) || (made.Equal(bestAt) && c.ID < best.ID)):
+		case !fresh && (c.Updated > best.Updated || (c.Updated == best.Updated && c.ID > best.ID)):
+		default:
+			continue
+		}
+		best, bestAt, bestFresh = c, made, fresh
+	}
+	return best
 }
 
 // Relaunched learns the session a relaunch resumes (`--session-id <id>`).
