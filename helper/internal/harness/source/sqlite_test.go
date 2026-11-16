@@ -94,3 +94,28 @@ func TestSQLiteURI(t *testing.T) {
 		t.Fatal(u)
 	}
 }
+
+// A database nobody wrote to is not queried again on every poll.
+func TestSQLiteWatchSkipsUnchangedDatabase(t *testing.T) {
+	p, env := sqliteDB(t, `create table m(id integer primary key, at integer, v text);
+		insert into m(at, v) values (10, 'a');`)
+	q := spec.SQLite{Path: p, Query: "select id, at, v from m where at >= :cursor order by at", Cursor: "at", Key: "id"}
+	w := &sqliteWatch{q: q, path: p, name: "db", seen: map[string]string{}}
+	var got int
+	emit := func(harness.Record) { got++ }
+	for range 4 {
+		if err := w.poll(context.Background(), env, emit); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if w.queries != 1 {
+		t.Fatalf("queries = %d, want 1", w.queries)
+	}
+	exec.Command("sqlite3", p, "insert into m(at, v) values (11, 'b');").Run()
+	if err := w.poll(context.Background(), env, emit); err != nil {
+		t.Fatal(err)
+	}
+	if w.queries != 2 || got != 2 {
+		t.Fatalf("queries = %d, emitted = %d", w.queries, got)
+	}
+}

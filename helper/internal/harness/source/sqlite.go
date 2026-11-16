@@ -97,13 +97,40 @@ type sqliteWatch struct {
 	seen   map[string]string
 	fails  int
 	loaded bool
+
+	sig     string    // the database and its write-ahead log as of the last good query
+	sigAt   time.Time // when that query ran
+	queries int       // queries run, for tests
+}
+
+// sqliteRecheck is how long an unchanged database is trusted before the
+// query runs again anyway.
+const sqliteRecheck = 10 * time.Second
+
+// dbSignature is the size and modification time of the database and its
+// write-ahead log; it changes whenever either is written.
+func dbSignature(path string) string {
+	var b strings.Builder
+	for _, p := range []string{path, path + "-wal"} {
+		if st, err := os.Stat(p); err == nil {
+			fmt.Fprintf(&b, "%d@%d;", st.Size(), st.ModTime().UnixNano())
+		} else {
+			b.WriteString("-;")
+		}
+	}
+	return b.String()
 }
 
 func (w *sqliteWatch) poll(ctx context.Context, env harness.Env, emit func(harness.Record)) error {
 	if _, err := os.Stat(w.path); err != nil {
 		return err
 	}
+	sig := dbSignature(w.path)
+	if w.loaded && sig == w.sig && time.Since(w.sigAt) < sqliteRecheck {
+		return nil // nothing was written since the last query
+	}
 	cctx, cancel := context.WithTimeout(ctx, sqliteTimeout)
+	w.queries++
 	rows, err := querySQLite(cctx, w.path, w.q, w.cursor, env)
 	cancel()
 	if err != nil {
@@ -116,6 +143,7 @@ func (w *sqliteWatch) poll(ctx context.Context, env harness.Env, emit func(harne
 		return nil
 	}
 	w.fails = 0
+	w.sig, w.sigAt = sig, time.Now()
 	w.step(rows, emit)
 	return nil
 }
