@@ -161,3 +161,35 @@ func TestReconnectMidTurnWorksAgain2(t *testing.T) {
 		t.Fatalf("working after the turn ended: %v", m.State())
 	}
 }
+
+// Switching to another session while a turn runs does not leave the old
+// turn's working state on the new one.
+func TestSwitchingSessionResetsWorking(t *testing.T) {
+	recs := recorded(t)
+	at := indexOf(t, recs, "message.part.delta", "prt_1b3e21b50001enXgCLCa7we0L4")
+	m := NewEvents(harness.Env{SessionID: "s_oc", Cwd: "/Users/me/proj"})
+	run(m, recs[:at+4])
+	if m.State()["working"] != "true" || m.State()["turn"] == "" {
+		t.Fatalf("not working mid-turn: %v", m.State())
+	}
+	m.Map(harness.Record{Data: json.RawMessage(`{"type":"tui.session.select","properties":{"sessionID":"ses_other"}}`)})
+	st := m.State()
+	if st["working"] != "false" || st["idle"] != "true" || st["turn"] != "" || st["harness_session"] != "ses_other" {
+		t.Fatalf("state after the switch %v", st)
+	}
+}
+
+func TestSwitchingSessionResetsWorking2(t *testing.T) {
+	recs := recorded2(t)
+	at := indexOf(t, recs, "session.text.delta", "1\\n2\\n3")
+	m := NewEvents2(harness.Env{SessionID: "s_oc2", Cwd: "/tmp/work"})
+	run(m, recs[:at+1])
+	if m.State()["working"] != "true" {
+		t.Fatalf("not working mid-turn: %v", m.State())
+	}
+	m.Map(harness.Record{Data: json.RawMessage(`{"type":"session.inbox.enqueued","data":{"inboxID":"msg_x","sessionID":"ses_other","item":{"type":"user","payload":{"text":"hi"}}}}`)})
+	st := m.State()
+	if st["working"] != "false" || st["turn"] != "" || st["harness_session"] != "ses_other" {
+		t.Fatalf("state after the switch %v", st)
+	}
+}

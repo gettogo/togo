@@ -153,6 +153,13 @@ func (e *Events) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 }
 
 func (e *Events) setMain(id string) {
+	if e.main != "" && id != e.main {
+		// Another conversation: what the last one was doing says nothing
+		// about this one, and its end would never come.
+		e.state["working"], e.state["idle"] = "false", "true"
+		delete(e.state, "turn")
+		e.tools, e.waits, e.lost = map[string]harness.Item{}, map[string]string{}, false
+	}
 	e.main = id
 	e.state["harness_session"] = id
 }

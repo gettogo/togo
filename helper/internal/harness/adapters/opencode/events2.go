@@ -302,6 +302,12 @@ func (e *Events2) setMain(id string) {
 	if id != e.main {
 		// The folder a move named was the last conversation's.
 		delete(e.state, "conversation_cwd")
+		if e.main != "" {
+			// What the last conversation was doing says nothing about this one.
+			e.state["working"], e.state["idle"] = "false", "true"
+			delete(e.state, "turn")
+			e.lost = false
+		}
 		e.forgetUndo()
 		e.forgetShells()
 	}
