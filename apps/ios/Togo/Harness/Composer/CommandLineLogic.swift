@@ -150,6 +150,7 @@ enum CommandLineLogic {
     /// The composer's line for a send that did not go: "Not sent", with the helper's reason
     /// when it refused and said why.
     static func notSentNotice(_ error: any Error) -> String {
+        if error is HelperCallInterrupted { return ServiceErrors.message(error) }
         if case HelperError.rpc(let rpc) = error, rpc.code == RPCErrorCode.refused, let why = rpc.refusalMessage, !why.isEmpty {
             return ComposerCopy.notSent + ". " + why
         }

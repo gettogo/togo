@@ -87,6 +87,25 @@ import TogoKit
         #expect(chat.timeline.epoch == "e1")
     }
 
+    @Test func lostConnectionKeepsQueuedDeliveryUnconfirmedAcrossReconnect() async throws {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        let open = try HarnessFixtures.open()
+        services.feeds = [.init(elements: [.opened(open)], end: .hold), .init(elements: [.opened(open)], end: .hold)]
+        services.beforeSendResult = { throw HelperCallInterrupted() }
+        let chat = HarnessSessionStore(subject: ChatTests.subject, services: services,
+                                      retry: (.milliseconds(5), .milliseconds(20)))
+        chat.launch()
+        defer { chat.stop() }
+        try await wait { chat.phase == .live }
+        try await chat.send("check delivery before sending again")
+        #expect(chat.queue.prompts.first?.state == .unconfirmed)
+        chat.stop()
+        chat.launch()
+        try await wait { services.opens.count == 2 && chat.phase == .live }
+        #expect(services.sent.count == 1)
+        #expect(chat.queue.prompts.first?.state == .unconfirmed)
+    }
+
     @Test func cancellationDoesNotReplayAnUnconfirmedSend() async throws {
         let services = FakeHarnessServices(descriptor: ChatTests.claude)
         let open = try HarnessFixtures.open()

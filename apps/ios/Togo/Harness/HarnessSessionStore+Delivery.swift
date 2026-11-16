@@ -97,6 +97,10 @@ extension HarnessSessionStore {
             // The turn is still going; the next change of the mission tries again.
             queue.requeue(prompt.id)
             return
+        } catch is HelperCallInterrupted {
+            guard conversation == binding else { return }
+            changeQueue { $0.unconfirmed(prompt.id) }
+            return
         } catch is CancellationError {
             guard conversation == binding else { return }
             // Cancellation can race delivery. Preserve the text without replaying it.

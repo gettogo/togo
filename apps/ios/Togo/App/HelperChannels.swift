@@ -12,7 +12,7 @@ import TogoKit
 /// connections, so they end too and reopen from their cursor over a new one. A call that times
 /// out is followed by a ping, and a connection that does not answer it is dropped as well.
 actor HelperChannels {
-    private struct Channel {
+    private struct Channel: Sendable {
         let connection: SSHConnection
         let client: HelperClient
     }
@@ -41,8 +41,8 @@ actor HelperChannels {
         pathTask?.cancel()
     }
 
-    /// A connection that closed under a request is opened again once, since the host may
-    /// have dropped an idle channel.
+    /// Opening a connection may be retried before the body starts. Once the body starts,
+    /// loss of its reply is uncertain delivery and must never replay a mutation.
     func call<T: Sendable>(
         _ record: HostRecord, prompter: (any ConnectionPrompter)?, _ body: @Sendable (HelperClient) async throws -> T
     ) async throws -> T {
@@ -54,10 +54,9 @@ actor HelperChannels {
             opened = try await channel(for: record, prompter: prompter)
         }
         do {
-            return try await body(opened.client)
-        } catch HelperError.closed {
-            await drop(record.id, ifStill: opened)
-            return try await body(try await channel(for: record, prompter: prompter).client)
+            return try await HelperRequestExecution.once({ try await body(opened.client) }, onClosed: {
+                await self.drop(record.id, ifStill: opened)
+            })
         } catch HelperError.timeout(let method) {
             // Slow, or dead without knowing it: one more ping tells which.
             if await HelperLiveness.isDead(ping: { try await opened.client.keepalive() }) {
