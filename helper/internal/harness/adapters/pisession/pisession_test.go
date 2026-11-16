@@ -132,3 +132,31 @@ func TestRelaunchFlagsSetEffort(t *testing.T) {
 		t.Fatalf("no flags changed, ops %+v", ops)
 	}
 }
+
+// A message sent while Pi works is recorded inside the running turn: the
+// turn and its running tool carry on and finish normally.
+func TestQueuedMessageJoinsRunningTurn(t *testing.T) {
+	all := lines(t)
+	queued := `{"type":"message","id":"a0000040","parentId":"a0000004","timestamp":"2026-11-06T14:00:03.200Z","message":{"role":"user","content":"Also run the linter","timestamp":1794146403200}}`
+	seq := append([]string{}, all[:4]...)
+	seq = append(seq, queued)
+	seq = append(seq, all[4:9]...) // toolResult, the edit/bash reply, their results, the final reply
+	seq = append(seq, all[9])
+	m := New("pi.session", harness.Env{Cwd: "/Users/user/proj"})
+	items, _ := replay(t, m, seq)
+	if tool := items["call_1"].Tool; tool.State != harness.StateOK || tool.Output == "" {
+		t.Fatalf("read %+v", tool)
+	}
+	if turn := items["turn-a0000003"].Turn; turn.State != harness.StateOK {
+		t.Fatalf("turn %+v", turn)
+	}
+	if _, ok := items["turn-a0000040"]; ok {
+		t.Fatal("queued message opened its own turn")
+	}
+	if u := items["a0000040"]; u.User == nil || u.TurnID != "turn-a0000003" {
+		t.Fatalf("queued message %+v", u)
+	}
+	if m.State()["working"] != "false" {
+		t.Fatal("still working")
+	}
+}
