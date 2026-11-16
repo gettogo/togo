@@ -1,6 +1,10 @@
 package local
 
-import "github.com/gettogo/togo/helper/internal/wire"
+import (
+	"context"
+
+	"github.com/gettogo/togo/helper/internal/wire"
+)
 
 // closeAgentPrompts closes the session's pending prompt approvals as
 // answered at the desk: the agent moved on, so the user answered there.
@@ -14,6 +18,19 @@ func (h *Handlers) closeAgentPrompts(id string) {
 			h.Approvals.CloseDesk(a.RequestID)
 		}
 	}
+}
+
+// closeAnsweredPrompts runs when a tool finished. Another tool of the same
+// turn may still be waiting at its permission prompt, so a store that can
+// read the screen keeps an approval whose prompt is still shown.
+func (h *Handlers) closeAnsweredPrompts(ctx context.Context, id string) {
+	if c, ok := h.Approvals.(interface {
+		CloseAnswered(ctx context.Context, sessionID string)
+	}); ok {
+		c.CloseAnswered(ctx, id)
+		return
+	}
+	h.closeAgentPrompts(id)
 }
 
 // setTurn records whether id has a turn under way and returns whether it

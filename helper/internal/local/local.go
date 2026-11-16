@@ -219,7 +219,7 @@ func (h *Handlers) hook(ctx context.Context, raw json.RawMessage) (any, error) {
 		}
 		h.Hub.SetStatus(id, statusWorking, act)
 	case EventToolDone:
-		h.closeAgentPrompts(id)
+		h.closeAnsweredPrompts(ctx, id)
 		h.Hub.SetStatus(id, statusWorking, nil)
 	case EventPermission:
 		if !h.askingQuestion(id) {
