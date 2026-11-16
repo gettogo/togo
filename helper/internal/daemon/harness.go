@@ -39,8 +39,12 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		// Marked first, so the exit the killed run reports at once is not
 		// taken for the session ending (it went "ended" and refused sends).
 		Relaunch: func(ctx context.Context, id string, argv []string) error {
-			c.Hub.Relaunched(id)
-			return svc.RelaunchWith(ctx, id, argv)
+			undo := c.Hub.Relaunched(id)
+			err := svc.RelaunchWith(ctx, id, argv)
+			if err != nil {
+				undo()
+			}
+			return err
 		},
 		Marker:    &anchor.Marker{Home: o.Home, Pane: pane},
 		Approvals: c.Approvals,
