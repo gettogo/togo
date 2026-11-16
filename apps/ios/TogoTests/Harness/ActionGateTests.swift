@@ -31,6 +31,19 @@ import TogoKit
         #expect(runs == [["id": .string("sonnet")], ["id": .string("opus")]])
     }
 
+    @Test func cancellingAChangeCompletesWithoutApplyingIt() async throws {
+        var runs = 0
+        var results: [HarnessActionResult?] = []
+        let context = context(working: true, runs: { _, _ in runs += 1 })
+        let actions = PrimitiveActions()
+        await actions.change(modelChange("Sonnet"), context: context) { results.append($0) }
+        let request = try #require(actions.asking)
+        request.cancel?()
+        #expect(results.count == 1)
+        #expect(results.first.flatMap { $0 } == nil)
+        #expect(runs == 0)
+    }
+
     @Test func aRelaunchWhileWorkingAsksWithAfterThisReply() {
         let decision = ActionGate.decide(confirm: relaunch.text, effect: .relaunch, working: true, agent: "Auggie", previous: "Opus")
         guard case .confirm(let dialog) = decision else {

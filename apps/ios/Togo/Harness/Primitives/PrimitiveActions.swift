@@ -158,7 +158,8 @@ struct GatedChange {
             asking = ActionGateRequest(
                 dialog: dialog,
                 run: { [weak self] in done(await self?.apply(change, undo: nil, context: context)) },
-                afterReply: Self.afterReply(change, context: context, done: done)
+                afterReply: Self.afterReply(change, context: context, done: done),
+                cancel: { done(nil) }
             )
         }
     }
