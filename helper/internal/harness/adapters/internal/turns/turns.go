@@ -30,7 +30,9 @@ type Builder struct {
 }
 
 // New returns an empty builder.
-func New() *Builder { return &Builder{tools: map[string]harness.Item{}, ended: map[string]harness.Item{}} }
+func New() *Builder {
+	return &Builder{tools: map[string]harness.Item{}, ended: map[string]harness.Item{}}
+}
 
 // Reset forgets the open turn (another session's history follows).
 func (b *Builder) Reset() {

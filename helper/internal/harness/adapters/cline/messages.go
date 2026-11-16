@@ -314,6 +314,7 @@ func (m *messages) render(msgs []message) []harness.Item {
 	open := false
 	tools := map[string]int{} // call id -> index in items
 	asks := map[string]int{}  // ask_question call id -> index in items
+	var latest time.Time      // the newest message of the open turn
 	closeTurn := func(state string, at time.Time) {
 		if !open {
 			return
@@ -347,6 +348,9 @@ func (m *messages) render(msgs []message) []harness.Item {
 			id = "cline-" + strconv.Itoa(n)
 		}
 		bs := blocks(msg.Content)
+		if open && at.After(latest) {
+			latest = at
+		}
 		switch msg.Role {
 		case "user":
 			var text []string
@@ -390,6 +394,7 @@ func (m *messages) render(msgs []message) []harness.Item {
 				continue
 			}
 			closeTurn(harness.StateOK, at)
+			latest = at
 			tid := id + ".turn"
 			turn = harness.Item{ID: tid, TurnID: tid, Kind: harness.KindTurn, At: at,
 				Turn: &harness.TurnBody{State: harness.StateRunning, Started: at}}
@@ -458,7 +463,14 @@ func (m *messages) render(msgs []message) []harness.Item {
 	}
 	asking := len(asks) > 0
 	if open {
-		if at, ok := m.idleAt[turn.ID]; ok && !asking {
+		at, idle := m.idleAt[turn.ID]
+		if idle && latest.After(at) {
+			// The turn went on after the pane was quiet (a permission
+			// prompt, a long tool): the idle close no longer holds.
+			delete(m.idleAt, turn.ID)
+			idle = false
+		}
+		if idle && !asking {
 			closeTurn(harness.StateOK, at)
 		} else {
 			items = append(items, turn)

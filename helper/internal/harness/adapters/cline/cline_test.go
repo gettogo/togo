@@ -206,3 +206,33 @@ func TestErrorTextReasons(t *testing.T) {
 		}
 	}
 }
+
+// The pane goes quiet while Cline waits for a permission or runs a long
+// tool, and the turn closes. The turn goes on: what Cline writes next must
+// not be closed again at the old idle time.
+func TestMessagesTurnGoesOnAfterAnIdleClose(t *testing.T) {
+	h, doc := home(t)
+	var d map[string]any
+	_ = json.Unmarshal(doc, &d)
+	all := d["messages"].([]any)
+	m := newMessages(env(h, "2026-11-08T03:37:52Z"))
+	d["messages"] = all[:2]
+	cut, _ := json.Marshal(d)
+	m.Map(harness.Record{Data: cut})
+	idle := time.UnixMilli(1794109081821)
+	if closed := m.CloseIdle(idle); len(closed) == 0 {
+		t.Fatal("the idle pane closed nothing")
+	}
+	d["messages"] = all[:3] // the tool result arrives after the idle time
+	cut, _ = json.Marshal(d)
+	items, _ := m.Map(harness.Record{Data: cut})
+	var turn *harness.TurnBody
+	for _, it := range items {
+		if it.Kind == harness.KindTurn {
+			turn = it.Turn
+		}
+	}
+	if turn == nil || turn.State != harness.StateRunning || turn.Ended != nil {
+		t.Fatalf("the turn stayed closed: %+v", turn)
+	}
+}
