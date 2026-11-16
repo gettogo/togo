@@ -51,6 +51,10 @@ type PushPlaintext struct {
 	Active    *int         `json:"active,omitempty"`
 	Reminder  bool         `json:"reminder,omitempty"`
 	AllowText bool         `json:"allowText,omitempty"`
+	// Expires is when a needs_you request stops taking answers, in Unix
+	// seconds as the helper knew it when it sealed the push. The helper
+	// may keep a request open longer, never shorter.
+	Expires int64 `json:"expires,omitempty"`
 }
 
 // MarshalJSON writes options as [] for needs_you even when there are none,

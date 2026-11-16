@@ -36,6 +36,9 @@ const (
 	CapHostInfo  = "hostinfo.v1"
 	// CapDoneSilent: push.pair takes doneSilent.
 	CapDoneSilent = "donesilent.v1"
+	// CapExpiry: a needs_you push and the Live Activity context say when
+	// the request stops taking answers.
+	CapExpiry = "expiry.v1"
 )
 
 // App-facing methods.

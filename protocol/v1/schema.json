@@ -3812,6 +3812,11 @@
           "description": "Optional, needs_you only: true when the approval takes a typed answer as well as its options. Absent means false.",
           "type": "boolean"
         },
+        "expires": {
+          "description": "Optional, needs_you only, from helpers advertising expiry.v1: Unix time in seconds when the request stops taking answers, as the helper knew it when it sealed the push. The helper may keep a request open longer, never shorter. Absent from older helpers: the request lives 600 seconds from ts.",
+          "type": "integer",
+          "minimum": 1
+        },
         "sessionName": {
           "description": "Optional: the session's name, the title of its notifications.",
           "type": "string",
@@ -3906,7 +3911,7 @@
         },
         {
           "if": { "properties": { "kind": { "const": "needs_you" } } },
-          "else": { "properties": { "reminder": false, "allowText": false } }
+          "else": { "properties": { "reminder": false, "allowText": false, "expires": false } }
         }
       ]
     },

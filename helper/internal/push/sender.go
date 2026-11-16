@@ -255,6 +255,9 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 			p.Body = detect.CleanLine(detect.DropKeyHints(*a.Detail))
 		}
 		p.RequestID = a.RequestID
+		if a.ExpiresAt != nil {
+			p.Expires = a.ExpiresAt.Unix()
+		}
 		p.Options = a.Options
 		p.Subject = a.Subject
 		if s := a.Subject; s != nil && s.Kind == wire.SubjectFile && s.Validate() == nil {

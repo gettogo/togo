@@ -263,7 +263,11 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 	if st.Status == wire.LevelNeedsYou && st.Since > 0 {
 		// The buttons go with the answer window: past it the helper refuses the answer,
 		// and an asleep Mac sends no update to say so.
-		stale = min(stale, st.Since+int64(approval.DefaultTTL/time.Second))
+		until := st.Since + int64(approval.DefaultTTL/time.Second)
+		if st.context.Expires > 0 {
+			until = st.context.Expires
+		}
+		stale = min(stale, until)
 	}
 	cs := mask(st, d)
 	cs.Ctx = s.sealContext(d, st.context)
