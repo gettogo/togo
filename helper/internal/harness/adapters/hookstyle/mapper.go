@@ -184,6 +184,12 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			return m.notice(at, harness.NoticeResumed, "info", "Resumed an earlier conversation"), nil
 		}
 	case UserPromptSubmit:
+		// A prompt while a turn runs (a steer or a queued message): the
+		// running turn and its tools end here, else they spin for good.
+		var closed []harness.Item
+		if m.turn != "" {
+			closed = m.end(payload{}, at, draw, harness.StateInterrupted)
+		}
 		m.begin(at)
 		m.skipReplies()
 		if !draw {
@@ -192,7 +198,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		noteDrawn(m.env.SessionID, m.turn, m.started)
 		u := harness.Item{ID: m.turn + ":user", TurnID: m.turn, Kind: harness.KindUser, At: at,
 			User: &harness.UserBody{Text: Clip(p.Prompt), Source: "unknown"}}
-		return []harness.Item{u, m.turnItem(harness.StateRunning, nil)}, nil
+		return append(closed, u, m.turnItem(harness.StateRunning, nil)), nil
 	case PreToolUse:
 		if m.turn == "" {
 			m.begin(at)
