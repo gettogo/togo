@@ -52,7 +52,7 @@ import TogoTerminal
         other.sessionID = "s2"
         var done = open
         done.phase = .done(.approved)
-        #expect(PromptKeys.card(for: "s1", in: [done, other, open])?.id == open.id)
+        #expect(PromptKeys.card(for: "s1", hostID: Samples.studio, in: [done, other, open])?.id == open.id)
         #expect(PromptKeys.plan(for: done).isEmpty)
         #expect(PromptKeys.decision(for: PromptKeys.more, card: open) == nil)
     }

@@ -9,9 +9,9 @@ enum PromptKeys {
     static let wordLimit = 3
     static let moreID = "more"
 
-    /// The open request for `sessionID`, if any.
-    static func card(for sessionID: String, in requests: [RequestCard]) -> RequestCard? {
-        requests.first { $0.sessionID == sessionID && $0.phase == .open }
+    /// The open request for this machine and session, if any.
+    static func card(for sessionID: String, hostID: HostID, in requests: [RequestCard]) -> RequestCard? {
+        requests.first { $0.hostID == hostID && $0.sessionID == sessionID && $0.phase == .open }
     }
 
     static func plan(for card: RequestCard?) -> [PromptKey] {

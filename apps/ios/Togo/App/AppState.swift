@@ -208,6 +208,7 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     case editMachine(HostID)
     case newSession(HostID?)
     case signIn(HostID)
+    case requestPrompt(HostID, String)
     /// Adding this device's key to a machine that came from another device.
     case setUpHere(HostID)
     case review(ReviewSubject, ReviewTab)
@@ -220,7 +221,7 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     /// from the keyboard) must not replace it and lose what was typed.
     var isForm: Bool {
         switch self {
-        case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .newSession, .signIn: true
+        case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .newSession, .signIn, .requestPrompt: true
         case .review, .settings: false
         }
     }

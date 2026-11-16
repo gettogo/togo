@@ -287,11 +287,11 @@ import UIKit
             guard let store else { return }
             switch key.kind {
             case .answer:
-                guard let card = PromptKeys.card(for: id.sessionID, in: store.controlCenter.requests),
+                guard let card = PromptKeys.card(for: id.sessionID, hostID: id.hostID, in: store.controlCenter.requests),
                       let decision = PromptKeys.decision(for: key, card: card) else { return }
                 Task { await store.answer(card.id, decision) }
             case .more:
-                // The prompt bar shows the whole request once the terminal lets the keyboard go.
+                guard store.showRequest(for: id) else { return }
                 handle?.keys?.overlay?.press(.hideKeyboard)
             case .stroke(let stroke):
                 handle?.sendKeys([stroke])
@@ -327,7 +327,7 @@ struct TerminalSlot: View {
         input.verticalBar = barVertical
         input.keep = store?.keptKeys.contains(tab) ?? false
         if let store {
-            input.promptKeys = PromptKeys.plan(for: PromptKeys.card(for: tab.sessionID, in: store.controlCenter.requests))
+            input.promptKeys = PromptKeys.plan(for: PromptKeys.card(for: tab.sessionID, hostID: tab.hostID, in: store.controlCenter.requests))
         }
         return input
     }

@@ -26,7 +26,7 @@ struct RootSheet: View {
     @ViewBuilder private var presented: some View {
         switch sheet {
         case .newSession: content
-        case .signIn: content.togoSheet(.prompt)
+        case .signIn, .requestPrompt: content.togoSheet(.prompt)
         case .settings: content.togoSheet(.page)
         default: content.togoSheet(.form)
         }
@@ -47,6 +47,8 @@ struct RootSheet: View {
             AddMachineSheet(store: store, services: onboarding, tutorial: tutorial)
         case .addMachineFilled(let draft):
             AddMachineSheet(flow: AddMachineFlow.filled(draft, store: store, services: onboarding, tutorial: tutorial))
+        case .requestPrompt(let hostID, let requestID):
+            RequestPromptSheet(store: store, hostID: hostID, requestID: requestID).id(sheet)
         case .editMachine(let id):
             if let record = store.services.hostRecord(id) {
                 AddMachineSheet(flow: AddMachineFlow.editing(record, store: store, services: onboarding, tutorial: tutorial))
@@ -87,7 +89,7 @@ private extension AppSheet {
     var changesMachine: Bool {
         switch self {
         case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .signIn: true
-        case .newSession, .review, .settings: false
+        case .newSession, .review, .settings, .requestPrompt: false
         }
     }
 }
