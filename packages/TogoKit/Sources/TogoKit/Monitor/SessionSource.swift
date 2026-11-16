@@ -167,13 +167,16 @@ actor HelperLink {
             presence = .present(version: hello.helper.version)
             capabilities = Set(hello.capabilities)
         } catch HelperError.closed {
-            // SSH is up, so a channel that ends before hello means the helper did not run:
-            // not found (127, or no status), or found but stopped, which is worth retrying.
-            if let status = dialed.channel.exitStatus, status != HelperSourceError.notFound, status != 0 {
+            // Only the shell's explicit not-found status proves absence. No status or a
+            // clean exit can also mean the channel dropped before hello, so retry those.
+            if dialed.channel.exitStatus != HelperSourceError.notFound {
                 await dialed.hangUp()
                 self.client = nil
                 hangUp = nil
-                throw HelperSourceError.didNotStart(host: host, status: status)
+                if let status = dialed.channel.exitStatus, status != 0 {
+                    throw HelperSourceError.didNotStart(host: host, status: status)
+                }
+                throw HelperError.closed
             }
             presence = .missing
         } catch HelperError.rpc(let error) where error.code == RPCErrorCode.unsupportedVersion {
