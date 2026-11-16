@@ -428,9 +428,20 @@ func (e *Engine) terminalAct(ctx context.Context, s *sess, req harness.ActionReq
 			if err := e.menuKeys(ctx, s, "Escape"); err != nil {
 				return harness.ActionResult{}, err
 			}
+			// The same list: its title and its rows. Text the program
+			// prints once the list is gone can read as a list of as many
+			// rows.
 			same := func() bool {
 				after, still := e.readMenu(ctx, s)
-				return still && after.Title == before.Title && len(after.Items) == len(before.Items)
+				if !still || after.Title != before.Title || len(after.Items) != len(before.Items) {
+					return false
+				}
+				for i := range after.Items {
+					if after.Items[i].Label != before.Items[i].Label {
+						return false
+					}
+				}
+				return true
 			}
 			// A list with a search field in it may give its first Escape
 			// to that field. One more, only while the same list is still

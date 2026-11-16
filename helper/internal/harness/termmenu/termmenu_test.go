@@ -500,3 +500,22 @@ func TestRowsReadAsMeant(t *testing.T) {
 		t.Errorf("sessions detail = %q", m.Items[0].Detail)
 	}
 }
+
+// A numbered list whose descriptions wrap in their own column keeps one
+// row per choice, the wrapped lines in the description.
+func TestWrappedDescriptionColumnStaysInTheDescription(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "cc-model-wrapped.ansi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := Read(string(raw))
+	if !ok || len(m.Items) < 5 {
+		t.Fatalf("menu = %+v %v", m.Items, ok)
+	}
+	if m.Items[1].Label != "Opus 5.5" || !strings.Contains(m.Items[1].Detail, "everyday") {
+		t.Errorf("row = %+v", m.Items[1])
+	}
+	if !m.Items[2].Cursor || !strings.HasPrefix(m.Items[2].Label, "Fable 5.2") {
+		t.Errorf("cursor row = %+v", m.Items[2])
+	}
+}

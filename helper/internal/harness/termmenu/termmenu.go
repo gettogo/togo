@@ -479,6 +479,21 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 	described := 0
 	blockStart := true
 	numberedList := false
+	// A list that starts its rows with a mark (✔, ⚠) writes its headings
+	// without one.
+	marked, plain := 0, 0
+	for i := top; i <= bot; i++ {
+		t := strings.TrimSpace(pane(i))
+		if isCursor(t) {
+			t = strings.TrimSpace(string([]rune(t)[1:]))
+		}
+		if f := strings.Fields(t); len(f) > 1 && icon(f[0]) {
+			marked++
+		} else if len(f) > 0 {
+			plain++
+		}
+	}
+	markedRows := marked >= 3 && marked >= 2*plain
 	for i := top; i <= bot; i++ {
 		p := pane(i)
 		indent := lead(p)
@@ -492,13 +507,28 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 		if strings.ContainsAny(t, "╮╭") && strings.Contains(t, "──") {
 			continue
 		}
+		// A scrolling list marks its last row in view with an arrow in
+		// front of the number ("↓ 5.  Name").
+		arrowed := false
+		if f := strings.Fields(t); len(f) > 1 && (f[0] == "↓" || f[0] == "↑") && ordinal.MatchString(f[1]) {
+			t = strings.TrimSpace(strings.TrimPrefix(t, f[0]))
+			arrowed = true
+		}
+		// "… +1 model": how many more there are, not a choice.
+		if strings.HasPrefix(t, "…") && !cur {
+			continue
+		}
 		// In a list that numbers its choices, a line with no number is
 		// the rest of the choice above it, wrapped.
 		if isNum := numbered.MatchString(t) || ordinal.MatchString(strings.Fields(t + " x")[0]); isNum {
 			numberedList = true
-		} else if numberedList && !cur && len(m.Items) > 0 && t != "" && !hintWords.MatchString(t) {
+		} else if numberedList && !cur && indent <= labelCol+1 && len(m.Items) > 0 && t != "" && !hintWords.MatchString(t) {
 			last := &m.Items[len(m.Items)-1]
 			last.Label = strings.TrimSpace(last.Label + " " + t)
+			continue
+		}
+		if f := strings.Fields(t); markedRows && !cur && len(f) > 0 && !icon(f[0]) && len(gap.Split(t, 2)) == 1 && !hintWords.MatchString(t) {
+			group = t
 			continue
 		}
 		// An underlined line over the rows is their heading, wherever it
@@ -555,7 +585,7 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			continue
 		}
 		here := indent
-		if cur {
+		if cur || arrowed {
 			here += 2
 		}
 		if first, rest, ok := strings.Cut(t, " "); ok && icon(first) && strings.TrimSpace(rest) != "" {
