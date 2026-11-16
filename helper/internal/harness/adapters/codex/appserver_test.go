@@ -419,3 +419,19 @@ func TestApprovalWithObjectDecisionStillAsks(t *testing.T) {
 		t.Fatalf("no approval question: %+v", items)
 	}
 }
+
+// Two top-level threads are loaded after /new or /resume at the desk, and
+// the feed joins both in list order. The one the TUI is working on stays
+// the main thread whichever is joined last.
+func TestResumeKeepsTheActiveTopLevelThreadAsMain(t *testing.T) {
+	first := records(t, "appserver-turn.jsonl")[0]
+	idle := string(first.Data)
+	active := strings.Replace(strings.Replace(idle, "019a0000-0000-7000-8000-000000000001", "019a0000-0000-7000-8000-000000000002", 1),
+		`"status": {"type": "idle"}`, `"status": {"type": "active"}`, 1)
+	m := NewAppServer(harness.Env{SessionID: "s_main"})
+	m.Map(harness.Record{At: t0, Data: json.RawMessage(active)})
+	m.Map(harness.Record{At: t0.Add(time.Second), Data: json.RawMessage(idle)})
+	if got := m.State()["harness_session"]; got != "019a0000-0000-7000-8000-000000000002" {
+		t.Fatalf("main thread %q, want the active one", got)
+	}
+}
