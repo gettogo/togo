@@ -33,9 +33,11 @@ type transcript struct {
 	bgTasks    map[string]string             // background task id to its tool call id
 	roles      map[string]string             // subagent type by Agent call id
 	shellAbout map[string]string             // a Bash call's own description, by call id
-	plan       []harness.Row
-	changes    map[string]*harness.FileChange
-	notices    int
+	// retry is the open retry warning of the running turn.
+	retry   *harness.Item
+	plan    []harness.Row
+	changes map[string]*harness.FileChange
+	notices int
 	// workingAt is when the main chain last started or ended a turn,
 	// the stamp of the working state (harness.MergeWorking).
 	workingAt time.Time
@@ -375,6 +377,7 @@ func (t *transcript) assistant(e entry) ([]harness.Item, []harness.Op) {
 	var ops []harness.Op
 	if !e.IsSidechain && m.Model != "<synthetic>" {
 		ops = append(ops, contextOps(m)...)
+		items = append(items, t.retryDone()...)
 	}
 	for _, b := range blocks {
 		switch b.Type {
@@ -448,6 +451,10 @@ func (t *transcript) system(e entry) ([]harness.Item, []harness.Op) {
 			it[0].ID = t.turn.id + ".retry"
 		}
 		it[0].Notice.Reason = reason
+		if t.turn != nil && !t.turn.ended {
+			open := it[0]
+			t.retry = &open
+		}
 		return it, nil
 	}
 	return nil, nil
@@ -460,6 +467,7 @@ func (t *transcript) endTurn(at time.Time) []harness.Item {
 		return nil
 	}
 	tr.ended = true
+	t.retry = nil
 	if tr.state == harness.StateRunning {
 		tr.state = harness.StateOK
 	}
@@ -486,4 +494,18 @@ func (p *textParts) set(key, text string) string {
 		parts = append(parts, p.by[k])
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// retryDone settles the turn's retry warning once a request went through.
+func (t *transcript) retryDone() []harness.Item {
+	if t.retry == nil {
+		return nil
+	}
+	x := *t.retry
+	t.retry = nil
+	n := *x.Notice
+	n.Level, n.Reason = "info", ""
+	n.Text = "The API had an error and the request went through on a retry"
+	x.Notice = &n
+	return []harness.Item{x}
 }

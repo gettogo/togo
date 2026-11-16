@@ -2,6 +2,7 @@ package claude
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -47,5 +48,18 @@ func TestTranscriptReadAgainChangesNothing(t *testing.T) {
 		if !reflect.DeepEqual(p1, p2) {
 			t.Errorf("%s: plan after a second read %v, want %v", name, p2, p1)
 		}
+	}
+}
+
+// A retry warning is for the attempts that failed. Once the request goes
+// through, the turn shows that it recovered, not that it is retrying.
+func TestRetryNoticeSettlesWhenTheRequestSucceeds(t *testing.T) {
+	errs := records(t, "transcript-errors.jsonl")
+	basic := records(t, "transcript-basic.jsonl")
+	m := newTranscript(env())
+	r := mapAll(m, []harness.Record{errs[2], errs[3], basic[6]})
+	retry := r.final["u2.retry"].Notice
+	if retry == nil || retry.Level != "info" || strings.Contains(retry.Text, "retrying") {
+		t.Fatalf("retry after success = %+v", retry)
 	}
 }
