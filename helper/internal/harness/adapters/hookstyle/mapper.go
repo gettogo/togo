@@ -86,13 +86,15 @@ type Mapper struct {
 	// replyFrom is where Options.Replies goes on reading replySession's log.
 	replySession string
 	replyFrom    int64
+	// seenCalls are the tool calls the replies read so far requested.
+	seenCalls map[string]bool
 }
 
 // New returns a mapper for one session.
 func New(env harness.Env, opts Options) *Mapper {
 	m := &Mapper{env: env, opts: opts, state: map[string]string{"working": "false", "idle": "true"},
 		steps: map[string]bool{}, running: map[string][]string{}, tools: map[string]harness.Item{},
-		asks: map[string]harness.Item{}}
+		asks: map[string]harness.Item{}, seenCalls: map[string]bool{}}
 	if env.Cwd != "" {
 		// Sources filter the harness's session lists by $state.cwd.
 		m.state["cwd"] = env.Cwd
@@ -205,7 +207,14 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		m.working(at)
 		call := p.ToolUseID
-		said := m.replies(at, draw, replyWaitTool, func(r Reply) bool { return call != "" && slices.Contains(r.Calls, call) })
+		// Waiting pays only for a call whose message has not been read: a
+		// hook without an id, or a later call of a message already read,
+		// can never match.
+		wait := replyWaitTool
+		if call == "" || m.seenCalls[call] {
+			wait = 0
+		}
+		said := m.replies(at, draw, wait, func(r Reply) bool { return call != "" && slices.Contains(r.Calls, call) })
 		if qs := m.askStart(p, at); len(qs) > 0 {
 			if !draw {
 				return nil, nil
@@ -468,6 +477,7 @@ func (m *Mapper) replies(at time.Time, draw bool, wait time.Duration, want func(
 	}
 	if session != m.replySession {
 		m.replySession, m.replyFrom = session, 0
+		m.seenCalls = map[string]bool{}
 	}
 	var got []Reply
 	deadline := time.Now().Add(wait)
@@ -475,6 +485,11 @@ func (m *Mapper) replies(at time.Time, draw bool, wait time.Duration, want func(
 		more, next := m.opts.Replies(m.env, session, m.replyFrom)
 		m.replyFrom = next
 		got = append(got, more...)
+		for _, r := range more {
+			for _, c := range r.Calls {
+				m.seenCalls[c] = true
+			}
+		}
 		if slices.ContainsFunc(got, want) || !time.Now().Before(deadline) {
 			break
 		}

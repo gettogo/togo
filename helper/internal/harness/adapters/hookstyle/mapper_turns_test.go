@@ -2,6 +2,7 @@ package hookstyle
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
@@ -50,5 +51,43 @@ func TestPromptWhileTurnRunsClosesTheOldTurn(t *testing.T) {
 	}
 	if m.State()["working"] != "true" {
 		t.Fatal("new turn not working")
+	}
+}
+
+// A hook that no reply message can match must not wait for one: Map runs
+// under the session's lock.
+func TestRepliesDoNotWaitForWhatCannotArrive(t *testing.T) {
+	oldTool, oldPoll := replyWaitTool, replyWaitStop
+	replyWaitTool, replyWaitStop = 400*time.Millisecond, 400*time.Millisecond
+	defer func() { replyWaitTool, replyWaitStop = oldTool, oldPoll }()
+	reads := 0
+	m := New(harness.Env{SessionID: "s-wait"}, Options{Name: "copilot.hooks",
+		Replies: func(_ harness.Env, _ string, off int64) ([]Reply, int64) {
+			if off < 0 {
+				return nil, 5
+			}
+			reads++
+			if reads == 1 { // one assistant message requesting two tools
+				return []Reply{{Calls: []string{"call-a", "call-b"}}}, 10
+			}
+			return nil, 10
+		}})
+	hook := func(at int, body string) time.Duration {
+		d, _ := For("copilot")
+		_, norm, err := Normalize(d, "preToolUse", []byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		m.Map(harness.Record{Source: "hooks", At: t0.Add(time.Duration(at) * time.Second), Data: norm})
+		return time.Since(start)
+	}
+	m.Map(harness.Record{At: t0, Data: []byte(`{"hook_event_name":"UserPromptSubmit","session_id":"copilot-session-1","prompt":"hi"}`)})
+	hook(1, `{"session_id":"copilot-session-1","toolName":"bash","toolCallId":"call-a","toolArgs":"{}"}`)
+	if d := hook(2, `{"session_id":"copilot-session-1","toolName":"bash","toolCallId":"call-b","toolArgs":"{}"}`); d > 100*time.Millisecond {
+		t.Errorf("a call of a message already read waited %v", d)
+	}
+	if d := hook(3, `{"session_id":"copilot-session-1","toolName":"bash","toolArgs":"{}"}`); d > 100*time.Millisecond {
+		t.Errorf("a call without an id waited %v", d)
 	}
 }
