@@ -331,8 +331,11 @@ main() {
     # must be the togo Developer ID build, and of the version asked for.
     codesign --verify --strict -R "=$requirement" "$tmp/x/togo" >/dev/null 2>&1 ||
       refuse "the downloaded togo is not signed by the togo developer; nothing was installed."
-    [ "$("$tmp/x/togo" version </dev/null 2>/dev/null || true)" = "togo $version" ] ||
-      refuse "the downloaded togo is not version $version; refusing a mismatched or older release."
+    # `togo version` prints "togo vX.Y.Z (os/arch)"; compare the version field.
+    case "$("$tmp/x/togo" version </dev/null 2>/dev/null || true)" in
+      "togo $version" | "togo $version "*) ;;
+      *) refuse "the downloaded togo is not version $version; refusing a mismatched or older release." ;;
+    esac
   fi
   say "Verified $archive ($how)"
 

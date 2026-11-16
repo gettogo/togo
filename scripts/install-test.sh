@@ -91,7 +91,7 @@ func main() {
 	}
 	switch args {
 	case "version":
-		fmt.Println("togo " + version)
+		fmt.Println("togo " + version + " (" + platform + ")")
 	case "service status":
 		if os.Getenv("TOGO_FAKE_SERVICE") == "installed" {
 			fmt.Println("Installed and running from /fake/togo.plist")
