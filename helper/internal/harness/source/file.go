@@ -185,7 +185,7 @@ func headTail(p, format string) (head, tail []json.RawMessage) {
 	}
 	first := make([]byte, 64<<10)
 	n, _ := io.ReadFull(fh, first)
-	recs := Records(dropPartialLast(first[:n], n == len(first)), globHeadRecords)
+	recs := Records(dropPartialLast(first[:n], n == len(first)), 1<<30)
 	if len(recs) > globHeadRecords {
 		recs = recs[:globHeadRecords]
 	}

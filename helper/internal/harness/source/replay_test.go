@@ -98,3 +98,20 @@ func TestReplayKeepsHeaderWhenCutByBytes(t *testing.T) {
 		t.Fatal("partial line replayed")
 	}
 }
+
+// A listing's head is the first records of the file, header first.
+func TestHeadTailHeadIsTheFirstRecords(t *testing.T) {
+	var b []byte
+	b = append(b, `{"type":"session","id":"abc"}`+"\n"...)
+	for i := 0; i < 30; i++ {
+		b = append(b, `{"type":"message","n":`+strconv.Itoa(i)+"}\n"...)
+	}
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	head, _ := headTail(path, "jsonl")
+	if len(head) != globHeadRecords || string(head[0]) != `{"type":"session","id":"abc"}` {
+		t.Fatalf("head = %s", head)
+	}
+}
