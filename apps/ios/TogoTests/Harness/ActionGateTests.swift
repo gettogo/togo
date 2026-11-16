@@ -16,6 +16,21 @@ import TogoKit
         #expect(ActionGate.decide(confirm: relaunch.text, effect: .relaunch, working: false) == .run)
     }
 
+    @Test func undoSurvivesTheDismissedPickerRunner() async {
+        var runs: [[String: JSONValue]?] = []
+        var saved: SessionUndo?
+        let context = context(working: false, results: ["set_model": .relaunched],
+                              runs: { _, args in runs.append(args) }, notes: { _, undo in saved = undo })
+        var actions: PrimitiveActions? = PrimitiveActions()
+        weak let dismissed = actions
+        await actions?.change(modelChange("Sonnet"), context: context)
+        let undo = saved
+        actions = nil
+        #expect(dismissed == nil)
+        await undo?.run()
+        #expect(runs == [["id": .string("sonnet")], ["id": .string("opus")]])
+    }
+
     @Test func aRelaunchWhileWorkingAsksWithAfterThisReply() {
         let decision = ActionGate.decide(confirm: relaunch.text, effect: .relaunch, working: true, agent: "Auggie", previous: "Opus")
         guard case .confirm(let dialog) = decision else {

@@ -182,12 +182,12 @@ struct GatedChange {
         switch result.result {
         case .relaunched:
             let back = undo.map { previous in
-                SessionUndo(title: PrimitiveCopy.backTo(previous.label)) { [weak self] in
+                SessionUndo(title: PrimitiveCopy.backTo(previous.label)) {
                     var reverse = change
                     reverse.args = previous.args
                     reverse.value = previous.label
                     reverse.previous = nil
-                    _ = await self?.apply(reverse, undo: nil, context: context)
+                    _ = await PrimitiveActions().apply(reverse, undo: nil, context: context)
                 }
             }
             note(PrimitiveCopy.restartedWith(change.value), SessionNote.Echo(value: change.value), back)
