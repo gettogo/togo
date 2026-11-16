@@ -349,6 +349,10 @@ import UIKit
         // A new wake target or route is no reason to reconnect.
         let changed = records.keys.filter { incoming[$0] != nil && incoming[$0]?.withoutLearned != records[$0]?.withoutLearned }
         let rewoken = records.keys.filter { incoming[$0] != nil && incoming[$0]?.wake != records[$0]?.wake && !changed.contains($0) }
+        let relabeled = records.keys.filter { id in
+            guard let next = incoming[id], let prior = records[id], !changed.contains(id) else { return false }
+            return next.profile.name != prior.profile.name || next.symbol != prior.symbol
+        }
         // A removed machine's channel and saved password stay until its helper is told to stop pushing.
         let paired = deps.pairing?.pairedOrPairing ?? []
         // A merged record's machine is still here: its helper keeps this device, and its key stays.
@@ -373,7 +377,7 @@ import UIKit
             onMachineRemoved(id)
         }
         changed.forEach(onMachineChanged)
-        for id in rewoken {
+        for id in Set(rewoken + relabeled) {
             if let snapshot = latest[id], let record = records[id] { publish(snapshot, record: record) }
         }
         settlePendingTerminals()

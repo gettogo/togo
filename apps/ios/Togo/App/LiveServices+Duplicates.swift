@@ -12,6 +12,19 @@ extension LiveServices {
         _ = try await addHost(record)
     }
 
+    func updateHostMetadata(_ id: HostID, change: HostDisplayEdit) async throws -> HostRecord {
+        let name = change.name, symbol = change.symbol
+        if name != nil || symbol != nil {
+            guard await hostStore.update(id, { record in
+                if let name { record.profile.name = name }
+                if let symbol { record.symbol = symbol }
+            }) != nil else { throw HostDisplayEdit.Failure.unavailable }
+        }
+        reconcile(await hostStore.hosts())
+        guard let current = records[id] else { throw LiveServiceError.unknownMachine }
+        return current
+    }
+
     func removeHost(_ id: HostID) async throws {
         await hostStore.remove(id)
         reconcile(await hostStore.hosts())

@@ -267,6 +267,37 @@ import struct TogoPush.Pairing
         }
     }
 
+    @Test func displayEditsDoNotRestartConnectionsOrDropTheirChannels() async throws {
+        let watches = Watches(), helpers = NoHelper()
+        let services = services(watches: watches, helpers: helpers)
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let before = try #require(watches[Samples.studio])
+        let updated = try await services.updateHostMetadata(Samples.studio, change: .init(name: "Renamed", symbol: "laptop"))
+        #expect(updated.profile.name == "Renamed")
+        #expect(services.hostRecord(Samples.studio)?.symbol == "laptop")
+        #expect(watches[Samples.studio] === before)
+        #expect(helpers.dropped.withLock { $0 }.isEmpty)
+    }
+
+    @Test func displayEditsPatchTheLatestRecordWithoutRestoringOldConnectionFields() async throws {
+        let services = services(watches: Watches())
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        _ = await services.hostStore.update(Samples.studio) { record in
+            record.profile.endpoint.host = "new.example.test"
+            record.profile.auth = .key(id: "latest-key")
+            record.helperPath = "/new/togo"
+            record.symbol = "server.rack"
+        }
+        let updated = try await services.updateHostMetadata(Samples.studio, change: .init(name: "Renamed", symbol: nil))
+        #expect(updated.profile.name == "Renamed")
+        #expect(updated.profile.endpoint.host == "new.example.test")
+        #expect(updated.profile.auth == .key(id: "latest-key"))
+        #expect(updated.helperPath == "/new/togo")
+        #expect(updated.symbol == "server.rack")
+    }
+
     @Test func editReconnectsWithTheNewProfile() async throws {
         let watches = Watches()
         let helpers = NoHelper()

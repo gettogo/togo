@@ -172,6 +172,8 @@ enum ConnectPhase: Equatable, Sendable {
 
     /// The saved machine as the form opened, for telling whether anything was changed.
     var originalDraft: MachineDraft?
+    var updateMetadata: (@MainActor (HostDisplayEdit) async throws -> HostRecord)?
+    private var closed = false
 
     /// Whether there is anything to save: always for a new machine, only after an edit for a saved one.
     var hasChanges: Bool { originalDraft.map { $0 != draft } ?? true }
@@ -261,8 +263,8 @@ enum ConnectPhase: Equatable, Sendable {
     /// Shows field errors in place when the form is not ready; otherwise starts the attempt
     /// where it is. The connection step is pushed only when the attempt needs a decision.
     func connect() {
-        showsErrors = true
-        guard draft.isValid, !isWorking else { return }
+        showsErrors = validatesConnection
+        guard !isWorking, !validatesConnection || draft.isValid else { return }
         retry()
     }
 
@@ -286,6 +288,21 @@ enum ConnectPhase: Equatable, Sendable {
     /// sheet cancels it. A machine that connects with a usable helper is saved here.
     func runAttempt() async {
         phase = .connecting
+        if let edit = displayEdit, let updateMetadata {
+            guard !closed, !Task.isCancelled else { return }
+            saving = true
+            defer { saving = false }
+            do {
+                let record = try await updateMetadata(edit)
+                guard !closed, !Task.isCancelled else { return }
+                complete(record)
+            } catch {
+                guard !closed, !Task.isCancelled else { return }
+                phase = .failed(String(localized: "onboard.save.failed", defaultValue: "Couldn't save \(machineName). Try again."))
+                showConnect()
+            }
+            return
+        }
         var deviceKey: KeyInfo?
         if draft.auth == .deviceKey {
             do {
@@ -372,6 +389,7 @@ enum ConnectPhase: Equatable, Sendable {
 
     /// Leaving the flow answers a pending question with no.
     func cancel() {
+        closed = true
         answerTrust(false)
     }
 

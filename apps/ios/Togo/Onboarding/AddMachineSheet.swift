@@ -63,7 +63,8 @@ struct AddMachineSheet: View {
         MachineForm(
             draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
             onImportKey: { text, label, source in Task { await flow.importKey(text, label: label, source: source) } },
-            isEditing: flow.isEditing, isWorking: flow.isWorking, canSave: flow.hasChanges, onConnect: flow.connect
+            isEditing: flow.isEditing, isWorking: flow.isWorking, canSave: flow.hasChanges,
+            validatesConnection: flow.validatesConnection, onConnect: flow.connect
         )
     }
 
@@ -215,7 +216,8 @@ struct ConnectPhaseView: View {
     @ViewBuilder private var content: some View {
         switch phase {
         case .connecting:
-            PawWalk(String(localized: "onboard.connect.connecting", defaultValue: "Connecting to \(machine)"))
+            PawWalk(saving ? String(localized: "onboard.save.saving", defaultValue: "Saving changes")
+                : String(localized: "onboard.connect.connecting", defaultValue: "Connecting to \(machine)"))
         case .hostKeyNew(let prompt):
             HostKeyCheckView(machine: machine, kind: .new(prompt), onTrust: actions.trust, onCancel: actions.cancel, onForget: {})
         case .hostKeyChanged(let change):

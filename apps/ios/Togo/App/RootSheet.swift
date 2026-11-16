@@ -115,6 +115,7 @@ extension AddMachineFlow {
             store.sheet = nil
         }
         flow.originalDraft = flow.draft
+        flow.updateMetadata = { try await store.services.updateHostMetadata(record.id, change: $0) }
         return flow
     }
 

@@ -14,6 +14,7 @@ struct MachineForm: View {
     var isWorking = false
     /// False while editing a saved machine with no changes, so ✓ and ✕ never do the same thing.
     var canSave = true
+    var validatesConnection = true
     let onConnect: () -> Void
 
     @FocusState private var focus: MachineDraft.Field?
@@ -272,6 +273,7 @@ struct MachineForm: View {
     /// A form with a problem off screen would look like Connect did nothing, so the first
     /// field with an error scrolls into view (a synced machine's key may not be on this device).
     private func revealFirstError(_ proxy: ScrollViewProxy) {
+        guard validatesConnection else { return }
         let errors = draft.errors
         guard let first = MachineDraft.Field.allCases.first(where: { errors[$0] != nil }) else { return }
         if first == .jump { jumpShown = true }

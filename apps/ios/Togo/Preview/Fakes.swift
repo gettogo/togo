@@ -157,6 +157,16 @@ import UIKit
         calls.append(.saveHost(record.id))
     }
 
+    var beforeMetadataSave: (@MainActor () async throws -> Void)?
+    func updateHostMetadata(_ id: HostID, change: HostDisplayEdit) async throws -> HostRecord {
+        try await beforeMetadataSave?()
+        guard var record = hostRecord(id) else { throw LiveServiceError.unknownMachine }
+        if let name = change.name { record.profile.name = name }
+        if let symbol = change.symbol { record.symbol = symbol }
+        try await saveHost(record)
+        return record
+    }
+
     func removeHost(_ id: HostID) async throws {
         try fail()
     }
