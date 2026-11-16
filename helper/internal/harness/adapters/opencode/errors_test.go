@@ -158,3 +158,18 @@ func TestV1ErrorOnce(t *testing.T) {
 		t.Fatalf("turn %+v", got["msg_u"])
 	}
 }
+
+// A subagent's failed step and failed execution bring the same error: one
+// notice in its conversation, as for the main session.
+func TestV2ChildModelNotFoundIsOneNotice(t *testing.T) {
+	m := NewEvents2(harness.Env{SessionID: "s", Cwd: "/w/proj"})
+	const child = "ses_e46998291ffeBwmaFvvIT50kUC"
+	pre := []harness.Record{
+		{Data: json.RawMessage(`{"type":"session.created","data":{"sessionID":"ses_main"}}`)},
+		{Data: json.RawMessage(`{"type":"session.created","data":{"sessionID":"` + child + `","parentID":"ses_main","title":"Explore"}}`)},
+	}
+	got := run(m, append(pre, jsonl(t, "testdata/v2/model-not-found.jsonl")...)).last()
+	if ns := notices(got); len(ns) != 1 {
+		t.Fatalf("notices %+v", ns)
+	}
+}

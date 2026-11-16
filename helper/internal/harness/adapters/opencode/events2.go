@@ -213,10 +213,10 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "session.execution.succeeded":
 		return e.ended(d.SessionID, harness.StateOK, at)
 	case "session.execution.failed":
+		t := e.turnFor(d.SessionID) // before ended forgets a child's turn
 		items, ops := e.ended(d.SessionID, harness.StateFailed, at)
 		if d.Error != nil && e.follows(d.SessionID) {
 			// step.failed brought the same error: one notice per turn.
-			t := e.turnFor(d.SessionID)
 			items = append(items, e.noticeBody(failedID(t, ev.ID), t, d.SessionID, at, errorBody(d.Error.Type, d.Error.Status, d.Error.Message)))
 		}
 		return items, ops
