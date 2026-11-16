@@ -60,7 +60,9 @@ struct PendingImage: Identifiable, Equatable {
     typealias Upload = @MainActor (_ name: String, _ data: Data) async throws -> String
     typealias Load = @MainActor () async throws -> Data?
 
-    let support: ImageSupport
+    private let initialSupport: ImageSupport
+    private let supportNow: (@MainActor () -> ImageSupport)?
+    var support: ImageSupport { supportNow?() ?? initialSupport }
     private(set) var phase: Phase
     private let upload: Upload
     private let paste: @MainActor (String) -> Void
@@ -74,9 +76,11 @@ struct PendingImage: Identifiable, Equatable {
 
     init(
         support: ImageSupport, phase: Phase = .idle, upload: @escaping Upload,
-        paste: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init
+        paste: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init,
+        supportNow: (@MainActor () -> ImageSupport)? = nil
     ) {
-        self.support = support
+        initialSupport = support
+        self.supportNow = supportNow
         self.phase = phase
         self.upload = upload
         self.paste = paste

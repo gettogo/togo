@@ -31,6 +31,7 @@ enum ComposeCopy {
 /// Enter, so the session's own prompt holds the words until the user sends them there.
 @Observable @MainActor final class TerminalInputModel {
     let images: ImagePasteFlow
+    private(set) var retired = false
     /// Nil when there is nothing to listen with.
     private(set) var dictation: DictationModel?
     @ObservationIgnored private let paste: @MainActor (String) -> Void
@@ -51,11 +52,26 @@ enum ComposeCopy {
     /// words carry (a recogniser's "new line", a trailing return) becomes a space, and
     /// words that are only space type nothing.
     func type(_ words: String) {
+        guard !retired else { return }
         let clean = String(PasteText.sanitize(words).map { $0.isNewline ? " " : $0 })
             .trimmingCharacters(in: .whitespaces)
         guard !clean.isEmpty else { return }
         paste(clean)
     }
+
+    /// A closed tab can no longer receive a late image or dictation result.
+    func retire() {
+        retired = true
+        images.dismiss()
+        dictation?.relinquish()
+    }
+
+    static func prune(_ tools: inout [TabID: TerminalInputModel], keeping tabs: Set<TabID>) {
+        for id in tools.keys where !tabs.contains(id) {
+            tools.removeValue(forKey: id)?.retire()
+        }
+    }
+
 }
 
 /// What a terminal's dictation speaks with.
