@@ -14,6 +14,7 @@ import UIKit
 
     struct Item: Identifiable, Equatable {
         enum State: Equatable {
+            case loading
             case uploading
             /// On the machine at `path`.
             case ready(path: String)
@@ -21,7 +22,7 @@ import UIKit
         }
 
         let id: UUID
-        let preview: UIImage
+        var preview: UIImage?
         var state: State
         /// The bytes as sent, kept so Try again does not shrink twice.
         var encoded: ImageShrinker.Encoded?
@@ -39,6 +40,7 @@ import UIKit
 
     typealias Upload = @MainActor (_ name: String, _ data: Data) async throws -> String
     typealias Prepare = @MainActor (Data) async -> Prepared?
+    typealias Load = @MainActor () async throws -> Data?
 
     private(set) var items: [Item] = []
     /// One quiet line about a picture that could not be read or did not fit.
@@ -47,6 +49,11 @@ import UIKit
     @ObservationIgnored private let upload: Upload?
     @ObservationIgnored private let prepare: Prepare
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private var sources: [UUID: Load] = [:]
+    @ObservationIgnored private var tasks: [UUID: Task<Void, Never>] = [:]
+    /// Two lanes bound photo acquisition, decoding and upload, even across clear/re-add.
+    @ObservationIgnored private var tails: [Task<Void, Never>?] = [nil, nil]
+    @ObservationIgnored private var nextLane = 0
 
     init(upload: Upload?, prepare: @escaping Prepare = ComposerAttachments.shrink, now: @escaping () -> Date = Date.init) {
         self.upload = upload
@@ -61,8 +68,8 @@ import UIKit
     var isFull: Bool { items.count >= Self.limit }
     var room: Int { max(0, Self.limit - items.count) }
 
-    /// Still uploading, so Send waits.
-    var isUploading: Bool { items.contains { $0.state == .uploading } }
+    /// Selected media is still loading, preparing or uploading, so Send waits.
+    var isUploading: Bool { items.contains { $0.state == .loading || $0.state == .uploading } }
 
     /// Every picture is on the machine and none failed: the prompt can go.
     var isReady: Bool { !items.isEmpty && items.allSatisfy { $0.path != nil } }
@@ -72,26 +79,76 @@ import UIKit
 
     /// Adds pictures in order, as many as there is room for, and starts their uploads.
     func add(_ images: [Data]) async {
+        guard !Task.isCancelled else { return }
+        let sources: [Load] = images.map { data in { data } }
+        await enqueue(sources).value
+    }
+
+    /// Reserves the chips before returning to the UI. Send cannot slip between selection
+    /// and the first asynchronous photo-library read.
+    @discardableResult
+    func enqueue(_ loads: [Load]) -> Task<Void, Never> {
         notice = nil
-        let take = images.prefix(room)
-        if take.count < images.count { notice = ComposerCopy.attachLimit(Self.limit) }
-        var uploads: [Task<Void, Never>] = []
-        // Order is fixed as each is prepared, before any upload ends.
-        for data in take {
-            guard let prepared = await prepare(data) else {
-                notice = ComposerCopy.attachUnreadable
-                continue
-            }
+        guard available else { refuse(); return Task {} }
+        let take = loads.prefix(room)
+        if take.count < loads.count { notice = ComposerCopy.attachLimit(Self.limit) }
+        var work: [Task<Void, Never>] = []
+        for load in take {
             let id = UUID()
-            let item = Item(id: id, preview: prepared.preview, state: .uploading, encoded: prepared.encoded)
+            sources[id] = load
+            let item = Item(id: id, preview: nil, state: .loading, encoded: nil)
             // motion: cause → effect — the picked picture's chip grows in place as the glass makes room.
             withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { items.append(item) }
-            uploads.append(Task { await self.deliver(id) })
+            work.append(start(id))
         }
-        for upload in uploads { await upload.value }
+        return Task { for task in work { await task.value } }
+    }
+
+    private func start(_ id: UUID) -> Task<Void, Never> {
+        let lane = nextLane
+        nextLane = (lane + 1) % tails.count
+        let previous = tails[lane]
+        let task = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            defer { self.tasks[id] = nil }
+            guard !Task.isCancelled, self.items.contains(where: { $0.id == id }) else { return }
+            await self.process(id)
+        }
+        tasks[id] = task
+        tails[lane] = task
+        return task
+    }
+
+    private func process(_ id: UUID) async {
+        if items.first(where: { $0.id == id })?.encoded != nil {
+            await deliver(id)
+            return
+        }
+        guard let load = sources[id] else { return }
+        let data = try? await load()
+        guard !Task.isCancelled, let at = items.firstIndex(where: { $0.id == id }) else { return }
+        guard let data else {
+            setState(.failed(ComposeCopy.loadFailed), at: at)
+            return
+        }
+        let prepared = await prepare(data)
+        guard !Task.isCancelled, let at = items.firstIndex(where: { $0.id == id }) else { return }
+        guard let prepared else {
+            notice = ComposerCopy.attachUnreadable
+            setState(.failed(ComposerCopy.attachUnreadable), at: at)
+            return
+        }
+        items[at].preview = prepared.preview
+        items[at].encoded = prepared.encoded
+        sources[id] = nil
+        setState(.uploading, at: at)
+        await deliver(id)
     }
 
     func remove(_ id: UUID) {
+        tasks.removeValue(forKey: id)?.cancel()
+        sources[id] = nil
         // motion: preventing a jump — the removed chip conceals and the strip closes its room.
         withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { items.removeAll { $0.id == id } }
     }
@@ -106,8 +163,8 @@ import UIKit
 
     func retry(_ id: UUID) async {
         guard let at = items.firstIndex(where: { $0.id == id }), case .failed = items[at].state else { return }
-        setState(.uploading, at: at)
-        await deliver(id)
+        setState(items[at].encoded == nil ? .loading : .uploading, at: at)
+        await start(id).value
     }
 
     /// A pasted file that is not a picture: uploaded as it is, its machine path returned for
@@ -137,6 +194,9 @@ import UIKit
 
     /// The prompt went: the pictures are part of it now.
     func clear() {
+        for task in tasks.values { task.cancel() }
+        tasks = [:]
+        sources = [:]
         items = []
         notice = nil
     }
@@ -147,12 +207,12 @@ import UIKit
         guard let upload, let item = items.first(where: { $0.id == id }), let encoded = item.encoded else { return }
         do {
             let path = try await upload(fileName(encoded.fileExtension, index: items.firstIndex { $0.id == id } ?? 0), encoded.data)
-            guard let at = items.firstIndex(where: { $0.id == id }) else { return }
+            guard !Task.isCancelled, let at = items.firstIndex(where: { $0.id == id }) else { return }
             setState(.ready(path: path), at: at)
             // The chat shows the sent picture from here, without fetching it back.
-            ChatImageLoader.shared.put(item.preview, path: path)
+            if let preview = item.preview { ChatImageLoader.shared.put(preview, path: path) }
         } catch {
-            guard let at = items.firstIndex(where: { $0.id == id }) else { return }
+            guard !Task.isCancelled, let at = items.firstIndex(where: { $0.id == id }) else { return }
             setState(.failed(ServiceErrors.message(error)), at: at)
         }
     }

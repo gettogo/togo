@@ -88,6 +88,104 @@ import UIKit
         return .init(preview: UIImage(), encoded: .init(data: data, fileExtension: "jpg"))
     }
 
+    @Test func preparationBlocksTheActualComposerSend() async throws {
+        var waiting: CheckedContinuation<Void, Never>?
+        let attachments = ComposerAttachments(upload: { name, _ in "/u/\(name)" }, prepare: { data in
+            await withCheckedContinuation { waiting = $0 }
+            return await prepared(data)
+        })
+        let model = CommandLineModel(store: .preview(), attachments: attachments)
+        model.draft = "include this picture"
+        let add = Task { await attachments.add([Data("a".utf8)]) }
+        for _ in 0..<1000 where waiting == nil { try? await Task.sleep(for: .milliseconds(1)) }
+        let release = try #require(waiting)
+        #expect(!model.canSend, "Preparing a selected image must hold Send even before upload starts")
+        #expect(attachments.isUploading)
+        release.resume()
+        await add.value
+        #expect(model.canSend)
+        #expect(attachments.paths.count == 1)
+    }
+
+    @Test func anUnreadableSelectionRemainsVisibleForRetryOrRemoval() async {
+        let attachments = ComposerAttachments(upload: { name, _ in "/u/\(name)" }, prepare: prepared)
+        await attachments.add([Data("bad".utf8)])
+        #expect(attachments.items.count == 1)
+        #expect(!attachments.isReady)
+        if case .failed? = attachments.items.first?.state {} else { Issue.record("The selected picture vanished") }
+    }
+
+    @Test func librarySelectionReservesItsChipBeforeReturningToTheUI() async throws {
+        var waiting: CheckedContinuation<Data?, Never>?
+        let attachments = ComposerAttachments(upload: { name, _ in "/u/\(name)" }, prepare: prepared)
+        let model = CommandLineModel(store: .preview(), attachments: attachments)
+        model.draft = "include this photo"
+        let work = attachments.enqueue([{ await withCheckedContinuation { waiting = $0 } }])
+        #expect(attachments.items.count == 1 && attachments.isUploading)
+        #expect(!model.canSend)
+        for _ in 0..<1000 where waiting == nil { try? await Task.sleep(for: .milliseconds(1)) }
+        let release = try #require(waiting)
+        release.resume(returning: Data("a".utf8))
+        await work.value
+        #expect(attachments.isReady && model.canSend)
+    }
+
+    @Test func failedLibraryLoadCanBeRetriedOnTheSameChip() async throws {
+        var calls = 0
+        let attachments = ComposerAttachments(upload: { name, _ in "/u/\(name)" }, prepare: prepared)
+        await attachments.enqueue([{
+            calls += 1
+            if calls == 1 { throw CocoaError(.fileReadUnknown) }
+            return Data("a".utf8)
+        }]).value
+        let id = try #require(attachments.items.first?.id)
+        #expect(attachments.items.count == 1 && !attachments.isReady)
+        if case .failed(let message) = attachments.items[0].state { #expect(message == ComposeCopy.loadFailed) }
+        else { Issue.record("Failed photo lost its retry state") }
+        await attachments.retry(id)
+        #expect(calls == 2 && attachments.isReady)
+        #expect(attachments.items.first?.id == id)
+    }
+
+    @Test(arguments: [true, false])
+    func removedLibraryLoadCannotRestoreAnAttachment(_ clearAll: Bool) async throws {
+        var waiting: CheckedContinuation<Data?, Never>?
+        var uploads = 0
+        let attachments = ComposerAttachments(upload: { name, _ in uploads += 1; return "/u/\(name)" }, prepare: prepared)
+        let work = attachments.enqueue([{ await withCheckedContinuation { waiting = $0 } }])
+        let id = try #require(attachments.items.first?.id)
+        for _ in 0..<1000 where waiting == nil { try? await Task.sleep(for: .milliseconds(1)) }
+        let release = try #require(waiting)
+        if clearAll { attachments.clear() } else { attachments.remove(id) }
+        release.resume(returning: Data("a".utf8))
+        await work.value
+        #expect(attachments.isEmpty && uploads == 0)
+        #expect(!attachments.isUploading)
+    }
+
+    @Test func photoWorkIsBoundedWhileSelectionOrderStaysStable() async {
+        var waiting: [CheckedContinuation<Void, Never>] = []
+        var opened = false
+        var active = 0
+        var maximum = 0
+        let attachments = ComposerAttachments(upload: { name, _ in "/u/\(name)" }, prepare: prepared)
+        let loads: [ComposerAttachments.Load] = (0..<10).map { n in {
+            active += 1
+            maximum = max(maximum, active)
+            defer { active -= 1 }
+            if !opened { await withCheckedContinuation { waiting.append($0) } }
+            return Data("photo-\(n)".utf8)
+        } }
+        let work = attachments.enqueue(loads)
+        for _ in 0..<1000 where waiting.count < 2 { try? await Task.sleep(for: .milliseconds(1)) }
+        #expect(waiting.count == 2 && active == 2)
+        opened = true
+        for release in waiting { release.resume() }
+        await work.value
+        #expect(maximum == 2 && attachments.items.count == 10 && attachments.isReady)
+        #expect(attachments.items.map { String(decoding: $0.encoded!.data, as: UTF8.self) } == (0..<10).map { "photo-\($0)" })
+    }
+
     @Test func picturesUploadInOrderAndSendTheirPaths() async {
         @MainActor final class Log { var names: [String] = [] }
         let log = Log()
@@ -107,7 +205,7 @@ import UIKit
     @Test func unreadablePicturesAndOverflowSaySoAndKeepTheRest() async {
         let attachments = ComposerAttachments(upload: { name, _ in "/u/\(name)" }, prepare: prepared)
         await attachments.add([Data("bad".utf8), Data("ok".utf8)])
-        #expect(attachments.items.count == 1)
+        #expect(attachments.items.count == 2, "The unreadable selection keeps its retry/remove chip")
         #expect(attachments.notice == ComposerCopy.attachUnreadable)
         await attachments.add((0..<12).map { Data("\($0)".utf8) })
         #expect(attachments.items.count == ComposerAttachments.limit)

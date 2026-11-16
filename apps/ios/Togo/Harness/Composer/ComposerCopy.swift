@@ -87,6 +87,7 @@ enum ComposerCopy {
     static let previewImage = String(localized: "composer.attach.preview", defaultValue: "Preview")
     static let retryImage = String(localized: "composer.attach.retry", defaultValue: "Try Again")
     static let uploading = String(localized: "composer.attach.uploading", defaultValue: "Uploading")
+    static let loadingPhoto = String(localized: "composer.attach.loading", defaultValue: "Loading photo")
     static let uploadFailed = String(localized: "composer.attach.failed", defaultValue: "Not uploaded")
     static let attachUnreadable = String(localized: "composer.attach.unreadable", defaultValue: "That image could not be read.")
     static let attachUnavailable = String(localized: "composer.attach.unavailable",
