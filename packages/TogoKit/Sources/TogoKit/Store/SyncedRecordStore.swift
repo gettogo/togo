@@ -117,6 +117,19 @@ public actor SyncedRecordStore<Value: Codable & Sendable & Equatable> {
         write(Stamped(value: value, updatedAt: nextStamp(for: key), deviceID: deviceID), key: key)
     }
 
+    /// Applies a field edit to the current value without suspending between read and write.
+    /// A deleted or unreadable record is never recreated from an older caller's snapshot.
+    @discardableResult
+    public func update(_ id: String, _ change: @Sendable (inout Value) -> Void) -> Value? {
+        prepare()
+        let key = prefix + id
+        guard var value = read(key, from: local)?.value else { return nil }
+        let original = value
+        change(&value)
+        if value != original { put(id, value) }
+        return value
+    }
+
     public func delete(_ id: String) {
         prepare()
         let key = prefix + id

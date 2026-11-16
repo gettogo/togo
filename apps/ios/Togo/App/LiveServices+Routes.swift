@@ -1,12 +1,10 @@
 import Foundation
-import os
+import Synchronization
 import TogoKit
 
 /// Keeping each machine's routes in step with what its helper reports and with the route
 /// that last connected, and handing them to every connection through the route book.
 extension LiveServices {
-    private static let routeLog = Logger(subsystem: "app.togo", category: "routes")
-
     /// Gives running monitors and terminals the stored routes, so their next reconnect races
     /// them without starting over.
     func shareRoutes(_ all: [HostRecord], removed: [HostID]) {
@@ -41,25 +39,21 @@ extension LiveServices {
         _ id: HostID, reported: [HostRoute]?, last: String?, mismatched: Set<String> = [],
         diagnostics: DiagnosticsRecorder? = nil
     ) async {
-        guard var current = await hostStore.hosts().first(where: { $0.id == id }) else { return }
-        var profile = RoutePlan.learned(current.profile, reported: reported, last: last) ?? current.profile
-        let kept = RoutePlan.droppingMismatched(profile.routes, mismatched)
-        if kept.count != profile.routes.count {
-            if let diagnostics {
-                diagnostics.record(.link, "route_key_mismatch", [
-                    "machine": .machine(diagnostics.log.token(for: id)),
-                    "dropped": .int(profile.routes.count - kept.count),
-                ])
-            }
+        let dropped = Mutex(0)
+        guard await hostStore.update(id, { current in
+            var profile = RoutePlan.learned(current.profile, reported: reported, last: last) ?? current.profile
+            let kept = RoutePlan.droppingMismatched(profile.routes, mismatched)
+            dropped.withLock { $0 = profile.routes.count - kept.count }
             profile.routes = kept
+            current.profile = profile
+        }) != nil else { return }
+        if let diagnostics, dropped.withLock({ $0 }) > 0 {
+            diagnostics.record(.link, "route_key_mismatch", [
+                "machine": .machine(diagnostics.log.token(for: id)),
+                "dropped": .int(dropped.withLock { $0 }),
+            ])
         }
-        guard profile != current.profile else { return }
-        current.profile = profile
-        do {
-            try await saveHost(current)
-        } catch {
-            Self.routeLog.error("Could not store the routes for a machine: \(error.localizedDescription, privacy: .public)")
-        }
+        reconcile(await hostStore.hosts())
     }
 
     /// How the machine was last reached in this run, for its details.

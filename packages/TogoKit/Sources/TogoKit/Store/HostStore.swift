@@ -47,6 +47,13 @@ public actor HostStore {
         await records.put(Self.key(record.id), record)
     }
 
+    /// Learned fields change on the record actor, so concurrent route/wake updates and
+    /// machine edits cannot be overwritten by a snapshot captured before an await.
+    @discardableResult
+    public func update(_ id: UUID, _ change: @Sendable (inout HostRecord) -> Void) async -> HostRecord? {
+        await records.update(Self.key(id), change)
+    }
+
     public func remove(_ id: UUID) async {
         await records.delete(Self.key(id))
     }
