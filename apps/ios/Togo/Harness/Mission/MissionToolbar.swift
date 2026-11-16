@@ -16,10 +16,10 @@ enum MissionMenu {
     }
 
     /// Terminal only while the chat shows: over the terminal it would go nowhere.
-    static func items(needsYou: Int, working: Bool, canCompact: Bool, chatShows: Bool = true) -> [Item] {
+    static func items(needsYou: Int, working: Bool, canCompact: Bool, chatShows: Bool = true, canInterrupt: Bool = true) -> [Item] {
         var items: [Item] = []
         if needsYou > 0 { items.append(.goToRequest) }
-        if working { items.append(.stop) }
+        if working, canInterrupt { items.append(.stop) }
         if canCompact { items.append(.compact) }
         if chatShows { items.append(.terminal) }
         return items
@@ -66,7 +66,8 @@ struct MissionToolbarItem: ToolbarContent {
     /// The long press's choices for the session now.
     var menuItems: [MissionMenu.Item] {
         MissionMenu.items(
-            needsYou: badge, working: summary.working, canCompact: compact != nil, chatShows: store.shownLayer == .chat
+            needsYou: badge, working: summary.working, canCompact: compact != nil, chatShows: store.shownLayer == .chat,
+            canInterrupt: store.has(HarnessCapability.interrupt)
         )
     }
 

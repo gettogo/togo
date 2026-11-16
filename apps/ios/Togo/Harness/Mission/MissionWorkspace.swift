@@ -45,7 +45,7 @@ import TogoKit
     static func stop(_ store: HarnessSessionStore) async -> String? {
         do {
             let result = try await store.interrupt()
-            return result.result == .failed ? (result.message ?? MissionCopy.stopFailed) : nil
+            return [.failed, .fallback].contains(result.result) ? (result.message ?? MissionCopy.stopFailed) : nil
         } catch {
             return MissionCopy.stopFailed
         }
