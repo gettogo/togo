@@ -466,3 +466,37 @@ func TestHeadingsAreGroups(t *testing.T) {
 		t.Fatalf("sessions = %+v %v", m, ok)
 	}
 }
+
+// Row text as the program means it: a wrapped numbered choice is one row,
+// a name and its description in two colours are title and detail, and a
+// list that only says it has nothing is its message, not a choice.
+func TestRowsReadAsMeant(t *testing.T) {
+	get := func(name string) string {
+		raw, err := os.ReadFile(filepath.Join("testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	m, ok := Read(get("omp-review-wrapped.ansi"))
+	if !ok || len(m.Items) != 5 || m.Items[0].Label != "Review against a base branch (PR Style)" || m.Items[1].Group != "" {
+		t.Errorf("review = %+v %v", m.Items, ok)
+	}
+	m, ok = Read(get("oc-agents.ansi"))
+	if !ok || len(m.Items) != 2 || m.Items[0].Label != "build" || !strings.HasPrefix(m.Items[0].Detail, "The default agent.") || m.Items[1].Label != "plan" {
+		t.Errorf("agents = %+v %v", m.Items, ok)
+	}
+	for name, title := range map[string]string{"omp-plugins-none.ansi": "Plugins", "oc-mcps-none.ansi": "MCP servers"} {
+		if m, ok := Read(get(name)); ok {
+			t.Errorf("%s read as a list: %+v", name, m.Items)
+		}
+		p, ok := ReadPanel(get(name))
+		if !ok || p.Title != title || len(p.Lines) != 1 || !strings.HasPrefix(p.Lines[0], "No ") {
+			t.Errorf("%s panel = %+v %v", name, p, ok)
+		}
+	}
+	m, ok = Read(get("oc-sessions-today.ansi"))
+	if !ok || m.Items[0].Detail != "" {
+		t.Errorf("sessions detail = %q", m.Items[0].Detail)
+	}
+}

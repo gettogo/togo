@@ -23,7 +23,7 @@ var (
 	wholeURL   = regexp.MustCompile(`^https?://\S+$`)
 	// deskKey is one key that acts on the machine the harness runs
 	// on ("open o  copy c").
-	deskKey = regexp.MustCompile(`^[a-z]+ \S$`)
+	deskKey = regexp.MustCompile(`^[a-z][a-z ]* (\S|space|enter|esc|tab|ctrl\+\S+)$`)
 )
 
 // ReadPanel reads an information panel: a panel on its own background
@@ -69,13 +69,18 @@ func readEmptyList(lines [][]cell) (Panel, bool) {
 			case t == "":
 			case hintWords.MatchString(t):
 				hint = t
+			case nothingHere.MatchString(unmarked(t)):
+				// The message may be drawn under the cursor mark.
+				p.Lines = append(p.Lines, unmarked(t))
 			case promptInput.MatchString(t) || searchField.MatchString(t) || promptLabel.MatchString(t):
 				inputs++
 			default:
 				p.Lines = append(p.Lines, t)
 			}
 		}
-		if !closed || p.Title == "" || inputs > 1 || len(p.Lines) == 0 || len(p.Lines) > 3 || !listKeys.MatchString(hint) {
+		// A box that says there is nothing needs no keys to be known.
+		said := len(p.Lines) == 1 && nothingHere.MatchString(p.Lines[0])
+		if !closed || p.Title == "" || inputs > 1 || len(p.Lines) == 0 || len(p.Lines) > 3 || !(listKeys.MatchString(hint) || said) {
 			return Panel{}, false
 		}
 		return p, true
@@ -113,6 +118,10 @@ func readPanel(lines [][]cell) (Panel, bool) {
 				if line == "" {
 					continue
 				}
+				// An empty search field is not what the panel says.
+				if strings.EqualFold(line, "search") {
+					continue
+				}
 				p.Lines = append(p.Lines, line)
 				// The address is a link only with room left on its line.
 				if wholeURL.MatchString(line) && len([]rune(body)) < hi-lo-pad {
@@ -126,6 +135,10 @@ func readPanel(lines [][]cell) (Panel, bool) {
 				if wholeURL.MatchString(line) {
 					return p, true
 				}
+			}
+			// A list's panel that only says it has nothing.
+			if len(p.Lines) == 1 && nothingHere.MatchString(p.Lines[0]) {
+				return p, true
 			}
 		}
 	}
@@ -164,4 +177,12 @@ func bgSpans(l []cell) []bgSpan {
 		out[i].hi = k + 1
 	}
 	return out
+}
+
+// unmarked is a line without a cursor mark in front of it.
+func unmarked(t string) string {
+	if rs := []rune(t); len(rs) > 2 && strings.ContainsRune(cursors+">", rs[0]) && rs[1] == ' ' {
+		return strings.TrimSpace(string(rs[2:]))
+	}
+	return t
 }

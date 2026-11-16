@@ -197,9 +197,14 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 	type raw struct {
 		Item
 		fg string
+		// whole is the row's text before a split by colour.
+		whole string
 	}
 	var m Menu
 	var rows []raw
+	// Rows split by colour into a one-word name and its description, and
+	// rows split otherwise.
+	oneWordNames, otherNames := 0, 0
 	escTitle := regexp.MustCompile(`(?i)\s{2,}esc$`)
 	keyHint := regexp.MustCompile(`(?i)\bctrl\+\w`)
 	for i := top; i <= bot; i++ {
@@ -246,9 +251,19 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 		isCurrent := strings.HasPrefix(body, "●") || strings.HasPrefix(body, "✓")
 		body = strings.TrimSpace(strings.TrimLeft(body, "●•✓"))
 		parts := gap.Split(body, 2)
-		detail := ""
+		detail, whole := "", ""
 		if len(parts) > 1 {
 			detail = strings.TrimSpace(parts[1])
+		} else if name, about, two := byColour(l[a:b]); two {
+			// A name and what it is, one space apart but in two colours
+			// ("build The default agent.").
+			whole = parts[0]
+			parts[0], detail = name, about
+			if len(strings.Fields(name)) == 1 {
+				oneWordNames++
+			} else {
+				otherNames++
+			}
 		}
 		fgs := map[string]int{}
 		for _, c := range l[a:b] {
@@ -262,10 +277,28 @@ func readHighlightAt(lines [][]cell, hl string, row int) (Menu, bool) {
 				fg, n = k, v
 			}
 		}
-		rows = append(rows, raw{Item{Label: parts[0], Detail: detail, Cursor: i == row, Current: isCurrent}, fg})
+		rows = append(rows, raw{Item{Label: parts[0], Detail: detail, Cursor: i == row, Current: isCurrent}, fg, whole})
 	}
 	if len(rows) == 0 {
 		return Menu{}, false
+	}
+	// The row under the cursor is drawn in one colour. Where every other
+	// row is a one-word name and its description, so is that one.
+	// Where names run to several words that row cannot be split, and a
+	// row must read the same with the cursor on it or off: none is split.
+	if otherNames > 0 {
+		for i := range rows {
+			if rows[i].whole != "" {
+				rows[i].Label, rows[i].Detail = rows[i].whole, ""
+			}
+		}
+	}
+	if oneWordNames > 0 && otherNames == 0 {
+		for i := range rows {
+			if name, about, cut := strings.Cut(rows[i].Label, " "); rows[i].Cursor && rows[i].Detail == "" && cut {
+				rows[i].Label, rows[i].Detail = name, strings.TrimSpace(about)
+			}
+		}
 	}
 	// A heading is a detail-less row in a text colour the choices do not use.
 	// The row under the cursor is drawn in its own colours and is left out
@@ -491,4 +524,37 @@ func run(l []cell, bg string) (lo, hi int, ok bool) {
 		hi = k + 1
 	}
 	return lo, hi, lo >= 0
+}
+
+// byColour splits a row at the one place its text colour changes, when
+// that place is a space: the name, then what the program says about it.
+func byColour(cells []cell) (string, string, bool) {
+	var words []cell
+	for _, c := range cells {
+		if strings.ContainsRune("●•✓", c.r) || strings.ContainsRune(rules, c.r) {
+			continue
+		}
+		words = append(words, c)
+	}
+	at, changes := -1, 0
+	prev, prevBold := "", false
+	seen := false
+	for i, c := range words {
+		if c.r == ' ' {
+			continue
+		}
+		if seen && (c.fg != prev || c.bold != prevBold) {
+			changes++
+			at = i
+		}
+		prev, prevBold, seen = c.fg, c.bold, true
+	}
+	if changes != 1 || at < 1 || words[at-1].r != ' ' {
+		return "", "", false
+	}
+	name, about := strings.TrimSpace(text(words[:at])), strings.TrimSpace(text(words[at:]))
+	if name == "" || about == "" || len(strings.Fields(name)) > 3 {
+		return "", "", false
+	}
+	return name, about, true
 }

@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // Item is one row of a list.
@@ -56,6 +57,9 @@ type cell struct {
 	rev    bool
 	// ul: underlined, which lists use for a heading over their rows.
 	ul bool
+	// bold tells a name from the description after it on a row drawn in
+	// one colour.
+	bold bool
 }
 
 // ordinal is the number a list puts before a choice.
@@ -73,7 +77,7 @@ func parse(screen string) [][]cell {
 	for _, line := range strings.Split(screen, "\n") {
 		var cells []cell
 		var bg, fg string
-		rev, ul := false, false
+		rev, ul, bold := false, false, false
 		rest := line
 		for len(rest) > 0 {
 			loc := sgr.FindStringSubmatchIndex(rest)
@@ -82,12 +86,12 @@ func parse(screen string) [][]cell {
 				text = rest[:loc[0]]
 			}
 			for _, r := range otherEscape.ReplaceAllString(text, "") {
-				cells = append(cells, cell{r, bg, fg, rev, ul})
+				cells = append(cells, cell{r, bg, fg, rev, ul, bold})
 			}
 			if loc == nil {
 				break
 			}
-			applySGR(rest[loc[2]:loc[3]], &bg, &fg, &rev, &ul)
+			applySGR(rest[loc[2]:loc[3]], &bg, &fg, &rev, &ul, &bold)
 			rest = rest[loc[1]:]
 		}
 		out = append(out, cells)
@@ -95,7 +99,7 @@ func parse(screen string) [][]cell {
 	return out
 }
 
-func applySGR(params string, bg, fg *string, rev, ul *bool) {
+func applySGR(params string, bg, fg *string, rev, ul, bold *bool) {
 	ps := strings.FieldsFunc(params, func(r rune) bool { return r == ';' || r == ':' })
 	if len(ps) == 0 {
 		ps = []string{"0"}
@@ -104,7 +108,11 @@ func applySGR(params string, bg, fg *string, rev, ul *bool) {
 		p, _ := strconv.Atoi(ps[i])
 		switch {
 		case p == 0:
-			*bg, *fg, *rev, *ul = "", "", false, false
+			*bg, *fg, *rev, *ul, *bold = "", "", false, false, false
+		case p == 1:
+			*bold = true
+		case p == 22:
+			*bold = false
 		case p == 4:
 			*ul = true
 		case p == 24:
@@ -175,6 +183,38 @@ func ReadOffered(screen string) (Menu, bool) {
 
 // Read finds a list on the screen.
 func Read(screen string) (Menu, bool) {
+	m, ok := readAny(screen)
+	if !ok {
+		return m, false
+	}
+	// One row that only says there is nothing ("No plugins available") is
+	// the list's message, not a choice.
+	if len(m.Items) == 1 && nothingHere.MatchString(m.Items[0].Label) {
+		return Menu{}, false
+	}
+	for i := range m.Items {
+		// A description of dots alone ("..", "…") is where the program
+		// cut one off: it says nothing.
+		if !hasWord(m.Items[i].Detail) {
+			m.Items[i].Detail = ""
+		}
+	}
+	return m, true
+}
+
+// nothingHere is a list's own line for having no rows.
+var nothingHere = regexp.MustCompile(`(?i)^no \S.*\b(available|found|yet|here|configured|installed)\b`)
+
+func hasWord(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func readAny(screen string) (Menu, bool) {
 	lines := parse(screen)
 	// A panel that only shows a link and a code has the frame of a list
 	// but no rows to pick.
@@ -438,6 +478,7 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 	// attached: the choice that has one may have more.
 	described := 0
 	blockStart := true
+	numberedList := false
 	for i := top; i <= bot; i++ {
 		p := pane(i)
 		indent := lead(p)
@@ -447,6 +488,19 @@ func readGlyph(cellLines [][]cell) (Menu, bool) {
 			t = strings.TrimSpace(string([]rune(t)[1:]))
 		}
 		t = scrollbar.ReplaceAllString(t, "")
+		// The top edge of a box drawn inside the list is not a row.
+		if strings.ContainsAny(t, "╮╭") && strings.Contains(t, "──") {
+			continue
+		}
+		// In a list that numbers its choices, a line with no number is
+		// the rest of the choice above it, wrapped.
+		if isNum := numbered.MatchString(t) || ordinal.MatchString(strings.Fields(t + " x")[0]); isNum {
+			numberedList = true
+		} else if numberedList && !cur && len(m.Items) > 0 && t != "" && !hintWords.MatchString(t) {
+			last := &m.Items[len(m.Items)-1]
+			last.Label = strings.TrimSpace(last.Label + " " + t)
+			continue
+		}
 		// An underlined line over the rows is their heading, wherever it
 		// is indented: the cursor never stops on it.
 		if !cur && t != "" && underlined(cellLines[i]) {
