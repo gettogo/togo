@@ -193,7 +193,7 @@ func (s *Store) typeAnswer(ctx context.Context, a wire.Approval, fingerprint str
 		if !ok || len(keys) == 0 {
 			return errPromptGone
 		}
-		if n := len(keys); n > 1 {
+		if n := len(keys); n > 1 && movesOnly(keys[:n-1]) {
 			// Moves, then the key that confirms. Sent in one batch, a menu
 			// can take the moves and drop the confirm (seen live on omp
 			// 18.20: Deny stayed selected and the tool call kept waiting).
@@ -272,6 +272,21 @@ var (
 // awaitSelected waits for the screen to show the cursor on the option
 // labelled label, which is when one key confirms it, and returns that key.
 // A prompt that left meanwhile was answered at the desk.
+// movesOnly reports whether every key moves the cursor. Only then does the
+// screen show the option selected before the confirm key: a prompt answered
+// by a digit and Enter (Kimi) never puts the cursor on the option, so its
+// keys go in one batch.
+func movesOnly(keys []string) bool {
+	for _, k := range keys {
+		switch k {
+		case "Up", "Down", "Left", "Right", "Tab", "BTab":
+		default:
+			return false
+		}
+	}
+	return len(keys) > 0
+}
+
 func (s *Store) awaitSelected(ctx context.Context, tgt, fingerprint, label string) ([]string, error) {
 	deadline := time.Now().Add(answerSelect)
 	for {
