@@ -260,7 +260,7 @@ import UIKit
         focusedAgent = nil
         pendingJump = nil
         scrollRequest = nil
-        chatScroll.reset()
+        chatScroll.prepareReload(ids: Set(rows.map(\.id)))
         ledger = ResolutionLedger()
         resolvedAt = [:]
         awaitingSince = nil
@@ -391,6 +391,7 @@ import UIKit
                     let outcome = feed.load(result)
                     phase = .live
                     changed(arrivals: false)
+                    chatScroll.finishReload(ids: Set(rows.map(\.id)))
                     hasLoaded = true
                     if outcome == .reopen { return .reopen }
                 case .note(let note):

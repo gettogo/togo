@@ -56,6 +56,32 @@ import TogoKit
         #expect(ChatLoadingState(store) == .none)
     }
 
+    @Test(arguments: [true, false])
+    func helperRestartKeepsTheReadingRowOnlyWhenHistoryStillContainsIt(sharedRows: Bool) async throws {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        let first = AsyncThrowingStream<HarnessFeed, any Error>.makeStream()
+        let initial = try HarnessFixtures.open()
+        var whole = initial
+        whole.epoch = "helper-restarted"
+        if !sharedRows {
+            whole.items = whole.items.map { var item = $0; item.id = "other-" + item.id; return item }
+        }
+        services.feeds = [.init(stream: first.stream), .init(elements: [.opened(whole)], end: .hold),
+                         .init(elements: [.opened(whole)], end: .hold)]
+        first.continuation.yield(.opened(initial))
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: services, retry: (.milliseconds(5), .milliseconds(20)))
+        store.launch()
+        defer { store.stop(); first.continuation.finish() }
+        try await until { store.phase == .live }
+        let reading = try #require(store.rows.first?.id)
+        store.chatScroll.pinned = false
+        store.chatScroll.settle(at: reading)
+        first.continuation.finish(throwing: HelperError.closed)
+        try await until { services.opens.count == 3 && store.phase == .live }
+        #expect(store.chatScroll.settledRow == (sharedRows ? reading : nil))
+        #expect(store.chatScroll.pinned == !sharedRows)
+    }
+
     private func until(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(3)
         while !condition() {

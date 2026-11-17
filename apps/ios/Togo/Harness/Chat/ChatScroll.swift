@@ -127,6 +127,11 @@ enum ChatScroll {
         var seed: Int
     }
 
+    /// Transport epochs can change while the same conversation is replayed. Only a
+    /// genuinely different set of rows needs a fresh native scroll view.
+    private(set) var identity = UUID()
+    @ObservationIgnored private var beforeReload: Set<String>?
+
     /// The latest scroll asked for; the chat applies it once.
     private(set) var request: Request?
     /// Needs cards on screen now.
@@ -142,6 +147,8 @@ enum ChatScroll {
     @ObservationIgnored private var conversation = UUID()
 
     func reset() {
+        identity = UUID()
+        beforeReload = nil
         conversation = UUID()
         request = nil
         visibleNeeds = []
@@ -149,6 +156,23 @@ enum ChatScroll {
         dragging = false
         pinned = true
         settledRow = nil
+    }
+
+    /// Retire pending scroll requests, but keep the native viewport while history reloads.
+    /// A reconnect is not a request to move the reader to the end.
+    func prepareReload(ids: Set<String>) {
+        conversation = UUID()
+        request = nil
+        beforeReload = ids
+    }
+
+    func finishReload(ids: Set<String>) {
+        guard let previous = beforeReload else { return }
+        beforeReload = nil
+        let keptReadingRow = pinned || settledRow.map { !previous.contains($0) || ids.contains($0) } ?? true
+        guard !previous.isDisjoint(with: ids), keptReadingRow else { reset(); return }
+        visibleNeeds.formIntersection(ids)
+        if let capsule, !ids.contains(capsule) { self.capsule = nil }
     }
 
     /// Scrolls on `resize`, the same role that grows a card, so the chat makes room and brings

@@ -96,7 +96,7 @@ struct ChatView: View {
             // The content as a whole: what a scroll to the foot aims at.
             .id(ChatScroll.contentID)
         }
-        .id(store.conversation)
+        .id(scroll.identity)
         .onChange(of: store.shownLayer) { _, layer in
             if layer == .terminal { store.retireInteraction() }
         }
