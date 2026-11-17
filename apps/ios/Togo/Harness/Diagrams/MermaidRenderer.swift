@@ -45,7 +45,9 @@ import WebKit
             await previous?.value
             guard let self else { return nil as UIImage? }
             let image = await self.render(fence.source, key: key)
-            self.store(image, key: key)
+            // A render that timed out or was interrupted is tried again next time. Only a
+            // diagram that cannot be drawn is remembered as failed.
+            if image != nil || self.lastFailure == "javascript-or-size" { self.store(image, key: key) }
             return image
         }
         jobs[key] = job

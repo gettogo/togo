@@ -197,6 +197,15 @@ struct HelperClientWriteTests {
         await #expect(throws: HelperError.closed) { try await client.agents() }
     }
 
+    /// A client says when its channel has ended, so a caller holding one that closed while
+    /// idle can open another before it sends anything.
+    @Test func aClosedClientSaysItHasEnded() async {
+        let client = HelperClient(channel: PipeChannel())
+        #expect(await !client.hasEnded)
+        await client.close()
+        #expect(await client.hasEnded)
+    }
+
     @Test func callAfterCloseThrowsClosed() async throws {
         let channel = AnsweringChannel()
         let client = HelperClient(channel: channel)

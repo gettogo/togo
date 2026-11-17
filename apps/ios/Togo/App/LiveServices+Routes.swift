@@ -40,11 +40,13 @@ extension LiveServices {
         diagnostics: DiagnosticsRecorder? = nil
     ) async {
         let dropped = Mutex(0)
+        let changed = Mutex(false)
         guard await hostStore.update(id, { current in
             var profile = RoutePlan.learned(current.profile, reported: reported, last: last) ?? current.profile
             let kept = RoutePlan.droppingMismatched(profile.routes, mismatched)
             dropped.withLock { $0 = profile.routes.count - kept.count }
             profile.routes = kept
+            changed.withLock { $0 = profile != current.profile }
             current.profile = profile
         }) != nil else { return }
         if let diagnostics, dropped.withLock({ $0 }) > 0 {
@@ -53,6 +55,8 @@ extension LiveServices {
                 "dropped": .int(dropped.withLock { $0 }),
             ])
         }
+        // Every online snapshot comes through here; only a change is worth a reconcile.
+        guard changed.withLock({ $0 }) else { return }
         reconcile(await hostStore.hosts())
     }
 

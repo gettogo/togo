@@ -77,6 +77,11 @@ extension AppStore {
     }
 
     private func openNewSessionLink(host: String?, folder: String?, preset: UUID?, hostID requestedID: UUID?) {
+        // With no machine set up there is nowhere to start one; first-run setup stays on screen.
+        guard !services.hosts.isEmpty else {
+            clearPendingLink()
+            return
+        }
         let candidates = matchingLinkHosts(name: host, id: requestedID)
         if requestedID != nil, candidates.isEmpty {
             finishUnavailableLink()

@@ -16,6 +16,8 @@ public actor HelperClient {
     private var pending: [Int: PendingCall] = [:]
     private var capabilities: Set<String>?
     private var isClosed = false
+    /// True once the channel has ended. A call made now fails before anything is written.
+    public var hasEnded: Bool { isClosed }
     private var reader: Task<Void, Never>?
     private var writer: Task<Void, Never>?
     private let outbox: AsyncStream<OutgoingFrame>

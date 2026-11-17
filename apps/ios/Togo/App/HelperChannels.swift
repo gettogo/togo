@@ -46,12 +46,21 @@ actor HelperChannels {
     func call<T: Sendable>(
         _ record: HostRecord, prompter: (any ConnectionPrompter)?, _ body: @Sendable (HelperClient) async throws -> T
     ) async throws -> T {
-        let opened: Channel
+        let kept: Channel
         do {
-            opened = try await channel(for: record, prompter: prompter)
+            kept = try await channel(for: record, prompter: prompter)
         } catch HelperError.closed {
             await drop(record.id)
+            kept = try await channel(for: record, prompter: prompter)
+        }
+        // A kept channel that ended while idle (the machine slept, the network dropped it)
+        // has sent nothing for this request, so opening another is not a replay.
+        let opened: Channel
+        if await kept.client.hasEnded {
+            await drop(record.id, ifStill: kept)
             opened = try await channel(for: record, prompter: prompter)
+        } else {
+            opened = kept
         }
         do {
             return try await HelperRequestExecution.once({ try await body(opened.client) }, onClosed: {

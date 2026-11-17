@@ -59,6 +59,28 @@ struct SignInURLTests {
         }
     }
 
+    /// A page about signing in is an ordinary page: it opens in the browser view, with no
+    /// sign-in consent alert.
+    @Test func pagesAboutSigningInAreNotSignIns() {
+        for raw in [
+            "https://developers.google.com/identity/protocols/oauth2",
+            "https://example.com/login-help",
+            "https://docs.example.com/docs/oauth-guide",
+            "https://example.com/blog/authorize-net-review",
+            "https://example.com/devices",
+        ] {
+            #expect(!SignInRoute.isSignIn(URL(string: raw)!), "\(raw)")
+        }
+        for raw in [
+            "https://github.com/login/oauth/authorize",
+            "https://accounts.google.com/o/oauth2/v2/auth",
+            "https://console.example.com/oauth/authorize",
+            "https://example.com/signin",
+        ] {
+            #expect(SignInRoute.isSignIn(URL(string: raw)!), "\(raw)")
+        }
+    }
+
     @Test func codeFlagReadsOnlyTrue() {
         #expect(!SignInURL(URL(string: "https://claude.ai/oauth/authorize?code=false")!).offersCode)
         #expect(SignInURL(URL(string: "https://claude.ai/oauth/authorize?code=1")!).offersCode)

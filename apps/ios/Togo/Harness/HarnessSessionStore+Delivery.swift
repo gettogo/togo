@@ -80,7 +80,8 @@ extension HarnessSessionStore {
     }
 
     private func deliverNext() async {
-        guard let prompt = queue.next(canSend: canSendNow) else { return }
+        // A pump cancelled before it took a prompt leaves the queue as it was.
+        guard !Task.isCancelled, let prompt = queue.next(canSend: canSendNow) else { return }
         let binding = conversation
         do {
             let item = try await services.send(subject, text: prompt.text, mode: .queue, images: prompt.images)
