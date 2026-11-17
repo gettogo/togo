@@ -279,6 +279,11 @@ type File struct {
 	// folder): a file one session follows is never joined by another, and
 	// a new file goes first to a session still without one.
 	Exclusive bool `yaml:"exclusive"`
+	// Whole marks a followed glob over a folder that belongs to the
+	// session alone (omp's folder of subagent files for one conversation):
+	// every file in it is read from its start, also the ones that stopped
+	// changing before the helper began to watch.
+	Whole bool `yaml:"whole"`
 }
 
 // SQLite reads a harness's own database read-only through the system

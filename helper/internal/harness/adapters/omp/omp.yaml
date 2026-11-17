@@ -40,7 +40,9 @@ feeds:
     stability: documented
   subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl, only the
     # followed session's own folder, so another omp's subagents in the same folder are never read.
-    jsonl: { glob: '{{.omp_sessions}}/{{.state.subagent_rel}}', follow: true }
+    # whole: a subagent that finished before a helper restart is read again, or its row
+    # would say running for good.
+    jsonl: { glob: '{{.omp_sessions}}/{{.state.subagent_rel}}', follow: true, whole: true }
     mapper: omp.session
     stability: internal
   config:           # model roles for the picker's role chips

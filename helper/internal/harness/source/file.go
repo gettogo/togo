@@ -240,7 +240,7 @@ func (f File) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, 
 	if fs.Exclusive {
 		return watchGlobExclusive(ctx, s.Name, fs.Glob, env, emit)
 	}
-	return watchGlob(ctx, s.Name, fs.Glob, env, emit)
+	return watchGlob(ctx, s.Name, fs.Glob, fs.Whole, env, emit)
 }
 
 func pollLoop(ctx context.Context, step func() error) error {
@@ -263,7 +263,11 @@ func pollLoop(ctx context.Context, step func() error) error {
 // session's creation time is known, the newest match is taken at once only
 // if it was written since then: an older file is an earlier session's in the
 // same folder, joined only if it changes (a resume writing to it).
-func watchGlob(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
+//
+// whole reads every match from its start, whatever its age: the folder is
+// the session's own, and a file in it that no longer changes (a subagent
+// that finished before a helper restart) still has its end to tell.
+func watchGlob(ctx context.Context, name, pattern string, whole bool, env harness.Env, emit func(harness.Record)) error {
 	started := time.Now()
 	created, err := time.Parse(time.RFC3339, env.Vars["created"])
 	if err != nil {
@@ -283,7 +287,7 @@ func watchGlob(ctx context.Context, name, pattern string, env harness.Env, emit 
 				if _, ok := tails[m.path]; ok {
 					continue
 				}
-				if (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started) {
+				if whole || (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started) {
 					tails[m.path] = &tail{path: m.path, name: name, replay: true}
 				}
 			}
