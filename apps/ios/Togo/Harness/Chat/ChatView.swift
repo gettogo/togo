@@ -108,6 +108,9 @@ struct ChatView: View {
         }
         // The gap above the composer, kept by every scroll: at the foot and to a needs card.
         .chatScrollMargins()
+        // Paint only the scrolling transcript through its viewport; controls and loading
+        // overlays below remain fully legible, including the Needs you shortcut.
+        .modifier(ChatScrollEdges())
         .scrollDismissesKeyboard(.interactively)
         // While the composer's / or @ menu is up, a tap on the conversation puts the keyboard
         // away, and the menu goes with it: a way out that needs no aim.
