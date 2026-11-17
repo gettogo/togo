@@ -99,6 +99,7 @@ struct RosterSection: View {
         RosterMachineHeading(
             name: machine.name, count: group.count,
             caption: AwakeCopy.caption(reach: caption, awake: machine.awake),
+            progress: machine.reachability == .online ? nil : ConnectionProgress.shared.summary(for: machine.id),
             onWake: WakeCopy.showsButton(for: machine, enabled: wakeEnabled) ? { perform(.wake(machine.id)) } : nil
         )
     }
@@ -118,7 +119,9 @@ struct RosterSection: View {
             return ControlCenterCopy.noNetwork
         case .hostKeyChanged:
             return ControlCenterCopy.keyChangedCaption
-        case .connecting, .online, .authNeeded, .failed, .keyMissing, .setUpHere:
+        case .connecting:
+            return ControlCenterCopy.connecting
+        case .online, .authNeeded, .failed, .keyMissing, .setUpHere:
             return helper == .missing ? ControlCenterCopy.noHelper : nil
         }
     }
@@ -137,8 +140,8 @@ struct RosterSection: View {
     /// user was about to tap moves away.
     private var stale: Bool {
         switch machine.reachability {
-        case .offline, .authNeeded, .failed, .keyMissing, .setUpHere, .hostKeyChanged, .deviceOffline: true
-        case .connecting, .waking, .online: false
+        case .offline, .authNeeded, .failed, .keyMissing, .setUpHere, .hostKeyChanged, .deviceOffline, .connecting, .waking: true
+        case .online: false
         }
     }
 
@@ -308,6 +311,7 @@ struct RosterMachineHeading: View {
     let name: String
     let count: Int
     var caption: String?
+    var progress: ConnectionProgress.Summary?
     /// Set on an offline machine that can be woken.
     var onWake: (() -> Void)?
 
@@ -322,8 +326,9 @@ struct RosterMachineHeading: View {
                     .foregroundStyle(Color.togoMute)
                     // A background count: it changes at once.
                     .monospacedDigit()
-                if let caption, !typeSize.isAccessibilitySize {
-                    captionText(caption)
+                if !typeSize.isAccessibilitySize {
+                    if let progress { ConnectionProgressLabel(summary: progress).font(.footnote).foregroundStyle(Color.togoMute) }
+                    else if let caption { captionText(caption) }
                 }
                 Spacer(minLength: 0)
                 if let onWake, !typeSize.isAccessibilitySize {
@@ -333,7 +338,8 @@ struct RosterMachineHeading: View {
             // At accessibility sizes the caption and the button each take a line of their own,
             // so the name keeps the row's width.
             if typeSize.isAccessibilitySize {
-                if let caption { captionText(caption) }
+                if let progress { ConnectionProgressLabel(summary: progress).font(.footnote).foregroundStyle(Color.togoMute) }
+                else if let caption { captionText(caption) }
                 if let onWake { wakeButton(onWake) }
             }
         }

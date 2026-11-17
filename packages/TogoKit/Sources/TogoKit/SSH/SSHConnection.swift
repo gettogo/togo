@@ -18,7 +18,9 @@ public actor SSHConnection: TCPChannelOpener {
     private let biometrics: BiometricSession
     let hostKeys: any HostKeyStore
     private let prompter: any ConnectionPrompter
-    private let connectTimeout: Duration
+    let connectTimeout: Duration?
+    let purpose: ConnectionPurpose
+    let attemptObserver: @Sendable (ConnectionAttemptEvent) -> Void
     private let credentialFallback: Bool
     let routeBook: RouteBook
 
@@ -41,8 +43,9 @@ public actor SSHConnection: TCPChannelOpener {
     /// machine uses this so a key that is not authorised yet can be explained as such.
     public init(
         profile: HostProfile, keys: KeychainKeyStore, secrets: any SecretStore, biometrics: BiometricSession,
-        hostKeys: any HostKeyStore, prompter: any ConnectionPrompter, connectTimeout: Duration = .seconds(8),
-        credentialFallback: Bool = true, routeBook: RouteBook = .shared
+        hostKeys: any HostKeyStore, prompter: any ConnectionPrompter, connectTimeout: Duration? = nil,
+        credentialFallback: Bool = true, routeBook: RouteBook = .shared, purpose: ConnectionPurpose = .requests,
+        attemptObserver: @escaping @Sendable (ConnectionAttemptEvent) -> Void = { _ in }
     ) {
         self.profile = profile
         self.keys = keys
@@ -51,6 +54,8 @@ public actor SSHConnection: TCPChannelOpener {
         self.hostKeys = hostKeys
         self.prompter = prompter
         self.connectTimeout = connectTimeout
+        self.attemptObserver = attemptObserver
+        self.purpose = purpose
         self.credentialFallback = credentialFallback
         self.routeBook = routeBook
     }
@@ -59,7 +64,10 @@ public actor SSHConnection: TCPChannelOpener {
 
     public func connect() async throws {
         guard root == nil else { return }
-        var credentials = try await prepareCredentials()
+        let preparing = ConnectionAttemptSpan(hostID: profile.id, stage: .credentials, purpose: purpose, report: attemptObserver)
+        var credentials: Credentials
+        do { credentials = try await prepareCredentials(); preparing.end(.succeeded) }
+        catch { preparing.end(ConnectionAttemptSpan.failure(error)); throw error }
         if let routes = try await racedRoutes() {
             try await connectRacing(routes, credentials: &credentials)
             keepReplacedPassword(credentials)
@@ -302,35 +310,6 @@ public actor SSHConnection: TCPChannelOpener {
                 throw SSHError.authFailed(tried: delegate.tried)
             }
         }
-    }
-
-    func handshake(
-        _ endpoint: HostEndpoint, via parent: SSHClient?,
-        validator: SnapshotHostKeyValidator, delegate: PreparedAuthDelegate
-    ) async throws -> (SSHClient, any Channel) {
-        var settings = SSHClientSettings(
-            host: endpoint.host, port: endpoint.port,
-            authenticationMethod: { .custom(delegate) }, hostKeyValidator: .custom(validator)
-        )
-        let parts = connectTimeout.components
-        settings.connectTimeout = .milliseconds(parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000)
-        settings.loginTimeout = KeyboardInteractiveResponder.loginTimeout
-        let client: SSHClient
-        if let parent {
-            client = try await parent.jump(to: settings)
-        } else {
-            client = try await SSHClient.connect(to: settings)
-        }
-        // Session channels with a PTY and exec are opened on the root channel directly,
-        // because Citadel opens a PTY only with a login shell.
-        let channel = client.channel
-        if parent == nil { await Self.keepAlive(channel) }
-        // Mosh needs the address SSH reached, not a name that may resolve elsewhere later.
-        if parent == nil, profile.jumps.isEmpty {
-            remoteAddress = channel.remoteAddress?.ipAddress
-            remoteInterface = Self.scopeInterface(channel.remoteAddress)
-        }
-        return (client, channel)
     }
 
     /// TCP keepalive on the socket: a link that stops passing traffic (the Mac slept, a NAT

@@ -74,12 +74,10 @@ struct RosterLine: View {
     /// A stale "Needs you" is a last-known state, not a live call, so it never lights.
     @ViewBuilder private var status: some View {
         if stale {
-            Text(StatusWord.label(row.status, exit: row.exit))
+            Text(ControlCenterCopy.lastKnown(StatusWord.label(row.status, exit: row.exit)))
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
-                // trunc-ok: a status word from a fixed short set
-                .lineLimit(1)
-                .fixedSize()
+                .fixedSize(horizontal: false, vertical: true)
         } else if connecting && !line.needsYou {
             RosterStatus(connecting: ControlCenterCopy.connecting)
                 .fixedSize()
@@ -116,7 +114,8 @@ struct RosterLine: View {
 
     private var spokenLabel: String {
         var parts = [row.bib, displayName, showsAgent ? row.agentName : nil]
-        parts.append(StatusWord.label(line.status, exit: row.exit))
+        let status = StatusWord.label(line.status, exit: row.exit)
+        parts.append(stale ? ControlCenterCopy.lastKnown(status) : status)
         let mission = RosterMission.spoken(meta: row.meta, mission: line.mission)
         if !mission.isEmpty { parts.append(mission) }
         if row.muted { parts.append(ControlCenterCopy.muted) }

@@ -133,11 +133,11 @@ import UIKit
     @ObservationIgnored var pumpTask: Task<Void, Never>?
     @ObservationIgnored var pumpToken: UUID?
     @ObservationIgnored private var needsDescribe = true
+    @ObservationIgnored private(set) var hasConnected = false
     @ObservationIgnored let retryFloor: Duration
     @ObservationIgnored let retryCeiling: Duration
     @ObservationIgnored private let pendingTimeout: Duration
     @ObservationIgnored private var waitTask: Task<Void, Never>?
-
     init(
         subject: HarnessSubject, services: any HarnessServices,
         retry: (floor: Duration, ceiling: Duration) = (.milliseconds(500), .seconds(10)),
@@ -327,6 +327,7 @@ import UIKit
             phase = .describing
             do {
                 adopt(try await services.describe(subject))
+                hasConnected = true
                 needsDescribe = false
                 describeFailed = false
             } catch {

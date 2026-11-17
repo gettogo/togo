@@ -67,10 +67,12 @@ import TogoMosh
                 cols: request.cols, rows: request.rows
             )
         }
-        let env = SessionEnvironment(
+        var connectionEnvironment = SessionEnvironment(
             keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys,
             prompter: NoPrompts(), connector: Connector(factories: [mosh, ETFactory.factory, .ssh])
         )
+        connectionEnvironment.attemptObserver = ConnectionProgress.shared.report
+        let env = connectionEnvironment
         let deviceID = Self.deviceID()
         let signedIn = SignedInConnections()
         let helpers = HelperChannels(env: env)

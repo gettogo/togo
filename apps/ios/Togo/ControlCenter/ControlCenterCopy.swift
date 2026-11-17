@@ -3,6 +3,10 @@ import TogoKit
 
 /// Every sentence the control center shows, keyed under `cc.` in the string catalog.
 enum ControlCenterCopy {
+    static func lastKnown(_ status: String) -> String {
+        String(localized: "cc.lastKnownStatus", defaultValue: "Last known: \(status)")
+    }
+
     static let terminalOnly = String(localized: "cc.terminalOnly", defaultValue: "Terminal Only")
     static let newSession = String(localized: "cc.newSession", defaultValue: "New Session")
     static let settings = String(localized: "cc.settings", defaultValue: "Settings")

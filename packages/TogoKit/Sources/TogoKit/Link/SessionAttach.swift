@@ -7,6 +7,7 @@ public struct SessionEnvironment: Sendable {
     public var hostKeys: any HostKeyStore
     public var prompter: any ConnectionPrompter
     public var connector: Connector
+    public var attemptObserver: @Sendable (ConnectionAttemptEvent) -> Void = { _ in }
 
     public init(
         keys: KeychainKeyStore, secrets: any SecretStore, biometrics: BiometricSession,
@@ -20,10 +21,10 @@ public struct SessionEnvironment: Sendable {
         self.connector = connector
     }
 
-    public func connection(for profile: HostProfile) -> SSHConnection {
+    public func connection(for profile: HostProfile, purpose: ConnectionPurpose = .requests) -> SSHConnection {
         SSHConnection(
             profile: profile, keys: keys, secrets: secrets, biometrics: biometrics,
-            hostKeys: hostKeys, prompter: prompter
+            hostKeys: hostKeys, prompter: prompter, purpose: purpose, attemptObserver: attemptObserver
         )
     }
 }
@@ -79,7 +80,7 @@ public enum SessionAttach {
                 onWaking: onWaking,
                 attempt: { await WakeProbe.anyReachable(hosts: hosts, port: probe.port, timeout: .seconds(2)) }
             )
-            let connection = env.connection(for: profile)
+            let connection = env.connection(for: profile, purpose: .terminal)
             do {
                 try await connection.connect()
                 let request = AttachRequest(

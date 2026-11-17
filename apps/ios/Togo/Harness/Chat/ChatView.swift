@@ -117,7 +117,7 @@ struct ChatView: View {
         )
         .overlay {
             if !ChatLoadingState.hasContent(store) {
-                ChatLoadingView(state: loadingState)
+                ChatLoadingView(state: loadingState, hostID: store.subject.hostID)
                     // motion: state change — reading gives way to the empty state in place.
                     .motion(.fade, value: loadingState)
             }
@@ -125,7 +125,7 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             if ChatLoadingState.hasContent(store), loadingState.isProgress {
                 // The status stays in the pane without changing scroll geometry or anchors.
-                ChatLoadingView(state: loadingState, inline: true)
+                ChatLoadingView(state: loadingState, inline: true, hostID: store.subject.hostID)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.togoInk)

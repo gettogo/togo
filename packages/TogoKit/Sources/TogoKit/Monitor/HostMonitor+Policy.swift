@@ -3,6 +3,13 @@ import Foundation
 
 extension HostMonitor {
     static let backoff = TerminalLink.backoff
+    static func retryDelay(failures: Int, hasConnected: Bool, deviceOffline: Bool = false) -> Duration {
+        if deviceOffline { return offlineRetry }
+        guard failures > 0 else { return .zero }
+        guard hasConnected else { return ConnectionTiming.retryPause }
+        return failures >= failuresBeforeOffline ? offlineRetry : backoff[min(failures, backoff.count - 1)]
+    }
+
     static let failuresBeforeOffline = 3
     static let offlineRetry: Duration = .seconds(8)
     static let pollInterval: Duration = .seconds(5)

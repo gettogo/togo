@@ -14,7 +14,7 @@ public struct PlainTmuxSource: SessionSource {
     /// record saved without it can switch to the helper. It runs at most once per connection.
     public init(record: HostRecord, env: SessionEnvironment, helperFound: (@Sendable (String) -> Void)? = nil) {
         self.init(host: record.profile.name, now: { Date() }, helperFound: helperFound) {
-            let connection = env.connection(for: record.profile)
+            let connection = env.connection(for: record.profile, purpose: .monitor)
             do {
                 try await connection.connect()
             } catch {

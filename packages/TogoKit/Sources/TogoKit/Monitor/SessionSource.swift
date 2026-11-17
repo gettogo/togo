@@ -49,7 +49,7 @@ public struct HelperSource: SessionSource {
         self.init(host: record.profile.name, clock: SystemClock(), deviceID: deviceID) {
             let connection = SSHConnection(
                 profile: record.profile, keys: env.keys, secrets: env.secrets, biometrics: env.biometrics,
-                hostKeys: env.hostKeys, prompter: SilentPrompter()
+                hostKeys: env.hostKeys, prompter: SilentPrompter(), purpose: .monitor, attemptObserver: env.attemptObserver
             )
             do {
                 try await connection.connect()
