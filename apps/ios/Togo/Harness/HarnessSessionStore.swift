@@ -85,7 +85,7 @@ import UIKit
     var pendingJump: TerminalJump?
     /// The pill asked for mission control.
     var showsMission = false {
-        didSet { if !showsMission { missionSection = nil } }
+        didSet { missionVisibilityChanged() }
     }
     var missionSection: MissionSectionKind?
     let nativeInteractions = NativeChatState()

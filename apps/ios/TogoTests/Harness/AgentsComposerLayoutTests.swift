@@ -55,6 +55,28 @@ import UIKit
         #expect(abs(heights[0] - baseline) < 1 && abs(heights[3] - baseline) < 1, "Zero agents must add no height: \(heights), baseline \(baseline)")
         #expect(heights[1] > baseline && heights[2] > baseline)
     }
+    @Test func openingMissionControlDismissesTheActiveComposer() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        let controller = UIViewController()
+        let field = UITextField(frame: .init(x: 16, y: 16, width: 250, height: 44))
+        controller.view.addSubview(field)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKey() }
+        #expect(field.becomeFirstResponder())
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: FakeHarnessServices(descriptor: ChatTests.claude))
+        store.showsMission = true
+        #expect(!field.isFirstResponder)
+        #expect(field.becomeFirstResponder())
+        store.showsMission = false
+        #expect(field.isFirstResponder, "Closing must not dismiss focus in another screen")
+        store.showAgents()
+        #expect(!field.isFirstResponder)
+        #expect(store.missionSection == .agents)
+    }
+
     @Test func nativeInputUsesTheSameLargeTypeSizeAsItsPlaceholder() {
         let normal = ComposerTextInput.font(for: .large)
         let large = ComposerTextInput.font(for: .accessibility3)

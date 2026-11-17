@@ -58,6 +58,12 @@ struct ChatScrollRequest: Equatable, Sendable {
 }
 
 extension HarnessSessionStore {
+    /// Every entry point clears composer focus before presenting mission control.
+    func missionVisibilityChanged() {
+        if showsMission { LayerToolbarItem.resignKeyboard() }
+        else { missionSection = nil }
+    }
+
     /// The agents link opens the existing session manager at its agents list.
     func showAgents() {
         missionSection = .agents
