@@ -30,7 +30,7 @@ import UIKit
     @Test func aSentPromptShowsTheRowBeforeTheHelperReportsWork() throws {
         let state = try #require(WorkingLogic.state(items: [], working: false, awaitingSince: t0, localSince: nil, now: t0 + 1))
         #expect(state.clock.start == t0)
-        #expect(state.step == nil)
+        #expect(state.step == WorkingCopy.thinking)
         #expect(WorkingCopy.line(state, now: t0 + 12) == "Working · 12s")
     }
 
@@ -50,12 +50,12 @@ import UIKit
         #expect(WorkingLogic.step([prompt(), mcp]) == "github: list issues")
     }
 
-    @Test func stepsBeforeThePromptAndStreamedRepliesSayNothing() {
+    @Test func stepsStayInTheirTurnWhileStreamingDoesNotHideRunningWork() {
         let old = tool("old", .shell, title: "make", subject: Subject(kind: .command, text: "make"), state: .running)
-        #expect(WorkingLogic.step([old, prompt()]) == nil)
+        #expect(WorkingLogic.step([old, prompt()]) == WorkingCopy.thinking)
         let streaming = item("a", .assistant(.init(text: "Looking", partial: true)))
         let live = tool("r", .read, title: "Read a", subject: Subject(kind: .file, text: "a"), state: .running)
-        #expect(WorkingLogic.step([prompt(), live, streaming]) == nil)
+        #expect(WorkingLogic.step([prompt(), live, streaming]) == "Reading a")
     }
 
     @Test func theSentHoldEndsWhenWorkStopsAfterItBegan() {

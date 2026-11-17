@@ -64,7 +64,7 @@ struct LiveLine: View {
             // trunc-ok: one line so the live line never changes height; the full step is in the work line's steps and their details
             .lineLimit(1)
             .truncationMode(.middle)
-            .opacity(state.step == nil || state.pausedAt != nil ? 0 : 1)
+            .opacity(state.step == nil || state.pausedAt != nil ? 0 : state.completedStep ? 0.65 : 1)
             .contentTransition(.identity)
             .transaction { $0.animation = nil }
     }
