@@ -54,6 +54,75 @@ import UIKit
         #expect(abs(frame.minY - finalViewport.minY - offset) < 8, "Keep the position within a tall reply, not merely its row")
     }
 
+    @Test(arguments: [false, true])
+    func aWorkingStatusChangeDoesNotCauseAFarJump(atFoot: Bool) async throws {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        let initial = snapshot(epoch: "initial")
+        let stream = AsyncThrowingStream<HarnessFeed, any Error>.makeStream()
+        services.feeds = [.init(stream: stream.stream)]
+        stream.continuation.yield(.opened(initial))
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: services)
+        store.launch()
+        defer { store.stop(); stream.continuation.finish() }
+        try await until { store.phase == .live }
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.keyWindow
+        let host = UIHostingController(rootView: ChatView(store: store))
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 800, height: 420)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil; previous?.makeKeyAndVisible() }
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(500))
+        if !atFoot {
+            store.chatScroll.go(.row("reply-5-14"), reduce: true)
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        let scroll = try mainScroll(host.view)
+        let viewport = visible(scroll)
+        let reading = try #require(all(scroll).compactMap { $0 as? UITextView }.last {
+            $0.text.contains("Response ") && $0.convert($0.bounds, to: scroll).intersects(viewport)
+        })
+        let text = try #require(reading.text)
+        let offset = reading.convert(reading.bounds, to: scroll).minY - viewport.minY
+        let originalRows = store.rows
+        var largestShift: CGFloat = 0
+        var trace = ["start foot=\(atFoot), y=\(scroll.contentOffset.y), h=\(scroll.contentSize.height), row=\(text.prefix(30)), offset=\(offset)"]
+        for (index, working) in [true, false].enumerated() {
+            var summary = initial.mission.summary
+            summary.working = working
+            stream.continuation.yield(.note(HarnessNotification(
+                sessionId: ChatTests.subject.sessionID, kind: .mission, ts: WireDate(.now), epoch: initial.epoch,
+                mission: HarnessDelta(rev: index + 2, ops: [.init(op: .summary, summary: summary)])
+            )))
+            try await until { store.working == working }
+            #expect((store.liveWork != nil) == working)
+            #expect(store.rows == originalRows, "A status note must not change the conversation")
+            for sample in 0..<24 {
+                try await Task.sleep(for: .milliseconds(16))
+                let current = try mainScroll(host.view)
+                let matches = all(current).compactMap { $0 as? UITextView }.filter { $0.text == text }
+                let row = matches.min {
+                    abs($0.convert($0.bounds, to: current).minY - visible(current).minY - offset)
+                    < abs($1.convert($1.bounds, to: current).minY - visible(current).minY - offset)
+                }
+                let frame = row.map { $0.convert($0.bounds, to: current) } ?? .null
+                let shift = abs(frame.minY - visible(current).minY - offset)
+                if sample == 0 || sample == 23 || shift > 64 && trace.count < 12 {
+                    let rows = all(current).compactMap { $0 as? UITextView }.filter {
+                        $0.convert($0.bounds, to: current).intersects(visible(current))
+                    }.map { String($0.text.prefix(24)) }
+                    trace.append("work=\(working), sample=\(sample), y=\(current.contentOffset.y), h=\(current.contentSize.height), rowY=\(frame.minY), matches=\(matches.count), shift=\(shift), visible=\(rows)")
+                }
+                largestShift = max(largestShift, shift)
+            }
+        }
+        // One footer line may take room at the foot; no multi-screen offset change is allowed.
+        #expect(largestShift <= 64, "Working status moved the reader by \(largestShift) points: \(trace.joined(separator: "; "))")
+    }
+
     /// Matches the observed shape: six prompts, tool-heavy turns, and tall markdown replies.
     private func snapshot(epoch: String) -> HarnessOpenResult {
         var items: [HarnessItem] = []

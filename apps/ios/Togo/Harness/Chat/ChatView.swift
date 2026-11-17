@@ -32,29 +32,33 @@ struct ChatView: View {
     }
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                if store.timeline.historyUnavailable {
-                    Text(ChatCopy.historyUnavailable)
-                        .font(.footnote).foregroundStyle(Color.togoMute)
-                        .chatColumn()
-                        .accessibilityIdentifier("chat.historyUnavailable")
+            VStack(alignment: .leading, spacing: 20) {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    if store.timeline.historyUnavailable {
+                        Text(ChatCopy.historyUnavailable)
+                            .font(.footnote).foregroundStyle(Color.togoMute)
+                            .chatColumn()
+                            .accessibilityIdentifier("chat.historyUnavailable")
+                    }
+                    // "Earlier" is a navigation affordance at the top: it is simply there or not.
+                    if showsEarlierButton {
+                        earlier.chatColumn()
+                    }
+                    let gaps = store.gaps
+                    // Rows arriving while the chat is open land in the store's `resize`
+                    // transaction; rows on first render, from Earlier or by scrolling land at once.
+                    ForEach(rows) { row in
+                        gapped(row, gap: gaps[row.id])
+                            .chatColumn()
+                            .id(row.id)
+                            .modifier(NeedsVisibility(id: row.isNeeds ? row.id : nil, scroll: scroll))
+                            .accessibilityRotorEntry(id: row.id, in: rotorSpace)
+                            // motion: preventing a jump — the conversation glides up to make room while the new row only fades in place; a needs card instead grows in place as it is scrolled into view (attention).
+                            .transition(row.isNeeds ? Motion.unfold(reduce: reduceMotion) : Motion.arrive(reduce: reduceMotion))
+                    }
                 }
-                // "Earlier" is a navigation affordance at the top: it is simply there or not.
-                if showsEarlierButton {
-                    earlier.chatColumn()
-                }
-                let gaps = store.gaps
-                // Rows arriving while the chat is open land in the store's `resize`
-                // transaction; rows on first render, from Earlier or by scrolling land at once.
-                ForEach(rows) { row in
-                    gapped(row, gap: gaps[row.id])
-                        .chatColumn()
-                        .id(row.id)
-                        .modifier(NeedsVisibility(id: row.isNeeds ? row.id : nil, scroll: scroll))
-                        .accessibilityRotorEntry(id: row.id, in: rotorSpace)
-                        // motion: preventing a jump — the conversation glides up to make room while the new row only fades in place; a needs card instead grows in place as it is scrolled into view (attention).
-                        .transition(row.isNeeds ? Motion.unfold(reduce: reduceMotion) : Motion.arrive(reduce: reduceMotion))
-                }
+                .scrollTargetLayout()
+                // Status is a measured sibling, never an insertion into the lazy history.
                 // The chat's one live indicator stays at the foot for the whole turn: one view,
                 // so waiting and working morph in place. Stop lives in the composer.
                 if let live {
@@ -62,8 +66,6 @@ struct ChatView: View {
                         .chatColumn()
                         .id("chat.working")
                         .accessibilityIdentifier("chat.working")
-                        // motion: continuity — the line is simply there when a turn starts (the spinner starting is the signal) and leaves as the work line above turns into "Worked … ✓".
-                        .transition(.asymmetric(insertion: .identity, removal: Motion.conceal(reduce: reduceMotion)))
                 }
                 // Prompts the phone still holds, after the conversation: the one place they show.
                 ForEach(store.queue.prompts) { prompt in
@@ -86,9 +88,6 @@ struct ChatView: View {
                         .transition(Motion.arrive(reduce: reduceMotion))
                 }
             }
-            // The rows are scroll targets, so the row at the bottom edge is reported as the
-            // reader scrolls and a rebuilt chat can return to it (`ChatScrollModel.restoreTarget`).
-            .scrollTargetLayout()
             // No horizontal padding here: each row spans the scroll view and keeps the reading
             // column inside it (`chatColumn()`), so replies, work lines, notices and cards start
             // `textLeading` in and the prompt bubble ends as far in, whatever the scroll anchor.
@@ -164,10 +163,7 @@ struct ChatView: View {
         .environment(\.openURL, OpenURLAction { url in open(url) })
     }
 
-    /// The live line is simply there when a turn starts and leaves with it, in a `resize`
-    /// transaction so the rows make room; while it stays, its contents change with no
-    /// animation at all, so the store's arrival transaction never reaches the clock. Before
-    /// the first load it is simply there.
+    /// Functional status never animates the conversation's geometry.
     private func follow(_ work: WorkingState?) {
         let change = LiveFollow.change(from: live, to: work, loaded: store.hasLoaded)
         if change.animates {
