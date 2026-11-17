@@ -1,34 +1,30 @@
 import SwiftUI
 import TogoKit
 
-/// A quiet, direct route above the composer; zero agents take no room.
+/// The live count in the composer's status header, beside queued prompts. The parent owns
+/// its appearance transaction and omits the header entirely when neither count is present.
 struct AgentsRunningLine: View {
     let store: HarnessSessionStore
-    let reconciled: Bool
+    let count: Int
 
     var body: some View {
-        let count = store.phase == .live
-            ? MissionLayout.runningAgents(store.mission.mission, working: store.working, reconciled: reconciled) : 0
-        if count > 0 {
-            Button { store.showAgents() } label: {
-                HStack(spacing: 8) {
-                    Text(MissionCopy.runningAgents(count))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .accessibilityHidden(true)
-                    Spacer(minLength: 0)
-                }
-                .font(.footnote)
-                .foregroundStyle(Color.togoMute)
-                .frame(minHeight: 44, alignment: .leading)
-                .contentShape(.rect)
+        Button { store.showAgents() } label: {
+            HStack(spacing: 8) {
+                Text(MissionCopy.runningAgents(count))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .monospacedDigit()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(MissionCopy.agentsHint)
-            .accessibilityIdentifier("composer.agents")
-            .transaction { $0.animation = nil }
+            .font(.footnote)
+            .foregroundStyle(Color.togoMute)
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+        .accessibilityHint(MissionCopy.agentsHint)
+        .accessibilityIdentifier("composer.agents")
     }
 }
 

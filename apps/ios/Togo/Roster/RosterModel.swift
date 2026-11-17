@@ -99,6 +99,11 @@ struct RosterModel: Equatable {
         .joined(separator: "  ")
     }
 
+    /// A count and its state wrap together; separators between pairs still allow a break.
+    var tallyDisplayText: String {
+        tallyText.components(separatedBy: "  ").map { $0.replacingOccurrences(of: " ", with: "\u{00a0}") }.joined(separator: "  ")
+    }
+
     /// The line drawn as selected: only beside a terminal, and only while its line is listed.
     static func selection(focused: TabID?, wide: Bool, in model: RosterModel) -> TabID? {
         guard wide, let focused, model.lines.contains(where: { $0.id == focused }) else { return nil }

@@ -154,15 +154,10 @@ struct WorkspaceComposeBar: View {
             // composer takes nothing from it.
             if let tab = store.composeTab, let model = chatComposer(for: tab.id) {
                 let shown = SessionInput(store.layer(for: tab.id)) == .composer
-                VStack(spacing: 0) {
-                    if let harness = store.harness(for: tab.id) {
-                        AgentsRunningLine(store: harness,
-                            reconciled: store.machine(for: tab.hostID)?.capabilities.contains(Capability.liveAgents) == true)
-                    }
-                    SmartCommandLine(model: model)
+                SmartCommandLine(model: model,
+                    agentsReconciled: store.machine(for: tab.hostID)?.capabilities.contains(Capability.liveAgents) == true)
                     // The terminal under the chat, for the composer's terminal peek.
                     .onAppear { model.peekTerminal = .live { [terminals] in terminals.handle(for: tab.id) } }
-                }
                     // The palette and the screens it opens follow links as the chat does.
                     .environment(\.openURL, OpenURLAction { [store] url in store.openChatLink(url, from: tab.id) })
                     // Under the chat's centred column on a wide window, not at the pane's edge.

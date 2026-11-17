@@ -64,6 +64,9 @@ struct ChatPanes: View {
                         // motion: state change — a tab switch is a cut: two half-faded chats
                         // would let the next tab's terminal show through.
                         .transition(.identity)
+                        // The scroll view may draw into its safe-area margins. Bound it before
+                        // reserving the composer, so no reply can paint through its controls.
+                        .clipped()
                         .padding(.bottom, bottom)
                         .padding(.leading, max(0, page.minX - rect.minX))
                         .padding(.trailing, max(0, rect.maxX - page.maxX))

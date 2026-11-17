@@ -5,7 +5,8 @@ import TogoKit
 /// you while anything waits. Only the needs count rolls (an event); the others change in
 /// place. A header to VoiceOver.
 struct MissionSectionHeader: View {
-    @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 16
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .footnote) private var mark: CGFloat = 24
     let kind: MissionSectionKind
     let count: Int
 
@@ -30,11 +31,16 @@ struct MissionSectionHeader: View {
             }
             .slot(width: mark, height: mark, key: lit)
             .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
-            Text(MissionCopy.header(kind))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.togoSnow)
-            if (count > 0 || kind == .agents || kind == .background), kind != .status {
-                countText
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
+            layout {
+                Text(MissionCopy.header(kind))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.togoSnow)
+                if (count > 0 || kind == .agents || kind == .background), kind != .status {
+                    countText.fixedSize(horizontal: true, vertical: false)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -111,6 +117,7 @@ struct MissionEmptyLine: View {
 /// progress when known, and a chevron when it opens somewhere.
 struct MissionRowView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .body) private var glyphWidth: CGFloat = 20
     let row: HarnessRow
     var opens = false
     /// What VoiceOver says the row opens.
@@ -120,7 +127,7 @@ struct MissionRowView: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             PrimitiveStateGlyph(state: row.state, font: .body)
-                .frame(width: 20)
+                .frame(width: glyphWidth)
             VStack(alignment: .leading, spacing: 3) {
                 // The timer moves under the title at accessibility sizes so the title keeps the width.
                 let layout = typeSize.isAccessibilitySize
@@ -141,6 +148,7 @@ struct MissionRowView: View {
                 }
                 if let subtitle = AgentLabel.subtitle(row) {
                     Text(verbatim: subtitle)
+                        .typesettingLanguage(Locale.Language(identifier: "zxx"))
                         .font(.mono(.caption))
                         .foregroundStyle(Color.togoMute)
                         .fixedSize(horizontal: false, vertical: true)
@@ -202,12 +210,13 @@ struct MissionClock: View {
 /// run, ticking while it runs. The full command is in its accessibility label and one tap away
 /// in the live terminal.
 struct MissionBackgroundRow: View {
+    @ScaledMetric(relativeTo: .body) private var glyphWidth: CGFloat = 20
     let row: HarnessRow
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             PrimitiveStateGlyph(state: row.state, font: .body)
-                .frame(width: 20)
+                .frame(width: glyphWidth)
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: BackgroundLabel.title(row))
                     .font(.body)
@@ -216,6 +225,7 @@ struct MissionBackgroundRow: View {
                 MissionActivityLine(row: row)
                 if let last = BackgroundLabel.lastLine(row) {
                     Text(verbatim: last)
+                        .typesettingLanguage(Locale.Language(identifier: "zxx"))
                         .font(.mono(.caption))
                         .foregroundStyle(Color.togoMute)
                         // trunc-ok: live output; the full line is spoken and one tap away.

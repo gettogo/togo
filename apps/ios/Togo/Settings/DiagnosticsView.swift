@@ -175,6 +175,7 @@ struct DiagnosticsPreview: View {
     var body: some View {
         ScrollView {
             Text(verbatim: text)
+                .typesettingLanguage(Locale.Language(identifier: "zxx"))
                 .font(.system(.footnote, design: .monospaced))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)

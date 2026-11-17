@@ -43,22 +43,34 @@ struct PromptBubble: View {
                     .motion(.respond, value: dimmed)
             }
             if note != nil || onRetry != nil || onCancel != nil {
-                HStack(spacing: 10) {
-                    if let note {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundStyle(Color.togoMute)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .contentTransition(.interpolate)
-                    }
-                    if let onRetry { footerButton(ChatCopy.tryAgain, action: onRetry) }
-                    if let onCancel { footerButton(cancelTitle, action: onCancel).disabled(!cancelEnabled) }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { footerNote; footerActions }.fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .trailing, spacing: 6) { footerNote; footerActions }
                 }
                 .transaction { $0.animation = nil }
             }
         }
         .padding(.leading, 48)
         .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    @ViewBuilder private var footerNote: some View {
+        if let note {
+            Text(note).font(.caption).foregroundStyle(Color.togoMute)
+                .fixedSize(horizontal: false, vertical: true).contentTransition(.interpolate)
+        }
+    }
+
+    private var footerActions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { buttons }.fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .trailing, spacing: 6) { buttons }
+        }
+    }
+
+    @ViewBuilder private var buttons: some View {
+        if let onRetry { footerButton(ChatCopy.tryAgain, action: onRetry) }
+        if let onCancel { footerButton(cancelTitle, action: onCancel).disabled(!cancelEnabled) }
     }
 
     private func footerButton(_ title: String, action: @escaping () -> Void) -> some View {

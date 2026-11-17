@@ -50,21 +50,22 @@ enum MissionActivity {
 
 /// A separate line keeps the state readable even with a long title or at large text sizes.
 struct MissionActivityLine: View {
-    @Environment(\.dynamicTypeSize) private var typeSize
     let row: HarnessRow
 
     var body: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
-        layout {
-            Text(verbatim: MissionActivity.label(row.state))
-                .font(.caption)
-                .foregroundStyle(MissionActivity.isFailure(row.state) ? PrimitiveTint.fail : Color.togoMute)
-                .fixedSize(horizontal: false, vertical: true)
-            if let start = MissionActivity.clockStart(row) {
-                MissionClock(start: start)
-            }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) { parts }.fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 3) { parts }
+        }
+    }
+
+    @ViewBuilder private var parts: some View {
+        Text(verbatim: MissionActivity.label(row.state))
+            .font(.caption)
+            .foregroundStyle(MissionActivity.isFailure(row.state) ? PrimitiveTint.fail : Color.togoMute)
+            .fixedSize(horizontal: false, vertical: true)
+        if let start = MissionActivity.clockStart(row) {
+            MissionClock(start: start)
         }
     }
 }
