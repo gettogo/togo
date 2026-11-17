@@ -48,15 +48,21 @@ struct ChatScrollTests {
 
     @Test func aDragSuppressesEveryAutomaticScroll() {
         #expect(ChatScroll.decide(.needsChanged(old: [], new: [a]), dragging: true) == nil)
-        #expect(ChatScroll.decide(.sent, dragging: true) == nil)
+        #expect(ChatScroll.decide(.sent, dragging: true, pinned: false, lastRow: "sent") == nil)
         #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: true) == nil)
         #expect(ChatScroll.decide(.reveal("approval-a"), dragging: true) == nil)
     }
 
-    @Test func theOwnSendAndItsLiveLineScrollToTheFoot() {
-        #expect(ChatScroll.decide(.sent, dragging: false) == .bottom)
-        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: false) == .bottom)
-        #expect(ChatScroll.decide(.liveAppeared(afterSend: false), dragging: false) == nil)
+    @Test func sendingAtTheFootLeavesTheOffsetToTheSizeChangeAnchor() {
+        #expect(ChatScroll.decide(.sent, dragging: false, pinned: true, lastRow: "sent") == nil)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: false, pinned: true) == nil)
+    }
+
+    @Test func sendingFromHistoryTargetsTheLastRealRowOnlyOnce() {
+        #expect(ChatScroll.decide(.sent, dragging: false, pinned: false, lastRow: "sent") == .row("sent"))
+        #expect(ChatScroll.decide(.sent, dragging: false, pinned: false, lastRow: nil) == nil)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: false, pinned: false) == nil)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: false), dragging: false, pinned: false) == nil)
     }
 
     @Test func aRevealedFieldOrGoToRequestScrollsToItsRow() {

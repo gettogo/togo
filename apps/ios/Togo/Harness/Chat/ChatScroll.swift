@@ -15,7 +15,7 @@ struct NeedsMark: Hashable, Sendable {
 /// layout and for every size change). The composer growing a line, the keyboard coming or
 /// going, a fold, a streaming reply: the scroll view keeps its foot by itself, and nothing
 /// here scrolls for a size change. The chat scrolls only for an event: a needs card arriving
-/// or growing its answers, the user's own send and the live line that follows it, a field a
+/// or growing its answers, the user's own send from history, a field a
 /// card revealed, a "Go to request". Never while the user's finger is on the chat.
 enum ChatScroll {
     enum Target: Equatable {
@@ -25,9 +25,9 @@ enum ChatScroll {
 
     /// What happens to a chat, as its scrolling sees it.
     enum Event: Equatable {
-        /// The user's own send.
+        /// The user's own send: scroll only from history to its last real row.
         case sent
-        /// The live line appeared; `afterSend` says the user's own prompt started the turn.
+        /// The live line appeared. Its size change never requests a second scroll.
         case liveAppeared(afterSend: Bool)
         /// The open needs cards changed.
         case needsChanged(old: [NeedsMark], new: [NeedsMark])
@@ -54,13 +54,16 @@ enum ChatScroll {
 
     /// The one decision: given what happened and whether a finger is on the chat, where the
     /// chat scrolls, or nowhere. A size change is never a reason: the anchor keeps the foot.
-    static func decide(_ event: Event, dragging: Bool) -> Target? {
+    static func decide(_ event: Event, dragging: Bool, pinned: Bool = false, lastRow: String? = nil) -> Target? {
         guard !dragging else { return nil }
         switch event {
         case .sent:
-            return .bottom
-        case .liveAppeared(let afterSend):
-            return afterSend ? .bottom : nil
+            // At the foot the size-change anchor already follows both the appended row and
+            // the composer shrinking. A second animated offset change fights that anchor.
+            return pinned ? nil : lastRow.map(Target.row)
+        case .liveAppeared:
+            // The send made the one navigation request. The live line is a size change.
+            return nil
         case .needsChanged(let old, let new):
             return newest(old: old, new: new).map(Target.row)
         case .reveal(let id):
@@ -308,8 +311,10 @@ struct ChatScrolling: ViewModifier {
                 }
             }
             .onChange(of: store.sends) {
-                guard let target = ChatScroll.decide(.sent, dragging: scroll.dragging) else { return }
-                scroll.go(target, reduce: reduceMotion)
+                guard let target = ChatScroll.decide(.sent, dragging: scroll.dragging, pinned: scroll.pinned, lastRow: store.rows.last?.id) else { return }
+                // A long lazy conversation has estimated heights: never animate a far jump.
+                // Resolve a real row once; the anchor owns all subsequent size changes.
+                scroll.go(target, reduce: true)
             }
             .onChange(of: store.scrollRequest) { _, request in
                 guard let request else { return }
