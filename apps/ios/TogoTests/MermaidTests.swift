@@ -17,6 +17,7 @@ import UIKit
         let renderer = MermaidRenderer.shared
         let actual = try #require(await renderer.image(real, dark: true, width: 340), "Renderer stage: \(renderer.lastFailure ?? "none")")
         #expect(actual.size.width > 0 && actual.size.height > 0)
+        #expect(await renderer.hasUnbrokenLabel(".cursor/hooks.json"), "File labels must occupy one SVG line, not split off their final character")
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.preferredRange = .standard

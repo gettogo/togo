@@ -67,6 +67,17 @@ import WebKit
 
     func clearCache() { cache.removeAll(); order.removeAll() }
 
+    #if DEBUG
+    /// Inspect actual SVG line layout without retaining or exporting diagram contents.
+    func hasUnbrokenLabel(_ label: String) async -> Bool {
+        guard let web else { return false }
+        let result = try? await web.callAsyncJavaScript(
+            "return [...document.querySelectorAll('#diagram svg text tspan')].some(node => !node.querySelector('tspan') && node.textContent === label);",
+            arguments: ["label": label], in: nil, contentWorld: .page)
+        return result as? Bool == true
+    }
+    #endif
+
     private func prepare(token: UUID) async -> Bool {
         guard generation == token else { return false }
         if loaded, web != nil { return true }
@@ -158,7 +169,7 @@ import WebKit
     if (source.length > 16384 || source.includes('%%{') || source.trimStart().startsWith('---')) return null;
     mermaid.initialize({startOnLoad:false,securityLevel:'strict',htmlLabels:false,suppressErrorRendering:true,
       maxTextSize:16384,maxEdges:300,theme:'base',darkMode:dark,fontFamily:'-apple-system, sans-serif',
-      flowchart:{htmlLabels:false,useMaxWidth:false},
+      flowchart:{htmlLabels:false,useMaxWidth:false,wrappingWidth:320},
       themeVariables:{background:colors.background,primaryColor:colors.fill,primaryTextColor:colors.text,
         primaryBorderColor:colors.line,lineColor:colors.line,secondaryColor:colors.fill,tertiaryColor:colors.fill},
       secure:['secure','securityLevel','startOnLoad','htmlLabels','flowchart','theme','themeVariables','fontFamily','maxTextSize','maxEdges','suppressErrorRendering']});
