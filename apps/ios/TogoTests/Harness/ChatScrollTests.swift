@@ -12,6 +12,21 @@ import TogoKit
 struct ChatScrollTests {
     private let a = NeedsMark(id: "approval-a", ready: false)
 
+    @Test func anEmptyRequestLinkDoesNotTargetAnUnrelatedFutureQuestion() async throws {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        services.feeds = [.init(elements: [.opened(.init(epoch: "e", cursor: 0, items: [], more: false,
+            mission: .init(rev: 1, summary: .init(), sections: [])))], end: .hold)]
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: services, cached: ChatTests.claude)
+        store.requestNeedsReveal()
+        #expect(store.pendingNeedsRequestID == "")
+        store.launch()
+        defer { store.stop() }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while store.phase != .live, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        try #require(store.phase == .live)
+        #expect(store.pendingNeedsRequestID == nil && store.scrollRequest == nil)
+    }
+
     /// ⌘↩ and ⌘. answer the topmost open yes-or-no request; answered or text-only ones are skipped.
     @Test func keyAnswersTakeTheTopmostOpenRequest() {
         var answered = Samples.request(id: "r1", bib: "01", title: "Edit?")

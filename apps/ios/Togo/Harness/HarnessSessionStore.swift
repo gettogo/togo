@@ -75,6 +75,8 @@ import UIKit
     var composerMenuOpen = false
     /// A scroll the chat should make: to a needs card ("Go to request", the capsule).
     var scrollRequest: ChatScrollRequest?
+    /// A notification's request waits for its full timeline item on a cold open.
+    var pendingNeedsRequestID: String?
     /// Bumped on every prompt this phone sends, so the chat scrolls to it.
     private(set) var sends = 0
     /// A subagent whose own conversation is shown (its agent item id), or nil for the main one.
@@ -235,6 +237,7 @@ import UIKit
     private func invalidateConversation() {
         guard !changingConversation else { return }
         changingConversation = true
+        if hasLoaded { pendingNeedsRequestID = nil }
         retireNativeInteractions(pumpQueue: false)
         nativeInteractions.requests.reset()
         commandList = []
@@ -471,6 +474,7 @@ import UIKit
         rememberMode()
         refreshWorking(conversation)
         updateNativeQuestion()
+        resolveNeedsReveal()
         pump()
     }
 

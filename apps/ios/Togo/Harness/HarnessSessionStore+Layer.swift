@@ -115,6 +115,33 @@ extension HarnessSessionStore {
         scrollRequest = ChatScrollRequest(row: row)
     }
 
+    /// A request link can arrive before the descriptor or its full question. Keep the intent
+    /// through that first load, without opening an input or answering the request.
+    func requestNeedsReveal(requestID: String? = nil) {
+        pendingNeedsRequestID = requestID ?? ""
+        focusedAgent = nil
+        layer = .chat
+        resolveNeedsReveal()
+    }
+
+    func resolveNeedsReveal() {
+        guard chatAvailable, let request = pendingNeedsRequestID else { return }
+        let item = WorkingLogic.openNeeds(rows: rows).first { item in
+            if request.isEmpty { return true }
+            switch item.body {
+            case .approval(let value): return value.requestId == request
+            case .question(let value): return value.requestId == request
+            default: return false
+            }
+        }
+        guard let item else {
+            if request.isEmpty, feed.isLoaded { pendingNeedsRequestID = nil }
+            return
+        }
+        pendingNeedsRequestID = nil
+        revealNeeds(id: item.id)
+    }
+
     // MARK: Actions
 
     func run(action: String, target: String? = nil, args: [String: JSONValue]? = nil) async throws -> HarnessActionResult {

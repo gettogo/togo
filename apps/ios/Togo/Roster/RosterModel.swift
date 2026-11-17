@@ -172,7 +172,7 @@ enum RosterCopy {
     static let detailClear = String(localized: "roster.detail.clear", defaultValue: "All clear")
     static let detailWaiting = String(localized: "roster.detail.waiting", defaultValue: "Something needs you")
     static let detailMessage = String(
-        localized: "roster.detail.message", defaultValue: "Pick a line to open its terminal."
+        localized: "roster.detail.message", defaultValue: "Select a session to open its conversation."
     )
     static let showAll = String(localized: "roster.filter.showAll", defaultValue: "Show All")
 

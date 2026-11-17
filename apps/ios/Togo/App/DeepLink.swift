@@ -140,7 +140,16 @@ extension AppStore {
         if let row = matches.first {
             clearPendingLink()
             if sheet?.isForm != true { sheet = nil }
-            open(hostID: row.hostID, sessionID: row.id)
+            // Links must reveal the detail, including a remembered terminal's request.
+            path = []
+            if let card = controlCenter.requests.first(where: { $0.tabID == TabID(hostID: row.hostID, sessionID: row.id) && $0.isPending }) {
+                openRequest(card)
+            } else {
+                showSession(TabID(hostID: row.hostID, sessionID: row.id))
+                if row.status == .needsYou || (row.mission?.needsYou ?? 0) > 0 {
+                    harness(for: TabID(hostID: row.hostID, sessionID: row.id))?.requestNeedsReveal()
+                }
+            }
             return
         }
         clearPendingLink()
