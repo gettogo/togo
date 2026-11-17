@@ -20,7 +20,9 @@ struct RequestsView: View {
             switch shown ?? page {
             case let .request(id, position, count):
                 // motion: state change — the next request takes the answered one's place, in place
-                RequestDetailView(store: store, requestId: id, position: position, count: count)
+                RequestDetailView(store: store, requestId: id, position: position, count: count, onAnswered: {
+                    if held == id { held = nil }
+                })
                     .id(id)
                     .transition(Motion.swap(reduce: reduceMotion))
             case .allClear:
@@ -39,12 +41,15 @@ struct RequestsView: View {
         }
         // The request the page shows, held or not: the focused one or the oldest.
         .onChange(of: WatchHome.page(for: store.requests, focus: focus).requestId) { old, new in
-            let answered = old.map { store.outcome($0) == .approved || store.outcome($0) == .denied || store.outcome($0) == .sent } ?? false
+            let answered = old.map {
+                let state = store.state(of: $0)
+                return state == .approved || state == .denied || state == .sent || state == .answered
+            } ?? false
             guard WatchHome.holds(previous: old, next: new, answeredHere: answered), let old else { return }
             held = old
             // A model-level hold: the page itself changes through `shown`'s transaction.
             Task { @MainActor in
-                try? await Task.sleep(for: WatchHome.holdAfterAnswer)
+                try? await Task.sleep(for: WatchHome.answerHold(expectsReceipt: store.expectsAnswerReceipt(old)))
                 if held == old { held = nil }
             }
         }

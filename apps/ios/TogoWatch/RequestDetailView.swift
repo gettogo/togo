@@ -9,6 +9,7 @@ struct RequestDetailView: View {
     let requestId: String
     var position = 1
     var count = 1
+    var onAnswered: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -79,8 +80,8 @@ struct RequestDetailView: View {
     /// Leaves the answered request on screen long enough to read the result.
     private func dismissSoon() {
         Task {
-            try? await Task.sleep(for: .seconds(1.2))
-            dismiss()
+            try? await Task.sleep(for: WatchHome.holdAfterAnswer)
+            if let onAnswered { onAnswered() } else { dismiss() }
         }
     }
 }
@@ -94,6 +95,8 @@ private struct AnswerButtons: View {
     private var outcome: WatchStore.Outcome? { store.outcome(request.requestId) }
     /// Off for a moment after the request shows; see `WatchHome.armDelay`.
     @State private var armed = false
+    @State private var decision: String?
+    @State private var feedback = WatchAnswerFeedback()
     /// The state on screen. It follows the store's in one transaction, so the buttons give way
     /// to the result, and a failure line arrives, with the screen around them moving too.
     @State private var shown: WatchStore.RequestState?
@@ -133,7 +136,15 @@ private struct AnswerButtons: View {
                     buttons(shown ?? state)
                 }
             }
-            .onChange(of: state, initial: true) { _, new in follow(new) }
+            .onChange(of: state, initial: true) { _, new in
+                follow(new)
+                if let result = feedback.observe(
+                    new, expectsReceipt: store.expectsAnswerReceipt(request.requestId), decision: decision
+                ) {
+                    WKInterfaceDevice.current().play(result == .denied ? .directionDown : .success)
+                    done()
+                }
+            }
         }
         .task {
             try? await Task.sleep(for: WatchHome.armDelay)
@@ -141,15 +152,9 @@ private struct AnswerButtons: View {
         }
         .onChange(of: outcome) { _, new in
             switch new {
-            case .approved:
-                WKInterfaceDevice.current().play(.success)
-                done()
-            case .denied:
-                WKInterfaceDevice.current().play(.directionDown)
-                done()
             case .failed, .notSetUp:
                 WKInterfaceDevice.current().play(.failure)
-            case .sending, .sent, nil:
+            case .approved, .denied, .sending, .sent, nil:
                 break
             }
         }
@@ -187,6 +192,7 @@ private struct AnswerButtons: View {
         if canApprove {
             Button {
                 guard armed else { return }
+                decision = "approve"
                 Task { await store.answer(request.requestId, "approve") }
             } label: {
                 Text(WatchCopy.yes)
@@ -215,6 +221,7 @@ private struct AnswerButtons: View {
         if WatchStore.canDeny(request) {
             Button {
                 guard armed else { return }
+                decision = "deny"
                 Task { await store.answer(request.requestId, "deny") }
             } label: {
                 Text(WatchCopy.no)

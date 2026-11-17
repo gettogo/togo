@@ -105,6 +105,12 @@ import WidgetKit
 
     func outcome(_ requestId: String) -> Outcome? { outcomes[requestId] }
 
+    /// A relay acknowledgement is not completion when this machine sends answer receipts.
+    func expectsAnswerReceipt(_ requestId: String) -> Bool {
+        guard let request = deps.pending.request(requestId) else { return false }
+        return deps.pairings.pairing(hostId: request.hostId)?.answerReceipts == true
+    }
+
     /// A request by id, still there after it was answered so its screen can say so.
     func request(_ requestId: String) -> PendingRequest? {
         requests.first { $0.requestId == requestId } ?? deps.pending.request(requestId)
