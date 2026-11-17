@@ -59,10 +59,12 @@ func replies(env harness.Env, session string, offset int64) ([]hookstyle.Reply, 
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
-			if offset+int64(len(line))-start >= maxRead {
+			if offset == start && int64(len(line)) >= maxRead {
 				// The read limit cut a line that is longer than a read
 				// (a large tool result): step over it, else every later
-				// read stops at the same place.
+				// read stops at the same place. A line the limit cut after
+				// others were read is left for the next read, which starts
+				// on it.
 				return out, skipLine(f, offset+int64(len(line)), offset)
 			}
 			// A line without its newline is still being written.

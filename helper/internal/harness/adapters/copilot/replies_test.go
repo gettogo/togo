@@ -160,3 +160,26 @@ func TestRepliesStepOverALineLongerThanARead(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+// More than one read's worth of log can pile up between two reads. The
+// line the read limit cuts is an ordinary one: it is read whole next time,
+// not stepped over as if it were longer than a read.
+func TestRepliesKeepsALineTheReadLimitCuts(t *testing.T) {
+	env, path := eventsFile(t)
+	filler := `{"type":"tool.execution_complete","data":{"output":"` + strings.Repeat("x", 1<<20) + `"}}`
+	var lines []string
+	for size := 0; size+len(filler)+1 < maxRead; size += len(filler) + 1 {
+		lines = append(lines, filler)
+	}
+	pad := maxRead - len(lines)*(len(filler)+1) - 10
+	lines = append(lines, `{"type":"x","data":"`+strings.Repeat("y", pad-21)+`"}`, evFinal)
+	appendLines(t, path, lines...)
+	got, next := replies(env, testSession, 0)
+	if len(got) != 0 {
+		t.Fatalf("first read: %d replies, want none yet", len(got))
+	}
+	got, _ = replies(env, testSession, next)
+	if len(got) != 1 || got[0].Text != "Every response now carries an X-Request-Id header." {
+		t.Fatalf("the cut line was lost: %+v", got)
+	}
+}
