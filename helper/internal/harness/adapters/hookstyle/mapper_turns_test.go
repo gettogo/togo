@@ -183,3 +183,36 @@ func TestOneNoticeForAFailureReportedTwice(t *testing.T) {
 		t.Fatalf("%d notices", n)
 	}
 }
+
+// Copilot names agents by type only. A third agent of a type, started after
+// the first stopped while the second still runs, gets its own row: it does
+// not share the second's, which a later stop would mark finished for both.
+func TestAThirdAgentOfATypeDoesNotShareARunningRow(t *testing.T) {
+	d, _ := For("copilot")
+	m := New(harness.Env{SessionID: "s-sub3"}, Options{Name: "copilot.hooks"})
+	rows := map[string]string{}
+	step := func(i int, event, body string) {
+		_, norm, err := Normalize(d, event, []byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, ops := m.Map(harness.Record{At: t0.Add(time.Duration(i) * time.Second), Data: norm})
+		for _, op := range ops {
+			if op.Section == harness.SectionAgents {
+				rows[op.Row.ID] = op.Row.State
+			}
+		}
+	}
+	step(0, "userPromptSubmitted", `{"prompt":"go"}`)
+	step(1, "subagentStart", `{"agentName":"explore"}`)
+	step(2, "subagentStart", `{"agentName":"explore"}`)
+	step(3, "subagentStop", `{"agentName":"explore"}`)
+	step(4, "subagentStart", `{"agentName":"explore"}`)
+	if len(rows) != 3 || rows["explore#2"] != harness.StateRunning || rows["explore#3"] != harness.StateRunning {
+		t.Fatalf("after a third start: %v", rows)
+	}
+	step(5, "subagentStop", `{"agentName":"explore"}`)
+	if rows["explore#2"] != harness.StateOK || rows["explore#3"] != harness.StateRunning {
+		t.Fatalf("after the second stop: %v", rows)
+	}
+}

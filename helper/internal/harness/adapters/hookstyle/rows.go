@@ -27,7 +27,7 @@ func (m *Mapper) agentOps(p payload, at time.Time) []harness.Op {
 		row.State, row.Started = harness.StateOK, nil
 	} else {
 		if len(open) > 0 {
-			row.ID = p.AgentID + "#" + strconv.Itoa(len(open)+1)
+			row.ID = freeAgentID(p.AgentID, open)
 		}
 		m.agents[p.AgentID] = append(open, agentRow{row.ID, row.Title})
 	}
@@ -35,6 +35,18 @@ func (m *Mapper) agentOps(p payload, at time.Time) []harness.Op {
 }
 
 type agentRow struct{ id, title string }
+
+// freeAgentID names one more agent of a type that already has open rows:
+// the first "type#n" no open row holds. Counting the open rows is not
+// enough, since an earlier one may have stopped while a later one runs.
+func freeAgentID(base string, open []agentRow) string {
+	for n := 2; ; n++ {
+		id := base + "#" + strconv.Itoa(n)
+		if !slices.ContainsFunc(open, func(a agentRow) bool { return a.id == id }) {
+			return id
+		}
+	}
+}
 
 // closeAgents ends the agent rows no SubagentStop closed: the turn that
 // started them is over.
