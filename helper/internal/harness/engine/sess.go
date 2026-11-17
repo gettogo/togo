@@ -79,6 +79,10 @@ type sess struct {
 	working    bool
 	// stoppedAt is when a stop last ended the turn (see stopHold).
 	stoppedAt time.Time
+	// agentAt is when an agent the session's agent started last did
+	// something live; agentsStale notes that rows without it were logged.
+	agentAt     time.Time
+	agentsStale bool
 	// feedWorking is what the mappers last said about the turn, and
 	// feedEndedAt when they last said it ended (see feedTrust).
 	feedWorking bool

@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"time"
+
 	"encoding/json"
 	"slices"
 
@@ -225,13 +227,23 @@ func sameJSON(a, b any) bool {
 	return err1 == nil && err2 == nil && string(x) == string(y)
 }
 
+// agentQuiet is how long agents may go without a record or a row change
+// and still count as running. A working agent writes its tool calls and
+// replies as it goes; a row left "running" with nothing behind it (its end
+// was never matched, or it ran before a helper restart) is not one.
+const agentQuiet = 2 * time.Minute
+
 // AgentsRunning reports whether agents the session's agent started still
-// run: rows of the agents section that are running or waiting. A main turn
-// can end while they work on (omp starts background agents, says so and
-// stops), and the pane watcher asks before it calls that silence a finished
-// turn. Background jobs are left out: a dev server runs for as long as the
-// session does. A row can stay running for good, so the watcher takes this
-// word for a bounded time only (watch.maxAgentsVouched).
+// work: a row of the agents section is running or waiting, and an agent
+// did something within agentQuiet. A main turn can end while they work on
+// (omp starts background agents, says so and stops), and the pane watcher
+// asks before it calls that silence a finished turn. Background jobs are
+// left out: a dev server runs for as long as the session does.
+//
+// The row alone is not enough. One left running for good held a session
+// "working" for minutes after its agent had gone idle: Stop stayed up,
+// queued prompts waited, the machine was kept awake. The watcher bounds
+// this word a second time (watch.maxAgentsVouched).
 func (e *Engine) AgentsRunning(id string) bool {
 	e.mu.Lock()
 	s, ok := e.sessions[id]
@@ -248,10 +260,23 @@ func (e *Engine) AgentsRunning(id string) bool {
 	if sec == nil {
 		return false
 	}
+	running := 0
 	for _, r := range sec.Rows {
 		if r.State == harness.StateRunning || r.State == harness.StateWaiting {
-			return true
+			running++
 		}
 	}
-	return false
+	if running == 0 {
+		s.agentsStale = false
+		return false
+	}
+	if s.agentAt.IsZero() || e.cfg.Now().Sub(s.agentAt) >= agentQuiet {
+		if !s.agentsStale {
+			s.agentsStale = true
+			e.cfg.Logf("harness: %s has %d agent rows running with no agent activity; not held as working", s.id, running)
+		}
+		return false
+	}
+	s.agentsStale = false
+	return true
 }

@@ -27,9 +27,21 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 	var ready []harness.Item
 	now := s.e.cfg.Now()
 	mark := s.batchMark()
+	if !s.restoring {
+		// What an agent started by the session's agent does right now, not
+		// what a replayed file says it once did (see AgentsRunning).
+		for _, op := range ops {
+			if op.Section == harness.SectionAgents {
+				s.agentAt = now
+			}
+		}
+	}
 	for _, it := range items {
 		if it.ID == "" || it.Kind == "" {
 			continue
+		}
+		if !s.restoring && (it.Parent != "" || it.Kind == harness.KindAgent) {
+			s.agentAt = now
 		}
 		s.prepareLocked(&it, mark)
 		s.labelModelNoticeLocked(&it)

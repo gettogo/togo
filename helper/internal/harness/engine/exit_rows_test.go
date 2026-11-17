@@ -116,6 +116,16 @@ func TestAgentsRunningCountsAgentsNotJobs(t *testing.T) {
 	waitFor(t, func() bool { return !e.AgentsRunning(id) })
 	deliver(id, map[string]any{"ops": []harness.Op{row(harness.SectionAgents, "agent-b", harness.StateRunning)}})
 	waitFor(t, func() bool { return e.AgentsRunning(id) })
+	// A row left running with nothing behind it does not count: seen live,
+	// one held an idle session "working" for minutes.
+	s.mu.Lock()
+	s.agentAt = s.agentAt.Add(-agentQuiet)
+	s.mu.Unlock()
+	if e.AgentsRunning(id) {
+		t.Fatal("a running row with no agent activity for agentQuiet still counted")
+	}
+	deliver(id, map[string]any{"ops": []harness.Op{row(harness.SectionAgents, "agent-b", harness.StateRunning)}})
+	waitFor(t, func() bool { return e.AgentsRunning(id) })
 	status.Store(wire.StatusEnded)
 	if e.AgentsRunning(id) {
 		t.Fatal("agents running after the session's agent ended")
