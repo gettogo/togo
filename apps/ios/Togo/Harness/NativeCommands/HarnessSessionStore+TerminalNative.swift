@@ -136,7 +136,12 @@ extension HarnessSessionStore {
         return model
     }
 
-    func dismissTerminalCommand(handbackOnFailure: Bool = false) {
+    /// Dismissal releases ownership, not the question waiting in the terminal.
+    func dismissTerminalCommand() {
+        retireTerminalInteraction()
+    }
+
+    func cancelTerminalCommand() {
         nativeInteractions.terminalWatch.cancel()
         guard let model = terminalInteraction else { return }
         if model.phase == .ended {
@@ -144,13 +149,7 @@ extension HarnessSessionStore {
             layer = .terminal
             return
         }
-        Task { [weak self] in
-            let closed = await model.close(cancel: true)
-            if !closed, handbackOnFailure, let self, self.terminalInteraction === model {
-                self.retireTerminalInteraction()
-                self.layer = .terminal
-            }
-        }
+        Task { _ = await model.close(cancel: true) }
     }
 
     func reopenTerminalMenu() async {

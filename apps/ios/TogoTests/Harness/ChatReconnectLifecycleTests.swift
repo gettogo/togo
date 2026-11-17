@@ -40,6 +40,22 @@ import TogoKit
         #expect(services.describes == 2)
         #expect(chat.chatAvailable)
     }
+    @Test func sendingAMultilineDraftDoesNotRestartOrRereadTheConversation() async throws {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        services.feeds = [.init(elements: [.opened(try HarnessFixtures.open())], end: .hold)]
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: services)
+        store.launch()
+        defer { store.stop() }
+        try await until { store.phase == .live }
+        let epoch = store.timeline.epoch
+        try await store.send("first line\nsecond line\nthird line", mode: .now)
+        #expect(store.phase == .live)
+        #expect(services.opens == [0])
+        #expect(services.describes == 1)
+        #expect(store.timeline.epoch == epoch)
+        #expect(ChatLoadingState(store) == .none)
+    }
+
     private func until(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(3)
         while !condition() {

@@ -140,6 +140,7 @@ enum SurfaceCopy {
     static let openingCommand = String(localized: "surface.openingCommand", defaultValue: "Opening command…")
     static let finishCurrent = String(localized: "surface.finishCurrent", defaultValue: "Finish or close the open request, then try again.")
     static let interface = String(localized: "surface.interface", defaultValue: "Session Controls")
+    static let cancelRequest = String(localized: "surface.cancelRequest", defaultValue: "Cancel Request")
     static let close = String(localized: "surface.close", defaultValue: "Close")
     static let terminal = String(localized: "surface.terminal", defaultValue: "Terminal")
     static let loading = String(localized: "surface.loading", defaultValue: "Opening session controls…")

@@ -93,9 +93,16 @@ extension HarnessSessionStore {
         }
     }
 
+    /// Closing the app presentation hands control back; it never answers or cancels.
     func dismissNativeCommand() {
+        if terminalInteraction != nil { dismissTerminalCommand(); return }
+        retireInteraction(pumpQueue: false)
+    }
+
+    /// Only an explicit Cancel Request may dismiss the original program's controls.
+    func cancelNativeCommand() {
         if terminalInteraction != nil {
-            dismissTerminalCommand()
+            cancelTerminalCommand()
             return
         }
         guard let current = interaction, nativeInteractions.dismissing != current.id else { return }
@@ -152,9 +159,7 @@ extension HarnessSessionStore {
            let id = nativeInteractions.requests.next(in: feed.timeline.conversation(), available: true, skipping: current.earlierRequests) {
             current.attachRequest(id)
         }
-        guard let id = nativeInteractions.requests.next(in: items,
-            available: surfaceAvailable && interaction == nil && terminalInteraction == nil && !nativeInteractions.stopping,
-            unanswerableApprovals: approvals) else { return }
-        interaction = makeInteraction(command: nil, requestID: id)
+        // Arrival keeps a card in the conversation. Only its Open action presents a form.
+        _ = nativeInteractions.requests.next(in: items, available: false, unanswerableApprovals: approvals)
     }
 }

@@ -15,7 +15,7 @@ struct TerminalNativeScreen: View {
             store.retireTerminalInteraction()
             store.layer = .terminal
             dismiss()
-        }) {
+        }, cancelRequest: model.phase == .active ? { store.cancelTerminalCommand() } : nil) {
             VStack(spacing: 0) {
                 if model.phase == .ended, let failure = model.failure {
                     StateView(kind: .error, title: PrimitiveCopy.couldNotLoad, message: failure,

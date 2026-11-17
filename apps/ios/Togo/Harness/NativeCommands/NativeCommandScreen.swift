@@ -12,10 +12,10 @@ struct NativeCommandScreen: View {
         NativeCommandNavigation(title: model.title, close: {
             store.dismissNativeCommand()
         }, terminal: {
-            store.retireInteraction()
+            store.retireInteraction(pumpQueue: false)
             store.layer = .terminal
             dismiss()
-        }) { page.disabled(store.nativeInteractions.dismissing == model.id) }
+        }, cancelRequest: model.blocks.isEmpty ? nil : { store.cancelNativeCommand() }) { page.disabled(store.nativeInteractions.dismissing == model.id) }
         .modifier(NativeRuntimeConfirmation(store: store, model: model))
         .background {
             if !model.retired, let scene = model.session.scene, let generation = model.session.generation {
@@ -67,6 +67,7 @@ struct NativeCommandNavigation<Content: View>: View {
     let title: String
     let close: () -> Void
     let terminal: () -> Void
+    var cancelRequest: (() -> Void)? = nil
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -76,10 +77,15 @@ struct NativeCommandNavigation<Content: View>: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(PrimitiveCopy.cancel, systemImage: "xmark", role: .cancel, action: close)
+                        Button(SurfaceCopy.close, systemImage: "xmark", action: close)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(PrimitiveCopy.terminal, systemImage: "terminal", action: terminal)
+                    }
+                    if let cancelRequest {
+                        ToolbarItem(placement: .secondaryAction) {
+                            Button(SurfaceCopy.cancelRequest, role: .destructive, action: cancelRequest)
+                        }
                     }
                 }
         }
@@ -139,7 +145,7 @@ struct NativeCommandPresentation: ViewModifier {
             if value == nil, let current = request {
                 switch current {
                 case .surface: store.dismissNativeCommand()
-                case .terminal: store.dismissTerminalCommand(handbackOnFailure: true)
+                case .terminal: store.dismissTerminalCommand()
                 }
             }
         }), as: .browse, name: "composer.nativeCommand") { request in
@@ -154,24 +160,12 @@ struct NativeCommandPresentation: ViewModifier {
                           available: store.canAttachTerminalMenu || (!terminalRequests.isEmpty && store.canAttachTerminalQuestion),
                           questions: terminalRequests, conversation: store.conversation)) {
             guard showing, scenePhase == .active else { return }
-            if store.canAttachTerminalQuestion, !terminalRequests.isEmpty {
-                store.attachTerminalQuestion(approvals: unanswerableApprovals)
-            } else if let request = store.readyTerminalMenu {
+            // Late screens belong to a command the user sent. Unsolicited questions
+            // remain cards until Open, even when entering a chat with a terminal prompt.
+            if let request = store.readyTerminalMenu {
                 await store.attachReadyTerminalMenu(request)
             }
         }
-        .task(id: Attachment(active: showing && scenePhase == .active,
-            available: store.has(HarnessCapability.terminalNative) && store.phase == .live,
-            conversation: store.conversation)) {
-                guard showing, scenePhase == .active, store.phase == .live else { return }
-                await store.attachTerminalMenu()
-            }
-    }
-
-    private struct Attachment: Hashable {
-        let active: Bool
-        let available: Bool
-        let conversation: UUID
     }
 
     private struct LateMenu: Hashable {

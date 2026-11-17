@@ -55,6 +55,26 @@ import TogoKit
         return try JSONDecoder().decode(HarnessItem.self, from: Data(wire.utf8))
     }
 
+    @Test func dismissingAQuestionHandsBackWithoutCancelAndItCanReopen() async throws {
+        let connection = Connection()
+        connection.results = [.init(result: .applied, screen: menu("request")), .init(result: .applied),
+                              .init(result: .applied, screen: menu("request-again")), .init(result: .applied)]
+        let (store, _) = try await make(connection)
+        defer { store.stop() }
+        let item = try question()
+        store.feed.insertSent(item)
+        await store.recoverTerminalRequest(item)
+        #expect(store.terminalInteraction?.screen != nil)
+        store.dismissTerminalCommand()
+        try await until { store.terminalInteraction == nil }
+        await store.nativeInteractions.stopTask?.value
+        #expect(connection.calls.map(\.action) == ["terminal.attach", "terminal.release"])
+        #expect(store.canRecoverTerminalRequest(item))
+        await store.recoverTerminalRequest(item)
+        #expect(store.terminalInteraction?.screen != nil)
+        #expect(connection.calls.map(\.action) == ["terminal.attach", "terminal.release", "terminal.attach"])
+    }
+
     @Test func staleReadOnlyRequestDoesNotHoldInputAndExplicitOpenPrefersNative() async throws {
         let connection = Connection()
         connection.results = [.init(result: .applied, screen: menu("request")), .init(result: .applied)]

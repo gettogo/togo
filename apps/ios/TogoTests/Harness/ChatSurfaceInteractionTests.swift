@@ -260,7 +260,7 @@ import TogoKit
         #expect(connection.inputs == 0)
     }
 
-    @Test func closeWaitsForPendingSearchBeforeEndingTheOriginalPicker() async throws {
+    @Test func explicitCancelWaitsForPendingSearchBeforeEndingTheOriginalPicker() async throws {
         let connection = try Connection()
         let (store, _) = try await makeStore(connection)
         defer { store.stop() }
@@ -287,7 +287,7 @@ import TogoKit
         let search = try #require(NativeCommandContext(model: model, block: block, store: store).primitive().searchScreen)
         let query = Task { try await search("phone search") }
         try await wait { connection.inputs == 2 }
-        store.dismissNativeCommand()
+        store.cancelNativeCommand()
         try await Task.sleep(for: .milliseconds(20))
         #expect(!model.retired)
         #expect(!connection.closed)
@@ -302,7 +302,7 @@ import TogoKit
         #expect(connection.closed)
     }
 
-    @Test func closingRecordedDockInputSendsItsOriginalCancelButtonOnce() async throws {
+    @Test func closingRecordedDockInputLeavesTheOriginalQuestionPending() async throws {
         let connection = try Connection()
         connection.next = try Self.scene(overlay: "omp-native-hook-input")
         let (store, _) = try await makeStore(connection)
@@ -326,10 +326,9 @@ import TogoKit
         try await wait { model.retired }
         await store.nativeInteractions.stopTask?.value
         await run.value
-        #expect(connection.actions == ["cancel"])
-        #expect(seen["id"] == .string("s.actions/cancel"))
-        #expect(seen["ev"] == .string("action"))
-        #expect(seen["act"] == .string("cancel"))
+        #expect(connection.actions.isEmpty)
+        #expect(seen.isEmpty)
+        #expect(!model.session.scene!.views[0].document.root.children.isEmpty)
         #expect(connection.closed)
     }
 
@@ -358,8 +357,10 @@ import TogoKit
         let item = try JSONDecoder().decode(HarnessItem.self, from: Data(wire.utf8))
         store.feed.insertSent(item)
         store.updateNativeQuestion()
+        #expect(store.interaction == nil)
+        store.openNativeQuestion(item.id)
         #expect(store.interaction?.requestID == item.id)
-        store.retireInteraction()
+        store.dismissNativeCommand()
         await store.nativeInteractions.stopTask?.value
         store.updateNativeQuestion()
         #expect(store.interaction == nil)
