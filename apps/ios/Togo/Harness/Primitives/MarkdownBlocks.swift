@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import TogoKit
 
 /// Markdown as blocks the app draws with system text: headings, paragraphs, list items, quotes,
 /// rules and fenced code. Inline marks (bold, code spans, links) are left to `AttributedString`.
@@ -9,12 +10,13 @@ enum PrimitiveMarkdownBlock: Equatable {
     case item(marker: String, text: String)
     case quote(String)
     case code(language: String?, text: String)
+    case richCode(MarkdownFence)
     case rule
 
     static func parse(_ markdown: String) -> [PrimitiveMarkdownBlock] {
         var blocks: [PrimitiveMarkdownBlock] = []
         var paragraph: [String] = []
-        var fence: (language: String?, lines: [String])?
+        var fence: (marker: MarkdownFenceMarker, lines: [String])?
 
         func flush() {
             let text = paragraph.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -25,8 +27,10 @@ enum PrimitiveMarkdownBlock: Equatable {
         for raw in markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if var open = fence {
-                if line.hasPrefix("```") {
-                    blocks.append(.code(language: open.language, text: open.lines.joined(separator: "\n")))
+                if open.marker.closes(line) {
+                    let text = open.lines.joined(separator: "\n")
+                    if let rich = MarkdownFence(language: open.marker.language, source: text, closed: true) { blocks.append(.richCode(rich)) }
+                    else { blocks.append(.code(language: open.marker.language, text: text)) }
                     fence = nil
                 } else {
                     open.lines.append(raw)
@@ -34,10 +38,9 @@ enum PrimitiveMarkdownBlock: Equatable {
                 }
                 continue
             }
-            if line.hasPrefix("```") {
+            if let marker = MarkdownFenceMarker.opening(line) {
                 flush()
-                let language = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-                fence = (language.isEmpty ? nil : language, [])
+                fence = (marker, [])
             } else if line.isEmpty {
                 flush()
             } else if let heading = Self.heading(line) {
@@ -56,7 +59,7 @@ enum PrimitiveMarkdownBlock: Equatable {
                 paragraph.append(line)
             }
         }
-        if let open = fence { blocks.append(.code(language: open.language, text: open.lines.joined(separator: "\n"))) }
+        if let open = fence { blocks.append(.code(language: open.marker.language, text: open.lines.joined(separator: "\n"))) }
         flush()
         return blocks
     }
@@ -142,6 +145,8 @@ struct PrimitiveMarkdown: View {
             .fixedSize(horizontal: false, vertical: true)
         case let .code(_, text):
             CodeWell(text: text)
+        case .richCode(let fence):
+            RichFenceView(fence: fence)
         case .rule:
             Rectangle().fill(Color.togoLine).frame(height: 1)
         }

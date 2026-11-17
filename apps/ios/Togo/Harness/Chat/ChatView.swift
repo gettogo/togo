@@ -289,7 +289,7 @@ struct ChatView: View {
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
-                ReplyRow(text: text.text)
+                ReplyRow(text: text.text, partial: text.partial)
                     .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(RichMarkdown.spoken(text.text)), host: self, selectable: true) { selecting = $0 })
             }
         case .work(let id, let summary, let steps):

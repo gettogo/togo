@@ -1,0 +1,11 @@
+{
+  "name": "mermaid",
+  "version": "12.3.0",
+  "source": "https://registry.npmjs.org/mermaid/-/mermaid-12.3.0.tgz",
+  "file": "mermaid.min.js",
+  "sha256": "336df803d87a38b70a01e736e666c8f7601d2ce42f5e47c8fafe5d721074b9a3",
+  "bytes": 5537838,
+  "gzipBytes": 1580013,
+  "license": "MIT",
+  "modified": false
+}

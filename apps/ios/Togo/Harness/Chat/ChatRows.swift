@@ -111,9 +111,10 @@ struct PendingPromptRow: View {
 /// The agent's answer, in full.
 struct ReplyRow: View, Equatable {
     let text: String
+    var partial = false
 
     var body: some View {
-        MarkdownText(text: text)
+        MarkdownText(text: text, isStreaming: partial)
             // Streamed and finalised text updates in place: a note's arrival transaction moves
             // the rows around it, never reflows this paragraph (motion v2 §5).
             .transaction { $0.animation = nil }

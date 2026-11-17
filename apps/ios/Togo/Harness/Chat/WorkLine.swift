@@ -390,7 +390,7 @@ struct StepDetail: View {
                     }
                     if let output = info.output, !output.isEmpty {
                         if case .thinking = step.body {
-                            MarkdownText(text: output)
+                            MarkdownText(text: output, isStreaming: info.state == .running)
                         } else {
                             CodeWell(text: output)
                         }
