@@ -274,15 +274,11 @@ struct ChatView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         PromptBubble(
                             text: user.text, note: promptNote(user), dimmed: user.queued,
-                            command: user.images.isEmpty && CommandEcho.isCommand(user.text, known: store.commandList)
+                            command: user.images.isEmpty && CommandEcho.isCommand(user.text, known: store.commandList),
+                            cancelTitle: ComposerCopy.cancelQueued,
+                            cancelEnabled: store.phase == .live,
+                            onCancel: user.queued ? { Task { await store.cancelQueued(item: item) } } : nil
                         )
-                        // Queued prompts show only here, so their Take back is on the row itself.
-                        if user.queued {
-                            Button(ComposerCopy.cancelQueued) { Task { await store.cancelQueued(item: item) } }
-                                .disabled(store.phase != .live)
-                                .buttonStyle(PlainAnswerStyle())
-                                .font(.footnote)
-                        }
                     }
                     .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self, selectable: true) { selecting = $0 })
                 }

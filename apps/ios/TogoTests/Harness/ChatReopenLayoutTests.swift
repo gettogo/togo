@@ -93,3 +93,16 @@ import UIKit
         try #require(condition())
     }
 }
+
+/// The queued status and its action stay in one footer at compact and wide widths.
+@MainActor @Suite(.serialized) struct QueuedPromptLayoutTests {
+    @Test(arguments: [240.0, 688.0])
+    func aQueuedStatusAndTakeBackShareOneFooter(width: Double) {
+        let host = UIHostingController(rootView: PromptBubble(text: "", note: ChatCopy.queued,
+            cancelTitle: ComposerCopy.cancelQueued, onCancel: {}))
+        let size = host.sizeThatFits(in: CGSize(width: width, height: 1_000))
+        #expect(size.width <= width)
+        #expect(size.height >= 44 && size.height < 50, "Queued and Take Back belong to one accessible footer row")
+    }
+
+}
