@@ -302,6 +302,8 @@ func (s *session) message(e map[string]any, parent string, at time.Time) ([]harn
 		return s.toolResult(m, at)
 	case "bashExecution":
 		return s.bash(id, parent, m, at)
+	case "developer":
+		return s.note(id, parent, at)
 	case "compactionSummary", "branchSummary":
 		return nil, nil
 	}
