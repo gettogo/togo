@@ -239,6 +239,11 @@ func (s *sess) notifyLocked(n harness.Notification) {
 		return
 	}
 	n.SessionID, n.TS, n.Epoch = s.id, s.e.cfg.Now(), s.e.log.Epoch(s.id)
+	if n.Kind == harness.NoteReset && len(s.subs) > 0 {
+		// A reset makes every open chat read the conversation again: rare
+		// by design, so each one is on record with its cause.
+		s.e.cfg.Logf("harness: %s chat reset (%s), %d open", s.id, n.Reason, len(s.subs))
+	}
 	for _, q := range s.subs {
 		q.push(n)
 	}

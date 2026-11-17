@@ -548,6 +548,7 @@ func (s *sess) syncFeedsLocked() {
 		}
 		if run != nil {
 			run.cancel()
+			s.e.cfg.Logf("harness: %s feed %s restarts: its source changed", s.id, name)
 		}
 		ctx, cancel := context.WithCancel(s.ctx)
 		run = &feedRun{name: name, rendered: string(rendered), cancel: cancel}
