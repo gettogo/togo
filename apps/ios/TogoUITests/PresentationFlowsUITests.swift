@@ -3,8 +3,8 @@ import XCTest
 /// Smoke flows over a replayed helper (`-ui-replay`, recordings in the app's Debug resources)
 /// and the presentation coordinator's probe (`presentation.probe`: violations, how many modals
 /// are stacked, what shows and what waits). Every check is on elements: no screenshots.
-/// `scripts/check-ui.sh` runs them on one iPhone simulator, portrait for compact width and
-/// landscape for regular.
+/// Run on one iPhone simulator in portrait for compact width and in landscape on a simulator
+/// with enough width to exercise the inspector.
 @MainActor final class PresentationFlowsUITests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -327,7 +327,7 @@ import XCTest
         openChat()
         // An iPhone below the Max models keeps a compact-width window in landscape (its size
         // class), where mission control is rightly a sheet. The regular-width inspector is
-        // checked on a Max or an iPad; check-ui.sh runs on the iPhone 18 Pro Max.
+        // checked on a Max or an iPad with enough width for the inspector.
         let device = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] ?? ""
         if !device.contains("Max"), !device.contains("iPad") {
             throw XCTSkip("Landscape on \(device) is compact width; the inspector is for regular width")
