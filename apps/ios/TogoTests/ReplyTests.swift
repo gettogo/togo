@@ -208,15 +208,16 @@ struct ReplyTests {
 
     /// A request the phone heard of only by push is answered only on the machine that sent it.
     @Test func watchAnswerChecksTheRequestsMachine() async {
-        let pending = PendingStore(directory: directory, clock: { Samples.now })
+        let now = Date()
+        let pending = PendingStore(directory: directory, clock: { now })
         pending.upsert(PendingRequest(
             requestId: "r_bbbbbbbbbb", hostId: "h_aaaaaaaaaaaaaaaaaaaaaaaaaa", sessionId: nil, bib: "01", agent: "claude",
-            host: "laptop", title: "Which file?", subject: nil, options: [], receivedAt: Samples.now, answered: nil,
+            host: "laptop", title: "Which file?", subject: nil, options: [], receivedAt: now, answered: nil,
             allowText: true
         ))
         pending.upsert(PendingRequest(
             requestId: "r_cccccccccc", hostId: hostID, sessionId: nil, bib: "01", agent: "claude",
-            host: "studio", title: "Which file?", subject: nil, options: [], receivedAt: Samples.now, answered: nil,
+            host: "studio", title: "Which file?", subject: nil, options: [], receivedAt: now, answered: nil,
             allowText: true
         ))
         tools.answer("approval.answer", #"{"state":"answered"}"#)
@@ -231,10 +232,11 @@ struct ReplyTests {
     /// With no window (the Watch launched the app in the background) a typed answer to a
     /// request the push announced still goes; a prompt, which needs the sessions, does not.
     @Test func watchReplyWithoutAWindow() async {
-        let pending = PendingStore(directory: directory, clock: { Samples.now })
+        let now = Date()
+        let pending = PendingStore(directory: directory, clock: { now })
         pending.upsert(PendingRequest(
             requestId: "r_cccccccccc", hostId: hostID, sessionId: nil, bib: "01", agent: "claude",
-            host: "studio", title: "Which file?", subject: nil, options: [], receivedAt: Samples.now, answered: nil,
+            host: "studio", title: "Which file?", subject: nil, options: [], receivedAt: now, answered: nil,
             allowText: true
         ))
         tools.answer("approval.answer", #"{"state":"answered"}"#)

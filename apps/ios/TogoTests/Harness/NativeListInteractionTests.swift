@@ -64,7 +64,7 @@ import TogoKit
             if case .object(let fields) = value { event = fields }
             connection?.next = after
         }
-        store.dismissNativeCommand()
+        store.cancelNativeCommand()
         try await support.wait { model.retired }
         await store.nativeInteractions.stopTask?.value
         await run.value
@@ -85,7 +85,7 @@ import TogoKit
         store.interaction = model
         let run = Task { await model.run(options: support.options) }
         try await support.wait { session.canInteract && !model.blocks.isEmpty }
-        store.dismissNativeCommand()
+        store.cancelNativeCommand()
         try await support.wait { model.closeFailure != nil }
         #expect(store.interaction === model)
         #expect(!model.retired && !connection.closed)
@@ -121,7 +121,7 @@ import TogoKit
             if case .object(let fields) = value { target = fields["id"] }
             connection?.next = after
         }
-        store.dismissNativeCommand()
+        store.cancelNativeCommand()
         try await support.wait { model.retired }
         await store.nativeInteractions.stopTask?.value
         await run.value
@@ -142,7 +142,7 @@ import TogoKit
         var after = try ChatSurfaceInteractionTests.scene(revision: 2, overlay: "omp-native-select-overlay")
         after.views[0].document.root.children[0].children[0].properties["head"] = .string("Still open")
         connection.onInput = { [weak connection] _ in connection?.next = after }
-        store.dismissNativeCommand()
+        store.cancelNativeCommand()
         try await support.wait(timeout: .seconds(7)) { model.closeFailure != nil }
         #expect(!model.retired && !connection.closed)
         #expect(connection.actions == ["togo.escape"])
@@ -162,7 +162,7 @@ import TogoKit
         try await support.wait { session.canInteract && !model.blocks.isEmpty }
         let after = try ChatSurfaceInteractionTests.scene(revision: 2, overlay: "omp-native-hook-input")
         connection.onInput = { [weak connection] _ in connection?.next = after }
-        store.dismissNativeCommand()
+        store.cancelNativeCommand()
         try await support.wait { session.scene?.revision == 2 && store.nativeInteractions.dismissing == nil }
         #expect(store.interaction === model)
         #expect(!model.retired && !connection.closed)

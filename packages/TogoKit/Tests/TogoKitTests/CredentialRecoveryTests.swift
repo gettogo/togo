@@ -37,7 +37,7 @@ struct HostCredentialRecoveryTests {
         let monitor = MonitorFixtures.monitor(factory, clock: clock)
         let log = SnapshotLog(monitor)
         await monitor.start()
-        let retry = await clock.runSleep(.milliseconds(500))
+        let retry = await clock.runSleep(ConnectionTiming.retryPause)
         #expect(retry, "temporary credential access must not require a manual refresh")
         if retry { #expect(await eventually { log.reach == .online && log.sessionIDs == ["s1"] }) }
         #expect(log.reach != .authNeeded)
