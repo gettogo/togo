@@ -3,7 +3,7 @@ import TogoKit
 
 /// What the bar shows besides the field, mirrored so each change is one transaction.
 struct ComposerParts: Equatable {
-    enum Part: Hashable { case menu, peek, agents, queued, notice, undo, attachNotice, pictures }
+    enum Part: Hashable { case menu, peek, queued, notice, undo, attachNotice, pictures }
 
     /// The Undo a restart offers, compared by id.
     struct Undo: Equatable {
@@ -18,14 +18,12 @@ struct ComposerParts: Equatable {
     /// The terminal peek's strip: the agent's own menu.
     var peek = false
     var queued = 0
-    var agents = 0
     var notice: String?
     var undo: Undo?
     var attachNotice: String?
     var pictures = false
 
-    @MainActor init(_ model: CommandLineModel, agents: Int = 0) {
-        self.agents = agents
+    @MainActor init(_ model: CommandLineModel) {
         menu = model.menu != .none
         peek = !model.peekRows.isEmpty
         queued = model.queuedCount
@@ -43,7 +41,6 @@ struct ComposerParts: Equatable {
         if menu { out.insert(.menu) }
         if peek { out.insert(.peek) }
         if queued > 0 { out.insert(.queued) }
-        if agents > 0 { out.insert(.agents) }
         if notice != nil { out.insert(.notice) }
         if undo != nil { out.insert(.undo) }
         if attachNotice != nil { out.insert(.attachNotice) }

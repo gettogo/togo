@@ -20,10 +20,8 @@ struct SmartCommandLine: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.loopsPaused) private var loopsPaused
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var sendDiameter: CGFloat = 34
     @Bindable var model: CommandLineModel
-    let agentsReconciled: Bool
     /// Where a screen's non-screen open targets go, such as a diff or a URL.
     var onOpen: (HarnessOpen) -> Void = { _ in }
     @State private var focused = false
@@ -32,20 +30,13 @@ struct SmartCommandLine: View {
     /// Pictures and files pasted into the field go to the attachments, not into the text.
     @State private var paste = ComposerPasteDelegate()
 
-    init(model: CommandLineModel, agentsReconciled: Bool = false, onOpen: @escaping (HarnessOpen) -> Void = { _ in }) {
+    init(model: CommandLineModel, onOpen: @escaping (HarnessOpen) -> Void = { _ in }) {
         self.model = model
-        self.agentsReconciled = agentsReconciled
         self.onOpen = onOpen
-        _shown = State(initialValue: ComposerParts(model, agents: Self.agentCount(model, reconciled: agentsReconciled)))
+        _shown = State(initialValue: ComposerParts(model))
     }
 
     private func fades(_ part: ComposerParts.Part) -> Double { leaving.contains(part) ? 0 : 1 }
-    private var parts: ComposerParts { ComposerParts(model, agents: Self.agentCount(model, reconciled: agentsReconciled)) }
-    private static func agentCount(_ model: CommandLineModel, reconciled: Bool) -> Int {
-        guard model.store.phase == .live, model.store.has(HarnessCapability.agents) else { return 0 }
-        return MissionLayout.runningAgents(model.store.mission.mission, working: model.store.working, reconciled: reconciled)
-    }
-
     /// Follows the model: arrivals and changes in one `resize` transaction; anything leaving
     /// conceals first, then the bar shrinks to what the model shows by then.
     private func follow(_ parts: ComposerParts) {
@@ -64,7 +55,7 @@ struct SmartCommandLine: View {
         } completion: {
             // motion: preventing a jump — the glass closes the room the leaver had.
             withAnimation(Motion.animation(.resize, reduce: reduceMotion)) {
-                shown = self.parts
+                shown = ComposerParts(model)
                 leaving = []
             }
         }
@@ -92,7 +83,7 @@ struct SmartCommandLine: View {
                 // such as a folded Duo with the keyboard up.
                 .layoutPriority(1)
         }
-        .onChange(of: parts) { _, parts in follow(parts) }
+        .onChange(of: ComposerParts(model)) { _, parts in follow(parts) }
         // The keyboard going (a swipe, a tap on the chat, Hide Keyboard) takes the menu with it.
         .onChange(of: focused) { _, isFocused in
             if !isFocused, model.menu != .none { model.dismissMenu() }
@@ -148,24 +139,17 @@ struct SmartCommandLine: View {
     private var bar: some View {
         VStack(alignment: .leading, spacing: 0) {
             // The prompts themselves show in the chat, each with Take back; here only how many.
-            if shown.agents > 0 || shown.queued > 0 {
-                let layout = typeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
-                layout {
-                    if shown.agents > 0 {
-                        AgentsRunningLine(store: model.store, count: shown.agents).opacity(fades(.agents))
-                    }
-                    if shown.queued > 0 {
-                        Text(ComposerCopy.queuedCount(shown.queued))
-                            .font(.footnote).foregroundStyle(Color.togoMute)
-                            .countChange(Double(shown.queued)).opacity(fades(.queued))
-                    }
-                }
-                .padding(.horizontal, 16).padding(.top, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // motion: state change — status appears in the existing header without a separate entrance.
-                .transition(.identity)
+            if shown.queued > 0 {
+                Text(ComposerCopy.queuedCount(shown.queued))
+                    .font(.footnote)
+                    .foregroundStyle(Color.togoMute)
+                    .countChange(Double(shown.queued))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(fades(.queued))
+                    // motion: state change — status: the line is simply there (a cut).
+                    .transition(.identity)
             }
             if let notice = shown.notice {
                 ComposerNoticeLine(text: notice, action: model.noticeAction) { action in

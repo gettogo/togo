@@ -33,11 +33,12 @@ import UIKit
     }
 
     @Test(arguments: [CGFloat(320), CGFloat(700)], [DynamicTypeSize.large, .accessibility3])
-    func zeroAgentsLeaveNoHeaderSpace(width: CGFloat, type: DynamicTypeSize) async throws {
+    func agentsResizeOnlyTheOuterBarAndZeroLeavesNoRoom(width: CGFloat, type: DynamicTypeSize) async throws {
         let store = try await Self.fixture(agents: 0)
         defer { store.stop() }
         let model = CommandLineModel(store: store)
         var heights: [CGFloat] = []
+        var composerHeights: [CGFloat] = []
         for count in [0, 1, 4, 0] {
             var snapshot = HarnessOpenResult(epoch: store.timeline.epoch ?? "agents-layout", cursor: 24, items: store.timeline.items, more: false,
                 mission: .init(rev: 1, summary: .init(agents: count, working: true), sections: [
@@ -45,15 +46,18 @@ import UIKit
                 ]))
             snapshot.epoch = "agents-layout"
             _ = store.feed.load(snapshot)
-            let host = UIHostingController(rootView: SmartCommandLine(model: model, agentsReconciled: true).environment(\.dynamicTypeSize, type))
+            let host = UIHostingController(rootView: ChatComposerBar(model: model, agentsReconciled: true).environment(\.dynamicTypeSize, type))
             heights.append(host.sizeThatFits(in: .init(width: width, height: 2000)).height)
+            let composer = UIHostingController(rootView: SmartCommandLine(model: model).environment(\.dynamicTypeSize, type))
+            composerHeights.append(composer.sizeThatFits(in: .init(width: width, height: 2000)).height)
         }
         let bare = try await Self.fixture(agents: 0, supportsAgents: false)
         defer { bare.stop() }
         let host = UIHostingController(rootView: SmartCommandLine(model: CommandLineModel(store: bare)).environment(\.dynamicTypeSize, type))
         let baseline = host.sizeThatFits(in: .init(width: width, height: 2000)).height
         #expect(abs(heights[0] - baseline) < 1 && abs(heights[3] - baseline) < 1, "Zero agents must add no height: \(heights), baseline \(baseline)")
-        #expect(heights[1] > baseline && heights[2] > baseline)
+        #expect(heights[1] >= baseline + 44 && heights[2] >= baseline + 44)
+        #expect(composerHeights.allSatisfy { abs($0 - baseline) < 1 }, "The composer box must keep its original height")
     }
     @Test func openingMissionControlDismissesTheActiveComposer() throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

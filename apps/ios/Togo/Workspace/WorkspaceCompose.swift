@@ -154,7 +154,7 @@ struct WorkspaceComposeBar: View {
             // composer takes nothing from it.
             if let tab = store.composeTab, let model = chatComposer(for: tab.id) {
                 let shown = SessionInput(store.layer(for: tab.id)) == .composer
-                SmartCommandLine(model: model,
+                ChatComposerBar(model: model,
                     agentsReconciled: store.machine(for: tab.hostID)?.capabilities.contains(Capability.liveAgents) == true)
                     // The terminal under the chat, for the composer's terminal peek.
                     .onAppear { model.peekTerminal = .live { [terminals] in terminals.handle(for: tab.id) } }

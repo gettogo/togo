@@ -1,8 +1,8 @@
 import SwiftUI
 import TogoKit
 
-/// The live count in the composer's status header, beside queued prompts. The parent owns
-/// its appearance transaction and omits the header entirely when neither count is present.
+/// A separate row above the composer, included in the bottom inset. The parent omits it
+/// entirely when no agents are running.
 struct AgentsRunningLine: View {
     let store: HarnessSessionStore
     let count: Int
