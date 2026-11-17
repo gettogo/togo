@@ -224,3 +224,34 @@ func sameJSON(a, b any) bool {
 	y, err2 := json.Marshal(b)
 	return err1 == nil && err2 == nil && string(x) == string(y)
 }
+
+// AgentsRunning reports whether agents the session's agent started still
+// run: rows of the agents section that are running or waiting. A main turn
+// can end while they work on (omp starts background agents, says so and
+// stops), and the pane watcher asks before it calls that silence a finished
+// turn. Background jobs are left out: a dev server runs for as long as the
+// session does. A row can stay running for good, so the watcher takes this
+// word for a bounded time only (watch.maxAgentsVouched).
+func (e *Engine) AgentsRunning(id string) bool {
+	e.mu.Lock()
+	s, ok := e.sessions[id]
+	e.mu.Unlock()
+	if !ok || s.ad == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if agentGone(s.hubStatus()) {
+		return false
+	}
+	sec := s.mission.section(harness.SectionAgents)
+	if sec == nil {
+		return false
+	}
+	for _, r := range sec.Rows {
+		if r.State == harness.StateRunning || r.State == harness.StateWaiting {
+			return true
+		}
+	}
+	return false
+}

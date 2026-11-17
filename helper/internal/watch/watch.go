@@ -85,9 +85,12 @@ type Watcher struct {
 	// turnRunning, when set, reports that the agent's own feed (its server's
 	// event stream) sees its turn still running; see SetTurnRunning.
 	turnRunning func(id string) bool
-	needsYou    func(id string) bool
-	home        string
-	now         func() time.Time
+	// agentsRunning, when set, reports that agents the session's agent
+	// started still run; see SetAgentsRunning.
+	agentsRunning func(id string) bool
+	needsYou      func(id string) bool
+	home          string
+	now           func() time.Time
 
 	// Seams for tests; New binds them to tmux and the session service.
 	list    func(context.Context) ([]session.Session, error)

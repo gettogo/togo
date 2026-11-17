@@ -45,6 +45,13 @@ const (
 	// never records the end of a turn that failed on screen), and a done
 	// that never comes is the worst miss; after this the pane decides.
 	maxVouched = 3 * time.Minute
+	// maxAgentsVouched bounds how long agents the turn started (subagents
+	// still running after the main turn ended) keep a silent pane working.
+	// Longer than maxVouched, because a batch of agents runs for many
+	// minutes while the main agent sits at its prompt; still bounded,
+	// because a row can stay "running" for good (an agent file that stops
+	// without a last record).
+	maxAgentsVouched = 30 * time.Minute
 	// textIdlePoll spaces the screen reads of an agent whose output left
 	// its text unchanged last time (a blinking cursor at an idle prompt).
 	textIdlePoll = 8 * time.Second
@@ -117,7 +124,7 @@ func (w *Watcher) selfRedraw(ctx context.Context, id string, e *entry, now time.
 
 // settle runs after silence: a prompt on screen is reported, otherwise the
 // session is idle and its owner is told it is done, unless the agent's
-// feed says its turn still runs.
+// feed says its turn, or an agent the turn started, still runs.
 func (w *Watcher) settle(ctx context.Context, id string, e *entry) {
 	e.working, e.promptCheck, e.busyMisses = false, false, 0
 	p, ok, err := w.inspect(ctx, id)
@@ -153,10 +160,16 @@ func (w *Watcher) settle(ctx context.Context, id string, e *entry) {
 }
 
 // vouched reports whether the feed's word keeps a silent session working:
-// it says the turn runs, and has not said so alone for maxVouched since
-// the pane last showed the agent busy.
+// it says the turn runs, or that agents the turn started still do, and has
+// not said so alone for too long (maxVouched for the turn, maxAgentsVouched
+// for its agents) since the pane last showed the agent busy.
 func (w *Watcher) vouched(id string, e *entry) bool {
-	if !w.feedWorking(id) {
+	limit := maxVouched
+	switch {
+	case w.feedWorking(id):
+	case w.agentsWorking(id):
+		limit = maxAgentsVouched
+	default:
 		e.vouchedSince = time.Time{}
 		return false
 	}
@@ -164,7 +177,7 @@ func (w *Watcher) vouched(id string, e *entry) bool {
 	if e.vouchedSince.IsZero() {
 		e.vouchedSince = now
 	}
-	return now.Sub(e.vouchedSince) < maxVouched
+	return now.Sub(e.vouchedSince) < limit
 }
 
 // agentOutput handles output from an agent with a working indicator: it

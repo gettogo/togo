@@ -81,3 +81,43 @@ func TestSubagentsAndJobsEndWhenTheAgentExits(t *testing.T) {
 		t.Errorf("rows after the exit: %v", rows)
 	}
 }
+
+// AgentsRunning is the pane watcher's question before it calls a silent
+// pane a finished turn: yes while an agent row runs, no for a background
+// job alone (a dev server lasts as long as the session), no once the agent
+// has finished or the session's own agent is gone.
+func TestAgentsRunningCountsAgentsNotJobs(t *testing.T) {
+	id := "s_agentsrun1"
+	var status atomic.Value
+	status.Store("working")
+	e := statusEngine(t, id, &seqPane{mode: "a"}, &status, func(c *Config) {
+		c.Sessions = fakeSessions{id: {ID: id, Agent: "fakeexit", Managed: true, Cwd: c.Home, Command: []string{"fakeexit"}}}
+	})
+	s, _ := e.served(context.Background(), id)
+	sub := &fakeSub{done: make(chan struct{})}
+	defer close(sub.done)
+	if _, err := e.Open(context.Background(), sub, id, 0, 50); err != nil {
+		t.Fatal(err)
+	}
+	if e.AgentsRunning(id) || e.AgentsRunning("s_unknown") {
+		t.Fatal("agents running before any started")
+	}
+	row := func(section, rowID, state string) harness.Op {
+		return harness.Op{Op: harness.OpUpsert, Section: section, Row: &harness.Row{ID: rowID, Title: rowID, State: state}}
+	}
+	deliver(id, map[string]any{"ops": []harness.Op{row(harness.SectionBackground, "job-1", harness.StateRunning)}})
+	waitFor(t, func() bool { return s.sum.Load().Background == 1 })
+	if e.AgentsRunning(id) {
+		t.Fatal("a background job alone counted as an agent running")
+	}
+	deliver(id, map[string]any{"ops": []harness.Op{row(harness.SectionAgents, "agent-a", harness.StateRunning)}})
+	waitFor(t, func() bool { return e.AgentsRunning(id) })
+	deliver(id, map[string]any{"ops": []harness.Op{row(harness.SectionAgents, "agent-a", harness.StateOK)}})
+	waitFor(t, func() bool { return !e.AgentsRunning(id) })
+	deliver(id, map[string]any{"ops": []harness.Op{row(harness.SectionAgents, "agent-b", harness.StateRunning)}})
+	waitFor(t, func() bool { return e.AgentsRunning(id) })
+	status.Store(wire.StatusEnded)
+	if e.AgentsRunning(id) {
+		t.Fatal("agents running after the session's agent ended")
+	}
+}

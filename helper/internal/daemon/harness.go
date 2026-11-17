@@ -122,6 +122,7 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 	})
 	c.Hub.SetMission(eng.Summary)
 	c.Watch.SetTurnRunning(eng.TurnRunning)
+	c.Watch.SetAgentsRunning(eng.AgentsRunning)
 	c.Watch.SetNeedsYou(eng.NeedsYou)
 	c.Hub.OnEvent(eng.Observe)
 	source.Hooks.OnDeliver = eng.Delivered
