@@ -106,13 +106,13 @@ struct PendingPromptRow: View {
                     .opacity(0.6)
             }
             PromptBubble(text: prompt.text, note: note, dimmed: true,
-                         onCancel: prompt.state == .sending ? nil : onCancel, onRetry: failed ? onRetry : nil)
+                         onCancel: prompt.state == .sending ? nil : onCancel, onRetry: canRetry ? onRetry : nil)
         }
         .haptic(.error, trigger: failed) { _, failed in failed }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(ChatCopy.spokenPrompt(prompt.text) + ", " + (note ?? ""))
         .accessibilityActions {
-            if case .failed = prompt.state { Button(ChatCopy.tryAgain, action: onRetry) }
+            if canRetry { Button(ChatCopy.tryAgain, action: onRetry) }
             if prompt.state != .sending { Button(ChatCopy.cancel, action: onCancel) }
         }
     }
@@ -120,6 +120,10 @@ struct PendingPromptRow: View {
     private var failed: Bool {
         if case .failed = prompt.state { true } else { false }
     }
+
+    /// A prompt that failed, or whose delivery could not be confirmed, is sent again only when
+    /// the user asks: it is never replayed on its own, and it must not hold the queue for good.
+    private var canRetry: Bool { failed || prompt.state == .unconfirmed }
 
     private var note: String? {
         switch prompt.state {

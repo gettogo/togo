@@ -358,6 +358,21 @@ struct ChatTests {
         #expect(queue.isFull)
     }
 
+    /// A prompt whose delivery could not be confirmed holds the rest, and goes out again only
+    /// when the user asks for it.
+    @Test func unconfirmedPromptCanBeSentAgainByTheUser() {
+        var queue = PromptQueue()
+        let a = queue.add("a")!
+        queue.add("b")
+        _ = queue.next(canSend: true)
+        queue.unconfirmed(a)
+        let held = queue.next(canSend: true)
+        #expect(held == nil)
+        queue.retry(a)
+        let again = queue.next(canSend: true)
+        #expect(again?.id == a)
+    }
+
     @Test func failedPromptHoldsTheRestUntilRetriedOrCancelled() {
         var queue = PromptQueue()
         let a = queue.add("a")!
