@@ -112,6 +112,15 @@ import TogoKit
         #expect(store.pendingLink == nil)
     }
 
+    /// With no machine set up there is nowhere to start a session: the link is dropped and
+    /// first-run setup stays on screen.
+    @Test func newSessionLinkWithNoMachinesOpensNothing() {
+        let store = AppStore(services: FakeAppServices(hosts: []), controlCenter: Samples.controlCenter)
+        store.open(.newSession(host: nil))
+        #expect(store.sheet == nil)
+        #expect(store.pendingLink == nil)
+    }
+
     @Test func newSessionLinkPicksTheNamedMachine() {
         let store = AppStore(services: FakeAppServices(), controlCenter: Samples.controlCenter)
         store.open(.newSession(host: "Build box"))
