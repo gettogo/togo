@@ -45,6 +45,13 @@ const (
 	// CapReceipt: push.pair takes answerReceipts, and a device that set it
 	// is told what became of each answer it sends through the relay.
 	CapReceipt = "receipt.v1"
+	// CapAgentsLive: the agents section's running rows can be trusted while
+	// the main turn is idle. A helper that says so reads a session's
+	// subagent files again after it restarts, so an agent that finished
+	// earlier is not left "running"; before it, such rows could stay for
+	// good, and the app shows its "agents are running" line only while a
+	// turn works.
+	CapAgentsLive = "agents.live.v1"
 )
 
 // App-facing methods.

@@ -54,6 +54,7 @@ var Capabilities = []string{
 	wire.CapExpiry,
 	wire.CapForegroundDevice,
 	wire.CapReceipt,
+	wire.CapAgentsLive,
 	wire.CapLiveContext,
 	api.RecentCapability,
 	wire.CapReply,
