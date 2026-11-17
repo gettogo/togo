@@ -25,6 +25,30 @@ enum MissionLayout {
         }
     }
 
+    /// Present the snapshot without trimming history on behalf of an older helper. The helper
+    /// owns row removal; the app keeps identity and source order within each activity group.
+    static func presentedSections(_ mission: HarnessMission?, descriptor: HarnessDescriptor?) -> [HarnessSection] {
+        sections(mission, capabilities: descriptor.map { Set($0.capabilities) }).compactMap { section in
+            guard !section.rows.isEmpty || (section.kind == .status
+                && (section.status != nil || !statusScreens(descriptor).isEmpty)) else { return nil }
+            var result = section
+            if section.kind == .agents || section.kind == .background {
+                result.rows = section.rows.filter { MissionActivity.isRunning($0.state) }
+                    + section.rows.filter { !MissionActivity.isRunning($0.state) }
+            }
+            return result
+        }
+    }
+
+    static func headerCount(_ section: HarnessSection, summary: MissionSummary) -> Int {
+        switch section.kind {
+        case .agents, .background: section.rows.filter { MissionActivity.isRunning($0.state) }.count
+        case .needs: max(section.rows.count, summary.needsYou)
+        case .plan: 0
+        default: section.rows.count
+        }
+    }
+
     static func supports(_ kind: MissionSectionKind, _ capabilities: Set<String>) -> Bool {
         switch kind {
         case .needs:

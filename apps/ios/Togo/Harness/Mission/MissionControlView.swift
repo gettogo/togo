@@ -31,7 +31,7 @@ struct MissionControlView: View {
     var showChat: (String?) -> Void = { _ in }
 
     private var sections: [HarnessSection] {
-        MissionLayout.sections(store.mission.mission, capabilities: store.descriptor.map { Set($0.capabilities) })
+        MissionLayout.presentedSections(store.mission.mission, descriptor: store.descriptor)
     }
 
     var body: some View {
@@ -43,7 +43,10 @@ struct MissionControlView: View {
                     LazyVStack(alignment: .leading, spacing: 26) {
                         ForEach(sections) { section in
                             VStack(alignment: .leading, spacing: 10) {
-                                MissionSectionHeader(kind: section.kind, count: count(section))
+                                MissionSectionHeader(
+                                    kind: section.kind,
+                                    count: MissionLayout.headerCount(section, summary: store.mission.summary)
+                                )
                                 content(section)
                             }
                             .id(section.kind.rawValue)
@@ -69,14 +72,6 @@ struct MissionControlView: View {
         .background(Color.togoInk)
         .navigationTitle(MissionCopy.title)
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func count(_ section: HarnessSection) -> Int {
-        switch section.kind {
-        case .needs: max(section.rows.count, store.mission.summary.needsYou)
-        case .plan: 0
-        default: section.rows.count
-        }
     }
 
     // MARK: Sections
@@ -129,7 +124,7 @@ struct MissionControlView: View {
             let displayed = kind == .agents ? AgentLabel.resolved(row, in: store.timeline) : row
             let target = MissionLayout.target(for: row, in: kind)
             Button { open(row, kind: kind) } label: {
-                MissionRowView(row: displayed, opens: target != nil, openLabel: target.map(openLabel))
+                MissionRowView(row: displayed, opens: target != nil, openLabel: target.map(openLabel), showsActivity: kind == .agents)
             }
             .buttonStyle(.plain)
             .disabled(target == nil)

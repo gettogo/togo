@@ -349,10 +349,10 @@ struct WorkspaceView: View {
                 Text(title.title)
             }
         }
-        // A compact horizontal bar keeps three items; mission control is the menu's first. With
-        // the controller in a vertical bar, the layer switch and Settings join it here too.
-        if !layout.sessionItemsInBar || inMenu, let item = bar.mission {
-            MissionMenuSection(item: item)
+        // Mission's secondary actions stay reachable on every layout. Its toggle is repeated
+        // here only when it has no bar item (compact bars or the terminal controller's rail).
+        if let item = bar.mission {
+            MissionMenuSection(item: item, missionInBar: layout.sessionItemsInBar && !inMenu)
         }
         if inMenu {
             Section {
