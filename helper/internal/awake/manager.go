@@ -365,7 +365,9 @@ func (m *Manager) holdFailed(now time.Time) {
 		m.holdRetryAt = time.Time{}
 		return
 	}
-	wait := min(tick<<(m.holdFails-2), holdRetryMax)
+	// The shift is capped: past it the doubling overflows and the wait
+	// would fall to nothing.
+	wait := min(tick<<min(m.holdFails-2, 16), holdRetryMax)
 	m.holdRetryAt = now.Add(wait)
 	m.cfg.Logf("awake: hold failed %d times in a row; next try in %s", m.holdFails, wait)
 }
