@@ -193,6 +193,9 @@ func (e *Engine) Forget(id string) {
 	e.mu.Unlock()
 	if ok {
 		s.stop()
+		e.menuMu.Lock()
+		delete(e.catalogs, s)
+		e.menuMu.Unlock()
 	}
 	e.log.Forget(id)
 	e.cache.forget(id)

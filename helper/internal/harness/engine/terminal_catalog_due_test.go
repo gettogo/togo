@@ -33,3 +33,25 @@ func TestCommandListIsReadOncePerConversation(t *testing.T) {
 		}
 	}
 }
+
+// A list too long to walk within one reading's budget is read from the top
+// each time. A second reading that gets no further than the first ends the
+// tries: the terminal is not typed into again for it.
+func TestACommandListThatNeverFinishesIsNotReadForever(t *testing.T) {
+	now := time.Now()
+	two := []harness.Completion{{Title: "/model"}, {Title: "/help"}}
+	three := append(append([]harness.Completion{}, two...), harness.Completion{Title: "/new"})
+	var c terminalCatalog
+	c.take(two, false, now)
+	if c.whole || !c.due(now.Add(catalogRetry)) {
+		t.Fatalf("first cut-short reading: whole %v, want another try", c.whole)
+	}
+	c.take(three, false, now)
+	if c.whole || len(c.rows) != 3 {
+		t.Fatalf("a reading that got further: whole %v rows %d, want another try with 3", c.whole, len(c.rows))
+	}
+	c.take(two, false, now)
+	if !c.whole || len(c.rows) != 3 || c.due(now.Add(24*time.Hour)) {
+		t.Fatalf("a reading that got no further: whole %v rows %d, want the tries ended and 3 rows kept", c.whole, len(c.rows))
+	}
+}

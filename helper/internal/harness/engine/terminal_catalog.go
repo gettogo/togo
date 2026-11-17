@@ -80,6 +80,19 @@ func (c *terminalCatalog) due(now time.Time) bool {
 	return len(c.rows) == 0 || now.Sub(c.at) >= catalogRetry
 }
 
+// take records a reading. One interrupted (someone typed at the desk) or
+// cut short by its budget keeps what it read, and the rest is read on a
+// later try (due). A cut-short reading starts from the top again, so one
+// that brought no more rows than the last would never finish: it is the
+// last, and the terminal is not typed into for this list again.
+func (c *terminalCatalog) take(rows []harness.Completion, whole bool, now time.Time) {
+	stalled := !whole && len(c.rows) > 0 && len(rows) <= len(c.rows)
+	if stalled && len(rows) < len(c.rows) {
+		rows = c.rows
+	}
+	c.rows, c.at, c.whole = rows, now, whole || stalled
+}
+
 func (e *Engine) readCatalog(s *sess, c *terminalCatalog) {
 	ctx, cancel := context.WithTimeout(context.Background(), catalogBudget)
 	defer cancel()
@@ -91,9 +104,7 @@ func (e *Engine) readCatalog(s *sess, c *terminalCatalog) {
 		c.failed = time.Now()
 		return
 	}
-	// Interrupted (someone typed at the desk): what was read is kept and
-	// the rest is read on a later try (due).
-	c.rows, c.at, c.whole = rows, time.Now(), whole
+	c.take(rows, whole, time.Now())
 	// Tell the open chats the list has grown; they ask for it again.
 	go func() {
 		s.mu.Lock()
