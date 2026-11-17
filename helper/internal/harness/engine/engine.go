@@ -94,6 +94,8 @@ type Engine struct {
 	// catalogs holds, per running session, the commands read from the
 	// harness's own "/" list.
 	catalogs map[*sess]*terminalCatalog
+	// heldWhy is the last reason logged for a held queued prompt, by session.
+	heldWhy sync.Map
 }
 
 var _ harness.Engine = (*Engine)(nil)

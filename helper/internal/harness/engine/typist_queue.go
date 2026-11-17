@@ -57,6 +57,17 @@ func (e *Engine) drainQueue(s *sess) {
 	}
 }
 
+// heldBecause puts on record why a queued prompt is not being typed, once
+// per reason: the drain tries again every drainRetry for as long as the
+// prompt waits, and a prompt held for minutes left no trace of the cause.
+func (e *Engine) heldBecause(s *sess, why string) {
+	if was, ok := e.heldWhy.Load(s.id); ok && was == why {
+		return
+	}
+	e.heldWhy.Store(s.id, why)
+	e.cfg.Logf("harness: %s holds a queued prompt: %s", s.id, why)
+}
+
 // typeNext types the first queued prompt under the typing lock, after
 // checking again that the agent is idle. It reports whether a prompt was
 // typed.
@@ -68,10 +79,16 @@ func (e *Engine) typeNext(s *sess) bool {
 	if !viaAPI && e.cfg.Typist == nil {
 		return false
 	}
-	if !e.idleNow(s) || e.asking(s.ctx, s, viaAPI) != "" {
-		// A question on screen holds the queue until it is answered.
+	if !e.idleNow(s) {
+		e.heldBecause(s, "the session is working or an approval waits")
 		return false
 	}
+	if why := e.asking(s.ctx, s, viaAPI); why != "" {
+		// A question on screen holds the queue until it is answered.
+		e.heldBecause(s, why)
+		return false
+	}
+	e.heldWhy.Delete(s.id)
 	s.mu.Lock()
 	if len(s.queue) == 0 {
 		s.mu.Unlock()
