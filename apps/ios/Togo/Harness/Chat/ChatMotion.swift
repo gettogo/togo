@@ -9,9 +9,10 @@ enum LiveFollow {
         /// transaction never reaches the clock.
         case cut
         /// A turn started: the line is simply there (the spinner starting is the signal) while
-        /// the viewport geometry is left to the scroll anchor.
+        /// the rows above make room on `resize`.
         case appear
-        /// The turn ended: the line leaves without animating the viewport geometry.
+        /// The turn ended: the line leaves in the same `resize` transaction that turns the
+        /// work line into "Worked … ✓".
         case end
     }
 
@@ -26,12 +27,8 @@ enum LiveFollow {
 }
 
 extension LiveFollow.Change {
-    /// Functional status must not animate the offset under someone reading or typing.
-    var animates: Bool {
-        switch self {
-        case .cut, .appear, .end: false
-        }
-    }
+    /// Whether the change lands on `resize` (the rows make room); a cut has no animation.
+    var animates: Bool { self != .cut }
 }
 
 /// Which answer the person tapped on a request, so the answered line can come out of it

@@ -27,12 +27,13 @@ import TogoKit
         #expect(!LiveFollow.Change.cut.animates)
     }
 
-    /// Status arriving or leaving must not animate the geometry under a reader or typist.
-    @Test func aTurnStartingOrEndingDoesNotAnimateTheViewport() {
+    /// A turn starting or ending moves the rows on `resize`; before the first load the line is
+    /// simply there.
+    @Test func aTurnStartingOrEndingMakesRoom() {
         let a = working()
         #expect(LiveFollow.change(from: nil, to: a, loaded: true) == .appear)
         #expect(LiveFollow.change(from: a, to: nil, loaded: true) == .end)
-        #expect(!LiveFollow.Change.appear.animates && !LiveFollow.Change.end.animates)
+        #expect(LiveFollow.Change.appear.animates && LiveFollow.Change.end.animates)
         #expect(LiveFollow.change(from: nil, to: a, loaded: false) == .cut)
         #expect(LiveFollow.change(from: a, to: nil, loaded: false) == .cut)
     }
