@@ -43,6 +43,12 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 		if !s.restoring && (it.Parent != "" || it.Kind == harness.KindAgent) {
 			s.agentAt = now
 		}
+		if it.Kind == harness.KindUser && it.Parent == "" && it.User != nil && !it.User.Queued {
+			// The user's next prompt: the failures shown since the last one go.
+			if d := s.mission.prompted(); d != nil {
+				s.missionDeltaLocked(d)
+			}
+		}
 		s.prepareLocked(&it, mark)
 		s.labelModelNoticeLocked(&it)
 		if it.Kind == harness.KindQuestion && it.Question != nil {

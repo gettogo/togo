@@ -77,7 +77,9 @@ func TestSubagentsAndJobsEndWhenTheAgentExits(t *testing.T) {
 			rows[r.ID] = r.State
 		}
 	}
-	if rows["agent-a"] != harness.StateInterrupted || rows["job-1"] != harness.StateInterrupted || rows["agent-b"] != harness.StateOK {
+	// The agent that had finished well is not listed: mission control shows
+	// what runs and what went wrong (mission_rows.go).
+	if _, listed := rows["agent-b"]; listed || rows["agent-a"] != harness.StateInterrupted || rows["job-1"] != harness.StateInterrupted {
 		t.Errorf("rows after the exit: %v", rows)
 	}
 }

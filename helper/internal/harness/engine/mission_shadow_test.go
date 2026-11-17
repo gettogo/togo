@@ -76,7 +76,7 @@ func TestOneAgentRowWhenMapperAndSourceNameTheSameChild(t *testing.T) {
 		t.Helper()
 		before := len(agents())
 		deliver(id, map[string]any{"ops": []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &harness.Row{
-			ID: row, Title: "Audit read-only child", Subtitle: "general", State: harness.StateOK,
+			ID: row, Title: "Audit read-only child", Subtitle: "general", State: harness.StateRunning,
 			Open:    &harness.Open{Kind: harness.OpenChat, Ref: "agent-" + row},
 			Actions: []harness.ActionRef{{ID: harness.ActionStop, Label: "Stop", Role: harness.RoleDestructive}}}}}})
 		waitFor(t, func() bool {
@@ -98,7 +98,7 @@ func TestOneAgentRowWhenMapperAndSourceNameTheSameChild(t *testing.T) {
 
 	// The mapper's row first, then the source lists the same child.
 	mapperRow(child)
-	list(`[{"id":"` + child + `","title":"Audit read-only child","state":"done"}]`)
+	list(`[{"id":"` + child + `","title":"Audit read-only child","state":"running"}]`)
 	e.refreshMission(ctx, s, harness.SectionAgents)
 	only("mapper first", child)
 	if r := agents()[0]; r.Open == nil || len(r.Actions) != 1 {
@@ -107,7 +107,7 @@ func TestOneAgentRowWhenMapperAndSourceNameTheSameChild(t *testing.T) {
 
 	// The source's row first (a child the mapper learns of a moment later).
 	const late = "ses_e28d51c92ffeLATERCHILD0001"
-	list(`[{"id":"` + child + `","title":"Audit read-only child","state":"done"},{"id":"` + late + `","title":"Later","state":"running"}]`)
+	list(`[{"id":"` + child + `","title":"Audit read-only child","state":"running"},{"id":"` + late + `","title":"Later","state":"running"}]`)
 	e.refreshMission(ctx, s, harness.SectionAgents)
 	if rows := agents(); len(rows) != 2 || rows[1].ID != "src-"+late {
 		t.Fatalf("a child only the source knows: rows %+v", rows)

@@ -15,6 +15,9 @@ type missionState struct {
 	summary  harness.Summary
 	sections []harness.Section // supported kinds in SectionOrder
 	working  bool
+	// held are the agents and background rows that failed or were stopped,
+	// by section: shown until the user's next prompt (mission_rows.go).
+	held map[string]map[string]bool
 }
 
 // sectionCaps names the capability that turns each section on.
@@ -58,6 +61,7 @@ func (m *missionState) section(kind string) *harness.Section {
 func (m *missionState) apply(ops []harness.Op) *harness.Delta {
 	var applied []harness.Op
 	for _, op := range ops {
+		op = m.settle(op)
 		if m.applyOne(op) {
 			applied = append(applied, op)
 		}
