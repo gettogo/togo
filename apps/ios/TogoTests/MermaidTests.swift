@@ -10,6 +10,16 @@ import UIKit
         try #require(MarkdownFence(language: "mermaid", source: source, closed: true))
     }
 
+    /// A render that timed out or was interrupted is tried again; only a drawing, or a
+    /// diagram that cannot be drawn, is remembered.
+    @Test func onlyADrawingOrAnUndrawableDiagramIsRemembered() {
+        #expect(MermaidRenderer.remembers(UIImage(), failure: nil))
+        #expect(MermaidRenderer.remembers(nil, failure: "javascript-or-size"))
+        for transient in ["timeout-bootstrap", "timeout-render", "snapshot", nil] {
+            #expect(!MermaidRenderer.remembers(nil, failure: transient), "\(transient ?? "no reason")")
+        }
+    }
+
     @Test func realAgentDiagramAndOtherCommonShapesRenderOffline() async throws {
         let url = try #require(Bundle(for: ResourceProbe.self).url(forResource: "mermaid-real-agent", withExtension: "md") ?? Bundle(for: ResourceProbe.self).url(forResource: "mermaid-real-agent", withExtension: "md", subdirectory: "Fixtures"))
         let markdown = try String(contentsOf: url, encoding: .utf8)

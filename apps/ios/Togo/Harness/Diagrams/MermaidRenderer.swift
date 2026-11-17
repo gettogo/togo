@@ -47,7 +47,7 @@ import WebKit
             let image = await self.render(fence.source, key: key)
             // A render that timed out or was interrupted is tried again next time. Only a
             // diagram that cannot be drawn is remembered as failed.
-            if image != nil || self.lastFailure == "javascript-or-size" { self.store(image, key: key) }
+            if Self.remembers(image, failure: self.lastFailure) { self.store(image, key: key) }
             return image
         }
         jobs[key] = job
@@ -55,6 +55,12 @@ import WebKit
         let image = await job.value
         jobs[key] = nil
         return image
+    }
+
+    /// Whether a render's result is kept for its key: a drawing always, and a failure only
+    /// when the diagram itself cannot be drawn. A timeout or an interrupted render is not kept.
+    nonisolated static func remembers(_ image: UIImage?, failure: String?) -> Bool {
+        image != nil || failure == "javascript-or-size"
     }
 
     private func touch(_ key: Key) { order.removeAll { $0 == key }; order.append(key) }
