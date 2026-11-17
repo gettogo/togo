@@ -29,6 +29,14 @@ type pagedRoute struct {
 	fail     map[int]bool            // offsets whose page answers 500
 	overlap  int                     // records each older page repeats from the newer one
 	empty    map[int]bool            // offsets whose page is empty but still names a cursor
+	raw      string                  // when set, every request is answered with this body
+}
+
+// count is how many requests the route has answered.
+func (p *pagedRoute) count() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.requests)
 }
 
 func (p *pagedRoute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +44,11 @@ func (p *pagedRoute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer p.mu.Unlock()
 	q := r.URL.Query()
 	p.requests = append(p.requests, r.URL.RawQuery)
+	if p.raw != "" {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, p.raw)
+		return
+	}
 	offset := 0
 	if c := q.Get("cursor"); c != "" {
 		if q.Has("order") {

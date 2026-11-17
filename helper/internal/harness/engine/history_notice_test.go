@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
@@ -101,23 +100,13 @@ func TestAnAnswerThatIsNotAPageIsNotTheStart(t *testing.T) {
 		"an object cursor": `{"data":[{"n":2}],"cursor":{"next":{"unexpected":"shape"}}}`,
 		"data not a list":  `{"data":{"n":2},"cursor":{}}`,
 	} {
-		e, s := pagedEngine(t, &pagedRoute{})
-		called := false
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			called = true
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, body)
-		}))
-		u, _ := url.Parse(srv.URL)
-		port, _ := strconv.Atoi(u.Port())
-		e.eps.mu.Lock()
-		e.eps.byID[s.id] = endpoint{kind: spec.EndpointHTTP, port: port, adapter: "fakehist"}
-		e.eps.mu.Unlock()
-		s.env.Endpoint = srv.URL
+		route := &pagedRoute{raw: body}
+		e, s := pagedEngine(t, route)
+		before := route.count()
 		h := pagedHistory(0)
 		h.Items = ".data"
 		events, partial, err := e.readHistory(context.Background(), s, h, "A")
-		srv.Close()
+		called := route.count() > before
 		if !called {
 			t.Fatalf("%s: the route was not read", name)
 		}
@@ -131,21 +120,10 @@ func TestAnAnswerThatIsNotAPageIsNotTheStart(t *testing.T) {
 		"null cursor":  `{"data":[{"n":1}],"cursor":{"next":null}}`,
 		"empty cursor": `{"data":[{"n":1}],"cursor":{"next":""}}`,
 	} {
-		e, s := pagedEngine(t, &pagedRoute{})
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, body)
-		}))
-		u, _ := url.Parse(srv.URL)
-		port, _ := strconv.Atoi(u.Port())
-		e.eps.mu.Lock()
-		e.eps.byID[s.id] = endpoint{kind: spec.EndpointHTTP, port: port, adapter: "fakehist"}
-		e.eps.mu.Unlock()
-		s.env.Endpoint = srv.URL
+		e, s := pagedEngine(t, &pagedRoute{raw: body})
 		h := pagedHistory(0)
 		h.Items = ".data"
 		events, partial, err := e.readHistory(context.Background(), s, h, "A")
-		srv.Close()
 		if err != nil || partial || len(events) != 1 {
 			t.Errorf("%s: %d records partial %v err %v, want the whole past", name, len(events), partial, err)
 		}
