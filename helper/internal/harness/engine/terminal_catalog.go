@@ -23,10 +23,12 @@ import (
 // is taken back only from a line that still reads as we left it.
 //
 // The list belongs to one running session and one conversation; a restart
-// or a new conversation reads it again.
+// or a new conversation reads it again. Read whole, it is not read a second
+// time: every reading types into the terminal on the desk, in view of
+// whoever sits there, and a program's commands do not change mid-conversation.
+// A reading that was cut short is finished on a later try.
 
 const (
-	catalogLife   = 10 * time.Minute
 	catalogRetry  = 30 * time.Second
 	catalogBudget = 12 * time.Second
 	catalogStep   = 45 * time.Millisecond
@@ -36,6 +38,7 @@ type terminalCatalog struct {
 	rows    []harness.Completion
 	conv    uint64
 	at      time.Time
+	whole   bool // every row was read: nothing more to fetch
 	reading bool
 	failed  time.Time
 }
@@ -60,12 +63,21 @@ func (e *Engine) terminalCommands(s *sess) (rows []harness.Completion, pending b
 		c = &terminalCatalog{conv: conv}
 		e.catalogs[s] = c
 	}
-	fresh := len(c.rows) > 0 && time.Since(c.at) < catalogLife
-	if !fresh && !c.reading && time.Since(c.failed) > catalogRetry {
+	if c.due(time.Now()) {
 		c.reading = true
 		go e.readCatalog(s, c)
 	}
 	return c.rows, c.reading
+}
+
+// due reports whether the list is to be read now: never while a reading
+// runs or within catalogRetry of a failed or cut-short one, and never again
+// once it was read whole.
+func (c *terminalCatalog) due(now time.Time) bool {
+	if c.reading || c.whole || now.Sub(c.failed) <= catalogRetry {
+		return false
+	}
+	return len(c.rows) == 0 || now.Sub(c.at) >= catalogRetry
 }
 
 func (e *Engine) readCatalog(s *sess, c *terminalCatalog) {
@@ -79,12 +91,9 @@ func (e *Engine) readCatalog(s *sess, c *terminalCatalog) {
 		c.failed = time.Now()
 		return
 	}
-	c.rows, c.at = rows, time.Now()
-	if !whole {
-		// Interrupted (someone typed at the desk): what was read is kept
-		// and the rest is read on a later try.
-		c.at = time.Now().Add(catalogRetry - catalogLife)
-	}
+	// Interrupted (someone typed at the desk): what was read is kept and
+	// the rest is read on a later try (due).
+	c.rows, c.at, c.whole = rows, time.Now(), whole
 	// Tell the open chats the list has grown; they ask for it again.
 	go func() {
 		s.mu.Lock()
