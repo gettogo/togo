@@ -19,11 +19,11 @@ struct RequestsView: View {
         ZStack {
             switch shown ?? page {
             case let .request(id, position, count):
-                // motion: state change — the next request takes the answered one's place, in place
                 RequestDetailView(store: store, requestId: id, position: position, count: count, onAnswered: {
                     if held == id { held = nil }
                 })
                     .id(id)
+                    // motion: state change — the next request takes the answered one's place, in place
                     .transition(Motion.swap(reduce: reduceMotion))
             case .allClear:
                 // motion: state change — nothing is left; the all-clear takes the request's place
