@@ -25,6 +25,7 @@ type session struct {
 	mu        sync.Mutex
 	state     map[string]string
 	dirAt     time.Time
+	readAt    time.Time         // when the record being mapped was read
 	crumbAt   time.Time         // when the terminal record was last read
 	crumb     string            // the session file omp's terminal record names
 	parents   map[string]string // entry id -> agent item id ("" for the main session)
@@ -116,6 +117,7 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	at := stamp(e["timestamp"], rec.At)
+	s.readAt = rec.At
 	main := rec.Source == feedSession
 	if str(e, "type") == "session" {
 		return s.header(e, at, main)
@@ -328,14 +330,6 @@ func (s *session) user(id, parent, txt string, at time.Time) ([]harness.Item, []
 	s.turn.item.TurnID = s.turn.item.ID
 	it.TurnID = s.turn.item.ID
 	return append(out, it, s.turn.item), nil
-}
-
-func (s *session) endTurn(state string, at time.Time) harness.Item {
-	t := s.turn
-	t.ended = true
-	t.item.Turn.State = state
-	t.item.Turn.Ended = ptr(at)
-	return t.item
 }
 
 func (s *session) assistant(id, parent string, m map[string]any, at time.Time) ([]harness.Item, []harness.Op) {

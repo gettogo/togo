@@ -20,3 +20,11 @@ func (s *session) note(id, parent string, at time.Time) ([]harness.Item, []harne
 	s.turn.item.TurnID = s.turn.item.ID
 	return []harness.Item{s.turn.item}, nil
 }
+
+func (s *session) endTurn(state string, at time.Time) harness.Item {
+	t := s.turn
+	t.ended = true
+	t.item.Turn.State = state
+	t.item.Turn.Ended = ptr(at)
+	return t.item
+}

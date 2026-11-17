@@ -159,25 +159,50 @@ func (s *session) runningAgent(id string) *harness.Item {
 	return nil
 }
 
-// agentStopped ends a background agent whose own conversation finished or
-// was aborted. omp reports most of these itself, but not one whose session
-// was interrupted first (seen on 18.19: the file ends "aborted" and no
-// async-result follows), and that row would stay running.
+// agentFresh is how recent an agent's record must be, when it is read, to
+// count as something the agent does now. A file replayed long after it was
+// written tells what happened, not what is happening.
+const agentFresh = 5 * time.Minute
+
+// agentStopped follows a background agent by its own conversation. omp
+// reports most ends itself, but not one whose session was interrupted
+// first (seen on 18.19: the file ends "aborted" and no async-result
+// follows), and that row would stay running.
+//
+// The agent's own word outranks omp's exit: read after a restart, the main
+// file's recorded exit marks the agents of that time interrupted before
+// their files, read next, say they had finished.
+//
+// A stop is not always the end (seen on 18.20): omp adds a note and the
+// agent goes back to its tools. Its next tool call makes it running again,
+// when that call was just made; an old one, in a file replayed later,
+// leaves it as it ended.
 func (s *session) agentStopped(aid, stopReason string, at time.Time) ([]harness.Item, []harness.Op) {
 	a := s.agents[aid]
-	if a == nil || !s.detached[aid] || a.Agent.Ended != nil {
+	if a == nil || !s.detached[aid] {
 		return nil, nil
 	}
 	ab := *a.Agent
+	ended := ab.Ended != nil
 	switch stopReason {
 	case "stop":
-		ab.State = harness.StateOK
+		if ended && ab.State != harness.StateInterrupted {
+			return nil, nil
+		}
+		ab.State, ab.Ended = harness.StateOK, ptr(at)
 	case "aborted":
-		ab.State = harness.StateCancelled
+		if ended {
+			return nil, nil
+		}
+		ab.State, ab.Ended = harness.StateCancelled, ptr(at)
+	case "toolUse":
+		if !ended || ab.State != harness.StateOK || s.readAt.Sub(at) > agentFresh {
+			return nil, nil
+		}
+		ab.State, ab.Ended = harness.StateRunning, nil
 	default:
 		return nil, nil
 	}
-	ab.Ended = ptr(at)
 	a.Agent = &ab
 	return []harness.Item{*a}, []harness.Op{s.agentRow(a)}
 }
