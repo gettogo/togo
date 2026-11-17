@@ -38,9 +38,16 @@ public enum SignInRoute {
     /// device or login page. Those go to the authentication browser; other pages to Safari's view.
     public static func isSignIn(_ url: URL) -> Bool {
         if returnsToLoopback(url) { return true }
-        let path = url.path.lowercased()
-        let markers = ["oauth", "authorize", "/login", "/signin", "/sign-in", "/device", "/auth/", "/activate"]
-        if markers.contains(where: path.contains) { return true }
+        // Whole path segments, so a page about signing in (/docs/oauth-guide, /login-help) is
+        // an ordinary page. A flow segment counts only with a step after it (/oauth/authorize).
+        let segments = url.path.lowercased().split(separator: "/").map(String.init)
+        let pages: Set = ["login", "signin", "sign-in", "device", "devicelogin", "activate", "authorize"]
+        let flows: Set = ["oauth", "oauth2", "auth"]
+        // A login step named in one word (loginDeepControl) counts; a hyphenated page does not.
+        let loginStep = segments.contains { segment in
+            ["login", "signin"].contains { segment.hasPrefix($0) && segment.dropFirst($0.count).allSatisfy(\.isLetter) }
+        }
+        if loginStep || segments.contains(where: pages.contains) || segments.dropLast().contains(where: flows.contains) { return true }
         let names = Set((URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { $0.name.lowercased() })
         return !names.isDisjoint(with: ["client_id", "redirect_uri", "callback_url", "user_code", "code_challenge"])
     }
