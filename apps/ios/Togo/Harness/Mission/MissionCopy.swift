@@ -23,6 +23,13 @@ enum MissionCopy {
     static let openPreview = String(localized: "mission.openPreview", defaultValue: "Open Preview")
     static let more = String(localized: "mission.more", defaultValue: "More")
     static let noOutputYet = String(localized: "mission.background.noOutput", defaultValue: "No output yet")
+    static let agentsHint = String(localized: "mission.agents.hint", defaultValue: "Opens the agents list in Mission Control")
+
+    static func runningAgents(_ count: Int) -> String {
+        count == 1
+            ? String(localized: "mission.agents.running.one", defaultValue: "1 agent is running in the background")
+            : String(localized: "mission.agents.running.many", defaultValue: "\(count) agents are running in the background")
+    }
 
     // MARK: Bar item and session menu
 

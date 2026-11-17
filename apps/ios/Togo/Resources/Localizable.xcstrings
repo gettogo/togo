@@ -1,6 +1,50 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "mission.agents.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the agents list in Mission Control"
+          }
+        }
+      }
+    },
+    "mission.agents.running.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 agent is running in the background"
+          }
+        }
+      }
+    },
+    "mission.agents.running.many": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld agents are running in the background"
+          }
+        }
+      }
+    },
+    "roster.detail.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a session to open its conversation."
+          }
+        }
+      }
+    },
     "review.files.searchIncomplete" : {
       "extractionState" : "manual",
       "localizations" : {

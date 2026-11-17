@@ -48,6 +48,33 @@ struct MissionTests {
 
     // MARK: Sections
 
+    @Test func theComposerCountsOnlyRunningAndWaitingAgentRows() {
+        let rows: [HarnessRow] = [
+            .init(id: "a", title: "Working", state: .running),
+            .init(id: "b", title: "Waiting", state: .waiting),
+            .init(id: "c", title: "Finished", state: .done),
+            .init(id: "d", title: "Interrupted", state: .interrupted),
+        ]
+        let mission = HarnessMission(rev: 1, summary: .init(agents: 99, background: 5), sections: [
+            .init(kind: .agents, rows: rows), .init(kind: .background, rows: [.init(id: "server", title: "Server", state: .running)])
+        ])
+        #expect(MissionLayout.runningAgents(mission, working: true, reconciled: false) == 2)
+        #expect(MissionLayout.runningAgents(mission, working: false, reconciled: true) == 2)
+        #expect(MissionLayout.runningAgents(mission, working: false, reconciled: false) == 0)
+        #expect(MissionLayout.runningAgents(nil, working: true, reconciled: true) == 0)
+        #expect(MissionLayout.runningAgents(.init(rev: 1, summary: .init(background: 3), sections: []), working: true, reconciled: true) == 0)
+        #expect(MissionCopy.runningAgents(1) == "1 agent is running in the background")
+        #expect(MissionCopy.runningAgents(2) == "2 agents are running in the background")
+    }
+
+    @Test func theAgentsLinkOpensItsListAndClosingClearsTheTarget() {
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: FakeHarnessServices(descriptor: ChatTests.claude))
+        store.showAgents()
+        #expect(store.showsMission && store.missionSection == .agents)
+        store.showsMission = false
+        #expect(store.missionSection == nil)
+    }
+
     private static let all: [MissionSectionKind] = [.status, .ports, .changes, .plan, .background, .agents, .needs]
 
     private func mission(_ kinds: [MissionSectionKind]) -> HarnessMission {

@@ -8,6 +8,14 @@ import TogoKit
 /// declares its capability (needs: approvals or questions). Without a descriptor, as from the
 /// roster before the session is described, the snapshot's own sections stand.
 enum MissionLayout {
+    /// Match the helper's agents count. Long-lived background jobs are a different section.
+    static func runningAgents(_ mission: HarnessMission?, working: Bool, reconciled: Bool) -> Int {
+        guard working || reconciled else { return 0 }
+        return mission?.sections.first { $0.kind == .agents }?.rows.filter {
+            $0.state == .running || $0.state == .waiting
+        }.count ?? 0
+    }
+
     static func sections(_ mission: HarnessMission?, capabilities: Set<String>?) -> [HarnessSection] {
         guard let mission else { return [] }
         return MissionSectionKind.order.compactMap { kind in

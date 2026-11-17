@@ -58,6 +58,16 @@ struct ChatScrollRequest: Equatable, Sendable {
 }
 
 extension HarnessSessionStore {
+    /// The agents link opens the existing session manager at its agents list.
+    func showAgents() {
+        missionSection = .agents
+        showsMission = true
+    }
+
+    /// The rows again from the feed, with this phone's notes in place: after a note is added.
+    func refreshRows() {
+        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: true)
+    }
     /// The session's current mode id for the mode chip; empty only while truly unknown.
     var currentMode: String {
         ModeMemory.current(status: ModeMemory.status(mission.mission), remembered: rememberedMode, described: descriptor?.mode)

@@ -84,7 +84,10 @@ import UIKit
     /// Set by "Show in terminal"; the terminal layer consumes and clears it.
     var pendingJump: TerminalJump?
     /// The pill asked for mission control.
-    var showsMission = false
+    var showsMission = false {
+        didSet { if !showsMission { missionSection = nil } }
+    }
+    var missionSection: MissionSectionKind?
     let nativeInteractions = NativeChatState()
     @ObservationIgnored let surfaceDrafts = SurfaceDrafts()
     /// Why the native layers are not showing, when they fell back to the terminal.
@@ -238,6 +241,7 @@ import UIKit
         guard !changingConversation else { return }
         changingConversation = true
         if hasLoaded { pendingNeedsRequestID = nil }
+        missionSection = nil
         retireNativeInteractions(pumpQueue: false)
         nativeInteractions.requests.reset()
         commandList = []
@@ -491,8 +495,4 @@ import UIKit
         withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { rows = next }
     }
 
-    /// The rows again from the feed, with this phone's notes in place: after a note is added.
-    func refreshRows() {
-        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: true)
-    }
 }

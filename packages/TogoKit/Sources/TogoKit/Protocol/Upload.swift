@@ -18,6 +18,8 @@ public enum Capability {
     public static let liveContext = "livecontext.v1"
     public static let foregroundDevice = "fgdevice.v1"
     public static let answerReceipts = "receipt.v1"
+    /// Agent rows are reconciled after helper restart, including while the main turn is idle.
+    public static let liveAgents = "agents.live.v1"
     public static let capture = "capture.v1"
     public static let launch = "launch.v1"
     public static let lifecycle = "lifecycle.v1"

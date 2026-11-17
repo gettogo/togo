@@ -1,6 +1,37 @@
 import SwiftUI
 import TogoKit
 
+/// A quiet, direct route above the composer; zero agents take no room.
+struct AgentsRunningLine: View {
+    let store: HarnessSessionStore
+    let reconciled: Bool
+
+    var body: some View {
+        let count = store.phase == .live
+            ? MissionLayout.runningAgents(store.mission.mission, working: store.working, reconciled: reconciled) : 0
+        if count > 0 {
+            Button { store.showAgents() } label: {
+                HStack(spacing: 8) {
+                    Text(MissionCopy.runningAgents(count))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .accessibilityHidden(true)
+                    Spacer(minLength: 0)
+                }
+                .font(.footnote)
+                .foregroundStyle(Color.togoMute)
+                .frame(minHeight: 44, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(MissionCopy.agentsHint)
+            .accessibilityIdentifier("composer.agents")
+            .transaction { $0.animation = nil }
+        }
+    }
+}
+
 /// A session's mission at a glance, as the preview over a roster line's long-press menu:
 /// "2 agents  1 shell  plan 3/7" in mono, a small plan ring or a working mark at its leading
 /// edge, and the beacon while something needs the user. Still: it is a snapshot, not a control.

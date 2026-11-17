@@ -38,24 +38,33 @@ struct MissionControlView: View {
         // Rows and sections arriving or leaving move in one `resize` transaction (`IdentityKeyed`);
         // text inside them updates in place. The first render is a cut.
         IdentityKeyed(sections, key: MissionLayout.shape) { sections in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 26) {
-                    ForEach(sections) { section in
-                        VStack(alignment: .leading, spacing: 10) {
-                            MissionSectionHeader(kind: section.kind, count: count(section))
-                            content(section)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 26) {
+                        ForEach(sections) { section in
+                            VStack(alignment: .leading, spacing: 10) {
+                                MissionSectionHeader(kind: section.kind, count: count(section))
+                                content(section)
+                            }
+                            .id(section.kind.rawValue)
+                            // motion: preventing a jump — a section that arrives fades in where the
+                            // sections below glided to make room; nothing rises.
+                            .transition(Motion.arrive(reduce: reduceMotion))
                         }
-                        .id(section.kind.rawValue)
-                        // motion: preventing a jump — a section that arrives fades in where the
-                        // sections below glided to make room; nothing rises.
-                        .transition(Motion.arrive(reduce: reduceMotion))
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
+                .overlay { placeholder(empty: sections.isEmpty) }
+                .task(id: store.missionSection.map { $0.rawValue + sections.map(\.id).joined(separator: ",") }) {
+                    guard let target = store.missionSection, sections.contains(where: { $0.kind == target }) else { return }
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    proxy.scrollTo(target.rawValue, anchor: .top)
+                    store.missionSection = nil
+                }
             }
-            .overlay { placeholder(empty: sections.isEmpty) }
         }
         .background(Color.togoInk)
         .navigationTitle(MissionCopy.title)
@@ -273,6 +282,7 @@ struct MissionControlStack: View {
         }
         // A screen's sign-in pushes here, never a sheet over this one.
         .environment(\.pushSignIn, PushSignIn { path.append(.signIn($0)) })
+        .onChange(of: store.missionSection) { _, section in if section != nil { path = [] } }
         // Links in rows, cards and screens go through the chat's router, as in the chat.
         .environment(\.openURL, OpenURLAction { actions.open($0) })
     }
