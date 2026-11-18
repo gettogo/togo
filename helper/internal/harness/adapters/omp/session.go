@@ -182,8 +182,11 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		// /todo in the terminal edits the list by hand and saves the whole
 		// list (seen on 18.20: "/todo done" wrote user_todo_edit and the
 		// plan stayed 0/2). It replaces the plan like a todo result does.
-		if main && str(e, "customType") == "session_exit" {
-			return s.exited(at)
+		if str(e, "customType") == "session_exit" {
+			if main {
+				return s.exited(at)
+			}
+			return s.agentExited(parent, str(obj(e["data"]), "kind"), at)
 		}
 		if parent == "" && str(e, "customType") == "user_todo_edit" {
 			if phases, ok := phasesFromDetails(obj(e["data"])); ok {
