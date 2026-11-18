@@ -245,6 +245,14 @@ func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.I
 		s.headers[id], s.cur = dropped, dropped
 		return nil, nil
 	}
+	if len(s.pending) == 0 && s.readAt.Sub(at) > agentFresh {
+		// No task call is waiting for this file and it was written long
+		// before it is read: after a restart the conversation is read from
+		// its recent part and the subagent files whole, so this is one of
+		// an earlier turn. It is not a step of the turn that runs now.
+		s.headers[id], s.cur = dropped, dropped
+		return nil, nil
+	}
 	if len(s.pending) > 0 {
 		agentID, s.pending = s.pending[0], s.pending[1:]
 	} else {
