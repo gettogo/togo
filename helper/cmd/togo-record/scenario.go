@@ -62,9 +62,16 @@ func (r *recording) run() error {
 	if err := r.described(); err != nil {
 		return err
 	}
-	if _, err := r.c.call("harness.open", map[string]any{"id": r.session, "after": 0}, rpcWait); err != nil {
+	open := func() error {
+		_, err := r.c.call("harness.open", map[string]any{"id": r.session, "after": 0}, rpcWait)
 		return err
 	}
+	if err := open(); err != nil {
+		return err
+	}
+	r.tape.mu.Lock()
+	r.tape.onReset = func() { _ = open() }
+	r.tape.mu.Unlock()
 	r.startup()
 	switch r.scenario {
 	case "model":

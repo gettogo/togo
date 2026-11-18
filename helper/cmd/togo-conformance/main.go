@@ -300,6 +300,9 @@ func runOne(ctx context.Context, o *options, r *runner) {
 	owned.observe(r.id, false)
 	c.before = func() { owned.observe(r.id, true) }
 	r.c = c
+	r.mu.Lock()
+	r.ctx = hctx
+	r.mu.Unlock()
 	r.run(hctx)
 	r.cutShort = hctx.Err() != nil
 }

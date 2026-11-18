@@ -25,6 +25,8 @@ type line struct {
 // the machine's only session. Notifications that arrive before the session
 // id is known wait until it is.
 type tape struct {
+	// onReset is called, off the reader, when the helper says the chat was reset.
+	onReset func()
 	mu      sync.Mutex
 	began   time.Time
 	session string
@@ -113,6 +115,11 @@ func (t *tape) keep(l line) {
 		t.trackEvent(f.Params)
 	} else {
 		t.trackHarness(f.Params)
+		if str(f.Params["kind"]) == "reset" && t.onReset != nil {
+			// The chat's content was replaced: it comes with an open, as the
+			// app asks for one, never as live items.
+			go t.onReset()
+		}
 	}
 	t.lines = append(t.lines, l)
 }
