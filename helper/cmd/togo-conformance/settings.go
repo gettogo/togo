@@ -89,9 +89,11 @@ func (r *runner) stuckWorking(ctx context.Context, what string) bool {
 func (r *runner) modelSetup(ctx context.Context) modelPlan {
 	var m modelPlan
 	if !r.has(harness.CapModel) {
+		r.noRoute("the adapter has no model control")
 		return m
 	}
 	if _, ok := r.hasScreen("model"); !ok {
+		r.noRoute("the adapter has no model screen")
 		return m
 	}
 	s, err := r.screen(ctx, "model")
@@ -104,7 +106,7 @@ func (r *runner) modelSetup(ctx context.Context) modelPlan {
 	for _, it := range s.Picker.Items {
 		items = append(items, pickerItem{ID: it.ID, Title: it.Title, Subtitle: it.Subtitle, Group: it.Group, Disabled: it.Disabled})
 	}
-	m.order, m.onSel = cheapest(items), s.Picker.OnSelect
+	m.order, m.onSel = r.opts.allowed(cheapest(items)), s.Picker.OnSelect
 	if len(m.order) == 0 {
 		m.setErr = "model picker lists no usable model"
 		r.noRoute("the model picker lists no usable model")
@@ -522,4 +524,25 @@ func (r *runner) noRoute(why string) {
 		return
 	}
 	r.note("openrouter: %s; the agent runs on its own account", why)
+}
+
+// allowed drops the models -avoid-models names: a model the run must never
+// use (one served from the developer's own machine), however cheap it ranks.
+func (o *options) allowed(items []pickerItem) []pickerItem {
+	if len(o.avoid) == 0 {
+		return items
+	}
+	out := items[:0:0]
+	for _, it := range items {
+		id, bad := strings.ToLower(it.ID+" "+it.Title+" "+it.Group), false
+		for _, a := range o.avoid {
+			if strings.Contains(id, a) {
+				bad = true
+			}
+		}
+		if !bad {
+			out = append(out, it)
+		}
+	}
+	return out
 }

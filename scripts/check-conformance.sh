@@ -24,7 +24,7 @@ set -eu
 cd "$(dirname "$0")/.."
 repo=$(pwd)
 
-only="" scenario="" jobs="" json="" keep=0 openrouter="" models="" args="" own=""
+only="" scenario="" jobs="" json="" keep=0 openrouter="" models="" args="" own="" avoid=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --openrouter)
@@ -37,6 +37,7 @@ while [ $# -gt 0 ]; do
         --jobs) jobs="$2"; shift 2 ;;
         --json) json="$2"; shift 2 ;;
         --own-account) own="$2"; shift 2 ;;
+        --avoid-models) avoid="$2"; shift 2 ;;
         --keep) keep=1; shift ;;
         -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -90,6 +91,9 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+TOGO_CONFORMANCE_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || true)
+[ -n "$(git status --porcelain 2>/dev/null)" ] && TOGO_CONFORMANCE_COMMIT="$TOGO_CONFORMANCE_COMMIT+changes"
+export TOGO_CONFORMANCE_COMMIT
 echo "building helper from $repo/helper" >&2
 (cd helper && go build -o "$bin/togo" ./cmd/togo && go build -o "$bin/togo-conformance" ./cmd/togo-conformance)
 
@@ -101,4 +105,5 @@ set -- -bin "$bin/togo" -adapters "$repo/helper/internal/harness/adapters" -root
 [ -n "$models" ] && set -- "$@" -model "$models"
 [ -n "$args" ] && set -- "$@" -args "$args"
 [ -n "$own" ] && set -- "$@" -own-account "$own"
+[ -n "$avoid" ] && set -- "$@" -avoid-models "$avoid"
 "$bin/togo-conformance" "$@"

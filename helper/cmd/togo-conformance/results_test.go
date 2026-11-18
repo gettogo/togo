@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -224,6 +225,27 @@ func TestNoRouteBlocksAnAgentNotAllowedItsOwnAccount(t *testing.T) {
 	r = &runner{id: "pi", opts: &options{ownOnly: true}}
 	r.noRoute("x")
 	if r.blocked != "" || r.ownAccount {
+		t.Fatalf("blocked %q, own %v", r.blocked, r.ownAccount)
+	}
+}
+
+func TestAvoidedModelsAreNeverPicked(t *testing.T) {
+	o := &options{avoid: []string{"qwen", "local/"}}
+	got := o.allowed([]pickerItem{{ID: "qwen5090/qwen3.8-27b"}, {ID: "kimi-code/k3"}, {ID: "x", Group: "Local/llama"}, {ID: "small", Title: "Qwen small"}})
+	if len(got) != 1 || got[0].ID != "kimi-code/k3" {
+		t.Fatalf("allowed = %+v", got)
+	}
+	if all := (&options{}).allowed([]pickerItem{{ID: "qwen"}}); len(all) != 1 {
+		t.Fatal("with nothing to avoid every model stays")
+	}
+}
+
+// An adapter with no model control cannot be put on the test model: its
+// turns would run on whatever its own config names.
+func TestAnAgentWithNoModelControlHasNoRoute(t *testing.T) {
+	r := &runner{id: "vibe", opts: &options{router: &openRouter{model: "m"}, ownOnly: true, ownOK: map[string]bool{}}}
+	r.modelSetup(context.Background())
+	if r.blocked == "" || !r.ownAccount {
 		t.Fatalf("blocked %q, own %v", r.blocked, r.ownAccount)
 	}
 }

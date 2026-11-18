@@ -103,8 +103,13 @@ func tidier(root string) func(string) string {
 	return rep.Replace
 }
 
-// builtFrom is the commit this binary was built from, or "unknown".
+// builtFrom is the commit this binary was built from, or "unknown". The
+// script that builds it names the commit, for a checkout Go cannot read
+// the revision of (a worktree).
 func builtFrom() string {
+	if c := os.Getenv("TOGO_CONFORMANCE_COMMIT"); c != "" {
+		return c
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"

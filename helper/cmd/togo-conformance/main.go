@@ -40,6 +40,7 @@ type options struct {
 	args      map[string][]string // -args: per-harness launch arguments (Cline's --auto-approve false)
 	ownOnly   bool                // -own-account was given: only the agents in ownOK may run on their own account
 	ownOK     map[string]bool
+	avoid     []string // -avoid-models: lower-case fragments of model ids the run must never pick
 }
 
 // order runs the slow, signed-in agents first so the run ends sooner.
@@ -74,7 +75,14 @@ func realMain() int {
 	flag.StringVar(&args, "args", "", "per-harness launch arguments, harness=args separated by ';', e.g. 'cline=--auto-approve false'")
 	var own string
 	flag.StringVar(&own, "own-account", "", "with -openrouter: comma-separated harness ids that may run on their own account when the test model cannot be set (\"none\" for no agent); the others then run no turns. Unset, every agent may")
+	var avoid string
+	flag.StringVar(&avoid, "avoid-models", "", "comma-separated fragments of model ids, titles or groups the run must never pick from a model picker (models served from this machine)")
 	flag.Parse()
+	for _, a := range strings.Split(avoid, ",") {
+		if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+			o.avoid = append(o.avoid, a)
+		}
+	}
 	if own != "" {
 		o.ownOnly, o.ownOK = true, map[string]bool{}
 		for _, id := range strings.Split(own, ",") {
