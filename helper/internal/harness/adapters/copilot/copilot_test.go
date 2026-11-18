@@ -18,6 +18,7 @@ func TestAdapterFileParses(t *testing.T) {
 	for _, c := range d.Events {
 		want[c] = true
 	}
+	want[hookstyle.StopFailure] = true // errorOccurred and sessionEnd become it in copilotPrep
 	for _, ev := range a.Feeds["hooks"].Hook.Events {
 		if !want[ev] {
 			t.Errorf("feed lists %q, which no copilot hook maps to", ev)

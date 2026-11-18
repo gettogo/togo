@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/rpc"
@@ -22,15 +23,24 @@ func (h *Hub) Methods() map[string]api.Method {
 	}
 }
 
+// deviceIDRe is the shape of a device id, as push.pair accepts it.
+var deviceIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
 func (h *Hub) eventsSubscribe(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p struct {
-		Foreground *bool `json:"foreground"`
+		Foreground *bool  `json:"foreground"`
+		DeviceID   string `json:"deviceId"`
 	}
 	if err := api.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if !deviceIDRe.MatchString(p.DeviceID) {
+		// Not an id a device can be paired under: counted as an app that
+		// named none, which keeps the subscription working.
+		p.DeviceID = ""
+	}
 	foreground := p.Foreground == nil || *p.Foreground
-	return h.Subscribe(ctx, rpc.ConnFrom(ctx), foreground)
+	return h.SubscribeDevice(ctx, rpc.ConnFrom(ctx), foreground, p.DeviceID)
 }
 
 // eventsKeepalive does nothing itself: like every request, it renews the

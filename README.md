@@ -136,7 +136,7 @@ Run this on your Mac or Linux machine:
 curl -fsSL https://togoapp.dev/install.sh | sh
 ```
 
-The installer checks the release's signature and checksum before writing anything, installs to `~/.togo/bin`, and starts the background service so alerts can arrive while the app is closed.
+The installer checks the release's signature and checksum before writing anything, installs to `~/.togo/bin`, puts `togo` on your terminal's `PATH`, and starts the background service so alerts can arrive while the app is closed. Where it cannot link from `/usr/local/bin`, it adds one line to your zsh, bash or fish profile; pass `--no-modify-path` to skip that.
 
 <details>
 <summary><strong>Homebrew, source installs and release verification</strong></summary>

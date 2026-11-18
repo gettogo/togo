@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gettogo/togo/helper/internal/agents"
+	"github.com/gettogo/togo/helper/internal/daemon"
 	"github.com/gettogo/togo/helper/internal/hooks"
 	"github.com/gettogo/togo/helper/internal/state"
 )
@@ -38,6 +39,9 @@ var binaryCheck = func(ctx context.Context, home string) func(string) bool {
 	}
 }
 
+// currentExecutable is a seam for tests.
+var currentExecutable = executable
+
 // hookOptions resolves the harness config roots from the environment the
 // same way the harnesses do.
 func hookOptions(env map[string]string, local, block bool) (hooks.Options, error) {
@@ -49,10 +53,13 @@ func hookOptions(env map[string]string, local, block bool) (hooks.Options, error
 	if err != nil {
 		return hooks.Options{}, err
 	}
-	exe, err := executable()
+	exe, err := currentExecutable()
 	if err != nil {
 		return hooks.Options{}, err
 	}
+	// Hooks name the path that survives `brew upgrade`, not this version's
+	// Cellar directory, which Homebrew deletes.
+	exe = daemon.StableExecutable(exe)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return hooks.Options{}, err

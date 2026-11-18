@@ -37,19 +37,40 @@ type Screen struct {
 	Confirm   *Confirm     `json:"confirm,omitempty"`
 	Status    *StatusBlock `json:"status,omitempty"`
 
+	// Interaction names the terminal list this screen was read from, for a
+	// screen the helper is driving in the harness's own terminal. The app
+	// passes it back to select, cancel and release.
+	Interaction string `json:"interaction,omitempty"`
+
 	// Actions are screen-level actions (toolbar or footer).
 	Actions []ActionRef `json:"actions"`
 }
 
 // Picker is a searchable, grouped list with one selection.
+// SearchRemote is the Picker.SearchMode of a list searched by its source.
+const SearchRemote = "remote"
+
 type Picker struct {
 	Items    []PickerItem `json:"items"`
 	Selected string       `json:"selected,omitempty"`
 	// Searchable lets the app filter Items by title, subtitle and group.
-	Searchable bool     `json:"searchable"`
-	Filters    []Filter `json:"filters,omitempty"`
+	Searchable bool `json:"searchable"`
+	// SearchMode is "remote" when the search text is to be sent as the
+	// screen's query value "search" and the list read again; absent, the
+	// app filters Items itself.
+	SearchMode string `json:"searchMode,omitempty"`
+	// Query is the search text the list already has (a list read from the
+	// harness's terminal may have been searched at the desk).
+	// It is present, possibly empty, when that text is known; absent means
+	// the list's search text could not be read and must not be edited.
+	Query   *string  `json:"query,omitempty"`
+	Filters []Filter `json:"filters,omitempty"`
 	// OnSelect is the action run with args {"id": item id}.
 	OnSelect string `json:"onSelect"`
+	// OnSelectArgs are sent with OnSelect besides the chosen row.
+	OnSelectArgs map[string]json.RawMessage `json:"onSelectArgs,omitempty"`
+	// Presentation is what the list says about itself.
+	Presentation *PickerPresentation `json:"presentation,omitempty"`
 	// OnSelectConfirm is OnSelect's confirm line and effect, when it has
 	// one.
 	OnSelectConfirm *SelectConfirm `json:"onSelectConfirm,omitempty"`
@@ -69,6 +90,23 @@ type Picker struct {
 }
 
 // PickerItem is one choice in a Picker.
+// PickerPresentation is what a list says about itself beyond its rows.
+type PickerPresentation struct {
+	// State is "partial" when only part of the list was read: it scrolls
+	// in the harness's terminal and does not say how long it is. The rows
+	// given are current.
+	State string `json:"state,omitempty"`
+	// Total is the list's own row count, when it shows one.
+	Total int `json:"total,omitempty"`
+	// Message says something about the list as a whole ("More in the
+	// terminal.").
+	Message string `json:"message,omitempty"`
+	// MoreAction reads further rows of a partial list. It is present only
+	// while more can be read; running it returns the same screen with the
+	// rows read so far.
+	MoreAction *ActionRef `json:"moreAction,omitempty"`
+}
+
 type PickerItem struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
@@ -134,6 +172,11 @@ type Field struct {
 	Action string `json:"action,omitempty"`
 	// ActionConfirm is Action's confirm line and effect, when it has one.
 	ActionConfirm *SelectConfirm `json:"actionConfirm,omitempty"`
+	// ActionLabel names the button that commits the field ("Continue").
+	ActionLabel string `json:"actionLabel,omitempty"`
+	// Presentation "prompt": the field is the whole screen's question, to
+	// be answered now, and not a stored setting.
+	Presentation string `json:"presentation,omitempty"`
 }
 
 // EffectRelaunch is a selection that restarts the agent.

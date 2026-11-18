@@ -21,12 +21,17 @@ type Events struct {
 	mu        sync.Mutex
 	state     map[string]string
 	main      string
+	lost      bool // the stream came back: the next sign of a running turn says so
 	sessions  map[string]*session
 	messages  map[string]message
 	parts     map[string]*part
 	turns     map[string]*turn
 	open      map[string]harness.Item // questions and permissions not yet answered
 	tools     map[string]harness.Item // tool items by call id, for permission waits
+	waits     map[string]string       // request id -> call id of the tool waiting on it
+	retries   map[string]int          // turn id -> attempts of its retry notice
+	closed    map[string]bool         // the last turns closed, so a late update of their prompt opens none
+	closedIDs []string
 	planFirst map[string]time.Time
 }
 
@@ -63,7 +68,7 @@ type turn struct {
 func NewEvents(env harness.Env) *Events {
 	return &Events{env: env, state: map[string]string{"working": "false", "idle": "true"},
 		sessions: map[string]*session{}, messages: map[string]message{}, parts: map[string]*part{},
-		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{},
+		turns: map[string]*turn{}, open: map[string]harness.Item{}, tools: map[string]harness.Item{}, waits: map[string]string{}, retries: map[string]int{}, closed: map[string]bool{},
 		planFirst: map[string]time.Time{}}
 }
 
@@ -151,6 +156,13 @@ func (e *Events) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 }
 
 func (e *Events) setMain(id string) {
+	if e.main != "" && id != e.main {
+		// Another conversation: what the last one was doing says nothing
+		// about this one, and its end would never come.
+		e.state["working"], e.state["idle"] = "false", "true"
+		delete(e.state, "turn")
+		e.tools, e.waits, e.lost = map[string]harness.Item{}, map[string]string{}, false
+	}
 	e.main = id
 	e.state["harness_session"] = id
 }
@@ -252,7 +264,10 @@ type messagePayload struct {
 		ProviderID string `json:"providerID"`
 		Agent      string `json:"agent"`
 		Mode       string `json:"mode"`
-		Time       struct {
+		// Summary is on the updates a user message gets after its prompt
+		// started the turn; the first update of a prompt has none.
+		Summary json.RawMessage `json:"summary"`
+		Time    struct {
 			Created   int64 `json:"created"`
 			Completed int64 `json:"completed"`
 		} `json:"time"`
@@ -296,7 +311,13 @@ func (e *Events) messageInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 		}
 	}
 	if in.Role == "user" {
-		if _, ok := e.turns[in.ID]; ok {
+		if _, ok := e.turns[in.ID]; ok || e.closed[in.ID] {
+			return nil, nil
+		}
+		if len(in.Summary) > 0 && e.state["working"] != "true" {
+			// A later update of a prompt this mapper did not see start (it
+			// started after the turn): not a new prompt, and nothing
+			// would close its turn.
 			return nil, nil
 		}
 		tu := &turn{session: in.SessionID, started: orAt(ms(in.Time.Created), at), state: harness.StateRunning,
@@ -365,6 +386,7 @@ func (e *Events) sessionStatus(raw json.RawMessage, at time.Time) ([]harness.Ite
 		}
 		// One notice per turn, updated on each attempt.
 		t := e.state["turn"]
+		e.retries[t] = max(p.Status.Attempt, 1)
 		return []harness.Item{e.noticeBody("retry-"+t, t, e.parentOf(p.SessionID), at,
 			retryBody("", 0, p.Status.Message, p.Status.Attempt))}, nil
 	case "offline":
@@ -386,6 +408,7 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 	}
 	if sess == e.main {
 		e.state["working"], e.state["idle"] = "false", "true"
+		e.lost = false
 	}
 	ids := make([]string, 0, len(e.turns))
 	for id, tu := range e.turns {
@@ -394,14 +417,20 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 		}
 	}
 	sort.Strings(ids)
-	var items []harness.Item
+	items := e.flushParts(sess)
 	for _, id := range ids {
 		tu := e.turns[id]
 		if tu.state == harness.StateRunning {
 			tu.state = harness.StateOK
 		}
+		if n := e.retries[id]; n > 0 {
+			delete(e.retries, id)
+			if tu.state == harness.StateOK {
+				items = append(items, recoveredNotice("retry-"+id, id, e.parentOf(sess), at, n))
+			}
+		}
 		items = append(items, e.turnItem(id, tu, ptr(at)))
-		tu.state = "" // closed
+		e.closeTurn(id)
 	}
 	s := e.sessions[sess]
 	if s == nil || s.agent.Agent == nil || s.agent.Agent.State != harness.StateRunning {
@@ -415,6 +444,21 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 	return append(items, x), []harness.Op{agentRow(x)}
 }
 
+// maxClosed is how many closed turns are remembered by id.
+const maxClosed = 256
+
+// closeTurn forgets a turn that ended. Its id is kept for a while: OpenCode
+// updates a user message again after its turn, and that is not a prompt.
+func (e *Events) closeTurn(id string) {
+	delete(e.turns, id)
+	e.closed[id] = true
+	e.closedIDs = append(e.closedIDs, id)
+	if len(e.closedIDs) > maxClosed {
+		delete(e.closed, e.closedIDs[0])
+		e.closedIDs = e.closedIDs[1:]
+	}
+}
+
 // lostTrack forgets whether the main session's turn runs: the stream that
 // came back may have missed its end (session.idle, an execution's end),
 // and a "working" kept from before would hold the done back for good. The
@@ -422,5 +466,16 @@ func (e *Events) idle(sess string, at time.Time) ([]harness.Item, []harness.Op) 
 func (e *Events) lostTrack() {
 	if e.state["working"] == "true" {
 		e.state["working"], e.state["idle"] = "false", "true"
+	}
+	e.lost = true
+}
+
+// running notes a part, tool or text update of a turn that is still going:
+// after a reconnect it is the first sign the turn kept running while the
+// stream was down, so the session is working again.
+func (e *Events) running(sess string) {
+	if e.lost && sess == e.main {
+		e.state["working"], e.state["idle"] = "true", "false"
+		e.lost = false
 	}
 }

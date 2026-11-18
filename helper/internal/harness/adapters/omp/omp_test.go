@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -387,4 +388,117 @@ func mustRead(t *testing.T, name string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// Every intent names something an app knows how to present.
+func TestCommandIntentsUseTheKnownVocabulary(t *testing.T) {
+	ad, err := spec.Parse(AdapterFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	known := []string{harness.OpensPicker, harness.OpensSettings, harness.OpensSignIn, harness.OpensScreen, harness.OpensInput,
+		harness.OpensText, harness.OpensToggle, harness.OpensAction, harness.OpensTurn, harness.OpensExit, harness.OpensUnknown}
+	if len(ad.Commands.Intents) < 80 {
+		t.Fatalf("only %d intents", len(ad.Commands.Intents))
+	}
+	for name, in := range ad.Commands.Intents {
+		if !slices.Contains(known, in.Opens) || (in.OpensWithArgs != "" && !slices.Contains(known, in.OpensWithArgs)) {
+			t.Errorf("/%s: opens %q, with args %q", name, in.Opens, in.OpensWithArgs)
+		}
+		if !slices.Contains([]string{"", "none", "optional", "required"}, in.Args) {
+			t.Errorf("/%s: args %q", name, in.Args)
+		}
+		if (in.Opens == harness.OpensScreen) != (in.Screen != "") {
+			t.Errorf("/%s: screen %q for opens %q", name, in.Screen, in.Opens)
+		}
+	}
+	for _, name := range []string{"resume", "new", "settings", "tree", "fork", "login"} {
+		if _, ok := ad.Commands.Intents[name]; !ok {
+			t.Errorf("/%s, which omp's RPC list leaves out, has no intent", name)
+		}
+	}
+	if in := ad.Commands.Intents["exit"]; in.Opens != harness.OpensExit || !in.Destructive {
+		t.Errorf("/exit = %+v", in)
+	}
+}
+
+// omp retries a request the provider failed: the reply after the failed
+// one, with no user entry between, runs in a new turn and ends it.
+func TestRetryAfterModelErrorContinuesWork(t *testing.T) {
+	m := newSession(env())
+	retry := `{"type":"message","id":"e0f1","parentId":"edd5d43e","timestamp":"2026-11-08T04:14:20.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Hello."}],"provider":"llama.cpp","model":"qwen3.8-27b","usage":{"input":1800,"output":12,"cacheRead":1500,"cacheWrite":0,"totalTokens":3312,"cost":{"total":0.0009}},"stopReason":"stop","timestamp":1794111260000}}`
+	recs := records(t, "error-401.jsonl", "session")
+	recs = append(recs[:7], harness.Record{Source: "session", At: t0, Data: json.RawMessage(retry)})
+	got := run(m, recs).last()
+	if a := got["e0f1"]; a.Assistant == nil || a.TurnID != "turn-e0f1" {
+		t.Fatalf("retry reply %+v", a)
+	}
+	if turn := got["turn-e0f1"]; turn.Turn == nil || turn.Turn.State != harness.StateOK {
+		t.Fatalf("retry turn %+v", turn.Turn)
+	}
+	if got["turn-95ab0ab2"].Turn.State != harness.StateFailed || m.State()["working"] != "false" {
+		t.Fatal("first turn or working state wrong")
+	}
+}
+
+func TestRetryTurnStaysWorkingUntilItEnds(t *testing.T) {
+	m := newSession(env())
+	retry := `{"type":"message","id":"e0f2","parentId":"edd5d43e","timestamp":"2026-11-08T04:14:20.000Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_r1","name":"read","arguments":{"path":"/Users/user/proj/a.go"}}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"toolUse","timestamp":1794111260000}}`
+	recs := records(t, "error-401.jsonl", "session")
+	recs = append(recs[:7], harness.Record{Source: "session", At: t0, Data: json.RawMessage(retry)})
+	run(m, recs)
+	if m.State()["working"] != "true" {
+		t.Fatalf("state %v", m.State())
+	}
+}
+
+// A second task call that reuses a task id gets a row of its own.
+func TestReusedTaskIDKeepsRunsApart(t *testing.T) {
+	m := newSession(env())
+	call := `{"type":"message","id":"e020","parentId":"e011","timestamp":"2026-11-06T10:00:30.000Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_task_2","name":"task","arguments":{"agent":"explore","tasks":[{"id":"FindCallers","description":"Find callers again","assignment":"List every caller of Parse."}]}}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"toolUse","timestamp":1794045630000}}`
+	res := `{"type":"message","id":"e021","parentId":"e020","timestamp":"2026-11-06T10:00:40.000Z","message":{"role":"toolResult","toolCallId":"call_task_2","toolName":"task","content":[{"type":"text","text":"1 task finished"}],"details":{"results":[{"index":0,"id":"FindCallers","agent":"explore","exitCode":1,"output":"failed this time","error":"failed"}]},"isError":false,"timestamp":1794045640000}}`
+	recs := records(t, "session.jsonl", "session")
+	for _, l := range []string{call, res} {
+		recs = append(recs, harness.Record{Source: "session", At: t0, Data: json.RawMessage(l)})
+	}
+	got := run(m, recs).last()
+	first, second := got["agent-FindCallers"], got["agent-call_task_2-FindCallers"]
+	if first.Agent == nil || second.Agent == nil {
+		t.Fatalf("rows: %+v / %+v", first, second)
+	}
+	if first.Agent.State != harness.StateOK || second.Agent.State != harness.StateFailed || second.Agent.Summary != "failed this time" {
+		t.Fatalf("first %+v second %+v", first.Agent, second.Agent)
+	}
+}
+
+// A feed restart reads the same file again through the same mapper: spend,
+// compactions and step counts are those of the file, not doubled.
+func TestReplayDoesNotDoubleCount(t *testing.T) {
+	once := newSession(env())
+	first := run(once, records(t, "session.jsonl", "session"))
+	twice := newSession(env())
+	second := run(twice, records(t, "session.jsonl", "session"), records(t, "session.jsonl", "session"))
+	lastCost := func(m mapped) *float64 {
+		var c *float64
+		for _, op := range m.Ops {
+			if op.Status != nil && op.Status.CostUSD != nil {
+				c = op.Status.CostUSD
+			}
+		}
+		return c
+	}
+	a, b := lastCost(first), lastCost(second)
+	if a == nil || b == nil || *a != *b {
+		t.Fatalf("cost once %v, twice %v", a, b)
+	}
+	if once.State()["compactions"] != twice.State()["compactions"] {
+		t.Fatalf("compactions %q then %q", once.State()["compactions"], twice.State()["compactions"])
+	}
+	for id, it := range first.last() {
+		if it.Kind == harness.KindTurn {
+			if got := second.last()[id].Turn; got.Steps != it.Turn.Steps || got.FilesChanged != it.Turn.FilesChanged {
+				t.Fatalf("turn %s once %+v twice %+v", id, it.Turn, got)
+			}
+		}
+	}
 }

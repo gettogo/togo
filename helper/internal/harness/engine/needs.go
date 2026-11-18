@@ -237,3 +237,38 @@ func (s *sess) hookOnlyChat() bool {
 	}
 	return true
 }
+
+// unansweredLocked returns the session's open question items as they read
+// once the agent that asked is gone: nothing can answer them from the
+// phone any more. Their offers to the Lock Screen are withdrawn.
+func (s *sess) unansweredLocked() []harness.Item {
+	var out []harness.Item
+	for id := range s.needs.open {
+		s.withdrawOfferLocked(id)
+		it, ok := s.e.log.Get(s.id, id)
+		if !ok || it.Question == nil {
+			continue
+		}
+		body, no := *it.Question, false
+		body.Answerable, body.RequestID = &no, ""
+		it.Question, it.Seq = &body, 0
+		out = append(out, it)
+	}
+	return out
+}
+
+// forgetQuestionsLocked stops counting the questions of an agent that
+// exited as needing the user and takes their Needs rows away. Left open,
+// they kept the session at "needs you" and held back every later done.
+func (s *sess) forgetQuestionsLocked() {
+	if len(s.needs.open) == 0 {
+		return
+	}
+	var ops []harness.Op
+	for id := range s.needs.open {
+		ops = append(ops, harness.Op{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id})
+		delete(s.needs.request, id)
+	}
+	s.needs.open = nil
+	s.publishLocked(nil, ops)
+}

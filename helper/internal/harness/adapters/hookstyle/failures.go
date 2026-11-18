@@ -100,18 +100,41 @@ func droidOutcome(path string) (reason, words string, ok bool) {
 	return DroidOutcome(b)
 }
 
-// DroidOutcome finds the last agent_turn_outcome in transcript lines and
-// the last user_only message before it.
+// DroidOutcome finds the agent_turn_outcome of the transcript's last
+// prompt and the last user_only message before it. An outcome that names
+// another turn belongs to an earlier prompt: the turn that just stopped
+// has none written yet, and the answer is "none".
 func DroidOutcome(b []byte) (reason, words string, ok bool) {
 	lines := bytes.Split(b, []byte("\n"))
+	prompt := "" // id of the last real prompt: a user message with no visibility
+	for _, l := range lines {
+		var r struct {
+			Type    string `json:"type"`
+			ID      string `json:"id"`
+			Message struct {
+				Role       string `json:"role"`
+				Visibility string `json:"visibility"`
+			} `json:"message"`
+		}
+		if !bytes.Contains(l, []byte(`"user"`)) || json.Unmarshal(l, &r) != nil || r.Type != "message" {
+			continue
+		}
+		if r.Message.Role == "user" && r.Message.Visibility == "" {
+			prompt = r.ID
+		}
+	}
 	at := -1
 	for i := len(lines) - 1; i >= 0; i-- {
 		var r struct {
 			Type   string `json:"type"`
 			Reason string `json:"reason"`
+			TurnID string `json:"turnId"`
 		}
 		if !bytes.Contains(lines[i], []byte(`"agent_turn_outcome"`)) || json.Unmarshal(lines[i], &r) != nil || r.Type != "agent_turn_outcome" {
 			continue
+		}
+		if prompt != "" && r.TurnID != "" && r.TurnID != prompt {
+			return "", "", false
 		}
 		reason, at, ok = r.Reason, i, true
 		break

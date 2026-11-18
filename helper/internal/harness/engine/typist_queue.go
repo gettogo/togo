@@ -57,6 +57,17 @@ func (e *Engine) drainQueue(s *sess) {
 	}
 }
 
+// heldBecause puts on record why a queued prompt is not being typed, once
+// per reason: the drain tries again every drainRetry for as long as the
+// prompt waits, and a prompt held for minutes left no trace of the cause.
+func (e *Engine) heldBecause(s *sess, why string) {
+	if was, ok := e.heldWhy.Load(s.id); ok && was == why {
+		return
+	}
+	e.heldWhy.Store(s.id, why)
+	e.cfg.Logf("harness: %s holds a queued prompt: %s", s.id, why)
+}
+
 // typeNext types the first queued prompt under the typing lock, after
 // checking again that the agent is idle. It reports whether a prompt was
 // typed.
@@ -64,10 +75,20 @@ func (e *Engine) typeNext(s *sess) bool {
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
-	if !e.idleNow(s) || e.blockedBy(s.ctx, s) != "" {
-		// A question on screen holds the queue until it is answered.
+	api, viaAPI := e.sendAction(s)
+	if !viaAPI && e.cfg.Typist == nil {
 		return false
 	}
+	if !e.idleNow(s) {
+		e.heldBecause(s, "the session is working or an approval waits")
+		return false
+	}
+	if why := e.asking(s.ctx, s, viaAPI); why != "" {
+		// A question on screen holds the queue until it is answered.
+		e.heldBecause(s, why)
+		return false
+	}
+	e.heldWhy.Delete(s.id)
 	s.mu.Lock()
 	if len(s.queue) == 0 {
 		s.mu.Unlock()
@@ -76,18 +97,36 @@ func (e *Engine) typeNext(s *sess) bool {
 	next := s.queue[0]
 	s.queue = s.queue[1:]
 	s.markSentLocked(next.item.ID)
+	gen := s.convGen
 	s.mu.Unlock()
 	u := next.item.User
-	if err := e.typePrompt(s.ctx, s, u.Text, harness.ImagePaths(u.Images)); err != nil {
-		e.cfg.Logf("harness: typing a queued prompt failed: %v", err)
-		s.mu.Lock()
-		delete(s.sent, next.item.ID)
-		s.queue = append([]queued{next}, s.queue...)
-		s.mu.Unlock()
-		return false
+	var err error
+	if viaAPI {
+		err = e.sendAPI(s.ctx, s, api, u.Text, harness.ImagePaths(u.Images))
+	} else {
+		err = e.typePrompt(s.ctx, s, u.Text, harness.ImagePaths(u.Images))
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.convGen != gen {
+		// The chat started over while the prompt travelled. It is not
+		// put back, shown as sent, or sent again; the new chat says so.
+		s.uncertainNoticeLocked(u.Text)
+		return false
+	}
+	if err != nil {
+		e.cfg.Logf("harness: sending a queued prompt failed: %v", err)
+		if viaAPI {
+			// A request that failed may still have reached the harness, so
+			// it is not sent again: the prompt leaves the queue and the
+			// chat says so.
+			s.dropUnsentLocked(next.item)
+			return false
+		}
+		delete(s.sent, next.item.ID)
+		s.queue = append([]queued{next}, s.queue...)
+		return false
+	}
 	it := next.item
 	body := *u
 	body.Queued = false
@@ -97,6 +136,28 @@ func (e *Engine) typeNext(s *sess) bool {
 	s.failedHold = false // a new prompt starts a new turn
 	s.publishLocked([]harness.Item{it}, nil)
 	return true
+}
+
+// dropUnsentLocked withdraws a queued prompt whose API request failed and leaves
+// a notice with its text, so the user can send it again.
+func (s *sess) dropUnsentLocked(it harness.Item) {
+	e := s.e
+	u := *it.User
+	u.Queued, u.Withdrawn = false, true
+	it.User = &u
+	text := s.ad.Name + " returned an error for a queued prompt. It may not have arrived and was not sent again: " + clipNotice(u.Text)
+	s.publishLocked([]harness.Item{it, {ID: "unsent-" + it.ID, Kind: harness.KindNotice, At: e.cfg.Now(),
+		Notice: &harness.NoticeBody{Level: "error", Code: harness.NoticeError, Reason: "refused", Text: text}}}, nil)
+}
+
+// clipNotice shortens a prompt quoted inside a notice.
+func clipNotice(text string) string {
+	const limit = 200
+	r := []rune(text)
+	if len(r) <= limit {
+		return text
+	}
+	return string(r[:limit]) + "…"
 }
 
 func (s *sess) queueLen() int {

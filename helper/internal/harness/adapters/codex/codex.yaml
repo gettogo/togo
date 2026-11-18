@@ -155,6 +155,7 @@ modes:
 commands:
   static:
     - { name: model, detail: Choose model and effort, kind: picker, screen: model }
+    - { name: resume, detail: Resume a conversation, kind: picker, screen: resume }
     - { name: compact, detail: Summarise the thread, action: compact }
     - { name: review, detail: Review current changes }
     - { name: diff, detail: Show the git diff, opens: changes }

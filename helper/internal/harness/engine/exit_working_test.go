@@ -54,3 +54,39 @@ func TestWorkingClearsWhenTheAgentExits(t *testing.T) {
 		})
 	}
 }
+
+// A question the agent left unanswered when it exited can no longer be
+// answered: it must stop counting as needing the user, or the session
+// reads "needs you" and holds back every later done.
+func TestOpenQuestionClosesWhenTheAgentExits(t *testing.T) {
+	id := "s_exitqst001"
+	var status atomic.Value
+	status.Store("working")
+	e := statusEngine(t, id, &seqPane{mode: "a"}, &status)
+	s, _ := e.served(context.Background(), id)
+	sub := &fakeSub{done: make(chan struct{})}
+	defer close(sub.done)
+	if _, err := e.Open(context.Background(), sub, id, 0, 50); err != nil {
+		t.Fatal(err)
+	}
+	deliver(id, map[string]any{"items": []harness.Item{{ID: "q1", Kind: harness.KindQuestion, Question: &harness.QuestionBody{
+		Questions: []harness.Question{{ID: "a", Prompt: "Which one?"}},
+	}}}})
+	open := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.needsOpenLocked()
+	}
+	waitFor(t, open)
+
+	status.Store(wire.StatusEnded)
+	sid := id
+	e.Observe(wire.Event{Kind: wire.EventSession, SessionID: &sid, Payload: wire.SessionEvent{
+		Session: session.Session{ID: id, Agent: "fake", Managed: true, Status: wire.StatusEnded},
+	}})
+	waitFor(t, func() bool { return !open() })
+	it, ok := e.log.Get(id, "q1")
+	if !ok || it.Question == nil || it.Question.Answerable == nil || *it.Question.Answerable {
+		t.Fatalf("the question still reads answerable: %+v", it.Question)
+	}
+}

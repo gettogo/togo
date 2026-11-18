@@ -40,10 +40,16 @@ func checkArgs(args map[string]json.RawMessage) (map[string]any, error) {
 			return nil, invalidArgs("an arg names a value only the helper sets")
 		}
 		var v any
-		if err := json.Unmarshal(raw, &v); err != nil {
+		err := json.Unmarshal(raw, &v)
+		if err != nil {
 			return nil, invalidArgs("args must be JSON")
 		}
-		if err := checkArgValue(k, v, k == "text" || k == "answers"); err != nil {
+		if answers, ok := v.(map[string]any); ok && k == "answers" {
+			err = checkAnswers(answers)
+		} else {
+			err = checkArgValue(k, v, k == "text" || k == "answers")
+		}
+		if err != nil {
 			return nil, err
 		}
 		out[k] = v
@@ -90,6 +96,13 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 	if err != nil {
 		return harness.ActionResult{}, err
 	}
+	if strings.HasPrefix(req.Action, terminalPrefix) {
+		// The same limits on arguments as every other action.
+		if _, err := checkArgs(req.Args); err != nil {
+			return harness.ActionResult{}, err
+		}
+		return e.terminalAct(ctx, s, req)
+	}
 	if req.Action == harness.ActionStop && req.Target != "" {
 		// Stop on a queued prompt cancels it before it is typed.
 		if queued, sent := e.dropQueued(s, req.Target); queued {
@@ -112,6 +125,9 @@ func (e *Engine) Act(ctx context.Context, req harness.ActionRequest) (harness.Ac
 		return harness.ActionResult{}, err
 	}
 	args["target"] = req.Target
+	if req.Action == harness.ActionAnswer {
+		s.dropInapplicable(e.log, req.Target, args)
+	}
 	if _, ok := args["id"]; !ok && req.Target != "" {
 		// Templates name the chosen item .id; a caller that sends only the
 		// target means that item.
@@ -496,7 +512,11 @@ func (e *Engine) runCLI(ctx context.Context, s *sess, act spec.Action, c *spec.C
 		e.cfg.Logf("harness: %s action %s (%s): %v", s.ad.Adapter.Adapter, argv[0], act.Stability, err)
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "The command failed"}, nil
 	}
-	e.verify(ctx, s, act.Verify, data)
+	if !e.verify(ctx, s, act.Verify, data) && act.Verify != nil && act.Verify.Required {
+		// The command ran and what it was for did not happen (a setting
+		// another layer overrides): not "applied".
+		return harness.ActionResult{Result: harness.ResultFailed, Message: e.notConfirmed(ctx, s, act.Verify)}, nil
+	}
 	return harness.ActionResult{Result: harness.ResultApplied}, nil
 }
 

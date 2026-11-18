@@ -115,3 +115,51 @@ func TestWaitOnTheUserIsNeverDone(t *testing.T) {
 		t.Fatalf("events after the answer = %+v, want one done", h.events)
 	}
 }
+
+// A main turn that ended while the agents it started still run (omp said
+// "the reviews are running" and stopped; six background agents wrote on) is
+// not done: no idle, no done, until the last agent has finished.
+func TestSilenceWhileAgentsRunIsNoDone(t *testing.T) {
+	h := newHarness(t)
+	var agents atomic.Bool
+	agents.Store(true)
+	h.w.SetTurnRunning(func(string) bool { return false })
+	h.w.SetAgentsRunning(func(id string) bool { return id == sid && agents.Load() })
+	h.work(t)
+	for range int(2*maxVouched/(7*time.Second)) + 3 { // well past the turn's own vouch cap
+		h.advance(7 * time.Second)
+		h.w.Tick(context.Background())
+	}
+	if len(h.events) != 0 {
+		t.Fatalf("events while agents run = %+v, want none", h.events)
+	}
+	for _, s := range h.statuses {
+		if s == sid+":idle" {
+			t.Fatalf("statuses = %v, want no idle while agents run", h.statuses)
+		}
+	}
+	agents.Store(false)
+	h.advance(7 * time.Second)
+	h.w.Tick(context.Background())
+	if len(h.events) != 1 || h.events[0].Level != wire.LevelDone {
+		t.Fatalf("events after the last agent = %+v, want one done", h.events)
+	}
+	if last := h.statuses[len(h.statuses)-1]; last != sid+":idle" {
+		t.Fatalf("statuses = %v, want idle last", h.statuses)
+	}
+}
+
+// An agent row that never ends (its file stopped without a last record)
+// holds the done back for maxAgentsVouched at most: then the done goes out.
+func TestAgentsStuckRunningStillEndsInDone(t *testing.T) {
+	h := newHarness(t)
+	h.w.SetAgentsRunning(func(id string) bool { return id == sid })
+	h.work(t)
+	for i := 0; i < int(maxAgentsVouched/(7*time.Second))+3; i++ {
+		h.advance(7 * time.Second)
+		h.w.Tick(context.Background())
+	}
+	if len(h.events) != 1 || h.events[0].Level != wire.LevelDone {
+		t.Fatalf("events = %+v, want one done once the hold ran out", h.events)
+	}
+}

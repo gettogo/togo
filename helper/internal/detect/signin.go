@@ -118,6 +118,9 @@ func signInURL(raw []string) string {
 	from := max(0, len(raw)-signInURLLines)
 	found := ""
 	for i := from; i < len(raw); i++ {
+		if replyLine(raw[i]) {
+			continue
+		}
 		for _, loc := range webURL.FindAllStringIndex(raw[i], -1) {
 			u := raw[i][loc[0]:loc[1]]
 			if loc[1] == len(raw[i]) {
@@ -188,12 +191,17 @@ func userCode(raw []string, page string) string {
 	code := ""
 	for i := from; i < len(raw); i++ {
 		near := codeWord.MatchString(raw[i]) || (i > 0 && codeWord.MatchString(raw[i-1]))
-		if !near {
+		if !near || replyLine(raw[i]) {
 			continue
 		}
 		// URLs carry dashes and capitals of their own; only text counts.
 		text := webURL.ReplaceAllString(raw[i], " ")
 		if m := deviceCode.FindStringSubmatch(text); m != nil && strings.ContainsAny(m[1], "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+			// Letters, a dash, digits is how tickets are named
+			// (PROJ-1234): a code only next to the page it is for.
+			if page == "" && ticketKey.MatchString(m[1]) {
+				continue
+			}
 			code = m[1]
 		}
 	}
@@ -211,6 +219,9 @@ func userCode(raw []string, page string) string {
 // or say the agent is waiting on one.
 func hinted(raw []string, n int) bool {
 	for _, l := range raw[max(0, len(raw)-n):] {
+		if replyLine(l) {
+			continue
+		}
 		if signInHint.MatchString(webURL.ReplaceAllString(l, " ")) {
 			return true
 		}
@@ -249,4 +260,15 @@ func pageHost(page string) string {
 
 func loopback(host string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasSuffix(host, ".localhost")
+}
+
+// ticketKey is the shape of an issue key, which a device code can share.
+var ticketKey = regexp.MustCompile(`^[A-Z]+-[0-9]+$`)
+
+// replyLine reports a line of the agent's own reply, led by its bullet:
+// what it says about codes, links and signing in is talk, not a request.
+func replyLine(l string) bool {
+	t := strings.TrimSpace(l)
+	r, size := utf8.DecodeRuneInString(t)
+	return (r == '•' || r == '⏺' || r == '●') && len(t) > size && t[size] == ' '
 }

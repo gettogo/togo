@@ -38,15 +38,25 @@ func runShutdownDaemon(t *testing.T, home string, d *Daemon, h rpc.Handler) <-ch
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
+	stopped := make(chan struct{})
 	info := testInfo
 	info.Concurrent = []string{wire.MethodLocalAsk}
 	go func() {
+		defer close(stopped)
 		result <- Run(ctx, Config{
 			Home: home, Daemon: d, Info: info, Logf: t.Logf,
 			Build: func(context.Context) (rpc.Handler, error) { return h, nil },
 		})
 	}()
-	t.Cleanup(cancel)
+	t.Cleanup(func() {
+		cancel()
+		// Shutdown assertions may have already consumed result.
+		select {
+		case <-stopped:
+		case <-time.After(5 * time.Second):
+			t.Error("daemon did not stop")
+		}
+	})
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		c, err := sockd.Dial(context.Background(), SocketPath(home))
@@ -168,6 +178,27 @@ func TestShutdownRejectsOtherModes(t *testing.T) {
 	stillRunning(t, result, 2*settle)
 	if d.Requests() != 0 {
 		t.Errorf("requests = %d, want 0", d.Requests())
+	}
+}
+
+func TestShutdownDaemonCleanupWaitsForRun(t *testing.T) {
+	home := shortHome(t)
+	var result <-chan error
+	t.Run("fixture", func(t *testing.T) {
+		result = runShutdownDaemon(t, home, New(), pingHandler{})
+	})
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Errorf("Run = %v, want nil after cleanup", err)
+		}
+	default:
+		t.Error("fixture cleanup returned before Run completed")
+		select {
+		case <-result:
+		case <-time.After(5 * time.Second):
+			t.Fatal("daemon did not stop after cleanup")
+		}
 	}
 }
 

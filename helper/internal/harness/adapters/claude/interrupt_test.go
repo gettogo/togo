@@ -121,3 +121,18 @@ func TestInterruptPressesUntilIdle(t *testing.T) {
 		t.Fatalf("interrupt keys = %+v", k)
 	}
 }
+
+// A background agent that is stopped writes the interrupt line into its own
+// sidechain file. The main chain's turn goes on.
+func TestSidechainInterruptDoesNotEndMainTurn(t *testing.T) {
+	tr := newTranscript(env())
+	main := `{"parentUuid":null,"isSidechain":false,"type":"user","message":{"role":"user","content":"keep going"},"uuid":"m1","timestamp":"2026-11-07T13:00:00.000Z","sessionId":"s9"}`
+	side := `{"parentUuid":null,"isSidechain":true,"agentId":"a8b7ce01541ed1304","type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"uuid":"i9","timestamp":"2026-11-07T13:00:05.000Z","sessionId":"s9"}`
+	r := mapAll(tr, []harness.Record{
+		{Source: "transcript", At: time.Unix(0, 0), Data: json.RawMessage(main)},
+		{Source: "transcript", At: time.Unix(0, 0), Data: json.RawMessage(side)},
+	})
+	if _, ended := r.final["m1.turn"]; ended || tr.State()["working"] != "true" {
+		t.Fatalf("the main turn ended by a sidechain interrupt: %v", tr.State())
+	}
+}

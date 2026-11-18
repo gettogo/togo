@@ -20,6 +20,16 @@ import (
 // with the same keys evict each other in a tight loop, so it backs off.
 const StatusReplaced websocket.StatusCode = 4000
 
+// StatusSilent is the close code the relay uses after it sent the will: it
+// heard nothing for its silence window and told the devices this machine is
+// offline.
+const StatusSilent websocket.StatusCode = 4001
+
+// silentGap is how long a link may be down before the relay is assumed to
+// have sent the will. It is below the relay's silence window, so a link
+// that died without a close frame is covered too.
+const silentGap = 4 * time.Minute
+
 // ByPhone is the "by" value passed to Answer for mailbox answers.
 const ByPhone = "phone"
 
@@ -54,6 +64,13 @@ type Config struct {
 	// Will, when set, is sent on every connect and again whenever it
 	// changes.
 	Will WillSource
+	// Answered runs after an answer was handed to Answer, with the device
+	// that sent it and what Answer returned. Nil skips it.
+	Answered func(ctx context.Context, deviceID, requestID string, err error)
+	// Returned runs when a connection opens after the relay may have sent
+	// the will, so what the will put on the devices can be replaced. Nil
+	// skips it.
+	Returned func()
 	// StopMarker is the path of the stop marker ($TOGO_HOME/stopping). Run
 	// removes a stale one at start; when ctx ends and the marker exists,
 	// each connection sends DisarmFrame before closing. Empty disables both.
@@ -193,8 +210,9 @@ func relayURLs(devs []Device) map[string]bool {
 // replaced, so a flapping or contested mailbox never reconnects fast.
 func (r *runner) relayLoop(ctx context.Context, relayURL string) {
 	attempt := 0
+	link := &linkGap{}
 	for {
-		up, code := r.session(ctx, relayURL)
+		up, code := r.session(ctx, relayURL, link)
 		if ctx.Err() != nil {
 			return
 		}
@@ -237,7 +255,7 @@ type frame struct {
 
 // session runs one connection until it fails. It reports how long the
 // connection was up and the close code (-1 when there was none).
-func (r *runner) session(ctx context.Context, relayURL string) (time.Duration, websocket.StatusCode) {
+func (r *runner) session(ctx context.Context, relayURL string, link *linkGap) (up time.Duration, code websocket.StatusCode) {
 	url := relayURL + "/v1/mailbox/" + r.cfg.Keys.HostID + "/ws"
 	h := http.Header{}
 	h.Set("Authorization", "Bearer "+base64.RawURLEncoding.EncodeToString(r.cfg.Keys.MailboxSecret))
@@ -259,6 +277,10 @@ func (r *runner) session(ctx context.Context, relayURL string) (time.Duration, w
 	sctx, stop := context.WithCancel(ctx)
 	var lastRead atomic.Int64
 	lastRead.Store(time.Now().UnixNano())
+	if link.willSent(time.Now()) && r.cfg.Returned != nil {
+		r.cfg.Returned()
+	}
+	defer func() { link.closed(time.Unix(0, lastRead.Load()), code) }()
 	pingDone := make(chan struct{})
 	go func() {
 		defer close(pingDone)
@@ -311,6 +333,26 @@ func (r *runner) session(ctx context.Context, relayURL string) (time.Duration, w
 			}
 		}
 	}
+}
+
+// linkGap remembers how one relay's last connection ended. Times are wall
+// clock: the monotonic clock stops while the machine sleeps, which is when
+// the relay sends the will.
+type linkGap struct {
+	heard  time.Time // last frame read on the connection that ended
+	silent bool      // it ended with StatusSilent
+}
+
+func (g *linkGap) closed(heard time.Time, code websocket.StatusCode) {
+	g.heard, g.silent = heard.Round(0), code == StatusSilent
+}
+
+// willSent reports whether the relay may have sent the will since the last
+// connection, and clears the record.
+func (g *linkGap) willSent(now time.Time) bool {
+	sent := g.silent || (!g.heard.IsZero() && now.Round(0).Sub(g.heard) >= silentGap)
+	*g = linkGap{}
+	return sent
 }
 
 // readLoop reads relay frames until the connection fails, acking each
@@ -401,6 +443,9 @@ func (r *runner) handle(ctx context.Context, f frame) bool {
 		}
 	} else {
 		err = r.cfg.Answer(ctx, m.Answer.RequestID, m.Answer.Decision, ByPhone)
+		if r.cfg.Answered != nil && ctx.Err() == nil {
+			r.cfg.Answered(ctx, m.Answer.DeviceID, m.Answer.RequestID, err)
+		}
 	}
 	if err != nil {
 		if m.Context != nil {

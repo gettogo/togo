@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -283,5 +284,86 @@ func TestAnswerApprovesWithoutTypingAlwaysOption(t *testing.T) {
 	a.Options = a.Options[:1]
 	if _, err := pick(a, wire.Decision{Kind: wire.DecisionApprove}); err == nil {
 		t.Fatal("approve with only an always option was accepted")
+	}
+}
+
+// stillTmux records keys and leaves the screen as it is, as a menu does
+// that has not opened its feedback field yet.
+type stillTmux struct{ fakeTmux }
+
+func (f *stillTmux) SendKeys(_ context.Context, _ string, _ bool, keys ...string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, keys)
+	return nil
+}
+
+func TestTextAnswerTypesNothingUntilTheFieldOpens(t *testing.T) {
+	raw, err := os.ReadFile("../detect/testdata/kimi/real-run-command.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := answerFieldWait
+	answerFieldWait = 300 * time.Millisecond
+	t.Cleanup(func() { answerFieldWait = old })
+	ft := &stillTmux{fakeTmux{screen: string(raw)}}
+	st := New(Config{Tmux: ft, Pub: &fakePub{}})
+	p, ok := detect.Detect(string(raw))
+	if !ok || len(p.TextKeys) == 0 {
+		t.Fatalf("detect = %+v, %v; want a prompt that takes feedback", p, ok)
+	}
+	const sid = "s_aaaaaaaaaa"
+	st.PromptSeen(context.Background(), sid, p)
+	a := st.Pending(sid)[0]
+	err = st.Answer(context.Background(), a.RequestID, "text:do step 1 first", wire.ByPhone)
+	if err == nil {
+		t.Fatal("answer succeeded although the field never opened")
+	}
+	if want := [][]string{p.TextKeys}; !reflect.DeepEqual(ft.sent, want) {
+		t.Fatalf("sent = %q, want only the key that opens the field %q", ft.sent, want)
+	}
+	if n := len(st.Pending(sid)); n != 1 {
+		t.Fatalf("pending = %d, want the request kept open", n)
+	}
+}
+
+// openOnceTmux opens the feedback field on the first key and then ignores
+// everything, as a program that never takes the typed words.
+type openOnceTmux struct {
+	fakeTmux
+	opened bool
+}
+
+func (f *openOnceTmux) SendKeys(_ context.Context, _ string, _ bool, keys ...string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, keys)
+	if !f.opened {
+		f.opened = true
+		f.screen += "\n   feedback: "
+	}
+	return nil
+}
+
+func TestTextAnswerStaysOpenWhileThePromptIsOnScreen(t *testing.T) {
+	raw, err := os.ReadFile("../detect/testdata/kimi/real-run-command.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := answerConfirm
+	answerConfirm = 300 * time.Millisecond
+	t.Cleanup(func() { answerConfirm = old })
+	ft := &openOnceTmux{fakeTmux: fakeTmux{screen: string(raw)}}
+	st := New(Config{Tmux: ft, Pub: &fakePub{}})
+	p, _ := detect.Detect(string(raw))
+	const sid = "s_aaaaaaaaaa"
+	st.PromptSeen(context.Background(), sid, p)
+	a := st.Pending(sid)[0]
+	err = st.Answer(context.Background(), a.RequestID, "text:use staging", wire.ByPhone)
+	if err == nil {
+		t.Fatal("answer recorded although the prompt never left the screen")
+	}
+	if n := len(st.Pending(sid)); n != 1 {
+		t.Fatalf("pending = %d, want the request kept open", n)
 	}
 }

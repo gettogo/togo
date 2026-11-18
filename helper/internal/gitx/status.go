@@ -128,6 +128,11 @@ func parseStatus(out []byte, st *Status) []entry {
 		case strings.HasPrefix(rec, "u "):
 			add(fileFromFields(rec, 11, nil))
 		case strings.HasPrefix(rec, "? "):
+			// git lists a folder that holds its own repository as "dir/";
+			// nothing in it can be staged or discarded from here.
+			if strings.HasSuffix(rec, "/") {
+				continue
+			}
 			add(entry{FileStatus: FileStatus{Path: rec[2:], Index: "?", Worktree: "?"}, kind: '?'}, true)
 		}
 	}

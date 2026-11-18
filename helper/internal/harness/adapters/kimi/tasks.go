@@ -21,15 +21,9 @@ func taskRow(it harness.Item) harness.Op {
 		Subtitle: b.Command, State: rowState(b.State), Started: x.Ptr(b.Started)}}
 }
 
-func rowState(s string) string {
-	switch s {
-	case harness.StateRunning, harness.StateWaiting:
-		return harness.RowActive
-	case harness.StateOK:
-		return harness.RowDone
-	}
-	return harness.RowSkipped
-}
+// rowState is the item's own run state: the mission summary counts the
+// rows that are running, and plan-row states ("active") are not counted.
+func rowState(s string) string { return s }
 
 // taskStarted is a detached process Kimi started outside a tool result.
 func (w *Wire) taskStarted(raw json.RawMessage, at time.Time) ([]harness.Item, []harness.Op) {
@@ -92,6 +86,11 @@ func (w *Wire) plan(raw json.RawMessage, at time.Time) ([]harness.Item, []harnes
 		var probe map[string]json.RawMessage
 		if json.Unmarshal(raw, &probe) != nil || probe["todos"] == nil {
 			w.NoteUnrecognisedPlan() // the call stays a tool step
+			return nil, nil
+		}
+		if len(a.Todos) == 0 && w.sections[harness.SectionPlan] {
+			// An emptied list: the plan is gone.
+			return nil, []harness.Op{{Op: harness.OpReplace, Section: harness.SectionPlan, Rows: []harness.Row{}}}
 		}
 		return nil, nil
 	}

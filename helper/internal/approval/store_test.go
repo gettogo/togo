@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -45,6 +46,8 @@ func (f *fakeTmux) SendKeys(_ context.Context, _ string, _ bool, keys ...string)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sent = append(f.sent, keys)
+	// The program takes the answer and the prompt leaves the screen.
+	f.screen = ""
 	return nil
 }
 
@@ -370,4 +373,29 @@ func TestHookSubjectWinsOverScreen(t *testing.T) {
 			t.Fatalf("approval = %+v", a)
 		}
 	})
+}
+
+func TestSessionGoneDropsThePaneLock(t *testing.T) {
+	st := New(Config{Tmux: &fakeTmux{}, Pub: &fakePub{}})
+	pr, _ := detect.Detect(menu)
+	st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+	st.SessionGone(context.Background(), "s_aaaaaaaaaa")
+	st.mu.Lock()
+	n := len(st.paneLocks)
+	st.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d pane locks kept for a session that is gone", n)
+	}
+}
+
+func TestAskAnswerIsTheLabelAsGivenNotTheWireCopy(t *testing.T) {
+	st := New(Config{Tmux: &fakeTmux{}, Pub: &fakePub{}})
+	long := strings.Repeat("Do not deploy to production today, ", 4)
+	a, ch := st.OpenAsk(context.Background(), wire.AskParams{Title: "Deploy?", Options: []string{"Deploy", long}})
+	if err := st.Answer(context.Background(), a.RequestID, "option:2", wire.ByPhone); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-ch; got != long {
+		t.Fatalf("ask received %q, want the full label", got)
+	}
 }

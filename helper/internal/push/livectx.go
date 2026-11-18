@@ -45,12 +45,15 @@ type LiveContext struct {
 	// Answer says which buttons can answer the request without the app:
 	// approve_deny, deny, or empty for none.
 	Answer string `json:"answer,omitempty"`
+	// Expires is when the focused request stops taking answers, in Unix
+	// seconds. The helper may keep it open longer, never shorter.
+	Expires int64 `json:"expires,omitempty"`
 }
 
 func (c LiveContext) equal(o LiveContext) bool {
 	same := c.Subject == nil && o.Subject == nil ||
 		c.Subject != nil && o.Subject != nil && *c.Subject == *o.Subject
-	return same && c.Title == o.Title && c.Step == o.Step && c.Ask == o.Ask && c.Answer == o.Answer
+	return same && c.Title == o.Title && c.Step == o.Step && c.Ask == o.Ask && c.Answer == o.Answer && c.Expires == o.Expires
 }
 
 func (c LiveContext) empty() bool { return c.equal(LiveContext{}) }
@@ -65,6 +68,9 @@ func requestContext(a wire.Approval) LiveContext {
 		c.Subject = &s
 	}
 	c.Answer = liveAnswer(a)
+	if a.ExpiresAt != nil {
+		c.Expires = a.ExpiresAt.Unix()
+	}
 	return c
 }
 

@@ -61,8 +61,9 @@ type PaneForeground struct {
 	PaneAge time.Duration
 }
 
-// psPaths are where ps lives on macOS and Linux.
-var psPaths = []string{"/bin/ps", "/usr/bin/ps"}
+// psPaths are where ps lives on macOS and Linux, then NixOS, then
+// wherever PATH has it.
+var psPaths = []string{"/bin/ps", "/usr/bin/ps", "/run/current-system/sw/bin/ps", "ps"}
 
 // Foreground reports the foreground job of the session's active pane, read
 // from tmux (pane_dead, pane_pid, pane_tty) and ps on the pane's terminal.
@@ -76,6 +77,10 @@ func (c *Client) Foreground(ctx context.Context, session string) (PaneForeground
 		return PaneForeground{}, err
 	}
 	f := strings.Fields(out)
+	if len(f) == 0 {
+		// display-message prints empty fields for a target that is gone.
+		return PaneForeground{}, ErrNoSession
+	}
 	if len(f) < 2 {
 		return PaneForeground{}, fmt.Errorf("tmux: unexpected pane description %q", strings.TrimSpace(out))
 	}

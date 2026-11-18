@@ -94,6 +94,7 @@ func Serve(ctx context.Context, r io.Reader, w io.Writer, h Handler, info Helper
 	for {
 		payload, err := ReadFrame(r)
 		if errors.Is(err, io.EOF) {
+			conn.clientGone()
 			// The client is done sending. Quick calls still running off
 			// the loop (a read moved off it so it never blocks Approve)
 			// get a moment to reply; a call that blocks on the user is

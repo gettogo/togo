@@ -1,0 +1,22 @@
+data: {"id": "evt_1db84dcb5001xcPGwkW2DsjiEV", "created": 1794684279989, "type": "session.created", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "slug": "witty-sailor", "version": "2.2.5", "projectID": "8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0", "location": {"directory": "/tmp/work"}, "subpath": ""}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 0, "version": 1}}
+
+data: {"id": "evt_1db84ddc6002jzvgi52NEnqIiQ", "created": 1794684280262, "type": "session.inbox.enqueued", "location": {"directory": "/tmp/work"}, "data": {"inboxID": "msg_1db84dd510014I4s7bYozTcTUn", "sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "item": {"type": "user", "payload": {"text": "Use the read and edit tools to replace the line beta in notes.txt with beta-updated. Do not change other files. Then reply NOTES_DONE."}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 1, "version": 1}}
+
+data: {"id": "evt_1db84ddc9001wp6uZOci3CLSTy", "created": 1794684280265, "type": "session.execution.started", "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 2, "version": 1}}
+
+data: {"id": "evt_1db84ddd00016QeyknRPtNF3Dn", "created": 1794684280272, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "inboxID": "msg_1db84dd510014I4s7bYozTcTUn"}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 4, "version": 1}}
+
+data: {"id": "evt_1db84df60001ra5z8A2S7Fq7r3", "created": 1794684280672, "type": "session.execution.failed", "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "error": {"type": "provider.quota", "message": "Quota exceeded", "status": 429}}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 7, "version": 1}}
+
+data: {"id": "evt_1db8589cf001BvuUWpPKWa9DFP", "created": 1794684324303, "type": "session.revert.staged", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "revert": {"messageID": "msg_1db84dd510014I4s7bYozTcTUn", "snapshot": "e60c60ddc4a2e67610cc8c55ec00df94a537da67", "files": []}}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 8, "version": 1}}
+
+data: {"id": "evt_1db858dcc001OSTyeSx6fSC2BW", "created": 1794684325324, "type": "session.revert.cleared", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 9, "version": 1}}
+
+data: {"id": "evt_1db858dcd001jFZg3ADEk7kkMa", "created": 1794684325325, "type": "session.execution.started", "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 10, "version": 1}}
+
+data: {"id": "evt_1db858dce001wTBRRuI1IXwp0I", "created": 1794684325326, "type": "session.execution.succeeded", "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 11, "version": 1}}
+
+data: {"id": "evt_1db8591d10014vVdb5HIYPdo1g", "created": 1794684326353, "type": "session.revert.staged", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "revert": {"messageID": "msg_1db84dd510014I4s7bYozTcTUn", "snapshot": "e60c60ddc4a2e67610cc8c55ec00df94a537da67", "files": []}}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 12, "version": 1}}
+
+data: {"id": "evt_1db85b578001xCjM02juPvAC3V", "created": 1794684335480, "type": "session.revert.committed", "data": {"sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "to": "msg_1db84dd510014I4s7bYozTcTUn"}, "durable": {"aggregateID": "ses_e247b235fffeUZ5d0j2BqcfYEW", "seq": 13, "version": 1}}
+

@@ -86,6 +86,19 @@ func TestSettleOnLastLineVisible(t *testing.T) {
 	}
 }
 
+// A last line that was on the screen before the paste says nothing about
+// the paste having been read: Enter waits for the screen to stop moving.
+func TestSettleIgnoresALastLineAlreadyShown(t *testing.T) {
+	var now time.Duration
+	f := &fakePane{screens: []string{"yes a", "yes b", "yes c", "yes d", "yes e", "yes f first yes", "yes f first yes"}, now: &now}
+	if err := typeReply(context.Background(), f, "s_abcdefghij", "first\nyes", true, fakeSleep(&now)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := lastCall(f), "keys Enter at 250ms"; got != want {
+		t.Fatalf("last call %q, want %q", got, want)
+	}
+}
+
 func TestEnterOnlyAfterPaste(t *testing.T) {
 	var now time.Duration
 	f := &fakePane{screens: []string{"x"}, now: &now}

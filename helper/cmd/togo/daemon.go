@@ -163,6 +163,13 @@ func runDaemonRestart(ctx context.Context, args []string, stdout, stderr io.Writ
 // restartPendingWait. No daemon running is not an error.
 func restartDaemon(ctx context.Context, home, reason string, whenIdle bool, stdout io.Writer) error {
 	socket := daemon.SocketPath(home)
+	// Before the daemon stops: a unit written by an older helper lets
+	// systemd end every session along with it.
+	if svc, err := userService(); err == nil {
+		if err := svc.Refresh(ctx); err != nil {
+			fmt.Fprintf(stdout, "Could not update the login service: %v\n", err)
+		}
+	}
 	if !daemonRunning(home) {
 		fmt.Fprintln(stdout, "No daemon is running; the next connection starts one")
 		return nil
@@ -249,10 +256,23 @@ func waitRestartBoundary(ctx context.Context, home string) error {
 func ensureDaemon(ctx context.Context, home string) error {
 	socket := daemon.SocketPath(home)
 	if svc, err := userService(); err == nil {
-		if st, err := svc.Status(ctx); err == nil && st.Installed && st.Loaded {
+		// A systemd unit that is restarting its daemon is not "active" for
+		// the moment between the two (seen on Ubuntu 24.04: the check fell
+		// in that gap, a daemon was started here instead, systemd's own
+		// lost to it and the unit went inactive, leaving the daemon outside
+		// the service). An installed unit is given the time to bring its
+		// daemon back, then asked to start it, before one is started here.
+		systemd := svc.Manager == daemon.Systemd
+		if st, err := svc.Status(ctx); err == nil && st.Installed && (st.Loaded || systemd) {
 			if c, err := daemon.Connect(ctx, socket, func() error { return nil }, restartServiceWait); err == nil {
 				c.Close()
 				return nil
+			}
+			if systemd {
+				if c, err := daemon.Connect(ctx, socket, func() error { return svc.Start(ctx) }, restartStartWait); err == nil {
+					c.Close()
+					return nil
+				}
 			}
 		}
 	}

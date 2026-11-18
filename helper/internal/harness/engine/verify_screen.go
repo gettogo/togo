@@ -48,6 +48,9 @@ func (e *Engine) readScreenValue(ctx context.Context, s *sess, v *spec.Verify) (
 // notConfirmed says a required change did not show, and what the harness
 // shows instead when it can be read.
 func (e *Engine) notConfirmed(ctx context.Context, s *sess, v *spec.Verify) string {
+	if v.Otherwise != "" {
+		return v.Otherwise
+	}
 	msg := s.ad.Name + " did not take the change."
 	got, ok := e.readValue(ctx, s, v, false)
 	if !ok || got == "" {

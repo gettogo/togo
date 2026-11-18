@@ -1,0 +1,52 @@
+{
+  "data": [
+    {
+      "id": "build",
+      "name": "Build",
+      "mode": "primary",
+      "hidden": false
+    },
+    {
+      "id": "general",
+      "name": "General",
+      "mode": "subagent",
+      "hidden": false
+    },
+    {
+      "id": "explore",
+      "name": "Explore",
+      "mode": "subagent",
+      "hidden": false
+    },
+    {
+      "id": "compaction",
+      "name": "Compaction",
+      "mode": "primary",
+      "hidden": true
+    },
+    {
+      "id": "title",
+      "name": "Title",
+      "mode": "primary",
+      "hidden": true
+    },
+    {
+      "id": "summary",
+      "name": "Summary",
+      "mode": "primary",
+      "hidden": true
+    },
+    {
+      "id": "plan",
+      "name": "Plan",
+      "mode": "primary",
+      "hidden": false
+    },
+    {
+      "id": "audit-observer",
+      "name": "audit-observer",
+      "mode": "primary",
+      "hidden": false
+    }
+  ]
+}

@@ -37,6 +37,21 @@ func (t SessionTypist) Type(ctx context.Context, id, text string, submit, _ bool
 	return t.Sessions.SendText(ctx, id, text, submit, status, nil)
 }
 
+// TypeKeys types text as keystrokes, not as a paste. A harness offers its
+// commands, and filters a list, as keys arrive; pasted text does neither
+// in some of them (Pi, Kimi). Only printable text on one line is sent.
+func (t SessionTypist) TypeKeys(ctx context.Context, id, text string) error {
+	if _, err := session.ValidateID(id); err != nil {
+		return err
+	}
+	for _, r := range text {
+		if r < 0x20 || r == 0x7f {
+			return errors.New("harness: text has a control character")
+		}
+	}
+	return t.Tmux.SendKeys(ctx, "="+id+":", true, text)
+}
+
 // Keys sends named keys from the allow list, the stop chords an
 // until-idle interrupt sends, or the keys that clear an input line (the
 // engine checks which keys a route may send).
@@ -45,7 +60,7 @@ func (t SessionTypist) Keys(ctx context.Context, id string, keys ...string) erro
 		return err
 	}
 	for _, k := range keys {
-		if !spec.AllowedKeys[k] && !spec.StopKeys[k] && !spec.InputKeys[k] {
+		if !spec.AllowedKeys[k] && !spec.StopKeys[k] && !spec.InputKeys[k] && !spec.MenuKeys[k] && !spec.MenuChord(k) {
 			return errors.New("harness: key not allowed")
 		}
 	}

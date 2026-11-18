@@ -1,0 +1,35 @@
+{
+ "location": {
+  "directory": "/tmp/work"
+ },
+ "data": [
+  {
+   "id": "sh_1db864447001c83N6QIvDM7Tkd",
+   "status": "running",
+   "command": "sleep 4",
+   "cwd": "/tmp/work",
+   "shell": "/bin/zsh",
+   "file": "/tmp/opencode/data/opencode/shell/8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0/sh_1db864447001c83N6QIvDM7Tkd.out",
+   "pid": 50963,
+   "metadata": {
+    "sessionID": "ses_e247b235fffeUZ5d0j2BqcfYEW"
+   },
+   "time": {
+    "started": 1794684372039
+   }
+  },
+  {
+   "id": "sh_1db864451001cK2J1627VjZkFS",
+   "status": "running",
+   "command": "sleep 3",
+   "cwd": "/tmp/work",
+   "shell": "/bin/zsh",
+   "file": "/tmp/opencode/data/opencode/shell/8bb43e658dc3fd47c635c89a6a2f1ffbcf9551e0/sh_1db864451001cK2J1627VjZkFS.out",
+   "pid": 50965,
+   "metadata": {},
+   "time": {
+    "started": 1794684372049
+   }
+  }
+ ]
+}

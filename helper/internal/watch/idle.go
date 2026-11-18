@@ -84,3 +84,22 @@ func (s *sessionState) outputSeen(now time.Time) (becameWorking bool) {
 func (s *sessionState) silent(now time.Time, idle time.Duration) bool {
 	return s.awaitingIdle && now.Sub(s.lastOutput) >= idle
 }
+
+// SetAgentsRunning installs the reader for whether agents a session's agent
+// started (subagents, background agents) still run. A main turn can end
+// while they work on; that silence is no done either (see settle), for
+// maxAgentsVouched at most.
+func (w *Watcher) SetAgentsRunning(fn func(id string) bool) {
+	w.mu.Lock()
+	w.agentsRunning = fn
+	w.mu.Unlock()
+}
+
+// agentsWorking reports whether agents the session's agent started still
+// run.
+func (w *Watcher) agentsWorking(id string) bool {
+	w.mu.Lock()
+	fn := w.agentsRunning
+	w.mu.Unlock()
+	return fn != nil && fn(id)
+}

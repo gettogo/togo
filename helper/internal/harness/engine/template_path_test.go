@@ -33,3 +33,26 @@ func TestRenderRefusesFormattingErrors(t *testing.T) {
 		t.Fatalf("got %q %v", got, err)
 	}
 }
+
+// User text is data: "%!" and "<no value>" inside a value must reach the
+// output untouched, while a missing value still renders empty.
+func TestRenderKeepsLiteralUserText(t *testing.T) {
+	data := map[string]any{"text": "that's 100%! ship it <no value> ok"}
+	got, err := Render(`{{.text | json}}`, data)
+	if err != nil || got != `"that's 100%! ship it \u003cno value\u003e ok"` {
+		t.Fatalf("json: got %s, %v", got, err)
+	}
+	got, err = Render(`say: {{.text}}`, data)
+	if err != nil || got != "say: that's 100%! ship it <no value> ok" {
+		t.Fatalf("plain: got %q, %v", got, err)
+	}
+	if got, err := Render(`[{{.gone}}]`, data); err != nil || got != "[]" {
+		t.Fatalf("missing: got %q, %v", got, err)
+	}
+	if got, err := Render(`{{if .text}}[{{.gone}}]{{end}}`, data); err != nil || got != "[]" {
+		t.Fatalf("nested: got %q, %v", got, err)
+	}
+	if _, err := Render(`{{printf "%d" .n}}`, map[string]any{"n": "abc"}); err == nil {
+		t.Fatal("rendered a mistyped printf")
+	}
+}

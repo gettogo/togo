@@ -23,6 +23,18 @@ import (
 // askQuestion turns an ask call into a question item, or nil when the
 // call asks nothing.
 func askQuestion(callID, tid, parent string, at time.Time, args map[string]any) *harness.Item {
+	if src := str(args, "html"); src != "" {
+		// 18.20's form (askform.go). Its dialog is not the one the key
+		// driver reads, so it shows as a question that is answered in the
+		// terminal until a way to answer it from the phone exists.
+		qs := formQuestions(src)
+		if len(qs) == 0 {
+			return nil
+		}
+		no := false
+		return &harness.Item{ID: "ask-" + callID, TurnID: tid, Parent: parent, Kind: harness.KindQuestion, At: at,
+			Question: &harness.QuestionBody{Questions: qs, Answerable: &no}}
+	}
 	var qs []harness.Question
 	for i, el := range asList(args["questions"]) {
 		m := obj(el)
@@ -70,6 +82,23 @@ func askAnswers(q *harness.QuestionBody, m map[string]any) map[string][]string {
 		out[id] = vals
 	}
 	details := obj(m["details"])
+	if answers := asList(details["answers"]); len(answers) > 0 {
+		// The form's result: [{name, question, answer}], named as the
+		// question ids are.
+		for i, a := range answers {
+			am := obj(a)
+			id := str(am, "name")
+			if _, ok := out[id]; !ok && i < len(q.Questions) {
+				id = q.Questions[i].ID
+			}
+			if _, ok := out[id]; ok {
+				if v := str(am, "answer"); v != "" {
+					out[id] = []string{clip(v)}
+				}
+			}
+		}
+		return out
+	}
 	if results := asList(details["results"]); len(results) > 0 {
 		for i, r := range results {
 			rm := obj(r)

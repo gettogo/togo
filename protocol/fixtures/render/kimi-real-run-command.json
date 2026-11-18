@@ -16,6 +16,7 @@
     },
     "host": "studio",
     "allowText": true,
+    "expires": 1793874600,
     "options": [
       {
         "n": 1,

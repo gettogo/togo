@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
@@ -49,5 +50,46 @@ func TestJobsStopByName(t *testing.T) {
 	}
 	if want := "omp ps stop browser --global=relay"; strings.Join(argv, " ") != want {
 		t.Errorf("argv %q, want %q", strings.Join(argv, " "), want)
+	}
+}
+
+// Seen live on omp 18.20: bash with async: true came back "Backgrounded as
+// job bg_1", /jobs showed it running, and the app's background section was
+// empty. The records below are that session's result and settle message.
+func TestAsyncJobShowsWhileItRunsAndCloses(t *testing.T) {
+	m := newSession(env())
+	rec := func(raw string) harness.Record {
+		return harness.Record{Source: "session", At: t0, Data: json.RawMessage(raw)}
+	}
+	start := run(m, []harness.Record{
+		rec(`{"type":"session","version":3,"id":"aaaa1111"}`),
+		rec(`{"type":"message","id":"1b05f710","timestamp":"2026-11-14T00:51:15.992Z","message":{"role":"user","content":[{"type":"text","text":"run it"}]}}`),
+		rec(`{"type":"message","id":"ce1b5408","parentId":"1b05f710","timestamp":"2026-11-14T00:51:21.013Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"0F03617E","name":"bash","arguments":{"async":true,"command":"sleep 15; printf OMP_ASYNC_LOCAL","timeout":30}}]}}`),
+		rec(`{"type":"message","id":"49aad0d5","parentId":"ce1b5408","timestamp":"2026-11-14T00:51:50.420Z","message":{"role":"toolResult","toolCallId":"0F03617E","toolName":"bash","content":[{"type":"text","text":"Backgrounded as job bg_1"}],"details":{"async":{"state":"running","jobId":"bg_1","type":"bash"},"timeoutSeconds":30},"isError":false}}`),
+	})
+	row := func(o mapped) *harness.Row {
+		var r *harness.Row
+		for _, op := range o.Ops {
+			if op.Section == harness.SectionBackground && op.Row != nil && op.Row.ID == "job-bg_1" {
+				r = op.Row
+			}
+		}
+		return r
+	}
+	if r := row(start); r == nil || r.State != harness.StateRunning || !strings.Contains(r.Subtitle, "sleep 15") {
+		t.Fatalf("running job row = %+v, want a running row with the command", r)
+	}
+	done := run(m, []harness.Record{rec(`{"type":"custom_message","customType":"async-result","content":"<system-notice>\nBackground job bg_1 has completed.\n</system-notice>","display":true,"details":{"jobs":[{"jobId":"bg_1","type":"bash","status":"completed","label":"sleep 15; printf OMP_ASYNC_LOCAL","durationMs":15084}]},"id":"4b222f56","parentId":"f9287723","timestamp":"2026-11-14T00:52:05.504Z"}`)})
+	if r := row(done); r == nil || r.State != harness.StateOK {
+		t.Fatalf("settled job row = %+v, want ok", r)
+	}
+	var ended bool
+	for _, it := range done.Items {
+		if it.Background != nil && it.Background.JobID == "bg_1" {
+			ended = it.Background.State == harness.StateOK && it.Background.Ended != nil
+		}
+	}
+	if !ended {
+		t.Error("the job item did not end")
 	}
 }

@@ -215,3 +215,14 @@ func TestDaemonStartRearmsTaps(t *testing.T) {
 		}
 	}
 }
+
+// On Linux the tmux server and the agents run in the daemon's control
+// group, and systemd's default ends the whole group when the unit stops or
+// restarts: a helper restart or update would end every session. The unit
+// stops the daemon alone.
+func TestUnitLeavesSessionsRunningWhenTheDaemonStops(t *testing.T) {
+	unit := renderUnit("/usr/local/bin/togo", "/home/u/.togo")
+	if !strings.Contains(unit, "\nKillMode=process\n") {
+		t.Errorf("the unit lets systemd end the sessions with the daemon:\n%s", unit)
+	}
+}

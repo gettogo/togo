@@ -206,3 +206,71 @@ func TestErrorTextReasons(t *testing.T) {
 		}
 	}
 }
+
+// The pane goes quiet while Cline waits for a permission or runs a long
+// tool, and the turn closes. The turn goes on: what Cline writes next must
+// not be closed again at the old idle time.
+func TestMessagesTurnGoesOnAfterAnIdleClose(t *testing.T) {
+	h, doc := home(t)
+	var d map[string]any
+	_ = json.Unmarshal(doc, &d)
+	all := d["messages"].([]any)
+	m := newMessages(env(h, "2026-11-08T03:37:52Z"))
+	d["messages"] = all[:2]
+	cut, _ := json.Marshal(d)
+	m.Map(harness.Record{Data: cut})
+	idle := time.UnixMilli(1794109081821)
+	if closed := m.CloseIdle(idle); len(closed) == 0 {
+		t.Fatal("the idle pane closed nothing")
+	}
+	d["messages"] = all[:3] // the tool result arrives after the idle time
+	cut, _ = json.Marshal(d)
+	items, _ := m.Map(harness.Record{Data: cut})
+	var turn *harness.TurnBody
+	for _, it := range items {
+		if it.Kind == harness.KindTurn {
+			turn = it.Turn
+		}
+	}
+	if turn == nil || turn.State != harness.StateRunning || turn.Ended != nil {
+		t.Fatalf("the turn stayed closed: %+v", turn)
+	}
+}
+
+// Resume relaunches Cline with --id; the mapper survives the relaunch and
+// must move to that session at once, even when its manifest does not say
+// this process owns it yet.
+func TestMessagesFollowsAResumeRelaunch(t *testing.T) {
+	h, doc := home(t)
+	m := newMessages(env(h, "2026-11-08T04:00:00Z")) // began after the fixture session
+	r, ok := any(m).(harness.Relauncher)
+	if !ok {
+		t.Fatal("the mapper does not follow a relaunch")
+	}
+	r.Relaunched([]string{"cline", "-i", "--id", fixtureID}, time.Now())
+	if st := m.State(); st["harness_session"] != fixtureID || !strings.HasSuffix(st["transcript_path"], fixtureID+".messages.json") {
+		t.Fatalf("state %v", st)
+	}
+	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
+		t.Fatal("the resumed session was not mapped")
+	}
+}
+
+// The mapper keeps a hash of each item it sent, not the item's JSON: a long
+// session would hold a second copy of the conversation.
+func TestMessagesKeepsNoCopyOfTheConversation(t *testing.T) {
+	h, doc := home(t)
+	m := newMessages(env(h, "2026-11-08T03:37:52Z"))
+	m.Map(harness.Record{Data: doc})
+	if len(m.sent) == 0 {
+		t.Fatal("nothing sent")
+	}
+	for id, v := range m.sent {
+		if len(v) > 64 {
+			t.Errorf("item %s: %d bytes kept", id, len(v))
+		}
+	}
+	if again, _ := m.Map(harness.Record{Source: "messages", Data: doc}); len(again) != 0 {
+		t.Fatalf("the same document sent %d items", len(again))
+	}
+}

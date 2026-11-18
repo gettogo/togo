@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -22,7 +23,8 @@ func (c *Client) PasteText(ctx context.Context, target, text string) error {
 	if _, err := c.runInput(ctx, text, "load-buffer", "-b", name, "-"); err != nil {
 		return fmt.Errorf("tmux: load buffer: %w", noSession(err))
 	}
-	if _, err := c.run(ctx, "paste-buffer", "-p", "-d", "-b", name, "-t", target); err != nil {
+	paste := append(leaveMode(target), "paste-buffer", "-p", "-d", "-b", name, "-t", target)
+	if _, err := c.run(ctx, paste...); err != nil {
 		_, _ = c.run(context.WithoutCancel(ctx), "delete-buffer", "-b", name)
 		return fmt.Errorf("tmux: paste: %w", noSession(err))
 	}
@@ -53,6 +55,7 @@ func (c *Client) runInput(ctx context.Context, input string, args ...string) (st
 		full = append(full, "-f", c.Config)
 	}
 	cmd := exec.CommandContext(ctx, c.Bin, append(full, args...)...)
+	cmd.Env = outsideTmux(os.Environ())
 	var out, errBuf strings.Builder
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stdout = &out

@@ -375,3 +375,70 @@ func TestSettledGoneWaitsForThePane(t *testing.T) {
 		}
 	}
 }
+
+type clearSink struct {
+	*exitSink
+	cleared int
+}
+
+func (c *clearSink) ClearExit(string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.status, c.exit = "", nil
+	c.cleared++
+}
+
+// An agent without hooks that exited and was started again by hand in its
+// pane is running: the session must not stay ended.
+func TestReconcileClearsExitWhenAgentRunsAgain(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	h.sessions[0].Command = []string{"/opt/bin/aider", "--yes"}
+	c := &clearSink{exitSink: &exitSink{harness: h}}
+	h.w.cfg.Status = c
+	back := false
+	var asked string
+	h.w.agentBack = func(_ context.Context, _ string, program string) (bool, error) {
+		asked = program
+		return back, nil
+	}
+	h.w.Reconcile(ctx)
+	if asked != "" {
+		t.Fatal("checked the pane of a session that has not ended")
+	}
+	c.SetExit(sid, wire.StatusEnded, &wire.SessionExit{Reason: wire.ExitReasonExit})
+	h.w.Reconcile(ctx)
+	if c.cleared != 0 || !h.w.Ended(sid) {
+		t.Fatal("cleared the exit while the agent is still gone")
+	}
+	back = true
+	h.w.Reconcile(ctx)
+	if c.cleared != 1 || h.w.Ended(sid) {
+		t.Fatalf("cleared %d, want the exit taken back once the agent runs", c.cleared)
+	}
+	if asked != "/opt/bin/aider" {
+		t.Fatalf("asked for %q", asked)
+	}
+}
+
+func TestAgentBack(t *testing.T) {
+	pane := tmux.Proc{PID: 10, Name: "zsh"}
+	for _, tc := range []struct {
+		name    string
+		fg      tmux.PaneForeground
+		program string
+		want    bool
+	}{
+		{"agent in front", tmux.PaneForeground{PanePID: 10, Foreground: []tmux.Proc{{PID: 20, Name: "aider"}}}, "/opt/bin/aider", true},
+		{"only the shell", tmux.PaneForeground{PanePID: 10, Foreground: []tmux.Proc{pane}}, "aider", false},
+		{"another command", tmux.PaneForeground{PanePID: 10, Foreground: []tmux.Proc{{PID: 20, Name: "vim"}}}, "aider", false},
+		{"pane itself named like the agent", tmux.PaneForeground{PanePID: 10, Foreground: []tmux.Proc{{PID: 10, Name: "aider"}}}, "aider", false},
+		{"dead pane", tmux.PaneForeground{Dead: true, PanePID: 10, Foreground: []tmux.Proc{{PID: 20, Name: "aider"}}}, "aider", false},
+		{"name cut at 15 bytes", tmux.PaneForeground{PanePID: 10, Foreground: []tmux.Proc{{PID: 20, Name: "a-very-long-age"}}}, "a-very-long-agent-name", true},
+		{"no program", tmux.PaneForeground{PanePID: 10, Foreground: []tmux.Proc{{PID: 20, Name: "."}}}, "", false},
+	} {
+		if got := AgentBack(tc.fg, tc.program); got != tc.want {
+			t.Errorf("%s: AgentBack = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

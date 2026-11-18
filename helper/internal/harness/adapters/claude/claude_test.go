@@ -213,7 +213,7 @@ func TestHooksMapper(t *testing.T) {
 
 func TestStatuslineMapper(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join("testdata", "statusline.json"))
-	s := newStatusline(env())
+	s := newStatusline(harness.Env{SessionID: "s_statusline_a"})
 	_, ops := s.Map(harness.Record{Data: b})
 	if len(ops) != 1 || ops[0].Op != harness.OpStatus {
 		t.Fatalf("ops = %+v", ops)
@@ -268,7 +268,7 @@ func TestAliasAndReadMode(t *testing.T) {
 // A fresh session's status line says used_percentage 0 before anything is
 // counted; that is unknown, not an empty context meter.
 func TestStatuslineZeroContextIsUnknown(t *testing.T) {
-	s := newStatusline(env())
+	s := newStatusline(harness.Env{SessionID: "s_statusline_b"})
 	_, ops := s.Map(harness.Record{Data: []byte(`{"model":{"id":"claude-opus-5","display_name":"Opus"},"context_window":{"used_percentage":0}}`)})
 	if len(ops) != 1 || ops[0].Status.ContextPercent != nil {
 		t.Fatalf("ops = %+v", ops)

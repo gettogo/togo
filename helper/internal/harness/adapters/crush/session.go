@@ -32,8 +32,14 @@ type db struct {
 }
 
 func newDB(env harness.Env) *db {
-	return &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{},
+	m := &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{},
 		done: map[string]bool{}, asks: map[string]asked{}, b: turns.New()}
+	if m.pin != "" {
+		// Resumed at launch: the chat is that conversation now, before the
+		// sessions feed (which lists only recently touched rows) names it.
+		m.state["harness_session"] = m.pin
+	}
+	return m
 }
 
 func (m *db) Name() string { return MapperDB }
@@ -115,12 +121,7 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 // (--session, see Relaunched) moves it.
 func (m *db) session(s sessionRow) {
 	m.sessions[s.ID] = s
-	best := sessionRow{}
-	for _, c := range m.sessions {
-		if c.Updated > best.Updated || (c.Updated == best.Updated && c.Created > best.Created) {
-			best = c
-		}
-	}
+	best := m.pick()
 	if m.pin != "" {
 		p, ok := m.sessions[m.pin]
 		if !ok {
@@ -129,6 +130,9 @@ func (m *db) session(s sessionRow) {
 		best = p
 	} else if m.shown && m.state["harness_session"] != "" {
 		best = m.sessions[m.state["harness_session"]]
+	}
+	if best.ID == "" {
+		return
 	}
 	if best.ID != m.state["harness_session"] {
 		m.b.Reset()
@@ -142,6 +146,36 @@ func (m *db) session(s sessionRow) {
 	}
 }
 
+// pick chooses the session this Togo session's agent created. A row made
+// before this session started (more than a minute, for clock skew) is
+// another conversation that was only touched since; it is never taken. Of
+// the rest, the one made after the session began and first is the row the
+// TUI created at launch; otherwise the newest updated. Without a start
+// time every row is a candidate.
+func (m *db) pick() sessionRow {
+	started, _ := time.Parse(time.RFC3339, m.env.Vars["created"])
+	var best sessionRow
+	bestFresh := false
+	for _, c := range m.sessions {
+		known := !started.IsZero() && c.Created > 0
+		if known && time.Unix(c.Created, 0).Before(started.Add(-time.Minute)) {
+			continue
+		}
+		fresh := known && !time.Unix(c.Created, 0).Before(started)
+		switch {
+		case best.ID == "", fresh && !bestFresh:
+		case fresh != bestFresh:
+			continue
+		case fresh && (c.Created < best.Created || (c.Created == best.Created && c.ID < best.ID)):
+		case !fresh && (c.Updated > best.Updated || (c.Updated == best.Updated && c.Created > best.Created)):
+		default:
+			continue
+		}
+		best, bestFresh = c, fresh
+	}
+	return best
+}
+
 // Relaunched learns the session a relaunch resumes (`--session <id>`).
 func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
 	m.mu.Lock()
@@ -150,6 +184,14 @@ func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
 		m.pin = id
 		if r, ok := m.sessions[id]; ok {
 			m.session(r)
+		} else if m.state["harness_session"] != id {
+			// The feed lists only rows touched since this Togo session
+			// began, which a resumed conversation may not be.
+			m.b.Reset()
+			m.done = map[string]bool{}
+			m.asks = map[string]asked{}
+			m.state["harness_session"] = id
+			m.shown = false
 		}
 	}
 	return nil

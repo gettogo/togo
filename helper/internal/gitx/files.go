@@ -10,6 +10,10 @@ import (
 // maxFiles caps a git.files answer; past it the list says it is truncated.
 const maxFiles = 50000
 
+// maxFilesBytes caps the JSON-encoded size of the paths in one answer, so the
+// whole response stays inside the transport's 1 MiB frame.
+const maxFilesBytes = 900 << 10
+
 // Files is a git.files answer: every file of the repository, relative to its
 // root, sorted bytewise.
 type Files struct {
@@ -77,6 +81,16 @@ func (g *Git) Files(ctx context.Context, dir, ref string) (Files, error) {
 		result.Paths = append(result.Paths, name)
 	}
 	sort.Strings(result.Paths)
+	size := 0
+	for i, p := range result.Paths {
+		enc, _ := json.Marshal(p)
+		size += len(enc) + 1
+		if size > maxFilesBytes {
+			result.Paths = result.Paths[:i]
+			cut = true
+			break
+		}
+	}
 	result.Truncated = cut
 	return result, nil
 }

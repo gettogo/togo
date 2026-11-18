@@ -85,9 +85,12 @@ type Watcher struct {
 	// turnRunning, when set, reports that the agent's own feed (its server's
 	// event stream) sees its turn still running; see SetTurnRunning.
 	turnRunning func(id string) bool
-	needsYou    func(id string) bool
-	home        string
-	now         func() time.Time
+	// agentsRunning, when set, reports that agents the session's agent
+	// started still run; see SetAgentsRunning.
+	agentsRunning func(id string) bool
+	needsYou      func(id string) bool
+	home          string
+	now           func() time.Time
 
 	// Seams for tests; New binds them to tmux and the session service.
 	list    func(context.Context) ([]session.Session, error)
@@ -107,6 +110,8 @@ type Watcher struct {
 	// settledGone checks the pane for an agent gone without a report: gone,
 	// in a pane that did not just start.
 	settledGone func(context.Context, string) (bool, error)
+	// agentBack checks the pane for the agent's program running again.
+	agentBack func(ctx context.Context, id, program string) (bool, error)
 	// pruneRecord prunes the restore record; nil skips it. pruned is
 	// set after the first reconcile.
 	pruneRecord func(context.Context) error
@@ -114,6 +119,9 @@ type Watcher struct {
 	// scans counts the reconciles that listed the sessions. The first
 	// restores stored exits; the first two look for agents already gone.
 	scans int
+	// reconciling lets one Reconcile run at a time: an older listing must
+	// not report as vanished a session a newer one has already taken in.
+	reconciling sync.Mutex
 
 	mu       sync.Mutex
 	sessions map[string]*entry
@@ -153,6 +161,7 @@ func New(cfg Config) (*Watcher, error) {
 	}
 	w.agentGone = w.paneGone
 	w.settledGone = w.paneSettledGone
+	w.agentBack = w.paneAgentBack
 	w.pruneRecord = cfg.Sessions.Settle
 	return w, nil
 }
@@ -262,6 +271,8 @@ func (w *Watcher) Run(ctx context.Context) {
 // sessions that have vanished. A failed listing changes nothing, so a tmux
 // hiccup is never mistaken for every session ending.
 func (w *Watcher) Reconcile(ctx context.Context) {
+	w.reconciling.Lock()
+	defer w.reconciling.Unlock()
 	all, err := w.list(ctx)
 	if err != nil {
 		return
@@ -311,6 +322,7 @@ func (w *Watcher) Reconcile(ctx context.Context) {
 			w.restoreExit(ctx, s, e, scan)
 		}
 		e.mu.Unlock()
+		w.revive(ctx, s)
 	}
 
 	type vanished struct {

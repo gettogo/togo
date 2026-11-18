@@ -47,11 +47,15 @@ func (r *Reminders) now() time.Time {
 
 // arm starts t's timer for d. The caller holds r.mu.
 func (r *Reminders) arm(t *reminder, d time.Duration) {
-	after := r.AfterFunc
-	if after == nil {
-		after = func(d time.Duration, fn func()) func() bool { return time.AfterFunc(d, fn).Stop }
+	t.stop = r.after(d, func() { r.fire(t) })
+}
+
+// after runs fn once d has passed and returns what stops it.
+func (r *Reminders) after(d time.Duration, fn func()) func() bool {
+	if r.AfterFunc != nil {
+		return r.AfterFunc(d, fn)
 	}
-	t.stop = after(d, func() { r.fire(t) })
+	return time.AfterFunc(d, fn).Stop
 }
 
 // Schedule arranges the one reminder for m, a needs_you push that went out.

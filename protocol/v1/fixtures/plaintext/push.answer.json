@@ -1,0 +1,16 @@
+{
+  "description": "receipt.v1: the answer this device sent through the relay for r_abcdefghij reached the machine after the request was over. Sent to that device alone, as an alert push. Seal it with label push and aad hostId + \"|\" + deviceId.",
+  "kind": "push",
+  "plaintext": {
+    "v": 1,
+    "kind": "answer",
+    "sessionId": null,
+    "bib": null,
+    "agent": null,
+    "title": "",
+    "body": "",
+    "requestId": "r_abcdefghij",
+    "ts": 1793707200000,
+    "result": "expired"
+  }
+}

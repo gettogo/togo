@@ -156,12 +156,26 @@ func TestMissingTogoSessionIsNoOpForNonBlocking(t *testing.T) {
 	}
 }
 
+func TestBlockingOutsideManagedSessionAsksNobody(t *testing.T) {
+	home, sock := tapHome(t)
+	d := startFakeDaemon(t, sock, func(string, json.RawMessage) (any, int) {
+		return map[string]any{"decision": "Allow", "reason": "answered"}, 0
+	})
+	env := map[string]string{"TOGO_HOME": home, "TOGO_HOOK_BLOCK": "1"}
+	if code, out, _ := runWith(t, env, fixtureBytes(t, "permission_request.json"), "hook", "claude", "PermissionRequest", "--block"); code != 0 || out != "" {
+		t.Fatalf("code %d out %q", code, out)
+	}
+	if n := len(d.recorded()); n != 0 {
+		t.Fatalf("%d daemon calls for an agent outside Togo", n)
+	}
+}
+
 func TestBlockingPrintsAllowOnApprove(t *testing.T) {
 	home, sock := tapHome(t)
 	d := startFakeDaemon(t, sock, func(string, json.RawMessage) (any, int) {
 		return map[string]any{"decision": "Allow", "reason": "answered"}, 0
 	})
-	env := map[string]string{"TOGO_HOME": home}
+	env := map[string]string{"TOGO_HOME": home, "TOGO_SESSION": "s_aaaaaaaaaa"}
 	code, out, _ := runWith(t, env, fixtureBytes(t, "permission_request.json"), "hook", "claude", "PermissionRequest", "--block")
 	if code != 0 {
 		t.Fatalf("code %d", code)
@@ -188,7 +202,7 @@ func TestBlockingTimeoutPrintsNothing(t *testing.T) {
 	startFakeDaemon(t, sock, func(string, json.RawMessage) (any, int) {
 		return map[string]any{"decision": nil, "reason": "timeout"}, 0
 	})
-	env := map[string]string{"TOGO_HOME": home, "TOGO_HOOK_BLOCK": "1"}
+	env := map[string]string{"TOGO_HOME": home, "TOGO_HOOK_BLOCK": "1", "TOGO_SESSION": "s_aaaaaaaaaa"}
 	if code, out, _ := runWith(t, env, fixtureBytes(t, "permission_request.json"), "hook", "claude", "PermissionRequest"); code != 0 || out != "" {
 		t.Fatalf("code %d out %q", code, out)
 	}

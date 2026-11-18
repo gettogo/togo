@@ -58,6 +58,7 @@ type entry struct {
 	resolution  string // wire.Resolution*, set when closed
 	fingerprint string // empty for ask approvals and hooks with no prompt on screen
 	ask         chan string
+	labels      map[int]string // an ask's option labels as given, by option number
 }
 
 // notAnswerable is Approval.Answerable for a request the phone cannot
@@ -170,7 +171,7 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		a.Answerable = notAnswerable()
 	}
 	withSubject(&a, p.Subject)
-	s.open(a, p.Fingerprint, nil)
+	s.open(a, p.Fingerprint, nil, nil)
 }
 
 // PromptGone records that the prompt on a session's screen went away, which
@@ -199,6 +200,9 @@ func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	for cur := s.pendingForSession(sessionID); cur != nil; cur = s.pendingForSession(sessionID) {
 		s.closeLocked(cur, wire.ResolutionGone)
 	}
+	// The session is gone for good: its pane lock would otherwise stay in
+	// the map for the life of the daemon.
+	delete(s.paneLocks, sessionID)
 }
 
 // OpenFromHook opens an approval for an agent permission hook. The title
@@ -269,7 +273,7 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 		s.closeLocked(cur, wire.ResolutionDesk)
 	}
 	s.mu.Unlock()
-	return s.open(a, fp, nil)
+	return s.open(a, fp, nil, nil)
 }
 
 // OpenAsk opens an approval for `togo ask`. Nothing is typed when it is
@@ -293,8 +297,18 @@ func (s *Store) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <
 	for i, label := range p.Options {
 		a.Options = append(a.Options, wire.Option{N: i + 1, Label: truncate(label, wire.MaxOptionLabel), Role: roles[i]})
 	}
+	if p.TimeoutSec > 0 {
+		// The caller waits this long, whatever the store's own limit.
+		exp := a.CreatedAt.Add(time.Duration(p.TimeoutSec) * time.Second)
+		a.ExpiresAt = &exp
+	}
 	ch := make(chan string, 1)
-	return s.open(a, "", ch), ch
+	// The wire label is cut to MaxOptionLabel; the caller gets its own back.
+	full := make(map[int]string, len(p.Options))
+	for i, label := range p.Options {
+		full[i+1] = label
+	}
+	return s.open(a, "", ch, full), ch
 }
 
 // CloseDesk closes a pending approval as answered at the desk.
@@ -349,31 +363,14 @@ func (s *Store) base(ctx context.Context, sessionID, source string) wire.Approva
 	return a
 }
 
-func (s *Store) open(a wire.Approval, fingerprint string, ask chan string) wire.Approval {
-	e := &entry{a: a, fingerprint: fingerprint, ask: ask}
+func (s *Store) open(a wire.Approval, fingerprint string, ask chan string, labels map[int]string) wire.Approval {
+	e := &entry{a: a, fingerprint: fingerprint, ask: ask, labels: labels}
 	s.mu.Lock()
 	s.entries[a.RequestID] = e
-	time.AfterFunc(s.cfg.TTL, func() { s.expire(a.RequestID) })
+	time.AfterFunc(a.ExpiresAt.Sub(a.CreatedAt), func() { s.expire(a.RequestID) })
 	s.cfg.Pub.Publish(wire.EventApprovalOpen, a.SessionID, wire.ApprovalOpenEvent{Approval: a})
 	s.mu.Unlock()
 	return a
-}
-
-// expire closes a still-pending approval at its TTL and later forgets it,
-// once a late answer no longer needs to learn the outcome.
-func (s *Store) expire(requestID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	e, ok := s.entries[requestID]
-	if !ok {
-		return
-	}
-	if e.state == statePending {
-		s.closeLocked(e, wire.ResolutionExpired)
-		time.AfterFunc(s.cfg.TTL, func() { s.forget(requestID) })
-		return
-	}
-	delete(s.entries, requestID)
 }
 
 func (s *Store) forget(requestID string) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -123,6 +124,9 @@ func loaded(ctx context.Context, c *Conn) []string {
 	return out.Data
 }
 
+// maxCarried bounds one carried option value.
+const maxCarried = 4096
+
 // runChild starts the source's child program (no shell), calls the method
 // once on its stdio and stops it.
 func runChild(ctx context.Context, b spec.RPC, env harness.Env) (json.RawMessage, error) {
@@ -135,7 +139,8 @@ func runChild(ctx context.Context, b spec.RPC, env harness.Env) (json.RawMessage
 			prog = p
 		}
 	}
-	cmd := exec.CommandContext(ctx, prog, b.Child[1:]...)
+	args := append(slices.Clone(b.Child[1:]), b.ChildCarry.Pick(env.Argv, b.Child, maxCarried)...)
+	cmd := exec.CommandContext(ctx, prog, args...)
 	cmd.Dir = fsx.ExecDir(env.Cwd, env.Vars["home"])
 	cmd.Env = append(cmd.Environ(), env.Environ...)
 	if path := env.Vars["path"]; path != "" {

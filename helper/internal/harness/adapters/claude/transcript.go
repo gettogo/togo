@@ -23,17 +23,21 @@ type transcript struct {
 	mu         sync.Mutex
 	state      map[string]string
 	turn       *turnState
-	tools      map[string]*harness.Item // tool calls by id
-	questions  map[string]*harness.Item // AskUserQuestion calls by id
-	texts      map[string]string        // assistant text by message id
-	agents     map[string]*harness.Item // agent items by agent id
-	prompts    map[string]string        // Agent call id by prompt, until its agent id is known
-	bgTasks    map[string]string        // background task id to its tool call id
-	roles      map[string]string        // subagent type by Agent call id
-	shellAbout map[string]string        // a Bash call's own description, by call id
-	plan       []harness.Row
-	changes    map[string]*harness.FileChange
-	notices    int
+	tools      map[string]*harness.Item      // tool calls by id
+	questions  map[string]*harness.Item      // AskUserQuestion calls by id
+	texts      map[string]*textParts         // assistant text by message id, one part per entry
+	changeBy   map[string]harness.FileChange // each tool call's share of a file's counts, by call id
+	taskBy     map[string]string             // plan row id by TaskCreate call id
+	agents     map[string]*harness.Item      // agent items by agent id
+	prompts    map[string]string             // Agent call id by prompt, until its agent id is known
+	bgTasks    map[string]string             // background task id to its tool call id
+	roles      map[string]string             // subagent type by Agent call id
+	shellAbout map[string]string             // a Bash call's own description, by call id
+	// retry is the open retry warning of the running turn.
+	retry   *harness.Item
+	plan    []harness.Row
+	changes map[string]*harness.FileChange
+	notices int
 	// workingAt is when the main chain last started or ended a turn,
 	// the stamp of the working state (harness.MergeWorking).
 	workingAt time.Time
@@ -54,7 +58,7 @@ type turnState struct {
 func newTranscript(env harness.Env) *transcript {
 	return &transcript{
 		env: env, cwd: env.Cwd, state: map[string]string{},
-		tools: map[string]*harness.Item{}, questions: map[string]*harness.Item{}, texts: map[string]string{}, agents: map[string]*harness.Item{},
+		tools: map[string]*harness.Item{}, questions: map[string]*harness.Item{}, texts: map[string]*textParts{}, changeBy: map[string]harness.FileChange{}, taskBy: map[string]string{}, agents: map[string]*harness.Item{},
 		prompts: map[string]string{}, roles: map[string]string{}, shellAbout: map[string]string{}, bgTasks: map[string]string{}, changes: map[string]*harness.FileChange{},
 	}
 }
@@ -237,7 +241,9 @@ var (
 	cmdName   = regexp.MustCompile(`(?s)<command-name>(.*?)</command-name>`)
 	cmdArgs   = regexp.MustCompile(`(?s)<command-args>(.*?)</command-args>`)
 	cmdStdout = regexp.MustCompile(`(?s)<local-command-stdout>(.*?)</local-command-stdout>`)
-	anyTag    = regexp.MustCompile(`^\s*<([a-z-]+)>`)
+	// anyTag is the wrappers Claude Code writes around its own user
+	// records; any other leading tag is part of what the user typed.
+	anyTag = regexp.MustCompile(`^\s*<(?:system-reminder|local-command-[a-z]+|command-[a-z]+|bash-input|bash-stdout|bash-stderr|task-notification|user-prompt-submit-hook)>`)
 )
 
 // prompt maps a user message: a typed prompt starts a turn; command
@@ -252,7 +258,7 @@ func (t *transcript) prompt(e entry, at time.Time, text string, images []harness
 			// over, such as one a task notification started.
 			t.workingAt = at
 		}
-		if t.turn != nil && !t.turn.ended {
+		if parent == "" && t.turn != nil && !t.turn.ended {
 			t.turn.state = harness.StateInterrupted
 			items = append(items, t.endTurn(at)...)
 		}
@@ -281,7 +287,7 @@ func (t *transcript) prompt(e entry, at time.Time, text string, images []harness
 		}
 		return append(items, t.notice(e, at, noticeCode(out), "info", firstLine(out))...), nil
 	} else if parent == "" && isTaskNotification(e, text) {
-		return t.continued(e, at, text), nil
+		return t.continued(e, at, text)
 	} else if anyTag.MatchString(text) {
 		return nil, nil
 	}
@@ -370,7 +376,10 @@ func (t *transcript) assistant(e entry) ([]harness.Item, []harness.Op) {
 	var items []harness.Item
 	var ops []harness.Op
 	if !e.IsSidechain && m.Model != "<synthetic>" {
-		ops = append(ops, contextOps(m)...)
+		if !hasStatusContext(t.env.SessionID) {
+			ops = append(ops, contextOps(m)...)
+		}
+		items = append(items, t.retryDone()...)
 	}
 	for _, b := range blocks {
 		switch b.Type {
@@ -383,11 +392,12 @@ func (t *transcript) assistant(e entry) ([]harness.Item, []harness.Op) {
 				continue
 			}
 			id := firstNonEmpty(m.ID, e.UUID)
-			txt := b.Text
-			if prev, ok := t.texts[id]; ok {
-				txt = prev + "\n\n" + b.Text
+			parts := t.texts[id]
+			if parts == nil {
+				parts = &textParts{by: map[string]string{}}
+				t.texts[id] = parts
 			}
-			t.texts[id] = txt
+			txt := parts.set(firstNonEmpty(e.UUID, b.Text), b.Text)
 			items = append(items, harness.Item{ID: id, TurnID: turn, Parent: parent, Kind: harness.KindAssistant, At: at,
 				Assistant: &harness.TextBody{Text: txt}})
 		case "thinking":
@@ -443,6 +453,10 @@ func (t *transcript) system(e entry) ([]harness.Item, []harness.Op) {
 			it[0].ID = t.turn.id + ".retry"
 		}
 		it[0].Notice.Reason = reason
+		if t.turn != nil && !t.turn.ended {
+			open := it[0]
+			t.retry = &open
+		}
 		return it, nil
 	}
 	return nil, nil
@@ -455,10 +469,45 @@ func (t *transcript) endTurn(at time.Time) []harness.Item {
 		return nil
 	}
 	tr.ended = true
+	t.retry = nil
 	if tr.state == harness.StateRunning {
 		tr.state = harness.StateOK
 	}
 	end := at
 	return []harness.Item{{ID: tr.id + ".turn", TurnID: tr.id, Kind: harness.KindTurn, At: tr.started,
 		Turn: &harness.TurnBody{State: tr.state, Started: tr.started, Ended: &end, Steps: tr.steps, FilesChanged: len(tr.files)}}}
+}
+
+// textParts is the text blocks of one assistant message, each in its own
+// transcript entry. A block read again replaces its earlier copy instead of
+// being added to it.
+type textParts struct {
+	order []string
+	by    map[string]string
+}
+
+func (p *textParts) set(key, text string) string {
+	if _, ok := p.by[key]; !ok {
+		p.order = append(p.order, key)
+	}
+	p.by[key] = text
+	parts := make([]string, 0, len(p.order))
+	for _, k := range p.order {
+		parts = append(parts, p.by[k])
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// retryDone settles the turn's retry warning once a request went through.
+func (t *transcript) retryDone() []harness.Item {
+	if t.retry == nil {
+		return nil
+	}
+	x := *t.retry
+	t.retry = nil
+	n := *x.Notice
+	n.Level, n.Reason = "info", ""
+	n.Text = "The API had an error and the request went through on a retry"
+	x.Notice = &n
+	return []harness.Item{x}
 }

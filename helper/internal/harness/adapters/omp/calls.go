@@ -1,6 +1,8 @@
 package omp
 
 import (
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +25,9 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 	if info.file != "" {
 		it.Tool.Files = []harness.FileChange{{Path: info.file}}
 	}
+	if r, ok := pathImage(args, s.cwd); ok {
+		it.Tool.Images = []harness.ImageRef{r}
+	}
 	s.tools[callID] = it
 	items := []harness.Item{*it}
 	var ops []harness.Op
@@ -43,12 +48,19 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 	if info.category == harness.ToolAgent && parent == "" {
 		for _, t := range taskList(args) {
 			aid := "agent-" + firstNonEmpty(t.id, callID+"-"+itoa(len(s.taskCalls[callID])+1))
+			if _, taken := s.agents[aid]; taken && !slices.Contains(s.taskCalls[callID], aid) {
+				// Another task call used this id ("1", "explore"): its own
+				// row, not a merge into the earlier run's.
+				aid = "agent-" + callID + "-" + firstNonEmpty(t.id, itoa(len(s.taskCalls[callID])+1))
+			}
 			a := &harness.Item{ID: aid, TurnID: tid, Kind: harness.KindAgent, At: at, Agent: &harness.AgentBody{
 				AgentID: strings.TrimPrefix(aid, "agent-"), Name: truncate(t.title, harness.MaxTitle), Role: t.role,
 				State: harness.StateRunning, Started: at}}
 			s.agents[aid] = a
-			s.taskCalls[callID] = append(s.taskCalls[callID], aid)
-			s.pending = append(s.pending, aid)
+			if !slices.Contains(s.taskCalls[callID], aid) { // a replay reads the call again
+				s.taskCalls[callID] = append(s.taskCalls[callID], aid)
+				s.pending = append(s.pending, aid)
+			}
 			items = append(items, *a)
 			ops = append(ops, s.agentRow(a))
 		}
@@ -69,8 +81,9 @@ func taskList(args map[string]any) []task {
 	var out []task
 	for _, el := range asList(args["tasks"]) {
 		m := obj(el)
-		t := task{id: str(m, "id"), role: firstNonEmpty(str(m, "agent"), role),
-			title: firstNonEmpty(str(m, "description"), firstLine(str(m, "assignment")), str(m, "id"))}
+		// 18.19 on names a task by "name" and gives its work as "task".
+		t := task{id: firstNonEmpty(str(m, "id"), str(m, "name")), role: firstNonEmpty(str(m, "agent"), role),
+			title: firstNonEmpty(str(m, "description"), str(m, "name"), firstLine(firstNonEmpty(str(m, "assignment"), str(m, "task"))), str(m, "id"))}
 		out = append(out, t)
 	}
 	if len(out) == 0 {
@@ -104,6 +117,9 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 		b.State = harness.StateFailed
 	}
 	b.Output = tail(text(m["content"]), harness.MaxToolOutput)
+	if len(b.Images) == 0 {
+		b.Images = resultImages(m["content"])
+	}
 	details := obj(m["details"])
 	if c, ok := num(details["exitCode"]); ok {
 		b.ExitCode = ptr(int(c))
@@ -111,6 +127,11 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 	it.Tool = &b
 	items := []harness.Item{*it}
 	var ops []harness.Op
+	agents := s.taskCalls[b.CallID]
+	if it.Parent == "" && len(agents) == 0 {
+		ji, jo := s.jobStarted(it, details, at)
+		items, ops = append(items, ji...), append(ops, jo...)
+	}
 	if isTodoTool(b.Name) && it.Parent == "" {
 		pi, po := s.todoResult(b.CallID, it.TurnID, m, it.At)
 		items, ops = append(items, pi...), append(ops, po...)
@@ -122,7 +143,19 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 		items = append(items, *q)
 		delete(s.asks, b.CallID)
 	}
-	if agents := s.taskCalls[b.CallID]; len(agents) > 0 {
+	if it.Parent == "" {
+		si, so := s.agentsSettled(asList(obj(details["proc"])["jobs"]), at)
+		items, ops = append(items, si...), append(ops, so...)
+	}
+	if str(obj(details["async"]), "state") == "running" {
+		// A background task call returns at once: its agents keep running,
+		// and their files are still to come. omp reports each one later.
+		for _, aid := range agents {
+			s.detached[aid] = true
+		}
+		return items, ops
+	}
+	if len(agents) > 0 {
 		results := map[string]map[string]any{}
 		for _, r := range asList(details["results"]) {
 			rm := obj(r)
@@ -133,7 +166,11 @@ func (s *session) toolResult(m map[string]any, at time.Time) ([]harness.Item, []
 			ab := *a.Agent
 			ab.Ended = ptr(at)
 			ab.State = b.State
-			if r, ok := results[aid]; ok {
+			r, ok := results[aid]
+			if !ok {
+				r, ok = results["agent-"+strings.TrimPrefix(aid, "agent-"+b.CallID+"-")]
+			}
+			if ok {
 				ab.State = harness.StateOK
 				if code, ok := num(r["exitCode"]); ok && code != 0 {
 					ab.State = harness.StateFailed
@@ -188,4 +225,61 @@ func (s *session) bash(id, parent string, m map[string]any, at time.Time) ([]har
 		b.State = harness.StateCancelled
 	}
 	return []harness.Item{{ID: id, Parent: parent, Kind: harness.KindTool, At: at, Tool: b}}, nil
+}
+
+// pathImage is the picture a tool call names by path (a read of a
+// screenshot, a written image), made absolute against the session folder.
+func pathImage(args map[string]any, cwd string) (harness.ImageRef, bool) {
+	p := firstNonEmpty(str(args, "path"), str(args, "file_path"))
+	if p == "" {
+		return harness.ImageRef{}, false
+	}
+	if !filepath.IsAbs(p) {
+		if cwd == "" {
+			return harness.ImageRef{}, false
+		}
+		p = filepath.Join(cwd, p)
+	}
+	return harness.ImageAtPath(p)
+}
+
+// resultImages are the image parts of a tool result ({type: "image", data,
+// mimeType}), which the text of the result leaves out: a screenshot a tool
+// took, a picture a read returned. A large one travels as its type and
+// size only.
+func resultImages(content any) []harness.ImageRef {
+	var out []harness.ImageRef
+	for _, part := range asList(content) {
+		m := obj(part)
+		if str(m, "type") != "image" || len(out) >= harness.MaxImagesPerItem {
+			continue
+		}
+		if r, ok := harness.InlineImage(str(m, "mimeType"), str(m, "data")); ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// parentOf names the conversation an entry belongs to. The session feed
+// reads only the terminal's own conversation, so its entries are the main
+// one's whatever was read last; a subagent file's entries follow their
+// parent entry, or the header read last.
+func (s *session) parentOf(e map[string]any, main bool) string {
+	if main {
+		if id := str(e, "id"); id != "" {
+			s.parents[id] = ""
+		}
+		return ""
+	}
+	if p := str(e, "parentId"); p != "" {
+		if o, ok := s.parents[p]; ok {
+			s.parents[str(e, "id")] = o
+			return o
+		}
+	}
+	if id := str(e, "id"); id != "" {
+		s.parents[id] = s.cur
+	}
+	return s.cur
 }

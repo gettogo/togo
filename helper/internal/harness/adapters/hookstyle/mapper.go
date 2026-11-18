@@ -86,13 +86,21 @@ type Mapper struct {
 	// replyFrom is where Options.Replies goes on reading replySession's log.
 	replySession string
 	replyFrom    int64
+	// seenCalls are the tool calls the replies read so far requested.
+	seenCalls map[string]bool
+	// agents are the subagent rows not stopped yet, by hook agent id.
+	agents map[string][]agentRow
+	// lastError is the text of the last failure drawn, until a turn begins.
+	lastError string
+	// closed are the ops end made that the Map call in progress returns.
+	closed []harness.Op
 }
 
 // New returns a mapper for one session.
 func New(env harness.Env, opts Options) *Mapper {
 	m := &Mapper{env: env, opts: opts, state: map[string]string{"working": "false", "idle": "true"},
 		steps: map[string]bool{}, running: map[string][]string{}, tools: map[string]harness.Item{},
-		asks: map[string]harness.Item{}}
+		asks: map[string]harness.Item{}, seenCalls: map[string]bool{}, agents: map[string][]agentRow{}}
 	if env.Cwd != "" {
 		// Sources filter the harness's session lists by $state.cwd.
 		m.state["cwd"] = env.Cwd
@@ -164,6 +172,14 @@ type payload struct {
 
 // Map reads one payload.
 func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
+	items, ops := m.mapRecord(rec)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ops, m.closed = append(ops, m.closed...), nil
+	return items, ops
+}
+
+func (m *Mapper) mapRecord(rec harness.Record) ([]harness.Item, []harness.Op) {
 	var p payload
 	if json.Unmarshal(rec.Data, &p) != nil {
 		return nil, nil
@@ -184,6 +200,12 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			return m.notice(at, harness.NoticeResumed, "info", "Resumed an earlier conversation"), nil
 		}
 	case UserPromptSubmit:
+		// A prompt while a turn runs (a steer or a queued message): the
+		// running turn and its tools end here, else they spin for good.
+		var closed []harness.Item
+		if m.turn != "" {
+			closed = m.end(payload{}, at, draw, harness.StateInterrupted)
+		}
 		m.begin(at)
 		m.skipReplies()
 		if !draw {
@@ -192,14 +214,21 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		noteDrawn(m.env.SessionID, m.turn, m.started)
 		u := harness.Item{ID: m.turn + ":user", TurnID: m.turn, Kind: harness.KindUser, At: at,
 			User: &harness.UserBody{Text: Clip(p.Prompt), Source: "unknown"}}
-		return []harness.Item{u, m.turnItem(harness.StateRunning, nil)}, nil
+		return append(closed, u, m.turnItem(harness.StateRunning, nil)), nil
 	case PreToolUse:
 		if m.turn == "" {
 			m.begin(at)
 		}
 		m.working(at)
 		call := p.ToolUseID
-		said := m.replies(at, draw, replyWaitTool, func(r Reply) bool { return call != "" && slices.Contains(r.Calls, call) })
+		// Waiting pays only for a call whose message has not been read: a
+		// hook without an id, or a later call of a message already read,
+		// can never match.
+		wait := replyWaitTool
+		if call == "" || m.seenCalls[call] {
+			wait = 0
+		}
+		said := m.replies(at, draw, wait, func(r Reply) bool { return call != "" && slices.Contains(r.Calls, call) })
 		if qs := m.askStart(p, at); len(qs) > 0 {
 			if !draw {
 				return nil, nil
@@ -261,6 +290,12 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		tid := m.turn
 		items := m.end(p, at, draw, harness.StateFailed)
+		// The same failure reported again once its turn has ended (Copilot's
+		// errorOccurred, then sessionEnd with the error): one notice.
+		if tid == "" && p.ErrorDetails != "" && p.ErrorDetails == m.lastError {
+			return items, nil
+		}
+		m.lastError = p.ErrorDetails
 		if !draw && p.ErrorDetails == "" && p.ErrorReason == "" {
 			// The transcript draws the error itself, in the harness's
 			// own words.
@@ -274,7 +309,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case PostCompact:
 		return m.notice(at, harness.NoticeCompacted, "info", "Conversation compacted"), nil
 	case SubagentStart, SubagentStop:
-		return nil, agentOps(p, at)
+		return nil, m.agentOps(p, at)
 	case TaskCreated, TaskCompleted:
 		ops := planOps(p)
 		m.planned = m.planned || len(ops) > 0
@@ -317,6 +352,7 @@ func (m *Mapper) working(at time.Time) {
 }
 
 func (m *Mapper) begin(at time.Time) {
+	m.lastError = ""
 	m.turn, m.started = "turn-"+strconv.FormatInt(at.UnixMilli(), 10), at
 	m.steps = map[string]bool{}
 	m.running = map[string][]string{}
@@ -329,6 +365,14 @@ func (m *Mapper) begin(at time.Time) {
 // end closes the turn, with the final reply when the payload carries it.
 func (m *Mapper) end(p payload, at time.Time, draw bool, state string) []harness.Item {
 	m.idle(at)
+	rowState := harness.StateOK
+	switch state {
+	case harness.StateInterrupted:
+		rowState = harness.StateCancelled
+	case harness.StateFailed:
+		rowState = harness.StateFailed
+	}
+	m.closed = append(m.closed, m.closeAgents(rowState)...)
 	clearDrawn(m.env.SessionID, m.turn)
 	if !draw || m.turn == "" {
 		return nil
@@ -461,7 +505,11 @@ func (m *Mapper) replies(at time.Time, draw bool, wait time.Duration, want func(
 		return nil
 	}
 	if session != m.replySession {
-		m.replySession, m.replyFrom = session, 0
+		// A session no prompt began here (the helper restarted mid-turn):
+		// its log holds earlier conversation, so read from the end.
+		m.seenCalls = map[string]bool{}
+		_, end := m.opts.Replies(m.env, session, -1)
+		m.replySession, m.replyFrom = session, end
 	}
 	var got []Reply
 	deadline := time.Now().Add(wait)
@@ -469,6 +517,11 @@ func (m *Mapper) replies(at time.Time, draw bool, wait time.Duration, want func(
 		more, next := m.opts.Replies(m.env, session, m.replyFrom)
 		m.replyFrom = next
 		got = append(got, more...)
+		for _, r := range more {
+			for _, c := range r.Calls {
+				m.seenCalls[c] = true
+			}
+		}
 		if slices.ContainsFunc(got, want) || !time.Now().Before(deadline) {
 			break
 		}

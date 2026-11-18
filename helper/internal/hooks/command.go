@@ -120,5 +120,15 @@ func shellWord(s string) (string, bool) {
 func owned(cmd, agent string) bool {
 	cmd, _ = unguard(cmd)
 	f := strings.Fields(cmd)
-	return len(f) >= 3 && f[len(f)-3] == "hook" && f[len(f)-2] == agent
+	if len(f) < 4 || f[len(f)-3] != "hook" || f[len(f)-2] != agent {
+		return false
+	}
+	// Another tool's "<program> hook claude Stop" is not Togo's: some
+	// word before the tail must name a togo binary.
+	for _, w := range f[:len(f)-3] {
+		if strings.Contains(filepath.Base(w), "togo") {
+			return true
+		}
+	}
+	return false
 }

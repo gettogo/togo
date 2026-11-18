@@ -14,6 +14,7 @@ CASES=(
   refuses_http_redirect_with_wget refuses_symlinked_togo runs_nothing_when_truncated
   openssl_path_without_minisign minisign_path codesign_path_on_darwin
   refuses_without_any_verifier installs_to_togo_bin_by_default
+  adds_togo_bin_to_shell_profile leaves_profile_alone_when_asked_or_unknown
   restarts_daemon_when_service_installed installs_service_by_default runs_from_a_pipe rejects_bad_usage
 )
 
@@ -157,7 +158,7 @@ case_installs_fresh() {
   run_install -- --dir "$C/dir"
   expect_code 0
   expect_same "$C/dir/togo" "$W/bins/v1.0.0_${HOST_OS}_$HOST_ARCH"
-  expect_tail "togo v1.0.0"
+  expect_tail "togo v1.0.0 ($HOST_OS/$HOST_ARCH)"
   expect_short
   [ "$(ls -A "$C/dir")" = togo ] || fail_msg "install directory holds $(ls -A "$C/dir" | tr '\n' ' ')"
   grep -q "/latest" "$WWW/requests.log" || fail_msg "latest release was not looked up"
@@ -338,7 +339,7 @@ case_uses_busybox_wget() {
   run_install -- --dir "$C/dir"
   expect_code 0
   expect_same "$C/dir/togo" "$W/bins/v1.0.0_${HOST_OS}_$HOST_ARCH"
-  expect_tail "togo v1.0.0"
+  expect_tail "togo v1.0.0 ($HOST_OS/$HOST_ARCH)"
 }
 
 case_refuses_http_redirect_with_wget() {
@@ -438,12 +439,14 @@ case_installs_to_togo_bin_by_default() {
   # is left alone.
   mkdir -p "$C/usr-local-bin"
   chmod 555 "$C/usr-local-bin"
-  ENV+=(TOGO_INSTALL_TEST_SYSTEM_DIR="$C/usr-local-bin")
+  # An unknown login shell, so no profile is edited (bash fills in an unset
+  # SHELL from the account, which would pick the tester's own shell).
+  ENV+=(TOGO_INSTALL_TEST_SYSTEM_DIR="$C/usr-local-bin" SHELL=/bin/tcsh)
   run_install -- --version v1.0.0
   expect_code 0
   expect_same "$C/home/.togo/bin/togo" "$W/bins/v1.0.0_${HOST_OS}_$HOST_ARCH"
   expect_err "$C/home/.togo/bin is not on your PATH"
-  expect_tail "togo v1.0.0"
+  expect_tail "togo v1.0.0 ($HOST_OS/$HOST_ARCH)"
   [ -z "$(ls -A "$C/usr-local-bin")" ] || fail_msg "wrote to the read-only directory"
   # A writable system directory gets a link, for the terminal's PATH.
   mkdir -p "$C/writable"
@@ -461,12 +464,64 @@ case_installs_to_togo_bin_by_default() {
   [ -h "$C/home/.local/bin/togo" ] || fail_msg "the old ~/.local/bin binary was not linked"
 }
 
+case_adds_togo_bin_to_shell_profile() {
+  tools default
+  # No writable system directory, as on a new Apple Silicon Mac: the login
+  # shell's profile gets one line, once.
+  ENV+=(TOGO_INSTALL_TEST_SYSTEM_DIR="$C/absent")
+  printf 'alias ll="ls -l"\n' >"$C/home/.zshrc"
+  run_install SHELL=/bin/zsh -- --version v1.0.0
+  expect_code 0
+  expect_out "Added togo to your PATH in $C/home/.zshrc. Open a new terminal to use it; until then run $C/home/.togo/bin/togo"
+  expect_no_out "is not on your PATH"
+  expect_tail "togo v1.0.0 ($HOST_OS/$HOST_ARCH)"
+  grep -qxF 'alias ll="ls -l"' "$C/home/.zshrc" || fail_msg "the profile lost its own lines"
+  grep -qxF 'export PATH="$PATH:$HOME/.togo/bin"' "$C/home/.zshrc" || fail_msg "no PATH line in .zshrc"
+  run_install SHELL=/bin/zsh -- --version v1.0.0
+  expect_code 0
+  [ "$(grep -cF '.togo/bin' "$C/home/.zshrc")" = 1 ] || fail_msg "the PATH line was added twice"
+  # fish has its own syntax and directory.
+  run_install SHELL=/usr/local/bin/fish -- --version v1.0.0
+  expect_code 0
+  grep -qxF 'fish_add_path --append --path "$HOME/.togo/bin"' "$C/home/.config/fish/conf.d/togo.fish" ||
+    fail_msg "no fish PATH line"
+  # bash on macOS: an existing .profile is used, so it is not hidden.
+  if [ "$HOST_OS" = darwin ]; then
+    : >"$C/home/.profile"
+    run_install SHELL=/bin/bash -- --version v1.0.0
+    expect_code 0
+    grep -qF '.togo/bin' "$C/home/.profile" || fail_msg "no PATH line in .profile"
+    [ ! -e "$C/home/.bash_profile" ] || fail_msg "a new .bash_profile hides .profile"
+  else
+    run_install SHELL=/bin/bash -- --version v1.0.0
+    expect_code 0
+    grep -qF '.togo/bin' "$C/home/.bashrc" || fail_msg "no PATH line in .bashrc"
+  fi
+}
+
+case_leaves_profile_alone_when_asked_or_unknown() {
+  tools default
+  ENV+=(TOGO_INSTALL_TEST_SYSTEM_DIR="$C/absent")
+  run_install SHELL=/bin/zsh -- --version v1.0.0 --no-modify-path
+  expect_code 0
+  expect_err "$C/home/.togo/bin is not on your PATH"
+  [ ! -e "$C/home/.zshrc" ] || fail_msg "--no-modify-path wrote a profile"
+  # An unknown shell and a chosen --dir get the hint, not an edit.
+  run_install SHELL=/bin/tcsh -- --version v1.0.0
+  expect_code 0
+  expect_err "$C/home/.togo/bin is not on your PATH"
+  run_install SHELL=/bin/zsh -- --version v1.0.0 --dir "$C/dir"
+  expect_code 0
+  expect_err "$C/dir is not on your PATH"
+  [ ! -e "$C/home/.zshrc" ] || fail_msg "a chosen --dir wrote a profile"
+}
+
 case_restarts_daemon_when_service_installed() {
   tools default
   run_install TOGO_FAKE_SERVICE=installed TOGO_FAKE_LOG="$C/togo.log" -- --version v1.0.0 --dir "$C/dir"
   expect_code 0
   grep -qx "daemon restart --when-idle" "$C/togo.log" || fail_msg "daemon was not restarted"
-  expect_tail "togo v1.0.0"
+  expect_tail "togo v1.0.0 ($HOST_OS/$HOST_ARCH)"
   expect_no_out "Next: togo service install"
   expect_short
   : >"$C/togo.log"
@@ -488,7 +543,7 @@ case_installs_service_by_default() {
   run_install TOGO_FAKE_LOG="$C/togo.log" -- --version v1.0.0 --dir "$C/dir" --no-service
   expect_code 0
   ! grep -q "service install" "$C/togo.log" || fail_msg "--no-service installed the service"
-  expect_tail "togo v1.0.0" "Next: $C/dir/togo service install"
+  expect_tail "togo v1.0.0 ($HOST_OS/$HOST_ARCH)" "Next: $C/dir/togo service install"
   : >"$C/togo.log"
   run_install TOGO_FAKE_LOG="$C/togo.log" -- --version v1.0.0 --dir "$C/dir" --service
   expect_code 0
@@ -501,7 +556,7 @@ case_runs_from_a_pipe() {
   # stdin must not swallow the rest of it.
   PIPED=1 run_install TOGO_FAKE_READ_STDIN=1 -- --version v1.0.0 --dir "$C/dir"
   expect_code 0
-  expect_tail "togo v1.0.0"
+  expect_tail "togo v1.0.0 ($HOST_OS/$HOST_ARCH)"
 }
 
 case_refuses_symlinked_togo() {

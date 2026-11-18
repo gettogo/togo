@@ -419,3 +419,84 @@ func TestExclusiveNamedFileIsFollowed(t *testing.T) {
 		t.Fatalf("named file not followed: %v", c.recs)
 	}
 }
+
+// Two Pi sessions started 30 s apart in one folder, neither has a file
+// yet. The first prompt is typed in the second; its file is born after
+// both sessions began. It must go to the second, whichever watcher polls
+// first.
+func TestExclusiveTwoFilelessSessionsFileGoesToLatest(t *testing.T) {
+	envA, h := testEnv(t)
+	envA.SessionID, envA.Agent = "s_fileless0a", "pi"
+	envA.Vars["created"] = time.Now().Add(-60 * time.Second).UTC().Format(time.RFC3339)
+	envA.Procs = &fakeProcs{tree: []int{100}, others: map[string]bool{envA.Cwd: true}}
+	envB := envA
+	envB.Vars = map[string]string{VarHome: h, "created": time.Now().Add(-30 * time.Second).UTC().Format(time.RFC3339)}
+	envB.SessionID = "s_fileless0b"
+	envB.Procs = &fakeProcs{tree: []int{200}, others: map[string]bool{envA.Cwd: true}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a, b := &collector{}, &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), envA, a.emit) }()
+	time.Sleep(50 * time.Millisecond)
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), envB, b.emit) }()
+	time.Sleep(50 * time.Millisecond)
+	writeLine(t, filepath.Join(h, stamped(time.Now().Add(-25*time.Second), "bfile")), `{"f":"b1"}`)
+	b.wait(t, 1)
+	time.Sleep(300 * time.Millisecond)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.recs) != 0 {
+		t.Fatalf("A took B's file: %v", a.recs)
+	}
+}
+
+// countProcs counts how often each path is put to the process view.
+type countProcs struct {
+	*fakeProcs
+	mu    sync.Mutex
+	asked map[string]int
+}
+
+func (c *countProcs) Holders(ctx context.Context, paths []string) (map[string][]int, error) {
+	c.mu.Lock()
+	for _, p := range paths {
+		c.asked[p]++
+	}
+	c.mu.Unlock()
+	return c.fakeProcs.Holders(ctx, paths)
+}
+
+// A file the session left stays newer than the watch; it is not put to
+// the process view on every pass.
+func TestExclusiveDoesNotAskAboutDroppedFileEveryPass(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID = "s_dropped0001"
+	env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	fake := &fakeProcs{tree: []int{100, 101}}
+	procs := &countProcs{fakeProcs: fake, asked: map[string]int{}}
+	env.Procs = procs
+	oldF, newF := filepath.Join(h, "old.jsonl"), filepath.Join(h, "new.jsonl")
+	writeLine(t, oldF, `{"f":"old1"}`)
+	fake.hold(oldF, 101)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+	c.wait(t, 1)
+	writeLine(t, oldF, `{"f":"old2"}`) // the session's file grows after the watch began
+	c.wait(t, 2)
+	time.Sleep(60 * time.Millisecond)
+	fake.hold(oldF)
+	fake.hold(newF, 101)
+	writeLine(t, newF, `{"f":"new1"}`)
+	c.wait(t, 3)
+	procs.mu.Lock()
+	before := procs.asked[oldF]
+	procs.mu.Unlock()
+	time.Sleep(600 * time.Millisecond)
+	procs.mu.Lock()
+	defer procs.mu.Unlock()
+	if n := procs.asked[oldF] - before; n > 5 {
+		t.Fatalf("the dropped file was put to the process view %d times in 600 ms", n)
+	}
+}

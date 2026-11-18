@@ -21,9 +21,9 @@ const Marker = "[redacted]"
 var secretKey = regexp.MustCompile(`(?i)(api[_-]?key|secret|token|password|passwd|authorization|bearer|cookie|credential|private[_-]?key|access[_-]?key|session[_-]?key|oauth)`)
 
 // usageKey matches keys that name token usage (input_tokens, tokenUsage,
-// total_output_tokens, token_count); their values are usage figures, not
+// total_output_tokens, token_count, tokensBefore); their values are usage figures, not
 // secrets, when Counts says so.
-var usageKey = regexp.MustCompile(`(?i)(tokens|token_?count|tokens_[a-z_]+|token_?usage|tokens_?used)$`)
+var usageKey = regexp.MustCompile(`(?i)(tokens|token_?count|tokens_[a-z_]+|tokens(?:before|after)|token_?usage|tokens_?used)$`)
 
 // headersKey names an object of HTTP headers (MCP server configs, custom
 // providers); its values often carry credentials, so only names are kept.
@@ -36,11 +36,17 @@ var bareKey = regexp.MustCompile(`(?i)^key$`)
 // valuePatterns are the key and token shapes replaced inside strings.
 var valuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?s:.*?)(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)`),
-	regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+`),
-	regexp.MustCompile(`sk-[A-Za-z0-9_-]{16,}`),
+	regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]+`),
+	regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}`),
+	regexp.MustCompile(`\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}`),
+	regexp.MustCompile(`\bnpm_[A-Za-z0-9]{30,}`),
+	regexp.MustCompile(`\bglpat-[A-Za-z0-9_-]{20,}`),
+	regexp.MustCompile(`\bhf_[A-Za-z0-9]{30,}`),
+	regexp.MustCompile(`\bASIA[0-9A-Z]{16}\b`),
 	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{16,}`),
 	regexp.MustCompile(`github_pat_[A-Za-z0-9_]{16,}`),
 	regexp.MustCompile(`xox[abposr]-[A-Za-z0-9-]{8,}`),
+	regexp.MustCompile(`\bxapp-[A-Za-z0-9-]{8,}`),
 	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
 	regexp.MustCompile(`AIza[0-9A-Za-z_-]{35}`),
 	regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*`),
@@ -78,6 +84,33 @@ var quotedKV = regexp.MustCompile(`(?i)(["']` + textSecretName + `["'][ \t]*:[ \
 // yamlKV hides key: value lines (YAML, .ini-ish dumps).
 var yamlKV = regexp.MustCompile(`(?im)(^[ \t]*-?[ \t]*` + textSecretName + `[ \t]*:[ \t]*)([^\s#][^\n]*)$`)
 
+// spacedKV hides name = "value" with spaces around the equals sign (TOML,
+// ini, Python); only quoted values, so code such as max_tokens = limit stays.
+var spacedKV = regexp.MustCompile(`(?i)(\b` + textSecretName + `[ \t]*=[ \t]*)("[^"\n]*"|'[^'\n]*')`)
+
+// secretEnding is a name that ends in a secret word. Upper-case names are
+// hidden by envAssign wherever the word sits; a mixed or lower-case name
+// must end in it, so tokenizer=... and primary_key=True stay readable.
+var secretEnding = regexp.MustCompile(`(?i)(?:api_?key|secret|token|password|passwd|private_?key|access_?key|credentials?|cookie|_key|_auth)s?$`)
+
+// hideEnv hides one NAME=value match of envAssign unless it is code: a
+// number or boolean value, or a lower-case name that does not end in a
+// secret word.
+func hideEnv(m string) string {
+	g := envAssign.FindStringSubmatch(m)
+	name, v := g[1], g[2]
+	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+		v = v[1 : len(v)-1]
+	}
+	if plainFigure(v) && v != "" {
+		return m
+	}
+	if name != strings.ToUpper(name) && !secretEnding.MatchString(name) {
+		return m
+	}
+	return name + "=" + Marker
+}
+
 // Redactor implements harness.Redactor. The zero value is ready to use.
 type Redactor struct{}
 
@@ -88,17 +121,24 @@ func (Redactor) String(s string) string { return String(s) }
 // by null rather than passed on.
 func (Redactor) JSON(raw json.RawMessage) json.RawMessage { return JSON(raw) }
 
+// Tokens replaces key and token shapes (sk-..., ghp_..., JWTs, PEM keys)
+// inside s, and nothing else.
+func Tokens(s string) string {
+	for _, re := range valuePatterns {
+		s = re.ReplaceAllString(s, Marker)
+	}
+	return s
+}
+
 // String replaces every key or token shape inside s.
 func String(s string) string {
 	if s == "" {
 		return s
 	}
-	for _, re := range valuePatterns {
-		s = re.ReplaceAllString(s, Marker)
-	}
+	s = Tokens(s)
 	s = bearerValue.ReplaceAllString(s, "$1 "+Marker)
 	s = queryParam.ReplaceAllString(s, "$1"+Marker)
-	s = envAssign.ReplaceAllString(s, "$1="+Marker)
+	s = envAssign.ReplaceAllStringFunc(s, hideEnv)
 	s = flagValue.ReplaceAllString(s, "$1"+Marker)
 	s = urlCreds.ReplaceAllString(s, "$1"+Marker+"@")
 	s = headerLine.ReplaceAllStringFunc(s, func(m string) string {
@@ -109,6 +149,7 @@ func String(s string) string {
 		return g[1] + Marker
 	})
 	s = replaceKV(quotedKV, s, 1)
+	s = replaceKV(spacedKV, s, 1)
 	return replaceKV(yamlKV, s, 6)
 }
 
@@ -122,11 +163,28 @@ func replaceKV(re *regexp.Regexp, s string, minLen int) string {
 		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
 			q, v = v[:1], v[1:len(v)-1]
 		}
-		if v == "" || strings.Contains(v, Marker) || plainFigure(v) || (q == "" && len(v) < minLen) {
+		if v == "" || strings.Contains(v, Marker) || plainFigure(v) || (q == "" && (len(v) < minLen || prose(v))) {
 			return m
 		}
 		return g[1] + q + Marker + q
 	})
+}
+
+// prose is an unquoted value of five or more plain words: a sentence in a
+// list ("- password: must be at least 8 characters"), not a credential.
+func prose(v string) bool {
+	words := strings.Fields(v)
+	if len(words) < 5 {
+		return false
+	}
+	for _, w := range words {
+		for _, r := range w {
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == ',' || r == '.' || r == '\'' || r == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // plainFigure is a number or a JSON literal: never a secret value.
@@ -163,6 +221,8 @@ func JSON(raw json.RawMessage) json.RawMessage {
 func Value(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
+		// A form's field names are not keys (form.go).
+		names := FormFieldNames(x)
 		for k, val := range x {
 			if SecretKey(k) && !(usageKey.MatchString(k) && Counts(val)) && !figure(val) {
 				x[k] = nil
@@ -179,6 +239,9 @@ func Value(v any) any {
 				continue
 			}
 			x[k] = Value(val)
+		}
+		for _, f := range names {
+			f.Restore()
 		}
 		return x
 	case []any:

@@ -37,8 +37,6 @@ var headersKey = regexp.MustCompile(`(?i)^(headers|http_?headers|env_?http_?head
 
 var valuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?s:.*?)(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)`),
-	regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+`),
-	regexp.MustCompile(`sk-[A-Za-z0-9_-]{16,}`),
 	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{16,}`),
 	regexp.MustCompile(`github_pat_[A-Za-z0-9_]{16,}`),
 	regexp.MustCompile(`xox[abposr]-[A-Za-z0-9-]{8,}`),
@@ -71,6 +69,8 @@ func Scrub(raw json.RawMessage) json.RawMessage {
 func ScrubValue(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
+		// A form's field names are not keys (redact/form.go).
+		names := redact.FormFieldNames(x)
 		var set []string
 		for k, val := range x {
 			if k == SetList {
@@ -103,6 +103,10 @@ func ScrubValue(v any) any {
 			}
 			x[SetList] = list
 		}
+		for _, f := range names {
+			f.Restore()
+			unset(f.In, "key")
+		}
 		return x
 	case []any:
 		for i := range x {
@@ -120,10 +124,28 @@ func ScrubString(s string) string {
 	if s == "" {
 		return s
 	}
+	s = redact.Tokens(s)
 	for _, re := range valuePatterns {
 		s = re.ReplaceAllString(s, Marker)
 	}
 	return s
+}
+
+// unset takes name off m's list of secrets that had a value: a restored
+// field name was never one.
+func unset(m map[string]any, name string) {
+	list, _ := m[SetList].([]any)
+	kept := make([]any, 0, len(list))
+	for _, el := range list {
+		if el != name {
+			kept = append(kept, el)
+		}
+	}
+	if len(kept) == 0 {
+		delete(m, SetList)
+	} else if len(kept) != len(list) {
+		m[SetList] = kept
+	}
 }
 
 // blankAll keeps a header object's names and drops every value.

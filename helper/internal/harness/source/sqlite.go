@@ -97,18 +97,48 @@ type sqliteWatch struct {
 	seen   map[string]string
 	fails  int
 	loaded bool
+
+	sig     string    // the database and its write-ahead log as of the last good query
+	sigAt   time.Time // when that query ran
+	queries int       // queries run, for tests
+}
+
+// sqliteRecheck is how long an unchanged database is trusted before the
+// query runs again anyway.
+const sqliteRecheck = 10 * time.Second
+
+// dbSignature is the size and modification time of the database and its
+// write-ahead log; it changes whenever either is written.
+func dbSignature(path string) string {
+	var b strings.Builder
+	for _, p := range []string{path, path + "-wal"} {
+		if st, err := os.Stat(p); err == nil {
+			fmt.Fprintf(&b, "%d@%d;", st.Size(), st.ModTime().UnixNano())
+		} else {
+			b.WriteString("-;")
+		}
+	}
+	return b.String()
 }
 
 func (w *sqliteWatch) poll(ctx context.Context, env harness.Env, emit func(harness.Record)) error {
 	if _, err := os.Stat(w.path); err != nil {
 		return err
 	}
+	sig := dbSignature(w.path)
+	if w.loaded && sig == w.sig && time.Since(w.sigAt) < sqliteRecheck {
+		return nil // nothing was written since the last query
+	}
 	cctx, cancel := context.WithTimeout(ctx, sqliteTimeout)
+	w.queries++
 	rows, err := querySQLite(cctx, w.path, w.q, w.cursor, env)
 	cancel()
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil
+		}
+		if errors.Is(err, errNoSQLite) {
+			return err
 		}
 		if w.fails++; w.fails >= sqliteFailures {
 			return err
@@ -116,6 +146,7 @@ func (w *sqliteWatch) poll(ctx context.Context, env harness.Env, emit func(harne
 		return nil
 	}
 	w.fails = 0
+	w.sig, w.sigAt = sig, time.Now()
 	w.step(rows, emit)
 	return nil
 }
@@ -160,7 +191,11 @@ func (w *sqliteWatch) step(rows []json.RawMessage, emit func(harness.Record)) {
 // querySQLite runs one read-only query. Parameters go in as hex blobs cast
 // to text, so no value can end the dot-command or the SQL around it.
 func querySQLite(ctx context.Context, path string, q spec.SQLite, cursor int64, env harness.Env) ([]json.RawMessage, error) {
-	argv := []string{sqliteBin(env), "-readonly", "-json", "-bail", "-cmd", ".timeout 2000",
+	bin := sqliteBin(env)
+	if _, err := os.Stat(bin); err != nil {
+		return nil, errNoSQLite
+	}
+	argv := []string{bin, "-readonly", "-json", "-bail", "-cmd", ".timeout 2000",
 		"-cmd", ".parameter set :cursor " + strconv.FormatInt(cursor, 10)}
 	keys := make([]string, 0, len(q.Params))
 	for k := range q.Params {
@@ -203,5 +238,12 @@ func sqliteBin(env harness.Env) string {
 	if p, err := LookPath("sqlite3", env.Vars[VarPath]); err == nil {
 		return p
 	}
-	return "/usr/bin/sqlite3"
+	return sqliteFallback
 }
+
+// sqliteFallback is the sqlite3 macOS ships.
+var sqliteFallback = "/usr/bin/sqlite3"
+
+// errNoSQLite means the sqlite3 program is not installed. Its text must
+// not read as a missing file, which the engine waits out and retries.
+var errNoSQLite = errors.New("source: the sqlite3 program is not installed")

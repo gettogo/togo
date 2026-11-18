@@ -2,6 +2,7 @@ package push
 
 import (
 	"encoding/json"
+	"net/http"
 	"os"
 	"reflect"
 	"testing"
@@ -276,5 +277,49 @@ func TestNoReminderWhenSessionRemoved(t *testing.T) {
 	r.handle(wire.Event{Kind: wire.EventSessionRemoved, SessionID: sid("s_abcdefghij"), Payload: wire.SessionRemovedEvent{}})
 	if liveTimers(r) != 0 {
 		t.Fatal("removal left the timer armed")
+	}
+}
+
+// A needs_you that reached no device is sent again while the request
+// waits, and a later send that gets through arms the reminder as usual.
+func TestFailedNeedsYouIsRetried(t *testing.T) {
+	r := newRemindEnv(t)
+	r.relay.status.Store(http.StatusServiceUnavailable)
+	r.handle(approvalOpen("r_abcdefghij"))
+	if len(r.timers) != 1 || r.timers[0].d != retryDelays[0] {
+		t.Fatalf("timers after a failed push: %+v, want one retry", r.timers)
+	}
+	before := len(r.relay.received())
+	r.relay.status.Store(http.StatusAccepted)
+	r.fire()
+	got := r.relay.received()
+	if len(got) != before+1 {
+		t.Fatalf("relay got %d pushes after the retry, want %d", len(got), before+1)
+	}
+	if p := r.open(t, got[len(got)-1].Ciphertext, r.phones[0].id); p.Kind != wire.PushNeedsYou || p.RequestID != "r_abcdefghij" {
+		t.Fatalf("retry was %+v", p)
+	}
+	armed := 0
+	for _, ft := range r.timers {
+		if !ft.stopped && ft.d == r.delay {
+			armed++
+		}
+	}
+	if armed != 1 {
+		t.Fatalf("%d reminders armed after the retry got through, want 1", armed)
+	}
+}
+
+// A request answered in the meantime is not announced by a retry.
+func TestFailedNeedsYouNotRetriedOnceAnswered(t *testing.T) {
+	r := newRemindEnv(t)
+	r.relay.status.Store(http.StatusServiceUnavailable)
+	r.handle(approvalOpen("r_abcdefghij"))
+	before := len(r.relay.received())
+	r.relay.status.Store(http.StatusAccepted)
+	r.pending["r_abcdefghij"] = false
+	r.fire()
+	if n := len(r.relay.received()); n != before {
+		t.Fatalf("relay got %d pushes, want %d", n, before)
 	}
 }

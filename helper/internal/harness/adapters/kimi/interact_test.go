@@ -150,3 +150,76 @@ func TestAnswerBranch(t *testing.T) {
 		}
 	}
 }
+
+// Kimi can be cancelled, killed or relaunched with `--continue` while a
+// question waits, the log carrying on without a new header: the question
+// closes with the turn, else the card and its Needs row stay for good.
+func TestOpenQuestionClosesWhenItsTurnEnds(t *testing.T) {
+	lines := fixture(t, "wire-question.jsonl")
+	cut := -1
+	for i, l := range lines {
+		if strings.Contains(l, `"type":"interaction.request"`) {
+			cut = i
+			break
+		}
+	}
+	if cut < 0 {
+		t.Fatal("no question in the fixture")
+	}
+	for _, end := range []string{
+		`{"type":"turn.cancel","agentId":"main","time":1789999700000}`,
+		`{"type":"turn.prompt","agentId":"main","turnId":2,"time":1789999700000,"origin":{"kind":"user"},"input":[{"type":"text","text":"next"}]}`,
+	} {
+		m := NewWire(harness.Env{SessionID: "s1"})
+		out := replay(t, m, lines[:cut+1])
+		var id string
+		for k, it := range out.items {
+			if it.Question != nil {
+				id = k
+			}
+		}
+		if id == "" || out.items[id].Question.Answered != nil {
+			t.Fatalf("question not open before the end: %q", id)
+		}
+		after := replay(t, m, []string{end})
+		if q := after.items[id].Question; q == nil || q.Answered == nil {
+			t.Fatalf("%s: question still open: %+v", end[:40], q)
+		}
+	}
+}
+
+// Protocol 1.5 writes turn.ended; a step that finishes end_turn is not the
+// turn's end, since a steer or a background notice runs more steps in it.
+func TestStepEndDoesNotEndATurnOnProtocol15(t *testing.T) {
+	lines := fixture(t, "wire-question.jsonl")
+	last := -1
+	for i, l := range lines {
+		if strings.Contains(l, `"type":"step.end"`) {
+			last = i
+		}
+	}
+	m := NewWire(harness.Env{SessionID: "s1"})
+	replay(t, m, lines[:last+1])
+	if m.State()["working"] != "true" {
+		t.Fatal("the turn ended at the step, before turn.ended")
+	}
+	replay(t, m, lines[last+1:])
+	if m.State()["working"] != "false" {
+		t.Fatal("turn.ended did not end the turn")
+	}
+}
+
+// A turn a skill starts (a slash command) has no user item unless the
+// prompt is drawn: the fixture's two turns both begin so.
+func TestSkillActivationDrawsItsPrompt(t *testing.T) {
+	m := NewWire(harness.Env{SessionID: "s1"})
+	out := replay(t, m, fixture(t, "wire-question.jsonl"))
+	if out.kinds()[harness.KindUser] != 2 {
+		t.Fatalf("user items: %d", out.kinds()[harness.KindUser])
+	}
+	for _, it := range out.items {
+		if it.Kind == harness.KindUser && (it.User.Text == "" || it.TurnID == "") {
+			t.Fatalf("user item %+v", it)
+		}
+	}
+}

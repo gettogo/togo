@@ -129,9 +129,13 @@ func isTaskNotification(e entry, text string) bool {
 // continued starts the turn Claude Code takes on its own after a task
 // notification, opened by a quiet marker naming the trigger. One that
 // arrives while a turn still runs belongs to that turn and draws nothing.
-func (t *transcript) continued(e entry, at time.Time, content string) []harness.Item {
+//
+// The notification also settles the agent or shell it names, as the queued
+// copy does: that copy is missing when the notice arrives some other way.
+func (t *transcript) continued(e entry, at time.Time, content string) ([]harness.Item, []harness.Op) {
+	settled, ops := t.settle(content, at)
 	if t.turn != nil && !t.turn.ended {
-		return nil
+		return settled, ops
 	}
 	id := e.UUID
 	if id == "" {
@@ -140,8 +144,8 @@ func (t *transcript) continued(e entry, at time.Time, content string) []harness.
 	}
 	t.turn = &turnState{id: id, started: at, files: map[string]bool{}, state: harness.StateRunning}
 	t.workingAt = at
-	return []harness.Item{{ID: id, TurnID: id, Kind: harness.KindNotice, At: at,
-		Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeContinued, Text: t.trigger(content)}}}
+	return append(settled, harness.Item{ID: id, TurnID: id, Kind: harness.KindNotice, At: at,
+		Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeContinued, Text: t.trigger(content)}}), ops
 }
 
 var exitCodeTag = regexp.MustCompile(`\(exit code (-?\d+)\)`)
@@ -190,6 +194,11 @@ func (t *transcript) queued(e entry) ([]harness.Item, []harness.Op) {
 	if json.Unmarshal(e.Content, &content) != nil || !strings.Contains(content, "<task-notification>") {
 		return nil, nil
 	}
+	return t.settle(content, stamp(e.Timestamp))
+}
+
+// settle ends the agent or background shell a task notification names.
+func (t *transcript) settle(content string, at time.Time) ([]harness.Item, []harness.Op) {
 	m := taskIDTag.FindStringSubmatch(content)
 	if m == nil {
 		return nil, nil
@@ -208,8 +217,10 @@ func (t *transcript) queued(e entry) ([]harness.Item, []harness.Op) {
 	case "running":
 		state = harness.StateRunning
 	}
-	at := stamp(e.Timestamp)
 	if ag, ok := t.agents[id]; ok {
+		if ag.Agent.State != harness.StateRunning && state != harness.StateRunning {
+			return nil, nil // the queued copy already settled it
+		}
 		body := *ag.Agent
 		body.State = state
 		if state != harness.StateRunning {
@@ -222,6 +233,9 @@ func (t *transcript) queued(e entry) ([]harness.Item, []harness.Op) {
 		return t.putAgent(ag, body)
 	}
 	if bg, ok := t.tools["bg-"+id]; ok {
+		if bg.Background.State != harness.StateRunning && state != harness.StateRunning {
+			return nil, nil
+		}
 		next := *bg
 		body := *bg.Background
 		body.State = state

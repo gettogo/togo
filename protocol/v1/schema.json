@@ -138,7 +138,7 @@
       ]
     },
     "Error": {
-      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail, or for the methods that name one a fixed word: session.create args, program or not_installed; agents.check program; session.restore not_installed; session.sendText text; authkeys.remove key}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve; session.restore: the session's folder no longer exists), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (the target is not in a state that allows the call; data {reason, by?}. approval.answer: answered, prompt_gone or expired, with by \"desk\" | \"phone\" when reason is answered; git writes: a refusal with data GitConflictData, nothing changed except for reasons partial and raced; session.relaunch: running (the agent still runs); session.sendText: shell (the session is the plain shell, not an agent), ended (the agent exited, or a shell is back in the foreground of the agent's pane) or needs_you (an approval is pending); authkeys.remove: symlink, missing or not_regular (authorized_keys is a symlink, absent, or not a regular file); harness.send: busy (mode now while the agent works)), -32007 \"not_managed\" (write call on an unmanaged session, including git.stage, git.unstage, git.discard and git.commit), -32008 \"refused\" (the helper will not do this until the user sets it up on the machine; data {reason: \"needs_admin_setup\"}; or, for harness.*, the session has no adapter, data {reason: \"no_adapter\"}, or the screen or action cannot be served and the app should show the terminal, data {reason: \"fallback\", detail: \"source\" | \"version\" | \"parse\"}). `data` is omitted when a code defines none.",
+      "description": "JSON-RPC error object. `message` is fixed per code: -32700 \"parse error\", -32600 \"invalid request\", -32601 \"method not found\", -32602 \"invalid params\" (with data {reason: human-readable detail, or for the methods that name one a fixed word: session.create args, program or not_installed; agents.check program; session.restore not_installed; session.sendText text; authkeys.remove key}), -32603 \"internal error\" (no details, never secrets), -32001 \"not_found\" (no such session), -32002 \"not_ready\" (call before a successful hello), -32003 \"invalid_path\" (fs.listDir: path not absolute after ~ expansion, contains NUL, missing, not a directory, or not readable; fs.read and git.*: path not relative, escaping the session cwd by .. or a symlink, missing, or a ref that starts with - or does not resolve; session.restore: the session's folder no longer exists), -32004 \"tmux_unavailable\" (data {found: version string or null when tmux is missing, required: \"3.2\"}), -32005 \"unsupported_version\" (hello with a protocol the helper does not speak; data {supported: [1]}), -32006 \"conflict\" (the target is not in a state that allows the call; data {reason, by?}. approval.answer: answered, prompt_gone or expired, with by \"desk\" | \"phone\" when reason is answered; git writes: a refusal with data GitConflictData, nothing changed except for reasons partial and raced; session.relaunch: running (the agent still runs); session.sendText: shell (the session is the plain shell, not an agent), ended (the agent exited, or a shell is back in the foreground of the agent's pane) or needs_you (an approval is pending); authkeys.remove: symlink, missing or not_regular (authorized_keys is a symlink, absent, or not a regular file); harness.send: busy (mode now while the agent works)), -32007 \"not_managed\" (write call on an unmanaged session, including git.stage, git.unstage, git.discard and git.commit), -32008 \"refused\" (the helper will not do this until the user sets it up on the machine; data {reason: \"needs_admin_setup\"}; or, for approval.answer, the keys were sent and the prompt is still on screen, so whether the answer was taken is not known and the request stays open, data {reason: \"unconfirmed\"}; or, for harness.*, the session has no adapter, data {reason: \"no_adapter\"}, or the screen or action cannot be served and the app should show the terminal, data {reason: \"fallback\", detail: \"source\" | \"version\" | \"parse\"}). `data` is omitted when a code defines none.",
       "type": "object",
       "properties": {
         "code": { "type": "integer" },
@@ -223,7 +223,7 @@
               "message": { "const": "refused" },
               "data": {
                 "type": "object",
-                "properties": { "reason": { "enum": ["needs_admin_setup", "no_adapter", "fallback"] }, "detail": { "enum": ["source", "version", "parse"] }, "message": { "type": "string", "maxLength": 600 } },
+                "properties": { "reason": { "enum": ["needs_admin_setup", "no_adapter", "fallback", "unconfirmed"] }, "detail": { "enum": ["source", "version", "parse"] }, "message": { "type": "string", "maxLength": 600 } },
                 "required": ["reason"],
                 "additionalProperties": false
               }
@@ -1265,11 +1265,14 @@
       "additionalProperties": false
     },
     "EventsSubscribeParams": {
-      "description": "events.subscribe. Starts event notifications on this connection and returns a snapshot. foreground (default true) says the app is on screen, which suppresses pushes for sessions the app shows; call again to change it. Foreground is a lease: it lapses 45 s after the last request the connection sent, and any request renews it. An idle app on screen calls events.keepalive about every 20 s.",
+      "description": "events.subscribe. Starts event notifications on this connection and returns a snapshot. foreground (default true) says the app is on screen, which suppresses pushes for sessions the app shows; call again to change it. Foreground is a lease: it lapses 45 s after the last request the connection sent, and any request renews it. An idle app on screen calls events.keepalive about every 20 s. deviceId (fgdevice.v1, optional) is the id the app pairs under with push.pair: with it, only that device is left out of pushes while it is in the foreground and other paired devices still get them; when every paired phone and tablet is in the foreground nothing is pushed. An app in front that names a device which is not paired suppresses pushes for no paired device. Without deviceId a foreground app suppresses pushes for every device, as helpers before fgdevice.v1 always do. A value that is not a device id is treated as absent.",
       "type": "object",
       "properties": {
         "foreground": {
           "type": "boolean"
+        },
+        "deviceId": {
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -1425,6 +1428,10 @@
           "pattern": "^[0-9a-f]{64,200}$"
         },
         "liveActivityCommand": {
+          "type": "boolean"
+        },
+        "answerReceipts": {
+          "description": "The device understands the answer push (see PushPlaintext) and wants one for each answer it sends through the relay mailbox. Send it only when the helper advertises receipt.v1: an older helper rejects push.pair with a field it does not know.",
           "type": "boolean"
         },
         "doneSilent": {
@@ -2490,6 +2497,12 @@
         "generation": {
           "type": "string",
           "pattern": "^[0-9a-f]{32}$"
+        },
+        "features": {
+          "description": "What the program's companion adds to the protocol's own events: submit, secret, commands. Unknown names must be ignored.",
+          "type": "array",
+          "maxItems": 32,
+          "items": { "type": "string", "maxLength": 32 }
         }
       },
       "required": [
@@ -2705,6 +2718,19 @@
       "properties": {
         "dispatched": {
           "type": "boolean"
+        },
+        "consumed": {
+          "const": true,
+          "description": "Present only for a send whose text the program's own editor submitted. Absent means not proven; it is not a failure and never a reason to send again."
+        },
+        "refused": {
+          "const": true,
+          "description": "Present only when the program received the event and did not take it because its screen had moved on. Nothing changed and the native screen stays; read the scene again."
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sequence of the last frame applied to the event's view when the helper passed the event on, read before it was written to the program. Nodes and recent results with a greater b came after the event."
         }
       },
       "required": [
@@ -2735,12 +2761,33 @@
           "items": {
             "$ref": "#/$defs/SurfaceNode"
           }
+        },
+        "b": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Sequence of the frame of this view that added the node (lease feature births). A node removed and added again under the same id carries the later frame. Absent: not known."
         }
       },
       "required": [
         "id",
         "k"
       ],
+      "additionalProperties": false
+    },
+    "SurfaceRecentResult": {
+      "description": "A result lately removed from an inline view's transcript: a toast, or a node the program gave a notice role. Only this projection is kept, in memory, for one lease.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "b": { "type": "integer", "minimum": 0, "description": "Sequence of the frame that added it." },
+        "gone": { "type": "integer", "minimum": 0, "description": "Sequence of the frame that removed it." },
+        "k": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "role": { "type": "string", "maxLength": 256 },
+        "tone": { "type": "string", "maxLength": 64 },
+        "text": { "type": "string", "maxLength": 2048, "description": "What it said, at most 2048 bytes." },
+        "cut": { "const": true, "description": "Present when text was cut to fit." }
+      },
+      "required": ["id", "b", "gone", "k", "text"],
       "additionalProperties": false
     },
     "SurfaceDocument": {
@@ -2810,6 +2857,17 @@
         },
         "document": {
           "$ref": "#/$defs/SurfaceDocument"
+        },
+        "recent": {
+          "type": "array",
+          "maxItems": 64,
+          "description": "Results removed from this view's transcript, oldest first; at most 64 entries and 64 KiB of text. Empty after surface.open.",
+          "items": { "$ref": "#/$defs/SurfaceRecentResult" }
+        },
+        "recentFloor": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Present when removed results were dropped from recent for room or age: the newest frame sequence among them. A command sent before that sequence may have had a result that is no longer listed."
         }
       },
       "required": [
@@ -2902,7 +2960,16 @@
         "prompt": { "type": "string" },
         "options": { "type": "array", "items": { "$ref": "#/$defs/HarnessChoice" } },
         "multi": { "type": "boolean" },
-        "allowText": { "type": "boolean" }
+        "allowText": { "type": "boolean" },
+        "required": { "description": "Whether the form can be submitted without an answer to this question. Absent means the source does not say, and the app keeps its rule of asking for an answer to every question; a form source that knows sends true or false.", "type": "boolean" },
+        "default": { "description": "The answer the harness starts with: option ids, or one text value.", "type": "array", "items": { "type": "string" } },
+        "when": {
+          "description": "The question applies only while the named question's current answer includes one of equals (booleans are \"true\" and \"false\"). A question that does not apply is not shown, validated or sent. Absent means it always applies.",
+          "type": "object",
+          "properties": { "question": { "type": "string" }, "equals": { "type": "array", "items": { "type": "string" } } },
+          "required": ["question", "equals"],
+          "additionalProperties": false
+        }
       },
       "required": ["id", "prompt", "options", "multi", "allowText"],
       "additionalProperties": false
@@ -3258,10 +3325,27 @@
         "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessPickerItem" } },
         "selected": { "type": "string" },
         "searchable": { "type": "boolean" },
+        "searchMode": { "description": "\"remote\": the app sends the search text as the harness.screen query value \"search\" and shows the list it gets back; absent: the app filters items itself.", "enum": ["remote"] },
         "filters": { "type": "array", "items": { "$ref": "#/$defs/HarnessFilter" } },
         "onSelect": { "type": "string" },
         "onSelectConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
         "onSelectLabel": { "description": "onSelect's own words for an item's button (omp: Use for this session).", "type": "string" },
+        "onSelectArgs": { "description": "Sent with onSelect besides the chosen row (a terminal list's interaction).", "type": "object" },
+        "query": { "description": "The search text the list has now. Present, possibly empty, when it is known; absent means it could not be read and must not be edited.", "type": "string", "maxLength": 200 },
+        "presentation": {
+          "description": "What the list says about itself. state partial: only part of the list was read (it scrolls in the harness's terminal); the rows are current, not stale.",
+          "type": "object",
+          "properties": {
+            "state": { "type": "string", "maxLength": 32 },
+            "total": { "type": "integer", "minimum": 0 },
+            "emptyText": { "type": "string" },
+            "searchPrompt": { "type": "string" },
+            "subtitle": { "type": "string" },
+            "noun": { "type": "string" },
+            "message": { "type": "string" },
+            "moreAction": { "description": "Reads further rows of a partial list; present only while more can be read. Returns the same screen with the rows read so far.", "$ref": "#/$defs/HarnessActionRef" }
+          }
+        },
         "itemActions": { "type": "array", "items": { "$ref": "#/$defs/HarnessActionRef" } },
         "setup": { "description": "What is not set up yet (a provider not signed in), shown after the items.", "type": "array", "items": { "$ref": "#/$defs/HarnessPickerItem" } },
         "setupAction": { "description": "Sets up one setup entry, run with args {id} (and {value} when setupInput is set).", "$ref": "#/$defs/HarnessActionRef" },
@@ -3285,7 +3369,9 @@
         "placeholder": { "type": "string" },
         "readOnly": { "type": "boolean" },
         "action": { "type": "string" },
-        "actionConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" }
+        "actionConfirm": { "$ref": "#/$defs/HarnessSelectConfirm" },
+        "actionLabel": { "description": "Names the button that commits the field.", "type": "string" },
+        "presentation": { "description": "prompt: the field is a question to answer now, not a stored setting.", "enum": ["prompt"] }
       },
       "required": ["id", "label", "kind", "value"],
       "additionalProperties": false,
@@ -3373,6 +3459,7 @@
         "title": { "type": "string" },
         "fetchedAt": { "$ref": "#/$defs/Timestamp" },
         "stale": { "type": "boolean" },
+        "interaction": { "description": "Names the list in the harness's own terminal this screen was read from; passed back to terminal.select, terminal.key, terminal.cancel, terminal.release and the terminal.menu screen. A new list has a new one.", "type": "string", "maxLength": 64 },
         "picker": { "$ref": "#/$defs/HarnessPicker" },
         "settings": { "$ref": "#/$defs/HarnessSettings" },
         "checklist": { "$ref": "#/$defs/HarnessChecklist" },
@@ -3556,6 +3643,7 @@
     "HarnessCompleteResult": {
       "type": "object",
       "properties": {
+        "pending": { "description": "True while more commands are being read from the harness itself: ask again shortly for the rest.", "type": "boolean" },
         "items": {
           "type": "array",
           "items": {
@@ -3570,7 +3658,24 @@
               "role": { "description": "destructive: the app asks in a system confirmation before running.", "enum": ["normal", "destructive"] },
               "action": { "description": "A harness.action id the command runs instead of typing its text (e.g. compact, undo).", "type": "string" },
               "opens": { "description": "A native home the command opens instead of typing: status, changes, or a screen id.", "type": "string" },
-              "choices": { "description": "For kind choice: the values, with the current one selected.", "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/HarnessCommandChoice" } }
+              "choices": { "description": "For kind choice: the values, with the current one selected.", "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/HarnessCommandChoice" } },
+              "native": {
+                "description": "What the running program and its source say about a command. Present only when the list came from the program itself, which is then the complete list. Unknown keys and unknown opens values must be tolerated.",
+                "type": "object",
+                "properties": {
+                  "opens": { "description": "What the command does with no arguments: picker, settings, signin, screen, input, text, toggle, action, turn, exit or unknown.", "type": "string", "maxLength": 32 },
+                  "opensWithArgs": { "type": "string", "maxLength": 32 },
+                  "args": { "enum": ["none", "optional", "required"] },
+                  "state": { "description": "The program's current value for the command.", "type": "string", "maxLength": 200 },
+                  "subcommands": { "type": "array", "maxItems": 32, "items": { "type": "object", "properties": { "name": { "type": "string" }, "detail": { "type": "string" }, "hint": { "type": "string" } }, "required": ["name"] } },
+                  "aliases": { "type": "array", "maxItems": 32, "items": { "type": "string" } },
+                  "group": { "type": "string", "maxLength": 128 },
+                  "destructive": { "type": "boolean" },
+                  "icon": { "type": "string", "maxLength": 40 },
+                  "source": { "type": "string", "maxLength": 32 },
+                  "screenId": { "type": "string", "maxLength": 64 }
+                }
+              }
             },
             "required": ["insert", "title"],
             "additionalProperties": false
@@ -3610,7 +3715,8 @@
       "type": "object",
       "properties": {
         "sessionId": { "$ref": "#/$defs/ManagedSessionId" },
-        "kind": { "enum": ["items", "mission", "reset"] },
+        "kind": { "enum": ["items", "mission", "reset", "commands", "menu"] },
+        "requestId": { "description": "For kind menu: the requestId the command was run with.", "type": "string", "maxLength": 128 },
         "ts": { "$ref": "#/$defs/Timestamp" },
         "epoch": { "type": "string" },
         "items": { "type": "array", "items": { "$ref": "#/$defs/HarnessItem" } },
@@ -3621,7 +3727,7 @@
       "additionalProperties": false
     },
     "PushPlaintext": {
-      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting. allowText, optional and only on needs_you, is true when the approval takes a typed answer (the phone offers Reply); the answer itself still travels only over SSH.",
+      "description": "Plaintext sealed (label push, aad hostId + \"|\" + deviceId) into the ciphertext of a relay push, encoded as compact UTF-8 JSON. kind needs_you announces an approval: requestId and options are required. kind clear withdraws the notification for requestId (required; the approval closed): title and body are empty strings and options is absent. done, job and notify carry no requestId or options. sessionId, bib and agent are null when the event belongs to no session. ts is Unix time in milliseconds when the helper sealed it. The push is not signed by the host; a forged push can only change what the phone displays, since answers are bound to the host's requestIds. subject (needs_you only, absent when unknown) is the approval's structured subject; host is the machine's display name (`hostname -s`, at most 64 characters). Both are optional so older payloads stay valid. lifecycle.v1 adds kind ended and failed (an agent process exited; exit, optional, is the SessionExit) and kind offline (the machine went quiet while sessions worked: sealed ahead of time and sent by the relay only when the helper's connection goes quiet; sessionId, bib and agent are null; active, optional, is how many sessions were working). These carry no requestId or options. receipt.v1 adds kind answer, sent only to the one device that sent an answer through the relay mailbox and that paired with answerReceipts: requestId and result are required, title and body are empty strings, sessionId, bib and agent are null. It is an alert push when result is expired, prompt_gone, unconfirmed or failed (the user believes the answer landed) and a background push when it is applied or answered. No answer push arrives while the machine is asleep or unreachable, so a device treats an answer as delivered only once this push says applied. reminder, optional and only on needs_you, is true on the one reminder for an approval still waiting. allowText, optional and only on needs_you, is true when the approval takes a typed answer (the phone offers Reply); the answer itself still travels only over SSH.",
       "type": "object",
       "properties": {
         "v": {
@@ -3636,7 +3742,8 @@
             "clear",
             "ended",
             "failed",
-            "offline"
+            "offline",
+            "answer"
           ]
         },
         "sessionId": {
@@ -3712,6 +3819,15 @@
         "allowText": {
           "description": "Optional, needs_you only: true when the approval takes a typed answer as well as its options. Absent means false.",
           "type": "boolean"
+        },
+        "result": {
+          "description": "kind answer only, required there: what became of the answer. applied: the machine took it. answered: someone answered first. expired or prompt_gone: the request was over. unconfirmed: the keys were sent and the prompt is still on screen, so the request stays open. failed: not applied for another reason.",
+          "enum": ["applied", "answered", "expired", "prompt_gone", "unconfirmed", "failed"]
+        },
+        "expires": {
+          "description": "Optional, needs_you only, from helpers advertising expiry.v1: Unix time in seconds when the request stops taking answers, as the helper knew it when it sealed the push. The helper may keep a request open longer, never shorter. Absent from older helpers: the request lives 600 seconds from ts.",
+          "type": "integer",
+          "minimum": 1
         },
         "sessionName": {
           "description": "Optional: the session's name, the title of its notifications.",
@@ -3807,7 +3923,12 @@
         },
         {
           "if": { "properties": { "kind": { "const": "needs_you" } } },
-          "else": { "properties": { "reminder": false, "allowText": false } }
+          "else": { "properties": { "reminder": false, "allowText": false, "expires": false } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "answer" } } },
+          "then": { "required": ["requestId", "result"], "properties": { "requestId": true, "result": true, "title": { "const": "" }, "body": { "const": "" }, "options": false } },
+          "else": { "properties": { "result": false } }
         }
       ]
     },

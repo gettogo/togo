@@ -122,6 +122,27 @@ func (h *Hub) ForegroundSubscribers() int {
 	return n
 }
 
+// ForegroundDevices names the devices whose app is in the foreground, as
+// ForegroundSubscribers counts them. unnamed is true when one of them did
+// not say which device it is (an app from before fgdevice.v1).
+func (h *Hub) ForegroundDevices() (devices map[string]bool, unnamed bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	now := h.clock()
+	devices = map[string]bool{}
+	for _, s := range h.subs {
+		if !s.foreground || now.Sub(s.lastRequest) >= ForegroundLease {
+			continue
+		}
+		if s.device == "" {
+			unnamed = true
+			continue
+		}
+		devices[s.device] = true
+	}
+	return devices, unnamed
+}
+
 // Snapshot is the events.subscribe result. Its events follow it on the
 // connection, starting after Seq.
 type Snapshot struct {
@@ -164,6 +185,12 @@ func (s Snapshot) MarshalJSON() ([]byte, error) {
 // numbered after seq may already be reflected in the snapshot; they carry
 // whole objects, so applying them again leaves the client at current state.
 func (h *Hub) Subscribe(ctx context.Context, conn *rpc.Conn, foreground bool) (Snapshot, error) {
+	return h.SubscribeDevice(ctx, conn, foreground, "")
+}
+
+// SubscribeDevice is Subscribe for an app that names its device, the id it
+// pairs for pushes with, so only that device counts as in the foreground.
+func (h *Hub) SubscribeDevice(ctx context.Context, conn *rpc.Conn, foreground bool, device string) (Snapshot, error) {
 	if conn == nil {
 		return Snapshot{}, errors.New("events.subscribe needs a served connection")
 	}
@@ -173,6 +200,7 @@ func (h *Hub) Subscribe(ctx context.Context, conn *rpc.Conn, foreground bool) (S
 		prev.stop()
 	}
 	s := newSubscriber(conn, foreground, prev)
+	s.device = device
 	s.lastRequest = h.clock()
 	h.subs[conn] = s
 	seq := h.seq
@@ -209,6 +237,7 @@ func (h *Hub) remove(s *subscriber) {
 type subscriber struct {
 	conn       *rpc.Conn
 	foreground bool
+	device     string // the id the app pairs for pushes with; "" when it named none
 	// lastRequest is guarded by Hub.mu.
 	lastRequest time.Time
 	queue       chan wire.Event

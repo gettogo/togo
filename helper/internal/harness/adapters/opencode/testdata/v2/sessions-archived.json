@@ -1,0 +1,72 @@
+{
+  "data": [
+    {
+      "id": "ses_e28eebc35ffej2FcIqldTeM7IP",
+      "projectID": "global",
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "time": {
+        "created": 1794609595339,
+        "updated": 1794609595339
+      },
+      "title": "Audit fixture API create probe",
+      "location": {
+        "directory": "/w/project"
+      }
+    },
+    {
+      "id": "ses_e28ef0137ffepoh51lXJCMo30g",
+      "projectID": "global",
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "time": {
+        "created": 1794609577673,
+        "updated": 1794609577674,
+        "archived": 1794609577674
+      },
+      "title": "Audit fixture ARCHIVED hidden from normal picker",
+      "location": {
+        "directory": "/w/project"
+      }
+    },
+    {
+      "id": "ses_e28ef0139ffefbZW54byL42KPJ",
+      "projectID": "global",
+      "cost": 0,
+      "tokens": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "time": {
+        "created": 1794609577671,
+        "updated": 1794609577671
+      },
+      "title": "Audit fixture recent 55",
+      "location": {
+        "directory": "/w/project"
+      }
+    }
+  ],
+  "cursor": {}
+}

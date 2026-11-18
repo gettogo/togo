@@ -89,19 +89,37 @@ func (s *Service) lookup(ctx context.Context, id string) ([]Listener, error) {
 	return normalize(found), nil
 }
 
-// normalize drops duplicates and orders by port, then address, then pid.
+// normalize keeps one listener per port and orders by port. A port held by
+// several processes (workers, a reloader) or bound to several addresses is
+// one thing to open: the address that a forward to loopback reaches comes
+// first, then the lowest pid, which is the parent of its workers.
 func normalize(in []Listener) []Listener {
 	out := slices.Clone(in)
 	slices.SortFunc(out, func(a, b Listener) int {
-		return cmp.Or(cmp.Compare(a.Port, b.Port), cmp.Compare(a.Address, b.Address), cmp.Compare(a.PID, b.PID))
+		return cmp.Or(cmp.Compare(a.Port, b.Port), cmp.Compare(addressRank(a.Address), addressRank(b.Address)),
+			cmp.Compare(a.Address, b.Address), cmp.Compare(a.PID, b.PID))
 	})
-	out = slices.CompactFunc(out, func(a, b Listener) bool {
-		return a.Port == b.Port && a.Address == b.Address && a.PID == b.PID
-	})
+	out = slices.CompactFunc(out, func(a, b Listener) bool { return a.Port == b.Port })
 	if out == nil {
 		out = []Listener{}
 	}
 	return out
+}
+
+// addressRank orders the addresses of one port: IPv4 loopback, every
+// address, IPv6 loopback, then the rest.
+func addressRank(a string) int {
+	switch a {
+	case "127.0.0.1":
+		return 0
+	case "*", "0.0.0.0":
+		return 1
+	case "::1", "[::1]":
+		return 2
+	case "::", "[::]":
+		return 3
+	}
+	return 4
 }
 
 // Methods returns the protocol methods this package serves, for API.Ext.

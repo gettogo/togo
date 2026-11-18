@@ -1,0 +1,38 @@
+{
+  "data": [
+    {
+      "id": "ses_e28d51c92ffeuZKPOJEAMrXUPw",
+      "parentID": "ses_e28f4c58affePFJ6qUEQH9BCR7",
+      "projectID": "be040d472edc93e9f486658824b9d19137761562",
+      "agent": "general",
+      "model": {
+        "id": "iceman-free",
+        "providerID": "opencode",
+        "variant": "default"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 16986,
+        "output": 43,
+        "reasoning": 46,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "outcome": "succeeded",
+      "time": {
+        "created": 1794611274611,
+        "updated": 1794611278461,
+        "busy": 1794611274618,
+        "idle": 1794611278463
+      },
+      "title": "Audit read-only child",
+      "permissions": [],
+      "location": {
+        "directory": "/w/project"
+      }
+    }
+  ],
+  "cursor": {}
+}

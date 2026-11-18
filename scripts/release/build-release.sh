@@ -63,6 +63,11 @@ step() { printf '\n# %s\n' "$*"; }
 
 if [ "$mode" = "run" ]; then
   check_pinned_key "$repo"
+  # SHA256SUMS lists every file in dist/, so leftovers from an earlier
+  # version or run would end up in this release's signed list.
+  if [ -d "$dist" ] && [ -n "$(ls -A "$dist")" ]; then
+    die "$dist is not empty; remove it (or move the old release away) and run again"
+  fi
 elif pinned_is_test_key "$repo"; then
   printf '# note: the pinned release key is the test key; --run refuses unless TOGO_RELEASE_TEST=1\n'
 fi
@@ -84,7 +89,7 @@ if [ "$apple" = "yes" ]; then
     fi
     "$here/sign-darwin.sh" "$work/togo" ${runflag[@]+"${runflag[@]}"}
     "$here/notarize.sh" "$work/togo" ${runflag[@]+"${runflag[@]}"}
-    release archive --version "$version" --module-dir "$repo/helper" --target "darwin/$arch" --binary "$work/togo" --license "$repo/LICENSE" --out "$dist"
+    release archive --version "$version" --module-dir "$repo/helper" --target "darwin/$arch" --binary "$work/togo" --license "$repo/helper/LICENSE" --out "$dist"
     if [ "$mode" = "run" ]; then
       find "$work" -mindepth 1 -delete
       rmdir "$work"

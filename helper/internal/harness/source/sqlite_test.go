@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -92,5 +93,45 @@ func TestSQLiteRejectsBadParam(t *testing.T) {
 func TestSQLiteURI(t *testing.T) {
 	if u := sqliteURI("/a b/c?.db"); u != "file:/a%20b/c%3F.db?mode=ro&immutable=1" {
 		t.Fatal(u)
+	}
+}
+
+// A database nobody wrote to is not queried again on every poll.
+func TestSQLiteWatchSkipsUnchangedDatabase(t *testing.T) {
+	p, env := sqliteDB(t, `create table m(id integer primary key, at integer, v text);
+		insert into m(at, v) values (10, 'a');`)
+	q := spec.SQLite{Path: p, Query: "select id, at, v from m where at >= :cursor order by at", Cursor: "at", Key: "id"}
+	w := &sqliteWatch{q: q, path: p, name: "db", seen: map[string]string{}}
+	var got int
+	emit := func(harness.Record) { got++ }
+	for range 4 {
+		if err := w.poll(context.Background(), env, emit); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if w.queries != 1 {
+		t.Fatalf("queries = %d, want 1", w.queries)
+	}
+	exec.Command("sqlite3", p, "insert into m(at, v) values (11, 'b');").Run()
+	if err := w.poll(context.Background(), env, emit); err != nil {
+		t.Fatal(err)
+	}
+	if w.queries != 2 || got != 2 {
+		t.Fatalf("queries = %d, emitted = %d", w.queries, got)
+	}
+}
+
+// Without a sqlite3 program the feed fails at once, in words that do not
+// read as a missing database.
+func TestSQLiteWatchFailsPlainlyWithoutProgram(t *testing.T) {
+	p, env := sqliteDB(t, `create table m(id integer primary key, v text);`)
+	old := sqliteFallback
+	sqliteFallback = filepath.Join(t.TempDir(), "no-sqlite3")
+	defer func() { sqliteFallback = old }()
+	env.Vars[VarPath] = t.TempDir()
+	w := &sqliteWatch{q: spec.SQLite{Path: p, Query: "select id from m"}, path: p, name: "db", seen: map[string]string{}}
+	err := w.poll(context.Background(), env, func(harness.Record) {})
+	if err == nil || strings.Contains(err.Error(), "no such file") {
+		t.Fatalf("err = %v", err)
 	}
 }

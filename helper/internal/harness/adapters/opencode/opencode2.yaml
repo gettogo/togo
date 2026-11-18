@@ -21,19 +21,45 @@ endpoint:
   # the same variable to it.
   password_env: OPENCODE_PASSWORD
   username: opencode
+# send.api stays listed though prompts are typed (see the note above `resume`): apps
+# take its absence to mean a typed / line may be mirrored into the terminal key by key,
+# which skips the helper's send checks. The helper decides how a prompt travels by
+# whether the adapter has a `send` action, not by this capability.
 capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt, commands,
-  files, mode, model, needs.approvals, needs.questions, agents, changes, ports, status,
+  files, mode, model, needs.approvals, needs.questions, agents, background, changes, ports, status,
   resume, compact, mcp, settings]
-images: { insert: together }   # how image paths are pasted into the input
+# The terminal attaches a pasted file only when the paste is nothing but file
+# paths; pasted with the text, a path stays text. So one paste per path.
+images: { insert: per_path }
+# The composer's footer ("┃  Build · <model> <provider>") shows once the TUI can take a
+# prompt. One typed before it (the TUI restarts when a model is picked before the first
+# prompt) is lost, so a prompt waits for this row.
+ready: '^\s*┃\s+\S.* · \S'
 feeds:
   events:
     sse: { path: /api/event }
+    # The stream tells what happens from now on. The conversation's messages are read
+    # from the messages route (newest page first, then older pages), so a chat opened after a
+    # helper restart, or moved to another conversation, shows what was said before. The
+    # session log route would give the events themselves, but on 2.2.5 it answers with
+    # its sync marker and no past events.
+    history:
+      path: '/api/session/{{.conversation}}/message?limit=200&order=desc'
+      items: '.data | reverse'
+      as: session.message
+      # 200 is the route's largest page. Older pages follow by its cursor, which
+      # must not be sent together with order (protocol/src/groups/message.ts).
+      page: { cursor: '.cursor.next', param: cursor, omit: [order] }
     mapper: opencode2.events
     stability: documented
 sources:
+  # The terminal's session list asks for archived=false; an archived session is
+  # not one to resume. The select drops one too, should a server ignore the filter.
   sessions:
-    http: { path: '/api/session?directory={{.cwd | urlquery}}&limit=50' }
-    select: '[.data[] | select(.parentID == null)] | sort_by(-.time.updated)'
+    # The list holds the 50 newest; `search` is the picker's search text (search_mode on
+    # the resume screen), which the server matches over every session of the folder.
+    http: { path: '/api/session?directory={{.cwd | urlquery}}&limit=50&archived=false{{with .search}}&search={{. | urlquery}}{{end}}' }
+    select: '[.data[] | select(.parentID == null and .time.archived == null)] | sort_by(-.time.updated)'
     cache: 30s
     stability: documented
   # Provider and model answers carry settings, headers and request bodies, where keys
@@ -47,6 +73,15 @@ sources:
     select: '[.data[] | select(.enabled and ((.type // "chat") == "chat")) | {id: ({id: .id, providerID: .providerID} | tojson), name: .name, provider: .providerID, providerName: .providerID}]'
     cache: 5m
     stability: documented
+  # The variants of the session's model (its reasoning levels), each as the
+  # Model.Ref that selects it. Default, the model without a variant, comes
+  # first, as in the terminal's list. A model with none lists nothing.
+  variants:
+    http: { path: '/api/model?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    redact: ['.data[].settings', '.data[].headers', '.data[].body']
+    select: '[.data[] | select(.providerID == $state.provider and .id == $state.model_id and ((.variants // []) | length) > 0) | . as $m | {id: ({id: $m.id, providerID: $m.providerID} | tojson), name: "Default"}, ($m.variants[] | {id: ({id: $m.id, providerID: $m.providerID, variant: .id} | tojson), name: .id})]'
+    cache: 5m
+    stability: documented
   providers:
     http: { path: '/api/provider?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     redact: ['.data[].settings.apiKey', '.data[].headers', '.data[].body']
@@ -54,31 +89,54 @@ sources:
     cache: 5m
     stability: documented
   # Integrations that take a key and have no connection: the model picker's
-  # "Not set up" section, where an API key connects one.
+  # "Not set up" section, where an API key connects one. An integration
+  # lists its sign-in methods (key, env, oauth, external, command). The key
+  # is the only one a route here can finish: a browser sign-in, a form or a
+  # local login runs in OpenCode's own dialog, which /connect opens in the
+  # terminal, so a row names those under its title. One without a key
+  # method is not listed: the section asks for a key.
   unconnected:
     http: { path: '/api/integration?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     redact: ['.data[].connections']
-    select: '[.data[] | select(((.connections // []) | length) == 0 and any(.methods[]; .type == "key")) | {id: .id, name: .name}] | sort_by(.name | ascii_downcase)'
+    select: '[.data[] | select(((.connections // []) | length) == 0 and any(.methods[]; .type == "key")) | {id: .id, name: .name, more: ([.methods[] | select(.type == "oauth" or .type == "external" or .type == "command") | (.label // .id)] | if length > 0 then "More sign-ins in /connect: " + join(", ") else "" end)}] | sort_by(.name | ascii_downcase)'
     cache: 5m
     stability: documented
+  # Agents and commands change when OpenCode reloads its config. The server says so
+  # (agent.updated, command.updated) and the mapper answers with a new agents_rev or
+  # commands_rev, which ends the cached copy at once instead of after five minutes.
   agents:
     http: { path: '/api/agent?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     select: '[.data[] | select(.mode != "subagent" and (.hidden | not)) | {id: .id, name: .name, description: .description}]'
     cache: 5m
+    cache_rev: agents_rev
     stability: documented
   commands:
     http: { path: '/api/command?location%5Bdirectory%5D={{.cwd | urlquery}}' }
     select: '.data'
     cache: 5m
+    cache_rev: commands_rev
     stability: documented
   children:
     http: { path: '/api/session?parentID={{.state.harness_session | urlquery}}' }
     select: '[.data[] | {id: .id, title: (.title // "Subagent"), state: (if (.time.busy // 0) > (.time.idle // 0) then "running" else "done" end)}]'
     stability: documented
+  # Shell commands OpenCode runs in the background, tagged with the session that
+  # started them; only running ones are listed. The mapper shows a shell from its
+  # shell.created on. This list brings back the ones a stream reconnect or a helper
+  # restart lost sight of.
+  shells:
+    http: { path: '/api/shell?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    select: '[.data[] | select(.metadata.sessionID == $state.harness_session) | {id: .id, title: (.command | gsub("\\s+"; " ") | .[:200]), state: .status}]'
+    stability: documented
+  # Each server with the actions its row offers: Disconnect when connected,
+  # Connect when it is off, failed or wants a sign-in, nothing while it
+  # starts. A server that is an OAuth integration signs in through OpenCode's
+  # own flow (its terminal's MCP list), which no route here starts. The copy
+  # is kept two seconds, so the list read after an action shows its result.
   mcp:
     http: { path: '/api/mcp?location%5Bdirectory%5D={{.cwd | urlquery}}' }
-    select: '[.data[] | {id: .name, title: (.title // .name), state: .status.status}]'
-    cache: 30s
+    select: '[.data[] | {id: .name, title: (.title // .name), state: .status.status, actions: (if .status.status == "connected" then ["mcp_disconnect"] elif .status.status == "pending" or (.status.status == "needs_auth" and .integrationID != null) then [] else ["mcp_connect"] end)}]'
+    cache: 2s
     stability: documented
 screens:
   model:
@@ -91,7 +149,21 @@ screens:
     map: { item.id: .id, item.title: .name, item.group: .providerName, selected: $state.model_ref }
     filters: [{ id: provider, label: Provider, kind: choice, field: provider }]
     on_select: set_model
-    setup: { source: unconnected, map: { item.id: .id, item.title: .name }, action: add_provider_key, input: secret }
+    setup: { source: unconnected, map: { item.id: .id, item.title: .name, item.subtitle: .more }, action: add_provider_key, input: secret }
+  # A variant is part of the session's model, so a pick goes through the
+  # model switch. The mapper reports the variant in use as model_variant
+  # ("default" for the model without one), which marks the current row.
+  variant:
+    primitive: picker
+    title: Variant
+    section: composer
+    capability: model
+    source: variants
+    map:
+      item.id: .id
+      item.title: .name
+      selected: '($state.model_variant // "") as $v | if $v == "" then "" elif $v == "default" then $state.model_ref else ({id: $state.model_id, providerID: $state.provider, variant: $v} | tojson) end'
+    on_select: set_model
   providers:
     primitive: settings
     title: Providers
@@ -108,6 +180,7 @@ screens:
     capability: resume
     source: sessions
     search: true
+    search_mode: remote
     map: { item.id: .id, item.title: .title, item.subtitle: '{{.time.updated | ago}}' }
     on_select: resume
   mcp:
@@ -116,6 +189,7 @@ screens:
     section: more
     capability: mcp
     source: mcp
+    map: { item.actions: .actions }
 actions:
   # These switch the session on the server (no config file is written), and the
   # TUI's footer follows (seen live).
@@ -134,7 +208,19 @@ actions:
   set_provider_key:
     http: { method: POST, path: '/api/integration/{{.target}}/connect/key?location%5Bdirectory%5D={{.cwd | urlquery}}', body: '{"key": {{.value | json}}}' }
     stability: unverified
-  # A / line from the composer or the palette runs as the server's command.
+  # The MCP list's row actions; the target is the server's name. Upstream
+  # describes both as lasting until OpenCode restarts. Seen on 2.2.5: 204,
+  # and the list follows.
+  mcp_connect:
+    label: Connect
+    http: { method: POST, path: '/api/experimental/mcp/{{.target | urlquery}}/connect?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    stability: experimental
+  mcp_disconnect:
+    label: Disconnect
+    http: { method: POST, path: '/api/experimental/mcp/{{.target | urlquery}}/disconnect?location%5Bdirectory%5D={{.cwd | urlquery}}' }
+    stability: experimental
+  # A / line from the composer or the palette runs as the server's command,
+  # unless it names one of the terminal's own (commands.static, kind terminal).
   command:
     http: { method: POST, path: '/api/session/{{.state.harness_session}}/command', body: '{"name": {{.command | json}}, "text": {{.arguments | json}}}' }
     stability: documented
@@ -150,9 +236,11 @@ actions:
   show_session:
     relaunch: { argv: [opencode, --session, '{{.state.harness_session}}'] }
     stability: documented
-  send:
-    http: { method: POST, path: '/api/session/{{.state.harness_session}}/prompt', body: '{"text": {{.text | json}}}' }
-    stability: documented
+  # Prompts are typed into the TUI, not posted to /api/session/{id}/prompt. The API
+  # needs a session id, and nothing reports which session the TUI shows: after /new or
+  # a fork in the terminal a posted prompt went to the session left behind (seen on
+  # 2.2.5, 2.3.0 and 1.19.5). A typed prompt lands in the session on screen; the
+  # mapper then follows it there (session.inbox.enqueued) and the chat starts over.
   # 2.x has no TUI control route: a resumed session is a restart on it.
   resume:
     relaunch: { argv: [opencode, --session, '{{.id}}'] }
@@ -171,14 +259,18 @@ actions:
     branch:
       - when: '{{if eq (slice .target 0 4) "per_"}}true{{end}}'
         http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/permission/{{part "~" 0 .target}}/reply', body: '{"decision": {{index (index .answers "0") 0 | json}}}' }
-      - http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/form/{{part "~" 0 .target}}/reply', body: '{"answer": {{form .answers}}}' }
+      # A form owned by "global" is found only in the folder it was asked in.
+      - http: { method: POST, path: '/api/session/{{part "~" 1 .target}}/form/{{part "~" 0 .target}}/reply{{if eq (part "~" 1 .target) "global"}}?location%5Bdirectory%5D={{or .state.location .cwd | urlquery}}{{end}}', body: '{"answer": {{form .answers}}}' }
     stability: documented
   stop:
     role: destructive
     http: { method: POST, path: '/api/session/{{.target}}/interrupt' }
     stability: documented
+# The modes are OpenCode's primary agents, which a user can add to: the agents
+# source lists them. Build and Plan are what is offered while it cannot be read.
 modes:
   choices: [{ id: build, label: Build }, { id: plan, label: Plan }]
+  source: agents
   current: agents
   select: $state.mode
   set: set_mode
@@ -192,7 +284,39 @@ commands:
     - { name: models, detail: Choose the model, screen: model }
     - { name: sessions, detail: Resume a session, screen: resume }
     - { name: compact, detail: Summarise the session, action: compact }
+    - { name: variants, detail: Choose the model variant, screen: variant }
+    - { name: mcps, detail: MCP servers, screen: mcp }
+    - { name: diff, detail: Review changes, opens: changes }
+    # The terminal's own commands: the server does not list or run them, so
+    # they are typed, and the terminal's / menu runs its first row on Enter.
+    # Only names that are that first row before and inside a conversation
+    # are here (seen on 2.2.5, and unconditional in the 2.3.0 source). Left
+    # out: /undo, /redo, /fork, /rename, /timeline, /copy, /export and
+    # /terminal exist only inside a conversation, and outside one the menu
+    # runs another command or leaves the text in the input line; /update,
+    # /restart and /highlights are not always there; /cd and /btw take an
+    # argument their menu completes without sending.
+    - { name: new, detail: Start a new session, kind: terminal }
+    - { name: clear, detail: Close this session and start a new one, kind: terminal }
+    - { name: open, detail: Open a session or project, kind: terminal }
+    - { name: agents, detail: Switch agent, kind: terminal }
+    - { name: connect, detail: Sign in to a provider, kind: terminal }
+    - { name: usage, detail: Provider usage and limits, kind: terminal }
+    - { name: stats, detail: Usage statistics, kind: terminal }
+    - { name: status, detail: Server and connection status, kind: terminal }
+    - { name: skills, detail: Pick a skill for the prompt, kind: terminal }
+    - { name: worktrees, detail: Manage workspaces, kind: terminal }
+    - { name: plugins, detail: Plugins, kind: terminal }
+    - { name: settings, detail: Open settings, kind: terminal }
+    - { name: themes, detail: Switch theme, kind: terminal }
+    - { name: editor, detail: Write the prompt in your editor, kind: terminal }
+    - { name: pair, detail: Pair a device, kind: terminal }
+    - { name: reload, detail: Reload configuration, kind: terminal }
+    - { name: debug, detail: Debug info, kind: terminal }
+    - { name: help, detail: Help, kind: terminal }
+    - { name: exit, detail: Quit OpenCode, kind: terminal, role: destructive }
   source: commands
   select: '[.[] | {name: .name, detail: .description, hint: ""}]'
 mission:
   agents: { source: children }
+  background: { source: shells, refresh: 10s }

@@ -137,3 +137,20 @@ func TestStatusOnlyFailuresSayToLookAtTerminal(t *testing.T) {
 		}
 	}
 }
+
+// Droid's Stop can run before the turn's outcome is written: the last
+// outcome in the file is then the previous turn's, a failure that must
+// not be drawn on this one. The new prompt is shaped like the real one.
+func TestDroidStopIgnoresAnEarlierTurnsOutcome(t *testing.T) {
+	b, err := os.ReadFile("testdata/droid-transcript-unreachable.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := `{"type":"message","id":"e1f2a3b4-0000-4000-8000-000000000001","parentId":"ac5ce99d-5348-4f50-be6b-28bb7d01f048","timestamp":"2026-11-08T04:19:18.722Z","message":{"role":"user","content":[{"type":"text","text":"try again"}],"interactionMode":"auto"},"seq":4}` + "\n"
+	if _, _, ok := DroidOutcome(append(b, next...)); ok {
+		t.Fatal("the previous turn's outcome was read for the new turn")
+	}
+	if reason, _, ok := DroidOutcome(b); !ok || reason != "model_provider_unreachable" {
+		t.Fatalf("own outcome lost: %q %v", reason, ok)
+	}
+}

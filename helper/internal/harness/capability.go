@@ -26,6 +26,14 @@ const (
 
 	// Mission control sections, in display order.
 	CapNeedsApprovals = "needs.approvals"
+	// CapSurface: this session's running agent can show its own pickers,
+	// forms and settings natively (the surface.* methods will serve it). It
+	// is reported per session, only while that is true, never by adapter.
+	CapSurface = "surface"
+	// CapTerminalNative: lists the harness draws in its own terminal (its
+	// command menu, its choosers) can be shown natively and driven for the
+	// phone: the terminal.* actions and the terminal.menu screen.
+	CapTerminalNative = "terminal.native"
 	CapNeedsQuestions = "needs.questions"
 	CapAgents         = "agents"
 	CapBackground     = "background"

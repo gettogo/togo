@@ -348,3 +348,34 @@ func TestFetchPoolsAndRedials(t *testing.T) {
 		t.Fatalf("no endpoint: %v", err)
 	}
 }
+
+// Several fetches on a cold endpoint at once share one connection; none
+// has its connection closed under it.
+func TestConcurrentColdFetchesShareOneConnection(t *testing.T) {
+	sock := filepath.Join(socketDir(t), "s.sock")
+	f := startFake(t, sock)
+	f.handle = func(method string, _ json.RawMessage) (any, *Error) {
+		time.Sleep(300 * time.Millisecond)
+		return map[string]any{"data": []map[string]string{{"id": "m1"}}}, nil
+	}
+	r := NewRunner()
+	env := harness.Env{Endpoint: "unix://" + sock}
+	src := feedSpec(t, spec.RPC{Method: "model/list"})
+	var wg sync.WaitGroup
+	errs := make(chan error, 6)
+	for range 6 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := r.Fetch(context.Background(), src, env)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("fetch failed: %v", err)
+		}
+	}
+}

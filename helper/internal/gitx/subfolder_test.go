@@ -69,3 +69,26 @@ func TestSubfolderSessionUsesRootPaths(t *testing.T) {
 		t.Fatalf("commit diff of a root-relative path: %q", d.Diff)
 	}
 }
+
+func TestNestedRepositoryIsNotListedAsFolder(t *testing.T) {
+	dir := seeded(t)
+	git(t, dir, "init", "-q", "-b", "main", filepath.Join(dir, "newapp"))
+	write(t, filepath.Join(dir, "newapp"), "a.txt", "a\n")
+	write(t, dir, "scratch.txt", "s\n")
+	for p := range entries(statusOf(t, writer(dir))) {
+		if strings.HasSuffix(p, "/") {
+			t.Errorf("folder entry %q", p)
+		}
+	}
+	if _, ok := entries(statusOf(t, writer(dir)))["scratch.txt"]; !ok {
+		t.Error("scratch.txt missing")
+	}
+}
+
+func TestSubmoduleRefusalNamesTheSubmodule(t *testing.T) {
+	dir, _ := hostileSubmodule(t)
+	_, err := writeCall(t, writer(dir), "git.stage", []string{"sub"}, nil)
+	if !isInvalidParams(err) || !strings.Contains(err.Error(), "repository") {
+		t.Errorf("err %v", err)
+	}
+}
