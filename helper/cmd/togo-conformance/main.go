@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -47,6 +46,14 @@ var order = []string{"claude", "omp", "opencode", "codex", "kilo", "pi", "kimi",
 func main() { os.Exit(realMain()) }
 
 func realMain() int {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "diff":
+			return diffMain(os.Args[2:])
+		case "publish":
+			return publishMain(os.Args[2:])
+		}
+	}
 	var o options
 	var only, scen, router, models, args string
 	var cleanup bool
@@ -151,7 +158,9 @@ func realMain() int {
 	notes := finish(o.root, o.runID, snap)
 	code := report(os.Stdout, runners, notes, time.Since(start), &o)
 	if o.jsonOut != "" {
-		writeJSON(o.jsonOut, runners, notes)
+		if err := buildReport(runners, notes, start, time.Now(), &o).write(o.jsonOut); err != nil {
+			fmt.Fprintln(os.Stderr, "json:", err)
+		}
 	}
 	return code
 }
@@ -256,7 +265,8 @@ func runOne(ctx context.Context, o *options, r *runner) {
 		if p := recover(); p != nil {
 			r.set("create", fail, "suite panic: %v", p)
 		}
-		fmt.Fprintf(os.Stderr, "  %-9s done in %s\n", r.id, time.Since(t0).Round(time.Second))
+		r.took = time.Since(t0)
+		fmt.Fprintf(os.Stderr, "  %-9s done in %s\n", r.id, r.took.Round(time.Second))
 	}()
 	sb, err := newSandbox(o.root, o.runID, r.id)
 	if err != nil {
@@ -291,6 +301,7 @@ func runOne(ctx context.Context, o *options, r *runner) {
 	c.before = func() { owned.observe(r.id, true) }
 	r.c = c
 	r.run(hctx)
+	r.cutShort = hctx.Err() != nil
 }
 
 var memRE = regexp.MustCompile(`free percentage: (\d+)%`)
@@ -328,21 +339,6 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-func writeJSON(path string, runners []*runner, notes []string) {
-	type row struct {
-		Harness string            `json:"harness"`
-		Version string            `json:"version"`
-		Results map[string]result `json:"results"`
-		Notes   []string          `json:"notes"`
-	}
-	var rows []row
-	for _, r := range runners {
-		rows = append(rows, row{r.id, r.version, r.res, r.notes})
-	}
-	b, _ := json.MarshalIndent(map[string]any{"harnesses": rows, "cleanup": notes}, "", "  ")
-	_ = os.WriteFile(path, b, 0o600)
-}
-
 // parseArgs reads -args: harness=arguments pairs separated by ';', the
 // arguments split on spaces (argv entries, never shell text).
 func parseArgs(s string) (map[string][]string, error) {
@@ -358,4 +354,38 @@ func parseArgs(s string) (map[string][]string, error) {
 		out[strings.TrimSpace(h)] = strings.Fields(a)
 	}
 	return out, nil
+}
+
+// diffMain is `togo-conformance diff old.json new.json`: what changed
+// between two runs. Exit 1 when a passing scenario now fails.
+func diffMain(args []string) int {
+	if len(args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: togo-conformance diff <old.json> <new.json>")
+		return 2
+	}
+	old, err := readReport(args[0])
+	if err == nil {
+		var cur Report
+		if cur, err = readReport(args[1]); err == nil {
+			return printDiff(os.Stdout, diffReports(old, cur))
+		}
+	}
+	fmt.Fprintln(os.Stderr, err)
+	return 2
+}
+
+// publishMain is `togo-conformance publish [-merge prev.json] report.json out.json`:
+// the public summary of a run.
+func publishMain(args []string) int {
+	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
+	prev := fs.String("merge", "", "an earlier public summary whose other agents are kept")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 2 {
+		fmt.Fprintln(os.Stderr, "usage: togo-conformance publish [-merge prev.json] <report.json> <out.json>")
+		return 2
+	}
+	if err := publish(fs.Arg(0), fs.Arg(1), *prev); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	return 0
 }

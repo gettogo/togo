@@ -45,6 +45,10 @@ type runner struct {
 	notes   []string       // context lines for the report
 	res     map[string]result
 	version string
+
+	took       time.Duration // how long the harness's run took
+	cutShort   bool          // the harness deadline passed or the run was stopped
+	ownAccount bool          // -openrouter was given but the agent could not be put on it
 }
 
 type session struct {

@@ -140,6 +140,7 @@ func (r *runner) modelSetup(ctx context.Context) modelPlan {
 			}
 			m.order = append([]pickerItem{it}, rest...)
 		} else {
+			r.ownAccount = true
 			r.note("openrouter: the model picker lists no %s; the agent runs on its own account", r.opts.router.model)
 		}
 	}
