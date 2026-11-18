@@ -1,0 +1,115 @@
+name: Nightly agent checks
+
+# Runs the conformance scenarios on real coding agents, each at its newest release, so a change in
+# an agent that breaks Togo shows up the night it ships. Only on a schedule or by hand: the job
+# holds an API key, and a pull request must never be able to reach it.
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Agents to run, comma-separated (empty: every agent installed)"
+        required: false
+        default: ""
+      scenario:
+        description: "Scenarios to run, comma-separated (empty: all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nightly-checks
+  cancel-in-progress: false
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: helper/go.mod
+          cache-dependency-path: helper/go.sum
+
+      - name: Install tmux and uv
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tmux
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install the agents
+        run: |
+          scripts/ci/install-agents.sh | tee agents.txt
+          test -s agents.txt
+
+      - name: Fetch the previous night's report
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --workflow nightly-checks.yml --branch "${GITHUB_REF_NAME}" --status completed \
+            --limit 5 --json databaseId,conclusion --jq '[.[] | select(.conclusion != "cancelled")][0].databaseId')
+          [ -n "$run_id" ] && gh run download "$run_id" --name conformance-report --dir previous
+
+      - name: Run the scenarios
+        id: run
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ONLY: ${{ inputs.only }}
+          SCENARIO: ${{ inputs.scenario }}
+        run: |
+          set -- --openrouter --own-account none --json report.json
+          [ -n "$ONLY" ] && set -- "$@" --only "$ONLY"
+          [ -n "$SCENARIO" ] && set -- "$@" --scenario "$SCENARIO"
+          status=0
+          scripts/check-conformance.sh "$@" > table.txt || status=$?
+          cat table.txt
+          {
+            echo '```'
+            sed -n '/^Togo harness conformance/,/^[0-9]* PASS/p' table.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Compare with the previous night
+        if: always() && hashFiles('report.json') != '' && hashFiles('previous/report.json') != ''
+        run: |
+          (cd helper && go build -o ../togo-conformance ./cmd/togo-conformance)
+          {
+            echo "### Since the previous run"
+            echo '```'
+            ./togo-conformance diff previous/report.json report.json || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Write the public summary
+        if: always() && hashFiles('report.json') != ''
+        run: |
+          [ -x ./togo-conformance ] || (cd helper && go build -o ../togo-conformance ./cmd/togo-conformance)
+          ./togo-conformance publish report.json latest.json
+          cat latest.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && hashFiles('report.json') != ''
+        with:
+          name: conformance-report
+          path: |
+            report.json
+            latest.json
+            agents.txt
+          retention-days: 30
+
+      - name: Fail when a scenario failed
+        if: steps.run.outputs.status != '0'
+        run: |
+          echo "The run ended with status ${{ steps.run.outputs.status }}: see the table above." >&2
+          exit 1

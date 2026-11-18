@@ -64,8 +64,10 @@ if [ -z "$jobs" ]; then
     if [ "$free" -ge 45 ]; then jobs=4; elif [ "$free" -ge 20 ]; then jobs=3; else jobs=2; fi
 fi
 
+# macOS: /tmp is a link to /private/tmp, and tmux and the agents name the real folder.
+case "$(uname)" in Darwin) tmp=/private/tmp ;; *) tmp=${TMPDIR:-/tmp} ;; esac
 run_id="tcr$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
-root="/private/tmp/togo-conformance-$run_id"
+root="$tmp/togo-conformance-$run_id"
 mkdir -p "$root/bin"
 bin="$root/bin"
 
@@ -75,7 +77,7 @@ cleanup() {
         "$bin/togo-conformance" -cleanup -root "$root" -run-id "$run_id" >/dev/null 2>&1 || true
     fi
     # Belt and braces: any tmux server of this run.
-    for s in /private/tmp/tmux-"$(id -u)"/tc-"$run_id"-*; do
+    for s in "$tmp"/tmux-"$(id -u)"/tc-"$run_id"-*; do
         [ -S "$s" ] && tmux -L "$(basename "$s")" kill-server 2>/dev/null || true
     done
     if [ "$keep" = 1 ]; then
