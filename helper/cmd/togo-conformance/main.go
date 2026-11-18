@@ -42,7 +42,7 @@ type options struct {
 }
 
 // order runs the slow, signed-in agents first so the run ends sooner.
-var order = []string{"claude", "omp", "opencode", "codex", "kilo", "pi", "gemini", "kimi", "copilot", "crush", "qwen", "droid", "auggie", "vibe", "goose", "aider", "cline", "cursor", "amp", "openhands", "kiro"}
+var order = []string{"claude", "omp", "opencode", "codex", "kilo", "pi", "kimi", "copilot", "crush", "droid", "auggie", "vibe", "goose", "aider", "cline", "cursor", "amp", "openhands", "kiro"}
 
 func main() { os.Exit(realMain()) }
 

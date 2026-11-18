@@ -117,12 +117,10 @@ var truthRoots = map[string][]string{
 	"codex":   {"~/.codex/sessions"},
 	"omp":     {"~/.omp/agent/sessions"},
 	"pi":      {"~/.pi/agent/sessions"},
-	"gemini":  {"~/.gemini/tmp"},
 	"copilot": {"~/.copilot/session-state"},
 	"kimi":    {"~/.kimi-code/sessions", "~/.kimi/sessions"},
 	"droid":   {"~/.factory/sessions"},
 	"vibe":    {"~/.vibe/logs"},
-	"qwen":    {"~/.qwen/projects"},
 	"auggie":  {"~/.augment/sessions"},
 	"cline":   {"~/.cline/data"},
 }
