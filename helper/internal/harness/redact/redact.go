@@ -304,7 +304,7 @@ func Paths(v any, paths []string) (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("redact path %q: %w", p, err)
 		}
-		it := code.Run(normalize(v))
+		it := code.Run(Normalize(v))
 		out, ok := it.Next()
 		if !ok {
 			continue
@@ -343,28 +343,60 @@ func Encode(v any) (json.RawMessage, error) {
 	return bytes.TrimRight(b.Bytes(), "\n"), nil
 }
 
-// normalize turns json.Number into the float64 or int gojq accepts.
-func normalize(v any) any {
+// normalize turns json.Number into the float64 or int gojq accepts. It
+// never writes into v: a decoded value can be shared between requests (the
+// engine keeps a source's last answer), and a map written by two of them at
+// once is a fatal error. A part with a number in it is copied; the rest is
+// returned as it is.
+func normalize(v any) (any, bool) {
 	switch x := v.(type) {
 	case map[string]any:
+		var out map[string]any
 		for k, val := range x {
-			x[k] = normalize(val)
+			n, changed := normalize(val)
+			if !changed {
+				continue
+			}
+			if out == nil {
+				out = make(map[string]any, len(x))
+				for k2, v2 := range x {
+					out[k2] = v2
+				}
+			}
+			out[k] = n
 		}
-		return x
+		if out == nil {
+			return x, false
+		}
+		return out, true
 	case []any:
-		for i := range x {
-			x[i] = normalize(x[i])
+		var out []any
+		for i, val := range x {
+			n, changed := normalize(val)
+			if !changed {
+				continue
+			}
+			if out == nil {
+				out = append([]any(nil), x...)
+			}
+			out[i] = n
 		}
-		return x
+		if out == nil {
+			return x, false
+		}
+		return out, true
 	case json.Number:
 		if i, err := x.Int64(); err == nil {
-			return int(i)
+			return int(i), true
 		}
 		f, _ := x.Float64()
-		return f
+		return f, true
 	}
-	return v
+	return v, false
 }
 
 // Normalize prepares a decoded value for gojq.
-func Normalize(v any) any { return normalize(v) }
+func Normalize(v any) any {
+	out, _ := normalize(v)
+	return out
+}
