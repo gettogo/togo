@@ -18,6 +18,9 @@ jobs:
       - name: Check action pins
         run: scripts/check-actions-pinned.sh
 
+      - name: Test the nightly checks' installer
+        run: make ci-scripts-test
+
   lint-test:
     strategy:
       matrix:
@@ -86,6 +89,20 @@ jobs:
 
       - name: Installer test
         run: make install-test
+
+  togokit:
+    # The Swift package the app is built on, with the recorded agent sessions replayed through
+    # the app's state. No simulator: the package builds and tests on macOS. The package needs
+    # macOS 26 and Swift 6.2, so the runner is named, not "latest".
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Swift package tests
+        run: swift test --package-path packages/TogoKit
 
   relay:
     runs-on: ubuntu-latest

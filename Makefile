@@ -1,6 +1,7 @@
 .PHONY: lint test build check-trailers relay-test lint-motion \
 	togokit-test ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-launch-perf ios-scroll-perf ios-snapshots ios-snapshots-record \
-	ios-release-check release-build release-test install-test repo-docs-check tokens tokens-check togopush-test watch-test
+	ios-release-check release-build release-test install-test repo-docs-check tokens tokens-check togopush-test watch-test \
+	replay-check conformance ci-scripts-test
 
 IOS_DIR := apps/ios
 IOS_PROJECT := $(IOS_DIR)/Togo.xcodeproj
@@ -26,6 +27,18 @@ build:
 # TogoKit's integration test runs the real helper, so the binary must exist.
 togokit-test: build
 	swift test --package-path packages/TogoKit
+
+# Recorded agent sessions replayed through the helper's push rules and the app's state.
+replay-check:
+	scripts/check-replay.sh
+
+# The standard scenarios on every coding agent installed on this machine. Real sessions, real
+# model calls: make conformance ARGS="--only opencode,pi --openrouter"
+conformance:
+	scripts/check-conformance.sh $(ARGS)
+
+ci-scripts-test:
+	scripts/ci/install-agents-test.sh
 
 # Reproducible helper release assets in dist/. VERSION is required, e.g.
 # VERSION=v1.0.0. ALLOW_DIRTY=1 makes a development build: it is marked dirty
