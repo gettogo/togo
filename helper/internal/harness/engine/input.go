@@ -46,13 +46,24 @@ func (a *adapter) readInput(screen string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	lines := strings.Split(ansiCSI.ReplaceAllString(screen, ""), "\n")
+	lines := strings.Split(screen, "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
-		m := re.FindStringSubmatch(strings.TrimRight(plainSpaces(lines[i]), " \t\r"))
+		line, dim := dimMap(lines[i])
+		line = strings.TrimRight(plainSpaces(line), " \t\r")
+		m := re.FindStringSubmatchIndex(line)
 		if m == nil {
 			continue
 		}
-		text := strings.TrimSpace(m[1])
+		if len(m) < 4 || m[2] < 0 {
+			return "", true
+		}
+		if allDim(line, dim, m[2], m[3]) {
+			// Drawn dim from its first character to its last: a suggestion
+			// or a placeholder the agent shows in an empty line, not text
+			// that was typed.
+			return "", true
+		}
+		text := strings.TrimSpace(line[m[2]:m[3]])
 		for _, e := range in.Empty {
 			if ok, _ := regexp.MatchString(e, text); ok {
 				return "", true
@@ -61,6 +72,83 @@ func (a *adapter) readInput(screen string) (string, bool) {
 		return text, true
 	}
 	return "", false
+}
+
+// dimMap removes a line's colour sequences and reports, for each rune left,
+// whether it was drawn dim (SGR 2, until SGR 0 or 22). A screen captured
+// without colour has no dim runes.
+func dimMap(raw string) (string, []bool) {
+	if !strings.Contains(raw, "\x1b") {
+		return raw, nil
+	}
+	var out strings.Builder
+	var dim []bool
+	on := false
+	for len(raw) > 0 {
+		if loc := ansiCSI.FindStringIndex(raw); loc != nil && loc[0] == 0 {
+			seq := raw[:loc[1]]
+			if strings.HasSuffix(seq, "m") {
+				on = sgrDim(seq[2:len(seq)-1], on)
+			}
+			raw = raw[loc[1]:]
+			continue
+		}
+		r, n := utf8.DecodeRuneInString(raw)
+		out.WriteRune(r)
+		dim = append(dim, on)
+		raw = raw[n:]
+	}
+	return out.String(), dim
+}
+
+// sgrDim follows the dim attribute through one SGR sequence's parameters.
+// The parameters of an extended colour (38, 48 or 58, then 5;n or 2;r;g;b)
+// are skipped: the 2 in "38;2;..." is not dim.
+func sgrDim(params string, on bool) bool {
+	if params == "" {
+		return false // ESC[m resets
+	}
+	p := strings.Split(params, ";")
+	for i := 0; i < len(p); i++ {
+		switch p[i] {
+		case "", "0":
+			on = false
+		case "2":
+			on = true
+		case "22":
+			on = false
+		case "38", "48", "58":
+			if i+1 < len(p) && p[i+1] == "5" {
+				i += 2
+			} else if i+1 < len(p) && p[i+1] == "2" {
+				i += 4
+			}
+		}
+	}
+	return on
+}
+
+// allDim reports whether the bytes [from, to) of line hold visible text and
+// every visible rune of it was drawn dim. Spaces do not count either way.
+func allDim(line string, dim []bool, from, to int) bool {
+	if dim == nil {
+		return false
+	}
+	seen := false
+	idx := 0
+	for off, r := range line {
+		if off >= to {
+			break
+		}
+		if off >= from && r != ' ' && r != '\t' {
+			if idx >= len(dim) || !dim[idx] {
+				return false
+			}
+			seen = true
+		}
+		idx++
+	}
+	return seen
 }
 
 // plainSpaces turns every Unicode space (NBSP, which Claude draws its
@@ -113,6 +201,13 @@ func (e *Engine) waitInputLine(ctx context.Context, s *sess) {
 
 // inputNow reads the session's input line.
 func (e *Engine) inputNow(ctx context.Context, s *sess) (string, bool) {
+	// With its colours when they can be had: a dim suggestion in an empty
+	// line is told from typed text only by how it is drawn.
+	if e.cfg.StyledScreen != nil {
+		if screen, err := e.cfg.StyledScreen(ctx, s.id); err == nil {
+			return s.ad.readInput(screen)
+		}
+	}
 	screen, err := e.cfg.Screen(ctx, s.id)
 	if err != nil {
 		return "", false
