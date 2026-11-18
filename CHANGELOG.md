@@ -105,7 +105,7 @@ The helper and the app are versioned separately. A newer helper always works wit
 - Removing and re-adding a paired relay could interrupt withdrawal of its offline notification. The old connection now drains before its replacement opens.
 - Disconnecting while a request waited for input could block RPC shutdown. The connection now closes before waiting requests are canceled.
 
-### 1.0.3
+### 1.0.3 (2026-11-12)
 
 **Fixed**
 
@@ -120,7 +120,7 @@ The helper and the app are versioned separately. A newer helper always works wit
 - A todo list the helper can't read shows as a tool step in the chat instead of disappearing.
 - In Goose and Crush, a conversation you start inside the agent shows in the chat once the session restarts. This keeps another Goose or Crush in the same folder out of the chat.
 
-### 1.0.2
+### 1.0.2 (2026-11-12)
 
 **Changed**
 
@@ -200,7 +200,7 @@ First release.
 
 - A notice appears in the session list when a newer compatible app version is available in the App Store.
 
-### 1.0.1
+### 1.0.1 (2026-11-12)
 
 **Added**
 
@@ -215,6 +215,6 @@ First release.
 
 - A helper installed after the machine was added wasn't detected.
 
-### 1.0.0
+### 1.0.0 (2026-11-11)
 
 First release.
