@@ -90,27 +90,20 @@ jobs:
       - name: Installer test
         run: make install-test
 
-  togokit:
-    # The Swift package the app is built on, with the recorded agent sessions replayed through
-    # the app's state. No simulator: the package builds and tests on macOS. The package needs
-    # macOS 26 and Swift 6.2, so the runner is named, not "latest".
+  replay:
+    # Every recorded agent session replayed through the app's state (the Swift package the app is
+    # built on). No simulator: the package builds and tests on macOS. It needs macOS 26 and
+    # Swift 6.2, so the runner is named, not "latest". The rest of the package's suites drive a
+    # real tmux server and an SSH server and are not run here.
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version-file: helper/go.mod
-
-      # Two suites drive a real tmux server and the helper built from this tree.
-      - name: Install tmux
-        run: brew install tmux
-
-      - name: Swift package tests
-        run: make togokit-test
+      - name: Replay the recorded sessions
+        run: swift test --package-path packages/TogoKit --filter 'ReplayTests|ReplayScenarioTests|ReplayEdgeTests'
 
   relay:
     runs-on: ubuntu-latest

@@ -59,7 +59,7 @@ Write commit subjects in the imperative mood and under 72 characters. Add a body
 ## Pull requests
 
 - Keep each pull request to one change. Say what it changes and how you tested it; the template asks for both.
-- CI must pass: helper lint and tests, the installer test, relay tests and the Swift package tests (`make togokit-test`), which include the recorded agent sessions replayed through the app's state. The app's unit, UI and snapshot tests need a simulator and do not run in CI: run `make ios-test` for an app change and say so in the pull request.
+- CI must pass: helper lint and tests, the installer test, relay tests and the recorded agent sessions replayed through the app's state (`make replay-check`). The rest of the Swift package's tests and the app's unit, UI and snapshot tests do not run in CI: run `make togokit-test` and `make ios-test` for an app change and say so in the pull request.
 - UI changes include screenshots in light and dark mode, and updated snapshot references when the change is intended.
 - A maintainer reviews within a week or so. Expect questions about behaviour, tests and naming. Review is about the code, never the person.
 
