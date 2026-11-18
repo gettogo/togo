@@ -101,8 +101,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: helper/go.mod
+
+      # Two suites drive a real tmux server and the helper built from this tree.
+      - name: Install tmux
+        run: brew install tmux
+
       - name: Swift package tests
-        run: swift test --package-path packages/TogoKit
+        run: make togokit-test
 
   relay:
     runs-on: ubuntu-latest
