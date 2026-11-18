@@ -11,7 +11,7 @@ struct TerminalKeysToolbarItem: ToolbarContent {
         if #available(iOS 27.1, *) {
             ToolbarSpacer(.fixed, placement: .primaryAction)
             ToolbarItem(placement: .primaryAction) {
-                DockControllerView(keys: keys)
+                face
             }
             .axisBehavior(.verticalPreferred)
             // A gesture surface cannot retain flicks/repeat inside an overflow menu. Keep
@@ -19,9 +19,14 @@ struct TerminalKeysToolbarItem: ToolbarContent {
             .visibilityPriority(DockPriority.tier(.keys).priority)
         } else {
             ToolbarItem(placement: .primaryAction) {
-                DockControllerView(keys: keys)
+                face
             }
         }
+    }
+
+    private var face: some View {
+        DockControllerView(keys: keys)
+            .frame(width: ControllerFace.side, height: ControllerFace.side)
     }
 }
 
@@ -30,9 +35,14 @@ struct DockControllerView: UIViewRepresentable {
     let keys: TerminalKeysHost
 
     func makeUIView(context: Context) -> ControllerFace {
-        let face = ControllerFace()
-        face.accessibilityIdentifier = "workspace.terminalKeys"
+        let face = Self.makeFace()
         keys.attachDockFace(face)
+        return face
+    }
+
+    static func makeFace() -> ControllerFace {
+        let face = ControllerFace(frame: CGRect(x: 0, y: 0, width: ControllerFace.side, height: ControllerFace.side))
+        face.accessibilityIdentifier = "workspace.terminalKeys"
         return face
     }
 
