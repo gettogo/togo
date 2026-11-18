@@ -27,14 +27,7 @@ const replayDir = "../../../protocol/v1/replays"
 // replayKnown lists product bugs the replays expose: fixture → rule →
 // reason. They are logged, not failed; a listed rule that no longer breaks
 // fails, so the entry is removed once the product is fixed.
-var replayKnown = map[string]map[string]string{
-	"omp.turn": {
-		"false-needs-you": "omp rings the terminal bell mid-turn; with no prompt on screen the watcher still sends a needs_you notify titled \"Bell\" (watch.go), a false \"needs you\" while the agent works.",
-	},
-	"claude.subagent": {
-		"done-then-working": "Claude's Stop hook fires when the main agent hands off to a background subagent, so the phone is told \"Claude finished\" while the turn goes on.",
-	},
-}
+var replayKnown = map[string]map[string]string{}
 
 type replayRecord struct {
 	T      int64           `json:"t"`
