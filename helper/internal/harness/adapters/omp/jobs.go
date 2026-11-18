@@ -104,6 +104,25 @@ func (s *session) exited(at time.Time) ([]harness.Item, []harness.Op) {
 	return items, ops
 }
 
+// agentExited ends a subagent whose own file records its exit (seen on
+// 18.21: every subagent's file ends with session_exit). It is the one end
+// that needs nothing from the main conversation, so it also closes a row
+// made from a file read with no task call waiting for it, which no report
+// of omp's names. An agent already ended keeps how it ended.
+func (s *session) agentExited(aid, kind string, at time.Time) ([]harness.Item, []harness.Op) {
+	a := s.agents[aid]
+	if a == nil || a.Agent.Ended != nil {
+		return nil, nil
+	}
+	ab := *a.Agent
+	ab.State, ab.Ended = harness.StateOK, ptr(at)
+	if kind != "" && kind != "normal" {
+		ab.State = harness.StateInterrupted
+	}
+	a.Agent = &ab
+	return []harness.Item{*a}, []harness.Op{s.agentRow(a)}
+}
+
 // jobState maps the status omp gives a settled job.
 func jobState(status string) string {
 	switch status {
