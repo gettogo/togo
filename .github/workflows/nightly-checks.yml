@@ -1,4 +1,4 @@
-name: Nightly agent checks
+name: Nightly agent conformance
 
 # Runs the conformance scenarios on real coding agents, each at its newest release, so a change in
 # an agent that breaks Togo shows up the night it ships. Only on a schedule or by hand: the job
@@ -27,6 +27,7 @@ concurrency:
 
 jobs:
   conformance:
+    name: Agent scenarios
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

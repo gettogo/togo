@@ -1,4 +1,4 @@
-name: CI
+name: Build and test
 
 on:
   push:
@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   pins:
+    name: Pinned actions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -22,6 +23,7 @@ jobs:
         run: make ci-scripts-test
 
   lint-test:
+    name: Helper lint and tests (${{ matrix.os == 'ubuntu-latest' && 'Linux' || 'macOS' }})
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -49,6 +51,7 @@ jobs:
         run: make lint test
 
   linux-386:
+    name: Helper tests (Linux 32-bit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -66,6 +69,7 @@ jobs:
         run: go test ./internal/rpc/...
 
   install-test:
+    name: Installer (${{ matrix.os == 'ubuntu-latest' && 'Linux' || 'macOS' }})
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -91,6 +95,7 @@ jobs:
         run: make install-test
 
   replay:
+    name: Recorded sessions replay
     # Every recorded agent session replayed through the app's state (the Swift package the app is
     # built on). No simulator: the package builds and tests on macOS. It needs macOS 26 and
     # Swift 6.2, so the runner is named, not "latest". The rest of the package's suites drive a
@@ -106,6 +111,7 @@ jobs:
         run: swift test --package-path packages/TogoKit --filter 'ReplayTests|ReplayScenarioTests|ReplayEdgeTests'
 
   relay:
+    name: Relay tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
