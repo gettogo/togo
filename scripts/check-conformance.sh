@@ -14,7 +14,7 @@
 # Usage: scripts/check-conformance.sh [--only claude,omp] [--scenario model_switch,mode]
 #                                     [--jobs N] [--json results.json] [--keep]
 #                                     [--openrouter [provider/model]] [--model aider=openrouter/z-ai/glm-5.3-flash,...]
-#                                     [--args 'cline=--auto-approve false;...']
+#                                     [--own-account codex,cursor|none] [--args 'cline=--auto-approve false;...']
 #
 # --openrouter runs the agents on OpenRouter (default model deepseek/deepseek-v3.2; or e.g.
 # z-ai/glm-5.3-flash) with the key from $TOGO_OPENROUTER_ENV (default
@@ -24,7 +24,7 @@ set -eu
 cd "$(dirname "$0")/.."
 repo=$(pwd)
 
-only="" scenario="" jobs="" json="" keep=0 openrouter="" models="" args=""
+only="" scenario="" jobs="" json="" keep=0 openrouter="" models="" args="" own="" avoid=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --openrouter)
@@ -36,6 +36,8 @@ while [ $# -gt 0 ]; do
         --scenario) scenario="$2"; shift 2 ;;
         --jobs) jobs="$2"; shift 2 ;;
         --json) json="$2"; shift 2 ;;
+        --own-account) own="$2"; shift 2 ;;
+        --avoid-models) avoid="$2"; shift 2 ;;
         --keep) keep=1; shift ;;
         -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -63,8 +65,10 @@ if [ -z "$jobs" ]; then
     if [ "$free" -ge 45 ]; then jobs=4; elif [ "$free" -ge 20 ]; then jobs=3; else jobs=2; fi
 fi
 
+# macOS: /tmp is a link to /private/tmp, and tmux and the agents name the real folder.
+case "$(uname)" in Darwin) tmp=/private/tmp ;; *) tmp=${TMPDIR:-/tmp} ;; esac
 run_id="tcr$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
-root="/private/tmp/togo-conformance-$run_id"
+root="$tmp/togo-conformance-$run_id"
 mkdir -p "$root/bin"
 bin="$root/bin"
 
@@ -74,7 +78,7 @@ cleanup() {
         "$bin/togo-conformance" -cleanup -root "$root" -run-id "$run_id" >/dev/null 2>&1 || true
     fi
     # Belt and braces: any tmux server of this run.
-    for s in /private/tmp/tmux-"$(id -u)"/tc-"$run_id"-*; do
+    for s in "$tmp"/tmux-"$(id -u)"/tc-"$run_id"-*; do
         [ -S "$s" ] && tmux -L "$(basename "$s")" kill-server 2>/dev/null || true
     done
     if [ "$keep" = 1 ]; then
@@ -87,6 +91,9 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+TOGO_CONFORMANCE_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || true)
+[ -n "$(git status --porcelain 2>/dev/null)" ] && TOGO_CONFORMANCE_COMMIT="$TOGO_CONFORMANCE_COMMIT+changes"
+export TOGO_CONFORMANCE_COMMIT
 echo "building helper from $repo/helper" >&2
 (cd helper && go build -o "$bin/togo" ./cmd/togo && go build -o "$bin/togo-conformance" ./cmd/togo-conformance)
 
@@ -97,4 +104,6 @@ set -- -bin "$bin/togo" -adapters "$repo/helper/internal/harness/adapters" -root
 [ -n "$openrouter" ] && set -- "$@" -openrouter "$openrouter"
 [ -n "$models" ] && set -- "$@" -model "$models"
 [ -n "$args" ] && set -- "$@" -args "$args"
+[ -n "$own" ] && set -- "$@" -own-account "$own"
+[ -n "$avoid" ] && set -- "$@" -avoid-models "$avoid"
 "$bin/togo-conformance" "$@"

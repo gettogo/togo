@@ -26,7 +26,6 @@ var watched = map[string][]struct {
 	"codex":    {{"~/.codex/config.toml", false}},
 	"opencode": {{"~/.config/opencode/opencode.json", false}, {"~/.local/state/opencode/model.json", false}},
 	"kilo":     {{"~/.config/kilo/kilo.jsonc", false}, {"~/.local/state/kilo/model.json", false}},
-	"gemini":   {{"~/.gemini/settings.json", false}, {"~/.gemini/trustedFolders.json", false}, {"~/.gemini/projects.json", true}},
 	"omp":      {{"~/.omp/agent/config.yml", false}},
 	"pi":       {{"~/.pi/agent/settings.json", false}},
 	"kimi":     {{"~/.kimi-code/config.toml", false}, {"~/.kimi-code/tui.toml", false}, {"~/.kimi-code/workspaces.json", true}, {"~/.kimi-code/projects.json", true}},
@@ -36,7 +35,6 @@ var watched = map[string][]struct {
 	"vibe":     {{"~/.vibe/config.toml", false}, {"~/.vibe/trusted_folders.toml", false}},
 	"crush":    {{"~/.config/crush/crush.json", false}, {"~/.local/share/crush/crush.json", false}},
 	"goose":    {{"~/.config/goose/config.yaml", false}},
-	"qwen":     {{"~/.qwen/settings.json", false}},
 	"aider":    {{"~/.aider.conf.yml", false}},
 	// Cline saves a -P/-m launch's provider and model as its default.
 	"cline": {{"~/.cline/data/settings/providers.json", false}, {"~/.cline/data/settings/global-settings.json", false}},
@@ -47,8 +45,8 @@ var watched = map[string][]struct {
 // artifactRoots hold per-folder records a harness makes for a new folder;
 // entries whose name carries the run id are the run's own and are removed.
 var artifactRoots = []string{
-	"~/.claude/projects", "~/.omp/agent/sessions", "~/.pi/agent/sessions", "~/.qwen/projects",
-	"~/.kimi-code/workspace-trust", "~/.gemini/history",
+	"~/.claude/projects", "~/.omp/agent/sessions", "~/.pi/agent/sessions",
+	"~/.kimi-code/workspace-trust",
 }
 
 type snapEntry struct {
@@ -241,7 +239,7 @@ func changedKeys(snapCopy string, cur []byte, marker string) []string {
 // runFileRoots hold per-session files harnesses write, named by their own
 // ids; the run's are the ones written during it that name its folders.
 var runFileRoots = []string{
-	"~/.copilot/sidebar-sessions-state", "~/.copilot/session-state", "~/.gemini/tmp",
+	"~/.copilot/sidebar-sessions-state", "~/.copilot/session-state",
 	"~/.codex/sessions", "~/.kimi-code/sessions", "~/.factory/sessions", "~/.vibe/logs",
 	"~/.augment/sessions", "~/.cline/data/sessions",
 }

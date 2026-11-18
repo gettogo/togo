@@ -45,6 +45,11 @@ type runner struct {
 	notes   []string       // context lines for the report
 	res     map[string]result
 	version string
+
+	ctx        context.Context // the harness's run, for opening again after a reset
+	took       time.Duration   // how long the harness's run took
+	cutShort   bool            // the harness deadline passed or the run was stopped
+	ownAccount bool            // -openrouter was given but the agent could not be put on it
 }
 
 type session struct {
@@ -76,6 +81,12 @@ func (r *runner) onNotify(method string, params json.RawMessage) {
 	defer r.mu.Unlock()
 	if n.SessionID != r.sid {
 		return
+	}
+	if n.Kind == harness.NoteReset && r.ctx != nil {
+		// The chat's content was replaced (the agent's session file was found
+		// or changed): what it holds now comes with an open, never as live
+		// items. A client that does not open again sees an empty chat.
+		go func(ctx context.Context) { _ = r.open(ctx) }(r.ctx)
 	}
 	for _, it := range n.Items {
 		r.items[it.ID] = it

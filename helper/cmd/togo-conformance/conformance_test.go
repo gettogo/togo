@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/gettogo/togo/helper/internal/agents"
 )
 
 func TestCheapestOrder(t *testing.T) {
@@ -143,6 +145,32 @@ func TestParseArgs(t *testing.T) {
 	for _, bad := range []string{"cline", "=x", "cline="} {
 		if _, err := parseArgs(bad); err == nil {
 			t.Errorf("parseArgs(%q) took it", bad)
+		}
+	}
+}
+
+// The runner's own lists must name only agents the helper knows: a stale
+// name is never run and hides that an agent was dropped or renamed.
+func TestRunnerListsNameOnlyRegisteredAgents(t *testing.T) {
+	check := func(list, id string) {
+		if _, ok := agents.Lookup(id); !ok {
+			t.Errorf("%s names %q, which is not in agents.Registry", list, id)
+		}
+	}
+	seen := map[string]bool{}
+	for _, id := range order {
+		check("order", id)
+		seen[id] = true
+	}
+	for id := range watched {
+		check("watched", id)
+	}
+	for id := range truthRoots {
+		check("truthRoots", id)
+	}
+	for _, a := range agents.Registry {
+		if a.ID != "shell" && !seen[a.ID] {
+			t.Errorf("order omits %q, so it runs last in no fixed place", a.ID)
 		}
 	}
 }

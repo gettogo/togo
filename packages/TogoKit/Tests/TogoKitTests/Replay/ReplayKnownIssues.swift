@@ -8,14 +8,6 @@ import Testing
 enum ReplayKnownIssues {
     /// fixture → check → key → reason.
     static let all: [String: [String: [String: String]]] = [
-        "claude.approve": ["invariants": [
-            "[items-before-first-send": staleTranscript,
-        ]],
-        "claude.subagent": [
-            "invariants": [
-                "[items-before-first-send": staleTranscript,
-            ],
-        ],
         "claude.model": [
             "invariants": [
                 "[working-stuck": "After set_model types `/model sonnet` (a local command, no turn), the mission stays working=true for good: the pill says Working on an idle session and held prompts never go.",
@@ -25,14 +17,9 @@ enum ReplayKnownIssues {
             ],
         ],
         "claude.demo": ["invariants": ["[working-after-turn-end": turnEndLag]],
-        "omp.turn": ["invariants": ["[working-after-turn-end": turnEndLag]],
         // Straight, Cline's turn ends 4.9 s before the hub's idle, inside the 5 s grace; with its last
         // tool frame swapped behind the turn's end the same lag reads 7 s.
         "cline.task": ["swap": ["[swap-working-after-turn-end": turnEndLag]],
-        "opencode.interrupt": ["invariants": ["[working-after-turn-end": turnEndLag]],
-        "opencode.turn": ["invariants": [
-            "[no-reply": "OpenCode ran a turn (working true, then false, a \"done\" notify with an empty body) but neither a reply nor an error notice reached the chat: the user sees the prompt and nothing else.",
-        ]],
         // Recorded on a local model: not a product bug. After the file reads the model thought for
         // 134 s before streaming anything; OpenCode's own execution events kept the turn running the
         // whole time (the same turn went on to write the files), so working=true is right and the 45 s
@@ -45,15 +32,9 @@ enum ReplayKnownIssues {
         "vibe.turn": ["invariants": [
             "[no-reply": "Mistral Vibe ran a turn (working, then a \"done\" notify with an empty body) but neither a reply nor an error notice reached the chat.",
         ]],
-        "claude.interrupt": ["scenario": [
-            "working again": "harness.interrupt answered applied and the turn showed Interrupted, but Claude went on: a new Bash call ran and the reply streamed; the mission went working=false then true again, and session.status never left working.",
-        ]],
     ]
 
     static let turnEndLag = "The turn item ends (ok or interrupted) but the mission summary keeps working=true for 6 to 10 s more (it waits for the hub's idle), so the pill, Stop and the queue act as if the agent still works."
-
-
-    static let staleTranscript = "A new Claude session in a folder used before shows the previous session's conversation (its transcript is tailed before the new session's hook names its own)."
 
     static func expected(fixture: String, check: String) -> [String: String] {
         all[fixture]?[check] ?? [:]

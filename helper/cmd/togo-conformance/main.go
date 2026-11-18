@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -39,14 +38,25 @@ type options struct {
 	router    *openRouter         // -openrouter: run on OpenRouter with the key from the environment
 	models    map[string]string   // -model: per-harness model id used instead of the picker's cheapest
 	args      map[string][]string // -args: per-harness launch arguments (Cline's --auto-approve false)
+	ownOnly   bool                // -own-account was given: only the agents in ownOK may run on their own account
+	ownOK     map[string]bool
+	avoid     []string // -avoid-models: lower-case fragments of model ids the run must never pick
 }
 
 // order runs the slow, signed-in agents first so the run ends sooner.
-var order = []string{"claude", "omp", "opencode", "codex", "kilo", "pi", "gemini", "kimi", "copilot", "crush", "qwen", "droid", "auggie", "vibe", "goose", "aider", "cline", "cursor", "amp", "openhands", "kiro"}
+var order = []string{"claude", "omp", "opencode", "codex", "kilo", "pi", "kimi", "copilot", "crush", "droid", "auggie", "vibe", "goose", "aider", "cline", "cursor", "amp", "openhands", "kiro"}
 
 func main() { os.Exit(realMain()) }
 
 func realMain() int {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "diff":
+			return diffMain(os.Args[2:])
+		case "publish":
+			return publishMain(os.Args[2:])
+		}
+	}
 	var o options
 	var only, scen, router, models, args string
 	var cleanup bool
@@ -63,7 +73,24 @@ func realMain() int {
 	flag.StringVar(&router, "openrouter", "", "run the agents on this OpenRouter model (provider/model; \"default\" = "+defaultOpenRouterModel+") with OPENROUTER_API_KEY from the environment")
 	flag.StringVar(&models, "model", "", "per-harness model ids used instead of the picker's cheapest, e.g. aider=openrouter/z-ai/glm-5.3-flash,omp=openrouter/deepseek/deepseek-v3.2")
 	flag.StringVar(&args, "args", "", "per-harness launch arguments, harness=args separated by ';', e.g. 'cline=--auto-approve false'")
+	var own string
+	flag.StringVar(&own, "own-account", "", "with -openrouter: comma-separated harness ids that may run on their own account when the test model cannot be set (\"none\" for no agent); the others then run no turns. Unset, every agent may")
+	var avoid string
+	flag.StringVar(&avoid, "avoid-models", "", "comma-separated fragments of model ids, titles or groups the run must never pick from a model picker (models served from this machine)")
 	flag.Parse()
+	for _, a := range strings.Split(avoid, ",") {
+		if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+			o.avoid = append(o.avoid, a)
+		}
+	}
+	if own != "" {
+		o.ownOnly, o.ownOK = true, map[string]bool{}
+		for _, id := range strings.Split(own, ",") {
+			if id = strings.TrimSpace(id); id != "" && id != "none" {
+				o.ownOK[id] = true
+			}
+		}
+	}
 	var err error
 	if o.args, err = parseArgs(args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -151,7 +178,9 @@ func realMain() int {
 	notes := finish(o.root, o.runID, snap)
 	code := report(os.Stdout, runners, notes, time.Since(start), &o)
 	if o.jsonOut != "" {
-		writeJSON(o.jsonOut, runners, notes)
+		if err := buildReport(runners, notes, start, time.Now(), &o).write(o.jsonOut); err != nil {
+			fmt.Fprintln(os.Stderr, "json:", err)
+		}
 	}
 	return code
 }
@@ -256,7 +285,8 @@ func runOne(ctx context.Context, o *options, r *runner) {
 		if p := recover(); p != nil {
 			r.set("create", fail, "suite panic: %v", p)
 		}
-		fmt.Fprintf(os.Stderr, "  %-9s done in %s\n", r.id, time.Since(t0).Round(time.Second))
+		r.took = time.Since(t0)
+		fmt.Fprintf(os.Stderr, "  %-9s done in %s\n", r.id, r.took.Round(time.Second))
 	}()
 	sb, err := newSandbox(o.root, o.runID, r.id)
 	if err != nil {
@@ -290,7 +320,11 @@ func runOne(ctx context.Context, o *options, r *runner) {
 	owned.observe(r.id, false)
 	c.before = func() { owned.observe(r.id, true) }
 	r.c = c
+	r.mu.Lock()
+	r.ctx = hctx
+	r.mu.Unlock()
 	r.run(hctx)
+	r.cutShort = hctx.Err() != nil
 }
 
 var memRE = regexp.MustCompile(`free percentage: (\d+)%`)
@@ -328,21 +362,6 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-func writeJSON(path string, runners []*runner, notes []string) {
-	type row struct {
-		Harness string            `json:"harness"`
-		Version string            `json:"version"`
-		Results map[string]result `json:"results"`
-		Notes   []string          `json:"notes"`
-	}
-	var rows []row
-	for _, r := range runners {
-		rows = append(rows, row{r.id, r.version, r.res, r.notes})
-	}
-	b, _ := json.MarshalIndent(map[string]any{"harnesses": rows, "cleanup": notes}, "", "  ")
-	_ = os.WriteFile(path, b, 0o600)
-}
-
 // parseArgs reads -args: harness=arguments pairs separated by ';', the
 // arguments split on spaces (argv entries, never shell text).
 func parseArgs(s string) (map[string][]string, error) {
@@ -358,4 +377,38 @@ func parseArgs(s string) (map[string][]string, error) {
 		out[strings.TrimSpace(h)] = strings.Fields(a)
 	}
 	return out, nil
+}
+
+// diffMain is `togo-conformance diff old.json new.json`: what changed
+// between two runs. Exit 1 when a passing scenario now fails.
+func diffMain(args []string) int {
+	if len(args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: togo-conformance diff <old.json> <new.json>")
+		return 2
+	}
+	old, err := readReport(args[0])
+	if err == nil {
+		var cur Report
+		if cur, err = readReport(args[1]); err == nil {
+			return printDiff(os.Stdout, diffReports(old, cur))
+		}
+	}
+	fmt.Fprintln(os.Stderr, err)
+	return 2
+}
+
+// publishMain is `togo-conformance publish [-merge prev.json] report.json out.json`:
+// the public summary of a run.
+func publishMain(args []string) int {
+	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
+	prev := fs.String("merge", "", "an earlier public summary whose other agents are kept")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 2 {
+		fmt.Fprintln(os.Stderr, "usage: togo-conformance publish [-merge prev.json] <report.json> <out.json>")
+		return 2
+	}
+	if err := publish(fs.Arg(0), fs.Arg(1), *prev); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	return 0
 }

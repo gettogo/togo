@@ -1,4 +1,4 @@
-name: Release verify
+name: Verify release (reproducible build)
 
 # Rebuilds a published release from its tag and compares the result with what
 # was released. It publishes nothing.
@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   verify:
+    name: Rebuild and compare
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag || github.ref_name }}

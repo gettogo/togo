@@ -16,15 +16,13 @@ import (
 var configFiles = map[string][]string{
 	"claude":   {".claude/settings.json"},
 	"codex":    {".codex/config.toml"},
-	"gemini":   {".gemini/settings.json"},
 	"opencode": {".config/opencode/opencode.json", ".config/opencode/opencode.jsonc"},
 	"omp":      {".omp/agent/config.yml"},
-	"qwen":     {".qwen/settings.json"},
 	"droid":    {".factory/settings.json"},
 	"copilot":  {".copilot/config.json"},
 	"crush":    {".config/crush/crush.json"},
 	"goose":    {".config/goose/config.yaml"},
-	"kimi":     {".kimi/config.toml"},
+	"kimi":     {".kimi-code/config.toml", ".kimi/config.toml"},
 	"vibe":     {".vibe/config.toml"},
 	// Kilo remembers the model last used per agent in its state, and
 	// prefers it to the config's model.

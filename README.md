@@ -22,7 +22,7 @@
 
 <p align="center">
   <a href="https://github.com/gettogo/togo/releases/latest"><img src="https://img.shields.io/github/v/release/gettogo/togo" alt="Latest helper release"></a>
-  <a href="https://github.com/gettogo/togo/actions/workflows/ci.yml"><img src="https://github.com/gettogo/togo/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/gettogo/togo/actions/workflows/ci.yml"><img src="https://github.com/gettogo/togo/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build and test"></a>
 </p>
 
 <p align="center">

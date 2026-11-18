@@ -1,4 +1,4 @@
-name: DCO
+name: Commit sign-off (DCO)
 
 on:
   pull_request:
@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   signoff:
+    name: Commit sign-off (DCO)
     runs-on: ubuntu-latest
     env:
       OWNER_EMAIL: ${{ vars.OWNER_EMAIL }}
