@@ -143,11 +143,29 @@ func (l *Log) Before(session string, before int64, limit int) ([]harness.Item, b
 	for end < len(r.items) && r.items[end].Seq < before {
 		end++
 	}
-	start := 0
-	if limit > 0 && end > limit {
-		start = end - limit
-	}
+	start := pageStart(r.items[:end], limit)
 	return append([]harness.Item{}, r.items[start:end]...), start > 0
+}
+
+// pageStart is where a page of the newest items begins: far enough back to
+// hold limit items the main chat shows. A subagent's own steps (items with
+// a parent) are not shown there, so they come with the page without being
+// counted; counted, a busy subagent filled whole pages with nothing to
+// show. Zero limit means everything. The caller bounds the page's size.
+func pageStart(items []harness.Item, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	seen := 0
+	for i := len(items) - 1; i >= 0; i-- {
+		if items[i].Parent != "" {
+			continue
+		}
+		if seen++; seen == limit {
+			return i
+		}
+	}
+	return 0
 }
 
 // Forget drops the session's log; the next use starts a new epoch.

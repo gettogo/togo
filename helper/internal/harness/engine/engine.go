@@ -316,8 +316,8 @@ func (e *Engine) Open(ctx context.Context, sub harness.Subscriber, id string, af
 	if after > cursor {
 		covered = 0
 	}
-	if limit > 0 && len(items) > limit {
-		items, more = items[len(items)-limit:], true
+	if start := pageStart(items, limit); start > 0 {
+		items, more = items[start:], true
 		covered = items[0].Seq - 1
 	}
 	if fit, cut := newestFitting(items, pageBytes); cut {
