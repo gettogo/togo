@@ -14,7 +14,7 @@
 # Usage: scripts/check-conformance.sh [--only claude,omp] [--scenario model_switch,mode]
 #                                     [--jobs N] [--json results.json] [--keep]
 #                                     [--openrouter [provider/model]] [--model aider=openrouter/z-ai/glm-5.3-flash,...]
-#                                     [--args 'cline=--auto-approve false;...']
+#                                     [--own-account codex,cursor|none] [--args 'cline=--auto-approve false;...']
 #
 # --openrouter runs the agents on OpenRouter (default model deepseek/deepseek-v3.2; or e.g.
 # z-ai/glm-5.3-flash) with the key from $TOGO_OPENROUTER_ENV (default
@@ -24,7 +24,7 @@ set -eu
 cd "$(dirname "$0")/.."
 repo=$(pwd)
 
-only="" scenario="" jobs="" json="" keep=0 openrouter="" models="" args=""
+only="" scenario="" jobs="" json="" keep=0 openrouter="" models="" args="" own=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --openrouter)
@@ -36,6 +36,7 @@ while [ $# -gt 0 ]; do
         --scenario) scenario="$2"; shift 2 ;;
         --jobs) jobs="$2"; shift 2 ;;
         --json) json="$2"; shift 2 ;;
+        --own-account) own="$2"; shift 2 ;;
         --keep) keep=1; shift ;;
         -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -97,4 +98,5 @@ set -- -bin "$bin/togo" -adapters "$repo/helper/internal/harness/adapters" -root
 [ -n "$openrouter" ] && set -- "$@" -openrouter "$openrouter"
 [ -n "$models" ] && set -- "$@" -model "$models"
 [ -n "$args" ] && set -- "$@" -args "$args"
+[ -n "$own" ] && set -- "$@" -own-account "$own"
 "$bin/togo-conformance" "$@"

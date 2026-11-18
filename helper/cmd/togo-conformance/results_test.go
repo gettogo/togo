@@ -200,3 +200,30 @@ func TestPublishWritesWholeFile(t *testing.T) {
 		t.Fatal("the temporary file was left behind")
 	}
 }
+
+func TestNoRouteBlocksAnAgentNotAllowedItsOwnAccount(t *testing.T) {
+	router := &openRouter{model: "vendor/small"}
+	strict := &options{router: router, ownOnly: true, ownOK: map[string]bool{"codex": true}}
+	for id, wantBlocked := range map[string]bool{"pi": true, "codex": false, "goose": false} {
+		r := &runner{id: id, opts: strict}
+		r.noRoute("the model picker lists no vendor/small")
+		if (r.blocked != "") != wantBlocked {
+			t.Errorf("%s: blocked = %q", id, r.blocked)
+		}
+		if id == "goose" && r.ownAccount {
+			t.Error("goose is wired through its environment: it is not on its own account")
+		}
+	}
+	// Without -own-account every agent may, as before.
+	r := &runner{id: "pi", opts: &options{router: router}}
+	r.noRoute("x")
+	if r.blocked != "" || !r.ownAccount {
+		t.Fatalf("blocked %q, own %v", r.blocked, r.ownAccount)
+	}
+	// Without -openrouter there is nothing to route.
+	r = &runner{id: "pi", opts: &options{ownOnly: true}}
+	r.noRoute("x")
+	if r.blocked != "" || r.ownAccount {
+		t.Fatalf("blocked %q, own %v", r.blocked, r.ownAccount)
+	}
+}

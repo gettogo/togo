@@ -38,6 +38,8 @@ type options struct {
 	router    *openRouter         // -openrouter: run on OpenRouter with the key from the environment
 	models    map[string]string   // -model: per-harness model id used instead of the picker's cheapest
 	args      map[string][]string // -args: per-harness launch arguments (Cline's --auto-approve false)
+	ownOnly   bool                // -own-account was given: only the agents in ownOK may run on their own account
+	ownOK     map[string]bool
 }
 
 // order runs the slow, signed-in agents first so the run ends sooner.
@@ -70,7 +72,17 @@ func realMain() int {
 	flag.StringVar(&router, "openrouter", "", "run the agents on this OpenRouter model (provider/model; \"default\" = "+defaultOpenRouterModel+") with OPENROUTER_API_KEY from the environment")
 	flag.StringVar(&models, "model", "", "per-harness model ids used instead of the picker's cheapest, e.g. aider=openrouter/z-ai/glm-5.3-flash,omp=openrouter/deepseek/deepseek-v3.2")
 	flag.StringVar(&args, "args", "", "per-harness launch arguments, harness=args separated by ';', e.g. 'cline=--auto-approve false'")
+	var own string
+	flag.StringVar(&own, "own-account", "", "with -openrouter: comma-separated harness ids that may run on their own account when the test model cannot be set (\"none\" for no agent); the others then run no turns. Unset, every agent may")
 	flag.Parse()
+	if own != "" {
+		o.ownOnly, o.ownOK = true, map[string]bool{}
+		for _, id := range strings.Split(own, ",") {
+			if id = strings.TrimSpace(id); id != "" && id != "none" {
+				o.ownOK[id] = true
+			}
+		}
+	}
 	var err error
 	if o.args, err = parseArgs(args); err != nil {
 		fmt.Fprintln(os.Stderr, err)

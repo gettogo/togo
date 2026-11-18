@@ -43,6 +43,16 @@ func (o *openRouter) env(agent string) []string {
 	return out
 }
 
+// wired reports whether the agent is put on the test model through its
+// environment or a project file, whatever its model picker lists.
+func (o *openRouter) wired(agent string) bool {
+	switch agent {
+	case "goose", "aider", "claude", "crush":
+		return o != nil
+	}
+	return false
+}
+
 // projectFiles are written into the scratch folder: Crush reads a
 // project .crush.json over the user's config.
 func (o *openRouter) projectFiles(agent, work string) error {
