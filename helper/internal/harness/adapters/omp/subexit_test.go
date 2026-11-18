@@ -2,6 +2,7 @@ package omp
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
@@ -77,5 +78,32 @@ func TestBackgroundAgentWithNoReportEndsAtItsExit(t *testing.T) {
 	out = run(m, []harness.Record{line("session", exitLine)})
 	if rows := agentRows(out); rows["agent-AuditOne"] != "" || rows["agent-AuditTwo"] != harness.StateInterrupted {
 		t.Fatalf("rows after omp's exit: %v", rows)
+	}
+}
+
+// After a helper restart the main conversation is read from its recent
+// part only, while every subagent file of the session is read whole. A
+// file from hours ago, whose task call is no longer in what was read, is
+// history: it is not a step of the turn that runs now. Shown, its row sat
+// in the current turn with a start time of days ago, and its conversation
+// filled the end of the chat.
+func TestOldSubagentFileWithNoCallIsLeftOut(t *testing.T) {
+	m := newSession(env())
+	run(m, records(t, "session.jsonl", "session")[:2])
+	late := func(raw string) harness.Record {
+		r := line("subagents", raw)
+		r.At = t0.Add(3 * time.Hour) // read three hours after it was written
+		return r
+	}
+	out := run(m, []harness.Record{late(subHeader), late(subAsk), late(subSaid), late(subExit)})
+	if len(out.Items) != 0 || len(out.Ops) != 0 {
+		t.Fatalf("an old subagent file with no call produced %d items, %d ops", len(out.Items), len(out.Ops))
+	}
+	// One whose call was read keeps its row, however late the file is read.
+	m = newSession(env())
+	run(m, records(t, "session.jsonl", "session"), []harness.Record{line("session", bgCall), line("session", bgResult)})
+	head := `{"type":"session","version":3,"id":"aud1","timestamp":"2026-11-06T10:01:03.000Z","cwd":"/Users/dev/project","parentSession":"/Users/dev/.omp/agent/sessions/-project/2026-11-06T10-00-00-000Z_0b7c1f2a9e.jsonl"}`
+	if out := run(m, []harness.Record{late(head), late(subAsk), late(subSaid), late(subExit)}); agentRows(out)["agent-AuditOne"] != harness.StateOK {
+		t.Fatalf("rows: %v", agentRows(out))
 	}
 }
