@@ -182,8 +182,11 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		// /todo in the terminal edits the list by hand and saves the whole
 		// list (seen on 18.20: "/todo done" wrote user_todo_edit and the
 		// plan stayed 0/2). It replaces the plan like a todo result does.
-		if main && str(e, "customType") == "session_exit" {
-			return s.exited(at)
+		if str(e, "customType") == "session_exit" {
+			if main {
+				return s.exited(at)
+			}
+			return s.agentExited(parent, str(obj(e["data"]), "kind"), at)
 		}
 		if parent == "" && str(e, "customType") == "user_todo_edit" {
 			if phases, ok := phasesFromDetails(obj(e["data"])); ok {
@@ -239,6 +242,14 @@ func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.I
 	if created, err := time.Parse(time.RFC3339, s.env.Vars["created"]); err == nil && len(s.pending) == 0 && at.Before(created.Add(-time.Minute)) {
 		// A subagent of an earlier session, read because its file was
 		// the newest: not part of this conversation.
+		s.headers[id], s.cur = dropped, dropped
+		return nil, nil
+	}
+	if len(s.pending) == 0 && s.readAt.Sub(at) > agentFresh {
+		// No task call is waiting for this file and it was written long
+		// before it is read: after a restart the conversation is read from
+		// its recent part and the subagent files whole, so this is one of
+		// an earlier turn. It is not a step of the turn that runs now.
 		s.headers[id], s.cur = dropped, dropped
 		return nil, nil
 	}
