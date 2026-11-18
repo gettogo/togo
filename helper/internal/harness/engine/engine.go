@@ -320,7 +320,7 @@ func (e *Engine) Open(ctx context.Context, sub harness.Subscriber, id string, af
 		items, more = items[start:], true
 		covered = items[0].Seq - 1
 	}
-	if fit, cut := newestFitting(items, pageBytes); cut {
+	if fit, cut := fitPage(items, pageBytes); cut {
 		items, more = fit, true
 		covered = items[0].Seq - 1
 	}
@@ -390,7 +390,7 @@ func (e *Engine) History(ctx context.Context, id string, before int64, limit int
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	items, more := e.log.Before(id, before, limit)
-	if fit, cut := newestFitting(items, pageBytes); cut {
+	if fit, cut := fitPage(items, pageBytes); cut {
 		items, more = fit, true
 	}
 	if items == nil {

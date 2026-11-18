@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -83,5 +84,52 @@ func TestTrailingSubagentStepsDoNotEmptyThePage(t *testing.T) {
 func TestOpenCountsWhatTheChatShows(t *testing.T) {
 	if got := pageStart(busyLog(30, 19).get("s").items, 10); got != 400 {
 		t.Fatalf("pageStart = %d, want 400", got)
+	}
+}
+
+// Seen on the same session after a helper restart: every subagent file is
+// read after the conversation, so the newest part of the log is subagent
+// steps only, and large ones. The size limit of a page then kept those and
+// dropped the whole conversation. What the chat shows is kept first; the
+// newest subagent steps fill what room is left.
+func TestThePageSizeLimitKeepsTheConversationFirst(t *testing.T) {
+	var items []harness.Item
+	for m := 0; m < 40; m++ {
+		items = append(items, harness.Item{ID: fmt.Sprintf("m%d", m), Seq: int64(m + 1), Kind: harness.KindAssistant,
+			Assistant: &harness.TextBody{Text: "a reply"}})
+	}
+	big := strings.Repeat("x", 4000)
+	for c := 0; c < 300; c++ {
+		items = append(items, harness.Item{ID: fmt.Sprintf("c%d", c), Seq: int64(41 + c), Kind: harness.KindThinking, Parent: "agent-1",
+			Thinking: &harness.TextBody{Text: big}})
+	}
+	max := 200 << 10 // room for about 50 of the 300 steps
+	page, cut := fitPage(items, max)
+	if !cut || shown(page) != 40 {
+		t.Fatalf("page keeps %d of 40 conversation items (cut %v)", shown(page), cut)
+	}
+	size := 0
+	for i, it := range page {
+		size += itemSize(it)
+		if i > 0 && page[i-1].Seq >= it.Seq {
+			t.Fatalf("page is out of order at %s", it.ID)
+		}
+	}
+	steps := len(page) - 40
+	if size > max || steps < 30 || steps > 60 || page[len(page)-1].ID != "c299" {
+		t.Fatalf("page is %d bytes with %d steps, last %s", size, steps, page[len(page)-1].ID)
+	}
+	// Everything fits: nothing is cut or reordered.
+	if all, cut := fitPage(items[:60], 1<<20); cut || len(all) != 60 {
+		t.Fatalf("a page that fits: %d items, cut %v", len(all), cut)
+	}
+	// The conversation alone is too large: its newest part is kept, as before.
+	var long []harness.Item
+	for m := 0; m < 100; m++ {
+		long = append(long, harness.Item{ID: fmt.Sprintf("m%d", m), Seq: int64(m + 1), Kind: harness.KindAssistant, Assistant: &harness.TextBody{Text: big}})
+	}
+	kept, cut := fitPage(long, max)
+	if !cut || len(kept) == 0 || len(kept) > 55 || kept[len(kept)-1].ID != "m99" {
+		t.Fatalf("long conversation: %d kept, cut %v", len(kept), cut)
 	}
 }
